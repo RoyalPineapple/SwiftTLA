@@ -109,6 +109,15 @@ equal edge sets and both outputs use the same guard and domain. These premises
 are not yet discharged for arbitrary compiler input. The rule is a reusable
 induction step, not proof that the current Swift emitter satisfies it.
 
+The existential-action rule now proves that iterating a state-dependent finite
+candidate sequence and existentially quantifying over a separately supplied
+domain produce the same complete labeled edge set and enabledness, provided
+their member sets and each corresponding branch's edge set agree. It permits
+duplicate candidates because graph edges have set semantics. The compiler has
+not yet established those premises for the emitted Swift and TLA+ expressions;
+evaluation failures and checking-register/`PrintT` effect order also remain
+open.
+
 The conditional-action rule selects a branch by a Boolean predicate of the
 complete source state. TLAPS proves that equal source/rendered predicates and
 branch edge sets yield equal complete labeled edges, and that the conditional
@@ -217,7 +226,7 @@ no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
 with a prior write, not arbitrary conditions, expression failures, or the
 Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 411 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 416 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
@@ -328,9 +337,10 @@ verify the emitted code itself.
 | `guard_` | Pure, total guards agree at each abstract ordered-statement position | Prove emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
 | `and` | Compatible delta conjunction and conflicting relational writes | Prove both emitters' evaluation order, conflict/error semantics, and frame completion. |
 | `or` | Guarded-choice preservation conditional on equal branch edges | Prove branch construction, multiplicity policy, and failure behavior in both outputs. |
-| `existsAction`, `define`, `ifElse` | No general output-linked theorem | Prove binding scope, selected domain/branch, expression evaluation, and both emitted forms. |
+| `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges | Prove the actual emitted domain and branch expressions agree, including failures and checking effects. |
+| `define`, `ifElse` | No general output-linked theorem | Prove binding scope, selected domain/branch, expression evaluation, and both emitted forms. |
 
-This table is a proof inventory, not a claim that these five groups exhaust
+This table is a proof inventory, not a claim that these six groups exhaust
 `#spec`: initialization, source lowering, properties, temporal behavior,
 refinement, and PlusCal export also require their own output links.
 

@@ -31,6 +31,43 @@ THEOREM GuardedChoiceEnabledness ==
                     <=> EnabledIn(GuardEdges(guard, ChoiceEdges(domain, rendered)), state, action)
     BY GuardedChoiceComposition, SMT DEF EnabledIn
 
+SequenceMembers(sequence) ==
+    {sequence[index] : index \in 1..Len(sequence)}
+EnumeratedExistentialEdges(candidates, branches) ==
+    {edge \in LabeledEdges :
+        \E index \in 1..Len(candidates[edge[1]]) :
+            edge \in branches[edge[1]][candidates[edge[1]][index]]}
+QuantifiedExistentialEdges(domains, branches) ==
+    {edge \in LabeledEdges :
+        \E value \in domains[edge[1]] :
+            edge \in branches[edge[1]][value]}
+
+THEOREM ExistentialEnumerationPreservesEdges ==
+    \A candidates \in [States -> Seq(Values)] :
+        \A domains \in [States -> SUBSET Values] :
+            \A native, rendered \in [States -> [Values -> SUBSET LabeledEdges]] :
+                (\A state \in States :
+                    SequenceMembers(candidates[state]) = domains[state]
+                    /\ (\A value \in domains[state] :
+                        native[state][value] = rendered[state][value]))
+                => EnumeratedExistentialEdges(candidates, native)
+                   = QuantifiedExistentialEdges(domains, rendered)
+    BY SMT DEF EnumeratedExistentialEdges, QuantifiedExistentialEdges,
+        SequenceMembers, LabeledEdges, States
+
+THEOREM ExistentialEnumerationPreservesEnabledness ==
+    \A candidates \in [States -> Seq(Values)] :
+        \A domains \in [States -> SUBSET Values] :
+            \A native, rendered \in [States -> [Values -> SUBSET LabeledEdges]] :
+                (\A state \in States :
+                    SequenceMembers(candidates[state]) = domains[state]
+                    /\ (\A value \in domains[state] :
+                        native[state][value] = rendered[state][value]))
+                => \A state \in States, action \in ActionLabels :
+                    EnabledIn(EnumeratedExistentialEdges(candidates, native), state, action)
+                    <=> EnabledIn(QuantifiedExistentialEdges(domains, rendered), state, action)
+    BY ExistentialEnumerationPreservesEdges, SMT DEF EnabledIn
+
 THEOREM UniqueExpressionChoice ==
     \A domain \in SUBSET Values :
         \A predicate \in [domain -> BOOLEAN] :
