@@ -549,6 +549,58 @@ THEOREM EmittedOrderedTemporalSpec ==
         BY <1>1, <1>2, <1>3, EmittedOrderedInitial, PTL
             DEF Repeated!Spec, SourceOrderedSpec
 
+OrderedStates ==
+    [pc: {"copy", "repeatWrites", "Done"}, x: Int, y: Int]
+OrderedBefore == [pc |-> orderedPC, x |-> orderedX, y |-> orderedY]
+OrderedAfter == [pc |-> orderedPC', x |-> orderedX', y |-> orderedY']
+
+OrderedSuccessor(state) ==
+    IF state.pc = "copy"
+    THEN [pc |-> "repeatWrites", x |-> state.x + 1, y |-> state.x + 1]
+    ELSE IF state.pc = "repeatWrites"
+         THEN [pc |-> "Done", x |-> state.x + 2, y |-> state.y]
+         ELSE state
+
+OrderedStepRelation(before, after) ==
+    /\ before \in OrderedStates
+    /\ after = OrderedSuccessor(before)
+
+THEOREM OrderedSuccessorIsTotal ==
+    \A state \in OrderedStates :
+        /\ OrderedSuccessor(state) \in OrderedStates
+        /\ OrderedStepRelation(state, OrderedSuccessor(state))
+    BY SMT DEF OrderedStates, OrderedSuccessor, OrderedStepRelation
+
+THEOREM OrderedHasNoRelationalDeadlock ==
+    \A state \in OrderedStates :
+        \E successor \in OrderedStates : OrderedStepRelation(state, successor)
+    BY OrderedSuccessorIsTotal
+
+THEOREM EmittedOrderedCompleteStateRelation ==
+    ASSUME OrderedTypeOK,
+           OrderedAfter \in OrderedStates
+    PROVE Repeated!Next <=> OrderedStepRelation(OrderedBefore, OrderedAfter)
+    BY EmittedOrderedNext, SMT DEF OrderedStepRelation,
+        OrderedSuccessor, OrderedStates, OrderedTypeOK,
+        OrderedBefore, OrderedAfter, SourceOrderedNext,
+        SourceOrderedCopyStep, SourceRepeatedWrites,
+        SourceOrderedTerminating
+
+THEOREM EmittedOrderedExactRelation ==
+    ASSUME OrderedTypeOK
+    PROVE Repeated!Next <=> OrderedStepRelation(OrderedBefore, OrderedAfter)
+    PROOF
+    <1>1. Repeated!Next => OrderedAfter \in OrderedStates
+        BY OrderedStepPreservesType,
+            SMT DEF OrderedAfter, OrderedStates, OrderedTypeOK
+    <1>2. OrderedStepRelation(OrderedBefore, OrderedAfter)
+            => OrderedAfter \in OrderedStates
+        BY OrderedSuccessorIsTotal,
+            SMT DEF OrderedStepRelation, OrderedBefore, OrderedStates,
+                OrderedTypeOK
+    <1>. QED
+        BY <1>1, <1>2, EmittedOrderedCompleteStateRelation
+
 SourceGuardedChoice ==
     /\ choiceSelected = 0
     /\ (choiceSelected' = 1 \/ choiceSelected' = 2)

@@ -82,9 +82,13 @@ atomic step), terminating step, and `Next` equivalent to independently stated
 relations. It also proves the integer/control-state invariant and equivalence
 of the complete temporal `Spec` over the resulting behaviors. The existing
 generated-machine test exercises the same two action steps. A separate
-`ENABLED Next` deadlock theorem is not yet checked. This covers one actual
-algorithm-lowering output, not the compiler's general substitution rule or
-all generated Swift transitions.
+complete-state relation theorem proves that every typed state has a successor
+and that this relation is exactly the generated `Next` relation. This is
+relational no-deadlock for this model; a direct theorem about TLA+'s `ENABLED`
+operator is not checked because the [pinned TLAPS proof system lists it as
+unsupported](https://proofs.tlapl.us/doc/web/content/Documentation/Unsupported_features.html).
+This covers one actual algorithm-lowering output, not the compiler's general
+substitution rule or all generated Swift transitions.
 
 `GeneratedGuardedChoiceProofModel.tla` is a second complete emitted module,
 checked byte-for-byte against its `#spec` fixture. Its generated Swift machine
@@ -96,7 +100,7 @@ Widening the emitted choice domain from `1..2` to `1..3` made the action proof
 fail; restoring it restored the proof. This is a second output-linked case,
 not a general proof of guarded choice or of the Swift emitter.
 
-TLAPS 1.6.0-pre checked all 231 obligations locally with fingerprint reuse
+TLAPS 1.6.0-pre checked all 248 obligations locally with fingerprint reuse
 disabled. The arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
