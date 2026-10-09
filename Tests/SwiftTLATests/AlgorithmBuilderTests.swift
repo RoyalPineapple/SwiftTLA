@@ -1163,8 +1163,8 @@ struct AlgorithmBuilderTests {
         }
     }
 
-    @Test("moving an independent update under a choice preserves successor multiplicity")
-    func scheduledChoicePreservesSuccessorMultiplicity() throws {
+    @Test("moving an independent update under a choice preserves the complete successor set")
+    func scheduledChoicePreservesSuccessors() throws {
         let original = Algorithm("ScheduledChoice", scoped: { scope in
             let value = scope.sharedVar(_name: "value", initial: 0)
             Do(TestControlLabel.advance) {
@@ -1172,16 +1172,37 @@ struct AlgorithmBuilderTests {
                 Assign(value, to: value + 1)
             }
         })
+        let moved = Algorithm("ScheduledChoice", scoped: { scope in
+            let value = scope.sharedVar(_name: "value", initial: 0)
+            Do(TestControlLabel.advance) {
+                With(SetExpr<Int>.literal(1, 2)) { _ in
+                    Assign(value, to: value + 1)
+                }
+            }
+        })
 
         let originalCompilation = try TLASpec("OriginalChoice") { original }.compile()
         let originalInitial = try firstCompiledState(in: originalCompilation)
-        let originalValues = try compiledSuccessors(
+        let originalStates = try compiledSuccessors(
             named: "advance",
             arguments: [],
             in: originalCompilation,
             from: originalInitial
-        ).map { try renderedValue(named: "value", in: $0, compilation: originalCompilation) }
-        #expect(originalValues == [.int(1), .int(1)])
+        )
+        let movedCompilation = try TLASpec("MovedChoice") { moved }.compile()
+        let movedInitial = try firstCompiledState(in: movedCompilation)
+        let movedStates = try compiledSuccessors(
+            named: "advance",
+            arguments: [],
+            in: movedCompilation,
+            from: movedInitial
+        )
+        #expect(originalStates.count == 1)
+        #expect(movedStates.count == 1)
+        #expect(try renderedValue(named: "value", in: #require(originalStates.first),
+            compilation: originalCompilation) == .int(1))
+        #expect(try Set(originalStates.map { try $0.projection(using: originalCompilation.layout) })
+            == Set(movedStates.map { try $0.projection(using: movedCompilation.layout) }))
     }
 
     @Test("lowering initializes pc and binds every atomic action to a process")
