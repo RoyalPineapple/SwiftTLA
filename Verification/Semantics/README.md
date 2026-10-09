@@ -110,6 +110,15 @@ do not yet prove expression evaluation or compiler lowering. The imported
 fixtures connect two actual TLA outputs, but the general TLA-emitter and
 generated-Swift output links remain mandatory.
 
+Ordinary CI now defines a separate `semantic-proof-diagnostic` job. It verifies
+the official Linux TLAPS archive against SHA-256
+`13eff4e3dd0a4570c1c33c46f052fd4eb3afad465eb201ebade607961f09d43c`,
+checks the proof without fingerprint reuse, and retains the exact source SHA,
+proof-input digests, tool version/configuration, and proof log. The rolling
+release URL is not treated as a pin: a changed archive fails the checksum.
+This job is not yet hosted evidence for this branch and is not the universal
+semantic-preservation admission check.
+
 ## Observable behavior
 
 For a source model `M` and resolved configuration `C`, define:

@@ -86,6 +86,45 @@ jobs:
       - name: Require every Swift test suite to pass
         run: test "$SWIFT_TEST_RESULT" = success
 
+  semantic-proof-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+
+      - name: Check pinned TLAPS proof
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          mkdir -p .build/semantic-proof-evidence
+          git rev-parse HEAD > .build/semantic-proof-evidence/source-sha.txt
+          sha256sum Verification/Semantics/*.tla > .build/semantic-proof-evidence/proof-inputs.sha256
+          proof_tool_dir="$(mktemp -d)"
+          curl -fsSL \
+            https://github.com/tlaplus/tlapm/releases/download/1.6.0-pre/tlapm-1.6.0-pre-x86_64-linux-gnu.tar.gz \
+            -o "$proof_tool_dir/tlapm.tar.gz"
+          echo '13eff4e3dd0a4570c1c33c46f052fd4eb3afad465eb201ebade607961f09d43c  '"$proof_tool_dir/tlapm.tar.gz" \
+            | sha256sum --check -
+          sha256sum "$proof_tool_dir/tlapm.tar.gz" > .build/semantic-proof-evidence/tlapm-archive.sha256
+          tar -xzf "$proof_tool_dir/tlapm.tar.gz" -C "$proof_tool_dir"
+          "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/semantic-proof-evidence/tlapm-version.txt
+          "$proof_tool_dir/tlapm/bin/tlapm" --config > .build/semantic-proof-evidence/tlapm-config.txt
+          "$proof_tool_dir/tlapm/bin/tlapm" --nofp Verification/Semantics/SingleAssignment.tla \
+            2>&1 | tee .build/semantic-proof-evidence/proof.log
+          grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' .build/semantic-proof-evidence/proof.log
+          ! grep -q '^\[ERROR\]' .build/semantic-proof-evidence/proof.log
+
+      - name: Retain diagnostic proof evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: semantic-proof-diagnostic-${{ env.SWIFT_TLA_SHA }}
+          path: .build/semantic-proof-evidence
+          if-no-files-found: error
+          retention-days: 14
+
   apple-platform-examples:
     runs-on: macos-15
     timeout-minutes: 30
