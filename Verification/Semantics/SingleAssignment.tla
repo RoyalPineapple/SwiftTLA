@@ -227,6 +227,47 @@ THEOREM OrderedDoPreservation ==
     BY OrderedHistoriesExist, OrderedHistoriesAgree,
         SMT DEF HistoriesExist
 
+SourceDoStep(original, steps, target) ==
+    \E history \in [0..Len(steps) -> States] :
+        SourceHistory(original, steps, history)
+        /\ history[Len(steps)] = target
+
+ScheduledDoStep(original, steps, target) ==
+    \E history \in [0..Len(steps) -> ScheduledRecords] :
+        ScheduledHistory(original, steps, history)
+        /\ ApplyDelta(original, history[Len(steps)].keys,
+            history[Len(steps)].values) = target
+
+THEOREM OrderedDoTransitionEquivalence ==
+    ASSUME NEW original \in States,
+           NEW target \in States,
+           NEW steps \in Seq(Instructions)
+    PROVE SourceDoStep(original, steps, target)
+          <=> ScheduledDoStep(original, steps, target)
+    BY OrderedHistoriesExist, OrderedHistoriesAgree,
+        SMT DEF SourceDoStep, ScheduledDoStep, HistoriesExist, HistoryAgrees
+
+THEOREM OrderedDoEnabledness ==
+    ASSUME NEW original \in States,
+           NEW steps \in Seq(Instructions)
+    PROVE (\E target \in States : SourceDoStep(original, steps, target))
+          <=> (\E target \in States : ScheduledDoStep(original, steps, target))
+    BY OrderedDoTransitionEquivalence
+
+SourceDoEdges(label, steps) ==
+    {edge \in LabeledEdges :
+        edge[2] = label /\ SourceDoStep(edge[1], steps, edge[3])}
+ScheduledDoEdges(label, steps) ==
+    {edge \in LabeledEdges :
+        edge[2] = label /\ ScheduledDoStep(edge[1], steps, edge[3])}
+
+THEOREM OrderedDoLabeledEdges ==
+    ASSUME NEW label \in ActionLabels,
+           NEW steps \in Seq(Instructions)
+    PROVE SourceDoEdges(label, steps) = ScheduledDoEdges(label, steps)
+    BY OrderedDoTransitionEquivalence,
+        SMT DEF SourceDoEdges, ScheduledDoEdges, LabeledEdges
+
 MergeCompatible(firstKeys, first, secondKeys, second) ==
     [key \in firstKeys \cup secondKeys |->
         IF key \in firstKeys THEN first[key] ELSE second[key]]

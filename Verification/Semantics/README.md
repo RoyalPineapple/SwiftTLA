@@ -47,9 +47,11 @@ induction step, not proof that the current Swift emitter satisfies it.
 
 The ordered-`Do` lemma uses finite, indexed source and scheduled histories.
 TLAPS proves that both histories exist for every finite sequence of typed
-abstract instructions and that their complete states agree at every position,
-including repeated writes and reads of earlier writes. This removes the
-vacuity risk in the earlier conditional theorem. It is **not** a total
+abstract **assignment** instructions and that their complete states agree at
+every position, including repeated writes and reads of earlier writes. It
+also proves equality of the resulting complete-state transition relation,
+enabledness, and labeled edges. This removes the vacuity risk in the earlier
+conditional theorem. It is **not** a total
 compiler-correctness theorem: we have not proved that the abstract schedule
 is exactly the Swift lowerer's schedule, that accepted source expressions
 denote the abstract instruction functions, or that either emitter implements
@@ -80,7 +82,7 @@ Widening the emitted choice domain from `1..2` to `1..3` made the action proof
 fail; restoring it restored the proof. This is a second output-linked case,
 not a general proof of guarded choice or of the Swift emitter.
 
-TLAPS 1.6.0-pre checked all 148 obligations locally with fingerprint reuse
+TLAPS 1.6.0-pre checked all 157 obligations locally with fingerprint reuse
 disabled. The arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
