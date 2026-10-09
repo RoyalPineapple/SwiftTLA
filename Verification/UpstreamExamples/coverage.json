@@ -7699,8 +7699,8 @@
     {
       "path": "specifications/MissionariesAndCannibals",
       "name": "Missionaries and Cannibals",
-      "audit": "The two published configurations resolve to one typed Swift model and byte-identical pinned upstream inputs. Focused native tests check safe crossings, the deliberate Solution violation, and exhaustive native completion for both value encodings; hosted parity is still absent.",
-      "gap": "Obtain hosted complete-graph and selected-verdict evidence for each configuration on both independent comparison paths. The direct case uses six TLC model values; the Apalache annotation wrapper uses six quoted PERSON strings. Its symbolic-success manifest does not establish the TLC verdict. On SHA 1faa0208 the direct case passed both paths, but the wrapper's upstream graph spool rejected TLC callbacks because the bridge evaluated a state-dependent action domain without its source state; the corrected bridge still needs hosted proof. Historical local checks and this focused diagnostic do not credit the family.",
+      "audit": "Both published configurations resolve to one typed Swift model and byte-identical pinned upstream inputs. On hosted SHA 1bb0b84e, both value encodings matched generated TLC and pinned upstream TLC on complete initial states, labeled graphs, selected properties, and default deadlock. The proof-only module has an explicit disposition and legacy cleanup is complete.",
+      "gap": "No family configuration gap remains at verified SHA 1bb0b84e. The focused diagnostic establishes this family's two hosted configuration matches, not ordinary CI, the unfiltered matrix, PR #394 admission, or completion of the other upstream families. The Apalache wrapper's symbolic-success manifest is a different tool claim; pinned TLC reports the deliberately violated Solution invariant on both encodings.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -7730,7 +7730,8 @@
           "module": "specifications/MissionariesAndCannibals/APMissionariesAndCannibals.tla",
           "configuration": "specifications/MissionariesAndCannibals/APMissionariesAndCannibals.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "1bb0b84e568ae90919ff10831bb305052752f174",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [{
@@ -7738,13 +7739,25 @@
             "scenario": "APMissionariesAndCannibals",
             "caseID": "ap-missionaries-and-cannibals"
           }],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "1bb0b84e568ae90919ff10831bb305052752f174",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025/artifacts/11590060520",
+            "nativeArtifactDigest": "sha256:aa76637a7b0bb81ce837da3f4ca5bafb314919202d7d001fdcc100be1448d67c",
+            "upstreamArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025/artifacts/11589688941",
+            "upstreamArtifactDigest": "sha256:ea08d71ffb7a2c0638b11d705f9464eec025f549f593b8d9677855bc0876c9b9",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Focused hosted diagnostic: native and generated-TLA TLC match one initial state, 64 complete states, and 252 labeled edges; generated-TLA TLC matches pinned upstream on the complete initial-state set and labeled graph. TypeOK and default deadlock satisfy, and Solution is violated as expected; generated and upstream TLC retain counterexamples. Artifacts are nonempty, retain this source SHA and run origin, exact pinned inputs, TLC v1.8.0, Temurin 17.0.19+10, and bridge source/binary hashes. This does not admit the full matrix or PR head."
+          }]
         },
         {
           "module": "specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla",
           "configuration": "specifications/MissionariesAndCannibals/MissionariesAndCannibals.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "1bb0b84e568ae90919ff10831bb305052752f174",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [{
@@ -7752,7 +7765,18 @@
             "scenario": "MissionariesAndCannibals",
             "caseID": "missionaries-and-cannibals"
           }],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "1bb0b84e568ae90919ff10831bb305052752f174",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025/artifacts/11589554474",
+            "nativeArtifactDigest": "sha256:bbe966fb71c20e7dd904db4b5976f8a1955b7c233e48ca506258436d81eb4351",
+            "upstreamArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025/artifacts/11589084454",
+            "upstreamArtifactDigest": "sha256:ffa4252f6c899dceabdc9cffc17fa68ba842563ab85898dab369e13cbb43e5ae",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Focused hosted diagnostic: native and generated-TLA TLC match one initial state, 64 complete states, and 252 labeled edges; generated-TLA TLC matches pinned upstream on the complete initial-state set and labeled graph. TypeOK and default deadlock satisfy, and Solution is violated as expected; generated and upstream TLC retain counterexamples. Artifacts are nonempty, retain this source SHA and run origin, exact pinned inputs, TLC v1.8.0, Temurin 17.0.19+10, and bridge source/binary hashes. This does not admit the full matrix or PR head."
+          }]
         }
       ],
       "partialCases": []
