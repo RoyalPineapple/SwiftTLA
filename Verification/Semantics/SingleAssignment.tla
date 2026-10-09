@@ -390,6 +390,51 @@ THEOREM EmittedCopyPreservesSourceOrder ==
     Next <=> SourceSequentialCopy
     BY EmittedCopyNext, OrderedCopySemantics
 
+CopySourceState ==
+    [key \in Vars |-> IF key = "first" THEN first ELSE second]
+CopyTargetState ==
+    [key \in Vars |-> IF key = "first" THEN first' ELSE second']
+CopyInstructions ==
+    <<[target |-> "first", rhs |-> [state \in States |-> state["second"]]],
+      [target |-> "second", rhs |-> [state \in States |-> state["first"]]]>>
+CopyIntermediateState ==
+    [CopySourceState EXCEPT !["first"] = second]
+CopyWitnessHistory ==
+    [index \in 0..2 |->
+        IF index = 0 THEN CopySourceState
+        ELSE IF index = 1 THEN CopyIntermediateState
+        ELSE [CopyIntermediateState EXCEPT !["second"] = CopyIntermediateState["first"]]]
+
+THEOREM EmittedCopyMatchesOrderedInstructions ==
+    ASSUME Vars = {"first", "second"},
+           Values = Int,
+           first \in Int,
+           second \in Int,
+           first' \in Int,
+           second' \in Int
+    PROVE copy <=> ScheduledDoStep(CopySourceState, CopyInstructions, CopyTargetState)
+    PROOF
+    <1>1. CopySourceState \in States /\ CopyTargetState \in States
+        BY SMT DEF CopySourceState, CopyTargetState, States
+    <1>2. CopyInstructions \in Seq(Instructions)
+        BY <1>1, SMT DEF CopyInstructions, Instructions, States
+    <1>3. CopyWitnessHistory \in [0..Len(CopyInstructions) -> States]
+        BY <1>1, SMT DEF CopyWitnessHistory, CopyIntermediateState,
+            CopyInstructions, States
+    <1>4. SourceHistory(CopySourceState, CopyInstructions, CopyWitnessHistory)
+        BY <1>1, <1>2, <1>3, SMT DEF SourceHistory, CopyWitnessHistory,
+            CopyIntermediateState, CopyInstructions, CopySourceState,
+            AdvanceSource, States
+    <1>5. SourceDoStep(CopySourceState, CopyInstructions, CopyTargetState)
+            <=> SourceOrderedCopy
+        BY <1>1, <1>2, <1>3, <1>4, SMT DEF SourceDoStep, SourceHistory,
+            CopyWitnessHistory, CopyIntermediateState, CopyInstructions,
+            CopySourceState, CopyTargetState, AdvanceSource, SourceOrderedCopy,
+            States
+    <1>. QED
+        BY <1>1, <1>2, <1>5, EmittedCopyStep,
+            OrderedDoTransitionEquivalence
+
 SourceGuardedChoice ==
     /\ choiceSelected = 0
     /\ (choiceSelected' = 1 \/ choiceSelected' = 2)

@@ -70,7 +70,10 @@ assignment reads the first assignment's new value. Changing that source read
 to the pre-step value made the ordering theorem fail. Changing the imported
 module's second next-state value to `0` made the action theorem fail; restoring
 both values restored the proof. This is an output-linked proof for one source
-fixture, not a proof of the Swift emitter or of arbitrary accepted models.
+fixture. The emitted `copy` action is also proved equivalent, over typed
+complete pre- and post-states, to the two independently stated instructions
+under the general ordered-schedule relation. Neither result proves the Swift
+emitter or arbitrary accepted models.
 
 `GeneratedGuardedChoiceProofModel.tla` is a second complete emitted module,
 checked byte-for-byte against its `#spec` fixture. Its generated Swift machine
@@ -82,7 +85,7 @@ Widening the emitted choice domain from `1..2` to `1..3` made the action proof
 fail; restoring it restored the proof. This is a second output-linked case,
 not a general proof of guarded choice or of the Swift emitter.
 
-TLAPS 1.6.0-pre checked all 157 obligations locally with fingerprint reuse
+TLAPS 1.6.0-pre checked all 182 obligations locally with fingerprint reuse
 disabled. The arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
