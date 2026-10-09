@@ -271,7 +271,7 @@ struct CompiledSpecificationRendererTests {
             .init(name: "Check", body: .and(local, local))
         ])
         let rendered = try specification.compile().render().tlaBundle.tla
-        #expect(rendered.contains("Check == ((LET item == TRUE\nIN item) /\\ (LET item == TRUE\nIN item))"))
+        #expect(rendered.contains("Check == (IF (LET item == TRUE\nIN item) THEN (LET item == TRUE\nIN item) ELSE FALSE)"))
     }
 
     @Test("Nested checked views render their operands once without capturing source names")

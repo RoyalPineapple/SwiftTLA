@@ -121,6 +121,11 @@ THEOREM ObservationalExpressionChoice ==
                         observation[CHOOSE member \in domain : predicate[member]]
     BY SMT
 
+THEOREM LazyConjunctionPreservesBooleanValue ==
+    \A left, right \in BOOLEAN :
+        (IF left THEN right ELSE FALSE) <=> (left /\ right)
+    BY SMT
+
 ConditionalEdges(selector, yes, no) ==
     {edge \in LabeledEdges :
         IF selector[edge[1]] THEN edge \in yes ELSE edge \in no}

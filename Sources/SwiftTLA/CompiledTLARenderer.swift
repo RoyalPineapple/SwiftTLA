@@ -599,7 +599,7 @@ extension CompiledOperation {
         case .lessOrEqual: ("(", " <= ", ")")
         case .greaterThan: ("(", " > ", ")")
         case .greaterOrEqual: ("(", " >= ", ")")
-        case .and: ("(", " /\\ ", ")")
+        case .and: ("(IF ", " THEN ", " ELSE FALSE)")
         case .or: ("(IF ", " THEN TRUE ELSE ", ")")
         case .in: ("(", " \\in ", ")")
         case .subset: ("(", " \\subseteq ", ")")

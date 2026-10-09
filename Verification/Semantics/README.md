@@ -153,6 +153,16 @@ predicate or that both emitters implement each branch. The repeated-write
 guard proof was split into the initial guard and the remaining positions so
 the full module checks without relying on prover search over one large step.
 
+The state-expression renderer now emits a Boolean conjunction as
+`IF left THEN right ELSE FALSE`, matching the generated Swift machine's
+left-first short circuit. TLAPS proves this form has the same truth value as
+`left /\ right` for total Boolean operands. The existing enabledness fixture
+tests the actual generated TLA+ form and native skipped-right-operand behavior.
+The [TLC tools documentation](https://github.com/tlaplus/tlaplus/blob/master/general/docs/current-tools.md)
+also states that an unselected `IF` branch is not evaluated.
+This does not yet prove arbitrary emitted predicate evaluation or a general
+correspondence for evaluation failures and checking effects.
+
 The ordered-`Do` lemma uses finite, indexed source and scheduled histories.
 TLAPS proves that both histories exist for every finite sequence of typed
 abstract **assignment** instructions and that their complete states agree at
@@ -258,7 +268,7 @@ no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
 with a prior write, not arbitrary conditions, expression failures, or the
 Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 444 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 446 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
