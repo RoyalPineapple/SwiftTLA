@@ -1,5 +1,5 @@
 ----------------------- MODULE SingleAssignment -----------------------
-EXTENDS TLAPS
+EXTENDS TLAPS, GeneratedAtomicCopyProofModel
 CONSTANTS Vars, Values, Key
 ASSUME KeyIsVariable == Key \in Vars
 
@@ -59,4 +59,24 @@ THEOREM ParallelUpdate ==
         NativeParallelStep(s, t, guard, first, firstValue, second, secondValue)
         <=> RenderedParallelStep(s, t, guard, first, firstValue, second, secondValue)
     BY SMT DEF NativeParallelStep, RenderedParallelStep, States
+
+SourceOrderedCopy ==
+    /\ first' = second
+    /\ second' = second
+
+SourceInitialCopyState ==
+    /\ first = 0
+    /\ second = 1
+
+THEOREM EmittedCopyInitialState ==
+    Init <=> SourceInitialCopyState
+    BY SMT DEF Init, SourceInitialCopyState
+
+THEOREM EmittedCopyStep ==
+    copy <=> SourceOrderedCopy
+    BY SMT DEF copy, SourceOrderedCopy
+
+THEOREM EmittedCopyNext ==
+    Next <=> SourceOrderedCopy
+    BY EmittedCopyStep DEF Next
 =======================================================================

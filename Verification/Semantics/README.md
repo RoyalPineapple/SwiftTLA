@@ -23,21 +23,34 @@ every other variable unchanged. It also proves equality of the corresponding
 enabled-successor predicates. The theorem assumes the assigned key belongs
 to the state's variable set. It is generic over state domains and values.
 
-The same module now proves that two assignments to distinct variables update
+The same module also proves that two distinct compiled assignments can update
 one complete state simultaneously, with every other variable unchanged. This
-matches the intended atomic-update rule, not the current Swift or TLA emitter
-implementation. A local negative control changed the second rendered value
-to the first value; TLAPS rejected the resulting obligation. Restoring the
-correct value restored the proof.
+is a compiled-action rule. Statements inside an authored `Do` step instead run
+in order while the resulting step remains externally atomic. A local negative
+control changed the second rendered value to the first value; TLAPS rejected
+the resulting obligation. Restoring the correct value restored the proof.
 
-TLAPS 1.6.0-pre checked all 14 obligations locally with fingerprint reuse
+`GeneratedAtomicCopyProofModel.tla` is the complete TLA module emitted from a
+small `#spec` model. `GeneratedAtomicUpdateProofTests` requires byte-for-byte
+equality with `GeneratedAtomicCopyProofModel.render()` and checks the generated
+Swift machine's concrete `(0, 1) -> (1, 1)` step. This module is imported by
+`SingleAssignment.tla`, which proves its generated `Init`, `copy`, and `Next`
+equivalent to independently stated source relations. In this `Do` step, the
+second assignment reads the first assignment's new value. Changing the
+imported module's second next-state value to `0` made the action theorem fail;
+restoring the generated output restored the proof. This is an output-linked
+proof for one source fixture, not a proof of the Swift emitter or of arbitrary
+accepted models.
+
+TLAPS 1.6.0-pre checked all 20 obligations locally with fingerprint reuse
 disabled. The arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
 SHA-256 `8bb3439772cafd75240d61abf255e89122850bab93563d1283b048359ab4e88f`.
-This is local diagnostic evidence, not hosted admission. The lemmas do not
-yet prove expression evaluation, the compiler's lowering, or either actual
-emitted file. Those output links remain mandatory.
+This is local diagnostic evidence, not hosted admission. The generic lemmas
+do not yet prove expression evaluation or compiler lowering. The imported
+fixture connects one actual TLA output, but the general TLA-emitter and
+generated-Swift output links remain mandatory.
 
 ## Observable behavior
 
