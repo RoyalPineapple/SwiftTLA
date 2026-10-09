@@ -124,6 +124,17 @@ package enum EWD998ChanIDExportReference {
         let outcome = try process.run(request, retainingIn: output.appendingPathComponent("tlc"))
         let payload: Data? = FileManager.default.fileExists(atPath: interceptor.payload.path)
             ? try Data(contentsOf: interceptor.payload) : nil
+        guard outcome == .safetyViolation else {
+            throw UpstreamTLCParityError.invalidOutcome("\(Self.caseID): \(outcome)")
+        }
+        guard payload?.isEmpty == false else {
+            throw FiniteGraphCaseError.missingArtifact("\(Self.caseID) intercepted POST payload")
+        }
+        let trace = output.appendingPathComponent("tlc/counterexample.json")
+        guard FileManager.default.fileExists(atPath: trace.path),
+              !(try Data(contentsOf: trace)).isEmpty else {
+            throw FiniteGraphCaseError.missingArtifact("\(Self.caseID) counterexample")
+        }
         try RetainedFiles.writeJSON([
             "schema": "swifttla.ewd998-export-reference",
             "caseID": caseID, "result": "terminal", "tlcOutcome": String(describing: outcome),

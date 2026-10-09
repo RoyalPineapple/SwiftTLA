@@ -59,6 +59,14 @@ package enum EWD998ChanIDShivizReference {
             workingDirectory: work, finiteGraphCase: check, runID: UUID(),
             timeout: timeout, invocation: .propertyCheck, referenceArtifacts: tools.artifacts)
         let outcome = try process.run(request, retainingIn: output.appendingPathComponent("tlc"))
+        guard outcome == .safetyViolation else {
+            throw UpstreamTLCParityError.invalidOutcome("\(id): \(outcome)")
+        }
+        let trace = output.appendingPathComponent("tlc/counterexample.json")
+        guard FileManager.default.fileExists(atPath: trace.path),
+              !(try Data(contentsOf: trace)).isEmpty else {
+            throw FiniteGraphCaseError.missingArtifact("\(id) counterexample")
+        }
         try RetainedFiles.writeJSON([
             "schema": "swifttla.ewd998-shiviz-reference",
             "caseID": id, "result": "terminal", "tlcOutcome": String(describing: outcome),
