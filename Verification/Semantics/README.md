@@ -161,10 +161,13 @@ it restored all obligations.
 candidate sequence produces exactly the complete states admitted by a TLA+
 membership clause when the sequence contains precisely the declared domain.
 `InitialMembershipComposesAcrossPriorChoices` permits that domain to depend on
-each previously selected state, including an empty domain. These are generic
-initialization rules; they do not yet prove that the actual initializer
-expressions, generated Swift loops, and rendered `Init` satisfy the premises
-for every accepted `#spec`.
+each previously selected state, including an empty domain.
+`OrderedInitialHistoriesAgree` extends the equality to every position in any
+finite ordered initialization plan. `OrderedInitialHistoriesExist` constructs a
+shared history for every such plan, so the equality is not vacuous. These are
+generic initialization rules; they do not yet prove that the actual initializer
+expressions, generated Swift loops, and rendered `Init` satisfy the candidate
+equality premise for every accepted `#spec`.
 
 The TLA renderer now prints action conjunction as `IF left THEN right ELSE
 FALSE`, matching the native machine's left-first disabled-branch evaluation.
@@ -320,7 +323,7 @@ no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
 with a prior write, not arbitrary conditions, expression failures, or the
 Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 490 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 574 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

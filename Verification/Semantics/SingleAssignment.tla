@@ -162,37 +162,170 @@ THEOREM CompleteDeltaUpdate ==
                 (t = ApplyDelta(s, keys, delta)) <=> RenderedDelta(s, t, keys, delta)
     BY SMT DEF ApplyDelta, RenderedDelta, States
 
-EnumeratedInitialStates(prior, candidates) ==
-    {[prior EXCEPT ![Key] = candidates[index]] : index \in 1..Len(candidates)}
-MembershipInitialStates(prior, domain) ==
+EnumeratedInitialStates(prior, key, candidates) ==
+    {[prior EXCEPT ![key] = candidates[index]] : index \in 1..Len(candidates)}
+MembershipInitialStates(prior, key, domain) ==
     {state \in States :
-        /\ state[Key] \in domain
-        /\ \A variable \in Vars \ {Key} : state[variable] = prior[variable]}
+        /\ state[key] \in domain
+        /\ \A variable \in Vars \ {key} : state[variable] = prior[variable]}
 
 THEOREM InitialMembershipMatchesEnumeration ==
-    \A prior \in States :
+    \A key \in Vars, prior \in States :
         \A candidates \in Seq(Values), domain \in SUBSET Values :
             SequenceMembers(candidates) = domain
-            => EnumeratedInitialStates(prior, candidates)
-               = MembershipInitialStates(prior, domain)
-    BY KeyIsVariable, SMT DEF EnumeratedInitialStates,
+            => EnumeratedInitialStates(prior, key, candidates)
+               = MembershipInitialStates(prior, key, domain)
+    BY SMT DEF EnumeratedInitialStates,
         MembershipInitialStates, SequenceMembers, States
 
-ExtendEnumeratedInitialStates(priorStates, candidates) ==
-    UNION {EnumeratedInitialStates(prior, candidates[prior]) : prior \in priorStates}
-ExtendMembershipInitialStates(priorStates, domains) ==
-    UNION {MembershipInitialStates(prior, domains[prior]) : prior \in priorStates}
+ExtendEnumeratedInitialStates(priorStates, key, candidates) ==
+    UNION {EnumeratedInitialStates(prior, key, candidates[prior]) : prior \in priorStates}
+ExtendMembershipInitialStates(priorStates, key, domains) ==
+    UNION {MembershipInitialStates(prior, key, domains[prior]) : prior \in priorStates}
 
 THEOREM InitialMembershipComposesAcrossPriorChoices ==
-    \A priorStates \in SUBSET States :
+    \A key \in Vars, priorStates \in SUBSET States :
         \A candidates \in [States -> Seq(Values)] :
             \A domains \in [States -> SUBSET Values] :
                 (\A prior \in priorStates :
                     SequenceMembers(candidates[prior]) = domains[prior])
-                => ExtendEnumeratedInitialStates(priorStates, candidates)
-                   = ExtendMembershipInitialStates(priorStates, domains)
+                => ExtendEnumeratedInitialStates(priorStates, key, candidates)
+                   = ExtendMembershipInitialStates(priorStates, key, domains)
     BY InitialMembershipMatchesEnumeration,
         SMT DEF ExtendEnumeratedInitialStates, ExtendMembershipInitialStates
+
+InitializationPlans ==
+    [key: Vars, candidates: [States -> Seq(Values)], domains: [States -> SUBSET Values]]
+InitializationPlanAgrees(plan) ==
+    \A prior \in States :
+        SequenceMembers(plan.candidates[prior]) = plan.domains[prior]
+EnumeratedInitialHistory(start, plans, history) ==
+    /\ history[0] = start
+    /\ \A index \in 1..Len(plans) :
+        history[index] = ExtendEnumeratedInitialStates(
+            history[index - 1], plans[index].key, plans[index].candidates)
+MembershipInitialHistory(start, plans, history) ==
+    /\ history[0] = start
+    /\ \A index \in 1..Len(plans) :
+        history[index] = ExtendMembershipInitialStates(
+            history[index - 1], plans[index].key, plans[index].domains)
+
+THEOREM OrderedInitialHistoriesAgree ==
+    ASSUME NEW start \in SUBSET States,
+           NEW plans \in Seq(InitializationPlans),
+           NEW enumerated \in [0..Len(plans) -> SUBSET States],
+           NEW membership \in [0..Len(plans) -> SUBSET States],
+           \A index \in 1..Len(plans) : InitializationPlanAgrees(plans[index]),
+           EnumeratedInitialHistory(start, plans, enumerated),
+           MembershipInitialHistory(start, plans, membership)
+    PROVE \A index \in 0..Len(plans) : enumerated[index] = membership[index]
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(plans) => enumerated[index] = membership[index]
+    <1>1. P(0)
+        BY SMT DEF P, EnumeratedInitialHistory, MembershipInitialHistory
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(plans)
+                     PROVE enumerated[index + 1] = membership[index + 1]
+            BY SMT DEF P
+        <2>1. index \in 0..Len(plans)
+            BY P(index), SMT DEF P
+        <2>2. enumerated[index] = membership[index]
+            BY <2>1, P(index), SMT DEF P
+        <2>3. plans[index + 1] \in InitializationPlans
+            BY LenProperties, SMT
+        <2>4. InitializationPlanAgrees(plans[index + 1])
+            BY SMT
+        <2>5. enumerated[index + 1] = ExtendEnumeratedInitialStates(
+                enumerated[index], plans[index + 1].key,
+                plans[index + 1].candidates)
+            BY SMT DEF EnumeratedInitialHistory
+        <2>6. membership[index + 1] = ExtendMembershipInitialStates(
+                membership[index], plans[index + 1].key,
+                plans[index + 1].domains)
+            BY SMT DEF MembershipInitialHistory
+        <2>. QED
+            BY <2>2, <2>3, <2>4, <2>5, <2>6,
+                InitialMembershipComposesAcrossPriorChoices,
+                SMT DEF InitializationPlanAgrees, InitializationPlans
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED
+        BY <1>3, SMT DEF P
+
+ValidInitializationPlans(plans) ==
+    \A index \in 1..Len(plans) : InitializationPlanAgrees(plans[index])
+InitialHistoriesExist(start, plans) ==
+    \E history \in [0..Len(plans) -> SUBSET States] :
+        EnumeratedInitialHistory(start, plans, history)
+        /\ MembershipInitialHistory(start, plans, history)
+ExtendInitialHistory(history, length, nextStates) ==
+    [index \in 0..(length + 1) |->
+        IF index = length + 1 THEN nextStates ELSE history[index]]
+
+THEOREM OrderedInitialHistoriesExist ==
+    ASSUME NEW start \in SUBSET States
+    PROVE \A plans \in Seq(InitializationPlans) :
+        ValidInitializationPlans(plans) => InitialHistoriesExist(start, plans)
+    PROOF
+    <1>. DEFINE P(plans) ==
+        ValidInitializationPlans(plans) => InitialHistoriesExist(start, plans)
+    <1>1. P(<<>>)
+        <2>. DEFINE empty == [index \in 0..0 |-> start]
+        <2>1. empty \in [0..Len(<<>>) -> SUBSET States]
+            BY SMT DEF empty
+        <2>2. EnumeratedInitialHistory(start, <<>>, empty)
+            BY SMT DEF EnumeratedInitialHistory, empty
+        <2>3. MembershipInitialHistory(start, <<>>, empty)
+            BY SMT DEF MembershipInitialHistory, empty
+        <2>. QED
+            BY <2>1, <2>2, <2>3, SMT DEF P, InitialHistoriesExist
+    <1>2. ASSUME NEW prior \in Seq(InitializationPlans),
+                  NEW plan \in InitializationPlans,
+                  P(prior)
+          PROVE P(Append(prior, plan))
+        <2>. SUFFICES ASSUME ValidInitializationPlans(Append(prior, plan))
+                     PROVE InitialHistoriesExist(start, Append(prior, plan))
+            BY SMT DEF P
+        <2>1. ValidInitializationPlans(prior)
+            BY AppendProperties, SMT DEF ValidInitializationPlans
+        <2>2. InitializationPlanAgrees(plan)
+            BY AppendProperties, SMT DEF ValidInitializationPlans
+        <2>3. PICK history \in [0..Len(prior) -> SUBSET States] :
+                    EnumeratedInitialHistory(start, prior, history)
+                    /\ MembershipInitialHistory(start, prior, history)
+            BY P(prior), <2>1, SMT DEF P, InitialHistoriesExist
+        <2>4. LET nextStates == ExtendEnumeratedInitialStates(
+                    history[Len(prior)], plan.key, plan.candidates)
+              IN nextStates = ExtendMembershipInitialStates(
+                    history[Len(prior)], plan.key, plan.domains)
+            BY <2>2, <2>3, InitialMembershipComposesAcrossPriorChoices,
+                SMT DEF InitializationPlanAgrees, InitializationPlans
+        <2>5. ExtendEnumeratedInitialStates(
+                    history[Len(prior)], plan.key, plan.candidates) \in SUBSET States
+            BY <2>3, SMT DEF ExtendEnumeratedInitialStates,
+                EnumeratedInitialStates, InitializationPlans, States
+        <2>6. LET nextStates == ExtendEnumeratedInitialStates(
+                    history[Len(prior)], plan.key, plan.candidates)
+              IN ExtendInitialHistory(history, Len(prior), nextStates)
+                 \in [0..Len(Append(prior, plan)) -> SUBSET States]
+            BY <2>3, <2>5, AppendProperties, SMT DEF ExtendInitialHistory
+        <2>7. LET nextStates == ExtendEnumeratedInitialStates(
+                    history[Len(prior)], plan.key, plan.candidates)
+              IN /\ EnumeratedInitialHistory(start, Append(prior, plan),
+                        ExtendInitialHistory(history, Len(prior), nextStates))
+                 /\ MembershipInitialHistory(start, Append(prior, plan),
+                        ExtendInitialHistory(history, Len(prior), nextStates))
+            BY <2>3, <2>4, AppendProperties,
+                SMT DEF EnumeratedInitialHistory, MembershipInitialHistory,
+                    ExtendInitialHistory
+        <2>. QED
+            BY <2>6, <2>7 DEF InitialHistoriesExist
+    <1>3. \A plans \in Seq(InitializationPlans) : P(plans)
+        BY <1>1, <1>2, SequencesInductionAppend
+    <1>. QED
+        BY <1>3 DEF P
 
 Instructions == [target: Vars, rhs: [States -> Values]]
 AdvanceSource(current, instruction) ==
