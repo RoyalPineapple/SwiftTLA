@@ -435,6 +435,59 @@ THEOREM EmittedCopyMatchesOrderedInstructions ==
         BY <1>1, <1>2, <1>5, EmittedCopyStep,
             OrderedDoTransitionEquivalence
 
+VARIABLES orderedPC, orderedX, orderedY
+Repeated == INSTANCE OrderedCopy WITH pc <- orderedPC, x <- orderedX, y <- orderedY
+
+SourceOrderedInitial ==
+    /\ orderedPC = "copy"
+    /\ orderedX = 1
+    /\ orderedY = 0
+
+THEOREM EmittedOrderedInitial ==
+    Repeated!Init <=> SourceOrderedInitial
+    BY SMT DEF Repeated!Init, SourceOrderedInitial
+
+SourceOrderedCopyStep ==
+    /\ orderedPC = "copy"
+    /\ orderedX' = orderedX + 1
+    /\ orderedY' = orderedX + 1
+    /\ orderedPC' = "repeatWrites"
+
+THEOREM EmittedOrderedCopyStep ==
+    ASSUME orderedX \in Int
+    PROVE Repeated!copy <=> SourceOrderedCopyStep
+    BY SMT DEF Repeated!copy, SourceOrderedCopyStep
+
+SourceRepeatedWrites ==
+    /\ orderedPC = "repeatWrites"
+    /\ orderedX' = orderedX + 2
+    /\ orderedY' = orderedY
+    /\ orderedPC' = "Done"
+
+THEOREM EmittedRepeatedWrites ==
+    ASSUME orderedX \in Int
+    PROVE Repeated!repeatWrites <=> SourceRepeatedWrites
+    BY SMT DEF Repeated!repeatWrites, SourceRepeatedWrites
+
+SourceOrderedTerminating ==
+    /\ orderedPC = "Done"
+    /\ orderedPC' = orderedPC
+    /\ orderedX' = orderedX
+    /\ orderedY' = orderedY
+
+THEOREM EmittedOrderedTerminating ==
+    Repeated!Terminating <=> SourceOrderedTerminating
+    BY SMT DEF Repeated!Terminating, SourceOrderedTerminating
+
+SourceOrderedNext ==
+    SourceOrderedCopyStep \/ SourceRepeatedWrites \/ SourceOrderedTerminating
+
+THEOREM EmittedOrderedNext ==
+    ASSUME orderedX \in Int
+    PROVE Repeated!Next <=> SourceOrderedNext
+    BY EmittedOrderedCopyStep, EmittedRepeatedWrites,
+        EmittedOrderedTerminating DEF Repeated!Next, SourceOrderedNext
+
 SourceGuardedChoice ==
     /\ choiceSelected = 0
     /\ (choiceSelected' = 1 \/ choiceSelected' = 2)

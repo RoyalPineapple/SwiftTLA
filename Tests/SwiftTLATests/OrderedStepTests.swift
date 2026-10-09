@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 @testable import UpstreamParity
@@ -19,6 +20,17 @@ import Testing
             initialMachines: OrderedCopyModel.initialMachines(), maximumStates: 4)
         #expect(graph.transitions.count == 3)
         #expect(Set(graph.transitions.keys.map { [$0.state.x, $0.state.y] }) == [[1, 0], [2, 2], [4, 2]])
+    }
+
+    @Test("The checked repeated-write module is the generated TLA output")
+    func renderedRepeatedWriteProofInput() throws {
+        let rendered = try OrderedCopyModel.render().tlaBundle.root.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/OrderedCopy.tla")
+            .standardizedFileURL
+        let checkedModule = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(rendered == checkedModule)
     }
 
     @Test("Choices and following statements read their current branch values")
