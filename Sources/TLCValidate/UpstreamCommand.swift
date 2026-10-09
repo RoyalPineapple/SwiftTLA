@@ -11,7 +11,7 @@ private enum UpstreamCommandError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            "Usage: tlc-validate upstream list | upstream run --case <id-or-all> --output <directory> [--oracle <completed-generated-oracle>] | upstream trace-reference --output <directory> | upstream shiviz-reference --output <directory> | upstream export-reference --output <directory> | upstream cache-key --case <id> | upstream recompare --case <id> --evidence <directory> | upstream compare-retained-graphs --case <id> --evidence <directory> --output <directory> | upstream annotate --case <id> --evidence <directory>"
+            "Usage: tlc-validate upstream list | upstream run --case <id-or-all> --output <directory> [--oracle <completed-generated-oracle>] | upstream cache-key --case <id> | upstream recompare --case <id> --evidence <directory> | upstream compare-retained-graphs --case <id> --evidence <directory> --output <directory> | upstream annotate --case <id> --evidence <directory>"
         case .unknownCase(let id): "unknown upstream case: \(id)"
         case .invalidToolchain: "invalid pinned TLC toolchain"
         case .outputExists(let path): "output already exists: \(path)"
@@ -26,53 +26,6 @@ func runUpstream(arguments: [String]) -> Never {
             at: root.appendingPathComponent("Verification/FiniteGraph/cases.json"))
         if arguments == ["list"] {
             print(String(decoding: try JSONEncoder().encode(manifest.cases.map(\.id)), as: UTF8.self))
-            exit(0)
-        }
-        if arguments.count == 3,
-           ["trace-reference", "shiviz-reference", "export-reference"].contains(arguments[0]),
-           arguments[1] == "--output" {
-            let output = URL(fileURLWithPath: arguments[2]).standardizedFileURL
-            guard !FileManager.default.fileExists(atPath: output.path) else {
-                throw UpstreamCommandError.outputExists(output.path)
-            }
-            let environment = ProcessInfo.processInfo.environment
-            let toolRoot = URL(fileURLWithPath: try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment))
-            let lock = try decode(PinnedTLCToolchain.self,
-                at: root.appendingPathComponent("Verification/FiniteGraph/toolchain.json"))
-            guard lock.schema == "TLCReferencePin",
-                  let archive = lock.java.archives[try normalizedArchitecture()] else {
-                throw UpstreamCommandError.invalidToolchain
-            }
-            let pin = try referencePin(from: lock, javaArchive: archive, toolRoot: toolRoot)
-            let tools = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: root, pin: pin)
-            let reference = arguments[0]
-            let timeoutKey = reference == "trace-reference" ? "SWIFTTLA_TRACE_TIMEOUT_SECONDS"
-                : reference == "shiviz-reference" ? "SWIFTTLA_SHIVIZ_TIMEOUT_SECONDS"
-                : "SWIFTTLA_EXPORT_TIMEOUT_SECONDS"
-            let timeout = TimeInterval(environment[timeoutKey]
-                ?? (reference == "trace-reference" ? "1800" : "120")) ?? 0
-            guard timeout.isFinite, timeout > 0 else { throw UpstreamCommandError.usage }
-            if reference == "trace-reference" {
-                let verdict = try EWD998ChanTraceReference.capture(
-                    repositoryRoot: root, toolRoot: toolRoot, tools: tools, pin: pin,
-                    timeout: timeout, to: output)
-                print("upstream ewd998-chan-trace: TraceAccepted \(verdict.rawValue)")
-            } else {
-                guard let base = manifest.cases.first(where: { $0.id == "ewd998-chan-id-0" }) else {
-                    throw UpstreamCommandError.unknownCase("ewd998-chan-id-0")
-                }
-                if reference == "shiviz-reference" {
-                    try EWD998ChanIDShivizReference.capture(
-                        repositoryRoot: root, base: base, tools: tools, pin: pin,
-                        timeout: timeout, to: output)
-                    print("upstream ewd998-chan-id-shiviz: terminal reference probe")
-                } else {
-                    try EWD998ChanIDExportReference.capture(
-                        repositoryRoot: root, base: base, toolRoot: toolRoot,
-                        tools: tools, pin: pin, timeout: timeout, to: output)
-                    print("upstream ewd998-chan-id-export: terminal no-network reference probe")
-                }
-            }
             exit(0)
         }
         if arguments.count == 7, arguments[0] == "compare-retained-graphs",

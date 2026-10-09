@@ -8,20 +8,23 @@ The [coverage ledger](UpstreamExamples/coverage.json) owns per-criterion, module
 configuration, and evidence status; this checklist owns only the sequence and
 admission gates. Do not credit a partial graph, timeout, or unrun configuration.
 
-As recorded in the ledger on 2026-10-08, all 19 DSL criteria are marked
-implemented with requirement-specific historical acceptance evidence. AC-13 was
-accepted on frozen PR SHA `852295bc`, with all five ordinary CI jobs and the
-unfiltered validation matrix green. Sixty of the 234 published configurations
-have historical hosted-match evidence. The later PR head still needs its own
-admission result; none of these counts completes the 78-family corpus.
+All 19 DSL criteria have requirement-specific historical acceptance evidence.
+The final PR source still needs its own criterion audit and hosted admission.
+The full matrix on `a7500dc2` failed because EWD998 N=4 exceeded TLC's
+three-hour limit before completing its graph. That result remains incomplete,
+not a DSL failure or parity match. The EWD998 family-specific work is deferred
+to the next PR; the already represented AsyncTerminationDetection configuration
+stays in this PR.
 
 ## 1. Close draft PR #394 without expanding its corpus
 
-- [ ] Reconcile the frozen candidate's ordinary CI and full, unfiltered
-      Independent Validation Pipeline once both are terminal. Confirm the PR
-      head, source/tool/input pins, every required job, and nonempty retained
-      artifacts. The existing heartbeat reports the terminal result; do not
-      restart or compete with the run while it is active.
+- [x] Reconcile `a7500dc2`: ordinary CI passed; the unfiltered validation
+      matrix failed only because EWD998 N=4 timed out. Do not credit its partial
+      graph or reuse that SHA for admission.
+- [ ] Keep the 19-criterion DSL contract and existing small acceptance models;
+      move the added EWD998 family variants, references, and configurations to
+      the follow-up PR. Do not delete the baseline AsyncTerminationDetection
+      model or its complete parity case.
 - [ ] Fix only a demonstrated failure. For each fix, run the exact focused
       check through `scripts/local-validation.sh`, then related focused checks.
       Local diagnostics never substitute for hosted evidence.
@@ -38,16 +41,15 @@ admission result; none of these counts completes the 78-family corpus.
 
 ## 2. Finish EWD998 as one family
 
-Use the separate EWD998 worktree while PR #394 is frozen; do not push a
-competing candidate during its admission run. The ledger currently records
-three hosted-matched, three implemented-but-unverified, and five missing
-published EWD998 configurations. Source-defined `*_opts` and campaign variants
-also require explicit dispositions and evidence.
+The `codex/ewd998-family-snapshot` branch retains the EWD998 work removed from
+#394. Its historical focused results remain useful diagnostics, but this PR's
+ledger credits only AsyncTerminationDetection. Source-defined `*_opts` and
+campaign variants still require explicit dispositions and evidence.
 
-- [ ] Finish the already implemented `ewd998-0`, `ewd998-small-0`, and
-      `ewd998-chan-0` configurations on both hosted paths. The N=4 graph's
-      reported scale is a capacity issue to measure, not permission to shrink
-      the configuration or call a timeout complete.
+- [ ] Restore and finish the deferred EWD998 configurations on both hosted
+      paths. The N=4 generated-TLC oracle timed out after three hours with
+      119,465,720 distinct states and 11,482,251 states queued. Diagnose
+      capacity without shrinking the configuration or calling it complete.
 - [ ] For `EWD998ChanTrace`, bind the exact pinned TLA/CFG, implementation log,
       and CommunityModules closure to a hosted TLC run. Retain a TLC-selected
       causal ordering, validate it against the complete raw events, and make

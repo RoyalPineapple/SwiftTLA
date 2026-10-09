@@ -166,8 +166,7 @@ run_guarded() {
     if [[ "$mode" == "static" ]]; then
         git diff --check
         ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }' \
-            .github/workflows/validation-pipeline.yml .github/workflows/validation-case.yml \
-            .github/workflows/ewd998-trace-reference.yml
+            .github/workflows/validation-pipeline.yml .github/workflows/validation-case.yml
         "$(dirname "$0")/setup-finite-graph-tools.sh" --verify-bridge-sources
         bash "$(dirname "$0")/verify-finite-graph-input-pins.sh"
         return
