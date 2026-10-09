@@ -5880,7 +5880,7 @@
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
       "audit": "Pinned AsyncTerminationDetection, EWD998, EWD998Chan, EWD998ChanID, EWD998PCal, ChanID export/ShiViz, ChanTrace, the source-defined opts variants and orchestration harness, and the Folds/Utils helpers inspected; remaining source-defined variants still need disposition audits",
-      "gap": "AsyncTerminationDetection matched both complete hosted comparison paths at bc35e8d2. Safra's EWD998 N=3 matched both complete hosted comparison paths at d873803c: the symbolic-membership fix cleared the prior native failure. EWD998 N=4 and EWD998Chan N=3 have typed model-owned scenarios and pinned inputs but still lack both hosted comparisons. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. EWD998ChanID N=5 matched both hosted comparison paths at c1c4ee49 on its complete configured VIEW graph and four selected properties; this does not prove equality of the full clock-bearing graph or final-revision admission. The trace source/CFG and optional CommunityModules closure are pinned but not bound to a hosted check. The source-defined EWD998_opts and EWD998Chan_opts generator variants and EWD998_optsSC campaign remain unimplemented. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
+      "gap": "AsyncTerminationDetection matched both complete hosted comparison paths at bc35e8d2. Safra's EWD998 N=3 matched both complete hosted comparison paths at d873803c, and EWD998Chan N=3 matched both complete hosted comparison paths at 8da377e3. EWD998 N=4 has a typed model-owned scenario and pinned inputs but still lacks hosted comparison. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. EWD998ChanID N=5 matched both hosted comparison paths at c1c4ee49 on its complete configured VIEW graph and four selected properties; this does not prove equality of the full clock-bearing graph or final-revision admission. The trace source/CFG and optional CommunityModules closure are pinned but not bound to a hosted check. The source-defined EWD998_opts and EWD998Chan_opts generator variants and EWD998_optsSC campaign remain unimplemented. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5942,7 +5942,7 @@
         {
           "path": "specifications/ewd998/EWD998Chan.tla",
           "role": "configured root",
-          "reason": "Published N=3 configuration has a typed model-owned scenario and pinned inputs; hosted parity remains pending.",
+          "reason": "Published N=3 configuration has a typed model-owned scenario and pinned inputs. Both complete hosted comparison paths matched at 8da377e3; other EWD998 family variants remain open.",
           "implementations": ["Sources/UpstreamParity/Examples/EWD998Chan.swift"],
           "dispositionComplete": false
         },
@@ -6080,11 +6080,24 @@
           "module": "specifications/ewd998/EWD998Chan.tla",
           "configuration": "specifications/ewd998/EWD998Chan.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "8da377e3e2b53f93b95b5b808ed404cdd19c0e95",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998Chan.swift", "scenario": "EWD998Chan", "caseID": "ewd998-chan-0"}],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "8da377e3e2b53f93b95b5b808ed404cdd19c0e95",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37884284496",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37884284496/artifacts/11598537838",
+            "artifactDigest": "sha256:22a7be96a6c61a2b15ea1da5199e63f203e1a2c30ca06d4ae30e7caddc0c60fd",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37884284496/artifacts/11596847901",
+            "nativeArtifactDigest": "sha256:6ca4f86e444aa9a242731b1614b9c520ce26a460c6423971d32c1aafaba0afa1",
+            "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37884284496/artifacts/11596951649",
+            "generatedOracleArtifactDigest": "sha256:c7908f34f013e2b5478b68e89084069d7db696ae2c6937102df946f2d04a7ef5",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Focused hosted native versus generated-TLA TLC and generated-TLA TLC versus pinned-upstream TLC comparisons are exact on complete initial-state sets and labeled graphs: 192 initial states, 1,524,022 reachable states, and 8,738,970 edges. TypeOK and EWD998Spec are satisfied on all paths; the pinned CFG disables deadlock. The retained source-sha markers and cache origins identify 8da377e3 and run 37884284496. The reference root TLA and CFG hashes ebdb5e9c6469fb1afc3b12198e1e2159b3ff3fa76d7bd15e5e11dce92b72313c and bd7455b8ba55de2d58bbcf8c6ff2aa42e285f9bbd153de4ba4653086fad64f27 match the pinned case. TLC paths record v1.8.0, Temurin 17.0.19+10, and exact jar and bridge hashes. This focused match does not establish full-matrix or EWD998-family completion."
+          }]
         },
         {
           "module": "specifications/ewd998/EWD998ChanID.tla",
