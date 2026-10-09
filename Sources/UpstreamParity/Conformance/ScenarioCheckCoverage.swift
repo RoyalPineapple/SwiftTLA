@@ -42,12 +42,14 @@ package struct ScenarioCheckCoverage: Codable, Equatable, Sendable {
             from: Data(contentsOf: reportURL))
         let coverage = try Self(scenario)
         let reported = Set(report.generatedProperties.keys)
+        let unreported = Set(coverage.selectedProperties).subtracting(reported)
         guard report.schema == "swifttla.upstream-tlc-parity", report.caseID == caseID,
               report.deadlockSelected == coverage.checksDeadlock,
               report.postconditionSelected == (coverage.postconditionName != nil),
               reported == Set(report.referenceProperties.keys),
               reported.isSubset(of: Set(coverage.selectedProperties)),
-              !report.graphCompared || reported == Set(coverage.selectedProperties) else {
+              // PlusCal assertions are checked by TLC's transition execution, not named CFG properties.
+              !report.graphCompared || unreported.allSatisfy({ $0.hasPrefix("__pcal_assert_") }) else {
             throw EvidenceFormatError.invalidField(record: caseID, field: "upstream check coverage")
         }
         if let expected = scenario.postconditionExpectation,

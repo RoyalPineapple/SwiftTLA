@@ -31,12 +31,25 @@ struct UpstreamScenarioCoverageTests {
         }
     }
 
-    private func retainedReport(properties: [String: ValidationVerdict]) throws -> URL {
+    @Test("Echo's complete selected checks annotate exact upstream evidence")
+    func annotatesEchoChecks() throws {
+        let scenario = try #require(EchoModel.validationScenarios().first { $0.name == "MCEcho" })
+        let url = try retainedReport(properties: [
+            "AncestorProperties": .satisfied, "TypeOK": .satisfied
+        ], deadlockSelected: true)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try ScenarioCheckCoverage.annotateUpstream(scenario, caseID: "fixture", reportURL: url)
+    }
+
+    private func retainedReport(properties: [String: ValidationVerdict], deadlockSelected: Bool = false) throws -> URL {
         let report = UpstreamTLCParityReport(
             schema: "swifttla.upstream-tlc-parity", caseID: "fixture",
             result: "exact", graphCompared: true, difference: nil,
             generatedProperties: properties, referenceProperties: properties,
-            generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false,
+            generatedDeadlock: deadlockSelected ? .satisfied : nil,
+            referenceDeadlock: deadlockSelected ? .satisfied : nil,
+            deadlockSelected: deadlockSelected,
             generatedPostcondition: nil, referencePostcondition: nil, postconditionSelected: false)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try JSONEncoder().encode(report).write(to: url)
