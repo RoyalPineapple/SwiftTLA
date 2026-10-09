@@ -50,7 +50,8 @@ package enum EWD998ChanIDShivizReference {
         let check = try FiniteGraphCase(
             id: id, exploration: .init(maximumStateLimit: Int.max, symmetryReduction: .disabled),
             moduleSHA256: moduleSHA, cfgSHA256: cfgSHA,
-            arguments: ["-workers", "1", "-fp", "1"], environment: [:], pin: pin)
+            arguments: ["-workers", "1", "-fp", "1", "-noTE", "-deadlock",
+                "-generate", "-depth", "99999"], environment: [:], pin: pin)
         let request = TLCProcessRequest(
             javaExecutable: tools.java, jar: tools.jar, bridgeJar: tools.bridgeJar,
             bundle: bundle, graphEvents: work.appendingPathComponent("unused.bin"),
