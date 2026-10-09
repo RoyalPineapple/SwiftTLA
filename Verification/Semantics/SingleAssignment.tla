@@ -162,6 +162,38 @@ THEOREM CompleteDeltaUpdate ==
                 (t = ApplyDelta(s, keys, delta)) <=> RenderedDelta(s, t, keys, delta)
     BY SMT DEF ApplyDelta, RenderedDelta, States
 
+EnumeratedInitialStates(prior, candidates) ==
+    {[prior EXCEPT ![Key] = candidates[index]] : index \in 1..Len(candidates)}
+MembershipInitialStates(prior, domain) ==
+    {state \in States :
+        /\ state[Key] \in domain
+        /\ \A variable \in Vars \ {Key} : state[variable] = prior[variable]}
+
+THEOREM InitialMembershipMatchesEnumeration ==
+    \A prior \in States :
+        \A candidates \in Seq(Values), domain \in SUBSET Values :
+            SequenceMembers(candidates) = domain
+            => EnumeratedInitialStates(prior, candidates)
+               = MembershipInitialStates(prior, domain)
+    BY KeyIsVariable, SMT DEF EnumeratedInitialStates,
+        MembershipInitialStates, SequenceMembers, States
+
+ExtendEnumeratedInitialStates(priorStates, candidates) ==
+    UNION {EnumeratedInitialStates(prior, candidates[prior]) : prior \in priorStates}
+ExtendMembershipInitialStates(priorStates, domains) ==
+    UNION {MembershipInitialStates(prior, domains[prior]) : prior \in priorStates}
+
+THEOREM InitialMembershipComposesAcrossPriorChoices ==
+    \A priorStates \in SUBSET States :
+        \A candidates \in [States -> Seq(Values)] :
+            \A domains \in [States -> SUBSET Values] :
+                (\A prior \in priorStates :
+                    SequenceMembers(candidates[prior]) = domains[prior])
+                => ExtendEnumeratedInitialStates(priorStates, candidates)
+                   = ExtendMembershipInitialStates(priorStates, domains)
+    BY InitialMembershipMatchesEnumeration,
+        SMT DEF ExtendEnumeratedInitialStates, ExtendMembershipInitialStates
+
 Instructions == [target: Vars, rhs: [States -> Values]]
 AdvanceSource(current, instruction) ==
     [current EXCEPT ![instruction.target] = instruction.rhs[current]]
@@ -976,8 +1008,12 @@ THEOREM CurrentAdditionHasRepresentableOperandMismatch ==
         /\ WithinSwiftInt(rhs)
         /\ CurrentNativeAddOutcome(lhs, rhs)
            # CurrentRenderedAddOutcome(lhs, rhs)
-    BY SwiftIntBounds, SMT DEF CurrentNativeAddOutcome,
-        CurrentRenderedAddOutcome, WithinSwiftInt, SwiftIntBounds
+    PROOF
+    <1>1. USE SwiftIntBounds DEF SwiftIntBounds
+    <1>2. WITNESS SwiftIntMax \in Int, 1 \in Int
+    <1>. QED
+        BY SwiftIntBounds, SMT DEF CurrentNativeAddOutcome,
+            CurrentRenderedAddOutcome, WithinSwiftInt, SwiftIntBounds
 
 RenderedSignedDivision(dividend, divisor) ==
     (LET __SignedDivision_dividend0 == dividend
