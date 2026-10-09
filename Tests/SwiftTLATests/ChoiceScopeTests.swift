@@ -97,6 +97,16 @@ struct ChoiceScopeTests {
         for action in unreachable {
             #expect(try successors(of: .and(.guard_(.bool(false)), action)).isEmpty)
         }
+
+        let guarded = ActionExpr.and(
+            .guard_(.equal(.variable("chosen"), .int(1))), unreachable[0])
+        #expect(try successors(of: guarded).isEmpty)
+        let compilation = try canonicalTestSpec(
+            variables: [("chosen", .value(.int(0))), ("copied", .value(.int(0)))],
+            actions: [("pick", guarded, [])]
+        ).compile()
+        #expect(try compilation.render().tlaBundle.tla.contains(
+            "IF ((chosen = 1)) = TRUE THEN"))
     }
 
     @Test("Repeated normalization preserves conditional choice scopes and frame clauses")

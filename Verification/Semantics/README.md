@@ -127,6 +127,13 @@ general output links remain to be proved. Removing the merge-compatibility
 guard in a local negative control made the successor theorem fail; restoring
 it restored all obligations.
 
+The TLA renderer now prints action conjunction as `IF left THEN right ELSE
+FALSE`, matching the native machine's left-first disabled-branch evaluation.
+`LazyConjunctionPreservesBooleanValue` proves equivalence to mathematical
+conjunction for total Boolean operands. The output-linked proof modules were
+refreshed against actual renderer output and re-proved; this does not yet
+prove arbitrary action operands are total or establish a universal output link.
+
 The guarded-choice composition rule preserves complete labeled edges and
 enabledness for any choice domain, provided corresponding branches produce
 equal edge sets and both outputs use the same guard and domain. These premises

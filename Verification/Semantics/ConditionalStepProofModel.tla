@@ -5,8 +5,8 @@ VARIABLES pc, chooseFirst, value
 
 vars == <<pc, chooseFirst, value>>
 
-choose == (((pc = "choose")) = TRUE /\ ((LET __atomic_0 == (~chooseFirst) IN ((__atomic_0) = TRUE /\ (LET __atomic_1 == 1 IN ((TRUE /\ chooseFirst' = __atomic_0) /\ (value' = __atomic_1 /\ pc' = "Done"))))) \/ (LET __atomic_0 == (~chooseFirst) IN (((~__atomic_0)) = TRUE /\ (LET __atomic_2 == 2 IN ((TRUE /\ chooseFirst' = __atomic_0) /\ (value' = __atomic_2 /\ pc' = "Done")))))))
-Terminating == (((((pc = "Done")) = TRUE /\ UNCHANGED pc) /\ (UNCHANGED chooseFirst /\ UNCHANGED value)) /\ UNCHANGED pc)
+choose == (IF ((pc = "choose")) = TRUE THEN ((LET __atomic_0 == (~chooseFirst) IN (IF (__atomic_0) = TRUE THEN (LET __atomic_1 == 1 IN (IF (IF TRUE THEN chooseFirst' = __atomic_0 ELSE FALSE) THEN (IF value' = __atomic_1 THEN pc' = "Done" ELSE FALSE) ELSE FALSE)) ELSE FALSE)) \/ (LET __atomic_0 == (~chooseFirst) IN (IF ((~__atomic_0)) = TRUE THEN (LET __atomic_2 == 2 IN (IF (IF TRUE THEN chooseFirst' = __atomic_0 ELSE FALSE) THEN (IF value' = __atomic_2 THEN pc' = "Done" ELSE FALSE) ELSE FALSE)) ELSE FALSE))) ELSE FALSE)
+Terminating == (IF (IF (IF ((pc = "Done")) = TRUE THEN UNCHANGED pc ELSE FALSE) THEN (IF UNCHANGED chooseFirst THEN UNCHANGED value ELSE FALSE) ELSE FALSE) THEN UNCHANGED pc ELSE FALSE)
 
 Init ==
   /\ pc = "choose"

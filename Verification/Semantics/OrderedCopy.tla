@@ -5,9 +5,9 @@ VARIABLES pc, x, y
 
 vars == <<pc, x, y>>
 
-copy == (((pc = "copy")) = TRUE /\ (LET __atomic_0 == (x + 1) IN (LET __atomic_1 == __atomic_0 IN ((TRUE /\ x' = __atomic_0) /\ (y' = __atomic_1 /\ pc' = "repeatWrites")))))
-repeatWrites == (((pc = "repeatWrites")) = TRUE /\ (LET __atomic_2 == (x + 1) IN (LET __atomic_3 == (__atomic_2 + 1) IN ((TRUE /\ x' = __atomic_3) /\ (pc' = "Done" /\ UNCHANGED y)))))
-Terminating == (((((pc = "Done")) = TRUE /\ UNCHANGED pc) /\ (UNCHANGED x /\ UNCHANGED y)) /\ UNCHANGED pc)
+copy == (IF ((pc = "copy")) = TRUE THEN (LET __atomic_0 == (x + 1) IN (LET __atomic_1 == __atomic_0 IN (IF (IF TRUE THEN x' = __atomic_0 ELSE FALSE) THEN (IF y' = __atomic_1 THEN pc' = "repeatWrites" ELSE FALSE) ELSE FALSE))) ELSE FALSE)
+repeatWrites == (IF ((pc = "repeatWrites")) = TRUE THEN (LET __atomic_2 == (x + 1) IN (LET __atomic_3 == (__atomic_2 + 1) IN (IF (IF TRUE THEN x' = __atomic_3 ELSE FALSE) THEN (IF pc' = "Done" THEN UNCHANGED y ELSE FALSE) ELSE FALSE))) ELSE FALSE)
+Terminating == (IF (IF (IF ((pc = "Done")) = TRUE THEN UNCHANGED pc ELSE FALSE) THEN (IF UNCHANGED x THEN UNCHANGED y ELSE FALSE) ELSE FALSE) THEN UNCHANGED pc ELSE FALSE)
 
 Init ==
   /\ pc = "copy"

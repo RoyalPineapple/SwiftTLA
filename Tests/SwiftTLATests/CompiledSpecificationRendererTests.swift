@@ -228,7 +228,7 @@ struct CompiledSpecificationRendererTests {
                 .and(.assign(variable, one), .unchanged(variable)),
                 .or(.guard_(no), .assign(variable, one)))))
         #expect(try renderer.action(action)
-            == #"(\E selected \in {1}: (LET saved == 1 IN (IF TRUE THEN ((count' = 1 /\ UNCHANGED count)) ELSE ((FALSE \/ count' = 1)))))"#)
+            == #"(\E selected \in {1}: (LET saved == 1 IN (IF TRUE THEN ((IF count' = 1 THEN UNCHANGED count ELSE FALSE)) ELSE ((FALSE \/ count' = 1)))))"#)
         let exists = CompiledExpression(operation: .exists(selected), resultType: .bool, children: [domain, yes])
         #expect(try renderer.action(.guard_(exists)) == #"((\E selected \in {1} : TRUE)) = TRUE"#)
         let trueQuery = CompiledStateQuery(expression: yes, enabledActions: [])
@@ -264,7 +264,7 @@ struct CompiledSpecificationRendererTests {
             .define(binder, yes, guardAction), .ifElse(yes, guardAction, guardAction)] {
             let scoped = try renderer.action(action)
             #expect(scoped.first == "(" && scoped.last == ")")
-            #expect(try renderer.action(.and(action, action)) == "(\(scoped) /\\ \(scoped))")
+            #expect(try renderer.action(.and(action, action)) == "(IF \(scoped) THEN \(scoped) ELSE FALSE)")
         }
         let local = StateExpr.letIn([LocalOperator("item", body: .bool(true))], .variable("item"))
         let specification = TLASpec(name: "SiblingOperators", variables: [], actions: [], invariants: [
