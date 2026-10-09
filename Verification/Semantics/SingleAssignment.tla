@@ -1,5 +1,5 @@
 ----------------------- MODULE SingleAssignment -----------------------
-EXTENDS TLAPS, GeneratedAtomicCopyProofModel
+EXTENDS TLAPS, NaturalsInduction, SequenceTheorems, GeneratedAtomicCopyProofModel
 VARIABLE choiceSelected
 Choice == INSTANCE GeneratedGuardedChoiceProofModel WITH selected <- choiceSelected
 CONSTANTS Vars, Values, Key, ActionLabels
@@ -44,6 +44,97 @@ THEOREM CompleteDeltaUpdate ==
             \A delta \in [keys -> Values] :
                 (t = ApplyDelta(s, keys, delta)) <=> RenderedDelta(s, t, keys, delta)
     BY SMT DEF ApplyDelta, RenderedDelta, States
+
+Instructions == [target: Vars, rhs: [States -> Values]]
+AdvanceSource(current, instruction) ==
+    [current EXCEPT ![instruction.target] = instruction.rhs[current]]
+AdvanceSchedule(original, keys, values, instruction) ==
+    LET current == ApplyDelta(original, keys, values)
+        updated == instruction.rhs[current]
+    IN  ApplyDelta(original, keys \cup {instruction.target},
+            [values EXCEPT ![instruction.target] = updated])
+
+THEOREM EmptySchedule ==
+    \A original \in States : ApplyDelta(original, {}, original) = original
+    BY SMT DEF ApplyDelta, States
+
+THEOREM OrderedScheduleStep ==
+    \A original, values \in States :
+        \A keys \in SUBSET Vars :
+            \A instruction \in Instructions :
+                AdvanceSource(ApplyDelta(original, keys, values), instruction)
+                = AdvanceSchedule(original, keys, values, instruction)
+    BY SMT DEF AdvanceSource, AdvanceSchedule, ApplyDelta, Instructions, States
+
+ScheduledRecords == [keys: SUBSET Vars, values: States]
+AdvanceScheduleRecord(original, prior, instruction) ==
+    LET current == ApplyDelta(original, prior.keys, prior.values)
+    IN [keys |-> prior.keys \cup {instruction.target},
+        values |-> [prior.values EXCEPT ![instruction.target] = instruction.rhs[current]]]
+
+SourceHistory(original, steps, history) ==
+    /\ history[0] = original
+    /\ \A index \in 1..Len(steps) :
+        history[index] = AdvanceSource(history[index - 1], steps[index])
+
+ScheduledHistory(original, steps, history) ==
+    /\ history[0] = [keys |-> {}, values |-> original]
+    /\ \A index \in 1..Len(steps) :
+        history[index] = AdvanceScheduleRecord(original, history[index - 1], steps[index])
+
+THEOREM OrderedHistoryStep ==
+    \A original \in States :
+        \A prior \in ScheduledRecords :
+            \A instruction \in Instructions :
+                AdvanceSource(ApplyDelta(original, prior.keys, prior.values), instruction)
+                = ApplyDelta(original,
+                    AdvanceScheduleRecord(original, prior, instruction).keys,
+                    AdvanceScheduleRecord(original, prior, instruction).values)
+    BY OrderedScheduleStep, SMT DEF AdvanceScheduleRecord, AdvanceSchedule,
+        ScheduledRecords, Instructions, States
+
+HistoryAgrees(original, source, scheduled, index) ==
+    source[index] = ApplyDelta(original, scheduled[index].keys, scheduled[index].values)
+
+THEOREM OrderedHistoriesAgree ==
+    ASSUME NEW original \in States,
+           NEW steps \in Seq(Instructions),
+           NEW source \in [0..Len(steps) -> States],
+           NEW scheduled \in [0..Len(steps) -> ScheduledRecords],
+           SourceHistory(original, steps, source),
+           ScheduledHistory(original, steps, scheduled)
+    PROVE  \A index \in 0..Len(steps) :
+               HistoryAgrees(original, source, scheduled, index)
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(steps) => HistoryAgrees(original, source, scheduled, index)
+    <1>1. P(0)
+        BY EmptySchedule, SMT DEF P, HistoryAgrees, SourceHistory, ScheduledHistory
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(steps)
+                     PROVE HistoryAgrees(original, source, scheduled, index + 1)
+            BY SMT DEF P
+        <2>1. index \in 0..Len(steps)
+            BY P(index), SMT DEF P
+        <2>2. steps[index + 1] \in Instructions
+            BY LenProperties, SMT
+        <2>3. scheduled[index] \in ScheduledRecords
+            BY <2>1, SMT
+        <2>4. HistoryAgrees(original, source, scheduled, index)
+            BY <2>1, P(index), SMT DEF P
+        <2>5. source[index + 1] = AdvanceSource(source[index], steps[index + 1])
+            BY SMT DEF SourceHistory
+        <2>6. scheduled[index + 1] =
+                 AdvanceScheduleRecord(original, scheduled[index], steps[index + 1])
+            BY SMT DEF ScheduledHistory
+        <2>. QED
+            BY <2>2, <2>3, <2>4, <2>5, <2>6, OrderedHistoryStep,
+                SMT DEF HistoryAgrees
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>4. QED
+        BY <1>3, SMT DEF P
 
 MergeCompatible(firstKeys, first, secondKeys, second) ==
     [key \in firstKeys \cup secondKeys |->
