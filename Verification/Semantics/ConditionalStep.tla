@@ -9,8 +9,8 @@ SourceConditionalInit ==
 SourceConditionalChoose ==
     /\ pc = "choose"
     /\ pc' = "Done"
-    /\ chooseFirst' = chooseFirst
-    /\ value' = IF chooseFirst THEN 1 ELSE 2
+    /\ chooseFirst' = ~chooseFirst
+    /\ value' = IF ~chooseFirst THEN 1 ELSE 2
 
 SourceConditionalTerminating ==
     /\ pc = "Done"

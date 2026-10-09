@@ -196,16 +196,15 @@ Widening the emitted choice domain from `1..2` to `1..3` made the action proof
 fail; restoring it restored the proof. This is a second output-linked case,
 not a general proof of guarded choice or of the Swift emitter.
 
-`ConditionalStepProofModel.tla` is the complete output from a `#spec` step with
-an `If`/`else` assignment. The fixture test pins those bytes and checks the
-generated Swift machine from both possible initial Boolean values. In a
-separate module, `ConditionalStep.tla` proves that the emitted initial states,
-both conditional branches, terminating action, and `Next` match independently
-stated source relations over Boolean condition states. This covers one actual
-conditional lowering and TLA output; it does not prove arbitrary conditions,
-expression failures, or the Swift emitter for all states. Changing only the
-emitted false-branch value from `2` to `3` made the branch obligation fail;
-restoring it restored all 9 obligations.
+`ConditionalStepProofModel.tla` is the complete output from a `#spec` step
+that flips a Boolean before an `If`/`else` assignment in the same atomic
+`Do`. The fixture test pins those bytes and checks that the generated Swift
+machine selects the branch from the updated value for both initial Boolean
+values. `ConditionalStep.tla` separately proves that the emitted initial
+states, both conditional branches, terminating action, and `Next` match
+independently stated source relations over Boolean condition states. This
+covers one emitted conditional with a prior write. It does not prove arbitrary
+conditions, expression failures, or the Swift emitter for all states.
 
 TLAPS 1.6.0-pre checked all 404 `SingleAssignment.tla` obligations and all 9
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The

@@ -3,7 +3,7 @@ import Testing
 
 @Suite("Conditional step proof input")
 struct ConditionalStepProofTests {
-    @Test("Both generated conditional branches choose their declared value")
+    @Test("A conditional branch reads the value written earlier in its atomic step")
     func generatedConditionalBranches() throws {
         let initial = try ConditionalStepProofModel.initialMachines()
         #expect(initial.count == 2)
@@ -11,8 +11,8 @@ struct ConditionalStepProofTests {
             let successors = try machine.successors(for: .choose)
             #expect(successors.count == 1)
             let successor = try #require(successors.first)
-            #expect(successor.state.value == (machine.state.chooseFirst ? 1 : 2))
-            #expect(successor.state.chooseFirst == machine.state.chooseFirst)
+            #expect(successor.state.value == (machine.state.chooseFirst ? 2 : 1))
+            #expect(successor.state.chooseFirst == !machine.state.chooseFirst)
             #expect(try !successor.isEnabled(.choose))
         }
         let rendered = try ConditionalStepProofModel.render().tlaBundle.root.tla
