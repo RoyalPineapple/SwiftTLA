@@ -202,11 +202,15 @@ that flips a Boolean before an `If`/`else` assignment in the same atomic
 machine selects the branch from the updated value for both initial Boolean
 values. `ConditionalStep.tla` separately proves that the emitted initial
 states, both conditional branches, terminating action, and `Next` match
-independently stated source relations over Boolean condition states. This
-covers one emitted conditional with a prior write. It does not prove arbitrary
-conditions, expression failures, or the Swift emitter for all states.
+independently stated source relations over Boolean condition states. It also
+proves the generated temporal `Spec` equivalent to the source temporal spec
+under a reachable-state type invariant, and proves the complete state
+relation has a successor for every typed state. This is relational
+no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
+with a prior write, not arbitrary conditions, expression failures, or the
+Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 404 `SingleAssignment.tla` obligations and all 9
+TLAPS 1.6.0-pre checked all 404 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
