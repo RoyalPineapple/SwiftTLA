@@ -2,6 +2,14 @@
 import Testing
 
 @Suite struct SignedIntegerSemanticsTests {
+    @Test("Generated Swift machine uses floor division for negative divisors")
+    func generatedSignedDivision() throws {
+        var machine = try SignedDivisionOutputModel.makeMachine()
+        #expect(machine.state.quotient == 0)
+        let transition = try machine.send(.divide)
+        #expect(transition.after.quotient == -3)
+    }
+
     @Test("Right-first operations preserve the first operand failure")
     func rightOperandFailurePrecedesLeft() {
         let overflow = StateExpr.add(.int(Int.max), .int(1))
