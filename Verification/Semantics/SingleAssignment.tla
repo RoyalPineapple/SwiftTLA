@@ -363,6 +363,67 @@ BranchGuardPlan(steps, position, predicate) ==
     [index \in 0..Len(steps) |->
         IF index = position THEN predicate ELSE AlwaysGuard]
 
+THEOREM ConditionalGuardReadsAfterPrefix ==
+    ASSUME NEW prefix \in Seq(Instructions),
+           NEW branch \in Seq(Instructions),
+           NEW suffix \in Seq(Instructions),
+           NEW predicate \in [States -> BOOLEAN],
+           NEW history \in [0..Len(ConditionalSteps(prefix, branch, suffix)) -> States]
+    PROVE (\A index \in 0..Len(ConditionalSteps(prefix, branch, suffix)) :
+            BranchGuardPlan(ConditionalSteps(prefix, branch, suffix),
+                Len(prefix), predicate)[index][history[index]])
+          <=> predicate[history[Len(prefix)]]
+    BY ConcatProperties, SMT DEF BranchGuardPlan, AlwaysGuard,
+        ConditionalSteps, States
+
+THEOREM ConditionalPrefixIsSourceHistory ==
+    ASSUME NEW original \in States,
+           NEW prefix \in Seq(Instructions),
+           NEW branch \in Seq(Instructions),
+           NEW suffix \in Seq(Instructions),
+           NEW history \in [0..Len(ConditionalSteps(prefix, branch, suffix)) -> States],
+           SourceHistory(original, ConditionalSteps(prefix, branch, suffix), history)
+    PROVE SourceHistory(original, prefix,
+            [index \in 0..Len(prefix) |-> history[index]])
+    BY ConcatProperties, SMT DEF SourceHistory, ConditionalSteps,
+        Instructions, States
+
+THEOREM ConditionalGuardUsesPrefixResult ==
+    ASSUME NEW original \in States,
+           NEW prefix \in Seq(Instructions),
+           NEW branch \in Seq(Instructions),
+           NEW suffix \in Seq(Instructions),
+           NEW predicate \in [States -> BOOLEAN],
+           NEW history \in [0..Len(ConditionalSteps(prefix, branch, suffix)) -> States],
+           NEW prefixHistory \in [0..Len(prefix) -> States],
+           SourceHistory(original, ConditionalSteps(prefix, branch, suffix), history),
+           SourceHistory(original, prefix, prefixHistory)
+    PROVE (\A index \in 0..Len(ConditionalSteps(prefix, branch, suffix)) :
+            BranchGuardPlan(ConditionalSteps(prefix, branch, suffix),
+                Len(prefix), predicate)[index][history[index]])
+          <=> predicate[prefixHistory[Len(prefix)]]
+    PROOF
+    <1>1. SourceHistory(original, prefix,
+            [index \in 0..Len(prefix) |-> history[index]])
+        BY ConditionalPrefixIsSourceHistory
+    <1>2. Len(prefix) <= Len(ConditionalSteps(prefix, branch, suffix))
+        BY ConcatProperties DEF ConditionalSteps
+    <1>3. Len(prefix) \in Nat
+          /\ Len(ConditionalSteps(prefix, branch, suffix)) \in Nat
+        BY LenProperties, ConcatProperties DEF ConditionalSteps
+    <1>4. 0..Len(prefix) \subseteq
+            0..Len(ConditionalSteps(prefix, branch, suffix))
+        BY <1>2, <1>3, SMT
+    <1>5. \A index \in 0..Len(prefix) : history[index] \in States
+        BY <1>4, SMT
+    <1>6. [index \in 0..Len(prefix) |-> history[index]]
+          \in [0..Len(prefix) -> States]
+        BY <1>5, SMT
+    <1>7. [index \in 0..Len(prefix) |-> history[index]] = prefixHistory
+        BY <1>1, <1>6, SourceHistoryIsUnique
+    <1>. QED
+        BY <1>7, ConditionalGuardReadsAfterPrefix
+
 SourceConditionalDoStep(original, prefix, yes, no, suffix, predicate, target) ==
     \/ SourceGuardedDoStep(original, ConditionalSteps(prefix, yes, suffix),
         BranchGuardPlan(ConditionalSteps(prefix, yes, suffix), Len(prefix), predicate), target)

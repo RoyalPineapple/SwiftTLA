@@ -116,13 +116,12 @@ the compiler and output obligations.
 
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is
-placed at history index `Len(prefix)`, the intended state after the prefix.
-TLAPS proves source and
-scheduled transition relations, enabledness, and labeled edges equal for
-every such plan and pure total predicate. A separate induction proves source
-histories unique; the emitted copy fixture uses that theorem instead of a
-large solver-only uniqueness step. Conditional expression evaluation,
-an explicit prefix-history restriction theorem, algorithm lowering, and the
+placed at history index `Len(prefix)`. TLAPS proves that restricting a full
+source history to that index yields a valid prefix history, and uniqueness
+then establishes that the guard reads exactly the state produced by the
+prefix. It also proves source and scheduled transition relations,
+enabledness, and labeled edges equal for every such plan and pure total
+predicate. Conditional expression evaluation, algorithm lowering, and the
 generated output links remain open.
 
 The guarded-history extension assigns a total, pure predicate to each position
@@ -197,7 +196,7 @@ expression failures, or the Swift emitter for all states. Changing only the
 emitted false-branch value from `2` to `3` made the branch obligation fail;
 restoring it restored all 9 obligations.
 
-TLAPS 1.6.0-pre checked all 372 `SingleAssignment.tla` obligations and all 9
+TLAPS 1.6.0-pre checked all 402 `SingleAssignment.tla` obligations and all 9
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
