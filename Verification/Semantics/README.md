@@ -17,7 +17,8 @@ that either backend implements the author's `#spec`.
 
 ## Integer range obligation
 
-Generated Swift retains `Int`; rendered TLA+ uses mathematical integers. A
+Generated Swift retains Swift `Int`; arbitrary-precision integer values are
+not part of the native model API. Rendered TLA+ uses mathematical integers. A
 semantic-preservation claim therefore needs a range proof for every integer
 value evaluated by an accepted program, including intermediate arithmetic in
 initializers, action guards and updates, and selected claims. The bounds are
@@ -35,8 +36,10 @@ links are proved, the universal theorem does not hold for accepted `#spec`.
 active, `SendMsg` can increment a receiver's `pending` count indefinitely.
 Its `pending <= 3` state constraint limits checking, not the generated
 machine's transition relation. A proof that this model always fits Swift
-`Int` would be false; it needs a representable unbounded value type or a
-different, explicitly bounded source model.
+`Int` would be false. Under the chosen `Int` contract, this unbounded model
+cannot receive an unconditional semantic-preservation certificate. A bounded
+replacement would be a different source model and cannot silently count as
+parity with the upstream unbounded transition relation.
 
 ## Choice-expression obligation
 
