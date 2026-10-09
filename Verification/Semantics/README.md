@@ -15,6 +15,23 @@ target only for programs whose export succeeds.
 can agree on an incorrectly lowered program. That agreement does not prove
 that either backend implements the author's `#spec`.
 
+## Checked kernel lemma
+
+`SingleAssignment.tla` proves that replacing one value in a complete state
+has the same successors as a guarded TLA+ assignment to that variable with
+every other variable unchanged. It also proves equality of the corresponding
+enabled-successor predicates. The theorem assumes the assigned key belongs
+to the state's variable set. It is generic over state domains and values.
+
+TLAPS 1.6.0-pre checked all 12 obligations locally with fingerprint reuse
+disabled. The arm64 TLAPS archive had SHA-256
+`fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
+its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
+SHA-256 `8bb3439772cafd75240d61abf255e89122850bab93563d1283b048359ab4e88f`.
+This is local diagnostic evidence, not hosted admission. The lemma does not
+yet prove expression evaluation, the compiler's lowering, or either actual
+emitted file. Those output links remain mandatory.
+
 ## Observable behavior
 
 For a source model `M` and resolved configuration `C`, define:
