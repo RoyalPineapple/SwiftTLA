@@ -26,6 +26,10 @@ For a source model `M` and resolved configuration `C`, define:
 - `Traces(M,C)`: the infinite behaviors formed from `Init` and `Step`, with
   TLA+ stuttering and declared fairness interpreted explicitly.
 
+An assumption-only model also observes the ordered values that `PrintT`
+records. A proof of its checking behavior must preserve the selected branch,
+the recorded values, and their order.
+
 The observation includes hidden control locations and every declared model
 variable. Checking-only registers, resource limits, views, symmetry reduction,
 and serialized evidence are separate operations with separately stated
