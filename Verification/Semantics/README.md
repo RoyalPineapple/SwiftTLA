@@ -203,6 +203,12 @@ and that this relation is exactly the generated `Next` relation. This is
 relational no-deadlock for this model; a direct theorem about TLA+'s `ENABLED`
 operator is not checked because the [pinned TLAPS proof system lists it as
 unsupported](https://proofs.tlapl.us/doc/web/content/Documentation/Unsupported_features.html).
+The emitted-spec invariant now fixes every reachable state to
+`(pc, x, y) = (copy, 1, 0)`, `(repeatWrites, 2, 2)`, or `(Done, 4, 2)`.
+TLAPS proves that both action bodies' intermediate additions stay within
+any Swift `Int` range containing `0...4`. This closes overflow for this
+fixture's reachable steps, not for the unbounded `Int` states used by the
+relational no-deadlock theorem or for arbitrary accepted programs.
 This covers one actual algorithm-lowering output, not the compiler's general
 substitution rule or all generated Swift transitions.
 
@@ -240,7 +246,7 @@ no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
 with a prior write, not arbitrary conditions, expression failures, or the
 Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 421 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 439 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

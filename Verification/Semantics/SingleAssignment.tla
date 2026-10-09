@@ -914,6 +914,52 @@ THEOREM EmittedOrderedTemporalSpec ==
         BY <1>1, <1>2, <1>3, EmittedOrderedInitial, PTL
             DEF Repeated!Spec, SourceOrderedSpec
 
+OrderedReachable ==
+    \/ (orderedPC = "copy" /\ orderedX = 1 /\ orderedY = 0)
+    \/ (orderedPC = "repeatWrites" /\ orderedX = 2 /\ orderedY = 2)
+    \/ (orderedPC = "Done" /\ orderedX = 4 /\ orderedY = 2)
+
+THEOREM OrderedInitialReachable ==
+    Repeated!Init => OrderedReachable
+    BY EmittedOrderedInitial, SMT DEF SourceOrderedInitial, OrderedReachable
+
+THEOREM OrderedStepPreservesReachable ==
+    ASSUME OrderedReachable, Repeated!Next
+    PROVE OrderedReachable'
+    BY EmittedOrderedNext, SMT DEF OrderedReachable, SourceOrderedNext,
+        SourceOrderedCopyStep, SourceRepeatedWrites, SourceOrderedTerminating
+
+THEOREM EmittedOrderedReachableInvariant ==
+    Repeated!Spec => []OrderedReachable
+    PROOF
+    <1>1. OrderedReachable /\ [Repeated!Next]_<<orderedPC, orderedX, orderedY>>
+            => OrderedReachable'
+        BY OrderedStepPreservesReachable, SMT DEF OrderedReachable
+    <1>2. OrderedReachable /\ [][Repeated!Next]_<<orderedPC, orderedX, orderedY>>
+            => []OrderedReachable
+        BY <1>1, PTL
+    <1>. QED
+        BY OrderedInitialReachable, <1>2 DEF Repeated!Spec
+
+CONSTANTS SwiftIntMin, SwiftIntMax
+ASSUME SwiftIntBounds ==
+    /\ SwiftIntMin \in Int
+    /\ SwiftIntMax \in Int
+    /\ SwiftIntMin <= 0
+    /\ 4 <= SwiftIntMax
+
+WithinSwiftInt(value) == SwiftIntMin <= value /\ value <= SwiftIntMax
+
+THEOREM EmittedOrderedArithmeticIsRepresentable ==
+    OrderedReachable =>
+        /\ WithinSwiftInt(orderedX)
+        /\ WithinSwiftInt(orderedY)
+        /\ (orderedPC = "copy" => WithinSwiftInt(orderedX + 1))
+        /\ (orderedPC = "repeatWrites" =>
+            WithinSwiftInt(orderedX + 1)
+            /\ WithinSwiftInt((orderedX + 1) + 1))
+    BY SwiftIntBounds, SMT DEF OrderedReachable, WithinSwiftInt, SwiftIntBounds
+
 OrderedStates ==
     [pc: {"copy", "repeatWrites", "Done"}, x: Int, y: Int]
 OrderedBefore == [pc |-> orderedPC, x |-> orderedX, y |-> orderedY]
