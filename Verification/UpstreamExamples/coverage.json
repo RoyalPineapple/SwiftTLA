@@ -1250,6 +1250,22 @@
     "toolchainGap": "Command Line Tools 16.4 supports focused SwiftPM diagnostics with the same SDK build shown in hosted Apple logs. Full Xcode 16.4 is absent locally. Earlier beta-toolchain passes remain uncredited."
   },
   "hostedComparisonFailures": {
+    "echo716": {
+      "sourceSHA": "716a7783ff6f48226ba6f93f8eba1dde9c7b88d4",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37894703582",
+      "validationRun": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37894703939",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37894703939/job/113732442801",
+      "conclusion": "failure",
+      "scope": "Ordinary CI passed. The generated-TLA TLC oracle and native/generated-TLA comparison succeeded for echo-mc. The upstream comparison logged 'upstream echo-mc: exact' for the complete graph, then annotation rejected the compiler-owned __pcal_assert_ check as an absent selected TLC property. Local commit 3ad01bee corrects that coverage distinction and tests ordinary missing-property rejection, but has not been pushed or hosted. This run is not a full-matrix admission or final hosted match."
+    },
+    "ewd998N4Oracle716": {
+      "sourceSHA": "716a7783ff6f48226ba6f93f8eba1dde9c7b88d4",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37894703582",
+      "validationRun": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37894703939",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37894703939/job/113733409735",
+      "conclusion": "cancelled",
+      "scope": "The ewd998-0 generated-TLA TLC oracle missed its cache and the enclosing job cancelled after 150 minutes, before TLC produced a complete graph or selected verdicts. The process limit was 180 minutes and the step limit 185 minutes, so the outer job ended first. The retained oracle artifact contains inputs but no TLC progress log or complete graph. Native/generated and generated/upstream comparisons were skipped. No configuration parity or capacity conclusion follows from this incomplete check."
+    },
     "dijkstra470": {
       "sourceSHA": "470ffc07bc6297eb057022bb71c2a2927890039c",
       "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37183726602",
@@ -5406,7 +5422,7 @@
       "path": "specifications/echo",
       "name": "The Echo Algorithm",
       "audit": "Pinned Echo, Relation, and MCEcho modules and the sole published TLC configuration inspected; hosted parity pending",
-      "gap": "Echo now has typed Node, initiator, and relation parameters with upstream irreflexivity, symmetry, and connectivity assumptions, plus a bounded MCEcho binding, upstream state shape, model-value NoNode, TypeOK, AncestorProperties, generated PlusCal assertions, and default deadlock checking. Its 75-state configured native graph and verdicts pass focused local diagnostics; changing the initiator, connected relation, or node population changes the generated machine. The pinned configuration binds R to the complete three-node relation and I1 to CHOOSE n in N1; Swift currently binds initiator to a. Pinned TLC v1.8.0 selects the first normalized set element for bounded CHOOSE, while StringValue order follows UniqueString intern IDs rather than alphabetical spelling, so source inspection does not establish TLC's exact selected node. Resolve this from hosted oracle evidence before claiming parity. No generated-TLA/pinned-upstream or native/generated-TLA hosted graph and property evidence exists yet. The concrete relation binding, action labels, exact state projection, and transitive-closure export remain subject to that independent comparison; do not count the configuration or family as verified.",
+      "gap": "Echo has typed Node, initiator, and relation parameters with upstream irreflexivity, symmetry, and connectivity assumptions, plus a bounded MCEcho binding, upstream state shape, model-value NoNode, TypeOK, AncestorProperties, generated PlusCal assertions, and default deadlock checking. Its 75-state configured native graph and verdicts pass focused local diagnostics. On hosted SHA 716a7783, the generated-TLA oracle and native/generated-TLA path succeeded, and the upstream path logged exact graph comparison, but its final annotation rejected a compiler-owned __pcal_assert_ check as an absent selected TLC property. Local commit 3ad01bee fixes that coverage distinction; full hosted admission on the fix is pending. Do not count the configuration or family as verified yet.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5445,7 +5461,7 @@
       ],
       "partialCases": [{
         "implementation": "Sources/UpstreamParity/Examples/Echo.swift",
-        "reason": "MCEcho is locally checked and registered with exact pinned inputs. Both hosted parity paths and a complete source-module audit remain open."
+        "reason": "MCEcho has a hosted exact-graph upstream comparison log at 716a7783, but the case job failed during selected-check annotation; the local correction is unhosted. Full hosted parity and final-revision admission remain open."
       }]
     },
     {
@@ -5880,7 +5896,7 @@
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
       "audit": "Pinned AsyncTerminationDetection, EWD998, EWD998Chan, EWD998ChanID, EWD998PCal, ChanID export/ShiViz, ChanTrace, the source-defined opts variants and orchestration harness, and the Folds/Utils helpers inspected; remaining source-defined variants still need disposition audits",
-      "gap": "AsyncTerminationDetection matched both complete hosted comparison paths at bc35e8d2. Safra's EWD998 N=3 matched both complete hosted comparison paths at d873803c, and EWD998Chan N=3 matched both complete hosted comparison paths at 8da377e3. EWD998 N=4 has a typed model-owned scenario and pinned inputs but still lacks hosted comparison. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. EWD998ChanID N=5 matched both hosted comparison paths at c1c4ee49 on its complete configured VIEW graph and four selected properties; this does not prove equality of the full clock-bearing graph or final-revision admission. The trace source/CFG and optional CommunityModules closure are pinned but not bound to a hosted check. The source-defined EWD998_opts and EWD998Chan_opts generator variants and EWD998_optsSC campaign remain unimplemented. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
+      "gap": "AsyncTerminationDetection matched both complete hosted comparison paths at bc35e8d2. Safra's EWD998 N=3 matched both complete hosted comparison paths at d873803c, and EWD998Chan N=3 matched both complete hosted comparison paths at 8da377e3. EWD998 N=4 has a typed model-owned scenario and pinned inputs but still lacks hosted comparison: at 716a7783 its generated-TLC oracle was cancelled by the outer 150-minute job limit, before its own 180-minute process limit or a complete graph. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. EWD998ChanID N=5 matched both hosted comparison paths at c1c4ee49 on its complete configured VIEW graph and four selected properties; this does not prove equality of the full clock-bearing graph or final-revision admission. The trace source/CFG and optional CommunityModules closure are pinned but not bound to a hosted parity check. The source-defined EWD998_opts and EWD998Chan_opts generator variants and EWD998_optsSC campaign remain unimplemented. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -6048,6 +6064,7 @@
           "configuration": "specifications/ewd998/EWD998.cfg",
           "required": true,
           "status": "implemented",
+          "gap": "Hosted generated-TLC oracle was cancelled after the enclosing job's 150-minute limit at SHA 716a7783; no complete graph or selected verdicts were retained, and both parity paths were skipped. The inner TLC process and step limits were longer than the job limit. N=3 evidence does not substitute for this published N=4 configuration.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998.swift", "scenario": "EWD998", "caseID": "ewd998-0"}],

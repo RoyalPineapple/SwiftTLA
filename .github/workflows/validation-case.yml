@@ -39,7 +39,7 @@ jobs:
     name: Generated TLC oracle ${{ inputs.case_id }}
     if: ${{ inputs.native_enabled }}
     runs-on: macos-15
-    timeout-minutes: 150
+    timeout-minutes: 270
     env:
       CASE_ID: ${{ inputs.case_id }}
       FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
