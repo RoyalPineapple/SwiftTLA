@@ -18,7 +18,8 @@ that either backend implements the author's `#spec`.
 ## Integer range obligation
 
 Generated Swift retains Swift `Int`; arbitrary-precision integer values are
-not part of the native model API. Rendered TLA+ currently uses mathematical
+not part of the native model API. This is the chosen representation, not a
+temporary implementation detail. Rendered TLA+ currently uses mathematical
 integers. For every accepted program, the outputs must either agree on an
 explicit overflow outcome or establish that every evaluated integer stays
 within the target Swift `Int` bounds. This includes intermediate arithmetic
@@ -27,6 +28,11 @@ are target-dependent, not an assumed constant width. Division by zero and
 other specified evaluation failures need separate matching rules. A finite
 TLC or native exploration is not a range proof. Whether unproved programs
 receive a diagnostic or a matched overflow outcome is not yet decided.
+Using TLC's operational `Assert` failure alone would not establish this
+agreement: the [standard TLA+ definition of `Assert`](https://github.com/tlaplus/tlaplus/blob/master/tlatools/org.lamport.tlatools/src/tla2sany/StandardModules/TLC.tla)
+does not define a matching mathematical error outcome. The failure must be
+represented in the semantics of both outputs, or the program must carry a
+proved range obligation.
 
 This gate is **not implemented**. `CheckedExecutionOverflow` in
 `NativeExecutionBoundaryTests` is a concrete accepted counterexample: its
