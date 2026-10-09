@@ -167,6 +167,41 @@ THEOREM OrderedHistoriesAgree ==
     <1>4. QED
         BY <1>3, SMT DEF P
 
+THEOREM SourceHistoryIsUnique ==
+    ASSUME NEW original \in States,
+           NEW steps \in Seq(Instructions),
+           NEW firstHistory \in [0..Len(steps) -> States],
+           NEW secondHistory \in [0..Len(steps) -> States],
+           SourceHistory(original, steps, firstHistory),
+           SourceHistory(original, steps, secondHistory)
+    PROVE firstHistory = secondHistory
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(steps) => firstHistory[index] = secondHistory[index]
+    <1>1. P(0)
+        BY SMT DEF P, SourceHistory
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(steps)
+                     PROVE firstHistory[index + 1] = secondHistory[index + 1]
+            BY SMT DEF P
+        <2>1. index \in 0..Len(steps)
+            BY P(index), SMT DEF P
+        <2>2. firstHistory[index] = secondHistory[index]
+            BY <2>1, P(index), SMT DEF P
+        <2>3. firstHistory[index + 1] =
+                AdvanceSource(firstHistory[index], steps[index + 1])
+            BY SMT DEF SourceHistory
+        <2>4. secondHistory[index + 1] =
+                AdvanceSource(secondHistory[index], steps[index + 1])
+            BY SMT DEF SourceHistory
+        <2>. QED
+            BY <2>2, <2>3, <2>4, SMT
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED
+        BY <1>3, SMT DEF P
+
 ExtendSourceHistory(history, length, instruction) ==
     [index \in 0..(length + 1) |->
         IF index = length + 1
@@ -320,6 +355,88 @@ THEOREM OrderedGuardedDoTransitionEquivalence ==
         OrderedGuardedHistoriesAgree,
         SMT DEF SourceGuardedDoStep, ScheduledGuardedDoStep,
             HistoriesExist, HistoryAgrees
+
+ConditionalSteps(prefix, branch, suffix) == (prefix \o branch) \o suffix
+AlwaysGuard == [state \in States |-> TRUE]
+OppositeGuard(predicate) == [state \in States |-> ~predicate[state]]
+BranchGuardPlan(steps, position, predicate) ==
+    [index \in 0..Len(steps) |->
+        IF index = position THEN predicate ELSE AlwaysGuard]
+
+SourceConditionalDoStep(original, prefix, yes, no, suffix, predicate, target) ==
+    \/ SourceGuardedDoStep(original, ConditionalSteps(prefix, yes, suffix),
+        BranchGuardPlan(ConditionalSteps(prefix, yes, suffix), Len(prefix), predicate), target)
+    \/ SourceGuardedDoStep(original, ConditionalSteps(prefix, no, suffix),
+        BranchGuardPlan(ConditionalSteps(prefix, no, suffix), Len(prefix),
+            OppositeGuard(predicate)), target)
+
+ScheduledConditionalDoStep(original, prefix, yes, no, suffix, predicate, target) ==
+    \/ ScheduledGuardedDoStep(original, ConditionalSteps(prefix, yes, suffix),
+        BranchGuardPlan(ConditionalSteps(prefix, yes, suffix), Len(prefix), predicate), target)
+    \/ ScheduledGuardedDoStep(original, ConditionalSteps(prefix, no, suffix),
+        BranchGuardPlan(ConditionalSteps(prefix, no, suffix), Len(prefix),
+            OppositeGuard(predicate)), target)
+
+THEOREM OrderedConditionalDoTransitionEquivalence ==
+    ASSUME NEW original \in States,
+           NEW target \in States,
+           NEW prefix \in Seq(Instructions),
+           NEW yes \in Seq(Instructions),
+           NEW no \in Seq(Instructions),
+           NEW suffix \in Seq(Instructions),
+           NEW predicate \in [States -> BOOLEAN]
+    PROVE SourceConditionalDoStep(original, prefix, yes, no, suffix, predicate, target)
+          <=> ScheduledConditionalDoStep(original, prefix, yes, no, suffix, predicate, target)
+    PROOF
+    <1>1. ConditionalSteps(prefix, yes, suffix) \in Seq(Instructions)
+          /\ ConditionalSteps(prefix, no, suffix) \in Seq(Instructions)
+        BY ConcatProperties DEF ConditionalSteps
+    <1>2. OppositeGuard(predicate) \in [States -> BOOLEAN]
+        BY SMT DEF OppositeGuard, States
+    <1>3. BranchGuardPlan(
+            ConditionalSteps(prefix, yes, suffix), Len(prefix), predicate)
+          \in GuardPlans(ConditionalSteps(prefix, yes, suffix))
+          /\ BranchGuardPlan(
+            ConditionalSteps(prefix, no, suffix), Len(prefix), OppositeGuard(predicate))
+          \in GuardPlans(ConditionalSteps(prefix, no, suffix))
+        BY <1>1, <1>2, SMT DEF BranchGuardPlan, AlwaysGuard, GuardPlans, States
+    <1>. QED
+        BY <1>1, <1>3, OrderedGuardedDoTransitionEquivalence
+            DEF SourceConditionalDoStep, ScheduledConditionalDoStep
+
+THEOREM OrderedConditionalDoEnabledness ==
+    ASSUME NEW original \in States,
+           NEW prefix \in Seq(Instructions),
+           NEW yes \in Seq(Instructions),
+           NEW no \in Seq(Instructions),
+           NEW suffix \in Seq(Instructions),
+           NEW predicate \in [States -> BOOLEAN]
+    PROVE (\E target \in States :
+            SourceConditionalDoStep(original, prefix, yes, no, suffix, predicate, target))
+          <=> (\E target \in States :
+            ScheduledConditionalDoStep(original, prefix, yes, no, suffix, predicate, target))
+    BY OrderedConditionalDoTransitionEquivalence
+
+SourceConditionalDoEdges(label, prefix, yes, no, suffix, predicate) ==
+    {edge \in LabeledEdges :
+        edge[2] = label /\
+        SourceConditionalDoStep(edge[1], prefix, yes, no, suffix, predicate, edge[3])}
+ScheduledConditionalDoEdges(label, prefix, yes, no, suffix, predicate) ==
+    {edge \in LabeledEdges :
+        edge[2] = label /\
+        ScheduledConditionalDoStep(edge[1], prefix, yes, no, suffix, predicate, edge[3])}
+
+THEOREM OrderedConditionalDoLabeledEdges ==
+    ASSUME NEW label \in ActionLabels,
+           NEW prefix \in Seq(Instructions),
+           NEW yes \in Seq(Instructions),
+           NEW no \in Seq(Instructions),
+           NEW suffix \in Seq(Instructions),
+           NEW predicate \in [States -> BOOLEAN]
+    PROVE SourceConditionalDoEdges(label, prefix, yes, no, suffix, predicate)
+          = ScheduledConditionalDoEdges(label, prefix, yes, no, suffix, predicate)
+    BY OrderedConditionalDoTransitionEquivalence,
+        SMT DEF SourceConditionalDoEdges, ScheduledConditionalDoEdges, LabeledEdges
 
 THEOREM OrderedDoEnabledness ==
     ASSUME NEW original \in States,
@@ -499,14 +616,20 @@ THEOREM EmittedCopyMatchesOrderedInstructions ==
         BY <1>1, <1>2, <1>3, SMT DEF SourceHistory, CopyWitnessHistory,
             CopyIntermediateState, CopyInstructions, CopySourceState,
             AdvanceSource, States
-    <1>5. SourceDoStep(CopySourceState, CopyInstructions, CopyTargetState)
+    <1>5. \A history \in [0..Len(CopyInstructions) -> States] :
+            SourceHistory(CopySourceState, CopyInstructions, history)
+            => history = CopyWitnessHistory
+        BY <1>1, <1>2, <1>3, <1>4, SourceHistoryIsUnique
+    <1>6. CopyWitnessHistory[Len(CopyInstructions)] = CopyTargetState
             <=> SourceOrderedCopy
-        BY <1>1, <1>2, <1>3, <1>4, SMT DEF SourceDoStep, SourceHistory,
-            CopyWitnessHistory, CopyIntermediateState, CopyInstructions,
-            CopySourceState, CopyTargetState, AdvanceSource, SourceOrderedCopy,
-            States
+        BY SMT DEF CopyWitnessHistory, CopyIntermediateState,
+            CopyInstructions, CopySourceState, CopyTargetState,
+            SourceOrderedCopy, States
+    <1>7. SourceDoStep(CopySourceState, CopyInstructions, CopyTargetState)
+            <=> SourceOrderedCopy
+        BY <1>3, <1>4, <1>5, <1>6, SMT DEF SourceDoStep
     <1>. QED
-        BY <1>1, <1>2, <1>5, EmittedCopyStep,
+        BY <1>1, <1>2, <1>7, EmittedCopyStep,
             OrderedDoTransitionEquivalence
 
 VARIABLES orderedPC, orderedX, orderedY
