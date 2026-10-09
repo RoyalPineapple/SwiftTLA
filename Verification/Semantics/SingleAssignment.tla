@@ -31,6 +31,15 @@ THEOREM GuardedChoiceEnabledness ==
                     <=> EnabledIn(GuardEdges(guard, ChoiceEdges(domain, rendered)), state, action)
     BY GuardedChoiceComposition, SMT DEF EnabledIn
 
+THEOREM UniqueExpressionChoice ==
+    \A domain \in SUBSET Values :
+        \A predicate \in [domain -> BOOLEAN] :
+            \A witness \in domain :
+                (predicate[witness]
+                 /\ (\A member \in domain : predicate[member] => member = witness))
+                => (CHOOSE member \in domain : predicate[member]) = witness
+    BY SMT
+
 ApplyDelta(s, keys, delta) ==
     [key \in Vars |-> IF key \in keys THEN delta[key] ELSE s[key]]
 

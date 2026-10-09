@@ -46,6 +46,12 @@ canonical selection in TLA+ or prove that every accepted use has a unique
 satisfying witness and define matching no-witness behavior. Agreement on a
 finite TLC run cannot discharge this obligation.
 
+`SingleAssignment.tla` now proves the general unique-witness rule for every
+typed domain and Boolean predicate: if exactly one member satisfies
+the predicate, TLA+ `CHOOSE` returns that member. This establishes the TLA+
+side of the restricted case, not that the compiler proves uniqueness for
+accepted uses or that emitted Swift evaluates every predicate identically.
+
 ## Checked kernel lemma
 
 `SingleAssignment.tla` proves that replacing one value in a complete state
@@ -162,7 +168,7 @@ expression failures, or the Swift emitter for all states. Changing only the
 emitted false-branch value from `2` to `3` made the branch obligation fail;
 restoring it restored all 9 obligations.
 
-TLAPS 1.6.0-pre checked all 307 `SingleAssignment.tla` obligations and all 9
+TLAPS 1.6.0-pre checked all 309 `SingleAssignment.tla` obligations and all 9
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
