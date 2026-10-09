@@ -247,6 +247,49 @@ THEOREM OrderedDoTransitionEquivalence ==
     BY OrderedHistoriesExist, OrderedHistoriesAgree,
         SMT DEF SourceDoStep, ScheduledDoStep, HistoriesExist, HistoryAgrees
 
+GuardPlans(steps) == [0..Len(steps) -> [States -> BOOLEAN]]
+
+SourceGuardedDoStep(original, steps, guards, target) ==
+    \E history \in [0..Len(steps) -> States] :
+        /\ SourceHistory(original, steps, history)
+        /\ \A index \in 0..Len(steps) : guards[index][history[index]]
+        /\ history[Len(steps)] = target
+
+ScheduledGuardedDoStep(original, steps, guards, target) ==
+    \E history \in [0..Len(steps) -> ScheduledRecords] :
+        /\ ScheduledHistory(original, steps, history)
+        /\ \A index \in 0..Len(steps) :
+            guards[index][ApplyDelta(original, history[index].keys,
+                history[index].values)]
+        /\ ApplyDelta(original, history[Len(steps)].keys,
+            history[Len(steps)].values) = target
+
+THEOREM OrderedGuardedHistoriesAgree ==
+    ASSUME NEW original \in States,
+           NEW steps \in Seq(Instructions),
+           NEW guards \in GuardPlans(steps),
+           NEW source \in [0..Len(steps) -> States],
+           NEW scheduled \in [0..Len(steps) -> ScheduledRecords],
+           SourceHistory(original, steps, source),
+           ScheduledHistory(original, steps, scheduled)
+    PROVE (\A index \in 0..Len(steps) : guards[index][source[index]])
+          <=> (\A index \in 0..Len(steps) :
+                guards[index][ApplyDelta(original, scheduled[index].keys,
+                    scheduled[index].values)])
+    BY OrderedHistoriesAgree, SMT DEF HistoryAgrees
+
+THEOREM OrderedGuardedDoTransitionEquivalence ==
+    ASSUME NEW original \in States,
+           NEW target \in States,
+           NEW steps \in Seq(Instructions),
+           NEW guards \in GuardPlans(steps)
+    PROVE SourceGuardedDoStep(original, steps, guards, target)
+          <=> ScheduledGuardedDoStep(original, steps, guards, target)
+    BY OrderedHistoriesExist, OrderedHistoriesAgree,
+        OrderedGuardedHistoriesAgree,
+        SMT DEF SourceGuardedDoStep, ScheduledGuardedDoStep,
+            HistoriesExist, HistoryAgrees
+
 THEOREM OrderedDoEnabledness ==
     ASSUME NEW original \in States,
            NEW steps \in Seq(Instructions)
@@ -620,4 +663,30 @@ THEOREM EmittedGuardedChoiceNext ==
 THEOREM GuardedChoiceDisabledAfterSelection ==
     choiceSelected # 0 => ~Choice!choose
     BY EmittedGuardedChoiceStep, SMT DEF SourceGuardedChoice
+
+THEOREM OrderedGuardedDoEnabledness ==
+    ASSUME NEW original \in States,
+           NEW steps \in Seq(Instructions),
+           NEW guards \in GuardPlans(steps)
+    PROVE (\E target \in States :
+            SourceGuardedDoStep(original, steps, guards, target))
+          <=> (\E target \in States :
+            ScheduledGuardedDoStep(original, steps, guards, target))
+    BY OrderedGuardedDoTransitionEquivalence
+
+SourceGuardedDoEdges(label, steps, guards) ==
+    {edge \in LabeledEdges :
+        edge[2] = label /\ SourceGuardedDoStep(edge[1], steps, guards, edge[3])}
+ScheduledGuardedDoEdges(label, steps, guards) ==
+    {edge \in LabeledEdges :
+        edge[2] = label /\ ScheduledGuardedDoStep(edge[1], steps, guards, edge[3])}
+
+THEOREM OrderedGuardedDoLabeledEdges ==
+    ASSUME NEW label \in ActionLabels,
+           NEW steps \in Seq(Instructions),
+           NEW guards \in GuardPlans(steps)
+    PROVE SourceGuardedDoEdges(label, steps, guards)
+          = ScheduledGuardedDoEdges(label, steps, guards)
+    BY OrderedGuardedDoTransitionEquivalence,
+        SMT DEF SourceGuardedDoEdges, ScheduledGuardedDoEdges, LabeledEdges
 =======================================================================

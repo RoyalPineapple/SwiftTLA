@@ -59,6 +59,16 @@ the abstract rules. The indexed formulation avoids a recursive-operator
 limitation in this pinned TLAPS build; that tool workaround does not discharge
 the compiler and output obligations.
 
+The guarded-history extension assigns a total, pure predicate to each position
+before, between, and after those assignments. TLAPS proves that each guard
+observes the same complete state in both histories and that guarded steps have
+equal successors, enabledness, and labeled edges. A false later guard therefore
+disables the whole abstract atomic step, including earlier pending writes.
+Multiple guards at one position can be conjoined. This does **not** prove the
+Swift scheduler's expression substitution, partial evaluation or failure
+behavior, branch selection, or control transfers; those remain separate
+compiler-to-semantics obligations.
+
 `GeneratedAtomicCopyProofModel.tla` is the complete TLA module emitted from a
 small `#spec` model. `GeneratedAtomicUpdateProofTests` requires byte-for-byte
 equality with `GeneratedAtomicCopyProofModel.render()` and checks the generated
@@ -100,7 +110,7 @@ Widening the emitted choice domain from `1..2` to `1..3` made the action proof
 fail; restoring it restored the proof. This is a second output-linked case,
 not a general proof of guarded choice or of the Swift emitter.
 
-TLAPS 1.6.0-pre checked all 248 obligations locally with fingerprint reuse
+TLAPS 1.6.0-pre checked all 261 obligations locally with fingerprint reuse
 disabled. The arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
