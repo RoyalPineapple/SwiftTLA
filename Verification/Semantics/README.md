@@ -88,6 +88,15 @@ equal edge sets and both outputs use the same guard and domain. These premises
 are not yet discharged for arbitrary compiler input. The rule is a reusable
 induction step, not proof that the current Swift emitter satisfies it.
 
+The conditional-action rule selects a branch by a Boolean predicate of the
+complete source state. TLAPS proves that equal source/rendered predicates and
+branch edge sets yield equal complete labeled edges, and that the conditional
+is enabled exactly when its selected branch is enabled. This supplies a
+compositional `ifElse` step, not a proof that the compiler preserves the
+predicate or that both emitters implement each branch. The repeated-write
+guard proof was split into the initial guard and the remaining positions so
+the full module checks without relying on prover search over one large step.
+
 The ordered-`Do` lemma uses finite, indexed source and scheduled histories.
 TLAPS proves that both histories exist for every finite sequence of typed
 abstract **assignment** instructions and that their complete states agree at
@@ -174,7 +183,7 @@ expression failures, or the Swift emitter for all states. Changing only the
 emitted false-branch value from `2` to `3` made the branch obligation fail;
 restoring it restored all 9 obligations.
 
-TLAPS 1.6.0-pre checked all 309 `SingleAssignment.tla` obligations and all 9
+TLAPS 1.6.0-pre checked all 320 `SingleAssignment.tla` obligations and all 9
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

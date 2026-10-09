@@ -40,6 +40,28 @@ THEOREM UniqueExpressionChoice ==
                 => (CHOOSE member \in domain : predicate[member]) = witness
     BY SMT
 
+ConditionalEdges(selector, yes, no) ==
+    {edge \in LabeledEdges :
+        IF selector[edge[1]] THEN edge \in yes ELSE edge \in no}
+
+THEOREM ConditionalEdgePreservation ==
+    \A sourceSelector, renderedSelector \in [States -> BOOLEAN] :
+        \A sourceYes, sourceNo, renderedYes, renderedNo \in SUBSET LabeledEdges :
+            ((\A state \in States : sourceSelector[state] = renderedSelector[state])
+             /\ sourceYes = renderedYes /\ sourceNo = renderedNo)
+            => ConditionalEdges(sourceSelector, sourceYes, sourceNo)
+               = ConditionalEdges(renderedSelector, renderedYes, renderedNo)
+    BY SMT DEF ConditionalEdges, LabeledEdges, States
+
+THEOREM ConditionalEnabledness ==
+    \A selector \in [States -> BOOLEAN] :
+        \A yes, no \in SUBSET LabeledEdges :
+            \A state \in States, action \in ActionLabels :
+                EnabledIn(ConditionalEdges(selector, yes, no), state, action)
+                <=> (IF selector[state] THEN EnabledIn(yes, state, action)
+                     ELSE EnabledIn(no, state, action))
+    BY SMT DEF ConditionalEdges, EnabledIn, LabeledEdges, States
+
 ApplyDelta(s, keys, delta) ==
     [key \in Vars |-> IF key \in keys THEN delta[key] ELSE s[key]]
 
@@ -774,18 +796,24 @@ THEOREM EmittedRepeatedWritesMatchesGuardedHistory ==
                 /\ orderedPC' = "Done"
         BY SMT DEF RepeatedAfterThird, RepeatedAfterSecond,
             RepeatedAfterFirst, RepeatedBefore, RepeatedAfter, States
-    <1>9. (\A index \in 0..Len(RepeatedInstructions) :
+    <1>9. RepeatedGuards[0][RepeatedWitnessHistory[0]]
+            <=> orderedPC = "repeatWrites"
+        BY <1>4, SMT DEF RepeatedGuards, RepeatedWitnessHistory,
+            RepeatedBefore, States
+    <1>10. \A index \in 1..3 :
+            RepeatedGuards[index][RepeatedWitnessHistory[index]]
+        BY <1>4, SMT DEF RepeatedGuards, RepeatedWitnessHistory, States
+    <1>11. (\A index \in 0..Len(RepeatedInstructions) :
             RepeatedGuards[index][RepeatedWitnessHistory[index]])
             <=> orderedPC = "repeatWrites"
-        BY <1>4, SMT DEF RepeatedGuards, RepeatedInstructions,
-            RepeatedWitnessHistory, RepeatedBefore, States
-    <1>10. SourceGuardedDoStep(
+        BY <1>9, <1>10, SMT DEF RepeatedInstructions
+    <1>12. SourceGuardedDoStep(
             RepeatedBefore, RepeatedInstructions, RepeatedGuards, RepeatedAfter)
             <=> SourceRepeatedWrites
-        BY <1>4, <1>6, <1>7, <1>8, <1>9,
+        BY <1>4, <1>6, <1>7, <1>8, <1>11,
             SMT DEF SourceGuardedDoStep, SourceRepeatedWrites,
                 RepeatedWitnessHistory, RepeatedInstructions
     <1>. QED
-        BY <1>1, <1>2, <1>3, <1>10, EmittedRepeatedWrites,
+        BY <1>1, <1>2, <1>3, <1>12, EmittedRepeatedWrites,
             OrderedGuardedDoTransitionEquivalence
 =======================================================================
