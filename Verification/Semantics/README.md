@@ -31,6 +31,12 @@ This gate is **not implemented**. `CheckedExecutionOverflow` in
 `count + 1` step starts at `Int.max`, so the generated machine throws while
 the rendered TLA+ arithmetic has a successor. Until the gate and both output
 links are proved, the universal theorem does not hold for accepted `#spec`.
+`EWD998TerminationModel` presents a different case: while a sender remains
+active, `SendMsg` can increment a receiver's `pending` count indefinitely.
+Its `pending <= 3` state constraint limits checking, not the generated
+machine's transition relation. A proof that this model always fits Swift
+`Int` would be false; it needs a representable unbounded value type or a
+different, explicitly bounded source model.
 
 ## Choice-expression obligation
 
