@@ -49,6 +49,18 @@ could preserve bounded source semantics, but would not establish parity with
 the upstream unbounded transition relation. A bounded replacement would be a
 different source model and cannot silently count as that parity either.
 
+`CurrentAdditionAgreementIsExactlyRangeSafety` models checked native addition
+as a tagged value or overflow outcome and the currently emitted TLA+ `+` as a
+mathematical value. For representable operands, TLAPS proves that the two
+outcomes agree exactly when the sum is representable. Replacing the modeled
+overflow with a normal value makes the obligation fail. This identifies the
+necessary range or output-change obligation; it does not prove that arbitrary
+emitted Swift evaluates this model, nor does it make the current outputs agree
+on overflow. A second theorem establishes that representable operands with
+different outcomes always exist for these finite bounds (`SwiftIntMax + 1` is
+a witness), so an unrestricted addition-equivalence claim for the current
+outputs would be false.
+
 ## Choice-expression obligation
 
 The expression-level `StateExpr.choose` is distinct from the nondeterministic
@@ -246,7 +258,7 @@ no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
 with a prior write, not arbitrary conditions, expression failures, or the
 Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 439 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 444 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

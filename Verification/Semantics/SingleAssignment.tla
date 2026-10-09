@@ -950,6 +950,30 @@ ASSUME SwiftIntBounds ==
 
 WithinSwiftInt(value) == SwiftIntMin <= value /\ value <= SwiftIntMax
 
+CurrentNativeAddOutcome(lhs, rhs) ==
+    IF WithinSwiftInt(lhs + rhs)
+    THEN <<"value", lhs + rhs>>
+    ELSE <<"overflow">>
+CurrentRenderedAddOutcome(lhs, rhs) == <<"value", lhs + rhs>>
+
+THEOREM CurrentAdditionAgreementIsExactlyRangeSafety ==
+    \A lhs, rhs \in Int :
+        (WithinSwiftInt(lhs) /\ WithinSwiftInt(rhs)) =>
+            ((CurrentNativeAddOutcome(lhs, rhs)
+              = CurrentRenderedAddOutcome(lhs, rhs))
+             <=> WithinSwiftInt(lhs + rhs))
+    BY SMT DEF CurrentNativeAddOutcome, CurrentRenderedAddOutcome,
+        WithinSwiftInt
+
+THEOREM CurrentAdditionHasRepresentableOperandMismatch ==
+    \E lhs, rhs \in Int :
+        /\ WithinSwiftInt(lhs)
+        /\ WithinSwiftInt(rhs)
+        /\ CurrentNativeAddOutcome(lhs, rhs)
+           # CurrentRenderedAddOutcome(lhs, rhs)
+    BY SwiftIntBounds, SMT DEF CurrentNativeAddOutcome,
+        CurrentRenderedAddOutcome, WithinSwiftInt, SwiftIntBounds
+
 THEOREM EmittedOrderedArithmeticIsRepresentable ==
     OrderedReachable =>
         /\ WithinSwiftInt(orderedX)
