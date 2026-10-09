@@ -18,14 +18,15 @@ that either backend implements the author's `#spec`.
 ## Integer range obligation
 
 Generated Swift retains Swift `Int`; arbitrary-precision integer values are
-not part of the native model API. Rendered TLA+ uses mathematical integers. A
-semantic-preservation claim therefore needs a range proof for every integer
-value evaluated by an accepted program, including intermediate arithmetic in
-initializers, action guards and updates, and selected claims. The bounds are
-those of the target Swift `Int`, not an assumed constant width. Division by
-zero and other specified evaluation failures need separate matching rules.
-Compilation must reject a program when it cannot establish the required
-range safety; a finite TLC or native exploration is not such a proof.
+not part of the native model API. Rendered TLA+ currently uses mathematical
+integers. For every accepted program, the outputs must either agree on an
+explicit overflow outcome or establish that every evaluated integer stays
+within the target Swift `Int` bounds. This includes intermediate arithmetic
+in initializers, action guards and updates, and selected claims. The bounds
+are target-dependent, not an assumed constant width. Division by zero and
+other specified evaluation failures need separate matching rules. A finite
+TLC or native exploration is not a range proof. Whether unproved programs
+receive a diagnostic or a matched overflow outcome is not yet decided.
 
 This gate is **not implemented**. `CheckedExecutionOverflow` in
 `NativeExecutionBoundaryTests` is a concrete accepted counterexample: its
@@ -36,10 +37,11 @@ links are proved, the universal theorem does not hold for accepted `#spec`.
 active, `SendMsg` can increment a receiver's `pending` count indefinitely.
 Its `pending <= 3` state constraint limits checking, not the generated
 machine's transition relation. A proof that this model always fits Swift
-`Int` would be false. Under the chosen `Int` contract, this unbounded model
-cannot receive an unconditional semantic-preservation certificate. A bounded
-replacement would be a different source model and cannot silently count as
-parity with the upstream unbounded transition relation.
+`Int` would be false. Under the `Int` contract, this unbounded model cannot
+receive an unconditional range-safety certificate. A matched overflow outcome
+could preserve bounded source semantics, but would not establish parity with
+the upstream unbounded transition relation. A bounded replacement would be a
+different source model and cannot silently count as that parity either.
 
 ## Choice-expression obligation
 
