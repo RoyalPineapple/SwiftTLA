@@ -61,6 +61,12 @@ different outcomes always exist for these finite bounds (`SwiftIntMax + 1` is
 a witness), so an unrestricted addition-equivalence claim for the current
 outputs would be false.
 
+The same exact range-safety equivalence is proved for the emitted subtraction,
+multiplication, and unary negation forms. These are operator-level obligations,
+not certificates for every occurrence in an accepted program. Division and
+modulo additionally require their operand-domain and rounding rules to match;
+those rules are not covered by these theorems.
+
 ## Choice-expression obligation
 
 The expression-level `StateExpr.choose` is distinct from the nondeterministic

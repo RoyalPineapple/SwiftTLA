@@ -979,6 +979,51 @@ THEOREM CurrentAdditionHasRepresentableOperandMismatch ==
     BY SwiftIntBounds, SMT DEF CurrentNativeAddOutcome,
         CurrentRenderedAddOutcome, WithinSwiftInt, SwiftIntBounds
 
+CurrentNativeSubtractOutcome(lhs, rhs) ==
+    IF WithinSwiftInt(lhs - rhs)
+    THEN <<"value", lhs - rhs>>
+    ELSE <<"overflow">>
+CurrentRenderedSubtractOutcome(lhs, rhs) == <<"value", lhs - rhs>>
+
+CurrentNativeMultiplyOutcome(lhs, rhs) ==
+    IF WithinSwiftInt(lhs * rhs)
+    THEN <<"value", lhs * rhs>>
+    ELSE <<"overflow">>
+CurrentRenderedMultiplyOutcome(lhs, rhs) == <<"value", lhs * rhs>>
+
+CurrentNativeNegateOutcome(value) ==
+    IF WithinSwiftInt(-value)
+    THEN <<"value", -value>>
+    ELSE <<"overflow">>
+CurrentRenderedNegateOutcome(value) == <<"value", -value>>
+
+THEOREM CurrentSubtractionAgreementIsExactlyRangeSafety ==
+    \A lhs, rhs \in Int :
+        (WithinSwiftInt(lhs) /\ WithinSwiftInt(rhs)) =>
+            ((CurrentNativeSubtractOutcome(lhs, rhs)
+              = CurrentRenderedSubtractOutcome(lhs, rhs))
+             <=> WithinSwiftInt(lhs - rhs))
+    BY SMT DEF CurrentNativeSubtractOutcome,
+        CurrentRenderedSubtractOutcome, WithinSwiftInt
+
+THEOREM CurrentMultiplicationAgreementIsExactlyRangeSafety ==
+    \A lhs, rhs \in Int :
+        (WithinSwiftInt(lhs) /\ WithinSwiftInt(rhs)) =>
+            ((CurrentNativeMultiplyOutcome(lhs, rhs)
+              = CurrentRenderedMultiplyOutcome(lhs, rhs))
+             <=> WithinSwiftInt(lhs * rhs))
+    BY SMT DEF CurrentNativeMultiplyOutcome,
+        CurrentRenderedMultiplyOutcome, WithinSwiftInt
+
+THEOREM CurrentNegationAgreementIsExactlyRangeSafety ==
+    \A value \in Int :
+        WithinSwiftInt(value) =>
+            ((CurrentNativeNegateOutcome(value)
+              = CurrentRenderedNegateOutcome(value))
+             <=> WithinSwiftInt(-value))
+    BY SMT DEF CurrentNativeNegateOutcome,
+        CurrentRenderedNegateOutcome, WithinSwiftInt
+
 THEOREM EmittedOrderedArithmeticIsRepresentable ==
     OrderedReachable =>
         /\ WithinSwiftInt(orderedX)
