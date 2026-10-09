@@ -37,7 +37,7 @@
     "sources": {
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/CanonicalBinaryState.java": "d7d4f416e962731aa059d6e4dc7e55294765ca5cc7c0a60e51672c115cb9b190",
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/ConfigurationParser.java": "9b7c8ddca097e40aa2d3859777c0f6b3fe21ce5b13cc58aa9eb0a37092640374",
-      "Tools/TLCGraphBridge/src/org/swifttla/conformance/InstanceActions.java": "d6759c8d61401e8be441666482c2d467f7ec59d1f759a2bddc539dce10cfbae7",
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/InstanceActions.java": "24c6612a641964394aa4676030e1a8c25c4353852b317d0d8715fca6e22197d8",
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java": "617a922ddfe92fe55dd6ad564a41d7aa5060bbb09eca49b6297cf84464fd1f9c",
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/TLCEvaluationOutput.java": "42ca0b8833868f35de4b29841906cbea41ef976b3559bcace84bb2e4ed98cbd8"
     }

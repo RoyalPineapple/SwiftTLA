@@ -119,6 +119,34 @@ INSTANCE StateDomain
         assert any(action["location"].startswith("<Move(2) line ")
                    for record in transitions for action in record["resolvedActions"]), transitions
 
+    (root / "StateArgument.tla").write_text(r"""---- MODULE StateArgument ----
+EXTENDS Integers
+VARIABLE x
+Init == x = 0
+Move(n) == x' = 1 - n
+Next == Move(x)
+====
+""", encoding="utf-8")
+    state_argument_wrapper = r"""---- MODULE StateArgumentWrapper ----
+VARIABLE y
+INSTANCE StateArgument WITH x <- y
+====
+"""
+    for records in [run("StateArgumentWrapper", state_argument_wrapper),
+                    run("StateArgumentWrapperCompact", state_argument_wrapper.replace(
+                        "MODULE StateArgumentWrapper", "MODULE StateArgumentWrapperCompact"), compact=True)]:
+        assert not any(record["type"] == "unsupported" for record in records), records
+        states = {record["state"]["fingerprint"]: int(record["state"]["bindings"][0]["tla"])
+                  for record in records if record["type"] == "initial"}
+        states.update({record["target"]["fingerprint"]: int(record["target"]["bindings"][0]["tla"])
+                       for record in records if record["type"] == "transition"
+                       and "bindings" in record["target"]})
+        edges = {(states[record["source"]["fingerprint"]], action["location"].split(" line ")[0],
+                  states[record["target"]["fingerprint"]])
+                 for record in records if record["type"] == "transition"
+                 for action in record["resolvedActions"]}
+        assert edges == {(0, "<Move(0)", 1), (1, "<Move(1)", 0)}, edges
+
     records = run("Qualified", r"""---- MODULE Qualified ----
 VARIABLE y
 instance == INSTANCE Base WITH K <- 2, x <- y

@@ -49,6 +49,7 @@ once, then references its numeric ID on every labeled edge.
 For an `INSTANCE` substitution, the bridge resolves the disjunction and finite existential prefix through TLC's semantic nodes and contexts.
 It preserves substitutions, then asks TLC which leaf predicates admit the original source and target states.
 Bound domains that depend on the source state are resolved per transition rather than cached across states.
+State-dependent invocation arguments are evaluated against TLC's source and target states and likewise never cached across states.
 Every matching named invocation becomes an edge, including distinct invocations with the same source and target.
 No native predicate or native action list participates in this resolution.
 
@@ -56,7 +57,7 @@ The reader rejects missing, duplicate, unnamed, and undeclared resolved invocati
 The diagnostic JSON retains the original callback and sequence; both formats
 have a completion digest.
 Unsupported decomposition produces an explicit failure, not a coarse `Next` edge or a guessed label.
-Named instance namespaces, recursive action prefixes, and state-dependent invocation arguments still require additional identity support.
+Named instance namespaces and recursive action prefixes still require additional identity support.
 These cases remain required corpus work and cannot pass through a fallback.
 
 Hosted setup runs `check-instance-actions.py` against the locked TLC build.

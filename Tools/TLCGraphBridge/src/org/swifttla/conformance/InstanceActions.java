@@ -101,10 +101,9 @@ final class InstanceActions implements ToolGlobals {
                         }
                         Context bound = context;
                         for (int index = 0; index < arguments.length; index++) {
-                            if (arguments[index].getLevel() != 0) {
-                                throw new IllegalArgumentException("State-dependent action arguments need explicit identity support");
-                            }
-                            bound = bound.cons(parameters[index], tool.eval(arguments[index], context, TLCState.Empty));
+                            stateDependent[0] |= arguments[index].getLevel() > 0;
+                            bound = bound.cons(parameters[index],
+                                    tool.eval(arguments[index], context, source, target, EvalControl.Clear));
                         }
                         split(tool, definition.getBody(), bound, definition, source, target,
                                 active, result, stateDependent);
