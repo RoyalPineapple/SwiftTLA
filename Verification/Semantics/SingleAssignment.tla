@@ -64,6 +64,17 @@ SourceOrderedCopy ==
     /\ first' = second
     /\ second' = second
 
+SourceSequentialCopy ==
+    LET before == [first |-> first, second |-> second]
+        afterFirst == [before EXCEPT !.first = before.second]
+        afterSecond == [afterFirst EXCEPT !.second = afterFirst.first]
+    IN  /\ first' = afterSecond.first
+        /\ second' = afterSecond.second
+
+THEOREM OrderedCopySemantics ==
+    SourceSequentialCopy <=> SourceOrderedCopy
+    BY SMT DEF SourceSequentialCopy, SourceOrderedCopy
+
 SourceInitialCopyState ==
     /\ first = 0
     /\ second = 1
@@ -79,4 +90,8 @@ THEOREM EmittedCopyStep ==
 THEOREM EmittedCopyNext ==
     Next <=> SourceOrderedCopy
     BY EmittedCopyStep DEF Next
+
+THEOREM EmittedCopyPreservesSourceOrder ==
+    Next <=> SourceSequentialCopy
+    BY EmittedCopyNext, OrderedCopySemantics
 =======================================================================

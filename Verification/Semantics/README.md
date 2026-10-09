@@ -35,14 +35,15 @@ small `#spec` model. `GeneratedAtomicUpdateProofTests` requires byte-for-byte
 equality with `GeneratedAtomicCopyProofModel.render()` and checks the generated
 Swift machine's concrete `(0, 1) -> (1, 1)` step. This module is imported by
 `SingleAssignment.tla`, which proves its generated `Init`, `copy`, and `Next`
-equivalent to independently stated source relations. In this `Do` step, the
-second assignment reads the first assignment's new value. Changing the
-imported module's second next-state value to `0` made the action theorem fail;
-restoring the generated output restored the proof. This is an output-linked
-proof for one source fixture, not a proof of the Swift emitter or of arbitrary
-accepted models.
+equivalent to independently stated source relations. It also derives that
+relation from two ordered state replacements: in this `Do` step, the second
+assignment reads the first assignment's new value. Changing that source read
+to the pre-step value made the ordering theorem fail. Changing the imported
+module's second next-state value to `0` made the action theorem fail; restoring
+both values restored the proof. This is an output-linked proof for one source
+fixture, not a proof of the Swift emitter or of arbitrary accepted models.
 
-TLAPS 1.6.0-pre checked all 20 obligations locally with fingerprint reuse
+TLAPS 1.6.0-pre checked all 25 obligations locally with fingerprint reuse
 disabled. The arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
