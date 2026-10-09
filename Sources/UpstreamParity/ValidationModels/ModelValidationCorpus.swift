@@ -75,7 +75,8 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "find-highest", scenarios: { try FindHighestModel.validationScenarios() }),
     .init(id: "binary-search", scenarios: { try BinarySearchModel.validationScenarios() }),
     .init(id: "quicksort", scenarios: { try QuicksortModel.validationScenarios() }),
-    .init(id: "chang-roberts", scenarios: { try ChangRobertsModel.validationScenarios() })
+    .init(id: "chang-roberts", scenarios: { try ChangRobertsModel.validationScenarios() }),
+    .init(id: "echo", scenarios: { try EchoModel.validationScenarios() })
 ]
 
 private let modelRegistrations = fixtureModelRegistrations + upstreamModelRegistrations

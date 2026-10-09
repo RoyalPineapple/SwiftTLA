@@ -5392,27 +5392,27 @@
       "path": "specifications/echo",
       "name": "The Echo Algorithm",
       "audit": "partial source and configuration audit",
-      "gap": "The existing EchoModel is a bounded three-node source port, not a verified MCEcho configuration. The pinned MCEcho.cfg selects Node=N1, initiator=I1, R=R1, NoNode as a model value, TestSpec, TypeOK, and AncestorProperties. The Swift port substitutes parent=a for NoNode, sender for sndr, and received for rcvd; it computes neighbors instead of retaining nbrs and does not declare either configured invariant. Exact state/action projection, default deadlock behavior, the Relation dependency, model-owned validation, pinned reference inputs, and hosted complete graph/property evidence remain missing. A 75-state local count alone cannot establish upstream equivalence. The ordinary-message migration preserves this existing bounded port and adds no configuration credit.",
+      "gap": "The model-owned MCEcho scenario now uses string nodes, a distinct NoNode model value, upstream message fields, stored nbrs, TypeOK, a three-node AncestorProperties closure, default deadlock, and byte-identical pinned upstream inputs. Focused local checks pass for the 75-state native/formal graph and selected property verdicts. Upstream I1's CHOOSE result, complete state/action projection, both independent hosted comparisons, and the Relation helper disposition remain unverified. This is implementation progress, not a hosted match or a complete family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/echo/Echo.tla",
           "role": "algorithm dependency",
-          "reason": "MCEcho extends this module. It owns the PlusCal algorithm, translated state, and the configured TypeOK and AncestorProperties invariants. The Swift source is only a partial port.",
-          "implementations": [],
+          "reason": "MCEcho extends this module. EchoModel implements its configured three-node algorithm and selected invariants; hosted equivalence remains pending.",
+          "implementations": ["Sources/UpstreamParity/Examples/Echo.swift"],
           "dispositionComplete": false
         },
         {
           "path": "specifications/echo/MCEcho.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": ["Sources/UpstreamParity/Examples/Echo.swift"],
           "dispositionComplete": false
         },
         {
           "path": "specifications/echo/Relation.tla",
           "role": "helper dependency",
-          "reason": "Echo extends Relation and uses its relation predicates and transitive closure in assumptions and AncestorProperties. It is not an excluded model; its required semantics and export closure remain to be implemented and verified.",
+          "reason": "Echo extends Relation for graph assumptions and transitive closure. The configured R1 graph is a complete three-node graph; EchoModel expresses its bounded neighbor and ancestor semantics. The generic helper's disposition and hosted parity remain open.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -5422,10 +5422,10 @@
           "module": "specifications/echo/MCEcho.tla",
           "configuration": "specifications/echo/MCEcho.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/Echo.swift", "scenario": "MCEcho", "caseID": "echo-mc"}],
           "evidence": []
         }
       ],

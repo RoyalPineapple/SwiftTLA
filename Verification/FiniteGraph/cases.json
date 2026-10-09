@@ -1285,6 +1285,26 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "echo-mc",
+      "sourceModel": "echo",
+      "scenario": "MCEcho",
+      "module": "echo/MCEcho.tla",
+      "configuration": "echo/MCEcho.cfg",
+      "imports": ["echo/Echo.tla", "echo/Relation.tla"],
+      "dependencies": [
+        {"importingModule": "MCEcho", "importedModule": "Echo"},
+        {"importingModule": "Echo", "importedModule": "Relation"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/echo/MCEcho.tla",
+        "sha256": "505c7e02bec386dd24cd1b0f33e16cbc1b7fe02edda7dd63689ad4172d01c2ac"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "505c7e02bec386dd24cd1b0f33e16cbc1b7fe02edda7dd63689ad4172d01c2ac",
+      "cfgSHA256": "72a84107ba0b85a38578590f2e9d4456cbed88a3cfcd8b4276ca2036843556ef",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "chang-roberts-ap",
       "sourceModel": "chang-roberts",
       "scenario": "APChangRoberts",
