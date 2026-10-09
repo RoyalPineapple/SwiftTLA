@@ -40,4 +40,23 @@ THEOREM EnabledUpdate ==
         (\E t \in States : NativeStep(s, t, guard, value))
         <=> (\E t \in States : RenderedStep(s, t, guard, value))
     BY CompleteStateUpdate, SMT DEF NativeStep, RenderedStep, States
+
+NativeParallelStep(s, t, guard, first, firstValue, second, secondValue) ==
+    /\ guard
+    /\ first # second
+    /\ t = [s EXCEPT ![first] = firstValue, ![second] = secondValue]
+
+RenderedParallelStep(s, t, guard, first, firstValue, second, secondValue) ==
+    /\ guard
+    /\ first # second
+    /\ t[first] = firstValue
+    /\ t[second] = secondValue
+    /\ \A other \in Vars \ {first, second} : t[other] = s[other]
+
+THEOREM ParallelUpdate ==
+    \A s, t \in States, guard \in BOOLEAN,
+       first, second \in Vars, firstValue, secondValue \in Values :
+        NativeParallelStep(s, t, guard, first, firstValue, second, secondValue)
+        <=> RenderedParallelStep(s, t, guard, first, firstValue, second, secondValue)
+    BY SMT DEF NativeParallelStep, RenderedParallelStep, States
 =======================================================================
