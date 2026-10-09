@@ -8,11 +8,14 @@ struct CompiledActionEnumerator {
 
     func enumerateSuccessors(_ action: CompiledAction) throws -> [CompiledSuccessor] {
         try actionBindings(action.bindings).flatMap { binding in
-            try execute(action.body, bindings: binding.values).map { delta in
-                CompiledSuccessor(
+            var emitted = Set<CompiledState>()
+            return try execute(action.body, bindings: binding.values).compactMap { delta -> CompiledSuccessor? in
+                let candidate = try state.updating(delta.assignments)
+                guard emitted.insert(candidate).inserted else { return nil }
+                return CompiledSuccessor(
                     action: action.id,
                     arguments: binding.arguments,
-                    state: try state.updating(delta.assignments)
+                    state: candidate
                 )
             }
         }
