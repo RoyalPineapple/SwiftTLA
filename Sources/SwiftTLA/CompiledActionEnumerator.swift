@@ -59,7 +59,7 @@ struct CompiledActionEnumerator {
             let left = try execute(lhs, bindings: bindings)
             guard !left.isEmpty else { return [] }
             return try left.flatMap { first in
-                try execute(rhs, bindings: bindings).map { try first.merging($0) }
+                try execute(rhs, bindings: bindings).compactMap { first.merging($0) }
             }
         case .or(let lhs, let rhs):
             return try execute(lhs, bindings: bindings) + execute(rhs, bindings: bindings)
@@ -92,12 +92,12 @@ private struct CompiledActionBindingValues {
 private struct CompiledActionDelta {
     var assignments: [VariableID: CompiledValue] = [:]
 
-    func merging(_ other: Self) throws -> Self {
-        .init(assignments: try other.assignments.reduce(into: assignments) { merged, assignment in
-            if let previous = merged[assignment.key], previous != assignment.value {
-                throw CompiledEvaluationError.conflictingAssignment(assignment.key)
-            }
-            merged[assignment.key] = assignment.value
-        })
+    func merging(_ other: Self) -> Self? {
+        var merged = assignments
+        for (variable, value) in other.assignments {
+            if let previous = merged[variable], previous != value { return nil }
+            merged[variable] = value
+        }
+        return .init(assignments: merged)
     }
 }

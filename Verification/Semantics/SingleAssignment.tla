@@ -566,6 +566,21 @@ THEOREM ConflictingConjunctionHasNoSuccessor ==
                     => ~RenderedConjunction(s, t, firstKeys, first, secondKeys, second)
     BY SMT DEF Compatible, RenderedConjunction, States
 
+ExecutableConjunction(s, t, firstKeys, first, secondKeys, second) ==
+    /\ Compatible(firstKeys, first, secondKeys, second)
+    /\ t = ApplyDelta(s, firstKeys \cup secondKeys,
+        MergeCompatible(firstKeys, first, secondKeys, second))
+
+THEOREM ConjunctionSuccessorsAgree ==
+    \A firstKeys, secondKeys \in SUBSET Vars :
+        \A s, t \in States :
+            \A first \in [firstKeys -> Values] :
+                \A second \in [secondKeys -> Values] :
+                    ExecutableConjunction(s, t, firstKeys, first, secondKeys, second)
+                    <=> RenderedConjunction(s, t, firstKeys, first, secondKeys, second)
+    BY CompatibleConjunction, ConflictingConjunctionHasNoSuccessor,
+        SMT DEF ExecutableConjunction
+
 \* The generated Swift machine replaces one value in a complete state.
 NativeStep(s, t, guard, value) ==
     /\ guard

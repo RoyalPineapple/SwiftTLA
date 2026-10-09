@@ -94,9 +94,11 @@ applying a partial assignment map to a complete state is equivalent to the
 rendered assignments plus an unchanged frame for every other variable. A
 second rule covers conjunction of two assignment maps when overlapping writes
 agree. If they disagree, the rendered conjunction has no successor. The
-compiled and generated Swift enumerators instead throw a conflicting-assignment
-error; the universal proof must show that accepted `#spec` lowering cannot
-reach such a conflict, or align the declared error semantics across outputs.
+compiled and generated Swift enumerators now also discard that conflicting
+branch. `ConjunctionSuccessorsAgree` proves that this executable merge-or-skip
+rule and the rendered conjunction have identical complete-state successors
+for both compatible and conflicting writes. The general output links remain
+to be proved.
 
 The guarded-choice composition rule preserves complete labeled edges and
 enabledness for any choice domain, provided corresponding branches produce
@@ -212,7 +214,7 @@ no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
 with a prior write, not arbitrary conditions, expression failures, or the
 Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 404 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 408 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
