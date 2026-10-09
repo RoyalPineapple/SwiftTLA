@@ -21,6 +21,13 @@ struct EWD998ChanTraceInputTests {
         #expect(throws: EWD998ChanTraceInput.InputError.causalityViolation(earlier: 3, later: 4)) {
             try input.events(inCausalOrder: input.events.map(\.sourceLine))
         }
+        let orderData = try Data(contentsOf: root.appendingPathComponent(
+            "Verification/FiniteGraph/fixtures/ewd998/EWD998ChanTrace.selected-order.json"))
+        #expect(orderData.last == 0x0A)
+        #expect(SHA256.hex(Data(orderData.dropLast())) ==
+            "b728a7eac858354dc10d2bc4616ba68fcca724ca141a1890e5bf0c5dec6af6eb")
+        let order = try JSONDecoder().decode([Int].self, from: orderData)
+        #expect(try input.events(inCausalOrder: order).count == 654)
     }
 
     @Test("invalid input fails closed while a reported failure remains an event")

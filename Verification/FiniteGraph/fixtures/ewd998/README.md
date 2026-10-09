@@ -23,21 +23,25 @@ full clock-bearing graph or final-revision admission claim.
 `EWD998ChanTrace.tla`, `.cfg`, and `.ndjson` are unchanged pinned upstream
 inputs. The reference diagnostic binds the 654-event log through the `JSON`
 environment variable and uses the separately pinned CommunityModules release
-and source closure. Its draft-PR workflow checks the upstream TLC outcome and
-retains the exact inputs. A second, explicitly instrumented copy prints TLC's
-chosen `TraceLog`; the diagnostic maps its complete records back to the 654
-source lines and checks that ordering against the vector clocks. The pinned
-`VectorClocks.tla` (`69cc7f09a0b1048495843778ba34afd3e1cb11881cd8e1ce7b725b376aeb9a6a`)
+and source closure. Hosted run `37894703890` on SHA `716a7783` satisfied
+`TraceAccepted` and retained artifact `11601000946`. Its instrumented copy
+printed TLC's chosen `TraceLog`; the diagnostic mapped every record back to a
+source line and checked vector-clock order. The resulting
+`EWD998ChanTrace.selected-order.json` contains that JSON payload, followed by
+a file-terminating newline. The hosted payload is pinned by SHA-256
+`b728a7eac858354dc10d2bc4616ba68fcca724ca141a1890e5bf0c5dec6af6eb`.
+The pinned `VectorClocks.tla`
+(`69cc7f09a0b1048495843778ba34afd3e1cb11881cd8e1ce7b725b376aeb9a6a`)
 uses `CHOOSE` over valid permutations, so a locally chosen topological order
-would not establish TLC's selected `TraceLog`. This capture
-has not run on a host. It does not compare a generated Swift machine, so it
-does not complete trace parity.
+would not establish TLC's selected `TraceLog`. This reference result does not
+compare a generated Swift machine or generated TLA, so it does not complete
+trace parity.
 
 `EWD998ChanID_shiviz.tla` and `.cfg` are also byte-for-byte pinned upstream
-inputs. A separate reference-only job records TLC's terminal outcome under
-the published configuration before a Swift port claims semantics for its
-`MCInit`, which omits the base model's `passes` variable. That job is not
-graph parity or a replacement for the documented generator-mode campaign.
+inputs. In hosted run `37894703890`, pinned TLC exited 255 before exploration:
+`MCInit` does not assign the base model's `passes` variable. The local
+reference diagnostic now classifies that source-invalid outcome, but neither
+the diagnostic correction nor a Swift port has hosted parity evidence.
 
 `EWD998ChanID_export.tla` and `.cfg` are byte-for-byte pinned at SHA-256
 `638f814c422250d6debe1209419971b66ead59c8aa8aca4a2efcc29feb379985`
@@ -45,6 +49,7 @@ and `a02a94fce512a1c7f8c47f0c35bbad7813dfedbafec7212d2404c585541b078a`.
 Their selected `PostInv` can execute an HTTP POST. The reference-only diagnostic
 stages the exact source and configuration but gives TLC a `PATH` containing only
 a local `curl` interceptor. The interceptor accepts only the published command,
-retains its trace payload, and performs no network request. TLC's actual
-terminal outcome has not yet been observed on a host, and no Swift parity is
-claimed for this configuration.
+retains its trace payload, and performs no network request. Hosted run
+`37894703890` exited 255 on the same incomplete `MCInit` before a POST was
+attempted. The local diagnostic correction classifies this source-invalid
+outcome; it is not hosted parity for a Swift implementation.
