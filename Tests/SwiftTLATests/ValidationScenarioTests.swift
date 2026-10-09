@@ -44,7 +44,16 @@ struct ValidationScenarioTests {
         #expect(binding.operation == .value(.integer(2)))
     }
 
-    @Test("scenario bindings reject missing, duplicate, foreign, and incompatible values", arguments: [0, 1, 2, 3])
+    @Test("a typed expression can supply a model-owned scenario binding")
+    func bindsTypedExpression() throws {
+        let scenario = try #require(ScenarioExpectations.validationScenarios().first {
+            $0.name == "derivedLimit"
+        })
+        #expect(scenario.configuration.limit == 2)
+        #expect(try scenario.render().tlaBundle.cfg.contains("limit = 2"))
+    }
+
+    @Test("scenario bindings reject missing, duplicate, foreign, incompatible, and state-dependent values", arguments: [0, 1, 2, 3, 4])
     func rejectsInvalidBindings(variant: Int) throws {
         var spec = ConfiguredCounter.spec
         let original = try #require(spec.validationScenarios.first)
@@ -53,7 +62,8 @@ struct ValidationScenarioTests {
         case 0: bindings.removeLast()
         case 1: bindings.append(bindings[0])
         case 2: bindings[0] = .init(parameter: .init(name: "limit"), value: .value(.int(2)))
-        default: bindings[0] = .init(parameter: bindings[0].parameter, value: .value(.bool(true)))
+        case 3: bindings[0] = .init(parameter: bindings[0].parameter, value: .value(.bool(true)))
+        default: bindings[0] = .init(parameter: bindings[0].parameter, value: .variable("value"))
         }
         spec.validationScenarios = [.init(name: original.name, bindings: bindings)]
         #expect(throws: CompilationDiagnostic.self) {

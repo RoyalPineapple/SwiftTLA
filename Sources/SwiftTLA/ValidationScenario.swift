@@ -226,7 +226,9 @@ public struct ValidationBinding: Sendable {
     }
 }
 
-public func Bind<Value: TLAValueType>(_ parameter: ModelParameter<Value>, to value: Value) -> ValidationBinding {
+public func Bind<Value: TLAValueType>(
+    _ parameter: ModelParameter<Value>, to value: some TypedExpression<Value>
+) -> ValidationBinding {
     .init(parameter: parameter.reference, value: value.stateExpr)
 }
 

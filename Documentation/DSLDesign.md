@@ -887,6 +887,11 @@ let upstreamSelection = Validation(label: "Upstream selection") {
 upstreamSelection
 ```
 
+`Bind` accepts a typed value or a closed typed expression, such as
+`Bind(processCount, to: IntRange(1, through: 3).cardinality)`. The expression
+must not depend on model state, another parameter, or an operator; the resolved
+value supplies both the native configuration and TLA+ export.
+
 `checking(only:)` accepts registered property handles from the same model.
 An empty array selects no properties. Without this modifier, the scenario selects
 every declared property. `checkingDeadlock(_:)` accepts a Boolean literal and overrides

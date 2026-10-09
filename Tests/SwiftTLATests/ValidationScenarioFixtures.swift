@@ -24,6 +24,10 @@ struct ScenarioExpectations {
                 Bind(limit, to: 2)
             }.expect(beyondLimit, .violated).expectDeadlock(.violated)
             expectedUnreachableGoal
+            let derivedLimit = Validation {
+                Bind(limit, to: IntRange(1, through: 2).cardinality)
+            }
+            derivedLimit
         }
     }
 }
