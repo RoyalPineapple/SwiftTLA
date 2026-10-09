@@ -198,6 +198,26 @@ implementation boundaries are `SpecParser`, `CompiledLowerer`,
 `AlgorithmPlusCalRenderer`. The proof must track their current behavior,
 not a simplified substitute.
 
+The compiled action tree has eight constructors in
+`Sources/SwiftTLA/CompiledExpressions.swift`. It is consumed by three distinct
+implementations: `CompiledActionEnumerator` executes it for compiled checking,
+`NativeSwiftEmitter+Machine` emits executable Swift, and `CompiledTLARenderer`
+prints TLA+. The generated Swift machine does **not** delegate action execution
+to `CompiledActionEnumerator`. Consequently, a theorem about the action tree
+or the compiled checker alone cannot discharge either output obligation.
+
+| Action-tree rule | Current machine-checked fact | Output obligation still open |
+| --- | --- | --- |
+| `assign`, `unchanged` | Complete-state delta and unchanged-frame equality | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
+| `guard_` | Pure, total guards agree at each abstract ordered-statement position | Prove emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
+| `and` | Compatible delta conjunction and conflicting relational writes | Prove both emitters' evaluation order, conflict/error semantics, and frame completion. |
+| `or` | Guarded-choice preservation conditional on equal branch edges | Prove branch construction, multiplicity policy, and failure behavior in both outputs. |
+| `existsAction`, `define`, `ifElse` | No general output-linked theorem | Prove binding scope, selected domain/branch, expression evaluation, and both emitted forms. |
+
+This table is a proof inventory, not a claim that these five groups exhaust
+`#spec`: initialization, source lowering, properties, temporal behavior,
+refinement, and PlusCal export also require their own output links.
+
 Record exactly which parser, macro-expansion, Swift compiler/runtime, TLA+
 parser/TLC, PlusCal translator, serialization, and proof-checker facts remain
 assumptions. Do not describe a result as a universal guarantee if a backend
