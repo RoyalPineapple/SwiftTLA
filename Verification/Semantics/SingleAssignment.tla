@@ -68,6 +68,36 @@ THEOREM ExistentialEnumerationPreservesEnabledness ==
                     <=> EnabledIn(QuantifiedExistentialEdges(domains, rendered), state, action)
     BY ExistentialEnumerationPreservesEdges, SMT DEF EnabledIn
 
+NativeDefinedEdges(values, branches) ==
+    {edge \in LabeledEdges : edge \in branches[edge[1]][values[edge[1]]]}
+RenderedDefinedEdges(values, branches) ==
+    {edge \in LabeledEdges :
+        LET bound == values[edge[1]]
+        IN edge \in branches[edge[1]][bound]}
+
+THEOREM DefinedBindingPreservesEdges ==
+    \A nativeValues, renderedValues \in [States -> Values] :
+        \A native, rendered \in [States -> [Values -> SUBSET LabeledEdges]] :
+            (\A state \in States :
+                nativeValues[state] = renderedValues[state]
+                /\ native[state][nativeValues[state]]
+                   = rendered[state][renderedValues[state]])
+            => NativeDefinedEdges(nativeValues, native)
+               = RenderedDefinedEdges(renderedValues, rendered)
+    BY SMT DEF NativeDefinedEdges, RenderedDefinedEdges, LabeledEdges, States
+
+THEOREM DefinedBindingPreservesEnabledness ==
+    \A nativeValues, renderedValues \in [States -> Values] :
+        \A native, rendered \in [States -> [Values -> SUBSET LabeledEdges]] :
+            (\A state \in States :
+                nativeValues[state] = renderedValues[state]
+                /\ native[state][nativeValues[state]]
+                   = rendered[state][renderedValues[state]])
+            => \A state \in States, action \in ActionLabels :
+                EnabledIn(NativeDefinedEdges(nativeValues, native), state, action)
+                <=> EnabledIn(RenderedDefinedEdges(renderedValues, rendered), state, action)
+    BY DefinedBindingPreservesEdges, SMT DEF EnabledIn
+
 THEOREM UniqueExpressionChoice ==
     \A domain \in SUBSET Values :
         \A predicate \in [domain -> BOOLEAN] :
