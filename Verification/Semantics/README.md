@@ -32,6 +32,20 @@ This gate is **not implemented**. `CheckedExecutionOverflow` in
 the rendered TLA+ arithmetic has a successor. Until the gate and both output
 links are proved, the universal theorem does not hold for accepted `#spec`.
 
+## Choice-expression obligation
+
+The expression-level `StateExpr.choose` is distinct from the nondeterministic
+`Choose` algorithm statement. The generated Swift expression sorts its finite
+domain and returns the first satisfying member, or throws when none exists;
+the TLA+ renderer emits ordinary `CHOOSE`. TLA+ permits an unspecified
+consistent witness and gives `CHOOSE` an arbitrary value when none satisfies
+the predicate ([Specifying Systems, §16.1.2](https://lamport.azurewebsites.net/tla/book-01-08-21.pdf)).
+Therefore the current outputs are not generally equal for observable
+expression-level choice. A sound output link must either emit the same
+canonical selection in TLA+ or prove that every accepted use has a unique
+satisfying witness and define matching no-witness behavior. Agreement on a
+finite TLC run cannot discharge this obligation.
+
 ## Checked kernel lemma
 
 `SingleAssignment.tla` proves that replacing one value in a complete state
