@@ -3,6 +3,12 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct EWD998CorpusExecutionTests {
+    @Test("Safra's TypeOK checks integer-valued functions without enumerating Int")
+    func integerFunctionTypeInvariant() throws {
+        let machine = try #require(EWD998Model.initialMachines(configuration: .init(N: 3)).first)
+        #expect(try machine.violatedInvariants(checking: [.TypeOK], atLevel: 0).isEmpty)
+    }
+
     @Test("Safra's token and counters retain the published send, receive, and pass effects")
     func generatedTransitions() throws {
         let initial = try EWD998Model.initialMachines(configuration: .init(N: 2))

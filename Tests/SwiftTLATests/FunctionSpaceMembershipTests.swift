@@ -86,4 +86,11 @@ struct FunctionSpaceMembershipTests {
         #expect(throws: NativeMachineEvaluationError.divisionByZero) { try failing.send(.candidateFailure) }
         #expect(failing.snapshot == before)
     }
+
+    @Test("Generated function membership checks an unbounded integer codomain symbolically")
+    func generatedUnboundedRangeMembership() throws {
+        var machine = try FunctionSpaceMembershipModel.makeMachine()
+        #expect(try machine.send(.integerRangeAccepted).after.result)
+        #expect(try !machine.send(.integerRangeRejected).after.result)
+    }
 }

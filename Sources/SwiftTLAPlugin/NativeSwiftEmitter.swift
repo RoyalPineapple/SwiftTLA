@@ -1001,10 +1001,12 @@ struct NativeSwiftEmitter {
             return { candidate in bounds?.contains(candidate) ?? false }
             """
         case .functionSet:
+            let range = try predicate(node.children[1])
             body = """
             let domain = \(try emit(node.children[0]))
-            let range = \(try emit(node.children[1]))
-            return { candidate in Set(candidate.keys) == domain && candidate.values.allSatisfy(range.contains) }
+            \(range.declaration)
+            let contains = \(range.call)
+            return { candidate in Set(candidate.keys) == domain && candidate.values.allSatisfy(contains) }
             """
         case .ifThenElse:
             let first = try predicate(node.children[1])
