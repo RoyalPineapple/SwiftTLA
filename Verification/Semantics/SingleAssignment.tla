@@ -979,6 +979,49 @@ THEOREM CurrentAdditionHasRepresentableOperandMismatch ==
     BY SwiftIntBounds, SMT DEF CurrentNativeAddOutcome,
         CurrentRenderedAddOutcome, WithinSwiftInt, SwiftIntBounds
 
+StrictlyIncreasingIntegers(sequence) ==
+    \A first, second \in 1..Len(sequence) :
+        first < second => sequence[first] < sequence[second]
+
+FirstMatchingInteger(sequence, predicate, index) ==
+    /\ index \in 1..Len(sequence)
+    /\ predicate[sequence[index]]
+    /\ \A earlier \in 1..(index - 1) : ~predicate[sequence[earlier]]
+
+THEOREM SortedIntegerFirstIsUniqueLeast ==
+    \A sequence \in Seq(Int) :
+        \A predicate \in [SequenceMembers(sequence) -> BOOLEAN] :
+            \A index \in 1..Len(sequence) :
+                (StrictlyIncreasingIntegers(sequence)
+                 /\ FirstMatchingInteger(sequence, predicate, index)) =>
+                    /\ sequence[index] \in SequenceMembers(sequence)
+                    /\ \A other \in SequenceMembers(sequence) :
+                        predicate[other] => sequence[index] <= other
+                    /\ \A candidate \in SequenceMembers(sequence) :
+                        (predicate[candidate]
+                         /\ (\A other \in SequenceMembers(sequence) :
+                             predicate[other] => candidate <= other))
+                        => candidate = sequence[index]
+    BY SMT DEF StrictlyIncreasingIntegers, FirstMatchingInteger,
+        SequenceMembers
+
+CanonicalIntegerChoice(sequence, predicate) ==
+    LET candidates == SequenceMembers(sequence)
+    IN CHOOSE member \in candidates :
+        predicate[member]
+        /\ (\A other \in candidates : predicate[other] => member <= other)
+
+THEOREM CanonicalIntegerChoiceMatchesSortedFirst ==
+    \A sequence \in Seq(Int) :
+        \A predicate \in [SequenceMembers(sequence) -> BOOLEAN] :
+            \A index \in 1..Len(sequence) :
+                (StrictlyIncreasingIntegers(sequence)
+                 /\ FirstMatchingInteger(sequence, predicate, index))
+                => CanonicalIntegerChoice(sequence, predicate) = sequence[index]
+    BY SortedIntegerFirstIsUniqueLeast, UniqueExpressionChoice, SMT
+        DEF CanonicalIntegerChoice, StrictlyIncreasingIntegers,
+            FirstMatchingInteger, SequenceMembers
+
 CurrentNativeSubtractOutcome(lhs, rhs) ==
     IF WithinSwiftInt(lhs - rhs)
     THEN <<"value", lhs - rhs>>

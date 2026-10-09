@@ -98,6 +98,14 @@ that their consumers are witness-independent, a shared canonical choice
 semantics, or an explicit unsupported-program diagnostic; their presence
 cannot be hidden by the unique-witness lemma.
 
+`SortedIntegerFirstIsUniqueLeast` and
+`CanonicalIntegerChoiceMatchesSortedFirst` prove a constructive rule for
+nonempty integer choices: given a strictly increasing enumeration and a first
+satisfying index, TLA+ selection of the least satisfying integer returns the
+same member. The renderer still emits ordinary `CHOOSE`, not this canonical
+operator. The proof does not cover empty domains, predicate evaluation
+failures, or the ordering of other value types.
+
 ## Checked kernel lemma
 
 `SingleAssignment.tla` proves that replacing one value in a complete state
