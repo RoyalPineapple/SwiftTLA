@@ -15,6 +15,8 @@ public protocol StateMachine: Sendable {
     func hasSameConfiguration(as other: Self) -> Bool
     /// Explicit conversions used by independent validation and export.
     func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection
+    /// Reconstructs an independently sampled initial state at the formal JSON boundary.
+    func selectedInitialMachine(from formalJSON: TLAJSONStateProjection) throws -> Self?
     func formalCall(for action: Action) throws -> FormalActionCall
     static var formalPropertyNames: [Property: String] { get }
     static var propertyDisplayNames: [Property: String] { get }
@@ -79,6 +81,8 @@ public protocol ConfiguredGeneratedModel: StateMachine {
 }
 
 extension StateMachine {
+    public func selectedInitialMachine(from formalJSON: TLAJSONStateProjection) throws -> Self? { nil }
+
     public static var hasActionConstraint: Bool { false }
 
     public func satisfiesActionConstraint(to successor: Self,

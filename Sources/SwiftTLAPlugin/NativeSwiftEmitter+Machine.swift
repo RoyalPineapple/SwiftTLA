@@ -310,7 +310,7 @@ extension NativeSwiftEmitter {
         code += "return result"
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
         let appendedArguments = arguments.isEmpty ? "" : ", " + arguments
-        return try nativeDeclarations("""
+        var declarations = try nativeDeclarations("""
         private static func _initialStates(_selectedInitial: State? = nil\(appendedParameters)) throws -> [Snapshot] {
             \(code)
         }
@@ -328,6 +328,43 @@ extension NativeSwiftEmitter {
             guard let execution = candidates.popFirst() else { throw GeneratedMachineError.invalidInitialState }
             guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
             return Self(execution: execution\(appendedArguments))
+        }
+        """)
+        if program.behavior.initializations.contains(where: { initialization in
+            guard case .memberOf(let expression) = initialization.initialization else { return false }
+            if case .randomSubset = expression.computation.operation { return true }
+            return false
+        }) {
+            declarations += try selectedInitialDeclarations(arguments: arguments)
+        }
+        return declarations
+    }
+
+    private func selectedInitialDeclarations(arguments: String) throws -> [DeclSyntax] {
+        let decoded = try program.layout.variables.enumerated().compactMap { index, variable -> String? in
+            guard stateMemberNames[variable.id] != nil else { return nil }
+            let type = program.variableTypes[variable.id]!
+            return """
+            guard let _json\(index) = formalJSON.value(for: Self.__swifttlaFormalProjectionTokens[\(index)]) else {
+                throw TLAStateProjectionDiagnostic.invalidKey(path: \(String(reflecting: variable.declaration.name)))
+            }
+            let _decoded\(variable.id.ordinal): \(try swiftType(type)) = \(try formalJSONValue("_json\(index)", type: type))
+            """
+        }.joined(separator: "\n")
+        let fields = model.api.variables.map { "\($0.swiftIdentifier): _decoded\($0.id.ordinal)" }.joined(separator: ", ")
+        let appendedArguments = arguments.isEmpty ? "" : ", \(arguments)"
+        return try nativeDeclarations("""
+        @_documentation(visibility: internal)
+        public func selectedInitialMachine(from formalJSON: TLAJSONStateProjection) throws -> Self? {
+            guard formalJSON.count == \(program.layout.variables.count) else { return nil }
+            do {
+                \(decoded)
+                return try Self.makeMachine(State(\(fields))\(appendedArguments))
+            } catch is TLAStateProjectionDiagnostic {
+                return nil
+            } catch GeneratedMachineError.invalidInitialState {
+                return nil
+            }
         }
         """)
     }

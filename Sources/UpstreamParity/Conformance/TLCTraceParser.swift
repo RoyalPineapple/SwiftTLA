@@ -132,7 +132,9 @@ package struct TLCTraceParser: Sendable {
             if let previous = machines.last {
                 candidates = try previous.successors(checking: &context).map { ($0.action, $0.machine) }
             } else {
-                candidates = initialMachines.map { (nil, $0) }
+                let selected = try (try? TLAJSONStateProjection(validatingJSON: bindings))
+                    .flatMap { try initial.selectedInitialMachine(from: $0) }
+                candidates = initialMachines.map { (nil, $0) } + (selected.map { [(nil, $0)] } ?? [])
             }
             var matches: [Machine.Snapshot: (Machine, CanonicalState)] = [:]
             var actions = Set<String>()
