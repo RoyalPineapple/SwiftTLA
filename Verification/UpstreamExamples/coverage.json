@@ -5392,7 +5392,7 @@
       "path": "specifications/echo",
       "name": "The Echo Algorithm",
       "audit": "partial source and configuration audit",
-      "gap": "The model-owned MCEcho scenario now uses string nodes, a distinct NoNode model value, upstream message fields, stored nbrs, TypeOK, a three-node AncestorProperties closure, default deadlock, and byte-identical pinned upstream inputs. Focused local checks pass for the 75-state native/formal graph and selected property verdicts. Upstream I1's CHOOSE result, complete state/action projection, both independent hosted comparisons, and the Relation helper disposition remain unverified. This is implementation progress, not a hosted match or a complete family.",
+      "gap": "The model-owned MCEcho scenario now uses string nodes, a distinct NoNode model value, upstream message fields, stored nbrs, TypeOK, the three-node ancestor closure and acyclicity clause of AncestorProperties, default deadlock, and byte-identical pinned upstream inputs. A cyclic-state regression fails before the acyclicity fix and passes afterward; focused local checks pass for the 75-state native/formal graph and selected property verdicts. Upstream I1's CHOOSE result, complete state/action projection, both independent hosted comparisons, and the Relation helper disposition remain unverified. This is implementation progress, not a hosted match or a complete family.",
       "legacyCleanupComplete": false,
       "modules": [
         {

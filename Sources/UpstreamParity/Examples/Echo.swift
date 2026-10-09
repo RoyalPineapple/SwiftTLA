@@ -123,8 +123,19 @@ package struct EchoModel: Sendable {
                                     && parents[m] == OneOf<Node, NoNode>.first(initiator)
                             }
                     }
+                    let hasAncestorCycle = Exists(in: node) { n in
+                        parents[n] == OneOf<Node, NoNode>.first(n)
+                            || Exists(in: node) { m in
+                                parents[n] == OneOf<Node, NoNode>.first(m)
+                                    && (parents[m] == OneOf<Node, NoNode>.first(n)
+                                        || Exists(in: node) { k in
+                                            parents[m] == OneOf<Node, NoNode>.first(k)
+                                                && parents[k] == OneOf<Node, NoNode>.first(n)
+                                        })
+                            }
+                    }
                     AncestorProperties {
-                        !finished || reachesRoot
+                        !finished || (reachesRoot && !hasAncestorCycle)
                     }
                 })
             })

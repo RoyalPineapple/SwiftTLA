@@ -34,6 +34,28 @@ struct EchoCorpusStateGraphTests {
         #expect(exported == formal.graph)
     }
 
+    @Test("Echo ancestor property rejects a cycle through the initiator")
+    func ancestorCycle() throws {
+        let compilation = try EchoModel.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let invariant = try #require(runtime.behavior.invariants.first { $0.name == "AncestorProperties" })
+        let pc = try #require(compilation.layout.variables.first { $0.declaration.name == "pc" }).id
+        let parent = try #require(compilation.layout.variables.first { $0.declaration.name == "parent" }).id
+        let done = try #require(compilation.layout.controlLocations.first { $0.renderedName == "Done" }).id
+        var state = try #require(runtime.initialStates().first)
+        state = try state.updating(pc, to: .function([
+            .string("a"): .controlLocation(done),
+            .string("b"): .controlLocation(done),
+            .string("c"): .controlLocation(done)
+        ]))
+        state = try state.updating(parent, to: .function([
+            .string("a"): .string("b"),
+            .string("b"): .string("a"),
+            .string("c"): .string("a")
+        ]))
+        #expect(try !runtime.invariantHolds(invariant, in: state))
+    }
+
     @Test("Echo projection preserves upstream message fields and NoNode")
     func messageProjection() {
         let message = EchoModel.Message(kind: .acknowledgement, sndr: .b)
