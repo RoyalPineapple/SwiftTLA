@@ -28,6 +28,28 @@ struct RandomSubsetExpressionTests {
         #expect(tla.contains("RandomSubset(100, [1..30 -> {FALSE, TRUE}])"))
     }
 
+    @Test("selected initialization accepts a valid function outside the latest random sample")
+    func selectedFunctionOutsideSample() throws {
+        let sampled = Set(try RandomSubsetFunctionModel.initialMachines().map(\.state.samples))
+        let unsampled = (0...100).lazy.map { pattern in
+            Dictionary(uniqueKeysWithValues: (1...30).map { key in
+                (key, key <= 7 && pattern & (1 << (key - 1)) != 0)
+            })
+        }.first { !sampled.contains($0) }
+        guard let unsampled else {
+            Issue.record("101 distinct valid functions cannot all be in a 100-member sample")
+            return
+        }
+
+        let selected = RandomSubsetFunctionModel.State(samples: unsampled)
+        #expect(try RandomSubsetFunctionModel.makeMachine(selected).state == selected)
+        var invalid = unsampled
+        invalid[31] = false
+        #expect(throws: GeneratedMachineError.invalidInitialState) {
+            try RandomSubsetFunctionModel.makeMachine(.init(samples: invalid))
+        }
+    }
+
     @Test("formal evaluation samples a large function space without enumerating it")
     func interpretedFunctionDomain() throws {
         let sample = RandomSubset(upTo: 100,
