@@ -403,6 +403,39 @@ struct ValidationEvidenceComparisonTests {
             generated: generated, reference: reference, actions: actions, in: root) == nil)
     }
 
+    @Test("substituted TLC actions retain the selected outer label")
+    func substitutedActionUsesOuterLabel() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let generated = root.appendingPathComponent("generated.bin")
+        let reference = root.appendingPathComponent("reference.bin")
+        try tlcGraph(edgeCount: 1).write(to: generated)
+        try tlcGraph(edgeCount: 1, actionName: "Next",
+            actionLocation: "<Move(0) line 2, col 1 to line 2, col 10 of module Example>")
+            .write(to: reference)
+        #expect(try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+            generated: generated, reference: reference, actions: [actions[0]], in: root) == nil)
+    }
+
+    @Test("substituted TLC leaves remain available when the outer action is not declared")
+    func substitutedActionUsesDeclaredLeaf() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let generated = root.appendingPathComponent("generated.bin")
+        let reference = root.appendingPathComponent("reference.bin")
+        let location = "<Move(0) line 2, col 1 to line 2, col 10 of module Example>"
+        try tlcGraph(edgeCount: 1, actionName: "Move", actionLocation: location).write(to: generated)
+        try tlcGraph(edgeCount: 1, actionName: "Next", actionLocation: location).write(to: reference)
+        let leaf = RenderedAction(sourceName: "Move", arguments: [.int(0)], renderedName: "Move(0)")
+        #expect(try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+            generated: generated, reference: reference, actions: [leaf], in: root) == nil)
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence(
+            "ambiguous TLC action Next() or Move(0)")) {
+            _ = try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+                generated: generated, reference: reference, actions: [actions[0], leaf], in: root)
+        }
+    }
+
     @Test("an undeclared TLC action identifies the observed invocation")
     func undeclaredTLCActionIdentifiesInvocation() throws {
         let root = try fixture()

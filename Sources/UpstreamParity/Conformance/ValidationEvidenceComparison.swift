@@ -688,16 +688,44 @@ package enum ValidationEvidenceComparison {
     private static func resolvedAction(name: String, location: String,
         declared: [String: String]) throws -> String {
         let direct = tlaInvocationLocationIdentity(action: name, arguments: [])
-        if let label = declared[direct] { return label }
-        let prefix = "<\(name)("
-        guard location.hasPrefix(prefix),
-              let suffix = location.range(of: ") line ", options: .backwards) else {
+        if location.isEmpty {
+            guard let label = declared[direct] else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("undeclared TLC action \(direct)")
+            }
+            return label
+        }
+        guard location.hasPrefix("<") else {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC action location")
         }
-        let arguments = String(location[location.index(location.startIndex, offsetBy: prefix.count)..<suffix.lowerBound])
-        let identity = tlaInvocationLocationIdentity(action: name,
-            arguments: try TLCValueParser.components(arguments))
-        guard let label = declared[identity] else {
+        let end: String.Index
+        if let suffix = location.range(of: ") line ", options: .backwards) {
+            end = location.index(after: suffix.lowerBound)
+        } else if let suffix = location.range(of: " line ") {
+            end = suffix.lowerBound
+        } else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("TLC action location")
+        }
+        let invocation = String(location[location.index(after: location.startIndex)..<end])
+        let identity: String
+        if let opening = invocation.firstIndex(of: "(") {
+            guard invocation.last == ")", opening > invocation.startIndex else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("TLC action location")
+            }
+            let arguments = String(invocation[invocation.index(after: opening)..<invocation.index(before: invocation.endIndex)])
+            identity = tlaInvocationLocationIdentity(action: String(invocation[..<opening]),
+                arguments: try TLCValueParser.components(arguments))
+        } else {
+            guard !invocation.isEmpty else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("TLC action location")
+            }
+            identity = tlaInvocationLocationIdentity(action: invocation, arguments: [])
+        }
+        let outer = declared[direct]
+        let inner = declared[identity]
+        if let outer, let inner, outer != inner {
+            throw ValidationEvidenceComparisonError.invalidEvidence("ambiguous TLC action \(direct) or \(identity)")
+        }
+        guard let label = outer ?? inner else {
             throw ValidationEvidenceComparisonError.invalidEvidence("undeclared TLC action \(identity)")
         }
         return label

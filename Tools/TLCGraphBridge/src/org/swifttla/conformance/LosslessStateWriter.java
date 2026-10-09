@@ -247,7 +247,7 @@ public final class LosslessStateWriter implements IStateWriter {
                     binaryState(target, false);
                 }
                 for (Action resolvedAction : resolved) {
-                    int actionId = binaryAction(resolvedAction);
+                    int actionId = binaryAction(action, resolvedAction);
                     binaryOutput.writeByte(3);
                     binaryOutput.writeLong(source.fingerPrint());
                     binaryOutput.writeInt(actionId);
@@ -327,9 +327,9 @@ public final class LosslessStateWriter implements IStateWriter {
         }
     }
 
-    private int binaryAction(Action action) throws IOException {
-        String name = action.getName().toString();
-        String location = action.getLocation();
+    private int binaryAction(Action original, Action resolved) throws IOException {
+        String name = original.getName().toString();
+        String location = resolved.getLocation();
         String key = name + '\0' + location;
         Integer existing = binaryActions.get(key);
         if (existing != null) {
