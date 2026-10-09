@@ -24,6 +24,7 @@ struct NativeSwiftEmitter {
     private var nextMembershipPredicate = 0
     var checkingContextName: String?
     var checkingLevelName: String?
+    var checkingDiameterName: String?
     var printTOutputName: String?
 
     init(model: MacroCompilation, sharedTypes: NativeTypeDeclarations? = nil) {
@@ -103,7 +104,7 @@ struct NativeSwiftEmitter {
         case .oneOf(let first, let second): return "OneOf<\(try swiftType(first)), \(try swiftType(second))>"
         case .nominalRecord(let name, _): return name
         case .tuple(let elements) where NativeTypeDeclarations.usesPublicTuple(type):
-            let name = elements.count == 2 ? "Pair" : "Triple"
+            let name = elements.count == 2 ? "Pair" : elements.count == 3 ? "Triple" : "Quintuple"
             return "\(name)<\(try elements.map(swiftType).joined(separator: ", "))>"
         case .finite, .union, .record, .tuple:
             guard let name = typeDeclarations.names[type] else {
@@ -143,7 +144,7 @@ struct NativeSwiftEmitter {
         case .record(let fields), .nominalRecord(_, let fields): return escaped ? "`\(fields[index].name)`" : fields[index].name
         case .tuple(let elements):
             if NativeTypeDeclarations.usesPublicTuple(type) {
-                return ["first", "second", "third"][index]
+                return ["first", "second", "third", "fourth", "fifth"][index]
             }
             return elements.count == 2 ? (index == 0 ? "first" : "second") : "element\(index + 1)"
         default: preconditionFailure("Field naming requires resolved record or tuple types")
@@ -590,7 +591,7 @@ struct NativeSwiftEmitter {
                  .functionLiteral(let binder), .letValue(let binder):
                 bound.insert(binder)
             case .foldFunction(let binders): bound.formUnion(binders)
-            case .stateVariable, .checkingRegister, .setCheckingRegister, .checkingLevel,
+            case .stateVariable, .checkingRegister, .setCheckingRegister, .checkingLevel, .checkingDiameter,
                  .enabledAction, .nextState, .stutteringStep, .printT, .call,
                  .checkedCall, .operatorReference, .operatorApplication, .letIn,
                  .integerSet:
@@ -628,6 +629,9 @@ struct NativeSwiftEmitter {
                 return "(try { () throws -> Int in throw NativeMachineEvaluationError.checkingContextRequired }())"
             }
             return "(try { () throws -> Int in guard let level = \(context)?.level else { throw NativeMachineEvaluationError.checkingContextRequired }; return level }())"
+        case .checkingDiameter:
+            guard let checkingDiameterName else { throw unsupported("checking diameter outside a postcondition") }
+            return checkingDiameterName
         case .stutteringStep:
             guard state != "nextState." else { throw unsupported("nested successor-state read") }
             let before = try expression(id.children[0], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
@@ -653,7 +657,7 @@ struct NativeSwiftEmitter {
         case .setLiteral, .tupleLiteral, .in, .subset, .union,
              .intersection, .setDifference, .cardinality, .integerRange, .setFilter,
              .setMap, .forAll, .exists, .choose, .sequenceFromSet, .sequenceFromFunction,
-             .powerSet, .sequenceSet, .unionAll, .functionSet, .setSum:
+             .powerSet, .sequenceSet, .unionAll, .functionSet, .randomSubset, .randomElement, .setSum:
             return try collectionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .foldFunction, .sequenceSelect, .tupleAccess, .tupleDynamicAccess, .tupleRemoving, .tuplePrefix,
              .tupleLength, .tupleHead, .tupleTail, .tupleAppend, .tupleConcatenate:
@@ -923,6 +927,17 @@ struct NativeSwiftEmitter {
             return "(\(try emit(0)).reduce(into: Set<\(try swiftType(element))>()) { $0.formUnion($1) })"
         case .functionSet:
             return "(try _NativeMachineOperations.functionSet(\(try emit(0)), \(try emit(1))))"
+        case .randomSubset:
+            if case .functionSet = node.children[1].operation,
+               case .set(.dictionary) = node.resultType {
+                let functionSet = node.children[1]
+                let domain = try self.expression(functionSet.children[0], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+                let range = try self.expression(functionSet.children[1], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+                return "(try _NativeMachineOperations.randomFunctionSubset(upTo: \(try emit(0)), from: \(domain), to: \(range)))"
+            }
+            return "(try _NativeMachineOperations.randomSubset(upTo: \(try emit(0)), from: \(try emit(1))))"
+        case .randomElement:
+            return "(try _NativeMachineOperations.randomElement(from: \(try emit(0))))"
         case .setSum:
             let functionCode = try emit(0)
             let domainCode = try emit(1)
@@ -986,10 +1001,12 @@ struct NativeSwiftEmitter {
             return { candidate in bounds?.contains(candidate) ?? false }
             """
         case .functionSet:
+            let range = try predicate(node.children[1])
             body = """
             let domain = \(try emit(node.children[0]))
-            let range = \(try emit(node.children[1]))
-            return { candidate in Set(candidate.keys) == domain && candidate.values.allSatisfy(range.contains) }
+            \(range.declaration)
+            let contains = \(range.call)
+            return { candidate in Set(candidate.keys) == domain && candidate.values.allSatisfy(contains) }
             """
         case .ifThenElse:
             let first = try predicate(node.children[1])
@@ -1200,6 +1217,13 @@ struct NativeSwiftEmitter {
             case .record(let fields), .nominalRecord(_, let fields):
                 let domain = "Set<String>([\(fields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
                 return "(try { () throws -> Set<String> in _ = \(try emit(0)); return \(domain) }())"
+            case .oneOf(let first, let second):
+                guard let firstFields = first.recordFields, let secondFields = second.recordFields else {
+                    throw unsupported("DOMAIN")
+                }
+                let firstDomain = "Set<String>([\(firstFields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
+                let secondDomain = "Set<String>([\(secondFields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
+                return "(try { () throws -> Set<String> in switch \(try emit(0)) { case .first(_): return \(firstDomain); case .second(_): return \(secondDomain) } }())"
             default: throw unsupported("DOMAIN")
             }
         case .functionLiteral(let binding):

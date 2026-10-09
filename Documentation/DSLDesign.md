@@ -132,6 +132,7 @@ Inside `#spec`, scoped state declarations derive their names from immutable Swif
 let count = scope.sharedVar(initial: 0)
 let hour = scope.sharedVar(in: 1...12)
 let visited = process.localVar(initial: false)
+let publicCount = process.localVar(initial: 0, exposed: true)
 let readable = scope.sharedVar(label: "Current value", initial: 0)
 let limit = scope.parameter(as: Int.self, in: 1...12, label: "Visit limit")
 ```
@@ -149,6 +150,10 @@ for every variable, and generated `State.displayNames` exposes labels for public
 state fields keyed by typed Swift key paths, falling back to the Swift binding
 name. Labels do not change the formal identifier, state
 value, transitions, or compilation identity; duplicate labels are permitted.
+Process-local values are internal to generated execution by default. Use
+`exposed: true` only when a typed generated `State` field is needed outside the
+process, such as for a refinement mapping. Exposure does not change the formal
+state or transition semantics; it changes the generated Swift surface.
 
 Parameter handles also derive their names from immutable Swift bindings and
 accept an optional nonempty literal `label:`. The label is available through
@@ -301,6 +306,9 @@ Do(Step.twice) { advance(); advance() }
 Later calls observe assignments from earlier calls in the same step.
 Parameterized independent steps and nested algorithms can use these macros.
 An algorithm can declare a local macro with the same name.
+An `Each` body can also declare a bound macro after its local state and use it
+inside its `Do` or `While` steps. Such a macro can capture that process's typed
+state; expansion remains inside the caller's atomic step.
 Specification macros require unique immutable bindings.
 Control transfers inside a macro still require an enclosing algorithm.
 
@@ -614,6 +622,14 @@ is invalid. The native checker and TLA+ export must retain this same scope;
 EWD840's `WF_vars(System)` is the corpus example. No fairness is inferred from
 the presence of the steps.
 
+For a disjunction with one obligation per member, write
+`WeakFairness(eachOf: [initiate, pass])` or `StrongFairness(eachOf: [initiate, pass])`.
+Both steps must use the same immutable member domain. Each member gets one
+obligation over the two steps for that member. This is not one global obligation
+or two separate obligations per member. EWD998ChanID's
+`\A n \in Node: WF_vars(System(n))` needs this form because `System(n)` is the
+disjunction of `InitiateProbe(n)` and `PassToken(n)`.
+
 Fairness belongs to behavior because it changes allowed executions.
 
 ### Explicit finite symmetry
@@ -703,7 +719,7 @@ algorithm
 
 Putting `WeakFairness(Step.pass)` inside that `Each` is invalid. An inner `Do`
 is a process control step, not a bound independent action handle; neither
-`WeakFairness(anyOf:)` nor `WeakFairness(each:)` changes this process scope.
+`WeakFairness(anyOf:)`, `WeakFairness(eachOf:)`, and `WeakFairness(each:)` do not change this process scope.
 Finer obligations inside a process require a named corpus case and a separate
 language decision. The DSL does not create individually targetable inner-step
 handles now.
@@ -827,7 +843,19 @@ Resource limits remain runner controls, not model constraints.
 Normal completion retains the semantics in section 4.
 
 State constraints select the initial states and successors that exploration
-retains. They do not change the executable transition relation. Deadlock checks
+retains. An action constraint selects successors using a typed before/after
+value beside the algorithm it bounds:
+
+```swift
+let counter = Algorithm(scoped: { scope in
+    let count = scope.sharedVar(initial: 0)
+    While(Step.advance, true) { Assign(count, to: count + 1) }
+    ActionConstraint(on: count) { before, after in after <= 2 }
+})
+counter
+```
+
+Neither constraint changes the executable transition relation. Deadlock checks
 use successors before constraint filtering. Invariant checks include all initial
 states and generated successors, including excluded candidates. These rules
 match the [pinned TLC checker](https://github.com/tlaplus/tlaplus/blob/867aefb69ffc2452031292587b389d1fc3eb43ff/tlatools/org.lamport.tlatools/src/tlc2/tool/ModelChecker.java#L406-L451).
@@ -895,6 +923,53 @@ Generated scenarios retain this choice as a typed `ModelBehavior` value.
 Native checking and export consume the same choice. Duplicate behavior modifiers
 produce a diagnostic. Expected outcomes do not select or alter behavior.
 Evidence identifies the selected behavior separately from property and deadlock coverage.
+
+`Validation.viewing(_:)` selects a typed state expression as TLC's `VIEW` and as
+the native checker's visited-state identity. Without it, both checkers use the
+complete state. A view can deliberately omit auxiliary state, but it does not
+change the generated machine, its transitions, state constraints, or selected
+checks. For example, EWD998ChanID excludes vector clocks while retaining the
+active flags, colors, counters, clock-free inbox, and pass count:
+
+```swift
+let published = Validation { Bind(Node, to: fiveNodes) }
+    .viewing(Quintuple.literal(active, color, counter, viewInbox, passes))
+    .checking(only: [EWD998Safe, Max3TokenRounds, EWD998ChanSpec, EWD998Live])
+    .checkingDeadlock(false)
+published
+```
+
+View-based exploration records complete representative states for diagnostics,
+but graph equality compares the complete, typed view values and labeled edges.
+Representatives chosen by the two independent checkers need not be identical.
+The view may include `scope.checkingLevel` when a trace must distinguish a
+revisited model state at a later breadth-first depth. Initial states have level
+1, and each successor is evaluated at its source level plus 1 in native checking
+and evidence encoding; TLA+ export renders this term as `TLCGet("level")`.
+The graph result must say that it is view-quotiented; it must not masquerade as
+complete full-state parity. A full-state graph export API rejects a viewed
+scenario, leaving the streaming validator as the supported check path.
+
+`Validation.postcondition(_:, name:, expecting:)` selects a typed Boolean
+condition to check after exhaustive exploration. Its optional name is the
+TLA+ operator name; when omitted, the compiler generates a stable name from
+the scenario. `scope.checkingDiameter` is the maximum one-based breadth-first
+level seen by the checker, rendered as `TLCGet("stats").diameter` in TLA+.
+For a configuration with a `VIEW`, both sides compute this value over the
+view-identified search. For example:
+
+Inside `#spec { scope in ... }`, a scenario can declare:
+
+```swift
+let trace = Validation {}.postcondition(scope.checkingDiameter == 3,
+    name: "TraceAccepted")
+trace
+```
+
+The condition is a check of the completed run, not a state invariant. It must
+not depend on an individual machine state or `scope.checkingLevel`. A run that
+stops early cannot claim that the postcondition passed. Native checking and
+TLC report its verdict separately from graph, property, and deadlock results.
 
 ### Declaration syntax
 
@@ -1014,8 +1089,9 @@ Array expressions support append, concatenation, indexed reads, indexed removal,
 selection, length, head, and folds through the shared sequence operations.
 These operations retain the array type. They do not require a `TupleExpr` value.
 When a TLA+ state value is a heterogeneous fixed-length tuple rather than a
-sequence, `Pair<A, B>` and `Triple<A, B, C>` retain each position's Swift type
-and serialize as `<<...>>`. The generated machine keeps the same ordered values.
+sequence, `Pair<A, B>`, `Triple<A, B, C>`, and five-position `Quintuple` retain
+each position's Swift type and serialize as `<<...>>`. The generated machine
+keeps the same ordered values.
 `Sequences` and `SortedSequences` produce domains of ordinary Swift arrays.
 Set operations accept different set representations with the same element type and preserve the receiver type.
 DSL sequence indices start at one, as in TLA+.
@@ -1146,6 +1222,12 @@ Each(nodes, scoped: { member, process in
 })
 ```
 
+When the process action needs a stable formal name, pass a typed String-backed
+case with `Each(nodes, named: ProcessName.node, fairness: .weak)`. The name is
+the emitted process/action identity, not a display label. An unconditional
+single-step loop over a range or nonempty literal population needs no `pc`;
+other process control flows retain it.
+
 The population expression can depend on immutable parameters and supported
 helpers. It cannot depend on machine state or action enabledness. For example,
 `Each(selected)` is invalid when `selected` is mutable model state.
@@ -1274,11 +1356,22 @@ model. `Bind` requires a state-independent expression of the target parameter's
 type; `Map` requires an expression of the target state member's type. A missing,
 duplicate, or type-mismatched binding fails compilation. The `let` bindings,
 not display labels or inline declarations, identify the instance and refinement.
+When two generated models use distinct Swift value types with the same complete
+formal value, `Map(\.field, from: expression, projecting: Target.self)` is an
+explicit boundary conversion. The native checker decodes the entire formal value
+as `Target` and rejects a failed or lossy projection. The TLA+ mapping uses the
+source expression's unchanged formal value. This does not relax typing for
+ordinary state, transitions, or exact `Map` bindings.
 The abstract model's compiled generated transitions supply native refinement
 checking; its compiled TLA+ module supplies export. The concrete model's one
 resolved mapping supplies both paths. Neither path compiles the abstract model
 again at runtime, copies its declarations, or evaluates it through an interpreter.
 EWD840's selected `TDSpec` must include the abstract model's fairness obligation.
+`Refinement(instance: TD, behavior: .initialAndNext)` instead checks the
+abstract initial predicate and next-state relation without its fairness; this
+is explicit and applies to both generated native checking and TLA+ export.
+The default remains `.specification`, including abstract fairness. EWD998PCal's
+published `EWD998Spec` requires the initial-and-next form.
 An instance alone does not add a check; the registered refinement is selected
 by default in each validation scenario unless an explicit selection omits it.
 For example, omitting `Map(\.terminationDetected, from: ...)` or writing
@@ -1312,9 +1405,11 @@ inconclusive. A sampled counterexample is a
 violation with a witness; finishing
 the traces without one is inconclusive, not satisfaction or complete-graph
 evidence. Simulation does not change the generated TLA+ model. The TLC adapter
-must request the same bounds independently, and validation infrastructure must
-verify each reported witness before claiming parity. Until that evidence path
-exists, simulation cases are excluded from admission, not run as exhaustive checks.
+requests the same bounds independently. Validation infrastructure checks the
+configured inputs and each reported witness before it claims parity. A sampled
+violation with checked witnesses can pass admission without graph parity. A
+simulation that finds no violation remains inconclusive. It cannot pass as a
+satisfied property or an equal complete graph.
 The native validator runs against the generated machine and records its states,
 transitions, and selected check outcomes without invoking TLC or rendering TLA+.
 Separately, TLC checks the generated TLA+ bundle. The two reports must agree on
@@ -1452,6 +1547,11 @@ Every field is required. Unknown, repeated, missing, or wrongly typed fields fai
 Nested records and model parameters remain typed expressions until native or formal emission.
 Native execution constructs the original Swift record, not a parallel schema.
 Literal `RecordType(...)` remains ordinary Swift construction.
+
+`OneOf<First, Second>` preserves either record shape without an added tag.
+If the alternatives have different fields, `recordFields` gives the fields of the current value.
+A guard can inspect those fields before an `assuming(...)` view reads a field from one alternative.
+Generated Swift and rendered TLA+ use the same complete record value.
 
 Formal set expressions support `mapping`, `filtering`, and `flatMapping`.
 The `flatMapping` closure returns a typed set expression for each member.

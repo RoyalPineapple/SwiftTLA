@@ -391,6 +391,20 @@ struct CompiledLowerer {
             return CompiledStateQuery(expression: query.expression, enabledActions: query.enabledActions,
                 clauseSourceOffsets: spec.constraints.map(\.sourceOffset))
         }
+        var transitionScope = rootScope
+        transitionScope.allowsNextState = true
+        let actionConstraintClauses = try spec.actionConstraints.enumerated().map { index, clause in
+            do { return try lower(clause.expression, at: "actionConstraint[\(index)]", scope: transitionScope) }
+            catch var diagnostic as CompilationDiagnostic {
+                if diagnostic.sourceOffset == nil { diagnostic.sourceOffset = clause.sourceOffset }
+                throw diagnostic
+            }
+        }
+        let actionConstraint = conjoin(actionConstraintClauses).map {
+            let query = predicate($0)
+            return CompiledStateQuery(expression: query.expression, enabledActions: query.enabledActions,
+                clauseSourceOffsets: spec.actionConstraints.map(\.sourceOffset))
+        }
         let scenarios = try lowerValidationScenarios(spec)
         for replacement in formalModuleReplacements {
             let requirements = replacement.expression.stateRequirements(operators: operators)
@@ -422,6 +436,7 @@ struct CompiledLowerer {
                 fairness: compiledFairness,
                 fairnessProfiles: fairnessProfiles,
                 constraint: constraint,
+                actionConstraint: actionConstraint,
                 assume: assume.map { .init(expression: $0, enabledActions: [],
                     clauseSourceOffsets: spec.assumptions.map(\.sourceOffset)) }),
             operators: operators,
@@ -451,13 +466,21 @@ struct CompiledLowerer {
             throw invalid("declarations", "duplicate property registration")
         }
         var scenarios: [CompiledValidationScenario] = []
-        for scenario in spec.validationScenarios {
+        for (scenarioIndex, scenario) in spec.validationScenarios.enumerated() {
             guard scenario.propertySelections.count <= 1, scenario.deadlockSelections.count <= 1,
                   scenario.behaviorSelections.count <= 1,
                   scenario.fairnessProfileSelections.count <= 1,
                   scenario.checkingModeSelections.count <= 1,
-                  scenario.symmetrySelections.count <= 1 else {
+                  scenario.symmetrySelections.count <= 1,
+                  scenario.viewSelections.count <= 1,
+                  scenario.postconditionSelections.count <= 1 else {
                 throw invalid(scenario.name, "duplicate check selection")
+            }
+            let postconditionName = scenario.postconditionSelections.first?.name
+                ?? "__SwiftTLAPostcondition\(scenarioIndex)"
+            if scenario.postconditionSelections.first != nil,
+               postconditionName.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) == nil {
+                throw invalid(scenario.name, "postcondition name must be a TLA identifier")
             }
             if let mode = scenario.checkingModeSelections.first,
                case .simulation(let traces, let maximumDepth) = mode,
@@ -563,7 +586,13 @@ struct CompiledLowerer {
                 deadlockExpectation: scenario.deadlockExpectations.first, checks: checks, checkDeadlock: checkDeadlock,
                 behavior: scenario.behaviorSelections.first ?? .specification,
                 checkingMode: scenario.checkingModeSelections.first ?? .exhaustive,
-                symmetry: selectedSymmetry, fairnessProfileIndex: fairnessProfileIndex))
+                symmetry: selectedSymmetry, fairnessProfileIndex: fairnessProfileIndex,
+                view: try scenario.viewSelections.first.map {
+                    try lower($0, at: "validation.\(scenario.name).view", scope: rootScope)
+                }, postcondition: try scenario.postconditionSelections.first.map {
+                    try lower($0.condition, at: "validation.\(scenario.name).postcondition", scope: rootScope)
+                }, postconditionName: scenario.postconditionSelections.isEmpty ? nil : postconditionName,
+                postconditionExpectation: scenario.postconditionSelections.first?.expected))
         }
         return scenarios
     }
@@ -795,7 +824,7 @@ struct CompiledLowerer {
                     let nested = try collect(process.components, path: "\(componentPath).components")
                     properties += nested.properties
                     translatorOwnedNames.formUnion(nested.translatorOwnedNames)
-                case .shared, .procedure, .formalOperator, .stateConstraint, .invalidPlacement, .local, .step:
+                case .shared, .procedure, .formalOperator, .stateConstraint, .actionConstraint, .invalidPlacement, .local, .step:
                     continue
                 }
             }
@@ -1307,6 +1336,9 @@ struct CompiledLowerer {
                 case .checkingLevel:
                     requiredStandardModules.insert(.tlc)
                     lowered.append(.init(expression: .init(operation: .checkingLevel, children: []), operatorReferences: []))
+                case .checkingDiameter:
+                    requiredStandardModules.insert(.tlc)
+                    lowered.append(.init(expression: .init(operation: .checkingDiameter, children: []), operatorReferences: []))
                 case .controlLocation(let reference):
                     let matches = layout.controlLocations.filter { location in
                         location.sourceName == reference.sourceName
@@ -1419,6 +1451,8 @@ struct CompiledLowerer {
                     )
                 case .functionApply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .functionApply, on: &tasks)
                 case .functionSet(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .functionSet, on: &tasks)
+                case .randomSubset(let count, let domain): scheduleBinary(count, domain, at: path, scope: scope, operation: .randomSubset, on: &tasks)
+                case .randomElement(let domain): scheduleUnary(domain, at: path, scope: scope, operation: .randomElement, on: &tasks)
                 case .setSum(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .setSum, on: &tasks)
                 case .integerRange(let lower, let upper):
                     schedule([(lower, "\(path).lower"), (upper, "\(path).upper")], at: path, scope: scope, build: { .integerRange($0[0].expression, $0[1].expression) }, on: &tasks)

@@ -23,7 +23,9 @@ import tlc2.TLCGlobals;
 import tlc2.tool.Action;
 import tlc2.tool.TLCState;
 import tlc2.util.BitVector;
+import tlc2.util.Context;
 import tlc2.util.IStateWriter;
+import tlc2.value.impl.Value;
 
 /** TLC v1.8.0 graph-event writer. */
 public final class LosslessStateWriter implements IStateWriter {
@@ -245,7 +247,7 @@ public final class LosslessStateWriter implements IStateWriter {
                     binaryState(target, false);
                 }
                 for (Action resolvedAction : resolved) {
-                    int actionId = binaryAction(resolvedAction);
+                    int actionId = binaryAction(action, resolvedAction);
                     binaryOutput.writeByte(3);
                     binaryOutput.writeLong(source.fingerPrint());
                     binaryOutput.writeInt(actionId);
@@ -294,21 +296,40 @@ public final class LosslessStateWriter implements IStateWriter {
     }
 
     private void binaryState(TLCState state, boolean initial) throws IOException {
+        long id = state.fingerPrint();
         binaryOutput.writeByte(2);
-        binaryOutput.writeLong(state.fingerPrint());
+        binaryOutput.writeLong(id);
         binaryOutput.writeByte(initial ? 1 : 0);
-        byte[] key = CanonicalBinaryState.encode(state);
+        byte[] key;
+        var tool = TLCGlobals.mainChecker == null ? null : TLCGlobals.mainChecker.tool;
+        var view = tool == null ? null : tool.getViewSpec();
+        if (view == null) {
+            key = CanonicalBinaryState.encode(state);
+        } else {
+            var evaluated = tool.eval(view, Context.Empty, state);
+            if (!(evaluated instanceof Value)) {
+                throw new IOException("TLC VIEW did not evaluate to a value");
+            }
+            key = CanonicalBinaryState.encodeView((Value) evaluated);
+        }
         binaryOutput.writeInt(key.length);
         binaryOutput.write(key);
+        if (view != null) {
+            byte[] representative = CanonicalBinaryState.encode(state);
+            binaryOutput.writeByte(9);
+            binaryOutput.writeLong(id);
+            binaryOutput.writeInt(representative.length);
+            binaryOutput.write(representative);
+        }
         binaryStates++;
         if (initial) {
             binaryInitials++;
         }
     }
 
-    private int binaryAction(Action action) throws IOException {
-        String name = action.getName().toString();
-        String location = action.getLocation();
+    private int binaryAction(Action original, Action resolved) throws IOException {
+        String name = original.getName().toString();
+        String location = resolved.getLocation();
         String key = name + '\0' + location;
         Integer existing = binaryActions.get(key);
         if (existing != null) {

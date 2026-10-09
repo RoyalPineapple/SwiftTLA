@@ -9,10 +9,11 @@ extension ReachabilityGraph {
     /// Checks the supplied native abstraction, allowing abstract stuttering.
     public mutating func refinementFailure<Abstract: StateMachine>(
         initialMachines: [Abstract],
+        abstractBehavior: ModelBehavior = .specification,
         mapping: (Machine.Snapshot) throws -> Abstract
     ) throws -> RefinementFailure<Machine.Snapshot, Machine.Action>? {
         guard let initial = initialMachines.first else { throw ExplorationError.noInitialStates }
-        let fairness = try initial.fairnessConditions()
+        let fairness = abstractBehavior == .specification ? try initial.fairnessConditions() : []
         for machine in initialMachines {
             guard machine.hasSameConfiguration(as: initial) else { throw ExplorationError.configurationMismatch }
             guard try machine.assumptionsHold() else { throw ExplorationError.assumptionViolated }

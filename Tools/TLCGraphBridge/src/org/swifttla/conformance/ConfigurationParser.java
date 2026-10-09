@@ -63,7 +63,8 @@ public final class ConfigurationParser {
             "declarations", declarations(configuration),
             "invariants", invariants,
             "properties", properties,
-            "checksDeadlock", configuration.getCheckDeadlock()
+            "checksDeadlock", configuration.getCheckDeadlock(),
+            "postconditions", strings(configuration.getPostConditions())
         ));
         Files.writeString(Path.of(arguments[2]), result + "\n", StandardCharsets.UTF_8,
             StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
@@ -98,7 +99,6 @@ public final class ConfigurationParser {
         append(result, "ACTION_CONSTRAINT", strings(original.getActionConstraints()));
         append(result, "VIEW", original.getView());
         append(result, "ALIAS", original.getAlias());
-        append(result, "POSTCONDITION", strings(original.getPostConditions()));
         append(result, "_PERIODIC", original.getPeriodic());
         append(result, "_RL_REWARD", original.getRLReward());
         append(result, "_POSSIBLE", strings(original.getPossible()));

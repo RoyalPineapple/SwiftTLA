@@ -1,0 +1,17 @@
+{
+  "schema": "PinnedCommunityModules",
+  "tag": "202609120237",
+  "commit": "9aae8ea1318b3ded4629abdccec2c4754b528d70",
+  "jar": {
+    "url": "https://github.com/tlaplus/CommunityModules/releases/download/202609120237/CommunityModules-deps-202609120237.jar",
+    "sha256": "3d9a282c360e90d55e9bbe99caa2987d508fef1556d652760b4af4455e283733"
+  },
+  "modules": {
+    "FiniteSetsExt": "dc5d6944395dd18e2f8acf696296808a9460cbbf1b9888f88c5ac4c83a5237f9",
+    "Folds": "aa59063fd600bb640b2ae24dc85ef770277ef5bf7955092b76b8b471790086da",
+    "Functions": "b54ff63b7c76c327525c17c188d5f9f5e53d92f3fd701f5e2ba54f0f54391063",
+    "IOUtils": "c107b97b6fa302f0c84855eaa8b6b6cd536710302e7e2e5ebbbbbd47accad4ad",
+    "SequencesExt": "bd53dcae19324e8445aab342e89cc88c1648f416472de0f395c76e1f734e09c0",
+    "VectorClocks": "69cc7f09a0b1048495843778ba34afd3e1cb11881cd8e1ce7b725b376aeb9a6a"
+  }
+}

@@ -6,6 +6,7 @@ import Foundation
 
 
 final class ParserSession {
+    var sourceModelTypeName: String?
     var symmetryDeclarations: [SymmetrySetDecl] = []
     var symmetryDeclarationOffsets: [Int] = []
     var stateDeclarationOffsets: [String: [Int]] = [:]
@@ -930,6 +931,25 @@ final class ParserSession {
             return functions
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
+           compilerGrammarName(in: call.calledExpression) == "RandomSubset",
+           call.arguments.map({ $0.label?.text }) == ["upTo", "from"],
+           call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+           let countArgument = call.arguments.first,
+           let domainArgument = call.arguments.dropFirst().first,
+           let count = decodeTypedFacadeValue(countArgument.expression, scope: scope),
+           let domain = decodeTypedFacadeValue(domainArgument.expression, scope: scope) {
+            return .randomSubset(count, domain)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           compilerGrammarName(in: call.calledExpression) == "RandomElement",
+           call.arguments.count == 1,
+           call.arguments.first?.label?.text == "from",
+           call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+           let argument = call.arguments.first,
+           let domain = decodeTypedFacadeValue(argument.expression, scope: scope) {
+            return .randomElement(domain)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
            let operation = scope.recursiveOperator(for: reference) {
             let arguments = call.arguments.compactMap {
@@ -965,6 +985,8 @@ final class ParserSession {
             case "first": return .tupleAccess(base, 1)
             case "second": return .tupleAccess(base, 2)
             case "third": return .tupleAccess(base, 3)
+            case "fourth": return .tupleAccess(base, 4)
+            case "fifth": return .tupleAccess(base, 5)
             case "head": return .tupleHead(base)
             case "tail": return .tupleTail(base)
             default: break
@@ -1213,6 +1235,7 @@ final class ParserSession {
             case "keys":
                 guard case .dictionary = typedFacadeValueType(baseSyntax, scope: scope) else { return nil }
                 return .domain(base)
+            case "recordFields": return .domain(base)
             case "count":
                 switch typedFacadeValueType(baseSyntax, scope: scope) {
                 case .array: return .tupleLength(base)
@@ -1301,8 +1324,8 @@ final class ParserSession {
                     elements.append(element)
                 }
                 return literalType.name == "TupleExpr" ? .tupleLiteral(elements) : formalZeroBasedSequence(elements)
-            case "Pair", "Triple":
-                let count = literalType.name == "Pair" ? 2 : 3
+            case "Pair", "Triple", "Quintuple":
+                let count = literalType.name == "Pair" ? 2 : literalType.name == "Triple" ? 3 : 5
                 guard call.arguments.count == count else { return nil }
                 let elements = call.arguments.compactMap { decodeTypedFacadeValue($0.expression, scope: scope) }
                 guard elements.count == count else { return nil }
@@ -1595,6 +1618,18 @@ final class ParserSession {
             var seen: Set<StateExpr> = []
             return .setLiteral(elements.filter { seen.insert($0).inserted })
         }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           compilerGrammarName(in: call.calledExpression) == "Sum",
+           call.arguments.count == 2,
+           call.arguments.first?.label == nil,
+           call.arguments.last?.label?.text == "over",
+           call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+           let functionSyntax = call.arguments.first?.expression,
+           let domainSyntax = call.arguments.last?.expression,
+           let function = decodeTypedFacadeValue(functionSyntax, scope: scope),
+           let domain = decodeTypedFacadeValue(domainSyntax, scope: scope) {
+            return .setSum(function, domain)
+        }
         let formalMember = expression.as(MemberAccessExprSyntax.self)
             ?? expression.as(FunctionCallExprSyntax.self)?.calledExpression.as(MemberAccessExprSyntax.self)
         if terminalTypeName(in: formalMember?.base) == "StateExpr" {
@@ -1801,6 +1836,7 @@ final class ParserSession {
         if decodeIntegerDomain(expression) != nil { return .set(.int) }
         if let checking = decodeCheckingExpression(expression, scope: scope) {
             if case .checkingLevel = checking { return .int }
+            if case .checkingDiameter = checking { return .int }
             return .bool
         }
         if decodeStepEnabledness(expression, scope: scope) != nil { return .bool }
@@ -1865,11 +1901,21 @@ final class ParserSession {
             case "first": return elements.first
             case "second": return elements.count > 1 ? elements[1] : nil
             case "third": return elements.count > 2 ? elements[2] : nil
+            case "fourth": return elements.count > 3 ? elements[3] : nil
+            case "fifth": return elements.count > 4 ? elements[4] : nil
             default: break
             }
         }
         if compilerGrammarName(in: call.calledExpression) == "PrintT" { return .bool }
         if compilerGrammarName(in: call.calledExpression) == "IntRange" { return .set(.int) }
+        if compilerGrammarName(in: call.calledExpression) == "RandomSubset",
+           let domain = call.arguments.first(where: { $0.label?.text == "from" })?.expression {
+            return typedFacadeValueType(domain, scope: scope)
+        }
+        if compilerGrammarName(in: call.calledExpression) == "RandomElement",
+           let domain = call.arguments.first(where: { $0.label?.text == "from" })?.expression {
+            return typedFacadeValueType(domain, scope: scope)?.selectedElement
+        }
         if compilerGrammarName(in: call.calledExpression) == "If",
            let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
            let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
@@ -1928,6 +1974,7 @@ final class ParserSession {
                 ?? typedFacadeValueType(range, scope: scope)?.selectedElement
             if let key, let value { return .set(.dictionary(key, value)) }
         }
+        if compilerGrammarName(in: call.calledExpression) == "Sum" { return .int }
         if let record = nominalRecordType(call.calledExpression) { return record }
         if isSwiftCollectionConstructor(call, named: "Array"),
            call.calledExpression.is(ArrayExprSyntax.self) {
@@ -2083,6 +2130,7 @@ final class ParserSession {
         switch name {
         case "Pair": return (["first", "second"], initializer)
         case "Triple": return (["first", "second", "third"], initializer)
+        case "Quintuple": return (["first", "second", "third", "fourth", "fifth"], initializer)
         default: return nil
         }
     }
@@ -3010,13 +3058,19 @@ extension ParserSession {
         let condition: FairnessCondition
         let arguments = Array(call.arguments)
         let hasAction = name == "WeakFairness" || name == "StrongFairness"
-        if hasAction, arguments.count == 1, arguments[0].label?.text == "anyOf" {
+        if hasAction, arguments.count == 1,
+           let group = arguments[0].label?.text, group == "anyOf" || group == "eachOf" {
             guard let array = arguments[0].expression.as(ArrayExprSyntax.self), !array.elements.isEmpty else {
                 return nil
             }
             let names = array.elements.compactMap { atomicStepName($0.expression) }
             guard names.count == array.elements.count, Set(names).count == names.count else { return nil }
-            return name == "WeakFairness" ? .weakFairnessActionGroup(names) : .strongFairnessActionGroup(names)
+            if group == "eachOf" {
+                return name == "WeakFairness" ? .weakFairnessEachActionGroup(names)
+                    : .strongFairnessEachActionGroup(names)
+            }
+            return name == "WeakFairness" ? .weakFairnessActionGroup(names)
+                : .strongFairnessActionGroup(names)
         }
         let offset = hasAction ? 1 : 0
         guard arguments.count == offset || arguments.count == offset + 1 else { return nil }

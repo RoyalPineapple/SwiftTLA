@@ -6,6 +6,7 @@ package struct TLCReferenceConfiguration: Decodable, Sendable {
   let declarations: String
   let invariants: [String]
   let properties: [String]
+  let postconditions: [String]
   package let checksDeadlock: Bool
 
   package static func parse(_ request: TLCProcessRequest, checking nativeChecks: Set<String>) throws -> Self {
@@ -21,7 +22,8 @@ package struct TLCReferenceConfiguration: Decodable, Sendable {
     defer { try? FileManager.default.removeItem(at: input.module.deletingLastPathComponent()) }
     let output = directory.appendingPathComponent("configuration.json")
     let result = try executeProcess(executable: request.javaExecutable,
-      arguments: ["-cp", request.bridgeJar.path + ":" + request.jar.path,
+      arguments: ["-cp", ([request.bridgeJar, request.jar]
+        + (request.supplementalJar.map { [$0.url] } ?? [])).map(\.path).joined(separator: ":"),
         "org.swifttla.conformance.ConfigurationParser", input.module.path, input.configuration.path, output.path]
         + nativeChecks.sorted(),
       directory: input.module.deletingLastPathComponent(), timeout: request.timeout, environment: request.effectiveEnvironment)
@@ -61,7 +63,7 @@ package struct TLCReferenceConfiguration: Decodable, Sendable {
 
 extension TLCReferenceConfiguration {
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case declarations, invariants, properties, checksDeadlock
+    case declarations, invariants, properties, postconditions, checksDeadlock
   }
 
   package init(from decoder: Decoder) throws {
@@ -69,6 +71,7 @@ extension TLCReferenceConfiguration {
     declarations = try fields.decode(String.self, forKey: .declarations)
     invariants = try fields.decode([String].self, forKey: .invariants)
     properties = try fields.decode([String].self, forKey: .properties)
+    postconditions = try fields.decode([String].self, forKey: .postconditions)
     checksDeadlock = try fields.decode(Bool.self, forKey: .checksDeadlock)
   }
 }
@@ -77,11 +80,13 @@ extension RenderedSpecification {
   /// Keep the upstream model's own source and declarations; only the selected
   /// check directives come from the independently rendered SwiftTLA model.
   package func referenceBundle(checking names: Set<String>, checkDeadlock: Bool,
-    declarations: String, in reference: TLAModuleBundle) throws -> TLAModuleBundle {
+    declarations: String, postcondition: String? = nil,
+    in reference: TLAModuleBundle) throws -> TLAModuleBundle {
     let selected = try checkSelection(checking: names, checkDeadlock: checkDeadlock)
     let directives = selected.tlcInvariantNames.map { "INVARIANT \($0)" }
       + selected.tlcPropertyNames.map { "PROPERTY \($0)" }
       + [selected.checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
+      + (postcondition.map { ["POSTCONDITION \($0)"] } ?? [])
     return reference.replacingConfiguration(declarations + "\n" + directives.joined(separator: "\n") + "\n")
   }
 }

@@ -5,8 +5,16 @@ public protocol TLAValueType: TLAValueConvertible, TypedExpression, Sendable whe
   init?(formalValue: TLAValue)
 }
 
+/// A formal value whose alternatives are records.
+public protocol FormalRecordValue: TLAValueType {}
+
+extension TypedExpression where ExpressionValue: FormalRecordValue {
+  /// The fields present in this record value, including a selected union alternative.
+  public var recordFields: Expr<Set<String>> { Expr(.domain(stateExpr)) }
+}
+
 /// Generated record metadata used at the typed source/formal boundary.
-public protocol _GeneratedRecordValue: TLAValueType {
+public protocol _GeneratedRecordValue: FormalRecordValue {
   static func _formalRecordFieldName(_ keyPath: PartialKeyPath<Self>) -> String?
 }
 extension _GeneratedRecordValue {

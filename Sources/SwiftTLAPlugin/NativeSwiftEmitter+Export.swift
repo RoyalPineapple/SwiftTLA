@@ -111,6 +111,7 @@ extension NativeSwiftEmitter {
                     \(String(reflecting: refinement.name)),
                     instance: \(String(reflecting: refinement.instanceName)), of: \(target).self,
                     configuration: try \(target).Configuration(\(configuration)),
+                    behavior: .\(refinement.behavior.rawValue),
                     parameters: [\(try renderedBindings(refinement.parameters))],
                     state: [\(try renderedBindings(refinement.state))])
                 """
@@ -128,6 +129,8 @@ extension NativeSwiftEmitter {
                 properties: \(String(reflecting: module.configuration.properties)),
                 refinements: \(String(reflecting: module.configuration.refinements)),
                 symmetry: \(String(reflecting: module.configuration.symmetry)),
+                viewOperators: \(String(reflecting: module.configuration.viewOperators)),
+                postconditionOperators: \(String(reflecting: module.configuration.postconditionOperators)),
                 actions: _actions, _generatedPlusCal: \(plusCal),
                 _generatedPlusCalProfiles: \(plusCalProfiles.isEmpty ? "[:]" : "[" + plusCalProfiles.joined(separator: ", ") + "]"),
                 _assumptionsOnly: \(module.configuration.assumptionsOnly),

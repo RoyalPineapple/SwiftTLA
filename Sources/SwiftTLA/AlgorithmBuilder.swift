@@ -304,32 +304,40 @@ public struct LocalVariable<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     fileprivate let initialization: VariableInitialization
     fileprivate let displayLabel: String?
+    fileprivate let exposed: Bool
 
-    fileprivate init(name: String, initialization: VariableInitialization, displayLabel: String? = nil) {
+    fileprivate init(name: String, initialization: VariableInitialization, displayLabel: String? = nil,
+                     exposed: Bool = false) {
         self.name = name
         self.initialization = initialization
         self.displayLabel = displayLabel
+        self.exposed = exposed
     }
 
-    fileprivate init(name: String, initial: Value, displayLabel: String? = nil) {
+    fileprivate init(name: String, initial: Value, displayLabel: String? = nil, exposed: Bool = false) {
         self.init(
             name: name,
             initialization: initial.sourceIssue.map { .expression(.sourceIssue($0)) } ?? .value(initial.tlaValue),
-            displayLabel: displayLabel
+            displayLabel: displayLabel,
+            exposed: exposed
         )
     }
 
-    fileprivate init(name: String, initial: some TypedExpression<Value>, displayLabel: String? = nil) {
+    fileprivate init(name: String, initial: some TypedExpression<Value>, displayLabel: String? = nil,
+                     exposed: Bool = false) {
         self.init(
             name: name,
             initialization: .expression(initial.stateExpr),
-            displayLabel: displayLabel
+            displayLabel: displayLabel,
+            exposed: exposed
         )
     }
 
-    fileprivate init<Domain: FormalSetValue>(name: String, in values: some TypedExpression<Domain>, displayLabel: String? = nil)
+    fileprivate init<Domain: FormalSetValue>(name: String, in values: some TypedExpression<Domain>,
+                                             displayLabel: String? = nil, exposed: Bool = false)
     where Domain.Element == Value {
-        self.init(name: name, initialization: .memberOf(values.stateExpr), displayLabel: displayLabel)
+        self.init(name: name, initialization: .memberOf(values.stateExpr), displayLabel: displayLabel,
+                  exposed: exposed)
     }
 
     public var stateExpr: StateExpr { .variable(name) }
@@ -446,6 +454,7 @@ public final class SpecificationScope {
     init() {}
 
     public var checkingLevel: Expr<Int> { Expr(.checkingLevel) }
+    public var checkingDiameter: Expr<Int> { Expr(.checkingDiameter) }
 
     public func checkingRegister<Value: TLAValueType>(
         as: Value.Type, initial: some TypedExpression<Value>, _name: String = "",
@@ -581,23 +590,27 @@ public final class ProcessScope {
     public func localVar<Value: TLAValueType>(
         _name name: String = "",
         label: String? = nil,
-        initial: Value
+        initial: Value,
+        exposed: Bool = false
     ) -> LocalVariable<Value> {
-        let variable = LocalVariable(name: name, initial: initial, displayLabel: label)
+        let variable = LocalVariable(name: name, initial: initial, displayLabel: label, exposed: exposed)
         declarations.append(localDeclaration(variable))
         return variable
     }
 
-    public func localVar<Value: TLAValueType>(_name name: String = "", label: String? = nil, initial: some TypedExpression<Value>) -> LocalVariable<Value> {
-        let variable = LocalVariable(name: name, initial: initial, displayLabel: label)
+    public func localVar<Value: TLAValueType>(_name name: String = "", label: String? = nil,
+                                               initial: some TypedExpression<Value>, exposed: Bool = false)
+        -> LocalVariable<Value> {
+        let variable = LocalVariable(name: name, initial: initial, displayLabel: label, exposed: exposed)
         declarations.append(localDeclaration(variable))
         return variable
     }
 
     public func localVar<Domain: FormalSetValue>(
-        _name name: String = "", label: String? = nil, in values: some TypedExpression<Domain>
+        _name name: String = "", label: String? = nil, in values: some TypedExpression<Domain>,
+        exposed: Bool = false
     ) -> LocalVariable<Domain.Element> {
-        let variable = LocalVariable(name: name, in: values, displayLabel: label)
+        let variable = LocalVariable(name: name, in: values, displayLabel: label, exposed: exposed)
         declarations.append(localDeclaration(variable))
         return variable
     }
@@ -630,7 +643,8 @@ private func localDeclaration<Value>(_ variable: LocalVariable<Value>) -> Algori
         root: variable.name,
         initialization: variable.initialization,
         displayLabel: variable.displayLabel,
-        swiftTypeName: swiftSurfaceTypeName(for: Value.self)
+        swiftTypeName: swiftSurfaceTypeName(for: Value.self),
+        exposed: variable.exposed
     )))
 }
 
@@ -704,6 +718,10 @@ public enum AlgorithmBuilder {
 
     public static func buildExpression(_ component: ConstraintDecl) -> [AlgorithmElement] {
         [AlgorithmElement(model: .stateConstraint(.init(component.body)))]
+    }
+
+    public static func buildExpression(_ component: ActionConstraintDecl) -> [AlgorithmElement] {
+        [AlgorithmElement(model: .actionConstraint(.init(component.body)))]
     }
 
     public static func buildExpression(_ component: FormalOperatorDecl) -> [AlgorithmElement] {
@@ -838,7 +856,16 @@ public func Each<Domain: FormalSetValue>(
     fairness: ProcessFairness = .none,
     @AlgorithmBuilder _ body: (ProcessIdentifier<Domain.Element>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
-    process(domain, fairness: fairness, body)
+    process(domain, name: nil, fairness: fairness, body)
+}
+
+public func Each<Name: CaseIterable & RawRepresentable & Sendable, Domain: FormalSetValue>(
+    _ domain: some TypedExpression<Domain>,
+    named name: Name,
+    fairness: ProcessFairness = .none,
+    @AlgorithmBuilder _ body: (ProcessIdentifier<Domain.Element>) -> [AlgorithmElement]
+) -> AlgorithmElement where Name.RawValue == String {
+    process(domain, name: name.rawValue, fairness: fairness, body)
 }
 
 public func Each<Domain: FormalSetValue>(
@@ -858,8 +885,28 @@ public func Each<Domain: FormalSetValue>(
     )))
 }
 
+public func Each<Name: CaseIterable & RawRepresentable & Sendable, Domain: FormalSetValue>(
+    _ domain: some TypedExpression<Domain>,
+    named name: Name,
+    fairness: ProcessFairness = .none,
+    @AlgorithmBuilder scoped body: (ProcessIdentifier<Domain.Element>, ProcessScope) -> [AlgorithmElement]
+) -> AlgorithmElement where Name.RawValue == String {
+    let scope = ProcessScope()
+    let identifier = ProcessIdentifier<Domain.Element>(expression: .currentProcess)
+    let components = body(identifier, scope)
+    return AlgorithmElement(model: .process(.init(
+        typeName: swiftSurfaceTypeName(for: Domain.Element.self),
+        name: name.rawValue,
+        domain: domain.stateExpr,
+        fairness: fairness.model,
+        components: scope.declarations.map(\.model) + components.map(\.model),
+        fairnessExcludedLabels: fairness.excludedLabels
+    )))
+}
+
 private func process<Domain: FormalSetValue>(
     _ domain: some TypedExpression<Domain>,
+    name: String?,
     fairness: ProcessFairness,
     @AlgorithmBuilder _ body: (ProcessIdentifier<Domain.Element>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
@@ -868,6 +915,7 @@ private func process<Domain: FormalSetValue>(
         model: .process(
             AlgorithmProcessModel(
                 typeName: swiftSurfaceTypeName(for: Domain.Element.self),
+                name: name,
                 domain: domain.stateExpr,
                 fairness: fairness.model,
                 components: body(identifier).map(\.model),
@@ -1553,6 +1601,10 @@ package enum AlgorithmValidator {
         if Set(sequentialLabels).count != sequentialLabels.count {
             diagnostics.append(AlgorithmDiagnostic(.duplicateLabel, at: .algorithm))
         }
+        let processNames = model.processes.compactMap(\.name)
+        if Set(processNames).count != processNames.count {
+            diagnostics.append(AlgorithmDiagnostic(.duplicateLabel, at: .algorithm))
+        }
 
         for (index, component) in model.components.enumerated() {
             switch component {
@@ -1582,7 +1634,7 @@ package enum AlgorithmValidator {
                 break
             case .formalOperator(let definition):
                 validateName(definition.name, at: .algorithm, diagnostics: &diagnostics)
-            case .stateConstraint:
+            case .stateConstraint, .actionConstraint:
                 break
             case .step(let step):
                 validateSequential(
@@ -1630,6 +1682,9 @@ package enum AlgorithmValidator {
         diagnostics: inout [AlgorithmDiagnostic]
     ) {
         let processAnchor = AlgorithmDiagnosticAnchor.process(index)
+        if let name = process.name {
+            validateName(name, at: processAnchor, diagnostics: &diagnostics)
+        }
         if let members = process.domain.literalSetMembers {
             validateDomain(members, at: processAnchor, diagnostics: &diagnostics)
         } else if case .sourceIssue(.finiteDomain(_, let problem)) = process.domain {
@@ -1672,7 +1727,9 @@ package enum AlgorithmValidator {
                 validateName(temporal.name, at: processAnchor, diagnostics: &diagnostics)
             case .invalidPlacement:
                 continue
-            case .formalOperator, .stateConstraint:
+            case .stateConstraint, .actionConstraint:
+                continue
+            case .formalOperator:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))
             case .shared, .process, .procedure:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))
@@ -1744,7 +1801,7 @@ package enum AlgorithmValidator {
             case .local, .step, .invalidPlacement:
                 break
             case .shared, .process, .procedure, .invariant, .reachable, .temporal,
-                 .formalOperator, .stateConstraint:
+                 .formalOperator, .stateConstraint, .actionConstraint:
                 diagnostics.append(.init(.invalidAlgorithmComponent, at: anchor))
             }
         }

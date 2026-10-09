@@ -11,6 +11,8 @@ package struct GeneratedTLCOracleReport: Codable, Sendable {
     package let properties: [String: ValidationVerdict]
     package let deadlock: ValidationVerdict?
     package let deadlockSelected: Bool
+    package let postconditionName: String?
+    package let postcondition: ValidationVerdict?
 }
 
 /// TLC receives only generated TLA+ and never reads native checker results.
@@ -39,12 +41,15 @@ package enum GeneratedTLCOracle {
               selected == rendered.checkNames,
               scenario.checking.properties == Set(scenario.expectations.keys),
               scenario.checking.checkDeadlock == rendered.checksDeadlock,
+              scenario.postconditionName == rendered.postconditionName,
+              (scenario.postconditionExpectation != nil) == (scenario.postconditionName != nil),
               (scenario.deadlockExpectation != nil) == rendered.checksDeadlock,
               scenario.behavior == rendered.behavior else {
             throw Error.checkingMismatch
         }
         if case .simulation(let traces, let maximumDepth) = scenario.checkingMode {
-            guard selected.count == 1, selected.isSubset(of: rendered.invariantNames) else {
+            guard selected.count == 1, selected.isSubset(of: rendered.invariantNames),
+                  rendered.postconditionName == nil else {
                 throw Error.checkingMismatch
             }
             let identity: [String: Any] = [
@@ -68,6 +73,8 @@ package enum GeneratedTLCOracle {
            graphChecks.count != 1 || selected != graphChecks {
             throw Error.checkingMismatch
         }
+        if scenario.checkingMode == .decisiveCounterexample,
+           rendered.postconditionName != nil { throw Error.checkingMismatch }
         let graph = try inputIdentity(
             bundle: rendered.tlaBundle(checking: graphChecks, checkDeadlock: rendered.checksDeadlock),
             pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .finiteGraph)
@@ -87,8 +94,13 @@ package enum GeneratedTLCOracle {
             ? try inputIdentity(bundle: rendered.tlaBundle(checking: [], checkDeadlock: true),
                 pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck)
             : nil
+        let postconditionInput: String? = try rendered.postconditionName.map { name in
+            try inputIdentity(bundle: rendered.tlaBundle(checking: [], checkDeadlock: false,
+                postcondition: name), pin: pin,
+                arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck)
+        }
         let identity: [String: Any] = [
-            "schema": "swifttla.oracle-cache-key-v3",
+            "schema": "swifttla.oracle-cache-key-v4",
             "caseID": id,
             "scenario": scenario.name,
             "checkingMode": scenario.checkingMode.rawValue,
@@ -97,6 +109,7 @@ package enum GeneratedTLCOracle {
             "fullGraph": fullGraph,
             "checks": checks,
             "deadlockInput": deadlockInput ?? NSNull(),
+            "postconditionInput": postconditionInput ?? NSNull(),
             "actions": rendered.actions.sorted {
                 ($0.sourceInvocationName, $0.renderedName) < ($1.sourceInvocationName, $1.renderedName)
             }.map {
@@ -124,12 +137,16 @@ package enum GeneratedTLCOracle {
               selected == rendered.checkNames,
               scenario.checking.properties == Set(scenario.expectations.keys),
               scenario.checking.checkDeadlock == rendered.checksDeadlock,
+              scenario.postconditionName == rendered.postconditionName,
+              (scenario.postconditionExpectation != nil) == (scenario.postconditionName != nil),
               (scenario.deadlockExpectation != nil) == rendered.checksDeadlock,
               scenario.behavior == rendered.behavior else { throw Error.checkingMismatch }
 
         if case .simulation(let traces, let maximumDepth) = scenario.checkingMode {
             guard selected.count == 1, let name = selected.first,
-                  rendered.invariantNames.contains(name) else { throw Error.checkingMismatch }
+                  rendered.invariantNames.contains(name), rendered.postconditionName == nil else {
+                throw Error.checkingMismatch
+            }
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
             let bundle = try rendered.tlaBundle(checking: selected,
                 checkDeadlock: rendered.checksDeadlock)
@@ -162,7 +179,8 @@ package enum GeneratedTLCOracle {
                 graphInputSHA256: try inputIdentity(bundle: bundle, pin: pin,
                     arguments: arguments, invocation: .propertyCheck),
                 properties: [name: verdict], deadlock: rendered.checksDeadlock ? .unavailable : nil,
-                deadlockSelected: rendered.checksDeadlock)
+                deadlockSelected: rendered.checksDeadlock,
+                postconditionName: nil, postcondition: nil)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
             try encoder.encode(report).write(to: directory.appendingPathComponent("oracle.json"), options: .atomic)
@@ -175,6 +193,7 @@ package enum GeneratedTLCOracle {
         guard !decisive || (graphChecks.count == 1 && selected == graphChecks) else {
             throw Error.checkingMismatch
         }
+        guard !decisive || rendered.postconditionName == nil else { throw Error.checkingMismatch }
         let graphBundle = try rendered.tlaBundle(checking: graphChecks,
                                                  checkDeadlock: rendered.checksDeadlock)
         try retainGeneratedInputs(graphBundle, in: directory.appendingPathComponent("generated"))
@@ -290,12 +309,31 @@ package enum GeneratedTLCOracle {
             deadlock = nil
         }
 
+        let postcondition: ValidationVerdict?
+        if let name = rendered.postconditionName {
+            guard !decisive else { throw Error.checkingMismatch }
+            let bundle = try rendered.tlaBundle(checking: [], checkDeadlock: false,
+                postcondition: name)
+            let retained = directory.appendingPathComponent("check-postcondition")
+            try FileManager.default.createDirectory(at: retained, withIntermediateDirectories: false)
+            try retainGeneratedInputs(bundle, in: retained.appendingPathComponent("generated"))
+            let outcome = try run(bundle: bundle, id: id, maximumStates: maximumStates,
+                timeout: timeout, tools: tools, pin: pin, workRoot: work,
+                retained: retained.appendingPathComponent("tlc"), invocation: .propertyCheck,
+                renderedActions: rendered.actions, process: process)
+            postcondition = try postconditionVerdict(name: name, outcome: outcome,
+                retained: retained.appendingPathComponent("tlc"))
+        } else {
+            postcondition = nil
+        }
+
         let report = GeneratedTLCOracleReport(
             schema: "swifttla.generated-tlc-oracle", caseID: id, scenario: scenario.name,
             maximumStates: maximumStates,
             graphComplete: !decisive, graphInputSHA256: graphIdentity,
             properties: properties, deadlock: deadlock,
-            deadlockSelected: rendered.checksDeadlock)
+            deadlockSelected: rendered.checksDeadlock,
+            postconditionName: rendered.postconditionName, postcondition: postcondition)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("oracle.json"), options: .atomic)
@@ -307,6 +345,7 @@ package enum GeneratedTLCOracle {
         tools: ResolvedTLCToolchain, pin: TLCReferencePin, workRoot: URL,
         retained: URL, invocation: TLCInvocationKind, renderedActions: [RenderedAction],
         process: TLCProcessAdapter, captureEvaluations: Bool = false,
+        supplementalJar: PinnedTLCModuleJar? = nil,
         arguments: [String] = ["-workers", "1", "-fp", "1"]
     ) throws -> TLCExecutionOutcome {
         let work = workRoot.appendingPathComponent(UUID().uuidString)
@@ -320,6 +359,7 @@ package enum GeneratedTLCOracle {
             renderedActions: renderedActions)
         let request = TLCProcessRequest(
             javaExecutable: tools.java, jar: tools.jar, bridgeJar: tools.bridgeJar,
+            supplementalJar: supplementalJar,
             bundle: bundle, graphEvents: work.appendingPathComponent("events.bin.gz"),
             traceOutput: work.appendingPathComponent("counterexample.json"),
             evaluationOutput: captureEvaluations ? work.appendingPathComponent("evaluations.bin") : nil,
@@ -352,6 +392,23 @@ package enum GeneratedTLCOracle {
         return rendered.reachabilityNames.contains(name) ? .reached : .violated
     }
 
+    package static func postconditionVerdict(name: String, outcome: TLCExecutionOutcome,
+        retained: URL) throws -> ValidationVerdict {
+        if outcome == .completed { return .satisfied }
+        guard outcome == .assumptionViolation else {
+            throw Error.invalidOutcome("postcondition: \(outcome)")
+        }
+        let stdout = try String(contentsOf: retained.appendingPathComponent("logs/tlc.stdout.log"),
+            encoding: .utf8)
+        let errors = stdout.split(whereSeparator: \.isNewline).filter { $0.hasPrefix("Error:") }
+        guard errors.count == 1,
+              errors[0].hasPrefix("Error: Postcondition \(name) at "),
+              errors[0].hasSuffix(" is false.") else {
+            throw Error.invalidOutcome("unidentified postcondition violation")
+        }
+        return .violated
+    }
+
     package static func retainGeneratedInputs(_ bundle: TLAModuleBundle, in directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         for file in bundle.files {
@@ -365,7 +422,8 @@ package enum GeneratedTLCOracle {
 
     package static func inputIdentity(bundle: TLAModuleBundle, pin: TLCReferencePin,
         arguments: [String], invocation: TLCInvocationKind = .finiteGraph,
-        captureEvaluations: Bool = false) throws -> String {
+        captureEvaluations: Bool = false,
+        supplementalJar: PinnedTLCModuleJar? = nil) throws -> String {
         let sources = bundle.files.sorted { $0.name < $1.name }.map {
             ["name": $0.name, "sha256": SHA256.hex(Data($0.tla.utf8))]
         }
@@ -380,6 +438,7 @@ package enum GeneratedTLCOracle {
             "invocation": invocation == .finiteGraph ? "finite-graph" : "property-check"
         ]
         if captureEvaluations { input["captureEvaluations"] = true }
+        if let supplementalJar { input["supplementalJarSHA256"] = supplementalJar.sha256 }
         let canonical = try JSONSerialization.data(withJSONObject: input, options: [.sortedKeys])
         return SHA256.hex(canonical)
     }

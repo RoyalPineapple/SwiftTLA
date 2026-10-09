@@ -44,18 +44,23 @@ or malformed fields are rejected. Tool, bridge, module, and configuration pins
 are validated against the launched files before TLC runs.
 
 The diagnostic JSON transition retains the original callback action and a
-`resolvedActions` array. The binary stream stores each resolved named action
-once, then references its numeric ID on every labeled edge.
+`resolvedActions` array. Each binary action record retains the selected
+callback action name and the resolved leaf invocation location, then edges
+reference its numeric ID. The comparator uses the selected action identity
+when declared by the generated model, otherwise the named leaf invocation;
+conflicting declarations fail instead of silently choosing one.
 For an `INSTANCE` substitution, the bridge resolves the disjunction and finite existential prefix through TLC's semantic nodes and contexts.
 It preserves substitutions, then asks TLC which leaf predicates admit the original source and target states.
+Bound domains that depend on the source state are resolved per transition rather than cached across states.
+State-dependent invocation arguments are evaluated against TLC's source and target states and likewise never cached across states.
 Every matching named invocation becomes an edge, including distinct invocations with the same source and target.
 No native predicate or native action list participates in this resolution.
 
 The reader rejects missing, duplicate, unnamed, and undeclared resolved invocations.
 The diagnostic JSON retains the original callback and sequence; both formats
 have a completion digest.
-Unsupported decomposition produces an explicit failure, not a coarse `Next` edge or a guessed label.
-Named instance namespaces, recursive action prefixes, and state-dependent invocation arguments still require additional identity support.
+Unsupported decomposition produces an explicit failure, not an unverified or guessed label.
+Named instance namespaces and recursive action prefixes still require additional identity support.
 These cases remain required corpus work and cannot pass through a fallback.
 
 Hosted setup runs `check-instance-actions.py` against the locked TLC build.

@@ -34,16 +34,30 @@ extension NativeSwiftEmitter {
             return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in\nswitch value { \(cases) } }(\(value)))"
         }
         if [.int, .bool, .string, .modelValue].contains(source) {
-            let cases = finiteViewMembers(target).compactMap { member -> String? in
-                guard let pattern = try? literal(member, as: source), let payload = try? literal(member, as: target) else { return nil }
-                return "case \(pattern): return \(payload)"
-            }.joined(separator: "\n")
-            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in\nswitch value { \(cases)\ndefault: throw NativeMachineEvaluationError.noMatchingCase } }(\(value)))"
+            let mapped = finiteViewMembers(target).compactMap { member -> (value: CompiledValue, clause: String)? in
+                guard let pattern = try? literal(member, as: source),
+                      let payload = try? literal(member, as: target) else { return nil }
+                return (member, "case \(pattern): return \(payload)")
+            }
+            let cases = mapped.map(\.clause).joined(separator: "\n")
+            let members = Set(mapped.map(\.value))
+            let exhaustive = switch source {
+            case .bool: members == Set([.boolean(false), .boolean(true)])
+            case .modelValue: members == Set(typeDeclarations.modelValueCases.keys.map(CompiledValue.constant))
+            default: false
+            }
+            let fallback = exhaustive ? "" : "\ndefault: throw NativeMachineEvaluationError.noMatchingCase"
+            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in\nswitch value { \(cases)\(fallback) } }(\(value)))"
         }
         if let inputs = source.recordFields, let outputs = target.recordFields,
-           inputs.map(\.name) == outputs.map(\.name) {
-            return try checkedFields(value, from: source, to: target,
-                                     inputs: inputs.map(\.type), outputs: outputs.map(\.type))
+           inputs.count == outputs.count, Set(inputs.map(\.name)) == Set(outputs.map(\.name)) {
+            let fields = try outputs.enumerated().map { index, output -> String in
+                let sourceIndex = inputs.firstIndex { $0.name == output.name }!
+                let projected = try checkedView("value." + fieldName(source, index: sourceIndex),
+                    from: inputs[sourceIndex].type, to: output.type)
+                return "\(fieldName(target, index: index, escaped: false)): \(projected)"
+            }.joined(separator: ", ")
+            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in \(try swiftType(target))(\(fields)) }(\(value)))"
         }
         switch (source, target) {
         case (.set(let input), .set(let output)):

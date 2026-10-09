@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "EWD840 remains the current incomplete family at frozen hosted SHA 17d82123; three wave-A candidates have had their pinned manifests and configured roots inspected, but none is selected or implemented while admission runs",
+      "status": "EWD840 is complete on hosted SHA 77ef17da. EWD998 is the current incomplete family; the three wave-A candidates remain source-audited alternatives, not implemented or credited by this audit",
       "candidates": [
         "specifications/MissionariesAndCannibals",
         "specifications/tower_of_hanoi",
         "specifications/SlidingPuzzles"
       ],
-      "scope": "MissionariesAndCannibals has two configured roots: the Toolbox model binds six distinct model values, while its Apalache wrapper binds quoted PERSON strings; both select TypeOK and the deliberately failing Solution invariant. Hanoi has two deliberately failing NotSolved configurations and uses bitwise disk transitions; its animation root adds an SVG trace alias. SlidingPuzzles has two deliberately failing KlotskiGoal configurations over set-of-piece boards; its animation root also adds an SVG trace alias. These are source observations, not implementation or hosted-parity credit. Complete module dispositions and capability checks are required before selecting a ready family; do not expand the matrix before reconciling the frozen admission run."
+      "scope": "MissionariesAndCannibals has two configured roots: the Toolbox model binds six distinct model values, while its Apalache wrapper binds quoted PERSON strings; both select TypeOK and the deliberately failing Solution invariant. Hanoi has two deliberately failing NotSolved configurations and uses bitwise disk transitions; its animation root adds an SVG trace alias. SlidingPuzzles has two deliberately failing KlotskiGoal configurations over set-of-piece boards; its animation root also adds an SVG trace alias. These are source observations, not implementation or hosted-parity credit. Complete module dispositions and capability checks remain required before selecting any of these alternatives."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -60,6 +60,20 @@
     "completionRule": "Scheduling labels and queue positions confer no evidence credit. Count only retained hosted configuration matches. Declare a family complete only after every applicable configuration and variant is verified, module dispositions are resolved, and legacy code is removed. The next deliverable is one fully verified family on a green hosted revision through the intended DSL and correct checking path."
   },
   "ci": {
+    "ewd998PcalFocusedDiagnostic": {
+      "sourceSHA": "8e754f5572a0dedaba6572ccd988c7e639ec325c",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37716911085",
+      "observedStatus": "completed",
+      "conclusion": "failure",
+      "scope": "For ewd998-pcal-0, generated TLA versus pinned upstream matched the complete graph (8 initial states, 321370 distinct states), EWD998Spec, and default deadlock. Native versus generated TLA stopped before comparison with invalidInitialState because the generated refinement bridge required every reachable mapped abstract state to be initial. This is one successful comparison path, not a hosted configuration match; a locally tested bridge fix requires a new hosted run."
+    },
+    "ewd998PcalRefinementRecovery": {
+      "sourceSHA": "c05c9837d5e2c56619fa00ab1ab3e6a57263ec8e",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37721773124",
+      "observedStatus": "completed",
+      "conclusion": "success",
+      "scope": "Focused ewd998-pcal-0 diagnostic only: generated-TLA versus pinned upstream and native versus generated-TLA both matched complete initial states, labeled graphs, EWD998Spec, and default deadlock. The native report records 8 initial states, 321370 states, and 2224768 labeled edges. Both comparison artifacts and the generated oracle were retained with source SHA, run provenance, exact input hashes, and pinned TLC v1.8.0/Java/bridge metadata. This does not admit the full matrix, ordinary CI, or the remaining EWD998 configurations."
+    },
     "prHeadFullMatrix": {
       "sourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
       "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669789",
@@ -5391,14 +5405,14 @@
     {
       "path": "specifications/echo",
       "name": "The Echo Algorithm",
-      "audit": "partial source and configuration audit",
-      "gap": "The model-owned MCEcho scenario now uses string nodes, a distinct NoNode model value, upstream message fields, stored nbrs, TypeOK, the three-node ancestor closure and acyclicity clause of AncestorProperties, default deadlock, and byte-identical pinned upstream inputs. A cyclic-state regression fails before the acyclicity fix and passes afterward; focused local checks pass for the 75-state native/formal graph and selected property verdicts. Upstream I1's CHOOSE result, complete state/action projection, both independent hosted comparisons, and the Relation helper disposition remain unverified. This is implementation progress, not a hosted match or a complete family.",
+      "audit": "Pinned Echo, Relation, and MCEcho modules and the sole published TLC configuration inspected; hosted parity pending",
+      "gap": "Echo now has typed Node, initiator, and relation parameters with upstream irreflexivity, symmetry, and connectivity assumptions, plus a bounded MCEcho binding, upstream state shape, model-value NoNode, TypeOK, AncestorProperties, generated PlusCal assertions, and default deadlock checking. Its 75-state configured native graph and verdicts pass focused local diagnostics; changing the initiator, connected relation, or node population changes the generated machine. The pinned configuration binds R to the complete three-node relation and I1 to CHOOSE n in N1; Swift currently binds initiator to a. Pinned TLC v1.8.0 selects the first normalized set element for bounded CHOOSE, while StringValue order follows UniqueString intern IDs rather than alphabetical spelling, so source inspection does not establish TLC's exact selected node. Resolve this from hosted oracle evidence before claiming parity. No generated-TLA/pinned-upstream or native/generated-TLA hosted graph and property evidence exists yet. The concrete relation binding, action labels, exact state projection, and transitive-closure export remain subject to that independent comparison; do not count the configuration or family as verified.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/echo/Echo.tla",
           "role": "algorithm dependency",
-          "reason": "MCEcho extends this module. EchoModel implements its configured three-node algorithm and selected invariants; hosted equivalence remains pending.",
+          "reason": "MCEcho extends this module. Echo owns the PlusCal algorithm, translated state, and the configured TypeOK and AncestorProperties invariants. The bounded Swift port is implemented locally but not hosted-verified.",
           "implementations": ["Sources/UpstreamParity/Examples/Echo.swift"],
           "dispositionComplete": false
         },
@@ -5412,7 +5426,7 @@
         {
           "path": "specifications/echo/Relation.tla",
           "role": "helper dependency",
-          "reason": "Echo extends Relation for graph assumptions and transitive closure. The configured R1 graph is a complete three-node graph; EchoModel expresses its bounded neighbor and ancestor semantics. The generic helper's disposition and hosted parity remain open.",
+          "reason": "Echo extends Relation and uses its relation predicates and transitive closure in assumptions and AncestorProperties. The finite three-node relation and bounded reachability predicate are represented in the Swift scenario but require hosted semantic comparison; this helper is not an excluded model.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -5429,7 +5443,10 @@
           "evidence": []
         }
       ],
-      "partialCases": []
+      "partialCases": [{
+        "implementation": "Sources/UpstreamParity/Examples/Echo.swift",
+        "reason": "MCEcho is locally checked and registered with exact pinned inputs. Both hosted parity paths and a complete source-module audit remain open."
+      }]
     },
     {
       "path": "specifications/ewd426",
@@ -5568,37 +5585,37 @@
     {
       "path": "specifications/ewd840",
       "name": "EWD840: Termination Detection in a Ring",
-      "audit": "partial source and pinned-configuration audit",
-      "gap": "Hosted run 37548075042 on a736e947 establishes complete two-path parity for SyncTerminationDetection N=7: 129 initial/reachable states, 3,593 labeled edges, TypeOK, TDCorrect, Quiescence, Liveness, and default deadlock. That run also established generated-TLA versus pinned-upstream parity for APSyncTerminationDetection, APEWD840, and EWD840_json, but their named native jobs were skipped. EWD840_anim has paired sampled AnimInv violations with retained witnesses, not complete-graph parity. Pushed SHA 80ccebca adds EWD840.cfg as a direct matrix case and declares its selected TDSpec in #spec using the generated SyncTerminationDetection model; its hosted full-matrix result remains pending. Focused local EWD840 and generated-refinement checks pass on the subsequent local branch. A source audit found only the three #spec models, registered scenarios, tests, and pinned upstream fixtures, with no EWD-specific legacy implementation or parity shim. The family remains partial until all required configurations have hosted evidence and module dispositions are complete. The two TLAPS-only proof companions are classified without a proof-validation claim.",
+      "audit": "source, implementation, and hosted parity audited",
+      "gap": "None for the six published configurations at hosted SHA 77ef17da. Both independent comparison paths are exact for all six selected check sets. Five exhaustive cases compare complete initial-state sets and labeled graphs; EWD840_anim instead compares the configured sampled AnimInv violation and retains witnesses, without a complete-graph claim. Deadlock is checked only for the two SyncTerminationDetection configurations, matching their pinned CFGs. All eight module dispositions and legacy cleanup are complete. The two TLAPS-only companions are classified without a proof-validation claim. Full independent validation and ordinary CI passed on 77ef17da; later local commits still need their own hosted admission.",
       "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/ewd840/APEWD840.tla",
           "role": "configured root",
-          "reason": "The pinned Apalache annotation wrapper instances EWD840 without changing its transitions. Its N=3 model-owned scenario selects TypeOK and TerminationDetection and disables deadlock; hosted comparisons remain missing.",
+          "reason": "The pinned Apalache annotation wrapper instances EWD840 without changing its transitions. Its N=3 model-owned scenario selects TypeOK and TerminationDetection and disables deadlock; both complete hosted comparisons match at 77ef17da. This does not claim Apalache validation.",
           "implementations": ["Sources/UpstreamParity/Examples/EWD840.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd840/APSyncTerminationDetection.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
           "implementations": ["Sources/UpstreamParity/Examples/SyncTerminationDetection.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd840/EWD840_anim.tla",
           "role": "configured root",
-          "reason": "This is a behavioral variant, not just an output wrapper: AnimInit fixes tpos=N-1 and introduces history, while AnimNext updates history for each action. The generated typed model and N=9 model-owned simulation scenario are locally checked. The scenario selects AnimInv, disables deadlock, and expects a safety failure; hosted witness comparison remains pending. The output-only SVG alias is retained with SVG.tla from tlaplus/CommunityModules@4c5f27346a94a8b54b432a990fd6804080baea00.",
+          "reason": "This is a behavioral variant, not just an output wrapper: AnimInit fixes tpos=N-1 and introduces history, while AnimNext updates history for each action. The generated typed model and N=9 model-owned simulation scenario select AnimInv, disable deadlock, and expect a safety failure; both hosted paths match that sampled outcome with retained witnesses at 77ef17da. This is not complete-graph parity. The output-only SVG alias is retained with SVG.tla from tlaplus/CommunityModules@4c5f27346a94a8b54b432a990fd6804080baea00.",
           "implementations": ["Sources/UpstreamParity/Examples/EWD840Animation.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd840/EWD840_json.tla",
           "role": "configured root",
-          "reason": "This wrapper extends EWD840 without changing Init or Next. Its pinned N=4 configuration selects JsonInv instead of Inv and disables deadlock. The typed scenario and parity case preserve that selection. JsonInv uses TLC trace serialization and exit control only when Inv fails; these diagnostics are not model transitions. Hosted parity is pending.",
+          "reason": "This wrapper extends EWD840 without changing Init or Next. Its pinned N=4 configuration selects JsonInv instead of Inv and disables deadlock. The typed scenario and parity case preserve that selection; both complete hosted comparisons match at 77ef17da. JsonInv uses TLC trace serialization and exit control only when Inv fails; these diagnostics are not model transitions.",
           "implementations": ["Sources/UpstreamParity/Examples/EWD840.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd840/EWD840_proof.tla",
@@ -5612,7 +5629,7 @@
           "role": "configured root",
           "reason": "Published configuration binding.",
           "implementations": ["Sources/UpstreamParity/Examples/EWD840.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd840/SyncTerminationDetection_proof.tla",
@@ -5626,7 +5643,7 @@
           "role": "configured root",
           "reason": "Published configuration binding.",
           "implementations": ["Sources/UpstreamParity/Examples/SyncTerminationDetection.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -5634,7 +5651,8 @@
           "module": "specifications/ewd840/APEWD840.tla",
           "configuration": "specifications/ewd840/APEWD840.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5644,13 +5662,29 @@
               "caseID": "ewd840-ap"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11530819406",
+              "artifactDigest": "sha256:bc3aaeaf4c2051d47c1885a2a20ac405b8569f4d88cda44012082db141d67f89",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11530863855",
+              "nativeArtifactDigest": "sha256:67b6cb6f0b77ab66d18de84053db760e6a2be97538244e6f5277a2cfe9f68774",
+              "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531230992",
+              "generatedOracleArtifactDigest": "sha256:ba126190b58bf29ab658f18efc34177c9879ae8ff6139bc3bdf138ecd615d4fe",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Both hosted paths compare exact complete initial states and labeled graphs: 192 initial, 302 reachable states, and 1,532 edges. TypeOK and TerminationDetection are satisfied; the pinned CFG disables deadlock. The reference module and CFG hashes match the ceeaa904 case pins. The generated TLC oracle was reused from 80ccebca under a verified input/tool cache key; current native and upstream comparisons, source-sha records, and ordinary CI bind the result to 77ef17da. No Apalache result is claimed."
+            }
+          ]
         },
         {
           "module": "specifications/ewd840/APSyncTerminationDetection.tla",
           "configuration": "specifications/ewd840/APSyncTerminationDetection.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5660,13 +5694,29 @@
               "caseID": "sync-termination-detection-ap"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531568364",
+              "artifactDigest": "sha256:c5f6d34049adc75f506814d53a6a9465668fd41faad78bf07b3145e5e5b4bd9d",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531074991",
+              "nativeArtifactDigest": "sha256:4bba99b38dc997659f45c822f31d8eb34fb7c19cdbebc8c47434cebdea9ff4c2",
+              "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531224141",
+              "generatedOracleArtifactDigest": "sha256:9267378e65ba477ed074216f8f7ae8b5a60ef33477c6c812f76c2727a9b0dd42",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Both hosted paths compare exact complete initial states and labeled graphs: 129 initial/reachable states and 3,593 edges. TypeOK, TDCorrect, and default deadlock are satisfied; the pinned CFG does not select Liveness or Quiescence. Reference inputs match ceeaa904 pins. The generated TLC oracle was reused from 17d82123 under a verified input/tool cache key; current comparisons and ordinary CI bind the result to 77ef17da. No Apalache result is claimed."
+            }
+          ]
         },
         {
           "module": "specifications/ewd840/EWD840.tla",
           "configuration": "specifications/ewd840/EWD840.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5676,14 +5726,29 @@
               "caseID": "ewd840-0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531220821",
+              "artifactDigest": "sha256:ecf223670549bad1799ed9beeb21fe11b488a3c38c5acd7219ea776bd06ab16b",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531355462",
+              "nativeArtifactDigest": "sha256:fdb39f0522826c997fc572ab22479441bed137851b3b77635317ababec58d423",
+              "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531330401",
+              "generatedOracleArtifactDigest": "sha256:94514b3d2d69f430531fea158201c78d60d8b3b9d2e274f263585895889a721d",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Both hosted paths compare exact complete initial states and labeled graphs: 192 initial, 302 reachable states, and 1,532 edges. TypeOK, Inv, TerminationDetection, Liveness, and TDSpec are satisfied; the pinned CFG disables deadlock and does not select JsonInv. Reference inputs match ceeaa904 pins. The generated TLC oracle was reused from 80ccebca under a verified input/tool cache key; current comparisons and ordinary CI bind the result to 77ef17da."
+            }
+          ]
         },
         {
           "module": "specifications/ewd840/EWD840_anim.tla",
           "configuration": "specifications/ewd840/EWD840_anim.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "a736e9477ae196059d05c91775fb48fc6e4e4148",
+          "verifiedSourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
           "upstreamMode": {
             "simulate": {
               "traceCount": 100
@@ -5712,6 +5777,21 @@
               "completion": "simulation",
               "completeCounterexampleMatch": true,
               "scope": "The pinned configuration requests 100 simulated traces and expects AnimInv to fail. Completed hosted native-versus-generated-TLC and generated-versus-pinned-upstream jobs both report the selected AnimInv violation and retain replayable or TLC-produced counterexample witnesses. Native evidence stops after a 49-state, 48-edge witness; pinned upstream TLC retains an 88-state witness. These are legitimate decisive sampled results, not equal traces, exhaustive checking, or complete-graph parity. Deadlock is disabled by the published configuration, and no other model property is selected. Artifact origins and source-sha records bind the checks to a736e947; the full admission run remained in progress during this audit."
+            },
+            {
+              "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11530019500",
+              "artifactDigest": "sha256:573ec9960ca3118385f2025652f642a5a3ee5a41ebb234337adb7a6b51184ccf",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11530578465",
+              "nativeArtifactDigest": "sha256:f8808c280dfd9d95833f624654eb7a3ad568b025087a2187090d85c60182b440",
+              "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11530893561",
+              "generatedOracleArtifactDigest": "sha256:5596270498a67d29083f974fd9caaa1e49c82df3639eedccf9a61793c8ec7624",
+              "completeGraph": false,
+              "completion": "simulation",
+              "completeCounterexampleMatch": true,
+              "scope": "Both hosted paths match the selected AnimInv violation with retained sampled witnesses. Native stops after 23 states and 22 edges; these are not complete graph or equal-witness claims. The published CFG disables deadlock. The generated TLC oracle was reused from a736e947 under a verified input/tool cache key; current comparison source-sha records and ordinary CI bind the result to 77ef17da."
             }
           ]
         },
@@ -5719,7 +5799,8 @@
           "module": "specifications/ewd840/EWD840_json.tla",
           "configuration": "specifications/ewd840/EWD840_json.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5729,14 +5810,29 @@
               "caseID": "ewd840-json-0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531171416",
+              "artifactDigest": "sha256:3c85a13ef75a0c8fcf9802398b0ec7c81597d57001ef8c163436fabf196895a2",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531081892",
+              "nativeArtifactDigest": "sha256:a4ac7a1a3ee727ac4340940db1125447efe6205c0e55a09bc91bb0a68ec8a41f",
+              "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531330836",
+              "generatedOracleArtifactDigest": "sha256:d3dc9070b248907a6fbd1ef631f79e5835a4564bf476e7cef331e2b7d1ef7a82",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Both hosted paths compare exact complete initial states and labeled graphs: 1,024 initial, 1,566 reachable states, and 12,281 edges. The selected JsonInv is satisfied; the pinned CFG disables deadlock and does not select the base module's other checks. Reference inputs match ceeaa904 pins. The generated TLC oracle was reused from 80ccebca under a verified input/tool cache key; current comparisons and ordinary CI bind the result to 77ef17da."
+            }
+          ]
         },
         {
           "module": "specifications/ewd840/SyncTerminationDetection.tla",
           "configuration": "specifications/ewd840/SyncTerminationDetection.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "a736e9477ae196059d05c91775fb48fc6e4e4148",
+          "verifiedSourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5760,6 +5856,20 @@
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Completed hosted case jobs on a736e947: native versus generated-TLA TLC and generated TLA versus pinned upstream TLC both report exact complete initial states and labeled graphs (129 initial states, 129 reachable states, 3,593 edges). TypeOK, TDCorrect, Quiescence, Liveness, and default deadlock are satisfied on every selected path, with no omitted property. The reference module input SHA-256 3626ab87e7431a7c07cf0f92b442fdf38363e6d7a9928f2391476c54a1e4fb2e matches the pinned source. Artifact origins and source-sha records bind both paths to a736e947. The full admission run was still in progress when this configuration was audited; this is not final-revision admission."
+            },
+            {
+              "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11532141310",
+              "artifactDigest": "sha256:7c4dafe4f284642956829dbafb494bece1c1a61ec9c488402cc3c0da1be93534",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531252665",
+              "nativeArtifactDigest": "sha256:78dd6d7448966775e03ba002df751ca1a24d29a6722b755eb5b7413beaa267aa",
+              "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531576823",
+              "generatedOracleArtifactDigest": "sha256:9b6f776c0994cece1df181a7f63335374ab919e8d232b898eae54f947a0c41c0",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Both hosted paths compare exact complete initial states and labeled graphs: 129 initial/reachable states and 3,593 edges. TypeOK, TDCorrect, Quiescence, Liveness, and default deadlock are satisfied with no omitted property. Reference inputs match ceeaa904 pins. The generated TLC oracle was reused from 17d82123 under a verified input/tool cache key; current comparison source-sha records and ordinary CI bind the result to 77ef17da."
             }
           ]
         }
@@ -5769,142 +5879,142 @@
     {
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
-      "audit": "not audited",
-      "gap": "The unregistered raw EWD998Termination fixture and its formal-runtime-only test were removed without configuration credit. Audit the pinned module roles and configuration semantics, then complete the typed EWD998 family on its separate branch with both hosted parity paths.",
+      "audit": "Pinned AsyncTerminationDetection, EWD998, EWD998Chan, EWD998ChanID, EWD998PCal, ChanID export/ShiViz, ChanTrace, the source-defined opts variants and orchestration harness, and the Folds/Utils helpers inspected; remaining source-defined variants still need disposition audits",
+      "gap": "AsyncTerminationDetection matched both complete hosted comparison paths at bc35e8d2. Safra's EWD998 N=3 matched both complete hosted comparison paths at d873803c, and EWD998Chan N=3 matched both complete hosted comparison paths at 8da377e3. EWD998 N=4 has a typed model-owned scenario and pinned inputs but still lacks hosted comparison. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. EWD998ChanID N=5 matched both hosted comparison paths at c1c4ee49 on its complete configured VIEW graph and four selected properties; this does not prove equality of the full clock-bearing graph or final-revision admission. The trace source/CFG and optional CommunityModules closure are pinned but not bound to a hosted check. The source-defined EWD998_opts and EWD998Chan_opts generator variants and EWD998_optsSC campaign remain unimplemented. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/ewd998/AsyncTerminationDetection_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof-only module",
+          "reason": "Unconfigured TLAPS proof companion extending AsyncTerminationDetection. Its lemmas and theorems are not a TLC configuration or an additional state machine; no TLAPS proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/AsyncTerminationDetection.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "reason": "Published N = 4 configuration has a typed model-owned scenario and an exact focused hosted match on both comparison paths at bc35e8d2. Its complete initial states, labeled graph, selected properties, and default deadlock match. Final-revision admission and the other EWD998 modules remain separate.",
+          "implementations": ["Sources/UpstreamParity/Examples/EWD998Termination.swift"],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/EWD998_anim.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured visualization companion",
+          "reason": "Extends EWD998ChanID to render SVG transition frames; it declares no published TLC configuration or distinct transition system. Visualization output is not counted as graph-parity evidence for the base model.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/EWD998_opts.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "source-defined simulation variant",
+          "reason": "Extends EWD998 with five feature flags, probabilistic generation, an action constraint, a state constraint, and CSV statistics. Its configuration is embedded after CONFIG in the source; no separate .cfg file is published. The pinned module requires TLC probabilistic -generate mode, depth -1, and deadlock disabled; ordinary -simulate is not equivalent. RandomSubset(1000, S) samples up to 1000 members of the finite initial domain S, not one 1000-member model state; SendMsgOpts also uses a checking-level-dependent RandomElement guard. Its action and state constraints record termination levels and per-action statistics for each behavior in CSV. Swift's generated function-subset helper can sample that initial domain without enumerating the full function space. Focused local tests prove selected initialization accepts a valid function outside the latest random sample and sampled TLC witness replay reconstructs and validates an independently chosen typed initial state; these are not hosted parity. The model-owned generation mode and statistical outcome are not implemented. The generator variant and its sampled/statistical outcome still require implementation and hosted evidence.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/EWD998_optsSC.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "source-defined orchestration harness",
+          "reason": "Its embedded CONFIG launches nested EWD998_opts TLC generation runs across feature subsets and node counts, then records exit codes in CSV. This is a simulation campaign, not a standalone state graph; reproducing its declared outcomes remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/EWD998_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof-only module",
+          "reason": "Unconfigured TLAPS proof companion extending EWD998. Its theorems do not add a TLC configuration; no TLAPS proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/EWD998.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
+          "reason": "Published N=3 configuration matched both complete hosted comparison paths at d873803c; the N=4 scenario and pinned inputs are implemented, but hosted parity remains pending.",
+          "implementations": ["Sources/UpstreamParity/Examples/EWD998.swift"],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/EWD998Chan_opts.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "source-defined simulation variant",
+          "reason": "Extends EWD998Chan with four feature flags, probabilistic generation, an action constraint, a state constraint, and CSV statistics. Its configuration is embedded after CONFIG in the source; no separate .cfg file is published. The variant and its sampled/statistical outcome remain unimplemented.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/EWD998Chan.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
+          "reason": "Published N=3 configuration has a typed model-owned scenario and pinned inputs. Both complete hosted comparison paths matched at 8da377e3; other EWD998 family variants remain open.",
+          "implementations": ["Sources/UpstreamParity/Examples/EWD998Chan.swift"],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/EWD998ChanID_export.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Published seven-node configuration overrides Init with all nodes active and white and selects PostInv. Its MCInit omits the base model's passes variable. The exact upstream TLA/CFG are pinned; a reference-only hosted probe is prepared but has not run, so the actual TLC outcome remains unknown. If PostInv invokes curl, the probe restricts PATH to a local interceptor, retains the attempted trace payload, and makes no external POST. The source recommends generator mode. No Swift scenario or base ChanID graph-parity claim follows.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/EWD998ChanID_shiviz.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Published seven-node configuration overrides Init with all nodes active and white and places the initial token at Initiator. Inv is TLCGet(level) < 666, ALIAS formats per-host vector clocks, and the source recommends TLC generator mode with a depth beyond the limit. The override MCInit does not assign the declared passes variable. Do not invent an initial passes value in Swift; first establish the actual pinned TLC outcome. This is not the five-node base graph.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/EWD998ChanID.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "reason": "A typed model with n1..n7 identifiers and rendered EWD998Chan refinement has a model-owned five-node scenario, native typed VIEW identity, and view-aware binary graph evidence. The pinned upstream TLA/CFG fixture is byte-identical at ceeaa904. Both hosted paths match the complete configured VIEW graph and four selected checks at c1c4ee49, without claiming full clock-bearing graph equality.",
+          "implementations": ["Sources/UpstreamParity/Examples/EWD998ChanID.swift"],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/EWD998ChanTrace.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The published configuration reads an NDJSON implementation log and checks trace acceptance. The pinned input remains byte-for-byte at Verification/FiniteGraph/fixtures/ewd998/EWD998ChanTrace.ndjson (SHA-256 0d288659698fe0a4db105988cdb326065aba82bf547b3473b94c760fc31bada5). A typed reader retains all 654 events and records failure fields, but raw source order is not causal: lines 3 then 4 violate the selected-order contract. Pinned CommunityModules!CausalOrder uses CHOOSE over valid permutations, so an arbitrary local topological order is not the TLC-selected TraceLog. A reference-only diagnostic now binds the log and exact CommunityModules closure, instruments TLC to retain its selected order, and validates that order against the typed events; it has not run on a host. Typed ACTION_CONSTRAINT, level-sensitive VIEW identity, and generic POSTCONDITION have local contract tests, but this configuration does not yet use them or have hosted parity. ALIAS provides diagnostic output. This is not exhaustive EWD998Chan graph parity.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/EWD998PCal_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof-only module",
+          "reason": "Unconfigured TLAPS proof companion for EWD998PCal. It is not a separate TLC configuration or generated-machine case; no TLAPS proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/EWD998PCal.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "reason": "Published N=3 PlusCal configuration has a typed model-owned scenario and pinned inputs. Both independent hosted comparisons matched the complete graph and selected outcomes at c05c9837; this module disposition is now resolved, while the family remains partial.",
+          "implementations": ["Sources/UpstreamParity/Examples/EWD998PCal.swift"],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/Folds.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "pure helper module",
+          "reason": "Defines MapThenFoldSet only; it has no variables, behavior, or configuration of its own. Any configured model that imports it must still implement the operator's semantics; it is not a separate graph-parity case.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/SmokeEWD998_SC.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Published orchestration harness: it forks 30 rounds of nested TLC simulations across single bug-flag selections and records their exit codes in CSV. This is not a standalone model graph. Reproducing and comparing its sampled campaign remains open; do not credit exact graph parity from it.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/SmokeEWD998.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Published simulation smoke test: SmokeInit uses RandomSubset(k, S) to sample up to k members from each finite initial domain S before taking the product, rather than enumerating all initial machines. StopAfter limits duration or trace depth. It needs a generator-aware native path and sampled-outcome evidence under its declared mode, not an exhaustive-graph claim; implementation and hosted comparison remain open.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/Utils.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "pure helper module",
+          "reason": "Defines IsSimpleCycle only; it has no variables, behavior, or configuration of its own. A configured importer must still preserve this operator's semantics; it is not a separate graph-parity case.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -5912,57 +6022,118 @@
           "module": "specifications/ewd998/AsyncTerminationDetection.tla",
           "configuration": "specifications/ewd998/AsyncTerminationDetection.cfg",
           "required": true,
-          "status": "missing",
+          "status": "hosted match",
+          "verifiedSourceSHA": "bc35e8d25aa83f9cf12dbd969b33d8871f2afbab",
+          "gap": "This focused configuration match does not admit the full matrix or complete the EWD998 family on a final source revision.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
-          "evidence": []
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998Termination.swift", "scenario": "AsyncTerminationDetection", "caseID": "ewd998-async"}],
+          "evidence": [{
+            "sourceSHA": "bc35e8d25aa83f9cf12dbd969b33d8871f2afbab",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37803925315",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37803925315/artifacts/11562883950",
+            "artifactDigest": "sha256:377c60a6f0506cfbfb71c5687748c10d76c5f28d6ae40dc34c475d9c31a79208",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37803925315/artifacts/11562354678",
+            "nativeArtifactDigest": "sha256:241eb7ede271f3976c231baf7ed81b4bbb193c2146dae782355334050070a394",
+            "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37803925315/artifacts/11562733373",
+            "generatedOracleArtifactDigest": "sha256:b4ad339bd8ec2d350fe2f2ab5061ba46058f67bd14140647c40ab7271776425d",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Focused hosted generated-TLA TLC versus pinned-upstream TLC and native versus generated-TLA TLC comparisons are exact on complete initial-state sets and labeled graphs: 17 initial states, 4097 states, and 45062 edges. TypeOK, Safe, Quiescence, Live, and default deadlock are satisfied on all paths; no declared property is omitted. The pinned root TLA and raw CFG hashes c1b15be68a73c6e5f69c5c09f2736870182a9b0765ad9860452240119911b030 and 6affac15002d814a67775f16affa001d9e01c2a758a9d35dbfbaccdd1fc9f5c6 match the ceeaa904 case pins. Both TLC paths retain v1.8.0, Temurin 17.0.19+10, exact jar and bridge hashes, nonempty graph artifacts, source-sha files, and run-origin records. This focused diagnostic is not ordinary CI, full-matrix admission, or EWD998 family completion."
+          }]
         },
         {
           "module": "specifications/ewd998/EWD998.tla",
           "configuration": "specifications/ewd998/EWD998.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998.swift", "scenario": "EWD998", "caseID": "ewd998-0"}],
           "evidence": []
         },
         {
           "module": "specifications/ewd998/EWD998.tla",
           "configuration": "specifications/ewd998/EWD998Small.cfg",
           "required": true,
-          "status": "missing",
+          "status": "hosted match",
+          "verifiedSourceSHA": "d873803c69de1208d34df14314a16095c123e8c1",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
-          "evidence": []
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998.swift", "scenario": "EWD998Small", "caseID": "ewd998-small-0"}],
+          "evidence": [{
+            "sourceSHA": "d873803c69de1208d34df14314a16095c123e8c1",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37880479874",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37880479874/artifacts/11595455050",
+            "artifactDigest": "sha256:ed7ef2226bfc8d63b56d587d6b1360d5e3af115aed7e2070769a4546fcb551f8",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37880479874/artifacts/11595325906",
+            "nativeArtifactDigest": "sha256:589c1ad7a0988eea01160d55aaf8b5db0e3dba7f7e41a234cc059fdaad8e0348",
+            "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37880479874/artifacts/11594756204",
+            "generatedOracleArtifactDigest": "sha256:7e0a4475b12740f7a15c6362bbc5e951c9c7b1c4dfb62b14d5f307a72d657552",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Focused hosted native versus generated-TLA TLC and generated-TLA TLC versus pinned-upstream TLC comparisons are exact on complete initial-state sets and labeled graphs: 192 initial states, 1,520,618 reachable states, and 8,900,429 edges. TypeOK, TerminationDetection, and Inv are satisfied on all paths; the pinned CFG disables deadlock and does not select Liveness or TDSpec. Retained native and upstream source-sha markers identify d873803c. The generated TLC oracle was reused from c0762283 with its unchanged input cache key; retained input hashes match the generated TLA/CFG. The reference root TLA and raw CFG hashes b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8 and f0869ebeddcdec5b0208014218a946532c01fdb34130579acff081ed6e883f2a match the pinned case. Both TLC paths record v1.8.0, Temurin 17.0.19+10, and exact jar/bridge source hashes. The three nonempty retained graph streams and complete comparison records support this focused match; they do not establish full-matrix or EWD998-family completion."
+          }]
         },
         {
           "module": "specifications/ewd998/EWD998Chan.tla",
           "configuration": "specifications/ewd998/EWD998Chan.cfg",
           "required": true,
-          "status": "missing",
+          "status": "hosted match",
+          "verifiedSourceSHA": "8da377e3e2b53f93b95b5b808ed404cdd19c0e95",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
-          "evidence": []
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998Chan.swift", "scenario": "EWD998Chan", "caseID": "ewd998-chan-0"}],
+          "evidence": [{
+            "sourceSHA": "8da377e3e2b53f93b95b5b808ed404cdd19c0e95",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37884284496",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37884284496/artifacts/11598537838",
+            "artifactDigest": "sha256:22a7be96a6c61a2b15ea1da5199e63f203e1a2c30ca06d4ae30e7caddc0c60fd",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37884284496/artifacts/11596847901",
+            "nativeArtifactDigest": "sha256:6ca4f86e444aa9a242731b1614b9c520ce26a460c6423971d32c1aafaba0afa1",
+            "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37884284496/artifacts/11596951649",
+            "generatedOracleArtifactDigest": "sha256:c7908f34f013e2b5478b68e89084069d7db696ae2c6937102df946f2d04a7ef5",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Focused hosted native versus generated-TLA TLC and generated-TLA TLC versus pinned-upstream TLC comparisons are exact on complete initial-state sets and labeled graphs: 192 initial states, 1,524,022 reachable states, and 8,738,970 edges. TypeOK and EWD998Spec are satisfied on all paths; the pinned CFG disables deadlock. The retained source-sha markers and cache origins identify 8da377e3 and run 37884284496. The reference root TLA and CFG hashes ebdb5e9c6469fb1afc3b12198e1e2159b3ff3fa76d7bd15e5e11dce92b72313c and bd7455b8ba55de2d58bbcf8c6ff2aa42e285f9bbd153de4ba4653086fad64f27 match the pinned case. TLC paths record v1.8.0, Temurin 17.0.19+10, and exact jar and bridge hashes. This focused match does not establish full-matrix or EWD998-family completion."
+          }]
         },
         {
           "module": "specifications/ewd998/EWD998ChanID.tla",
           "configuration": "specifications/ewd998/EWD998ChanID.cfg",
           "required": true,
-          "status": "missing",
+          "status": "hosted match",
+          "verifiedSourceSHA": "c1c4ee49179592fa50751e045bfdbaaa6f829060",
+          "gap": "The focused c1c4ee49 run matches the complete configured VIEW quotient graph and selected verdicts on both paths. This historical match does not prove the full clock-bearing graph or final-revision admission.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
-          "evidence": []
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998ChanID.swift", "scenario": "EWD998ChanID", "caseID": "ewd998-chan-id-0"}],
+          "evidence": [
+            {
+              "sourceSHA": "c1c4ee49179592fa50751e045bfdbaaa6f829060",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37767594632",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37767594632/artifacts/11549697245",
+              "artifactDigest": "sha256:7666116b94d8c04e6271eb7711b5f4d2eda0d04195f9b9279221f23ff4cc8092",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37767594632/artifacts/11550376982",
+              "nativeArtifactDigest": "sha256:92f4fd5c514e188cb2438371374792ed6bd33bad9c864c8660377a29ec67a4e5",
+              "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37767594632/artifacts/11548612561",
+              "generatedOracleArtifactDigest": "sha256:33ad396b739cae766ddeb07451d14113b4a419dfb9c1dba0053fdf8e9b539c8a",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "The focused hosted run completed native versus generated-TLA TLC and generated-TLA TLC versus pinned-upstream TLC with exact complete initial-state sets and labeled VIEW quotient graphs: 1 initial state, 14 viewed states, and 13 edges. EWD998Safe, Max3TokenRounds, EWD998ChanSpec refinement, and EWD998Live are satisfied on all paths; the pinned CFG disables deadlock. The clock-bearing full-state graph is not compared. The pinned root TLA and raw CFG SHA-256 values c498e5e35a83d84257016fdf4ba359ddb40dbb5f3b2234656e32b419a5499e93 and 69ec430deca39d7af5e2bfb1f6e43b5c941d29f4362a70048d534a52b8a54146 match the ceeaa904 case pins. Both TLC paths record v1.8.0, Temurin 17.0.19+10, and exact jar/bridge hashes; nonempty artifact digests, source-sha files, and evidence origins bind the run to c1c4ee49. This focused match is not full PR admission or completion of EWD998."
+            }
+          ]
         },
         {
           "module": "specifications/ewd998/EWD998ChanID_export.tla",
           "configuration": "specifications/ewd998/EWD998ChanID_export.cfg",
           "required": true,
           "status": "missing",
+          "gap": "Seven-node alternate MCInit, level-bound selected PostInv, and generator-style trace outcome remain unimplemented. A reference-only diagnostic stages byte-identical pinned TLA/CFG and intercepts the configured curl POST locally; it has not run on a host and does not establish parity. Retain TLC's actual outcome, any attempted payload, and source/tool pins before translating this configuration.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "unknown",
           "implementations": [],
@@ -5973,6 +6144,7 @@
           "configuration": "specifications/ewd998/EWD998ChanID_shiviz.cfg",
           "required": true,
           "status": "missing",
+          "gap": "The pinned MCInit override does not assign the declared passes variable. An exact-input, reference-only hosted outcome probe is prepared but has not run; establish the actual pinned TLC outcome before translating it, and do not invent passes = 0. The seven-node alternate initialization, TLCGet(level) < 666 outcome, ALIAS trace projection, and source-documented generator mode remain unimplemented. The five-node base scenario cannot stand in for this configuration.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "unknown",
           "implementations": [],
@@ -5983,6 +6155,7 @@
           "configuration": "specifications/ewd998/EWD998ChanTrace.cfg",
           "required": true,
           "status": "missing",
+          "gap": "The upstream trace TLA/CFG and pinned NDJSON input are staged. A draft-PR reference-only diagnostic binds the typed log and pinned CommunityModules closure and prepares a separate instrumented TLC capture of the complete selected causal order; neither check has run on a host and neither generated-TLA nor native parity path is connected. Raw source order violates CausalOrder at lines 3 and 4; the selected order must be retained and checked on the host, not assumed from the file. Typed ACTION_CONSTRAINT, level-sensitive VIEW identity, and generic POSTCONDITION are locally implemented and tested, but TraceAccepted is not wired into a generated configuration or hosted-verified. Base graph parity does not establish trace acceptance.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [],
@@ -5992,17 +6165,32 @@
           "module": "specifications/ewd998/EWD998PCal.tla",
           "configuration": "specifications/ewd998/EWD998PCal.cfg",
           "required": true,
-          "status": "missing",
+          "status": "hosted match",
+          "verifiedSourceSHA": "c05c9837d5e2c56619fa00ab1ab3e6a57263ec8e",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
-          "evidence": []
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998PCal.swift", "scenario": "EWD998PCal", "caseID": "ewd998-pcal-0"}],
+          "evidence": [{
+            "sourceSHA": "c05c9837d5e2c56619fa00ab1ab3e6a57263ec8e",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37721773124",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37721773124/artifacts/11527180465",
+            "artifactDigest": "sha256:cd0c782ced4088575cffb05c095daceb0c7cfd16939dc7c1cf2624a0b71fa385",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37721773124/artifacts/11527100918",
+            "nativeArtifactDigest": "sha256:7a6eeb27ce52191d48776d91d8df126c221ff404affa735b3d35a0bdc9bc1f77",
+            "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37721773124/artifacts/11526158877",
+            "generatedOracleArtifactDigest": "sha256:9a8f80c82a348fd96ed52d9353b4708fd8addad4dce29e38d287a963afa36345",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "The focused hosted run completed both independent comparisons exactly. Native and generated-TLA TLC have 8 initial states, 321370 complete states, and 2224768 labeled edges; generated-TLA TLC and pinned upstream TLC compare equal on the complete initial-state set and labeled graph. Native, generated-TLA TLC, and upstream TLC satisfy EWD998Spec and selected default deadlock with no omitted property. Both TLC paths retain CONSTRAINT StateConstraint. The reference root TLA SHA-256 d1622e16901edfa5b01d4e9c00779408b97483156d241c7b0f22515a1d81dc0d matches the ceeaa904 case pin; the raw CFG SHA-256 44073c04a88dd7aa593cab099e59b7b1dd4be31ec2d5b59616b0426a3a84f892 matches the pinned fixture. Retained source-sha and evidence-origin records bind artifacts to this SHA and run. TLC v1.8.0, Temurin 17.0.19+10, jar and bridge hashes are recorded. This focused configuration match does not replace ordinary CI or full-matrix admission on the final revision."
+          }]
         },
         {
           "module": "specifications/ewd998/SmokeEWD998.tla",
           "configuration": "specifications/ewd998/SmokeEWD998.cfg",
           "required": true,
           "status": "missing",
+          "gap": "RandomSubset initial-state sampling and TLC simulate mode make this a sampled smoke check; match selected checks and retained witnesses without claiming a complete graph.",
           "upstreamMode": {
             "simulate": {
               "traceCount": 100
@@ -6017,13 +6205,26 @@
           "configuration": "specifications/ewd998/SmokeEWD998_SC.cfg",
           "required": true,
           "status": "missing",
+          "gap": "External nested-TLC and CSV campaign, not a model-state graph; reproduce the published bug-flag/exit-code contract or record an explicit justified disposition, with hosted evidence.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "unknown",
           "implementations": [],
           "evidence": []
         }
       ],
-      "partialCases": []
+      "partialCases": [{
+        "implementation": "Sources/UpstreamParity/Examples/EWD998Termination.swift",
+        "reason": "AsyncTerminationDetection matched both complete hosted parity paths at bc35e8d2. The family and final-revision admission remain open."
+      }, {
+        "implementation": "Sources/UpstreamParity/Examples/EWD998.swift",
+        "reason": "Safra's N=3 direct-TLA configuration matched both complete hosted comparison paths at d873803c. The N=4 scenario is typed and registered but its roughly 219-million-state upstream graph, selected verdicts, resource capacity, and both hosted comparison paths remain open. Other family configurations remain open."
+      }, {
+        "implementation": "Sources/UpstreamParity/Examples/EWD998Chan.swift",
+        "reason": "The published N=3 channel configuration is typed, registered against pinned inputs, and locally checked for ordered message transitions, refinement selection, and grouped fairness. Complete native/generated and generated/pinned graph and verdict parity remain open."
+      }, {
+        "implementation": "Sources/UpstreamParity/Examples/EWD998ChanID.swift",
+        "reason": "The published five-node identifier configuration matched both hosted paths at c1c4ee49 on the complete configured VIEW graph. The full clock-bearing graph and final-revision admission remain open."
+      }]
     },
     {
       "path": "specifications/FiniteMonotonic",
@@ -6543,14 +6744,14 @@
     {
       "path": "specifications/Huang",
       "name": "Huang's Algorithm",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Pinned Huang.tla, Huang.cfg, and the published manifest inspected; the sole declared TLC configuration has no Swift implementation or retained parity evidence.",
+      "gap": "Port the direct TLA+ transition relation without changing its state: active, weight, and msgs are total per-process functions, with dyadic-rational weight and in-flight message values. Preserve SendMsg's arbitrary recipient (including the sender), the separate nonleader and leader receive/idle actions, ordered message sequences, the recursive Sum and fold-based TypeOK conservation check, the Safe and Live temporal properties, and the explicit weak-fairness obligations. The configured model binds five distinct model values, selects Spec, TypeOK, Safe, Live, StateConstraint (weight denominator at most 8), Alias for trace presentation, and CHECK_DEADLOCK FALSE. The 40-second upstream manifest runtime is not evidence of native or generated-TLA parity. Resolve the DyadicRationals, SequencesExt, and Functions module dependencies and obtain complete hosted graph/property evidence before crediting this configuration; do not treat the state constraint as an exploration resource limit or infer a deadlock verdict.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/Huang/Huang.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The only published root defines the direct TLA+ state, five action families, dyadic-rational conservation invariant, explicit fairness, Safe and Live temporal checks, a denominator state constraint, and an output-only Alias. It extends DyadicRationals, SequencesExt, and Functions in addition to standard modules.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -7526,16 +7727,16 @@
     {
       "path": "specifications/MissionariesAndCannibals",
       "name": "Missionaries and Cannibals",
-      "audit": "Pinned source, published manifest, module roles, and both configuration bindings audited; no Swift implementation or hosted parity.",
-      "gap": "Implement the exact safe-move relation, complete bank/person-set state, TypeOK, and the deliberately violated Solution invariant. The direct TLC configuration binds six distinct model values; the Apalache annotation wrapper binds six quoted PERSON strings to the same underlying transition module. Its manifest reports symbolic success, which is not evidence of the TLC verdict. Preserve both configurations independently, establish each TLC outcome, and compare native and generated-TLA graphs before credit. No current Swift source or retained parity evidence covers either configuration.",
-      "legacyCleanupComplete": false,
+      "audit": "Both published configurations resolve to one typed Swift model and byte-identical pinned upstream inputs. On hosted SHA 1bb0b84e, both value encodings matched generated TLC and pinned upstream TLC on complete initial states, labeled graphs, selected properties, and default deadlock. The proof-only module has an explicit disposition and legacy cleanup is complete.",
+      "gap": "No family configuration gap remains at verified SHA 1bb0b84e. The focused diagnostic establishes this family's two hosted configuration matches, not ordinary CI, the unfiltered matrix, PR #394 admission, or completion of the other upstream families. The Apalache wrapper's symbolic-success manifest is a different tool claim; pinned TLC reports the deliberately violated Solution invariant on both encodings.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/MissionariesAndCannibals/APMissionariesAndCannibals.tla",
           "role": "configured annotation wrapper",
           "reason": "Instantiates MissionariesAndCannibals without replacing its transitions; the Apalache type annotations are comments for TLC. Its configuration binds quoted PERSON strings and selects TypeOK and Solution.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": ["Sources/UpstreamParity/Examples/MissionariesAndCannibals.swift"],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/MissionariesAndCannibals/MissionariesAndCannibals_proof.tla",
@@ -7548,8 +7749,8 @@
           "path": "specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla",
           "role": "configured root and wrapper dependency",
           "reason": "Declares the two state variables, safe subset move relation, TypeOK, and Solution. The direct configuration binds six model values and selects both invariants; the annotation wrapper imports this same module.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": ["Sources/UpstreamParity/Examples/MissionariesAndCannibals.swift"],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -7557,21 +7758,53 @@
           "module": "specifications/MissionariesAndCannibals/APMissionariesAndCannibals.tla",
           "configuration": "specifications/MissionariesAndCannibals/APMissionariesAndCannibals.cfg",
           "required": true,
-          "status": "missing",
+          "status": "hosted match",
+          "verifiedSourceSHA": "1bb0b84e568ae90919ff10831bb305052752f174",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
-          "evidence": []
+          "implementations": [{
+            "file": "Sources/UpstreamParity/Examples/MissionariesAndCannibals.swift",
+            "scenario": "APMissionariesAndCannibals",
+            "caseID": "ap-missionaries-and-cannibals"
+          }],
+          "evidence": [{
+            "sourceSHA": "1bb0b84e568ae90919ff10831bb305052752f174",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025/artifacts/11590060520",
+            "nativeArtifactDigest": "sha256:aa76637a7b0bb81ce837da3f4ca5bafb314919202d7d001fdcc100be1448d67c",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025/artifacts/11589688941",
+            "artifactDigest": "sha256:ea08d71ffb7a2c0638b11d705f9464eec025f549f593b8d9677855bc0876c9b9",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Focused hosted diagnostic: native and generated-TLA TLC match one initial state, 64 complete states, and 252 labeled edges; generated-TLA TLC matches pinned upstream on the complete initial-state set and labeled graph. TypeOK and default deadlock satisfy, and Solution is violated as expected; generated and upstream TLC retain counterexamples. Artifacts are nonempty, retain this source SHA and run origin, exact pinned inputs, TLC v1.8.0, Temurin 17.0.19+10, and bridge source/binary hashes. This does not admit the full matrix or PR head."
+          }]
         },
         {
           "module": "specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla",
           "configuration": "specifications/MissionariesAndCannibals/MissionariesAndCannibals.cfg",
           "required": true,
-          "status": "missing",
+          "status": "hosted match",
+          "verifiedSourceSHA": "1bb0b84e568ae90919ff10831bb305052752f174",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
-          "implementations": [],
-          "evidence": []
+          "implementations": [{
+            "file": "Sources/UpstreamParity/Examples/MissionariesAndCannibals.swift",
+            "scenario": "MissionariesAndCannibals",
+            "caseID": "missionaries-and-cannibals"
+          }],
+          "evidence": [{
+            "sourceSHA": "1bb0b84e568ae90919ff10831bb305052752f174",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025/artifacts/11589554474",
+            "nativeArtifactDigest": "sha256:bbe966fb71c20e7dd904db4b5976f8a1955b7c233e48ca506258436d81eb4351",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37868268025/artifacts/11589084454",
+            "artifactDigest": "sha256:ffa4252f6c899dceabdc9cffc17fa68ba842563ab85898dab369e13cbb43e5ae",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Focused hosted diagnostic: native and generated-TLA TLC match one initial state, 64 complete states, and 252 labeled edges; generated-TLA TLC matches pinned upstream on the complete initial-state set and labeled graph. TypeOK and default deadlock satisfy, and Solution is violated as expected; generated and upstream TLC retain counterexamples. Artifacts are nonempty, retain this source SHA and run origin, exact pinned inputs, TLC v1.8.0, Temurin 17.0.19+10, and bridge source/binary hashes. This does not admit the full matrix or PR head."
+          }]
         }
       ],
       "partialCases": []
@@ -8007,14 +8240,14 @@
     {
       "path": "specifications/nbacc_ray97",
       "name": "Asynchronous Non-Blocking Atomic Commit",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Pinned nbacc_ray97.tla, nbacc_ray97.cfg, README, and published manifest inspected; the sole TLC model reports 3,016 distinct states, 49,592 total states, and a successful exhaustive check, but no Swift or hosted parity evidence exists.",
+      "gap": "Port the direct TLA+ four-variable state (pc, rcvd, sent, fd) and one atomic Step(self) over Proc = 1..N without changing action labels. Receive(self) nondeterministically chooses any message set between rcvd[self] and sent; each step independently updates the failure detector, then chooses Yes, No, Crash, Sent, or explicit stutter. The Sent branches read the same step's updated fd and rcvd values. Spec declares WF_vars of the exact separate action expression exists self in Proc: Receive(self) and (UponYes(self) or UponNo(self) or UponSent(self)); that expression omits the UpdateFailureDetector conjunct even though Step includes it. Under Spec, fair occurrences still involve the corresponding Step transitions, but fair-action enabledness must retain the published expression. Existing whole-step fairness cannot simply be applied to Step, and splitting into differently labeled actions would change graph parity. Implement a typed, independently checked action-predicate fairness form for this named case rather than dropping or strengthening the obligation. The sole published N=2 configuration selects TypeOK and default deadlock checking; Validity and commented NonTriv are not selected. Preserve all nondeterministic initial pc/fd functions, the complete labeled graph, TypeOK and deadlock outcomes, and both hosted comparison paths before crediting the family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/nbacc_ray97/nbacc_ray97.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The only published root owns Init, the atomic Step(self) relation, subset-valued message receives, nondeterministic failure-detector updates, conditional commit/abort/crash behavior, a selective weak-fairness obligation, and TypeOK. No helper TLA module or second configuration is declared by the pinned manifest.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -8687,21 +8920,21 @@
     {
       "path": "specifications/SlidingPuzzles",
       "name": "Sliding Block Puzzle",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned state machine and both published configurations inspected; implementation and hosted parity pending",
+      "gap": "Both configurations start from the same ten-piece Klotski board, check TypeOK and the deliberately violated KlotskiGoal invariant, and use one-cell translations of a uniquely identified adjacent piece into an empty cell. The animation root additionally selects an SVG-producing ALIAS; this trace output must not become part of graph-state identity. Implement the set-of-piece board and exact transition relation in typed #spec, retain the alias output for the animation configuration, and compare each decisive verdict and witness on both hosted paths. No configuration is implemented or credited yet.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/SlidingPuzzles/SlidingPuzzles_anim.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Extends the core sliding-puzzle module and adds the published SVG trace alias while checking the same Init, Next, TypeOK, and KlotskiGoal.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SlidingPuzzles/SlidingPuzzles.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Defines the set-of-piece Klotski state and one-cell move relation; its published configuration selects TypeOK and deliberately violated KlotskiGoal.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -10544,56 +10777,56 @@
     {
       "path": "specifications/tower_of_hanoi",
       "name": "The Tower of Hanoi Puzzle",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned modules and both published configurations inspected; implementation and hosted parity pending",
+      "gap": "The Toolbox MC root binds D=5/N=3 and checks the deliberately violated NotSolved invariant through Spec. Hanoi_anim binds D=3/N=3, uses INIT/NEXT, checks the same invariant, and selects an SVG-producing ALIAS. Both use the numeric bitmask tower state and the Bits bitwise-AND operator; the upstream Bits.java TLC override is a pinned tool dependency to resolve for hosted execution, not a reason to change the model. Preserve the exact bitmask transition semantics in typed #spec, using existing arithmetic and recursion if sufficient rather than presuming a new compiler operator. Preserve selected alias output separately from graph identity, and compare each decisive verdict and witness on both hosted paths. HanoiSeq is an unconfigured sequence-state variant, not an alias of the configured bitmask model. No configuration or module is credited yet.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/tower_of_hanoi/Bits.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "helper dependency",
+          "reason": "Hanoi imports its integer bitwise-AND operator; the Toolbox copy has the same pinned Git blob and Bits.java provides the documented TLC operator override.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi_anim.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The published D=3/N=3 configuration selects Hanoi's Init, Next, NotSolved, and an SVG-producing trace alias.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "algorithm dependency",
+          "reason": "Both configured roots use this numeric bitmask-tower state machine and its NotSolved invariant; its Toolbox copy has the same pinned Git blob.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/Bits.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "helper dependency copy",
+          "reason": "Byte-identical pinned Git blob of the top-level Bits.tla, located beside the Toolbox model.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/Hanoi.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "algorithm dependency copy",
+          "reason": "Byte-identical pinned Git blob of the top-level Hanoi.tla, extended by the Toolbox MC root.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/MC.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The published Toolbox model binds D=5/N=3, selects Spec, and checks the deliberately violated NotSolved invariant.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/HanoiSeq.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured algorithm variant",
+          "reason": "An independent sequence-of-disks representation with its own Init, Next, and invariants; the published manifest selects no TLC configuration for it.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -11149,7 +11382,7 @@
       "id": "AC-13",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Duplicate public record-schema and configuration APIs, compatibility spellings, hand-maintained example TLA/CFG, and obsolete fixture-name aliases have been removed. Model-owned #spec scenarios supply registered bindings and checks; formal-core Var/Variable/Action remains only for generated or explicitly formal fixtures. A source audit at 852295bc found no legacy application authoring in Examples and no hand-maintained example TLA/CFG. README, Design, and ProductionReadiness describe the generated checker and justify the package-only formal interpreter's compiler/fixture boundary. The incomplete raw SimpleAllocator, NanoBlockchain, and EWD998Termination models remain removed without claiming their families. Ordinary CI and the full unfiltered hosted matrix passed on 852295bc; later local commits require their own final-head admission.",
+      "reason": "Duplicate public record-schema and configuration APIs, compatibility spellings, hand-maintained example TLA/CFG, and obsolete fixture-name aliases have been removed. Model-owned #spec scenarios supply registered bindings and checks; formal-core Var/Variable/Action remains only for generated or explicitly formal fixtures. A source audit at 852295bc found no legacy application authoring in Examples and no hand-maintained example TLA/CFG. README, Design, and ProductionReadiness describe the generated checker and justify the package-only formal interpreter's compiler/fixture boundary. Incomplete raw SimpleAllocator, NanoBlockchain, and EWD998Termination fixtures remain removed; this branch has typed #spec models for AsyncTerminationDetection, EWD998 N=4 and N=3, and EWD998Chan N=3 without claiming completion of that family. Ordinary CI and the full unfiltered hosted matrix passed on 852295bc; later commits require their own final-head admission.",
       "evidence": [{
         "sourceSHA": "852295bc34d3f76141dbce4c1aa708dd54360e82",
         "developerToolsVersion": "16.4",

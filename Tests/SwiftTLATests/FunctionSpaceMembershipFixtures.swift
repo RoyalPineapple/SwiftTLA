@@ -63,7 +63,9 @@ enum CollidingFunctionKey: Hashable, TLAValueType {
 @TLAModel
 struct FunctionSpaceMembershipModel {
     enum Key: String, CaseIterable, FiniteTLAValueDomain { case first, second, third }
-    enum Step: String, CaseIterable { case accepted, candidateFailure, largeAccepted }
+    enum Step: String, CaseIterable {
+        case accepted, candidateFailure, largeAccepted, integerRangeAccepted, integerRangeRejected
+    }
 
     static var spec: TLASpec {
         #spec { scope in
@@ -80,6 +82,14 @@ struct FunctionSpaceMembershipModel {
             Do(Step.largeAccepted) {
                 Assign(result, to: Functions(from: IntRange(0, through: 99), to: Set<Int>([0, 1]))
                     .contains(Dictionary<Int, Int>.mapping(over: IntRange(0, through: 99)) { _ in 0 }))
+            }
+            Do(Step.integerRangeAccepted) {
+                Assign(result, to: Functions(from: IntRange(0, through: 2), to: Int.all)
+                    .contains(Dictionary<Int, Int>.mapping(over: IntRange(0, through: 2)) { _ in 0 }))
+            }
+            Do(Step.integerRangeRejected) {
+                Assign(result, to: Functions(from: IntRange(0, through: 2), to: Int.all)
+                    .contains(Dictionary<Int, Int>.mapping(over: IntRange(0, through: 1)) { _ in 0 }))
             }
         }
     }

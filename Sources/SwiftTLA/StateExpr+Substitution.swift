@@ -88,7 +88,7 @@ extension StateExpr {
         }
 
         switch expr {
-        case .sourceIssue, .parameter, .checkingRegister, .checkingLevel: return expr
+        case .sourceIssue, .parameter, .checkingRegister, .checkingLevel, .checkingDiameter: return expr
         case .setCheckingRegister(let reference, let value): return .setCheckingRegister(reference, sub(value))
         case .variable(let name): return replacements.values[.variable(name)] ?? expr
         case .processLocalFamily(let name): return replacements.values[.processLocalFamily(name)] ?? expr
@@ -169,6 +169,8 @@ extension StateExpr {
         case .printT(let value): return .printT(sub(value))
         case .setSum(let f, let s): return .setSum(sub(f), sub(s))
         case .functionSet(let d, let r): return .functionSet(sub(d), sub(r))
+        case .randomSubset(let count, let domain): return .randomSubset(sub(count), sub(domain))
+        case .randomElement(let domain): return .randomElement(sub(domain))
         case .foldFunction(let operation, let initial, let sequence):
             let scoped = underParameters(operation.parameters, body: operation.body)
             return .foldFunction(
@@ -249,7 +251,7 @@ extension StateExpr {
         }
         func visit(_ expression: StateExpr) -> StateExpr {
             switch expression {
-            case .sourceIssue, .value, .integerSet, .variable, .parameter, .checkingRegister, .checkingLevel, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction: return expression
+            case .sourceIssue, .value, .integerSet, .variable, .parameter, .checkingRegister, .checkingLevel, .checkingDiameter, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction: return expression
             case .setCheckingRegister(let reference, let value): return .setCheckingRegister(reference, visit(value))
             case .add(let a, let b): return .add(visit(a), visit(b))
             case .subtract(let a, let b): return .subtract(visit(a), visit(b))
@@ -317,6 +319,8 @@ extension StateExpr {
             case .printT(let value): return .printT(visit(value))
             case .setSum(let function, let set): return .setSum(visit(function), visit(set))
             case .functionSet(let domain, let range): return .functionSet(visit(domain), visit(range))
+            case .randomSubset(let count, let domain): return .randomSubset(visit(count), visit(domain))
+            case .randomElement(let domain): return .randomElement(visit(domain))
             case .foldFunction(let operation, let initial, let sequence):
                 return .foldFunction(
                     FormalLambda(parameters: operation.parameters, body: visitUnderBindings(Set(operation.parameters), operation.body)),

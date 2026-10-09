@@ -57,6 +57,7 @@ package struct AlgorithmModel: Sendable {
                     names.insert(step.label.name)
                     names.formUnion(step.statements.algorithmScopeNames)
                 case .process(let process):
+                    if let name = process.name { names.insert(name) }
                     collect(process.components, into: &names)
                 case .procedure(let procedure):
                     names.insert(procedure.name)
@@ -72,7 +73,7 @@ package struct AlgorithmModel: Sendable {
                     names.insert(temporal.name)
                 case .formalOperator(let definition):
                     names.insert(definition.name)
-                case .stateConstraint, .invalidPlacement:
+                case .stateConstraint, .actionConstraint, .invalidPlacement:
                     continue
                 }
             }
@@ -104,7 +105,7 @@ package struct AlgorithmModel: Sendable {
                 return .step(.init(label: step.label, statements: scheduleAtomicStatements(step.statements, binding: binding),
                     loopCondition: step.loopCondition))
             case .process(let process):
-                return .process(.init(typeName: process.typeName, domain: process.domain,
+                return .process(.init(typeName: process.typeName, name: process.name, domain: process.domain,
                     fairness: process.fairness, components: process.components.map(component),
                     resolvedElementType: process.resolvedElementType,
                     fairnessExcludedLabels: process.fairnessExcludedLabels))
@@ -187,6 +188,7 @@ package struct AlgorithmModel: Sendable {
                 return .process(
                     .init(
                         typeName: process.typeName,
+                        name: process.name,
                         domain: expression(process.domain),
                         fairness: process.fairness,
                         components: process.components.map(component),
@@ -225,6 +227,8 @@ package struct AlgorithmModel: Sendable {
                 )
             case .stateConstraint(let constraint): return .stateConstraint(.init(
                 expression(constraint.expression), sourceOffset: constraint.sourceOffset))
+            case .actionConstraint(let constraint): return .actionConstraint(.init(
+                expression(constraint.expression), sourceOffset: constraint.sourceOffset))
             case .local(let declaration): return .local(state(declaration))
             case .step(let declaration): return .step(step(declaration))
             }
@@ -257,6 +261,7 @@ internal struct AuthoredPlusCalAlgorithmPlan: Sendable {
         renderedName = StateExpr.freshBoundName(renderedName, avoiding: used)
         used.insert(renderedName)
         let processNames = algorithm.processes.indices.map { index in
+            if let name = algorithm.processes[index].name { return name }
             let stem = "pcalProcess\(index + 1)"
             var candidate = stem
             var suffix = 2
@@ -418,6 +423,7 @@ package indirect enum AlgorithmComponentModel: Sendable {
     case formalOperator(FormalOperatorDefinition)
     /// A TLC state-space bound whose excluded states are omitted from exploration.
     case stateConstraint(ModelPredicateClause)
+    case actionConstraint(ModelPredicateClause)
     case invalidPlacement(InvalidAlgorithmComponent)
     case local(AlgorithmStateModel)
     case step(AlgorithmStepModel)
@@ -501,6 +507,7 @@ package struct AlgorithmProcedureParameterModel: Sendable {
 
 package struct AlgorithmProcessModel: Sendable {
     package let typeName: String
+    package let name: String?
     package let resolvedElementType: CompiledValueType?
     package let domain: StateExpr
     package let fairness: AlgorithmFairness
@@ -514,10 +521,11 @@ package struct AlgorithmProcessModel: Sendable {
         }
     }
 
-    package init(typeName: String, domain: StateExpr, fairness: AlgorithmFairness,
+    package init(typeName: String, name: String? = nil, domain: StateExpr, fairness: AlgorithmFairness,
         components: [AlgorithmComponentModel], resolvedElementType: CompiledValueType? = nil,
         fairnessExcludedLabels: [AlgorithmLabelModel] = []) {
         self.typeName = typeName
+        self.name = name
         self.resolvedElementType = resolvedElementType
         self.domain = domain
         self.fairness = fairness
@@ -538,19 +546,22 @@ package struct AlgorithmStateModel: Sendable {
     package let displayLabel: String?
     package let swiftTypeName: String?
     package let resolvedValueType: CompiledValueType?
+    package let exposed: Bool
 
     package init(
         root: String,
         initialization: VariableInitialization,
         displayLabel: String? = nil,
         swiftTypeName: String? = nil,
-        resolvedValueType: CompiledValueType? = nil
+        resolvedValueType: CompiledValueType? = nil,
+        exposed: Bool = false
     ) {
         self.root = root
         self.initialization = initialization.normalized
         self.displayLabel = displayLabel
         self.swiftTypeName = swiftTypeName
         self.resolvedValueType = resolvedValueType
+        self.exposed = exposed
     }
 }
 

@@ -28,6 +28,8 @@ package struct NativeValidationReport: Codable, Sendable {
     package let properties: [String: ValidationVerdict]
     package let deadlock: ValidationVerdict?
     package let deadlockSelected: Bool
+    package let postconditionName: String?
+    package let postcondition: ValidationVerdict?
 }
 
 package enum NativeValidationRunnerError: Error, Equatable {
@@ -48,6 +50,8 @@ package enum NativeValidationRunner {
                   $0.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) != nil
               }),
               scenario.checking.properties == Set(scenario.expectations.keys),
+              scenario.postconditionName == (try scenario.render()).postconditionName,
+              (scenario.postconditionExpectation != nil) == (scenario.postconditionName != nil),
               (scenario.deadlockExpectation != nil) == scenario.checking.checkDeadlock else {
             throw NativeValidationRunnerError.invalidCoverage(scenario.name)
         }
@@ -68,6 +72,9 @@ package enum NativeValidationRunner {
         }
         let safety = scenario.checking.properties.intersection(invariant.union(reachability))
         let decisive = scenario.checkingMode == .decisiveCounterexample
+        guard !decisive || scenario.postconditionName == nil else {
+            throw NativeValidationRunnerError.unavailable("postcondition requires exhaustive exploration")
+        }
         guard !decisive || (safety.count == 1 && scenario.checking.properties == safety) else {
             throw NativeValidationRunnerError.unavailable("decisive mode requires one selected safety check")
         }
@@ -78,7 +85,8 @@ package enum NativeValidationRunner {
         } : nil
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let batch = try MachineValidationEvidence.write(
-            scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: decisive,
+            scenario: scenario, initialMachines: initial, caseID: caseID,
+            maximumStates: maximumStates, stopOnViolation: decisive,
             stopOnReachability: decisive,
             checking: .init(properties: safety, checkDeadlock: scenario.checking.checkDeadlock),
             to: directory.appendingPathComponent("machine.bin.gz"), observe: observe)
@@ -129,13 +137,23 @@ package enum NativeValidationRunner {
         } else {
             deadlock = nil
         }
+        let postcondition: ValidationVerdict?
+        if scenario.postconditionName != nil {
+            guard let satisfied = try scenario.postconditionSatisfied(after: batch) else {
+                throw NativeValidationRunnerError.unavailable("postcondition requires complete exploration")
+            }
+            postcondition = satisfied ? .satisfied : .violated
+        } else {
+            postcondition = nil
+        }
         let report = NativeValidationReport(
             schema: "swifttla.native-validation-report", scenario: scenario.name,
             maximumStates: maximumStates,
             graphComplete: !decisive, initialStates: batch.initialStates,
             states: batch.states, edges: batch.edges,
             properties: properties, deadlock: deadlock,
-            deadlockSelected: scenario.checking.checkDeadlock)
+            deadlockSelected: scenario.checking.checkDeadlock,
+            postconditionName: scenario.postconditionName, postcondition: postcondition)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("report.json"), options: .atomic)
@@ -179,18 +197,70 @@ package enum NativeValidationRunner {
         scenario: Scenario, caseID: String, maximumStates: Int,
         traces: Int, maximumDepth: Int, to directory: URL
     ) throws -> NativeValidationReport {
+        guard scenario.postconditionName == nil else {
+            throw NativeValidationRunnerError.unavailable("postcondition requires exhaustive exploration")
+        }
         var generator = SampleGenerator()
         let initial = try scenario.initialMachines()
         guard let first = initial.first else { throw ExplorationError.noInitialStates }
-        let sampled = try scenario.simulate(initialMachines: initial, using: &generator)
         let names = scenario.formalPropertyNames
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        let tracesURL = directory.appendingPathComponent("sampled-traces.jsonl")
+        try Data().write(to: tracesURL, options: .atomic)
+        let tracesFile = try FileHandle(forWritingTo: tracesURL)
+        defer { try? tracesFile.close() }
+        var sampledTraceCount = 0
+        var sampledStateCount = 0
+        var sampledEdgeCount = 0
+        func retain(_ sampled: NativeSimulationResult<Scenario.Machine>) throws {
+            let kind: String
+            let property: String
+            let trace: [(action: Scenario.Machine.Action?, state: Scenario.Machine.Snapshot)]
+            switch sampled {
+            case .counterexample(let witness):
+                kind = witness.violations.contains(.deadlock) ? "deadlock" : "violation"
+                property = witness.violations.compactMap { violation -> String? in
+                    if case .invariant(let selected) = violation { return names[selected] }
+                    return nil
+                }.sorted().first ?? (kind == "deadlock" ? "deadlock" : "")
+                trace = witness.trace
+            case .temporalCounterexample(let selected, _, let sampledTrace):
+                kind = "temporal-violation"
+                property = names[selected]!
+                trace = sampledTrace
+            case .inconclusive(let sampledTrace, _):
+                kind = "inconclusive"
+                property = ""
+                trace = sampledTrace
+            }
+            let steps = try trace.map { step -> SampledWitness.Step in
+                let action = try step.action.map { selected -> SampledWitness.Action in
+                    let call = try first.formalCall(for: selected)
+                    return .init(name: call.name, arguments: call.arguments)
+                }
+                let projection = try first.formalProjection(of: step.state)
+                return .init(action: action,
+                    state: Dictionary(uniqueKeysWithValues: projection.entries.map {
+                        ($0.token.description, $0.value)
+                    }))
+            }
+            let witness = SampledWitness(schema: "swifttla.native-sampled-trace", caseID: caseID,
+                kind: kind, property: property, seed: 1,
+                traces: traces, maximumDepth: maximumDepth, steps: steps)
+            try tracesFile.write(contentsOf: encoder.encode(witness))
+            try tracesFile.write(contentsOf: Data([0x0A]))
+            sampledTraceCount += 1
+            sampledStateCount += steps.count
+            sampledEdgeCount += max(0, steps.count - 1)
+        }
+        let sampled = try scenario.simulate(initialMachines: initial, using: &generator, onTrace: retain)
+        try tracesFile.synchronize()
         var properties = Dictionary(uniqueKeysWithValues: scenario.checking.properties.map {
             (names[$0]!, ValidationVerdict.unavailable)
         })
         var deadlock: ValidationVerdict? = scenario.checking.checkDeadlock ? .unavailable : nil
-        let kind: String?
-        let property: String?
-        let trace: [(action: Scenario.Machine.Action?, state: Scenario.Machine.Snapshot)]
         switch sampled {
         case .counterexample(let witness):
             for violation in witness.violations {
@@ -199,46 +269,17 @@ package enum NativeValidationRunner {
                 case .deadlock: deadlock = .violated
                 }
             }
-            kind = witness.violations.contains(.deadlock) ? "deadlock" : "violation"
-            property = witness.violations.compactMap { violation -> String? in
-                if case .invariant(let selected) = violation { return names[selected] }
-                return nil
-            }.sorted().first ?? (deadlock == .violated ? "deadlock" : nil)
-            trace = witness.trace
-        case .temporalCounterexample(let selected, _, let sampledTrace):
+        case .temporalCounterexample(let selected, _, _):
             properties[names[selected]!] = .violated
-            kind = "temporal-violation"
-            property = names[selected]
-            trace = sampledTrace
-        case .inconclusive(let sampledTrace, _):
-            kind = nil
-            property = nil
-            trace = sampledTrace
+        case .inconclusive: break
         }
-        let steps = try trace.map { step -> SampledWitness.Step in
-            let action = try step.action.map { selected -> SampledWitness.Action in
-                let call = try first.formalCall(for: selected)
-                return .init(name: call.name, arguments: call.arguments)
-            }
-            let projection = try first.formalProjection(of: step.state)
-            return .init(action: action,
-                state: Dictionary(uniqueKeysWithValues: projection.entries.map {
-                    ($0.token.description, $0.value)
-                }))
-        }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        let witness = SampledWitness(schema: "swifttla.native-sampled-trace", caseID: caseID,
-            kind: kind ?? "inconclusive", property: property ?? "", seed: 1,
-            traces: traces, maximumDepth: maximumDepth, steps: steps)
-        try encoder.encode(witness).write(to: directory.appendingPathComponent("sampled-trace.json"), options: .atomic)
         let report = NativeValidationReport(
             schema: "swifttla.native-validation-report", scenario: scenario.name,
             maximumStates: maximumStates, graphComplete: false,
-            initialStates: 1, states: steps.count, edges: max(0, steps.count - 1),
+            initialStates: sampledTraceCount, states: sampledStateCount, edges: sampledEdgeCount,
             properties: properties, deadlock: deadlock,
-            deadlockSelected: scenario.checking.checkDeadlock)
+            deadlockSelected: scenario.checking.checkDeadlock,
+            postconditionName: nil, postcondition: nil)
         try encoder.encode(report).write(to: directory.appendingPathComponent("report.json"), options: .atomic)
         return report
     }
@@ -252,51 +293,70 @@ package enum NativeValidationRunner {
               report.properties.values.contains(.violated) else {
             throw NativeValidationRunnerError.invalidCoverage("sampled native report")
         }
-        let witness = try JSONDecoder().decode(SampledWitness.self,
-            from: Data(contentsOf: directory.appendingPathComponent("sampled-trace.json")))
-        guard witness.schema == "swifttla.native-sampled-trace", witness.caseID == caseID,
-              witness.kind == "violation", witness.seed == 1,
-              witness.traces == traces, witness.maximumDepth == maximumDepth,
-              !witness.steps.isEmpty, witness.steps.count - 1 <= maximumDepth,
-              witness.steps.first?.action?.name == nil,
-              report.initialStates == 1, report.states == witness.steps.count,
-              report.edges == witness.steps.count - 1 else {
+        let evidence = try Data(contentsOf: directory.appendingPathComponent("sampled-traces.jsonl"))
+        guard evidence.last == 0x0A else {
+            throw NativeValidationRunnerError.invalidCoverage("incomplete sampled trace stream")
+        }
+        let witnesses = try evidence.split(separator: 0x0A).map {
+            try JSONDecoder().decode(SampledWitness.self, from: Data($0))
+        }
+        guard let witness = witnesses.last, witnesses.count <= traces,
+              witnesses.dropLast().allSatisfy({ $0.kind == "inconclusive" && $0.property.isEmpty }),
+              witnesses.allSatisfy({ candidate in
+                  candidate.schema == "swifttla.native-sampled-trace"
+                      && candidate.caseID == caseID && candidate.seed == 1
+                      && candidate.traces == traces && candidate.maximumDepth == maximumDepth
+                      && !candidate.steps.isEmpty
+                      && candidate.steps.count - 1 <= maximumDepth
+                      && candidate.steps.first?.action?.name == nil
+              }),
+              report.initialStates == witnesses.count,
+              report.states == witnesses.reduce(0, { $0 + $1.steps.count }),
+              report.edges == witnesses.reduce(0, { $0 + $1.steps.count - 1 }) else {
+            throw NativeValidationRunnerError.invalidCoverage("sampled native trace stream")
+        }
+        guard witness.kind == "violation" else {
             throw NativeValidationRunnerError.invalidCoverage("sampled native trace")
         }
         let initial = try scenario.initialMachines()
         guard let first = initial.first else { throw ExplorationError.noInitialStates }
-        var context = CheckingContext(registers: try first.initialCheckingRegisters())
-        try context.advanceLevel()
         func projected(_ machine: Scenario.Machine) throws -> [String: TLAValue] {
             let projection = try first.formalProjection(of: machine.snapshot)
             return Dictionary(uniqueKeysWithValues: projection.entries.map {
                 ($0.token.description, $0.value)
             })
         }
-        let starting = try initial.filter { try projected($0) == witness.steps[0].state }
-        guard starting.count == 1, let start = starting.first,
-              try start.assumptionsHold(), try start.satisfiesStateConstraint() else {
-            throw NativeValidationRunnerError.invalidCoverage("sampled initial state")
-        }
-        var machine = start
-        for step in witness.steps.dropFirst() {
-            guard let action = step.action else {
-                throw NativeValidationRunnerError.invalidCoverage("sampled action")
-            }
-            let matches = try machine.successors(checking: &context).filter { candidate in
-                let call = try first.formalCall(for: candidate.action)
-                guard call.name == action.name, call.arguments == action.arguments,
-                      try projected(candidate.machine) == step.state else { return false }
-                return try candidate.machine.satisfiesStateConstraint()
-            }
-            let distinct = Dictionary(grouping: matches, by: { $0.machine.snapshot })
-            guard distinct.count == 1, let next = distinct.values.first?.first?.machine,
-                  next.hasSameConfiguration(as: first) else {
-                throw NativeValidationRunnerError.invalidCoverage("sampled transition")
-            }
-            machine = next
+        func replay(_ sampled: SampledWitness) throws -> Scenario.Machine {
+            var context = CheckingContext(registers: try first.initialCheckingRegisters())
             try context.advanceLevel()
+            let starting = try initial.filter { try projected($0) == sampled.steps[0].state }
+            guard starting.count == 1, let start = starting.first,
+                  try start.assumptionsHold(), try start.satisfiesStateConstraint() else {
+                throw NativeValidationRunnerError.invalidCoverage("sampled initial state")
+            }
+            var machine = start
+            for step in sampled.steps.dropFirst() {
+                guard let action = step.action else {
+                    throw NativeValidationRunnerError.invalidCoverage("sampled action")
+                }
+                let matches = try machine.successors(checking: &context).filter { candidate in
+                    let call = try first.formalCall(for: candidate.action)
+                    guard call.name == action.name, call.arguments == action.arguments,
+                          try projected(candidate.machine) == step.state else { return false }
+                    return try candidate.machine.satisfiesStateConstraint()
+                }
+                let distinct = Dictionary(grouping: matches, by: { $0.machine.snapshot })
+                guard distinct.count == 1, let next = distinct.values.first?.first?.machine,
+                      next.hasSameConfiguration(as: first) else {
+                    throw NativeValidationRunnerError.invalidCoverage("sampled transition")
+                }
+                machine = next
+                try context.advanceLevel()
+            }
+            return machine
         }
+        for earlier in witnesses.dropLast() { _ = try replay(earlier) }
+        let machine = try replay(witness)
         let names = scenario.formalPropertyNames
         guard let property = scenario.checking.properties.first(where: { names[$0] == witness.property }),
               report.properties[witness.property] == .violated,

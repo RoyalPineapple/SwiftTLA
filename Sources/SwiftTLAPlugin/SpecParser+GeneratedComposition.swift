@@ -46,11 +46,15 @@ extension ParserSession {
     ) -> ParsedGeneratedModelRefinement? {
         let labels = call.arguments.filter { $0.label?.text == "label" }
         let label = labels.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
-        guard call.arguments.count == 1 + labels.count,
+        let behaviors = call.arguments.filter { $0.label?.text == "behavior" }
+        let behavior = behaviors.first?.expression.as(MemberAccessExprSyntax.self)
+            .flatMap { ModelBehavior(rawValue: $0.declName.baseName.sourceIdentifierName) }
+        guard call.arguments.count == 1 + labels.count + behaviors.count,
               labels.isEmpty || (labels.count == 1 && label?.isEmpty == false),
+              behaviors.isEmpty || (behaviors.count == 1 && behavior != nil),
               let instanceArgument = call.arguments.first(where: { $0.label?.text == "instance" }),
               let reference = instanceArgument.expression.as(DeclReferenceExprSyntax.self),
-              let instanceName = specBindings.generatedInstances[reference.baseName.sourceIdentifierName]?.name,
+              let instance = specBindings.generatedInstances[reference.baseName.sourceIdentifierName],
               let body = call.trailingClosure, call.additionalTrailingClosures.isEmpty else {
             components.diagnostics.append(.init(
                 message: "A generated-model Refinement requires a declared Instance and Map key paths.",
@@ -63,12 +67,24 @@ extension ParserSession {
             guard case .expr(let expression) = statement.item,
                   let mapping = expression.as(FunctionCallExprSyntax.self),
                   compilerGrammarName(in: mapping.calledExpression) == "Map",
-                  mapping.arguments.count == 2,
+                  mapping.arguments.count == 2 || mapping.arguments.count == 3,
                   let target = mapping.arguments.first,
                   let field = generatedFieldName(target.expression),
-                  let value = mapping.arguments.last,
+                  let value = mapping.arguments.first(where: { $0.label?.text == "from" }),
                   value.label?.text == "from",
-                  let source = decodeTypedFacadeValue(value.expression, scope: sourceScope),
+                  let source = generatedSourceFieldName(value.expression).map(StateExpr.variable)
+                    ?? decodeTypedFacadeValue(value.expression, scope: sourceScope) else {
+                components.diagnostics.append(.init(
+                    message: "Refinement mappings require distinct Map(\\.field, from: typedValue) entries.",
+                    source: statement))
+                return nil
+            }
+            let projection = mapping.arguments.first(where: { $0.label?.text == "projecting" })
+            guard
+                  (projection == nil && mapping.arguments.count == 2)
+                    || (projection != nil && mapping.arguments.count == 3),
+                  projection == nil || projection?.expression.as(MemberAccessExprSyntax.self)?
+                    .declName.baseName.sourceIdentifierName == "self",
                   seen.insert(field).inserted else {
                 components.diagnostics.append(.init(
                     message: "Refinement mappings require distinct Map(\\.field, from: typedValue) entries.",
@@ -77,12 +93,12 @@ extension ParserSession {
             }
             propertyDeclarationOffsets["generatedRefinements.\(name).mappings.\(field)", default: []].append(
                 value.expression.positionAfterSkippingLeadingTrivia.utf8Offset)
-            mappings.append(.init(fieldName: field, source: source))
+            mappings.append(.init(fieldName: field, source: source, projected: projection != nil))
         }
         propertyDeclarationOffsets["generatedRefinements.\(name)", default: []].append(
             call.positionAfterSkippingLeadingTrivia.utf8Offset)
         return .init(name: name, reference: .init(name: name, displayLabel: label),
-            instanceName: instanceName, fieldMappings: mappings)
+            instanceName: instance.name, behavior: behavior ?? .specification, fieldMappings: mappings)
     }
 
     private func generatedFieldName(_ expression: ExprSyntax) -> String? {
@@ -91,5 +107,20 @@ extension ParserSession {
               let field = keyPath.components.first?.component.as(KeyPathPropertyComponentSyntax.self),
               field.genericArgumentClause == nil else { return nil }
         return field.declName.baseName.sourceIdentifierName
+    }
+
+    private func generatedSourceFieldName(_ expression: ExprSyntax) -> String? {
+        guard let sourceModelTypeName,
+              expression.as(KeyPathExprSyntax.self) != nil else { return nil }
+        let source = expression.trimmedDescription
+        guard source.hasPrefix("\\") else { return nil }
+        let components = source.dropFirst().split(separator: ".")
+        guard components.count == 3,
+              components[0] == sourceModelTypeName,
+              components[1] == "State",
+              !components[2].isEmpty else { return nil }
+        let field = components[2]
+        return field.first == "`" && field.last == "`"
+            ? String(field.dropFirst().dropLast()) : String(field)
     }
 }

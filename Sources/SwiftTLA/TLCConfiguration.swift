@@ -32,11 +32,17 @@ package struct TLCConfiguration: Equatable, Sendable {
     package let properties: [String]
     package let refinements: [String]
     package let symmetry: [String]
+    package let viewOperators: [String]
+    package let view: String?
+    package let postconditionOperators: [String]
+    package let postcondition: String?
 
     package init(behavior: ModelBehavior = .specification, specificationName: String = "Spec",
         assumptionsOnly: Bool = false,
         declarations: [String], checkDeadlock: Bool, invariants: [String],
-        reachabilityProperties: [String] = [], properties: [String], refinements: [String] = [], symmetry: [String]) {
+        reachabilityProperties: [String] = [], properties: [String], refinements: [String] = [], symmetry: [String],
+        viewOperators: [String] = [], view: String? = nil,
+        postconditionOperators: [String] = [], postcondition: String? = nil) {
         self.behavior = behavior
         self.specificationName = specificationName
         self.assumptionsOnly = assumptionsOnly
@@ -47,6 +53,10 @@ package struct TLCConfiguration: Equatable, Sendable {
         self.properties = properties
         self.refinements = refinements
         self.symmetry = symmetry
+        self.viewOperators = viewOperators
+        self.view = view
+        self.postconditionOperators = postconditionOperators
+        self.postcondition = postcondition
     }
 
     func selecting(_ checks: Set<String>, checkDeadlock: Bool, behavior: ModelBehavior? = nil,
@@ -75,7 +85,8 @@ package struct TLCConfiguration: Equatable, Sendable {
             reachabilityProperties: reachabilityProperties.filter(checks.contains),
             properties: properties.filter(checks.contains),
             refinements: refinements.filter(checks.contains),
-            symmetry: symmetry)
+            symmetry: symmetry, viewOperators: viewOperators, view: view,
+            postconditionOperators: postconditionOperators, postcondition: postcondition)
     }
 
     func selectingSymmetry(_ name: String?) throws -> Self {
@@ -91,7 +102,36 @@ package struct TLCConfiguration: Equatable, Sendable {
             declarations: declarations, checkDeadlock: checkDeadlock,
             invariants: invariants, reachabilityProperties: reachabilityProperties,
             properties: properties, refinements: refinements,
-            symmetry: name.map { [$0] } ?? [])
+            symmetry: name.map { [$0] } ?? [], viewOperators: viewOperators, view: view,
+            postconditionOperators: postconditionOperators, postcondition: postcondition)
+    }
+
+    func selectingView(_ name: String?) throws -> Self {
+        if let name, !viewOperators.contains(name) {
+            throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
+                path: "view selection", expected: "a declared view operator", actual: name,
+                nextSafeAction: "Select a view declared by this model.")
+        }
+        return Self(behavior: behavior, specificationName: specificationName, assumptionsOnly: assumptionsOnly,
+            declarations: declarations, checkDeadlock: checkDeadlock,
+            invariants: invariants, reachabilityProperties: reachabilityProperties,
+            properties: properties, refinements: refinements, symmetry: symmetry,
+            viewOperators: viewOperators, view: name,
+            postconditionOperators: postconditionOperators, postcondition: postcondition)
+    }
+
+    func selectingPostcondition(_ name: String?) throws -> Self {
+        if let name, !postconditionOperators.contains(name) {
+            throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
+                path: "postcondition selection", expected: "a declared postcondition operator", actual: name,
+                nextSafeAction: "Select a postcondition declared by this model.")
+        }
+        return Self(behavior: behavior, specificationName: specificationName, assumptionsOnly: assumptionsOnly,
+            declarations: declarations, checkDeadlock: checkDeadlock,
+            invariants: invariants, reachabilityProperties: reachabilityProperties,
+            properties: properties, refinements: refinements, symmetry: symmetry,
+            viewOperators: viewOperators, view: view,
+            postconditionOperators: postconditionOperators, postcondition: name)
     }
 
     func usesSupportedSymmetryReduction(_ reduction: SymmetryReduction) throws -> Bool {
@@ -126,6 +166,12 @@ package struct TLCConfiguration: Equatable, Sendable {
         let checks = (invariants + reachabilityProperties).map { "INVARIANT \($0)" } + (properties + refinements).map { "PROPERTY \($0)" }
         // TLC cannot soundly check liveness on a symmetry-reduced graph.
         let reduction = usesSymmetryReduction && properties.isEmpty && refinements.isEmpty ? symmetry.map { "SYMMETRY \($0)" } : []
-        return (header + declarations + checks + reduction).joined(separator: "\n") + "\n"
+        var lines = header
+        lines.append(contentsOf: declarations)
+        lines.append(contentsOf: checks)
+        lines.append(contentsOf: reduction)
+        if let view { lines.append("VIEW \(view)") }
+        if let postcondition { lines.append("POSTCONDITION \(postcondition)") }
+        return lines.joined(separator: "\n") + "\n"
     }
 }

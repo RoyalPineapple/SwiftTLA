@@ -60,6 +60,33 @@ private struct GeneratedFormalUnionAlgorithm {
     }
 }
 
+@TLAModel
+private struct RecordUnionFieldModel {
+    struct Token: Hashable, Sendable {
+        let type: String
+        let q: Int
+    }
+
+    struct Payload: Hashable, Sendable {
+        let type: String
+        let src: Int
+    }
+
+    private enum Step: String, CaseIterable { case consume }
+
+    static var spec: TLASpec {
+        #spec("RecordUnionField") { scope in
+            let message = scope.sharedVar(initial: OneOf<Token, Payload>.first(
+                Token.expression(type: "tok", q: 1)))
+            Do(Step.consume) {
+                When(message.recordFields.contains("q"))
+                Assign(message, to: OneOf<Token, Payload>.second(
+                    Payload.expression(type: "pl", src: 2)))
+            }
+        }
+    }
+}
+
 struct FormalUnionTests {
     @Test("a formal union keeps untagged values and decodes either declared shape")
     func formalUnionRoundTrips() {
@@ -82,5 +109,14 @@ struct FormalUnionTests {
     @Test("#spec preserves a labeled formal-union view through both construction paths")
     func generatedAlgorithmPreservesFormalUnion() throws {
         _ = try GeneratedFormalUnionAlgorithm.spec.compile()
+    }
+
+    @Test("record-union field guards distinguish alternatives in generated execution")
+    func recordUnionFieldGuard() throws {
+        var machine = try RecordUnionFieldModel.makeMachine()
+        #expect(try machine.isEnabled(.consume))
+        _ = try machine.send(.consume)
+        #expect(machine.state.message == .second(.init(type: "pl", src: 2)))
+        #expect(try !machine.isEnabled(.consume))
     }
 }

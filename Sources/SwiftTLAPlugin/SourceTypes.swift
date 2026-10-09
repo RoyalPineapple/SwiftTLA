@@ -222,6 +222,9 @@ final class SourceTypeResolver {
         case "Triple":
             let parts = try resolveArguments(expecting: 3)
             return .init(type: .tuple(parts.map(\.type)), view: .tuple(parts.map(\.view)))
+        case "Quintuple":
+            let parts = try resolveArguments(expecting: 5)
+            return .init(type: .tuple(parts.map(\.type)), view: .tuple(parts.map(\.view)))
         case "OneOf":
             let parts = try resolveArguments(expecting: 2)
             return .init(type: try CompiledValueType.preservingUnion(parts[0].type, parts[1].type, namedDomains: namedDomains),

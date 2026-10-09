@@ -1,7 +1,7 @@
 import Dispatch
 
-/// Hashes select candidate snapshots; only complete snapshot equality identifies a state.
-private struct SeenSnapshots<Snapshot: Hashable> {
+/// Hashes select candidate identities; only complete identity equality identifies a state.
+private struct SeenIdentities<Identity: Hashable> {
     private static var pageSize: Int { 16_384 }
 
     private struct Entry {
@@ -10,31 +10,31 @@ private struct SeenSnapshots<Snapshot: Hashable> {
     }
 
     private var entries = Array(repeating: Entry(hash: 0, id: -1), count: 16_384)
-    private var pages: [[Snapshot]] = []
+    private var pages: [[Identity]] = []
     private(set) var count = 0
 
-    func id(for snapshot: Snapshot, hash: Int) -> Int? {
+    func id(for identity: Identity, hash: Int) -> Int? {
         let mask = entries.count - 1
         var slot = hash & mask
         while true {
             let entry = entries[slot]
             if entry.id < 0 { return nil }
-            if entry.hash == hash && pages[entry.id / Self.pageSize][entry.id % Self.pageSize] == snapshot {
+            if entry.hash == hash && pages[entry.id / Self.pageSize][entry.id % Self.pageSize] == identity {
                 return entry.id
             }
             slot = (slot + 1) & mask
         }
     }
 
-    mutating func insert(_ snapshot: Snapshot, hash: Int) -> Int {
+    mutating func insert(_ identity: Identity, hash: Int) -> Int {
         if count >= entries.count - entries.count / 4 { grow() }
         let id = count
         if pages.isEmpty || pages[pages.count - 1].count == Self.pageSize {
-            var page: [Snapshot] = []
+            var page: [Identity] = []
             page.reserveCapacity(Self.pageSize)
             pages.append(page)
         }
-        pages[pages.count - 1].append(snapshot)
+        pages[pages.count - 1].append(identity)
         count += 1
         place(hash: hash, id: id)
         return id
@@ -76,6 +76,8 @@ public struct MachineValidationSummary<Property: Hashable & Sendable>: Sendable 
     public let initialStates: Int
     public let states: Int
     public let edges: Int
+    /// Highest one-based BFS level among discovered states.
+    public let maximumLevel: Int
     public let violatedInvariants: Set<Property>
     public let reachedProperties: Set<Property>
     public let deadlockFound: Bool
@@ -109,6 +111,55 @@ public enum MachineValidator {
         stopOnReachability: Bool = false,
         emit: (MachineValidationEvent<Machine>) throws -> Void
     ) throws -> MachineValidationSummary<Machine.Property> {
+        try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, identity: { machine, _ in machine.snapshot }, usesView: false, emit: emit)
+    }
+
+    /// The identity is a typed state function. Equal identities share one exploration node;
+    /// the completed result is then a view graph, not a full-state reachability graph.
+    /// Events still carry complete representative snapshots.
+    public static func run<Machine: StateMachine, Identity: Hashable & Sendable>(
+        initialMachines: [Machine],
+        maximumStates: Int,
+        checking: ModelChecks<Machine.Property>,
+        stopOnViolation: Bool,
+        stopOnReachability: Bool = false,
+        identity: (Machine) throws -> Identity,
+        emit: (MachineValidationEvent<Machine>) throws -> Void
+    ) throws -> MachineValidationSummary<Machine.Property> {
+        try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, identity: { machine, _ in try identity(machine) },
+            usesView: true, emit: emit)
+    }
+
+    /// The checking level is the BFS depth exposed by TLCGet("level"): initial
+    /// states have level one, and a successor has its source level plus one.
+    public static func run<Machine: StateMachine, Identity: Hashable & Sendable>(
+        initialMachines: [Machine],
+        maximumStates: Int,
+        checking: ModelChecks<Machine.Property>,
+        stopOnViolation: Bool,
+        stopOnReachability: Bool = false,
+        identity: (Machine, Int) throws -> Identity,
+        emit: (MachineValidationEvent<Machine>) throws -> Void
+    ) throws -> MachineValidationSummary<Machine.Property> {
+        try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, identity: identity, usesView: true, emit: emit)
+    }
+
+    private static func runWithIdentity<Machine: StateMachine, Identity: Hashable & Sendable>(
+        initialMachines: [Machine],
+        maximumStates: Int,
+        checking: ModelChecks<Machine.Property>,
+        stopOnViolation: Bool,
+        stopOnReachability: Bool,
+        identity: (Machine, Int) throws -> Identity,
+        usesView: Bool,
+        emit: (MachineValidationEvent<Machine>) throws -> Void
+    ) throws -> MachineValidationSummary<Machine.Property> {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
         guard let first = initialMachines.first else { throw ExplorationError.noInitialStates }
         let startedAt = DispatchTime.now().uptimeNanoseconds
@@ -119,11 +170,12 @@ public enum MachineValidator {
         }
 
         var context = CheckingContext(registers: try first.initialCheckingRegisters())
-        var seen = SeenSnapshots<Machine.Snapshot>()
+        var seen = SeenIdentities<Identity>()
         var pending: [(id: Int, machine: Machine?)] = []
         var head = 0
         var initialCount = 0
         var edgeCount = 0
+        var maximumLevel = 0
         var violated: Set<Machine.Property> = []
         var reached: Set<Machine.Property> = []
         var deadlockFound = false
@@ -142,7 +194,7 @@ public enum MachineValidator {
         func summary(_ completion: MachineValidationSummary<Machine.Property>.Completion)
             -> MachineValidationSummary<Machine.Property> {
             .init(completion: completion, initialStates: initialCount, states: seen.count,
-                  edges: edgeCount, violatedInvariants: violated,
+                  edges: edgeCount, maximumLevel: maximumLevel, violatedInvariants: violated,
                   reachedProperties: reached, deadlockFound: deadlockFound,
                   timing: .init(
                     elapsedNanoseconds: DispatchTime.now().uptimeNanoseconds - startedAt,
@@ -179,11 +231,11 @@ public enum MachineValidator {
             return result
         }
 
-        func stateID(_ snapshot: Machine.Snapshot) -> (Int, Int?) {
+        func stateID(_ value: Identity) -> (Int, Int?) {
             let started = DispatchTime.now().uptimeNanoseconds
-            let hash = snapshot.hashValue
+            let hash = value.hashValue
             let hashed = DispatchTime.now().uptimeNanoseconds
-            let result = seen.id(for: snapshot, hash: hash)
+            let result = seen.id(for: value, hash: hash)
             let finished = DispatchTime.now().uptimeNanoseconds
             seenHashNanoseconds += hashed - started
             seenProbeNanoseconds += finished - hashed
@@ -219,13 +271,14 @@ public enum MachineValidator {
             return found
         }
 
-        func insertDiscovered(_ machine: Machine, snapshot: Machine.Snapshot, hash: Int,
-            initial: Bool, predecessor: Int?, action: Machine.Action?) throws -> Int {
+        func insertDiscovered(_ machine: Machine, snapshot: Machine.Snapshot, identity value: Identity, hash: Int,
+            level: Int, initial: Bool, predecessor: Int?, action: Machine.Action?) throws -> Int {
             guard seen.count < maximumStates else { throw ExplorationError.stateLimitExceeded(maximumStates) }
             let insertStarted = DispatchTime.now().uptimeNanoseconds
-            let id = seen.insert(snapshot, hash: hash)
+            let id = seen.insert(value, hash: hash)
             seenInsertNanoseconds += DispatchTime.now().uptimeNanoseconds - insertStarted
             pending.append((id, machine))
+            maximumLevel = max(maximumLevel, level)
             if initial { initialCount += 1 }
             try emitEvent(.state(id: id, snapshot: snapshot, initial: initial,
                             predecessor: predecessor, action: action))
@@ -235,16 +288,34 @@ public enum MachineValidator {
         for machine in initialMachines {
             guard sameConfiguration(machine) else { throw ExplorationError.configurationMismatch }
             guard try machine.assumptionsHold() else { throw ExplorationError.assumptionViolated }
+            if usesView {
+                let admitted = try constraintHolds(machine)
+                let snapshot = machine.snapshot
+                let value = admitted ? try identity(machine, 1) : nil
+                let lookup = value.map(stateID)
+                if !admitted || lookup?.1 == nil {
+                    let reached = try checkReachability(machine, predecessor: nil, action: nil)
+                    let failed = try checkInvariants(machine, atLevel: 1, predecessor: nil, action: nil)
+                    if failed && stopOnViolation { return summary(.decisiveViolation) }
+                    if reached && stopOnReachability { return summary(.decisiveReachability) }
+                }
+                if admitted, let value, let (hash, existing) = lookup, existing == nil {
+                    _ = try insertDiscovered(machine, snapshot: snapshot, identity: value, hash: hash,
+                        level: 1, initial: true, predecessor: nil, action: nil)
+                }
+                continue
+            }
             let reached = try checkReachability(machine, predecessor: nil, action: nil)
             let failed = try checkInvariants(machine, atLevel: 1, predecessor: nil, action: nil)
             if failed && stopOnViolation { return summary(.decisiveViolation) }
             if reached && stopOnReachability { return summary(.decisiveReachability) }
             guard try constraintHolds(machine) else { continue }
             let snapshot = machine.snapshot
-            let (hash, existing) = stateID(snapshot)
+            let value = try identity(machine, 1)
+            let (hash, existing) = stateID(value)
             if existing == nil {
-                _ = try insertDiscovered(machine, snapshot: snapshot, hash: hash,
-                    initial: true, predecessor: nil, action: nil)
+                _ = try insertDiscovered(machine, snapshot: snapshot, identity: value, hash: hash,
+                    level: 1, initial: true, predecessor: nil, action: nil)
             }
         }
         guard initialCount > 0 else { throw ExplorationError.noInitialStates }
@@ -263,7 +334,7 @@ public enum MachineValidator {
                 let successorStartedAt = DispatchTime.now().uptimeNanoseconds
                 var processingNanoseconds: UInt64 = 0
                 var decision: MachineValidationSummary<Machine.Property>.Completion?
-                let hasSuccessor = try machine.visitSuccessors(checking: &context) { action, successor in
+                func inspect(_ action: Machine.Action, _ successor: Machine, permitted: Bool) throws -> Bool {
                     let processingStartedAt = DispatchTime.now().uptimeNanoseconds
                     defer {
                         processingNanoseconds += DispatchTime.now().uptimeNanoseconds - processingStartedAt
@@ -271,11 +342,30 @@ public enum MachineValidator {
                     guard sameConfiguration(successor) else {
                         throw ExplorationError.configurationMismatch
                     }
-                    // State predicates and the constraint are functions of a complete
-                    // snapshot. A previously discovered target has already passed
-                    // those checks; only its additional labeled edge is new.
+                    if !permitted {
+                        let reached = try checkReachability(successor, predecessor: source, action: action)
+                        let failed = try checkInvariants(successor, atLevel: successorLevel,
+                            predecessor: source, action: action)
+                        if failed && stopOnViolation { decision = .decisiveViolation; return false }
+                        if reached && stopOnReachability { decision = .decisiveReachability; return false }
+                        return true
+                    }
+                    // A view can merge different complete states. Check the constraint
+                    // before looking up an identity, and still check properties at the
+                    // excluded boundary; an excluded successor adds no graph edge.
+                    if usesView {
+                        if try !constraintHolds(successor) {
+                            let reached = try checkReachability(successor, predecessor: source, action: action)
+                            let failed = try checkInvariants(successor, atLevel: successorLevel,
+                                predecessor: source, action: action)
+                            if failed && stopOnViolation { decision = .decisiveViolation; return false }
+                            if reached && stopOnReachability { decision = .decisiveReachability; return false }
+                            return true
+                        }
+                    }
                     let snapshot = successor.snapshot
-                    let (hash, existing) = stateID(snapshot)
+                    let value = try identity(successor, successorLevel)
+                    let (hash, existing) = stateID(value)
                     if let target = existing {
                         edgeCount += 1
                         try emitEvent(.edge(source: source, action: action, target: target))
@@ -291,12 +381,32 @@ public enum MachineValidator {
                         decision = .decisiveReachability
                         return false
                     }
-                    guard try constraintHolds(successor) else { return true }
-                    let target = try insertDiscovered(successor, snapshot: snapshot, hash: hash,
-                        initial: false, predecessor: source, action: action)
+                    if !usesView {
+                        if try !constraintHolds(successor) { return true }
+                    }
+                    let target = try insertDiscovered(successor, snapshot: snapshot, identity: value, hash: hash,
+                        level: successorLevel, initial: false, predecessor: source, action: action)
                     edgeCount += 1
                     try emitEvent(.edge(source: source, action: action, target: target))
                     return true
+                }
+                let hasSuccessor: Bool
+                if Machine.hasActionConstraint {
+                    let candidates = try machine.successors(checking: &context)
+                    hasSuccessor = !candidates.isEmpty
+                    for (action, successor) in candidates {
+                        guard sameConfiguration(successor) else { throw ExplorationError.configurationMismatch }
+                        let constraintStartedAt = DispatchTime.now().uptimeNanoseconds
+                        let permitted = try machine.satisfiesActionConstraint(to: successor, checking: &context)
+                        let constraintDuration = DispatchTime.now().uptimeNanoseconds - constraintStartedAt
+                        constraintNanoseconds += constraintDuration
+                        processingNanoseconds += constraintDuration
+                        if try !inspect(action, successor, permitted: permitted) { break }
+                    }
+                } else {
+                    hasSuccessor = try machine.visitSuccessors(checking: &context) { action, successor in
+                        try inspect(action, successor, permitted: true)
+                    }
                 }
                 successorNanoseconds += DispatchTime.now().uptimeNanoseconds - successorStartedAt - processingNanoseconds
                 successorCalls += 1

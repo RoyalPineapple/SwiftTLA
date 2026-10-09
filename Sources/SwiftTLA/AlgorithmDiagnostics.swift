@@ -110,7 +110,7 @@ internal enum AlgorithmPlacementValidator {
                 try validate(component, path: path + ["procedure", "components[\(index)]"])
             }
         case .shared, .invariant, .reachable, .temporal, .formalOperator,
-             .stateConstraint, .local, .step:
+             .stateConstraint, .actionConstraint, .local, .step:
             return
         }
     }

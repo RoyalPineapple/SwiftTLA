@@ -104,10 +104,19 @@ public protocol ModelValidationScenario: Sendable {
     var behavior: ModelBehavior { get }
     var expectations: [Property: ValidationExpectation] { get }
     var deadlockExpectation: ValidationExpectation? { get }
+    var postconditionName: String? { get }
+    var postconditionExpectation: ValidationExpectation? { get }
     func initialMachines() throws -> [Machine]
     func fairnessConditions(on machine: Machine) throws -> [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]
     func render() throws -> RenderedSpecification
     var formalPropertyNames: [Property: String] { get }
+    var usesView: Bool { get }
+    func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
+    func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
+        atLevel level: Int) throws -> TLAStateProjection
+    func postconditionSatisfied(after summary: MachineValidationSummary<Property>) throws -> Bool?
 }
 
 /// The product result for a configured module with no state machine.
@@ -131,12 +140,39 @@ public protocol AssumptionValidationScenario: Sendable {
 
 extension ModelValidationScenario {
     public var checkingMode: ValidationCheckingMode { .exhaustive }
+    public var usesView: Bool { false }
+    public var postconditionName: String? { nil }
+    public var postconditionExpectation: ValidationExpectation? { nil }
+
+    public func postconditionSatisfied(after summary: MachineValidationSummary<Property>) throws -> Bool? { nil }
+
+    public func runValidation(maximumStates: Int, checking: ModelChecks<Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+        try runValidation(initialMachines: initialMachines(), maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, emit: emit)
+    }
+
+    public func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+        try MachineValidator.run(initialMachines: initialMachines, maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, emit: emit)
+    }
+
+    public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
+        atLevel level: Int) throws -> TLAStateProjection {
+        return try machine.formalProjection(of: snapshot)
+    }
 
     public func fairnessConditions(on machine: Machine) throws -> [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] {
         try machine.fairnessConditions()
     }
 
     public func check(maximumStates: Int) throws -> NativeCheckResult<Machine> {
+        guard !usesView else { throw ExplorationError.viewRequiresStreamingValidation }
         let initial = try initialMachines()
         let fairness = behavior == .specification ? try initial.first.map { try fairnessConditions(on: $0) } : nil
         return try ReachabilityGraph.check(initialMachines: initial, maximumStates: maximumStates,
@@ -144,6 +180,7 @@ extension ModelValidationScenario {
     }
 
     public func explore(maximumStates: Int) throws -> ReachabilityGraph<Machine> {
+        guard !usesView else { throw ExplorationError.viewRequiresStreamingValidation }
         let initial = try initialMachines()
         let fairness = behavior == .specification ? try initial.first.map { try fairnessConditions(on: $0) } : nil
         return try ReachabilityGraph(initialMachines: initial, maximumStates: maximumStates,
@@ -166,7 +203,8 @@ extension ModelValidationScenario {
     }
 
     package func simulate<Generator: RandomNumberGenerator>(
-        initialMachines: [Machine], using generator: inout Generator
+        initialMachines: [Machine], using generator: inout Generator,
+        onTrace: ((NativeSimulationResult<Machine>) throws -> Void)? = nil
     ) throws -> NativeSimulationResult<Machine> {
         guard case .simulation(let traces, let maximumDepth) = checkingMode else {
             throw ExplorationError.simulationNotConfigured
@@ -175,7 +213,7 @@ extension ModelValidationScenario {
             ? try initialMachines.first.map { try fairnessConditions(on: $0) } : nil
         return try MachineSimulator.runConfigured(initialMachines: initialMachines,
             maximumDepth: maximumDepth, traceCount: traces, checking: checking,
-            behavior: behavior, fairness: fairness, using: &generator)
+            behavior: behavior, fairness: fairness, onTrace: onTrace, using: &generator)
     }
 }
 
@@ -209,6 +247,8 @@ public struct ValidationDeclaration: SpecComponent {
     package var fairnessProfileSelections: [FairnessProfileReference] = []
     package var checkingModeSelections: [ValidationCheckingMode] = []
     package var symmetrySelections: [SymmetryReference] = []
+    package var viewSelections: [StateExpr] = []
+    package var postconditionSelections: [(name: String?, condition: StateExpr, expected: ValidationExpectation)] = []
 
     package init(name: String, displayLabel: String? = nil, bindings: [ValidationBinding]) {
         self.name = name
@@ -265,6 +305,21 @@ public struct ValidationDeclaration: SpecComponent {
     public func usingSymmetry(_ symmetry: SymmetrySetDecl) -> Self {
         var copy = self
         copy.symmetrySelections.append(symmetry.reference)
+        return copy
+    }
+
+    /// Selects the typed value TLC uses to identify explored states for this scenario.
+    public func viewing<Value: TLAValueType>(_ value: some TypedExpression<Value>) -> Self {
+        var copy = self
+        copy.viewSelections.append(value.stateExpr)
+        return copy
+    }
+
+    /// Checks a model-checking result after the configured exploration completes.
+    public func postcondition(_ condition: some TypedExpression<Bool>, name: String? = nil,
+        expecting expected: ValidationExpectation = .satisfied) -> Self {
+        var copy = self
+        copy.postconditionSelections.append((name, condition.stateExpr, expected))
         return copy
     }
 }

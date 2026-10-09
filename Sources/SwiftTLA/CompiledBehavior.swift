@@ -17,6 +17,7 @@ package struct CompiledBehavior: Sendable {
     package let fairness: [CompiledFairnessCondition]
     package let fairnessProfiles: [CompiledFairnessProfile]
     package let constraint: CompiledStateQuery?
+    package let actionConstraint: CompiledStateQuery?
     package let assume: CompiledStateQuery?
 
     package func map(
@@ -26,13 +27,19 @@ package struct CompiledBehavior: Sendable {
             checkDeadlock: checkDeadlock,
             parameterDomains: parameterDomains.mapValues(transform),
             checkingRegisterInitializations: checkingRegisterInitializations.mapValues(transform),
-            validationScenarios: validationScenarios.map {
-                try .init(name: $0.name, displayLabel: $0.displayLabel,
-                    bindings: $0.bindings.mapValues(transform),
-                    expectations: $0.expectations, deadlockExpectation: $0.deadlockExpectation,
-                    checks: $0.checks, checkDeadlock: $0.checkDeadlock, behavior: $0.behavior,
-                    checkingMode: $0.checkingMode, symmetry: $0.symmetry,
-                    fairnessProfileIndex: $0.fairnessProfileIndex)
+            validationScenarios: try validationScenarios.map { scenario -> CompiledValidationScenario in
+                let bindings = try scenario.bindings.mapValues(transform)
+                let view = try scenario.view.map(transform)
+                let postcondition = try scenario.postcondition.map(transform)
+                return .init(name: scenario.name, displayLabel: scenario.displayLabel,
+                    bindings: bindings, expectations: scenario.expectations,
+                    deadlockExpectation: scenario.deadlockExpectation,
+                    checks: scenario.checks, checkDeadlock: scenario.checkDeadlock,
+                    behavior: scenario.behavior, checkingMode: scenario.checkingMode,
+                    symmetry: scenario.symmetry, fairnessProfileIndex: scenario.fairnessProfileIndex,
+                    view: view, postcondition: postcondition,
+                    postconditionName: scenario.postconditionName,
+                    postconditionExpectation: scenario.postconditionExpectation)
             },
             initializations: initializations.map {
                 (variable: $0.variable, initialization: try $0.initialization.map(transform))
@@ -55,6 +62,7 @@ package struct CompiledBehavior: Sendable {
                     fairness: try profile.fairness.map { try $0.map(transform) })
             },
             constraint: constraint.map { try $0.map(transform) },
+            actionConstraint: actionConstraint.map { try $0.map(transform) },
             assume: assume.map { try $0.map(transform) })
     }
 
@@ -79,4 +87,8 @@ package struct CompiledValidationScenario: Sendable {
     package let checkingMode: ValidationCheckingMode
     package let symmetry: SymmetrySet?
     package let fairnessProfileIndex: Int?
+    package let view: CompiledExpression?
+    package let postcondition: CompiledExpression?
+    package let postconditionName: String?
+    package let postconditionExpectation: ValidationExpectation?
 }

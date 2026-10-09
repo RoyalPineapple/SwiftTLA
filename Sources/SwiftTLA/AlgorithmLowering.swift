@@ -135,6 +135,34 @@ enum AlgorithmLowerer {
             guard case .stateConstraint(let constraint) = component else { return nil }
             return constraint
         }
+        let declaredActionConstraints = algorithm.components.compactMap { component -> ModelPredicateClause? in
+            guard case .actionConstraint(let constraint) = component else { return nil }
+            return constraint
+        }
+        let processConstraints = processes.flatMap { process -> [ModelPredicateClause] in
+            let localRoots = Set(process.components.compactMap { component -> String? in
+                guard case .local(let state) = component else { return nil }
+                return state.root
+            })
+            return process.components.compactMap { component -> ModelPredicateClause? in
+                guard case .stateConstraint(let constraint) = component else { return nil }
+                return .init(.forAll(process.domain, processBinding.rawValue,
+                    rewrite(constraint.expression, localRoots: localRoots)),
+                    sourceOffset: constraint.sourceOffset)
+            }
+        }
+        let processActionConstraints = processes.flatMap { process -> [ModelPredicateClause] in
+            let localRoots = Set(process.components.compactMap { component -> String? in
+                guard case .local(let state) = component else { return nil }
+                return state.root
+            })
+            return process.components.compactMap { component -> ModelPredicateClause? in
+                guard case .actionConstraint(let constraint) = component else { return nil }
+                return .init(.forAll(process.domain, processBinding.rawValue,
+                    rewrite(constraint.expression, localRoots: localRoots)),
+                    sourceOffset: constraint.sourceOffset)
+            }
+        }
 
         var variables = shared.map { state in
             NamedVar(
@@ -177,7 +205,7 @@ enum AlgorithmLowerer {
                         resolvedValueType: process.resolvedElementType.flatMap { key in
                             state.resolvedValueType.map { .dictionary(key, $0) }
                         },
-                        origin: .compiler
+                        origin: state.exposed ? .source : .compiler
                     ))
             }
         }
@@ -413,7 +441,7 @@ enum AlgorithmLowerer {
             actions.append(NamedAction(name: CompilerControlSymbol.terminatingAction.rawValue, body: unchanged, isTermination: true))
         }
 
-        return lowered(TLASpec(
+        var result = TLASpec(
             name: algorithm.name,
             variables: variables,
             actions: actions,
@@ -422,9 +450,11 @@ enum AlgorithmLowerer {
             reachabilityProperties: declaredReachability + processReachability,
             temporalProperties: declaredTemporal + processTemporal,
             fairness: fairness,
-            constraints: declaredConstraints,
+            constraints: declaredConstraints + processConstraints,
             formalOperatorDefinitions: resolvedFormalOperators,
-            sourceAlgorithms: [Algorithm(model: algorithm)]))
+            sourceAlgorithms: [Algorithm(model: algorithm)])
+        result.actionConstraints = declaredActionConstraints + processActionConstraints
+        return lowered(result)
     }
 
     private static func constantFunction(
@@ -470,13 +500,21 @@ enum AlgorithmLowerer {
         }
     }
 
-    /// A nonempty process machine with one unconditional control-free loop has no `pc`.
+    /// A nonempty literal or range-domain process with one control-free loop has no `pc`.
     private static func requiresProgramCounter(for algorithm: AlgorithmModel) -> Bool {
         guard !algorithm.processes.isEmpty, algorithm.procedures.isEmpty else {
             return true
         }
         return !algorithm.processes.allSatisfy { process in
-            guard let members = process.domain.literalSetMembers, !members.isEmpty else { return false }
+            let hasRangeDomain: Bool
+            if case .integerRange = process.domain {
+                hasRangeDomain = true
+            } else {
+                hasRangeDomain = false
+            }
+            guard hasRangeDomain || !(process.domain.literalSetMembers?.isEmpty ?? true) else {
+                return false
+            }
             return isControlFreeLoop(process.steps)
         }
     }
@@ -535,6 +573,10 @@ enum AlgorithmLowerer {
             guard case .stateConstraint(let constraint) = component else { return nil }
             return constraint
         }
+        let declaredActionConstraints = algorithm.components.compactMap { component -> ModelPredicateClause? in
+            guard case .actionConstraint(let constraint) = component else { return nil }
+            return constraint
+        }
 
         let sharedVariables = shared.map { state in
             NamedVar(
@@ -571,7 +613,7 @@ enum AlgorithmLowerer {
             }
         }
         guard let first = steps.first else {
-            return lowered(TLASpec(
+            var result = TLASpec(
                 name: algorithm.name,
                 variables: sharedVariables + procedureVariables,
                 actions: [],
@@ -582,7 +624,9 @@ enum AlgorithmLowerer {
                 constraints: declaredConstraints,
                 formalOperatorDefinitions: formalOperatorDefinitions,
                 sourceAlgorithms: [Algorithm(model: algorithm)]
-            ))
+            )
+            result.actionConstraints = declaredActionConstraints
+            return lowered(result)
         }
         // Match PlusCal's declaration order so TLC emits comparable frame
         // records in its retained DOT graph.
@@ -680,7 +724,7 @@ enum AlgorithmLowerer {
             actions.append(NamedAction(name: CompilerControlSymbol.terminatingAction.rawValue, body: terminate, isTermination: true))
         }
 
-        return lowered(TLASpec(
+        var result = TLASpec(
             name: algorithm.name,
             variables: variables,
             actions: actions,
@@ -691,7 +735,9 @@ enum AlgorithmLowerer {
             constraints: declaredConstraints,
             formalOperatorDefinitions: formalOperatorDefinitions,
             sourceAlgorithms: [Algorithm(model: algorithm)]
-        ))
+        )
+        result.actionConstraints = declaredActionConstraints
+        return lowered(result)
     }
 
     private static func deterministicInitialization(
@@ -1066,7 +1112,7 @@ enum AlgorithmLowerer {
     private static func rewrite(_ expression: StateExpr, localRoots: Set<String>) -> StateExpr {
         func rewritten(_ expression: StateExpr, localRoots: Set<String>) -> StateExpr {
             switch expression {
-            case .sourceIssue, .value, .integerSet, .parameter, .checkingRegister, .checkingLevel, .programCounter, .procedureStack, .controlLocation:
+            case .sourceIssue, .value, .integerSet, .parameter, .checkingRegister, .checkingLevel, .checkingDiameter, .programCounter, .procedureStack, .controlLocation:
                 return expression
             case .setCheckingRegister(let reference, let value):
                 return .setCheckingRegister(reference, rewritten(value, localRoots: localRoots))
@@ -1158,6 +1204,8 @@ enum AlgorithmLowerer {
             case .printT(let value): return .printT(rewritten(value, localRoots: localRoots))
             case .setSum(let function, let set): return .setSum(rewritten(function, localRoots: localRoots), rewritten(set, localRoots: localRoots))
             case .functionSet(let domain, let range): return .functionSet(rewritten(domain, localRoots: localRoots), rewritten(range, localRoots: localRoots))
+            case .randomSubset(let count, let domain): return .randomSubset(rewritten(count, localRoots: localRoots), rewritten(domain, localRoots: localRoots))
+            case .randomElement(let domain): return .randomElement(rewritten(domain, localRoots: localRoots))
             case .foldFunction(let operation, let initial, let sequence):
                 return .foldFunction(
                     FormalLambda(

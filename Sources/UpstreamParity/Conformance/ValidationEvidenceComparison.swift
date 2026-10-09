@@ -12,6 +12,8 @@ package struct ValidationEvidenceComparisonReport: Codable, Sendable {
     package let properties: [String: ValidationVerdict]
     package let deadlock: ValidationVerdict?
     package let deadlockSelected: Bool
+    package let postconditionName: String?
+    package let postcondition: ValidationVerdict?
 }
 
 package enum ValidationEvidenceComparisonError: Error, Equatable {
@@ -101,7 +103,8 @@ package enum ValidationEvidenceComparison {
               tlc.schema == "swifttla.generated-tlc-oracle",
               tlc.caseID == caseID, swift.scenario == tlc.scenario,
               swift.maximumStates > 0, swift.maximumStates == tlc.maximumStates,
-              swift.deadlockSelected == tlc.deadlockSelected else {
+              swift.deadlockSelected == tlc.deadlockSelected,
+              swift.postconditionName == tlc.postconditionName else {
             throw ValidationEvidenceComparisonError.invalidEvidence("report identity")
         }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
@@ -112,8 +115,9 @@ package enum ValidationEvidenceComparison {
         var difference: String?
         if swift.graphComplete != tlc.graphComplete {
             difference = "exploration completion"
-        } else if swift.properties != tlc.properties || swift.deadlock != tlc.deadlock {
-            difference = "selected property or deadlock verdict"
+        } else if swift.properties != tlc.properties || swift.deadlock != tlc.deadlock
+                    || swift.postcondition != tlc.postcondition {
+            difference = "selected property, deadlock, or postcondition verdict"
         }
         let compareGraph = swift.graphComplete && tlc.graphComplete
         if difference == nil {
@@ -171,7 +175,8 @@ package enum ValidationEvidenceComparison {
             schema: "swifttla.validation-evidence-comparison", caseID: caseID,
             result: difference == nil ? "exact" : "different", graphCompared: compareGraph,
             difference: difference, properties: swift.properties, deadlock: swift.deadlock,
-            deadlockSelected: swift.deadlockSelected)
+            deadlockSelected: swift.deadlockSelected,
+            postconditionName: swift.postconditionName, postcondition: swift.postcondition)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("comparison.json"), options: .atomic)
@@ -408,9 +413,17 @@ package enum ValidationEvidenceComparison {
         var reachabilityCount = 0
         var depths: [Int?] = []
         var witness: NativeDecisiveWitness?
+        var pendingRepresentative: UInt64?
+        var pendingPropertyRepresentative = false
         while true {
             let footerOffset = reader.offset
             let tag = try reader.byte()
+            if pendingRepresentative != nil && tag != 9 {
+                throw ValidationEvidenceComparisonError.invalidEvidence("missing view representative")
+            }
+            if pendingPropertyRepresentative && tag != 10 {
+                throw ValidationEvidenceComparisonError.invalidEvidence("missing view property representative")
+            }
             switch tag {
             case 1:
                 let id = try reader.uint32()
@@ -454,6 +467,7 @@ package enum ValidationEvidenceComparison {
                 let key = try reader.bytes(Int(reader.uint32()))
                 do { try CanonicalBinaryState.validate(key) }
                 catch { throw ValidationEvidenceComparisonError.invalidEvidence("binary state key") }
+                pendingRepresentative = CanonicalBinaryState.isView(key) ? identity : nil
                 let digest = CryptoKit.SHA256.hash(data: key)
                 let bucket = digest.withUnsafeBytes { Int($0[0]) & (stateBucketCount - 1) }
                 let sortKey = digest.prefix(8).reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
@@ -523,6 +537,7 @@ package enum ValidationEvidenceComparison {
                 let action = try reader.uint32()
                 do { try CanonicalBinaryState.validate(key) }
                 catch { throw ValidationEvidenceComparisonError.invalidEvidence("native property state") }
+                pendingPropertyRepresentative = CanonicalBinaryState.isView(key)
                 guard !property.isEmpty,
                       predecessor == UInt64.max || predecessor < UInt64(stateCount),
                       action == UInt32.max || UInt64(action) < UInt64(actionIDs.count) else {
@@ -558,6 +573,27 @@ package enum ValidationEvidenceComparison {
                     }
                     witness = NativeDecisiveWitness(kind: "deadlock", property: "", states: depth + 1)
                 }
+            case 9:
+                let identity = try reader.uint64()
+                let representative = try reader.bytes(Int(reader.uint32()))
+                guard pendingRepresentative == identity,
+                      !CanonicalBinaryState.isView(representative) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("view representative identity")
+                }
+                do { try CanonicalBinaryState.validate(representative) }
+                catch { throw ValidationEvidenceComparisonError.invalidEvidence("view representative value") }
+                pendingRepresentative = nil
+            case 10:
+                guard pendingPropertyRepresentative else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("unexpected property representative")
+                }
+                let representative = try reader.bytes(Int(reader.uint32()))
+                guard !CanonicalBinaryState.isView(representative) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("view property representative value")
+                }
+                do { try CanonicalBinaryState.validate(representative) }
+                catch { throw ValidationEvidenceComparisonError.invalidEvidence("view property representative value") }
+                pendingPropertyRepresentative = false
             case 255:
                 let counts = try (0..<8).map { _ in try reader.uint64() }
                 let completion = try reader.byte()
@@ -652,16 +688,44 @@ package enum ValidationEvidenceComparison {
     private static func resolvedAction(name: String, location: String,
         declared: [String: String]) throws -> String {
         let direct = tlaInvocationLocationIdentity(action: name, arguments: [])
-        if let label = declared[direct] { return label }
-        let prefix = "<\(name)("
-        guard location.hasPrefix(prefix),
-              let suffix = location.range(of: ") line ", options: .backwards) else {
+        if location.isEmpty {
+            guard let label = declared[direct] else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("undeclared TLC action \(direct)")
+            }
+            return label
+        }
+        guard location.hasPrefix("<") else {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC action location")
         }
-        let arguments = String(location[location.index(location.startIndex, offsetBy: prefix.count)..<suffix.lowerBound])
-        let identity = tlaInvocationLocationIdentity(action: name,
-            arguments: try TLCValueParser.components(arguments))
-        guard let label = declared[identity] else {
+        let end: String.Index
+        if let suffix = location.range(of: ") line ", options: .backwards) {
+            end = location.index(after: suffix.lowerBound)
+        } else if let suffix = location.range(of: " line ") {
+            end = suffix.lowerBound
+        } else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("TLC action location")
+        }
+        let invocation = String(location[location.index(after: location.startIndex)..<end])
+        let identity: String
+        if let opening = invocation.firstIndex(of: "(") {
+            guard invocation.last == ")", opening > invocation.startIndex else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("TLC action location")
+            }
+            let arguments = String(invocation[invocation.index(after: opening)..<invocation.index(before: invocation.endIndex)])
+            identity = tlaInvocationLocationIdentity(action: String(invocation[..<opening]),
+                arguments: try TLCValueParser.components(arguments))
+        } else {
+            guard !invocation.isEmpty else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("TLC action location")
+            }
+            identity = tlaInvocationLocationIdentity(action: invocation, arguments: [])
+        }
+        let outer = declared[direct]
+        let inner = declared[identity]
+        if let outer, let inner, outer != inner {
+            throw ValidationEvidenceComparisonError.invalidEvidence("ambiguous TLC action \(direct) or \(identity)")
+        }
+        guard let label = outer ?? inner else {
             throw ValidationEvidenceComparisonError.invalidEvidence("undeclared TLC action \(identity)")
         }
         return label

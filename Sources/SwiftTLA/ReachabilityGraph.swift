@@ -15,12 +15,17 @@ public protocol StateMachine: Sendable {
     func hasSameConfiguration(as other: Self) -> Bool
     /// Explicit conversions used by independent validation and export.
     func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection
+    /// Reconstructs an independently sampled initial state at the formal JSON boundary.
+    func selectedInitialMachine(from formalJSON: TLAJSONStateProjection) throws -> Self?
     func formalCall(for action: Action) throws -> FormalActionCall
     static var formalPropertyNames: [Property: String] { get }
     static var propertyDisplayNames: [Property: String] { get }
     static var checksDeadlock: Bool { get }
+    static var hasActionConstraint: Bool { get }
     func assumptionsHold() throws -> Bool
     func satisfiesStateConstraint() throws -> Bool
+    func satisfiesActionConstraint(to successor: Self,
+        checking context: inout CheckingContext<CheckingRegisters>) throws -> Bool
     /// A nil change predicate selects equality of the complete snapshot.
     func fairnessConditions() throws -> [MachineFairnessCondition<Snapshot, Action>]
     func temporalProperties(checking: Set<Property>) throws -> [Property: TemporalCondition<@Sendable (Snapshot, Snapshot) throws -> Bool>]
@@ -39,6 +44,7 @@ public protocol StateMachine: Sendable {
     /// Streams generated candidates of one action; false stops after that candidate.
     func visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>,
                          _ visit: (Self) throws -> Bool) throws -> Bool
+    func successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>) throws -> [Self]
     func successors(checking context: inout CheckingContext<CheckingRegisters>) throws -> [(action: Action, machine: Self)]
     /// Visits generated transitions in order. Returning false stops after that transition.
     /// The result reports whether any transition was enabled.
@@ -75,9 +81,25 @@ public protocol ConfiguredGeneratedModel: StateMachine {
 }
 
 extension StateMachine {
+    public func selectedInitialMachine(from formalJSON: TLAJSONStateProjection) throws -> Self? { nil }
+
+    public static var hasActionConstraint: Bool { false }
+
+    public func satisfiesActionConstraint(to successor: Self,
+        checking context: inout CheckingContext<CheckingRegisters>) throws -> Bool { true }
+
     public func visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>,
                                 _ visit: (Self) throws -> Bool) throws -> Bool {
         throw ExplorationError.unsupportedActionSampling
+    }
+
+    public func successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>) throws -> [Self] {
+        var result: [Self] = []
+        _ = try visitSuccessors(for: action, checking: &context) { successor in
+            result.append(successor)
+            return true
+        }
+        return result
     }
 }
 
@@ -95,6 +117,7 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case unsupportedRefinement(String)
     case undeclaredReachabilityProperty(String)
     case unsupportedValidationProperty(String)
+    case viewRequiresStreamingValidation
     case unsupportedActionSampling
 }
 
@@ -324,6 +347,11 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             guard !overflow else { throw ExplorationError.levelOverflow }
             let retained = try successors.filter { successor in
                 try checkDiscoveredState(successor.machine, atLevel: successorLevel, from: (machine.snapshot, successor.action))
+                guard try machine.satisfiesActionConstraint(to: successor.machine, checking: &context) else {
+                    try recordBoundaryViolations(successor.machine, atLevel: successorLevel,
+                        from: (machine.snapshot, successor.action))
+                    return false
+                }
                 guard try successor.machine.satisfiesStateConstraint() else {
                     try recordBoundaryViolations(successor.machine, atLevel: successorLevel, from: (machine.snapshot, successor.action))
                     return false

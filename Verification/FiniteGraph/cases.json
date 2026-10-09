@@ -83,6 +83,24 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "ap-missionaries-and-cannibals",
+      "sourceModel": "missionaries-and-cannibals",
+      "scenario": "APMissionariesAndCannibals",
+      "comparisonMode": "exhaustive",
+      "module": "missionaries-and-cannibals/APMissionariesAndCannibals.tla",
+      "configuration": "missionaries-and-cannibals/APMissionariesAndCannibals.cfg",
+      "imports": ["missionaries-and-cannibals/MissionariesAndCannibals.tla"],
+      "dependencies": [{"importingModule": "APMissionariesAndCannibals", "importedModule": "MissionariesAndCannibals"}],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MissionariesAndCannibals/APMissionariesAndCannibals.tla",
+        "sha256": "faa5f76aa2766c48c3e546bc3a78143accf287133d1f1137859a213623370725"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "faa5f76aa2766c48c3e546bc3a78143accf287133d1f1137859a213623370725",
+      "cfgSHA256": "9fc8f0be2ffa7c8d2e7b6c6934e4b555bf7c7ba0561b0168adf713fc23179581",
+      "timeoutSeconds": 60
+    },
+    {
       "id": "mc-die-harder",
       "sourceModel": "die-harder",
       "scenario": "MCDieHarder",
@@ -97,6 +115,24 @@
       "exploration": {"maximumStateLimit": 100000, "symmetryReduction": "disabled"},
       "moduleSHA256": "0c45536b4116e80a3736af5a968d5df43653eb54809567bcdcf4e2ca3d54a324",
       "cfgSHA256": "2aaf747d6566dc2c8ffb2d17caacc7c9cf64cd8faa623f8b312e9078ed72a557",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "missionaries-and-cannibals",
+      "sourceModel": "missionaries-and-cannibals",
+      "scenario": "MissionariesAndCannibals",
+      "comparisonMode": "exhaustive",
+      "module": "missionaries-and-cannibals/MissionariesAndCannibals.tla",
+      "configuration": "missionaries-and-cannibals/MissionariesAndCannibals.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla",
+        "sha256": "afb87e6ebc4af897ab9b27f90729c0170f061f8d95444a54035df1afaf21c65a"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "afb87e6ebc4af897ab9b27f90729c0170f061f8d95444a54035df1afaf21c65a",
+      "cfgSHA256": "8c0b9134393385ec605f5c6cd31e1215aef6f8c7b8b20ffe1e5261c614bcd5b8",
       "timeoutSeconds": 60
     },
     {
@@ -217,6 +253,26 @@
       "moduleSHA256": "13717bfa8f60570945a471643dc201d3d359225f71d0613bdf6190f059d557ee",
       "cfgSHA256": "8a155aefb3af798525d9cf2c6f289b121211d6ba5de893d926b55a8d1b61a591",
       "timeoutSeconds": 60
+    },
+    {
+      "id": "echo-mc",
+      "sourceModel": "echo",
+      "scenario": "MCEcho",
+      "module": "echo/MCEcho.tla",
+      "configuration": "echo/MCEcho.cfg",
+      "imports": ["echo/Echo.tla", "echo/Relation.tla"],
+      "dependencies": [
+        {"importingModule": "MCEcho", "importedModule": "Echo"},
+        {"importingModule": "Echo", "importedModule": "Relation"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/echo/MCEcho.tla",
+        "sha256": "505c7e02bec386dd24cd1b0f33e16cbc1b7fe02edda7dd63689ad4172d01c2ac"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "505c7e02bec386dd24cd1b0f33e16cbc1b7fe02edda7dd63689ad4172d01c2ac",
+      "cfgSHA256": "72a84107ba0b85a38578590f2e9d4456cbed88a3cfcd8b4276ca2036843556ef",
+      "timeoutSeconds": 120
     },
     {
       "id": "binary-search",
@@ -1285,26 +1341,6 @@
       "timeoutSeconds": 120
     },
     {
-      "id": "echo-mc",
-      "sourceModel": "echo",
-      "scenario": "MCEcho",
-      "module": "echo/MCEcho.tla",
-      "configuration": "echo/MCEcho.cfg",
-      "imports": ["echo/Echo.tla", "echo/Relation.tla"],
-      "dependencies": [
-        {"importingModule": "MCEcho", "importedModule": "Echo"},
-        {"importingModule": "Echo", "importedModule": "Relation"}
-      ],
-      "sourceInput": {
-        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/echo/MCEcho.tla",
-        "sha256": "505c7e02bec386dd24cd1b0f33e16cbc1b7fe02edda7dd63689ad4172d01c2ac"
-      },
-      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
-      "moduleSHA256": "505c7e02bec386dd24cd1b0f33e16cbc1b7fe02edda7dd63689ad4172d01c2ac",
-      "cfgSHA256": "72a84107ba0b85a38578590f2e9d4456cbed88a3cfcd8b4276ca2036843556ef",
-      "timeoutSeconds": 120
-    },
-    {
       "id": "chang-roberts-ap",
       "sourceModel": "chang-roberts",
       "scenario": "APChangRoberts",
@@ -1460,6 +1496,148 @@
       "moduleSHA256": "c0a4dca40a55ab18fc2c32bd1352905ed025ea5e047862401bb3f4afcaf08801",
       "cfgSHA256": "968c8bb8f600c45afb5e58c788db06b7a454fda7f234cc0b263f1314fb6309eb",
       "timeoutSeconds": 1200
+    },
+    {
+      "id": "ewd998-async",
+      "sourceModel": "ewd998",
+      "scenario": "AsyncTerminationDetection",
+      "module": "ewd998/AsyncTerminationDetection.tla",
+      "configuration": "ewd998/AsyncTerminationDetection.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/AsyncTerminationDetection.tla",
+        "sha256": "c1b15be68a73c6e5f69c5c09f2736870182a9b0765ad9860452240119911b030"
+      },
+      "exploration": {"maximumStateLimit": 50000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "c1b15be68a73c6e5f69c5c09f2736870182a9b0765ad9860452240119911b030",
+      "cfgSHA256": "6affac15002d814a67775f16affa001d9e01c2a758a9d35dbfbaccdd1fc9f5c6",
+      "timeoutSeconds": 1200
+    },
+    {
+      "id": "ewd998-0",
+      "sourceModel": "ewd998-safra",
+      "scenario": "EWD998",
+      "module": "ewd998/EWD998.tla",
+      "configuration": "ewd998/EWD998.cfg",
+      "imports": ["ewd998/AsyncTerminationDetection.tla", "kvsnap/Functions.tla", "ewd998/Folds.tla"],
+      "dependencies": [
+        {"importingModule": "EWD998", "importedModule": "AsyncTerminationDetection"},
+        {"importingModule": "EWD998", "importedModule": "Functions"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998.tla",
+        "sha256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8"
+      },
+      "exploration": {"maximumStateLimit": 300000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8",
+      "cfgSHA256": "4e47f078297118a6e31953eddf6a8a6d469d32464ec1d22b902c041c587e5d59",
+      "timeoutSeconds": 10800
+    },
+    {
+      "id": "ewd998-small-0",
+      "sourceModel": "ewd998-safra",
+      "scenario": "EWD998Small",
+      "module": "ewd998/EWD998.tla",
+      "configuration": "ewd998/EWD998Small.cfg",
+      "imports": ["ewd998/AsyncTerminationDetection.tla", "kvsnap/Functions.tla", "ewd998/Folds.tla"],
+      "dependencies": [
+        {"importingModule": "EWD998", "importedModule": "AsyncTerminationDetection"},
+        {"importingModule": "EWD998", "importedModule": "Functions"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998.tla",
+        "sha256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8"
+      },
+      "exploration": {"maximumStateLimit": 3000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8",
+      "cfgSHA256": "f0869ebeddcdec5b0208014218a946532c01fdb34130579acff081ed6e883f2a",
+      "timeoutSeconds": 3600
+    },
+    {
+      "id": "ewd998-chan-0",
+      "sourceModel": "ewd998-chan",
+      "scenario": "EWD998Chan",
+      "module": "ewd998/EWD998Chan.tla",
+      "configuration": "ewd998/EWD998Chan.cfg",
+      "imports": ["ewd998/Utils.tla", "ewd840/SequencesExt.tla", "ewd998/EWD998.tla", "ewd998/AsyncTerminationDetection.tla", "kvsnap/Functions.tla", "ewd998/Folds.tla", "die-hardest/FiniteSetsExt.tla"],
+      "dependencies": [
+        {"importingModule": "EWD998Chan", "importedModule": "Utils"},
+        {"importingModule": "EWD998Chan", "importedModule": "SequencesExt"},
+        {"importingModule": "EWD998Chan", "importedModule": "EWD998"},
+        {"importingModule": "Utils", "importedModule": "Functions"},
+        {"importingModule": "SequencesExt", "importedModule": "FiniteSetsExt"},
+        {"importingModule": "SequencesExt", "importedModule": "Folds"},
+        {"importingModule": "SequencesExt", "importedModule": "Functions"},
+        {"importingModule": "EWD998", "importedModule": "AsyncTerminationDetection"},
+        {"importingModule": "EWD998", "importedModule": "Functions"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998Chan.tla",
+        "sha256": "ebdb5e9c6469fb1afc3b12198e1e2159b3ff3fa76d7bd15e5e11dce92b72313c"
+      },
+      "exploration": {"maximumStateLimit": 300000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "ebdb5e9c6469fb1afc3b12198e1e2159b3ff3fa76d7bd15e5e11dce92b72313c",
+      "cfgSHA256": "259100c5161cf1e04dce4c9898957c5ff7ba81f790c840396a2a7b5e618eb044",
+      "timeoutSeconds": 10800
+    },
+    {
+      "id": "ewd998-chan-id-0",
+      "sourceModel": "ewd998-chan-id",
+      "scenario": "EWD998ChanID",
+      "module": "ewd998/EWD998ChanID.tla",
+      "configuration": "ewd998/EWD998ChanID.cfg",
+      "imports": ["ewd998/Utils.tla", "ewd840/SequencesExt.tla", "ewd998/EWD998Chan.tla", "ewd998/EWD998.tla", "ewd998/AsyncTerminationDetection.tla", "kvsnap/Functions.tla", "ewd998/Folds.tla", "die-hardest/FiniteSetsExt.tla"],
+      "dependencies": [
+        {"importingModule": "EWD998ChanID", "importedModule": "Utils"},
+        {"importingModule": "EWD998ChanID", "importedModule": "SequencesExt"},
+        {"importingModule": "EWD998ChanID", "importedModule": "EWD998Chan"},
+        {"importingModule": "EWD998Chan", "importedModule": "Utils"},
+        {"importingModule": "EWD998Chan", "importedModule": "SequencesExt"},
+        {"importingModule": "EWD998Chan", "importedModule": "EWD998"},
+        {"importingModule": "Utils", "importedModule": "Functions"},
+        {"importingModule": "SequencesExt", "importedModule": "FiniteSetsExt"},
+        {"importingModule": "SequencesExt", "importedModule": "Folds"},
+        {"importingModule": "SequencesExt", "importedModule": "Functions"},
+        {"importingModule": "EWD998", "importedModule": "AsyncTerminationDetection"},
+        {"importingModule": "EWD998", "importedModule": "Functions"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998ChanID.tla",
+        "sha256": "c498e5e35a83d84257016fdf4ba359ddb40dbb5f3b2234656e32b419a5499e93"
+      },
+      "exploration": {"maximumStateLimit": 300000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "c498e5e35a83d84257016fdf4ba359ddb40dbb5f3b2234656e32b419a5499e93",
+      "cfgSHA256": "69ec430deca39d7af5e2bfb1f6e43b5c941d29f4362a70048d534a52b8a54146",
+      "timeoutSeconds": 10800
+    },
+    {
+      "id": "ewd998-pcal-0",
+      "sourceModel": "ewd998-pcal",
+      "scenario": "EWD998PCal",
+      "module": "ewd998/EWD998PCal.tla",
+      "configuration": "ewd998/EWD998PCal.cfg",
+      "imports": ["ewd998/BagsExt.tla", "ewd998/EWD998.tla", "ewd998/AsyncTerminationDetection.tla", "kvsnap/Functions.tla", "ewd998/Folds.tla"],
+      "dependencies": [
+        {"importingModule": "EWD998PCal", "importedModule": "BagsExt"},
+        {"importingModule": "EWD998PCal", "importedModule": "EWD998"},
+        {"importingModule": "BagsExt", "importedModule": "Folds"},
+        {"importingModule": "EWD998", "importedModule": "AsyncTerminationDetection"},
+        {"importingModule": "EWD998", "importedModule": "Functions"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998PCal.tla",
+        "sha256": "d1622e16901edfa5b01d4e9c00779408b97483156d241c7b0f22515a1d81dc0d"
+      },
+      "exploration": {"maximumStateLimit": 300000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "d1622e16901edfa5b01d4e9c00779408b97483156d241c7b0f22515a1d81dc0d",
+      "cfgSHA256": "44073c04a88dd7aa593cab099e59b7b1dd4be31ec2d5b59616b0426a3a84f892",
+      "timeoutSeconds": 10800
     },
     {
       "id": "sync-termination-detection-0",

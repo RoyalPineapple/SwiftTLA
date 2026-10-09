@@ -12,6 +12,9 @@ package struct UpstreamTLCParityReport: Codable, Sendable {
     package let generatedDeadlock: ValidationVerdict?
     package let referenceDeadlock: ValidationVerdict?
     package let deadlockSelected: Bool
+    package let generatedPostcondition: ValidationVerdict?
+    package let referencePostcondition: ValidationVerdict?
+    package let postconditionSelected: Bool
 }
 
 package enum UpstreamTLCParityError: Error, Equatable {
@@ -32,7 +35,7 @@ package enum UpstreamTLCParity {
               SHA256.hex(Data(reference.cfg.utf8)) == expectedCFGSHA256,
               rendered.checkNames.count == 1,
               rendered.checkNames.isSubset(of: rendered.invariantNames),
-              !rendered.checksDeadlock else {
+              !rendered.checksDeadlock, rendered.postconditionName == nil else {
             throw UpstreamTLCParityError.inputMismatch(id)
         }
         let arguments = GeneratedTLCOracle.simulationArguments(
@@ -127,7 +130,8 @@ package enum UpstreamTLCParity {
         tools: ResolvedTLCToolchain, pin: TLCReferencePin, work: URL
     ) throws -> (name: String, generated: TLAModuleBundle, reference: TLAModuleBundle) {
         guard rendered.checkNames.count == 1, let name = rendered.checkNames.first,
-              rendered.invariantNames.contains(name), !rendered.checksDeadlock else {
+              rendered.invariantNames.contains(name), !rendered.checksDeadlock,
+              rendered.postconditionName == nil else {
             throw UpstreamTLCParityError.configurationMismatch(id)
         }
         let parseWork = work.appendingPathComponent("parse")
@@ -147,7 +151,7 @@ package enum UpstreamTLCParity {
         let configuration = try TLCReferenceConfiguration.parse(
             parseRequest, checking: rendered.checkNames)
         guard configuration.invariants == [name], configuration.properties.isEmpty,
-              !configuration.checksDeadlock else {
+              !configuration.checksDeadlock, configuration.postconditions.isEmpty else {
             throw UpstreamTLCParityError.configurationMismatch(id)
         }
         return (name,
@@ -173,7 +177,8 @@ package enum UpstreamTLCParity {
             difference: difference,
             generatedProperties: [name: generatedVerdict],
             referenceProperties: [name: referenceVerdict],
-            generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false)
+            generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false,
+            generatedPostcondition: nil, referencePostcondition: nil, postconditionSelected: false)
         try write(report, to: directory)
         return report
     }
@@ -245,8 +250,13 @@ package enum UpstreamTLCParity {
         }
         let generated = try rendered.tlaBundle(
             checking: rendered.checkNames, checkDeadlock: rendered.checksDeadlock)
+        let generatedPostconditionInput: String? = try rendered.postconditionName.map { name in
+            try GeneratedTLCOracle.inputIdentity(bundle: rendered.tlaBundle(
+                checking: [], checkDeadlock: false, postcondition: name), pin: pin,
+                arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck)
+        }
         let identity: [String: Any] = [
-            "schema": "swifttla.upstream-cache-key-v1",
+            "schema": "swifttla.upstream-cache-key-v2",
             "caseID": id,
             "maximumStates": maximumStates,
             "decisive": decisive,
@@ -256,6 +266,7 @@ package enum UpstreamTLCParity {
                 arguments: ["-workers", "1", "-fp", "1"]),
             "reference": try GeneratedTLCOracle.inputIdentity(bundle: reference, pin: pin,
                 arguments: ["-workers", "1", "-fp", "1"]),
+            "generatedPostcondition": generatedPostconditionInput ?? NSNull(),
             "actions": rendered.actions.map {
                 ["invocation": $0.sourceInvocationName, "rendered": $0.renderedName]
             }
@@ -298,9 +309,14 @@ package enum UpstreamTLCParity {
             parseRequest, checking: rendered.checkNames)
         let names = configuration.invariants + configuration.properties
         guard Set(names).count == names.count,
+              configuration.postconditions.count <= 1,
+              (rendered.postconditionName != nil) == !configuration.postconditions.isEmpty,
               Set(configuration.invariants).isSubset(of: rendered.invariantNames.union(rendered.reachabilityNames)),
               Set(configuration.properties).isSubset(of: rendered.temporalNames.union(rendered.refinementNames)),
               Set(names).isSubset(of: rendered.checkNames) else {
+            throw UpstreamTLCParityError.configurationMismatch(id)
+        }
+        if decisive && !configuration.postconditions.isEmpty {
             throw UpstreamTLCParityError.configurationMismatch(id)
         }
 
@@ -364,7 +380,8 @@ package enum UpstreamTLCParity {
                 graphCompared: false, difference: difference,
                 generatedProperties: generatedResults, referenceProperties: referenceResults,
                 generatedDeadlock: generatedDeadlock, referenceDeadlock: referenceDeadlock,
-                deadlockSelected: configuration.checksDeadlock)
+                deadlockSelected: configuration.checksDeadlock,
+                generatedPostcondition: nil, referencePostcondition: nil, postconditionSelected: false)
             try write(report, to: directory)
             return report
         }
@@ -467,9 +484,38 @@ package enum UpstreamTLCParity {
             referenceDeadlock = nil
         }
 
+        let generatedPostcondition: ValidationVerdict?
+        let referencePostcondition: ValidationVerdict?
+        if let generatedName = rendered.postconditionName,
+           let referenceName = configuration.postconditions.first {
+            let generatedBundle = try rendered.tlaBundle(checking: [], checkDeadlock: false,
+                postcondition: generatedName)
+            let referenceBundle = try rendered.referenceBundle(checking: [], checkDeadlock: false,
+                declarations: configuration.declarations, postcondition: referenceName,
+                in: reference)
+            let generatedOutput = directory.appendingPathComponent("generated-postcondition")
+            let referenceOutput = directory.appendingPathComponent("reference-postcondition")
+            let generatedOutcome = try GeneratedTLCOracle.run(bundle: generatedBundle, id: id,
+                maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
+                workRoot: work, retained: generatedOutput, invocation: .propertyCheck,
+                renderedActions: rendered.actions, process: process)
+            let referenceOutcome = try GeneratedTLCOracle.run(bundle: referenceBundle, id: id,
+                maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
+                workRoot: work, retained: referenceOutput, invocation: .propertyCheck,
+                renderedActions: rendered.actions, process: process)
+            generatedPostcondition = try GeneratedTLCOracle.postconditionVerdict(
+                name: generatedName, outcome: generatedOutcome, retained: generatedOutput)
+            referencePostcondition = try GeneratedTLCOracle.postconditionVerdict(
+                name: referenceName, outcome: referenceOutcome, retained: referenceOutput)
+        } else {
+            generatedPostcondition = nil
+            referencePostcondition = nil
+        }
+
         var difference: String?
-        if generatedResults != referenceResults || generatedDeadlock != referenceDeadlock {
-            difference = "selected property or deadlock verdict"
+        if generatedResults != referenceResults || generatedDeadlock != referenceDeadlock
+            || generatedPostcondition != referencePostcondition {
+            difference = "selected property, deadlock, or postcondition verdict"
         }
         let graphCompared = generatedComplete && referenceComplete
         if difference == nil && !graphCompared {
@@ -488,7 +534,10 @@ package enum UpstreamTLCParity {
             graphCompared: graphCompared, difference: difference,
             generatedProperties: generatedResults, referenceProperties: referenceResults,
             generatedDeadlock: generatedDeadlock, referenceDeadlock: referenceDeadlock,
-            deadlockSelected: configuration.checksDeadlock)
+            deadlockSelected: configuration.checksDeadlock,
+            generatedPostcondition: generatedPostcondition,
+            referencePostcondition: referencePostcondition,
+            postconditionSelected: !configuration.postconditions.isEmpty)
         try write(report, to: directory)
         return report
     }
@@ -508,6 +557,9 @@ package enum UpstreamTLCParity {
               previous.graphCompared != decisive,
               previous.generatedProperties == previous.referenceProperties,
               previous.generatedDeadlock == previous.referenceDeadlock,
+              previous.generatedPostcondition == previous.referencePostcondition,
+              (previous.postconditionSelected || previous.generatedPostcondition == nil),
+              (!previous.postconditionSelected || previous.generatedPostcondition != nil),
               (previous.deadlockSelected || previous.generatedDeadlock == nil),
               (!previous.deadlockSelected || decisive || previous.generatedDeadlock != nil),
               (!decisive || decisiveResult) else {
@@ -524,7 +576,10 @@ package enum UpstreamTLCParity {
                 referenceProperties: previous.referenceProperties,
                 generatedDeadlock: previous.generatedDeadlock,
                 referenceDeadlock: previous.referenceDeadlock,
-                deadlockSelected: previous.deadlockSelected)
+                deadlockSelected: previous.deadlockSelected,
+                generatedPostcondition: previous.generatedPostcondition,
+                referencePostcondition: previous.referencePostcondition,
+                postconditionSelected: previous.postconditionSelected)
         }
 
         // A failed replay must not leave a previously exact verdict behind.

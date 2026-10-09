@@ -199,6 +199,8 @@ private enum ExpressionCheckTask {
     case finishSetPredicate(choosing: Bool)
     case finishUnaryCollection(expected: CompiledValueType)
     case finishFunctionSet(expected: CompiledValueType)
+    case finishRandomSubset(expected: CompiledValueType)
+    case finishRandomElement(expected: CompiledValueType)
     case set
     case setElements(ArraySlice<CompiledExpression>, element: CompiledValueType)
     case mergeSetElement(ArraySlice<CompiledExpression>, previous: CompiledValueType)
@@ -328,13 +330,25 @@ package struct CompiledTypeChecker: Sendable {
                 expectations: scenario.expectations, deadlockExpectation: scenario.deadlockExpectation,
                 checks: scenario.checks, checkDeadlock: scenario.checkDeadlock, behavior: scenario.behavior,
                 checkingMode: scenario.checkingMode, symmetry: scenario.symmetry,
-                fairnessProfileIndex: scenario.fairnessProfileIndex)
+                fairnessProfileIndex: scenario.fairnessProfileIndex,
+                view: try scenario.view.map {
+                    let checked = try checkOperand($0)
+                    guard checked.resultType.resolved else {
+                        throw CompiledValueType.unresolvedDiagnostic(checked.resultType,
+                            at: "validation.\(scenario.name).view")
+                    }
+                    return checked
+                }, postcondition: try scenario.postcondition.map {
+                    try checkOperand($0, expected: .bool)
+                }, postconditionName: scenario.postconditionName,
+                postconditionExpectation: scenario.postconditionExpectation)
         }
         var actions: [CompiledAction] = []
         var invariants: [CompiledStatePredicate] = []
         var reachabilityProperties: [CompiledStatePredicate] = []
         var temporalProperties: [CompiledTemporal<CompiledStateQuery>] = []
         var constraint: CompiledStateQuery?
+        var actionConstraint: CompiledStateQuery?
         var assume: CompiledStateQuery?
         let declarations = Dictionary(uniqueKeysWithValues: inputs.layout.variables.map { ($0.id, $0.declaration) })
         for initialization in inputs.semantics.behavior.initializations {
@@ -413,6 +427,9 @@ package struct CompiledTypeChecker: Sendable {
         }
         constraint = try inputs.semantics.behavior.constraint.map {
             try checkModelPredicate($0, named: "constraint")
+        }
+        actionConstraint = try inputs.semantics.behavior.actionConstraint.map {
+            try checkModelPredicate($0, named: "actionConstraint")
         }
         assume = try inputs.semantics.behavior.assume.map {
             try checkModelPredicate($0, named: "assume")
@@ -504,6 +521,7 @@ package struct CompiledTypeChecker: Sendable {
                     })
             },
             constraint: constraint,
+            actionConstraint: actionConstraint,
             assume: assume)
         let replacements = try inputs.semantics.formalModuleReplacements.map {
             CompiledFormalModuleReplacement(moduleName: $0.moduleName, operatorName: $0.operatorName,
@@ -1306,6 +1324,8 @@ package struct CompiledTypeChecker: Sendable {
         case .dictionary(let key, _): result = .set(key)
         case .array, .tuple: result = .set(.int)
         case .record, .nominalRecord: result = .set(.string)
+        case .oneOf(let first, let second) where first.recordFields != nil && second.recordFields != nil:
+            result = .set(.string)
         case .unknown: result = .set(.unknown)
         default: throw CompiledValueType.diagnostic("domain", "unsupported domain shape")
         }
@@ -1650,6 +1670,21 @@ package struct CompiledTypeChecker: Sendable {
                             .retainOperand(1), .check(range, expected: .set(value)),
                             .retainOperand(0), .check(domain, expected: .set(key)),
                         ])
+                    case .randomSubset:
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(contentsOf: [
+                            .finishRandomSubset(expected: expected),
+                            .retainOperand(1), .check(expression.children[1], expected: expected == .unknown ? .set(.unknown) : expected),
+                            .retainOperand(0), .check(expression.children[0], expected: .int),
+                        ])
+                    case .randomElement:
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(contentsOf: [
+                            .finishRandomElement(expected: expected),
+                            .retainOperand(0), .check(expression.children[0], expected: .set(expected)),
+                        ])
                     case .setFilter(let id), .choose(let id):
                         let domain = expression.children[0]
                         let predicate = expression.children[1]
@@ -1899,6 +1934,23 @@ package struct CompiledTypeChecker: Sendable {
                     let checked = try checkedType(result, expected: expected, operandContexts: [domain, range])
                     results.append(checked.type)
                     try finish(checked, in: &self)
+                case .finishRandomSubset(let expected):
+                    guard let domain = results.popLast(), let count = results.popLast() else {
+                        throw CompiledValueType.diagnostic("checking", "missing checked random-subset operands")
+                    }
+                    guard case .set = domain else {
+                        throw CompiledValueType.diagnostic("RandomSubset", "expected a set domain")
+                    }
+                    let checked = try checkedType(domain, expected: expected, operandContexts: [count, domain])
+                    results.append(checked.type)
+                    try finish(checked, in: &self)
+                case .finishRandomElement(let expected):
+                    guard let domain = results.popLast(), case .set(let element) = domain else {
+                        throw CompiledValueType.diagnostic("RandomElement", "expected a set domain")
+                    }
+                    let checked = try checkedType(element, expected: expected, operandContexts: [domain])
+                    results.append(checked.type)
+                    try finish(checked, in: &self)
                 case .refineDomain(let domain, let id):
                     pending.append(contentsOf: [.retainOperand(0), .check(domain, expected: .set(bindings[id] ?? .unknown))])
                 case .finishSetPredicate(let choosing):
@@ -1965,7 +2017,13 @@ package struct CompiledTypeChecker: Sendable {
                     let context: CompiledValueType
                     if admitsEmptyFunctionContext(no, left) { context = left }
                     else if admitsEmptyFunctionContext(yes, right) { context = right }
-                    else { context = try Self.operandContext(left, right) }
+                    else if expected.unionAlternatives != nil,
+                            inputs.types.canProjectRead(left, to: expected),
+                            inputs.types.canProjectRead(right, to: expected) { context = expected }
+                    else if let common = try? Self.operandContext(left, right) { context = common }
+                    else if left.recordFields != nil && right.recordFields != nil {
+                        context = try CompiledValueType.preservingUnion(left, right, namedDomains: namedDomains)
+                    } else { context = try Self.operandContext(left, right) }
                     let offset: Int = if case .ifThenElse = ancestors.last?.operation { 1 } else { 0 }
                     pending.append(.result(context))
                     // Recheck only branches whose context changed, preserving
@@ -2380,6 +2438,7 @@ package struct CompiledTypeChecker: Sendable {
             let value = try checkOperand(expression.children[0], expected: type)
             return try checkedType(.bool, expected: expected, children: [value])
         case .checkingLevel: return try checkedType(.int, expected: expected)
+        case .checkingDiameter: return try checkedType(.int, expected: expected)
         case .integerSet: return try checkedType(.set(.int), expected: expected)
         case .assertView(let shape):
             let value = expression.children[0]
@@ -2415,6 +2474,19 @@ package struct CompiledTypeChecker: Sendable {
             let domain = expression.children[1]
 
             return try checkMembership(value: value, domain: domain, expected: expected)
+        case .randomSubset:
+            let count = try checkOperand(expression.children[0], expected: .int)
+            let domain = try checkOperand(expression.children[1], expected: expected == .unknown ? .set(.unknown) : expected)
+            guard case .set = domain.resultType else {
+                throw CompiledValueType.diagnostic("RandomSubset", "expected a set domain")
+            }
+            return try checkedType(domain.resultType, expected: expected, children: [count, domain])
+        case .randomElement:
+            let domain = try checkOperand(expression.children[0], expected: .set(expected))
+            guard case .set(let element) = domain.resultType else {
+                throw CompiledValueType.diagnostic("RandomElement", "expected a set domain")
+            }
+            return try checkedType(element, expected: expected, children: [domain])
         case .sequenceSelect(let id):
             let sequence = expression.children[0]
             let predicate = expression.children[1]

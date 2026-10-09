@@ -7,6 +7,7 @@ private struct ModelRegistration: Sendable {
 }
 
 private let fixtureModelRegistrations: [ModelRegistration] = [
+    .init(id: "checking-postcondition", scenarios: { try CheckingPostconditionModel.validationScenarios() }),
     .init(id: "counter", scenarios: { try ConfiguredCounter.validationScenarios() }),
     .init(id: "configured-processes", scenarios: { try ConfiguredProcessMachine.validationScenarios() }),
     .init(id: "weakly-fair-processes", scenarios: { try WeaklyFairConfiguredProcessMachine.validationScenarios() }),
@@ -39,6 +40,12 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "dijkstra-mutex", scenarios: { try DijkstraMutexModel.validationScenarios() }),
     .init(id: "ewd840", scenarios: { try EWD840Model.validationScenarios() }),
     .init(id: "ewd840-anim", scenarios: { try EWD840AnimationModel.validationScenarios() }),
+    .init(id: "echo", scenarios: { try EchoModel.validationScenarios() }),
+    .init(id: "ewd998", scenarios: { try EWD998TerminationModel.validationScenarios() }),
+    .init(id: "ewd998-safra", scenarios: { try EWD998Model.validationScenarios() }),
+    .init(id: "ewd998-chan", scenarios: { try EWD998ChanModel.validationScenarios() }),
+    .init(id: "ewd998-chan-id", scenarios: { try EWD998ChanIDModel.validationScenarios() }),
+    .init(id: "ewd998-pcal", scenarios: { try EWD998PCalModel.validationScenarios() }),
     .init(id: "sync-termination-detection", scenarios: { try SyncTerminationDetectionModel.validationScenarios() }),
     .init(id: "bakery", scenarios: { try BakeryModel.validationScenarios() }),
     .init(id: "boulanger", scenarios: { try BoulangerModel.validationScenarios() }),
@@ -57,6 +64,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "moving-cat", scenarios: { try CatModel.validationScenarios() }),
     .init(id: "asynch-interface", scenarios: { try AsynchInterfaceModel.validationScenarios() }),
     .init(id: "majority", scenarios: { try MajorityModel.validationScenarios() }),
+    .init(id: "missionaries-and-cannibals", scenarios: { try MissionariesAndCannibalsModel.validationScenarios() }),
     .init(id: "n-queens", scenarios: { try NQueensModel.validationScenarios() }),
     .init(id: "queens", scenarios: { try QueensModel.validationScenarios() }),
     .init(id: "coffee-can", scenarios: { try CoffeeCanModel.validationScenarios() }),
@@ -75,8 +83,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "find-highest", scenarios: { try FindHighestModel.validationScenarios() }),
     .init(id: "binary-search", scenarios: { try BinarySearchModel.validationScenarios() }),
     .init(id: "quicksort", scenarios: { try QuicksortModel.validationScenarios() }),
-    .init(id: "chang-roberts", scenarios: { try ChangRobertsModel.validationScenarios() }),
-    .init(id: "echo", scenarios: { try EchoModel.validationScenarios() })
+    .init(id: "chang-roberts", scenarios: { try ChangRobertsModel.validationScenarios() })
 ]
 
 private let modelRegistrations = fixtureModelRegistrations + upstreamModelRegistrations

@@ -66,17 +66,19 @@ extension NativeSwiftEmitter {
                     "\(binding.fieldName): \(try expression(binding.value.expression, state: ""))"
                 }.joined(separator: ", ")
                 let state = try refinement.state.map { binding in
-                    "\(binding.fieldName): \(try expression(binding.value.expression))"
+                    let value = try expression(binding.value.expression)
+                    return "\(binding.fieldName): \(binding.projected ? "try _NativeMachineOperations.checkedProjection(\(value))" : value)"
                 }.joined(separator: ", ")
                 let property = propertyCases[refinement.id]!
                 checks.append("""
                 if checking.contains(.\(property)) {
                     let abstractConfiguration = try \(target).Configuration(\(parameters))
                     let failure = try graph.refinementFailure(
-                        initialMachines: \(target).initialMachines(configuration: abstractConfiguration)
+                        initialMachines: \(target).initialMachines(configuration: abstractConfiguration),
+                        abstractBehavior: .\(refinement.behavior.rawValue)
                     ) { state in
                         let abstractState = \(target).State(\(state))
-                        return try \(target).makeMachine(abstractState, configuration: abstractConfiguration)
+                        return \(target)._machineForRefinement(abstractState, configuration: abstractConfiguration)
                     }
                     if let failure { failures[.\(property)] = failure }
                 }

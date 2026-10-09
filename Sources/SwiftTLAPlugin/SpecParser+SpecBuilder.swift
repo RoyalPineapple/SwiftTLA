@@ -894,6 +894,7 @@ extension ParserSession {
            let type = typedFacadeType(base) {
             switch (type.name, member.declName.baseName.sourceIdentifierName) {
             case ("SetExpr", "literal"), ("TupleExpr", "literal"), ("Pair", "literal"), ("Triple", "literal"),
+                 ("Quintuple", "literal"),
                  ("Record", "literal"), ("Function", "literal"), ("PartialFunction", "literal"),
                  ("ZeroBasedSequence", "literal"), ("ZeroBasedSequence", "filled"), ("Function", "mapping"),
                  ("Dictionary", "mapping"):
@@ -1052,6 +1053,33 @@ extension ParserSession {
                     source: call
                 ))
             }
+        case "ActionConstraint":
+            let arguments = Array(call.arguments)
+            guard arguments.count == 1, arguments[0].label?.text == "on",
+                  let value = decodeTypedFacadeValue(arguments[0].expression, scope: sourceScope),
+                  let closure = call.trailingClosure, closure.statements.count == 1,
+                  case .expr(let body) = closure.statements.first?.item else {
+                components.diagnostics.append(.init(
+                    message: "ActionConstraint requires one typed value and a two-parameter predicate closure.",
+                    source: call))
+                return
+            }
+            let parameters = closureParameterNames(in: closure)
+            guard parameters.count == 2, Set(parameters).count == 2 else {
+                components.diagnostics.append(.init(
+                    message: "ActionConstraint requires distinct before and after parameters.", source: call))
+                return
+            }
+            let shape = typedFacadeValueType(arguments[0].expression, scope: sourceScope)
+            let nested = sourceScope.extending(binding: parameters[0], to: value, shape: shape)
+                .extending(binding: parameters[1], to: .nextState(value), shape: shape)
+            guard let predicate = decodeTypedFacadeValue(body, scope: nested) else {
+                components.diagnostics.append(.init(
+                    message: "ActionConstraint requires a supported Boolean transition predicate.", source: call))
+                return
+            }
+            components.actionConstraints.append(.init(predicate,
+                sourceOffset: call.positionAfterSkippingLeadingTrivia.utf8Offset))
         case "Constant":
             parseConstantDecl(call, into: &components)
         case "Extends":
@@ -1062,6 +1090,7 @@ extension ParserSession {
                 case "naturals": return .naturals
                 case "finiteSets": return .finiteSets
                 case "sequences": return .sequences
+                case "randomization": return .randomization
                 case "tlc": return .tlc
                 default: return nil
                 }
@@ -1115,11 +1144,12 @@ extension ParserSession {
             if let fc = decodeFairness(call, scope: sourceScope) {
                 components.fairness.append(fc)
             } else {
-                if call.arguments.first?.label?.text == "anyOf" {
+                if let group = call.arguments.first?.label?.text,
+                   group == "anyOf" || group == "eachOf" {
                     components.diagnostics.append(.init(
-                        message: "Fairness anyOf requires a nonempty list of distinct locally bound Do steps.",
+                        message: "Fairness \(group) requires a nonempty list of distinct locally bound Do steps.",
                         source: call,
-                        expected: "WeakFairness(anyOf: [firstStep, secondStep]) with each step bound by let"
+                        expected: "WeakFairness(\(group): [firstStep, secondStep]) with each step bound by let"
                     ))
                     return
                 }
@@ -1132,7 +1162,7 @@ extension ParserSession {
                         : "Fairness action reference '\($0)' is not bound by a local Action declaration." }
                         ?? "Fairness declaration requires a structural action reference.",
                     source: call,
-                    expected: "WeakFairness(action), WeakFairness(anyOf: [steps]), WeakFairness(each: step), StrongFairness(action), StrongFairness(anyOf: [steps]), StrongFairness(each: step), WeakFairnessNext(), or StrongFairnessNext()"
+                    expected: "WeakFairness(action), WeakFairness(anyOf: [steps]), WeakFairness(eachOf: [steps]), WeakFairness(each: step), StrongFairness(action), StrongFairness(anyOf: [steps]), StrongFairness(eachOf: [steps]), StrongFairness(each: step), WeakFairnessNext(), or StrongFairnessNext()"
                 ))
             }
         case "Import":

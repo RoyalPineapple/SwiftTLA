@@ -4,6 +4,23 @@ import Testing
 @testable import UpstreamParity
 
 struct CanonicalBinaryStateTests {
+    @Test("a view value has a distinct exact identity from a full state")
+    func viewValueBytes() throws {
+        let projection = try state([("View", .int(1))])
+        let expected = Data("STLAVW01".utf8) + Data([
+            0, 0, 0, 1,
+            0, 0, 0, 4, 0x56, 0x69, 0x65, 0x77,
+            1, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 1
+        ])
+        #expect(try CanonicalBinaryState.encode(projection, viewed: true) == expected)
+        #expect(try CanonicalBinaryState.encode(projection) != expected)
+        #expect(CanonicalBinaryState.isView(expected))
+        try CanonicalBinaryState.validate(expected)
+        #expect(throws: CanonicalBinaryState.CodingError.malformed) {
+            try CanonicalBinaryState.encode(state([("x", .int(1))]), viewed: true)
+        }
+    }
+
     @Test("a state value has a versioned, unambiguous byte identity")
     func exactStateBytes() throws {
         let projection = try state([("x", .int(1))])

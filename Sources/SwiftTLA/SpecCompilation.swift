@@ -59,6 +59,7 @@ public struct CompilationDescription: Sendable, Equatable {
     public let temporalProperties: [String]
     public let refinements: [String]
     public let stateConstraint: String?
+    public let actionConstraint: String?
     public let procedures: [ProcedureDescription]
     public let controlLocations: [ControlLocationDescription]
     public let imports: [ModuleDescription]
@@ -127,6 +128,7 @@ package struct RenderedModule: Sendable, Equatable {
     let refinements: [String]
     let properties: [PropertyID: String]
     let constraint: String?
+    let actionConstraint: String?
     package var temporalObligations: [PropertyID: [_RenderedTemporalObligation]] = [:]
     package var temporalBindingNames: [BinderID: String] = [:]
 }
@@ -188,9 +190,16 @@ struct CompiledRefinement: Sendable {
 package struct CompiledGeneratedModelBinding: Sendable {
     package let fieldName: String
     package let value: CompiledStateQuery
+    package let projected: Bool
+
+    package init(fieldName: String, value: CompiledStateQuery, projected: Bool = false) {
+        self.fieldName = fieldName
+        self.value = value
+        self.projected = projected
+    }
 
     func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> Self {
-        .init(fieldName: fieldName, value: try value.map(transform))
+        .init(fieldName: fieldName, value: try value.map(transform), projected: projected)
     }
 }
 
@@ -199,11 +208,13 @@ package struct CompiledGeneratedModelRefinement: Sendable {
     package let name: String
     package let instanceName: String
     package let targetModelType: String
+    package let behavior: ModelBehavior
     package let parameters: [CompiledGeneratedModelBinding]
     package let state: [CompiledGeneratedModelBinding]
 
     func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> Self {
         .init(id: id, name: name, instanceName: instanceName, targetModelType: targetModelType,
+            behavior: behavior,
             parameters: try parameters.map { try $0.map(transform) },
             state: try state.map { try $0.map(transform) })
     }
@@ -432,7 +443,8 @@ public struct RenderedSpecification: Sendable {
     @_documentation(visibility: internal)
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
         declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
-        symmetry: [String], actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil,
+        symmetry: [String], viewOperators: [String] = [], postconditionOperators: [String] = [],
+        actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil,
         _generatedPlusCalProfiles: [String: Result<String, CompilationDiagnostic>] = [:],
         _assumptionsOnly: Bool = false,
         _generatedParameters: [(name: String, value: TLAValue)] = [],
@@ -472,7 +484,9 @@ public struct RenderedSpecification: Sendable {
         }
         let configuration = TLCConfiguration(assumptionsOnly: _assumptionsOnly,
             declarations: declarations, checkDeadlock: checkDeadlock,
-            invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements, symmetry: symmetry)
+            invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements,
+            symmetry: symmetry, viewOperators: viewOperators,
+            postconditionOperators: postconditionOperators)
         let bundle = TLAModuleBundle(root: .init(name: name, tla: try configuredSource(source),
             cfg: configuration.render(usesSymmetryReduction: false)),
             imports: _generatedImports.map { .init(name: $0.name, tla: $0.source) }, provenance: .compiled(
@@ -506,6 +520,7 @@ public struct RenderedSpecification: Sendable {
     public func addingGeneratedRefinement<Abstract: ConfiguredGeneratedModel>(
         _ name: String, instance: String, of abstract: Abstract.Type,
         configuration abstractConfiguration: Abstract.Configuration,
+        behavior: ModelBehavior = .specification,
         parameters: [(PartialKeyPath<Abstract.Configuration>, String)],
         state: [(PartialKeyPath<Abstract.State>, String)]
     ) throws -> Self {
@@ -547,15 +562,20 @@ public struct RenderedSpecification: Sendable {
         }
         let replacement = bindings.sorted { $0.0 < $1.0 }
             .map { "\($0.0) <- (\($0.1))" }.joined(separator: ", ")
+        let property = behavior == .specification
+            ? "\(instance)!Spec"
+            : "\(instance)!Init /\\ [][\(instance)!Next]_\(instance)!vars"
         let definitions = "\(instance) == INSTANCE \(target.root.name)"
             + (replacement.isEmpty ? "" : " WITH " + replacement)
-            + "\n\(name) == \(instance)!Spec\n"
+            + "\n\(name) == \(property)\n"
         let selected = TLCConfiguration(behavior: configuration.behavior,
             specificationName: configuration.specificationName, assumptionsOnly: configuration.assumptionsOnly,
             declarations: configuration.declarations, checkDeadlock: configuration.checkDeadlock,
             invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
             properties: configuration.properties, refinements: configuration.refinements + [name],
-            symmetry: configuration.symmetry)
+            symmetry: configuration.symmetry, viewOperators: configuration.viewOperators, view: configuration.view,
+            postconditionOperators: configuration.postconditionOperators,
+            postcondition: configuration.postcondition)
         func linked(_ source: TLAModuleBundle) throws -> TLAModuleBundle {
             guard let end = source.root.tla.range(of: "====", options: .backwards),
                   case .compiled(let rootIdentity, let rootOwnership, let rootDependencies) = source.provenance else {
@@ -627,6 +647,7 @@ public struct RenderedSpecification: Sendable {
     public var refinementNames: Set<String> { Set(configuration.refinements) }
     public var checkNames: Set<String> { Set(configuration.invariants + configuration.reachabilityProperties + configuration.properties + configuration.refinements) }
     public var checksDeadlock: Bool { configuration.checkDeadlock }
+    public var postconditionName: String? { configuration.postcondition }
     public var isAssumptionsOnly: Bool { configuration.assumptionsOnly }
     public var behavior: ModelBehavior { configuration.behavior }
 
@@ -660,7 +681,8 @@ public struct RenderedSpecification: Sendable {
 
     /// Converts model-owned check identities at the formal export boundary.
     public func selectingChecks<Property: Hashable & Sendable>(_ checks: ModelChecks<Property>, formalPropertyNames: [Property: String],
-        behavior: ModelBehavior? = nil, symmetry: String? = nil, fairnessProfile: String? = nil) throws -> Self {
+        behavior: ModelBehavior? = nil, symmetry: String? = nil, fairnessProfile: String? = nil,
+        view: String? = nil, postcondition: String? = nil) throws -> Self {
         let names = try Set(checks.properties.map { property in
             guard let name = formalPropertyNames[property] else {
                 throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "check selection",
@@ -688,7 +710,7 @@ public struct RenderedSpecification: Sendable {
         }
         let selected = try configuration.selecting(names, checkDeadlock: checks.checkDeadlock,
                 behavior: behavior, specificationName: profileOperator)
-            .selectingSymmetry(symmetry)
+            .selectingSymmetry(symmetry).selectingView(view).selectingPostcondition(postcondition)
         func bundle(_ original: TLAModuleBundle, using configuration: TLCConfiguration) -> TLAModuleBundle {
             .init(root: .init(name: original.root.name, tla: original.root.tla,
                 cfg: configuration.render(usesSymmetryReduction: symmetry != nil)), imports: original.imports, provenance: original.provenance)
@@ -719,8 +741,10 @@ public struct RenderedSpecification: Sendable {
     /// Selects declared checks for an independent validation pass without rendering the model again.
     /// Symmetry defaults to disabled so the pass retains the complete, unreduced graph.
     public func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool,
-        symmetryReduction: SymmetryReduction = .disabled, behavior: ModelBehavior? = nil) throws -> TLAModuleBundle {
+        symmetryReduction: SymmetryReduction = .disabled, behavior: ModelBehavior? = nil,
+        postcondition: String? = nil) throws -> TLAModuleBundle {
         let selected = try configuration.selecting(checks, checkDeadlock: checkDeadlock, behavior: behavior)
+            .selectingPostcondition(postcondition)
         let usesSymmetryReduction = try selected.usesSupportedSymmetryReduction(symmetryReduction)
         return TLAModuleBundle(
             root: .init(name: tlaBundle.root.name, tla: tlaBundle.root.tla,
@@ -794,6 +818,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case compilationIdentityMismatch
         case unsupportedGeneratedValueShape
         case unsupportedReachabilityEvaluation
+        case unsupportedActionConstraintEvaluation
         case unresolvedGeneratedValueShape
         case emptyFormalModuleClosure
         case cyclicFormalModule
@@ -998,6 +1023,7 @@ public extension TLASpec {
             temporalProperties: semantics.behavior.temporalProperties.map(\.name),
             refinements: compiledRefinements.map(\.name) + compiledGeneratedRefinements.map(\.name),
             stateConstraint: semantics.behavior.constraint.map { _ in "StateConstraint" },
+            actionConstraint: semantics.behavior.actionConstraint.map { _ in "ActionConstraint" },
             procedures: layout.procedures.map {
                 .init(
                     algorithm: $0.algorithm,
@@ -1332,10 +1358,12 @@ public extension TLASpec {
                     at: "generatedRefinements.\(refinement.name).mappings.\(mapping.fieldName)")
                 return CompiledGeneratedModelBinding(fieldName: mapping.fieldName,
                     value: .init(expression: expression, operators: lowerer.operators,
-                        actionDependencies: semantics.behavior.enabledActionDependencies))
+                        actionDependencies: semantics.behavior.enabledActionDependencies),
+                    projected: mapping.projected)
             }
             return .init(id: property.id, name: refinement.name,
                 instanceName: instance.name, targetModelType: instance.targetModelType,
+                behavior: refinement.behavior,
                 parameters: parameters, state: state)
         }
     }
@@ -1420,6 +1448,7 @@ public extension TLASpec {
             specialized.parameters += self.parameters.filter { modelParameterDependencies.contains($0.reference) }
             // A TLC exploration constraint is configuration, not part of C!Spec.
             specialized.constraints = []
+            specialized.actionConstraints = []
             return .init(
                 id: property.id,
                 name: refinement.name,
@@ -1562,6 +1591,10 @@ private struct CanonicalSpecificationEncoder {
                     canonicalList(scenario.checkingModeSelections.map(\.rawValue)),
                     canonicalList(scenario.symmetrySelections.map { reference in
                         String(spec.symmetrySets.firstIndex(where: { $0.reference == reference }) ?? -1)
+                    }),
+                    canonicalList(scenario.viewSelections.map(canonicalExpression)),
+                    canonicalList(scenario.postconditionSelections.map {
+                        node("postcondition", [$0.name ?? "", canonicalExpression($0.condition), $0.expected.rawValue])
                     })])
             }
             list("validation", scenarios) { $0 }
@@ -1609,6 +1642,10 @@ private struct CanonicalSpecificationEncoder {
             partial.map { .and($0, expression) } ?? expression
         }
         field("constraint", canonicalOptional(constraint.map(canonicalExpression)))
+        let actionConstraint = spec.actionConstraints.map(\.expression).reduce(nil as StateExpr?) { partial, expression in
+            partial.map { .and($0, expression) } ?? expression
+        }
+        field("actionConstraint", canonicalOptional(actionConstraint.map(canonicalExpression)))
         let recursiveFunctions = spec.recursiveFuncs.map {
             node("recursive-function", [$0.name, canonicalList($0.params), canonicalExpression($0.body)])
         }
@@ -1664,9 +1701,9 @@ private struct CanonicalSpecificationEncoder {
         }
         list("generatedInstances", generatedInstances) { $0 }
         let generatedRefinements = spec.generatedRefinements.map { refinement in
-            node("generated-refinement", [refinement.name, refinement.instanceName,
+            node("generated-refinement", [refinement.name, refinement.instanceName, refinement.behavior.rawValue,
                 canonicalList(refinement.fieldMappings.map {
-                    node("map", [$0.fieldName, canonicalExpression($0.source)])
+                    node("map", [$0.fieldName, canonicalExpression($0.source), $0.projected ? "projected" : "exact"])
                 })])
         }
         list("generatedRefinements", generatedRefinements) { $0 }
@@ -1825,9 +1862,17 @@ extension CompiledProgram {
             + formalModuleReplacements.map(renderer.formalModuleReplacement) + renderer.assumptions(behavior)
         let selectedAlgorithm = fairnessProfile.map { authoredAlgorithm.selecting($0, layout: layout) }
             ?? authoredAlgorithm
+        let views = try behavior.validationScenarios.enumerated().compactMap { index, scenario in
+            try scenario.view.map { "__SwiftTLAView\(index) == \(try renderer.state($0))" }
+        }
+        let postconditions = try behavior.validationScenarios.compactMap { scenario in
+            try scenario.postcondition.map {
+                "\(scenario.postconditionName!) == \(try renderer.state($0))"
+            }
+        }
         let module = try metadata.authoredPlusCalModule(algorithm: selectedAlgorithm,
             layout: layout, declarations: declarations,
-            prelude: prelude, define: [], postTranslation: declarations.instances,
+            prelude: prelude, define: [], postTranslation: declarations.instances + views + postconditions,
             parameterNames: layout.parameters.map { binderNames[$0.binder]! }, requiredModules: requiredStandardModules)
         return try AlgorithmPlusCalRenderer(module: module, formalRenderer: renderer).render()
     }
@@ -1872,7 +1917,7 @@ extension CompiledProgram {
         reserved.formUnion(refinements.map(\.name))
         reserved.formUnion(generatedRefinements.map(\.name))
         reserved.formUnion(generatedRefinements.map(\.instanceName))
-        reserved.formUnion(["Init", "Next", "Spec", "vars", "StateConstraint", "Terminating"])
+        reserved.formUnion(["Init", "Next", "Spec", "vars", "StateConstraint", "ActionConstraint", "Terminating"])
         for value in modelValues.subtracting(metadata.modelValueNames).sorted() where reserved.contains(value) {
             guard metadata.constants.contains(where: { $0.name == value && $0.value == .constant(value) }) else {
                 throw CompilationDiagnostic(code: .invalidFormalDeclaration, stage: .rendering,
@@ -2063,6 +2108,9 @@ private extension CompiledModuleMetadata {
             + behavior.reachabilityProperties.map { ($0.id, "\($0.name) == \(try statePredicate($0.predicate.expression, negated: true))") }
         let temporalProperties = try behavior.temporalProperties.map { ($0.id, "\($0.name) == \(try renderer.temporal($0))") }
         let constraint = try behavior.constraint.map { "StateConstraint == \(try renderer.state($0.expression))" }
+        let actionConstraint = try behavior.actionConstraint.map {
+            "ActionConstraint == \(try renderer.state($0.expression))"
+        }
         let emittedActionNamesByID = Dictionary(
             uniqueKeysWithValues: layout.actions.map { ($0.id, $0.renderedName) }
         )
@@ -2112,6 +2160,7 @@ private extension CompiledModuleMetadata {
                 renderedInvariants: invariants.map(\.1),
                 renderedTemporalProperties: temporalProperties.map(\.1),
                 renderedConstraint: constraint,
+                renderedActionConstraint: actionConstraint,
                 renderedActions: directModuleActions,
                 emittedActionCallNames: emittedActionCallNames,
                 renderedRefinements: renderedRefinements,
@@ -2127,7 +2176,8 @@ private extension CompiledModuleMetadata {
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             symbolicActions: behavior.actions.filter { $0.bindings.contains { $0.literalMembers == nil } }.map(\.id),
             definitions: definitions, instances: instances, refinements: renderedRefinements,
-            properties: Dictionary(uniqueKeysWithValues: invariants + temporalProperties), constraint: constraint,
+            properties: Dictionary(uniqueKeysWithValues: invariants + temporalProperties),
+            constraint: constraint, actionConstraint: actionConstraint,
             temporalObligations: Dictionary(uniqueKeysWithValues: try behavior.temporalProperties.compactMap { property in
                 guard let obligations = try renderer.temporalObligations(property.expression) else { return nil }
                 return (property.id, obligations)
@@ -2144,6 +2194,7 @@ private extension CompiledModuleMetadata {
         renderedInvariants: [String],
         renderedTemporalProperties: [String],
         renderedConstraint: String?,
+        renderedActionConstraint: String?,
         renderedActions: [DirectModuleAction],
         emittedActionCallNames: [CompiledActionCall: String],
         renderedRefinements: [String],
@@ -2239,6 +2290,10 @@ private extension CompiledModuleMetadata {
         if !renderedInvariants.isEmpty { lines.append("") }
         if let renderedConstraint {
             lines.append(renderedConstraint)
+            lines.append("")
+        }
+        if let renderedActionConstraint {
+            lines.append(renderedActionConstraint)
             lines.append("")
         }
         guard !isLibraryModule else {
@@ -2345,6 +2400,17 @@ private extension CompiledModuleMetadata {
             }
             lines.append("")
         }
+        for (index, scenario) in behavior.validationScenarios.enumerated() {
+            if let view = scenario.view {
+                lines.append("__SwiftTLAView\(index) == \(try renderer.state(view))")
+            }
+            if let postcondition = scenario.postcondition {
+                lines.append("\(scenario.postconditionName!) == \(try renderer.state(postcondition))")
+            }
+        }
+        if behavior.validationScenarios.contains(where: { $0.view != nil || $0.postcondition != nil }) {
+            lines.append("")
+        }
         lines.append(contentsOf: renderedTemporalProperties)
         if !renderedTemporalProperties.isEmpty { lines.append("") }
         if instancesAfterBehavior { lines += instanceDeclarations }
@@ -2367,10 +2433,11 @@ private extension CompiledModuleMetadata {
             lines.append("CONSTANT \(name) = \(name)")
         }
         if behavior.constraint != nil { lines.append("CONSTRAINT StateConstraint") }
+        if behavior.actionConstraint != nil { lines.append("ACTION_CONSTRAINT ActionConstraint") }
         let assumptionsOnly = !hasState && behavior.actions.isEmpty
             && behavior.invariants.isEmpty && behavior.reachabilityProperties.isEmpty
             && behavior.temporalProperties.isEmpty && refinementNames.isEmpty && behavior.assume != nil
-            && behavior.constraint == nil && behavior.fairness.isEmpty
+            && behavior.constraint == nil && behavior.actionConstraint == nil && behavior.fairness.isEmpty
         return TLCConfiguration(
             assumptionsOnly: assumptionsOnly,
             declarations: lines,
@@ -2379,7 +2446,11 @@ private extension CompiledModuleMetadata {
             reachabilityProperties: behavior.reachabilityProperties.map(\.name),
             properties: behavior.temporalProperties.map(\.name),
             refinements: refinementNames,
-            symmetry: symmetrySets.map { "Symm\($0.variableName)" }
+            symmetry: symmetrySets.map { "Symm\($0.variableName)" },
+            viewOperators: behavior.validationScenarios.enumerated().compactMap {
+                $0.element.view == nil ? nil : "__SwiftTLAView\($0.offset)"
+            },
+            postconditionOperators: behavior.validationScenarios.compactMap(\.postconditionName)
         )
     }
 

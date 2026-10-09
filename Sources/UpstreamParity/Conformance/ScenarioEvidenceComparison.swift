@@ -63,6 +63,9 @@ package enum ScenarioEvidenceComparison {
         guard swift.scenario == scenario.name,
               swift.deadlockSelected == coverage.checksDeadlock,
               tlc.deadlockSelected == coverage.checksDeadlock,
+              swift.postconditionName == coverage.postconditionName,
+              tlc.postconditionName == coverage.postconditionName,
+              (coverage.postconditionName == nil || (swift.postcondition != nil && tlc.postcondition != nil)),
               Set(swift.properties.keys) == Set(coverage.selectedProperties),
               Set(tlc.properties.keys) == Set(coverage.selectedProperties) else {
             throw ValidationEvidenceComparisonError.invalidEvidence("scenario check coverage")
@@ -97,6 +100,12 @@ package enum ScenarioEvidenceComparison {
                 throw ValidationEvidenceComparisonError.invalidEvidence("scenario expected deadlock")
             }
         }
+        if let expected = scenario.postconditionExpectation {
+            guard swift.postcondition?.satisfies(expected) == true,
+                  tlc.postcondition?.satisfies(expected) == true else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("scenario expected postcondition")
+            }
+        }
         return result
     }
 
@@ -122,7 +131,9 @@ package enum ScenarioEvidenceComparison {
               Set(swift.properties.keys) == Set(coverage.selectedProperties),
               Set(tlc.properties.keys) == Set(coverage.selectedProperties),
               swift.deadlockSelected == coverage.checksDeadlock,
-              tlc.deadlockSelected == coverage.checksDeadlock else {
+              tlc.deadlockSelected == coverage.checksDeadlock,
+              swift.postconditionName == nil, tlc.postconditionName == nil,
+              swift.postcondition == nil, tlc.postcondition == nil else {
             throw ValidationEvidenceComparisonError.invalidEvidence("sampled check coverage")
         }
         let bundle = try rendered.tlaBundle(checking: rendered.checkNames,
@@ -193,7 +204,8 @@ package enum ScenarioEvidenceComparison {
             schema: "swifttla.validation-evidence-comparison", caseID: caseID,
             result: difference == nil ? "exact" : "different", graphCompared: false,
             difference: difference, properties: swift.properties, deadlock: swift.deadlock,
-            deadlockSelected: swift.deadlockSelected)
+            deadlockSelected: swift.deadlockSelected,
+            postconditionName: nil, postcondition: nil)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("comparison.json"), options: .atomic)

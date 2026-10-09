@@ -67,6 +67,14 @@ extension NativeSwiftEmitter {
             \(program.layout.parameters.isEmpty ? "" : "self.configuration = configuration")
         }
         """)
+        if hiddenVariables.isEmpty {
+            declarations += try nativeDeclarations("""
+            @_documentation(visibility: internal)
+            public static func _machineForRefinement(_ state: State\(appendedParameters)) -> Self {
+                Self(execution: Snapshot(state: state)\(appendedArguments))
+            }
+            """)
+        }
         declarations += try nativeDeclarations("""
         public func hasSameConfiguration(as other: Self) -> Bool {
             \(program.layout.parameters.isEmpty ? "true" : "configuration == other.configuration")
@@ -264,9 +272,15 @@ extension NativeSwiftEmitter {
                 }
             case .memberOf(let expression):
                 if let field = stateMemberNames[initialization.variable] {
+                    let membershipDomain: CompiledExpression
+                    if case .randomSubset = expression.computation.operation {
+                        membershipDomain = expression.computation.children[1]
+                    } else {
+                        membershipDomain = expression
+                    }
                     let membership = CompiledExpression(operation: .in, resultType: .bool, children: [
                         CompiledExpression(operation: .stateVariable(initialization.variable), resultType: type, children: []),
-                        expression
+                        membershipDomain
                     ])
                     code += """
                     let \(name)Candidates: [\(try swiftType(type))]
@@ -296,7 +310,7 @@ extension NativeSwiftEmitter {
         code += "return result"
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
         let appendedArguments = arguments.isEmpty ? "" : ", " + arguments
-        return try nativeDeclarations("""
+        var declarations = try nativeDeclarations("""
         private static func _initialStates(_selectedInitial: State? = nil\(appendedParameters)) throws -> [Snapshot] {
             \(code)
         }
@@ -314,6 +328,43 @@ extension NativeSwiftEmitter {
             guard let execution = candidates.popFirst() else { throw GeneratedMachineError.invalidInitialState }
             guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
             return Self(execution: execution\(appendedArguments))
+        }
+        """)
+        if program.behavior.initializations.contains(where: { initialization in
+            guard case .memberOf(let expression) = initialization.initialization else { return false }
+            if case .randomSubset = expression.computation.operation { return true }
+            return false
+        }) {
+            declarations += try selectedInitialDeclarations(arguments: arguments)
+        }
+        return declarations
+    }
+
+    private func selectedInitialDeclarations(arguments: String) throws -> [DeclSyntax] {
+        let decoded = try program.layout.variables.enumerated().compactMap { index, variable -> String? in
+            guard stateMemberNames[variable.id] != nil else { return nil }
+            let type = program.variableTypes[variable.id]!
+            return """
+            guard let _json\(index) = formalJSON.value(for: Self.__swifttlaFormalProjectionTokens[\(index)]) else {
+                throw TLAStateProjectionDiagnostic.invalidKey(path: \(String(reflecting: variable.declaration.name)))
+            }
+            let _decoded\(variable.id.ordinal): \(try swiftType(type)) = \(try formalJSONValue("_json\(index)", type: type))
+            """
+        }.joined(separator: "\n")
+        let fields = model.api.variables.map { "\($0.swiftIdentifier): _decoded\($0.id.ordinal)" }.joined(separator: ", ")
+        let appendedArguments = arguments.isEmpty ? "" : ", \(arguments)"
+        return try nativeDeclarations("""
+        @_documentation(visibility: internal)
+        public func selectedInitialMachine(from formalJSON: TLAJSONStateProjection) throws -> Self? {
+            guard formalJSON.count == \(program.layout.variables.count) else { return nil }
+            do {
+                \(decoded)
+                return try Self.makeMachine(State(\(fields))\(appendedArguments))
+            } catch is TLAStateProjectionDiagnostic {
+                return nil
+            } catch GeneratedMachineError.invalidInitialState {
+                return nil
+            }
         }
         """)
     }
@@ -614,6 +665,7 @@ extension NativeSwiftEmitter {
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
         declarations += try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")
+        declarations += try nativeDeclarations("public static var hasActionConstraint: Bool { \(program.behavior.actionConstraint != nil) }")
         if let constraint = program.behavior.constraint {
             declarations += try nativeDeclarations("""
             private static func _constraintHolds(in state: Snapshot\(configurationParameters)) throws -> Bool {
@@ -625,6 +677,30 @@ extension NativeSwiftEmitter {
             """)
         } else {
             declarations += try nativeDeclarations("public func satisfiesStateConstraint() throws -> Bool { true }")
+        }
+        if let actionConstraint = program.behavior.actionConstraint {
+            let previousCheckingContextName = checkingContextName
+            checkingContextName = "context"
+            let body = try expression(actionConstraint.expression)
+            checkingContextName = previousCheckingContextName
+            declarations += try nativeDeclarations("""
+            private static func _actionConstraintHolds(in state: Snapshot, nextState: Snapshot,
+                checking context: inout CheckingContext<CheckingRegisters>?\(configurationParameters)) throws -> Bool {
+                \(body)
+            }
+            public func satisfiesActionConstraint(to successor: Self,
+                checking context: inout CheckingContext<CheckingRegisters>) throws -> Bool {
+                var run: CheckingContext<CheckingRegisters>? = context
+                defer { context = run! }
+                return try Self._actionConstraintHolds(in: _execution, nextState: successor._execution,
+                    checking: &run\(arguments))
+            }
+            """)
+        } else {
+            declarations += try nativeDeclarations("""
+            public func satisfiesActionConstraint(to successor: Self,
+                checking context: inout CheckingContext<CheckingRegisters>) throws -> Bool { true }
+            """)
         }
         for invariant in program.behavior.invariants {
             let previousCheckingLevelName = checkingLevelName

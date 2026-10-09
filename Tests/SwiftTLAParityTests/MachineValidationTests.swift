@@ -4,6 +4,92 @@ import SwiftTLA
 import Foundation
 
 struct MachineValidationTests {
+    @Test("a model-owned postcondition reports the result after complete native exploration")
+    func reportsPostconditionOutcome() throws {
+        for (name, expected) in [("levelView", ValidationVerdict.satisfied),
+                                 ("rejectedView", .violated)] {
+            let scenario = try #require(ReachabilityExportModel.validationScenarios().first { $0.name == name })
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let report = try NativeValidationRunner.run(scenario: scenario, caseID: name,
+                maximumStates: 4, to: directory)
+            #expect(report.graphComplete)
+            #expect(report.postcondition == expected)
+            #expect(report.postcondition?.satisfies(try #require(scenario.postconditionExpectation)) == true)
+        }
+    }
+
+    @Test("a typed view identifies explored states while evidence retains complete representatives")
+    func exploresByViewWithoutProjectingStateEvents() throws {
+        var states: [Int: Int] = [:]
+        var edges: Set<String> = []
+        let result = try MachineValidator.run(
+            initialMachines: ReachabilityExportModel.initialMachines(), maximumStates: 3,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false,
+            identity: { $0.state.value % 2 }
+        ) { event in
+            switch event {
+            case .state(let id, let snapshot, _, _, _): states[id] = snapshot.state.value
+            case .edge(let source, _, let target): edges.insert("\(source)->\(target)")
+            default: break
+            }
+        }
+        if case .exhausted = result.completion {} else { Issue.record("Expected completed view exploration") }
+        #expect(result.states == 2)
+        #expect(result.edges == 2)
+        #expect(states == [0: 0, 1: 1])
+        #expect(edges == ["0->1", "1->0"])
+    }
+
+    @Test("a view collision cannot admit a constrained-out successor or hide its invariant failure")
+    func checksExcludedSuccessorsBeforeViewLookup() throws {
+        let configuration = try ConstraintBoundaryCounter.Configuration(safetyLimit: 2)
+        var edges: Set<String> = []
+        var failures: [Int] = []
+        let result = try MachineValidator.run(
+            initialMachines: ConstraintBoundaryCounter.initialMachines(configuration: configuration),
+            maximumStates: 3, checking: .init(properties: [.Bounded], checkDeadlock: false),
+            stopOnViolation: false, identity: { $0.state.count % 2 }
+        ) { event in
+            switch event {
+            case .edge(let source, _, let target): edges.insert("\(source)->\(target)")
+            case .invariantFailure(_, let snapshot, _, _): failures.append(snapshot.state.count)
+            default: break
+            }
+        }
+        if case .exhausted = result.completion {} else { Issue.record("Expected completed view exploration") }
+        #expect(result.states == 2)
+        #expect(result.edges == 1)
+        #expect(edges == ["0->1"])
+        #expect(result.violatedInvariants == [.Bounded])
+        #expect(failures == [2])
+    }
+
+    @Test("a view merges admitted initial states but still checks an excluded initial state")
+    func checksInitialConstraintBeforeViewLookup() throws {
+        var initialValues: [Int] = []
+        var failures: [Int] = []
+        let result = try MachineValidator.run(
+            initialMachines: ConstraintInitialCounter.initialMachines(), maximumStates: 3,
+            checking: .init(properties: [.Bounded], checkDeadlock: false),
+            stopOnViolation: false, identity: { _ in 0 }
+        ) { event in
+            switch event {
+            case .state(_, let snapshot, let initial, _, _) where initial:
+                initialValues.append(snapshot.state.count)
+            case .invariantFailure(_, let snapshot, _, _):
+                failures.append(snapshot.state.count)
+            default: break
+            }
+        }
+        if case .exhausted = result.completion {} else { Issue.record("Expected completed view exploration") }
+        #expect(result.initialStates == 1)
+        #expect(result.states == 1)
+        #expect(initialValues == [0])
+        #expect(result.violatedInvariants == [.Bounded])
+        #expect(failures == [2])
+    }
+
     @Test("distinct generated states remain distinct when their snapshot hashes collide")
     func retainsFullStateIdentityAcrossHashCollisions() throws {
         let initial = try ReachabilityExportModel.initialMachines().map(CollidingReachabilityMachine.init(base:))
@@ -127,7 +213,8 @@ struct MachineValidationTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let output = directory.appendingPathComponent("native.bin")
         let summary = try MachineValidationEvidence.write(
-            scenario: scenario, caseID: "counter-0", maximumStates: 100,
+            scenario: scenario, initialMachines: scenario.initialMachines(),
+            caseID: "counter-0", maximumStates: 100,
             stopOnViolation: false, to: output)
         let evidence = try Data(contentsOf: output)
         let profileURL = output.deletingPathExtension().appendingPathExtension("profile.json")
@@ -144,6 +231,70 @@ struct MachineValidationTests {
         #expect(profile["estimatedCanonicalEncodingSeconds"] as? Double != nil)
         #expect(profile["stateEvents"] as? Int == summary.states)
         #expect(profile["edgeEvents"] as? Int == summary.edges)
+    }
+
+    @Test("binary view evidence uses the same checking level as native state identity")
+    func recordsCheckerLevelInViewEvidence() throws {
+        let scenario = try #require(ReachabilityExportModel.validationScenarios().first)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = directory.appendingPathComponent("native.bin")
+        var snapshots: [ReachabilityExportModel.Snapshot] = []
+        let summary = try MachineValidationEvidence.write(
+            scenario: scenario, initialMachines: scenario.initialMachines(),
+            caseID: "level-view", maximumStates: 4, stopOnViolation: false, to: output
+        ) { event in
+            if case .state(_, let snapshot, _, _, _) = event { snapshots.append(snapshot) }
+        }
+        #expect(summary.states == 3)
+        #expect(summary.edges == 2)
+        #expect(summary.maximumLevel == 3)
+        #expect(try scenario.postconditionSatisfied(after: summary) == true)
+        let rendered = try scenario.render().tlaBundle
+        #expect(rendered.cfg.contains("POSTCONDITION TraceAccepted"))
+        #expect(rendered.tla.contains("TraceAccepted =="))
+        #expect(rendered.tla.contains("TLCGet(\"stats\").diameter"))
+
+        var reader = try BinaryGraphEvidenceReader(output)
+        defer { reader.close() }
+        #expect(try reader.bytes(8) == Data("STLAGRF2".utf8))
+        #expect(try reader.byte() == 2)
+        #expect(try reader.string() == "level-view")
+        #expect(try reader.string().isEmpty)
+        var keys: [Data] = []
+        while keys.count < summary.states {
+            switch try reader.byte() {
+            case 1:
+                _ = try reader.uint32()
+                _ = try reader.string()
+                _ = try reader.string()
+            case 2:
+                #expect(try reader.uint64() == UInt64(keys.count))
+                _ = try reader.byte()
+                keys.append(try reader.bytes(Int(reader.uint32())))
+            case 3:
+                _ = try reader.uint64()
+                _ = try reader.uint32()
+                _ = try reader.uint64()
+            case 9:
+                _ = try reader.uint64()
+                _ = try reader.bytes(Int(reader.uint32()))
+            default:
+                Issue.record("Unexpected record before the complete view state set")
+                return
+            }
+        }
+        let machine = try #require(scenario.initialMachines().first)
+        guard snapshots.count == keys.count else {
+            Issue.record("Every retained view state needs one generated-machine snapshot")
+            return
+        }
+        for (offset, snapshot) in snapshots.enumerated() {
+            let projection = try scenario.formalIdentityProjection(of: snapshot, using: machine,
+                atLevel: offset + 1)
+            #expect(try keys[offset] == CanonicalBinaryState.encode(projection, viewed: true))
+        }
     }
 
     @Test("generated assertions and reachability retain all selected scenario outcomes")
@@ -208,6 +359,10 @@ struct MachineValidationTests {
             selectedSymmetry: scenario.selectedSymmetry,
             selectedFairnessProfile: scenario.selectedFairnessProfile,
             selectedFairnessProfileName: scenario.selectedFairnessProfileName,
+            selectedView: scenario.selectedView,
+            selectedPostcondition: scenario.selectedPostcondition,
+            postconditionName: scenario.postconditionName,
+            postconditionExpectation: scenario.postconditionExpectation,
             expectations: expectations, deadlockExpectation: scenario.deadlockExpectation)
         let changedReport = try NativeValidationRunner.run(
             scenario: changed, caseID: "constant-state-claims-0", maximumStates: 10,

@@ -370,6 +370,7 @@ struct CompiledTLARenderer {
                 case .boundValue(let binder): parts.append(try binderName(binder))
                 case .checkingRegister(let id): parts.append("TLCGet(\(id.ordinal))")
                 case .checkingLevel: parts.append("TLCGet(\"level\")")
+                case .checkingDiameter: parts.append("TLCGet(\"stats\").diameter")
                 case .setCheckingRegister(let id):
                     parts.append("TLCSet(\(id.ordinal), ")
                     tasks.append(.text(")"))
@@ -460,7 +461,7 @@ struct CompiledTLARenderer {
                     rendered.append(.expression(body))
                     rendered.append(.text(")"))
                     schedule(rendered)
-                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .setSum, .integerRange, .negate, .not, .printT, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
+                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .randomSubset, .randomElement, .setSum, .integerRange, .negate, .not, .printT, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
                     try schedule(expression.operation, expression.children)
 
                 }
@@ -610,7 +611,9 @@ extension CompiledOperation {
         case .tupleConcatenate: ("(", " \\o ", ")")
         case .functionApply: ("", "[", "]")
         case .functionSet: ("[", " -> ", "]")
-        case .setSum: ("Sum(", ", ", ")")
+        case .randomSubset: ("RandomSubset(", ", ", ")")
+        case .randomElement: ("RandomElement(", "", ")")
+        case .setSum: ("SumFunctionOnSet(", ", ", ")")
         case .integerRange: ("", "..", "")
         case .negate: ("(-", "", ")")
         case .nextState: ("(", "", ")'")

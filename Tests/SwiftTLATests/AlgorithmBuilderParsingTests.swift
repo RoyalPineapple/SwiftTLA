@@ -1023,6 +1023,63 @@ import SwiftTLAMacros
         #expect(try specification.compile().render().tlaBundle.tla.contains("lock"))
     }
 
+    @Test("process-local statement macros capture typed process state")
+    func parsesProcessLocalStatementMacro() throws {
+        let source = """
+        {
+            let MacroProcess = Algorithm { _ in
+                Each(Node.all, scoped: { _, process in
+                    let count = process.localVar(_name: "count", initial: 0)
+                    let advance = Macro {
+                        When(count == 0)
+                        Assign(count, to: count + 1)
+                    }
+                    Do(TestControlLabel.acquire) { advance() }
+                })
+            }
+            MacroProcess
+        }
+        """
+        let parsed = parseAlgorithm(
+            try parseSpecTestClosure(source),
+            enums: [parserTestEnum("Node", finiteValues: [.string("left"), .string("right")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let specification = try loweredSource(parsed, named: "MacroProcess")
+        #expect(specification.actions.map(\.name) == ["acquire", "Terminating"])
+        #expect(try specification.compile().render().tlaBundle.tla.contains("count"))
+    }
+
+    @Test("only explicitly exposed process locals enter the typed state surface")
+    func exposesSelectedProcessLocalState() throws {
+        let source = """
+        {
+            let Scoped = Algorithm { _ in
+                Each(Node.all, scoped: { _, process in
+                    let visible = process.localVar(_name: "visible", initial: 0, exposed: true)
+                    let hidden = process.localVar(_name: "hidden", initial: 0)
+                    Do(TestControlLabel.acquire) {
+                        Assign(visible, to: visible + 1)
+                        Assign(hidden, to: hidden + 1)
+                    }
+                })
+            }
+            Scoped
+        }
+        """
+        let parsed = parseAlgorithm(
+            try parseSpecTestClosure(source),
+            enums: [parserTestEnum("Node", finiteValues: [.string("left"), .string("right")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let compilation = try compile(parsed, named: "Scoped")
+        let generated = try GeneratedMachineAPI(
+            layout: compilation.layout, actions: compilation.semantics.behavior.actions)
+        #expect(generated.variables.map(\.swiftIdentifier) == ["visible"])
+    }
+
     @Test("parser expands every statement macro parameter in caller scope")
     func parsesTwoParameterStatementMacro() throws {
         let source = """

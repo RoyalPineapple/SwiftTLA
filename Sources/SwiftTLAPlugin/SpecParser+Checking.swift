@@ -4,9 +4,10 @@ import SwiftTLA
 extension ParserSession {
     func decodeCheckingExpression(_ expression: ExprSyntax, scope: TypedFacadeScope) -> StateExpr? {
         if let member = expression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.sourceIdentifierName == "checkingLevel",
+           ["checkingLevel", "checkingDiameter"].contains(member.declName.baseName.sourceIdentifierName),
            let owner = member.base?.as(DeclReferenceExprSyntax.self), scope.isCheckingScope(owner) {
-            return .checkingLevel
+            return member.declName.baseName.sourceIdentifierName == "checkingLevel"
+                ? .checkingLevel : .checkingDiameter
         }
         guard let call = expression.as(FunctionCallExprSyntax.self),
               call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
