@@ -60,6 +60,17 @@ typed domain and Boolean predicate: if exactly one member satisfies
 the predicate, TLA+ `CHOOSE` returns that member. This establishes the TLA+
 side of the restricted case, not that the compiler proves uniqueness for
 accepted uses or that emitted Swift evaluates every predicate identically.
+It also proves an observational rule for a nonempty, non-unique choice: if
+every satisfying witness has the same observation, Swift's selected witness
+and TLA+'s `CHOOSE` witness have that same observation. For a machine-fidelity
+claim, that observation must cover the complete state, action, and selected
+checking outcomes; the compiler does not establish this premise. A blanket
+uniqueness requirement would reject existing formal helpers such as
+`KeyValueStoreUtil.ReduceSet`, which deliberately chooses an arbitrary set
+member. Those uses need a proof
+that their consumers are witness-independent, a shared canonical choice
+semantics, or an explicit unsupported-program diagnostic; their presence
+cannot be hidden by the unique-witness lemma.
 
 ## Checked kernel lemma
 
@@ -196,7 +207,7 @@ expression failures, or the Swift emitter for all states. Changing only the
 emitted false-branch value from `2` to `3` made the branch obligation fail;
 restoring it restored all 9 obligations.
 
-TLAPS 1.6.0-pre checked all 402 `SingleAssignment.tla` obligations and all 9
+TLAPS 1.6.0-pre checked all 404 `SingleAssignment.tla` obligations and all 9
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

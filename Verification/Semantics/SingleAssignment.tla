@@ -40,6 +40,20 @@ THEOREM UniqueExpressionChoice ==
                 => (CHOOSE member \in domain : predicate[member]) = witness
     BY SMT
 
+THEOREM ObservationalExpressionChoice ==
+    \A domain \in SUBSET Values :
+        \A predicate \in [domain -> BOOLEAN] :
+            \A observation \in [domain -> Values] :
+                (\E witness \in domain : predicate[witness])
+                /\ (\A first, second \in domain :
+                    predicate[first] /\ predicate[second]
+                    => observation[first] = observation[second])
+                => \A native \in domain :
+                    predicate[native]
+                    => observation[native] =
+                        observation[CHOOSE member \in domain : predicate[member]]
+    BY SMT
+
 ConditionalEdges(selector, yes, no) ==
     {edge \in LabeledEdges :
         IF selector[edge[1]] THEN edge \in yes ELSE edge \in no}
