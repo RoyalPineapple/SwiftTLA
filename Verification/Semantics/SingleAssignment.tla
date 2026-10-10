@@ -2103,6 +2103,54 @@ CurrentNativeAddOutcome(lhs, rhs) ==
     ELSE <<"overflow">>
 CurrentRenderedAddOutcome(lhs, rhs) == <<"value", lhs + rhs>>
 
+AddWouldOverflow(lhs, rhs) ==
+    \/ (rhs > 0 /\ lhs > SwiftIntMax - rhs)
+    \/ (rhs < 0 /\ lhs < SwiftIntMin - rhs)
+
+GuardedAddOutcome(lhs, rhs) ==
+    IF AddWouldOverflow(lhs, rhs)
+    THEN <<"overflow">>
+    ELSE <<"value", lhs + rhs>>
+
+THEOREM AddOverflowGuardMatchesCheckedInt ==
+    ASSUME NEW lhs \in Int,
+           NEW rhs \in Int,
+           WithinSwiftInt(lhs),
+           WithinSwiftInt(rhs)
+    PROVE AddWouldOverflow(lhs, rhs) <=> ~WithinSwiftInt(lhs + rhs)
+    PROOF
+    <1>0. USE SwiftIntBounds DEF SwiftIntBounds
+    <1>1. rhs > 0 => lhs + rhs >= SwiftIntMin
+        BY SMT DEF WithinSwiftInt
+    <1>2. rhs < 0 => lhs + rhs <= SwiftIntMax
+        BY SMT DEF WithinSwiftInt
+    <1>3. rhs > 0 =>
+            (lhs + rhs > SwiftIntMax <=> lhs > SwiftIntMax - rhs)
+        BY SMT
+    <1>4. rhs < 0 =>
+            (lhs + rhs < SwiftIntMin <=> lhs < SwiftIntMin - rhs)
+        BY SMT
+    <1>5. rhs = 0 => WithinSwiftInt(lhs + rhs)
+        BY SMT DEF WithinSwiftInt
+    <1>. QED
+        BY <1>1, <1>2, <1>3, <1>4, <1>5, SMT
+            DEF AddWouldOverflow, WithinSwiftInt
+
+THEOREM AddOverflowGuardUsesRepresentableThresholds ==
+    \A rhs \in Int :
+        WithinSwiftInt(rhs) =>
+            /\ (rhs > 0 => WithinSwiftInt(SwiftIntMax - rhs))
+            /\ (rhs < 0 => WithinSwiftInt(SwiftIntMin - rhs))
+    BY SwiftIntBounds, SMT DEF AddWouldOverflow, WithinSwiftInt, SwiftIntBounds
+
+THEOREM GuardedAddMatchesNativeFailureAndValue ==
+    \A lhs, rhs \in Int :
+        (WithinSwiftInt(lhs) /\ WithinSwiftInt(rhs)) =>
+            GuardedAddOutcome(lhs, rhs) = CurrentNativeAddOutcome(lhs, rhs)
+    BY AddOverflowGuardMatchesCheckedInt, SMT
+        DEF GuardedAddOutcome, CurrentNativeAddOutcome,
+            AddWouldOverflow, WithinSwiftInt
+
 THEOREM CurrentAdditionAgreementIsExactlyRangeSafety ==
     \A lhs, rhs \in Int :
         (WithinSwiftInt(lhs) /\ WithinSwiftInt(rhs)) =>

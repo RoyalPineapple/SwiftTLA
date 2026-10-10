@@ -71,6 +71,16 @@ not certificates for every occurrence in an accepted program. Division needs
 its own nonzero-divisor and rounding rule; modulo has a separate
 positive-divisor rule below.
 
+`AddOverflowGuardMatchesCheckedInt` proves a pre-evaluation addition guard:
+for representable operands, checking `lhs > SwiftIntMax - rhs` when `rhs > 0`
+or `lhs < SwiftIntMin - rhs` when `rhs < 0` detects exactly the sums outside
+Swift `Int`. `AddOverflowGuardUsesRepresentableThresholds` proves that those
+thresholds themselves fit in `Int`. `GuardedAddMatchesNativeFailureAndValue`
+then proves that a guarded mathematical sum has the same tagged value or
+overflow outcome as checked native addition. This is a candidate TLA+ output
+rule, not the current emitter: no generated failure predicate or selected TLC
+check uses it yet, and the actual TLA+ still admits an overflow successor.
+
 The direct TLA+ renderer now gives each operand one local definition and
 normalizes a negative divisor into a positive one before integer division.
 This avoids relying on TLC's negative-divisor extension to the mathematical
