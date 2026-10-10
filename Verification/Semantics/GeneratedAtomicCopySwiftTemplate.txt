@@ -113,10 +113,7 @@ private func _visitSuccessors(checking context: inout CheckingContext<CheckingRe
                     }
                 }
             } catch let reason as NativeMachineEvaluationError where !callbackFailed {
-                if case .integerOverflow = reason {
-                    throw MachineActionEvaluationFailure(action: action, reason: reason)
-                }
-                throw reason
+                throw MachineActionEvaluationFailure(action: action, reason: reason)
             } catch {
                 throw error
             }
