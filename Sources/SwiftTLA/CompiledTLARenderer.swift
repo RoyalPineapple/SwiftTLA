@@ -145,8 +145,8 @@ struct CompiledTLARenderer {
                     parts.append("(LET \(try binderName(binder)) == \(try state(value)) IN ")
                     schedule([.expression(body), .text(")")])
                 case .and(let lhs, let rhs):
-                    parts.append("(IF ")
-                    schedule([.expression(lhs), .text(" THEN "), .expression(rhs), .text(" ELSE FALSE)")])
+                    parts.append("(")
+                    schedule([.expression(lhs), .text(" /\\ "), .expression(rhs), .text(")")])
                 case .or(let lhs, let rhs):
                     parts.append("(")
                     schedule([.expression(lhs), .text(" \\/ "), .expression(rhs), .text(")")])

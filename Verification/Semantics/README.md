@@ -189,12 +189,13 @@ initial-state set. This connects one actual output pair to the generic rule's
 intended behavior; it does not establish the candidate-set premise or generated
 Swift output semantics for arbitrary accepted models.
 
-The TLA renderer now prints action conjunction as `IF left THEN right ELSE
-FALSE`, matching the native machine's left-first disabled-branch evaluation.
-`LazyConjunctionPreservesBooleanValue` proves equivalence to mathematical
-conjunction for total Boolean operands. The output-linked proof modules were
-refreshed against actual renderer output and re-proved; this does not yet
-prove arbitrary action operands are total or establish a universal output link.
+The TLA renderer prints action conjunction as `/\`. TLC must solve primed
+assignments as an action relation; making one such assignment the condition of
+an `IF` caused generated models to fail during exploration. The native machine
+still evaluates ordered statements left-first. `LazyConjunctionPreservesBooleanValue`
+applies to total Boolean state expressions, not to TLC's execution of action
+formulas. Evaluation-failure order and the general action output link remain
+unproved.
 
 The guarded-choice composition rule preserves complete labeled edges and
 enabledness for any choice domain, provided corresponding branches produce
