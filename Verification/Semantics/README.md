@@ -210,6 +210,13 @@ members than the native set. The missing proof link is that, for every finite
 source set, equality of those cardinalities is equivalent to injectivity of
 the emitted element encoding on that set. The guard prevents a silent lossy
 result; it does not establish that all accepted models project successfully.
+It also cannot distinguish two singleton native sets whose different elements
+have the same formal encoding: each set passes the guard separately. Complete
+state identity therefore needs injectivity across the whole accepted element
+type, not only within one projected set. Macro collection rejects duplicate
+enum encodings, and type resolution rejects overlapping untagged union
+alternatives, but the emitted projection's every type case is not yet linked
+to those checks and the injectivity theorems.
 If state and action encodings are injective and the target initial set and
 edge relation are their exact images, they preserve initial membership,
 labeled edges, default deadlock, nonstuttering enabledness, mapped infinite
