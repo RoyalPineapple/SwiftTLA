@@ -1325,6 +1325,18 @@ THEOREM ConjunctionEnablednessAgree ==
                         RenderedConjunction(s, t, firstKeys, first, secondKeys, second))
     BY ConjunctionSuccessorsAgree, SMT
 
+THEOREM ConjunctionLabeledEdgesAgree ==
+    \A firstKeys, secondKeys \in SUBSET Vars :
+        \A first \in [States -> [firstKeys -> Values]],
+           second \in [States -> [secondKeys -> Values]] :
+            {edge \in LabeledEdges :
+                ExecutableConjunction(edge[1], edge[3], firstKeys,
+                    first[edge[1]], secondKeys, second[edge[1]])}
+            = {edge \in LabeledEdges :
+                RenderedConjunction(edge[1], edge[3], firstKeys,
+                    first[edge[1]], secondKeys, second[edge[1]])}
+    BY ConjunctionSuccessorsAgree, SMT DEF LabeledEdges, States
+
 \* The generated Swift machine replaces one value in a complete state.
 NativeStep(s, t, guard, value) ==
     /\ guard

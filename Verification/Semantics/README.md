@@ -180,8 +180,11 @@ compiled and generated Swift enumerators now also discard that conflicting
 branch. `ConjunctionSuccessorsAgree` proves that this executable merge-or-skip
 rule and the rendered conjunction have identical complete-state successors
 for both compatible and conflicting writes. `ConjunctionEnablednessAgree`
-derives matching enabledness from those complete successor relations. The
-general output links remain to be proved. Removing the merge-compatibility
+derives matching enabledness from those complete successor relations.
+`ConjunctionLabeledEdgesAgree` lifts the rule to complete labeled graphs when
+both partial update maps are total functions of the complete source state. It
+does not prove emitted Swift or TLA+ expressions denote those maps. The general
+output links remain to be proved. Removing the merge-compatibility
 guard in a local negative control made the successor theorem fail; restoring
 it restored all obligations.
 
