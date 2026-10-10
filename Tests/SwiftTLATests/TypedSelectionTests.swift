@@ -42,6 +42,13 @@ struct TypedSelectionTests {
         let rendered = try IncreasingSelection.render()
         let direct = rendered.tlaBundle.root.tla
         let plusCal = try rendered.plusCalBundle().root.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/IncreasingSelectionPlusCal.tla")
+            .standardizedFileURL
+        #expect(plusCal.replacingOccurrences(of: "MODULE IncreasingSelection ----",
+            with: "MODULE IncreasingSelectionPlusCal ----")
+            == (try String(contentsOf: proofInput, encoding: .utf8)))
         let failure = try #require(direct.split(separator: "\n").first {
             $0.hasPrefix("__SwiftTLAChoiceFailure0 ==")
         })
