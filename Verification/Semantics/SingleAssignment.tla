@@ -77,6 +77,16 @@ THEOREM ExactTraceStepCorrespondence ==
     BY ExactLabeledEdgeCorrespondence, SMT
         DEF TraceStep, InjectiveOn, MappedEdges, LabeledEdges, States
 
+THEOREM MappedEdgeEndpointsHavePreimages ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        \A edges \in SUBSET LabeledEdges,
+           before, after \in States, action \in ActionLabels :
+            <<before, action, after>> \in MappedEdges(edges, stateMap, actionMap)
+            => before \in MappedStates(States, stateMap)
+               /\ after \in MappedStates(States, stateMap)
+    BY SMT DEF MappedEdges, MappedStates, LabeledEdges, States
+
 THEOREM ExactRunCorrespondence ==
     \A stateMap \in [States -> States],
        actionMap \in [ActionLabels -> ActionLabels] :
@@ -87,6 +97,111 @@ THEOREM ExactRunCorrespondence ==
                 <=> ValidRun(edges, run)
     BY ExactTraceStepCorrespondence, SMT
         DEF ValidRun, MappedRun, States
+
+THEOREM TargetRunStaysInImage ==
+    ASSUME NEW stateMap \in [States -> States],
+           NEW actionMap \in [ActionLabels -> ActionLabels],
+           NEW edges \in SUBSET LabeledEdges,
+           NEW initial \in SUBSET States,
+           NEW run \in [Nat -> States],
+           run[0] \in MappedStates(initial, stateMap),
+           ValidRun(MappedEdges(edges, stateMap, actionMap), run)
+    PROVE \A index \in Nat : run[index] \in MappedStates(States, stateMap)
+    PROOF
+    <1>. DEFINE P(index) == run[index] \in MappedStates(States, stateMap)
+    <1>1. P(0)
+        BY SMT DEF P, MappedStates, States
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>1. TraceStep(MappedEdges(edges, stateMap, actionMap),
+                    run[index], run[index + 1])
+            BY SMT DEF ValidRun
+        <2>2. run[index] = run[index + 1] => P(index + 1)
+            BY P(index), SMT DEF P
+        <2>3. ASSUME \E action \in ActionLabels :
+                    <<run[index], action, run[index + 1]>>
+                    \in MappedEdges(edges, stateMap, actionMap)
+              PROVE P(index + 1)
+            <3>1. index + 1 \in Nat /\ run[index] \in States
+                    /\ run[index + 1] \in States
+                BY SMT
+            <3>2. PICK action \in ActionLabels :
+                    <<run[index], action, run[index + 1]>>
+                    \in MappedEdges(edges, stateMap, actionMap)
+                BY <2>3
+            <3>3. run[index + 1] \in MappedStates(States, stateMap)
+                BY <3>1, <3>2, MappedEdgeEndpointsHavePreimages, SMT
+            <3>. QED
+                BY <3>3 DEF P
+        <2>. QED
+            BY <2>1, <2>2, <2>3, SMT DEF TraceStep, P
+    <1>. QED
+        BY <1>1, <1>2, NatInduction DEF P
+
+InverseState(stateMap, target) ==
+    CHOOSE source \in States : stateMap[source] = target
+LiftedRun(run, stateMap) ==
+    [index \in Nat |-> InverseState(stateMap, run[index])]
+
+THEOREM MappedStateHasInverse ==
+    \A stateMap \in [States -> States] :
+        \A target \in MappedStates(States, stateMap) :
+            /\ InverseState(stateMap, target) \in States
+            /\ stateMap[InverseState(stateMap, target)] = target
+    BY SMT DEF InverseState, MappedStates, States
+
+THEOREM InjectiveStateInverse ==
+    \A stateMap \in [States -> States] :
+        InjectiveOn(stateMap, States) =>
+            \A state \in States : InverseState(stateMap, stateMap[state]) = state
+    BY MappedStateHasInverse, SMT
+        DEF InverseState, InjectiveOn, MappedStates, States
+
+THEOREM LiftedRunIsMappedInverse ==
+    ASSUME NEW stateMap \in [States -> States],
+           NEW run \in [Nat -> States],
+           \A index \in Nat : run[index] \in MappedStates(States, stateMap)
+    PROVE /\ LiftedRun(run, stateMap) \in [Nat -> States]
+          /\ MappedRun(LiftedRun(run, stateMap), stateMap) = run
+    BY MappedStateHasInverse, SMT
+        DEF LiftedRun, MappedRun, States
+
+THEOREM MappedInitialHasSourceInverse ==
+    \A stateMap \in [States -> States] :
+        InjectiveOn(stateMap, States) =>
+            \A initial \in SUBSET States :
+                \A target \in MappedStates(initial, stateMap) :
+                    InverseState(stateMap, target) \in initial
+    BY InjectiveStateInverse, SMT
+        DEF InverseState, MappedStates, InjectiveOn, States
+
+THEOREM EveryMappedTargetRunLifts ==
+    ASSUME NEW stateMap \in [States -> States],
+           NEW actionMap \in [ActionLabels -> ActionLabels],
+           InjectiveOn(stateMap, States),
+           InjectiveOn(actionMap, ActionLabels),
+           NEW edges \in SUBSET LabeledEdges,
+           NEW initial \in SUBSET States,
+           NEW targetRun \in [Nat -> States],
+           targetRun[0] \in MappedStates(initial, stateMap),
+           ValidRun(MappedEdges(edges, stateMap, actionMap), targetRun)
+    PROVE /\ LiftedRun(targetRun, stateMap) \in [Nat -> States]
+          /\ LiftedRun(targetRun, stateMap)[0] \in initial
+          /\ ValidRun(edges, LiftedRun(targetRun, stateMap))
+          /\ MappedRun(LiftedRun(targetRun, stateMap), stateMap) = targetRun
+    PROOF
+    <1>1. \A index \in Nat :
+            targetRun[index] \in MappedStates(States, stateMap)
+        BY TargetRunStaysInImage
+    <1>2. /\ LiftedRun(targetRun, stateMap) \in [Nat -> States]
+          /\ MappedRun(LiftedRun(targetRun, stateMap), stateMap) = targetRun
+        BY <1>1, LiftedRunIsMappedInverse
+    <1>3. LiftedRun(targetRun, stateMap)[0] \in initial
+        BY MappedInitialHasSourceInverse, SMT DEF LiftedRun
+    <1>4. ValidRun(edges, LiftedRun(targetRun, stateMap))
+        BY <1>2, ExactRunCorrespondence, SMT
+    <1>. QED
+        BY <1>2, <1>3, <1>4
 
 TakenChangingPair(edges, before, after, action) ==
     before # after /\ <<before, action, after>> \in edges
