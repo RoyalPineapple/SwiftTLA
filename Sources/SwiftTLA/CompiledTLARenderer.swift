@@ -283,10 +283,18 @@ struct CompiledTLARenderer {
             .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
             .union(stateNames.values)
         var nextDivisionName = 0
+        var nextChoiceName = 0
 
         func divisionName(_ role: String) -> String {
             var name = "__\(moduleName)_\(role)\(nextDivisionName)"
             nextDivisionName += 1
+            while occupied.contains(name) { name += "_" }
+            return name
+        }
+
+        func choiceName(_ role: String) -> String {
+            var name = "__\(moduleName)_\(role)\(nextChoiceName)"
+            nextChoiceName += 1
             while occupied.contains(name) { name += "_" }
             return name
         }
@@ -482,6 +490,17 @@ struct CompiledTLARenderer {
                     schedule([.expression(expression.children[0]), .text(" IN (LET \(divisor) == "),
                         .expression(expression.children[1]),
                         .text(" IN (IF \(divisor) < 0 THEN (-\(dividend)) \\div (-\(divisor)) ELSE \(dividend) \\div \(divisor))))")])
+                case .choose(let binder) where expression.resultType == .int:
+                    guard expression.children.count == 2 else {
+                        throw CompiledValueType.diagnostic("rendering.choose", "choice requires a domain and predicate")
+                    }
+                    let member = try binderName(binder)
+                    let candidates = choiceName("choiceCandidates")
+                    let other = choiceName("choiceOther")
+                    parts.append("(LET \(candidates) == {\(member) \\in ")
+                    schedule([.expression(expression.children[0]), .text(" : "),
+                        .expression(expression.children[1]),
+                        .text("} IN (CHOOSE \(member) \\in \(candidates) : (\\A \(other) \\in \(candidates) : \(member) <= \(other))))")])
                 case .add, .subtract, .multiply, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .randomSubset, .randomElement, .setSum, .integerRange, .negate, .not, .printT, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
                     try schedule(expression.operation, expression.children)
 

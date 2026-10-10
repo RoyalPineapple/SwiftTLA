@@ -188,9 +188,19 @@ cannot be hidden by the unique-witness lemma.
 `CanonicalIntegerChoiceMatchesSortedFirst` prove a constructive rule for
 nonempty integer choices: given a strictly increasing enumeration and a first
 satisfying index, TLA+ selection of the least satisfying integer returns the
-same member. The renderer still emits ordinary `CHOOSE`, not this canonical
-operator. The proof does not cover empty domains, predicate evaluation
-failures, or the ordering of other value types.
+same member. The renderer now emits this filtered-set, least-member rule for
+integer-valued `CHOOSE` expressions. `IncreasingSelection.tla` is the complete
+module emitted from the corresponding `#spec` fixture, and
+`TypedSelectionTests.renderedSelectionUsesLeastMember` requires exact equality
+with that output. `EmittedIntegerChoiceMatchesSourceWhenDefined` proves its
+actual emitted action advances from each position in `0..2` to the least
+matching member, matching the generated Swift machine's focused behavior test.
+`ReversedIntegerChoiceAtZeroDisagrees` is the negative control: reversing the
+ordering selects `3` where the source and emitted rule select `1`.
+This is a finite integer, nonempty-choice slice, not a general output theorem:
+empty domains, predicate evaluation failures, and other value orders remain
+open. At position `3`, Swift reports `noSatisfyingChoice` but the rendered
+TLA+ expression still has an unspecified `CHOOSE` value.
 
 ## Checked kernel lemma
 

@@ -74,6 +74,7 @@ Swift tests do not invoke it.
 | Stuck states | Report getting stuck before completion as a failure by default; scenarios may explicitly expect it |
 | Types | Use familiar Swift value types; infer only an unambiguous type, otherwise require an explicit annotation; never guess or recover types at runtime |
 | Integer overflow | Keep Swift `Int`; if an evaluated arithmetic operation exceeds the target `Int` range, both generated paths report the same operation and operands as an explicit evaluation failure, with no successor or partial state update. Do not reject the model merely because overflow is reachable |
+| Expression selection | `Select(from:matching:)` over a finite set evaluates members in the generated value order and returns the first satisfying member; no match is an evaluation failure, not a nondeterministic step. This differs from an algorithm-level `Choose` statement |
 | Fairness | Assume no promise that a ready process gets a turn unless the author explicitly declares it |
 | Default checks | Check every declared property in each scenario; require explicit expected-failure overrides |
 | Results | Represent counterexamples and reachability witnesses as checking results |
@@ -82,6 +83,9 @@ The overflow row is an acceptance requirement, not a claim about the current
 TLA+ emitter. It still renders unbounded integer arithmetic; the missing
 failure relation and output proof are tracked in
 `Verification/Semantics/README.md`.
+The expression-selection row records the generated Swift behavior. The TLA+
+output currently matches its nonempty integer case only; empty choices and
+other value orders remain proof and implementation gaps in the same record.
 
 “SwiftUI-like” means readable composition, scoped builders, and focused modifiers.
 It does not require an environment system, property-wrapper storage, or a generic

@@ -2,6 +2,7 @@
 EXTENDS TLAPS, NaturalsInduction, SequenceTheorems, GeneratedAtomicCopyProofModel
 VARIABLE choiceSelected
 Choice == INSTANCE GeneratedGuardedChoiceProofModel WITH selected <- choiceSelected
+IntegerChoice == INSTANCE IncreasingSelection WITH position <- choiceSelected
 VARIABLES dependentPC, dependentSeed, dependentChoice
 DependentInit == INSTANCE DependentInitializationOutputProofModel
     WITH pc <- dependentPC, seed <- dependentSeed, choice <- dependentChoice
@@ -2567,11 +2568,21 @@ THEOREM SortedIntegerFirstIsUniqueLeast ==
     BY SMT DEF StrictlyIncreasingIntegers, FirstMatchingInteger,
         SequenceMembers
 
+IntegerChoiceCandidates(sequence, predicate) ==
+    {member \in SequenceMembers(sequence) : predicate[member]}
+
 CanonicalIntegerChoice(sequence, predicate) ==
-    LET candidates == SequenceMembers(sequence)
+    LET candidates == IntegerChoiceCandidates(sequence, predicate)
     IN CHOOSE member \in candidates :
-        predicate[member]
-        /\ (\A other \in candidates : predicate[other] => member <= other)
+        \A other \in candidates : member <= other
+
+THEOREM UniqueMinimumIntegerChoice ==
+    \A domain \in SUBSET Int :
+        \A witness \in domain :
+            (\A other \in domain : witness <= other)
+            => (CHOOSE member \in domain :
+                    \A other \in domain : member <= other) = witness
+    BY SMT
 
 THEOREM CanonicalIntegerChoiceMatchesSortedFirst ==
     \A sequence \in Seq(Int) :
@@ -2580,9 +2591,56 @@ THEOREM CanonicalIntegerChoiceMatchesSortedFirst ==
                 (StrictlyIncreasingIntegers(sequence)
                  /\ FirstMatchingInteger(sequence, predicate, index))
                 => CanonicalIntegerChoice(sequence, predicate) = sequence[index]
-    BY SortedIntegerFirstIsUniqueLeast, UniqueExpressionChoice, SMT
-        DEF CanonicalIntegerChoice, StrictlyIncreasingIntegers,
-            FirstMatchingInteger, SequenceMembers
+    PROOF
+    <1>. SUFFICES ASSUME NEW sequence \in Seq(Int),
+                         NEW predicate \in [SequenceMembers(sequence) -> BOOLEAN],
+                         NEW index \in 1..Len(sequence),
+                         StrictlyIncreasingIntegers(sequence),
+                         FirstMatchingInteger(sequence, predicate, index)
+                  PROVE CanonicalIntegerChoice(sequence, predicate) = sequence[index]
+        BY SMT
+    <1>1. IntegerChoiceCandidates(sequence, predicate) \in SUBSET Int
+        BY SMT DEF IntegerChoiceCandidates, SequenceMembers
+    <1>2. sequence[index] \in IntegerChoiceCandidates(sequence, predicate)
+        BY SortedIntegerFirstIsUniqueLeast, SMT
+            DEF IntegerChoiceCandidates, StrictlyIncreasingIntegers,
+                FirstMatchingInteger, SequenceMembers
+    <1>3. \A other \in IntegerChoiceCandidates(sequence, predicate) :
+            sequence[index] <= other
+        BY SortedIntegerFirstIsUniqueLeast, SMT
+            DEF IntegerChoiceCandidates, StrictlyIncreasingIntegers,
+                FirstMatchingInteger, SequenceMembers
+    <1>4. CanonicalIntegerChoice(sequence, predicate) = sequence[index]
+        BY <1>1, <1>2, <1>3, UniqueMinimumIntegerChoice, SMT
+            DEF CanonicalIntegerChoice
+    <1>. QED BY <1>4
+
+THEOREM EmittedIntegerChoiceAtZero ==
+    choiceSelected = 0 =>
+        (IntegerChoice!advance <=> choiceSelected' = 1)
+    BY UniqueMinimumIntegerChoice, SMT DEF IntegerChoice!advance
+
+THEOREM EmittedIntegerChoiceAtOne ==
+    choiceSelected = 1 =>
+        (IntegerChoice!advance <=> choiceSelected' = 2)
+    BY UniqueMinimumIntegerChoice, SMT DEF IntegerChoice!advance
+
+THEOREM EmittedIntegerChoiceAtTwo ==
+    choiceSelected = 2 =>
+        (IntegerChoice!advance <=> choiceSelected' = 3)
+    BY UniqueMinimumIntegerChoice, SMT DEF IntegerChoice!advance
+
+THEOREM EmittedIntegerChoiceMatchesSourceWhenDefined ==
+    choiceSelected \in 0..2 =>
+        (IntegerChoice!advance <=>
+            choiceSelected' = choiceSelected + 1)
+    BY EmittedIntegerChoiceAtZero, EmittedIntegerChoiceAtOne,
+        EmittedIntegerChoiceAtTwo, SMT
+
+THEOREM ReversedIntegerChoiceAtZeroDisagrees ==
+    (CHOOSE member \in {1, 2, 3} :
+        \A other \in {1, 2, 3} : member >= other) = 3
+    BY SMT
 
 CurrentNativeSubtractOutcome(lhs, rhs) ==
     IF WithinSwiftInt(lhs - rhs)
