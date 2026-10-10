@@ -29,6 +29,26 @@ THEOREM PointwiseStateEncodingIsInjective ==
                 States)
     BY SMT DEF InjectiveOn, PointwiseStateEncoding, States
 
+UntaggedUnionEncoding(leftDomain, rightDomain, leftMap, rightMap) ==
+    [tagged \in ({"left"} \X leftDomain) \cup ({"right"} \X rightDomain) |->
+        IF tagged[1] = "left"
+        THEN leftMap[tagged[2]]
+        ELSE rightMap[tagged[2]]]
+
+THEOREM DisjointUntaggedUnionEncodingIsInjective ==
+    \A leftDomain, rightDomain \in SUBSET Values :
+        \A leftMap \in [leftDomain -> Values],
+           rightMap \in [rightDomain -> Values] :
+            (InjectiveOn(leftMap, leftDomain)
+             /\ InjectiveOn(rightMap, rightDomain)
+             /\ {leftMap[value] : value \in leftDomain}
+                \cap {rightMap[value] : value \in rightDomain} = {})
+            => InjectiveOn(
+                UntaggedUnionEncoding(leftDomain, rightDomain,
+                    leftMap, rightMap),
+                ({"left"} \X leftDomain) \cup ({"right"} \X rightDomain))
+    BY SMT DEF InjectiveOn, UntaggedUnionEncoding, States
+
 MappedStates(states, stateMap) ==
     {stateMap[state] : state \in states}
 MappedEdges(edges, stateMap, actionMap) ==
@@ -2302,11 +2322,41 @@ THEOREM EmittedRepeatedWritesMatchesGuardedHistory ==
         BY <1>9, <1>10, SMT DEF RepeatedInstructions
     <1>12. SourceGuardedDoStep(
             RepeatedBefore, RepeatedInstructions, RepeatedGuards, RepeatedAfter)
-            <=> SourceRepeatedWrites
-        BY <1>4, <1>6, <1>7, <1>8, <1>11,
+            => SourceRepeatedWrites
+        BY <1>7, <1>8, <1>11,
             SMT DEF SourceGuardedDoStep, SourceRepeatedWrites,
                 RepeatedWitnessHistory, RepeatedInstructions
+    <1>13. SourceRepeatedWrites
+            => SourceGuardedDoStep(
+                RepeatedBefore, RepeatedInstructions, RepeatedGuards, RepeatedAfter)
+        PROOF
+        <2>. SUFFICES ASSUME SourceRepeatedWrites
+                      PROVE SourceGuardedDoStep(
+                          RepeatedBefore, RepeatedInstructions,
+                          RepeatedGuards, RepeatedAfter)
+            OBVIOUS
+        <2>1. RepeatedAfterThird = RepeatedAfter
+            BY <1>8, SMT DEF SourceRepeatedWrites
+        <2>2. \A index \in 0..Len(RepeatedInstructions) :
+                RepeatedGuards[index][RepeatedWitnessHistory[index]]
+            BY <1>11, SMT DEF SourceRepeatedWrites
+        <2>3. \E history \in [0..Len(RepeatedInstructions) -> States] :
+                /\ SourceHistory(RepeatedBefore, RepeatedInstructions, history)
+                /\ \A index \in 0..Len(RepeatedInstructions) :
+                    RepeatedGuards[index][history[index]]
+                /\ history[Len(RepeatedInstructions)] = RepeatedAfter
+            <3>. WITNESS RepeatedWitnessHistory
+                    \in [0..Len(RepeatedInstructions) -> States]
+            <3>. QED
+                BY <1>4, <1>6, <2>1, <2>2, SMT
+                    DEF RepeatedWitnessHistory, RepeatedInstructions
+        <2>. QED
+            BY <2>3 DEF SourceGuardedDoStep
+    <1>14. SourceGuardedDoStep(
+            RepeatedBefore, RepeatedInstructions, RepeatedGuards, RepeatedAfter)
+            <=> SourceRepeatedWrites
+        BY <1>12, <1>13
     <1>. QED
-        BY <1>1, <1>2, <1>3, <1>12, EmittedRepeatedWrites,
+        BY <1>1, <1>2, <1>3, <1>14, EmittedRepeatedWrites,
             OrderedGuardedDoTransitionEquivalence
 =======================================================================

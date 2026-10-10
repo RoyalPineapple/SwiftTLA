@@ -192,8 +192,11 @@ it restored all obligations.
 observation layer for complete state-labeled/action-labeled graphs.
 `PointwiseStateEncodingIsInjective` proves that an injective value encoding
 lifts to an injective encoding of complete states with the same variable keys.
-It does not establish that the actual generated Swift/TLA+ value encoding is
-injective.
+`DisjointUntaggedUnionEncodingIsInjective` proves that erasing a union's branch
+tag preserves identity when each branch encoding is injective and their images
+are disjoint. The generated projection does erase that tag, and type resolution
+rejects overlapping alternatives, but these theorems do not prove that the
+actual emitted encodings satisfy their premises.
 If state and action encodings are injective and the target initial set and
 edge relation are their exact images, they preserve initial membership,
 labeled edges, default deadlock, nonstuttering enabledness, mapped infinite
@@ -429,7 +432,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 933 `SingleAssignment.tla` obligations and all 192
+TLAPS 1.6.0-pre checked all 956 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
