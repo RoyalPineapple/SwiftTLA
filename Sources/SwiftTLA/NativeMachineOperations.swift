@@ -18,7 +18,6 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
     case noMatchingCase
     case checkingContextRequired
     case noSatisfyingChoice
-    case conflictingAssignment(variable: String)
     case collectionCardinalityOverflow(CollectionOperation, operands: [Int])
     case powerSetTooLarge(actualCount: Int, maximumCount: Int)
     case nonEnumerableSequenceDomain
@@ -43,7 +42,6 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
         case .noMatchingCase: return "No CASE branch matched"
         case .checkingContextRequired: return "This expression requires a checking run context"
         case .noSatisfyingChoice: return "No value satisfies CHOOSE"
-        case .conflictingAssignment(let variable): return "Conflicting assignments to \(variable)"
         case .collectionCardinalityOverflow(let operation, let operands):
             return "Collection \(operation.rawValue) cardinality overflowed for \(operands.map(String.init).joined(separator: ", "))"
         case .powerSetTooLarge(let actual, let maximum):
@@ -63,6 +61,17 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
         case .invalidRandomSubsetCount(let count): return "RandomSubset requires a nonnegative count; received \(count)"
         case .emptyRandomElementDomain: return "RandomElement requires a nonempty domain"
         }
+    }
+}
+
+/// A generated action failed while evaluating a successor, before committing state.
+public struct MachineActionEvaluationFailure<Action: Hashable & Sendable>: Error, Equatable, Sendable {
+    public let action: Action
+    public let reason: NativeMachineEvaluationError
+
+    public init(action: Action, reason: NativeMachineEvaluationError) {
+        self.action = action
+        self.reason = reason
     }
 }
 

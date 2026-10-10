@@ -55,6 +55,15 @@ struct FormalValueProjectionTests {
         #expect([ZeroBasedSequence<Int>: Int](formalValue: .function([tuple: .int(1), function: .int(2)])) == nil)
     }
 
+    @Test("generated set projection rejects colliding formal members")
+    func rejectsGeneratedSetProjectionCollisions() throws {
+        let source: Set<CollidingSetMember> = [.init(id: 1), .init(id: 2)]
+        #expect(throws: TLAStateProjectionDiagnostic.invalidValue(path: "duplicate formal set element")) {
+            try TLAStateProjection.losslessSet(source, project: \.tlaValue)
+        }
+        #expect(try TLAStateProjection.losslessSet(Set([1, 2]), project: \.tlaValue) == .set([.int(1), .int(2)]))
+    }
+
     @Test("nominal projections retain byte-exact strings and distinguish model values")
     func rejectsChangedScalarIdentity() {
         #expect(ByteExactProjectionCase(formalValue: .string("\u{e9}")) == .composed)

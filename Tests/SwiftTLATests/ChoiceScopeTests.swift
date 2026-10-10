@@ -97,6 +97,10 @@ struct ChoiceScopeTests {
         for action in unreachable {
             #expect(try successors(of: .and(.guard_(.bool(false)), action)).isEmpty)
         }
+
+        let guarded = ActionExpr.and(
+            .guard_(.equal(.variable("chosen"), .int(1))), unreachable[0])
+        #expect(try successors(of: guarded).isEmpty)
     }
 
     @Test("Repeated normalization preserves conditional choice scopes and frame clauses")

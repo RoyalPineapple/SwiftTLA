@@ -54,6 +54,10 @@ private struct SeenIdentities<Identity: Hashable> {
     }
 }
 
+private struct ValidationVisitorFailure: Error {
+    let reason: any Error
+}
+
 /// The generated machine is the execution authority for native validation.
 /// This traversal retains only the seen-state index and the pending frontier;
 /// callers persist evidence as events arrive.
@@ -63,13 +67,15 @@ public enum MachineValidationEvent<Machine: StateMachine>: Sendable {
     case invariantFailure(property: Machine.Property, snapshot: Machine.Snapshot, predecessor: Int?, action: Machine.Action?)
     case deadlock(state: Int)
     case reachability(property: Machine.Property, snapshot: Machine.Snapshot, predecessor: Int?, action: Machine.Action?)
+    case evaluationFailure(source: Int, action: Machine.Action, reason: NativeMachineEvaluationError)
 }
 
 public struct MachineValidationSummary<Property: Hashable & Sendable>: Sendable {
-    public enum Completion: Sendable {
+    public enum Completion: Equatable, Sendable {
         case exhausted
         case decisiveViolation
         case decisiveReachability
+        case evaluationFailure(NativeMachineEvaluationError)
     }
 
     public let completion: Completion
@@ -390,9 +396,21 @@ public enum MachineValidator {
                     try emitEvent(.edge(source: source, action: action, target: target))
                     return true
                 }
+                func evaluationFailure(_ failure: MachineActionEvaluationFailure<Machine.Action>) throws
+                    -> MachineValidationSummary<Machine.Property> {
+                    try emitEvent(.evaluationFailure(source: source, action: failure.action, reason: failure.reason))
+                    return summary(.evaluationFailure(failure.reason))
+                }
                 let hasSuccessor: Bool
                 if Machine.hasActionConstraint {
-                    let candidates = try machine.successors(checking: &context)
+                    let candidates: [(action: Machine.Action, machine: Machine)]
+                    do {
+                        candidates = try machine.successors(checking: &context)
+                    } catch let failure as MachineActionEvaluationFailure<Machine.Action> {
+                        return try evaluationFailure(failure)
+                    } catch {
+                        throw error
+                    }
                     hasSuccessor = !candidates.isEmpty
                     for (action, successor) in candidates {
                         guard sameConfiguration(successor) else { throw ExplorationError.configurationMismatch }
@@ -404,8 +422,17 @@ public enum MachineValidator {
                         if try !inspect(action, successor, permitted: permitted) { break }
                     }
                 } else {
-                    hasSuccessor = try machine.visitSuccessors(checking: &context) { action, successor in
-                        try inspect(action, successor, permitted: true)
+                    do {
+                        hasSuccessor = try machine.visitSuccessors(checking: &context) { action, successor in
+                            do { return try inspect(action, successor, permitted: true) }
+                            catch { throw ValidationVisitorFailure(reason: error) }
+                        }
+                    } catch let failure as ValidationVisitorFailure {
+                        throw failure.reason
+                    } catch let failure as MachineActionEvaluationFailure<Machine.Action> {
+                        return try evaluationFailure(failure)
+                    } catch {
+                        throw error
                     }
                 }
                 successorNanoseconds += DispatchTime.now().uptimeNanoseconds - successorStartedAt - processingNanoseconds

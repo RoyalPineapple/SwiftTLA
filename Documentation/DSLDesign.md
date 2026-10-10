@@ -73,9 +73,19 @@ Swift tests do not invoke it.
 | Scenario scope | Vary settings and collection members without changing generated state/action types |
 | Stuck states | Report getting stuck before completion as a failure by default; scenarios may explicitly expect it |
 | Types | Use familiar Swift value types; infer only an unambiguous type, otherwise require an explicit annotation; never guess or recover types at runtime |
+| Integer overflow | Keep Swift `Int`; if an evaluated arithmetic operation exceeds the target `Int` range, both generated paths report the same operation and operands as an explicit evaluation failure, with no successor or partial state update. Do not reject the model merely because overflow is reachable |
+| Expression selection | `Select(from:matching:)` over a finite set evaluates members in the generated value order and returns the first satisfying member; no match is an evaluation failure, not a nondeterministic step. This differs from an algorithm-level `Choose` statement |
 | Fairness | Assume no promise that a ready process gets a turn unless the author explicitly declares it |
 | Default checks | Check every declared property in each scenario; require explicit expected-failure overrides |
 | Results | Represent counterexamples and reachability witnesses as checking results |
+
+The overflow row is an acceptance requirement, not a claim about the current
+TLA+ emitter. It still renders unbounded integer arithmetic; the missing
+failure relation and output proof are tracked in
+`Verification/Semantics/README.md`.
+The expression-selection row records the generated Swift behavior. The TLA+
+output has demonstrated matching nonempty integer and Boolean fixtures; a
+general output proof, empty choices, and other value orders remain open.
 
 “SwiftUI-like” means readable composition, scoped builders, and focused modifiers.
 It does not require an environment system, property-wrapper storage, or a generic
@@ -1697,7 +1707,7 @@ Hosted equivalence is separate from settling the syntax and semantics.
 | B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm` and `Validation` require explicit registration by bound reference. Inline control statements need no extra identity. Optional `label:` is presentation-only |
 | B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
 | B-04 | Settled for this DSL surface: only the explicit bound-step, `Next`, process-member, and projected fairness forms above declare obligations; inner process steps have no independent handles. Finite symmetry is opt-in for a registered, immutable binding, and only a safety-only TLC scenario may select it. Native checking remains unreduced. Unsupported scopes and reductions fail rather than silently changing meaning; independent parity evidence is still required |
-| B-05 | Bounded current contract: ordinary supported Swift values and the typed operations above retain their types; immutable local expressions and bound `Macro` statements are the supported reuse forms, not arbitrary Swift function bodies. Inference must resolve completely before emission; checked `Int` arithmetic, one-based DSL sequence indices, and explicit evaluation failures apply. Additional value or helper forms require a named case and a new native/formal contract |
+| B-05 | Bounded current contract: ordinary supported Swift values and the typed operations above retain their types; immutable local expressions and bound `Macro` statements are the supported reuse forms, not arbitrary Swift function bodies. Inference must resolve completely before emission; checked `Int` arithmetic and other specified evaluation failures must agree in generated Swift and TLA+, including failure identity and evaluation order. Reachable overflow is a checking failure, not a compile-time rejection. One-based DSL sequence indices apply. Additional value or helper forms require a named case and a new native/formal contract |
 | B-06 | Settled for the present acceptance set: ordered assignments, procedures, recursion, typed configured populations, and bound generated-model `Instance` refinement share the one compiled model path. The concrete scenario determines the abstract instance configuration and typed mappings. Unspecified general composition is not inferred or routed through a second backend; add it only for a named upstream configuration |
 
 The B-04 positive examples are bound `WeakFairness(anyOf: [initiate, pass])`

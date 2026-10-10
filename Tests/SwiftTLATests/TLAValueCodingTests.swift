@@ -23,5 +23,9 @@ struct TLAValueCodingTests {
         #expect(throws: TLAValueCodingError.malformedValue("int")) {
             _ = try JSONDecoder().decode(TLAValue.self, from: Data(#"{"version":1,"tag":"int","value":1,"extra":true}"#.utf8))
         }
+        let duplicateSet = Data(#"{"version":1,"tag":"set","elements":[{"version":1,"tag":"int","value":1},{"version":1,"tag":"int","value":1}]}"#.utf8)
+        #expect(throws: TLAValueCodingError.malformedValue("set")) {
+            _ = try JSONDecoder().decode(TLAValue.self, from: duplicateSet)
+        }
     }
 }

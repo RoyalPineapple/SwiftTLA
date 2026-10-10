@@ -102,6 +102,20 @@ private struct CheckedExecutionOverflow {
 }
 
 @TLAModel
+private struct CheckedExecutionBeyondTLCIntegerRange {
+    enum Step: String, CaseIterable { case advance }
+    static var spec: TLASpec {
+        #spec("CheckedExecutionBeyondTLCIntegerRange") {
+            let algorithm = Algorithm(label: "CheckedExecutionBeyondTLCIntegerRange", scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: 2_147_483_647)
+                Do(Step.advance) { Assign(count, to: count + 1) }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
 private struct ReachableInvariantFailure {
     enum Step: String, CaseIterable { case advance }
     static var spec: TLASpec {
@@ -197,15 +211,55 @@ private struct ReachableInvariantFailure {
         #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
             try machine.isEnabled(.advance)
         }
-        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+        #expect(throws: MachineActionEvaluationFailure<CheckedExecutionOverflow.Action>(
+            action: .advance, reason: .integerOverflow(.addition, operands: [Int.max, 1]))) {
             try ReachabilityGraph(initialMachines: [machine], maximumStates: 2)
         }
+        var observedFailure = false
+        let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 2,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
+            if case .evaluationFailure(let source, let action, let reason) = event {
+                observedFailure = true
+                #expect(source == 0)
+                #expect(action == .advance)
+                #expect(reason == .integerOverflow(.addition, operands: [Int.max, 1]))
+            }
+        }
+        #expect(observedFailure)
+        if case .evaluationFailure(let reason) = outcome.completion {
+            #expect(reason == .integerOverflow(.addition, operands: [Int.max, 1]))
+        } else {
+            Issue.record("Expected a typed model evaluation failure")
+        }
+        #expect(outcome.initialStates == 1 && outcome.states == 1 && outcome.edges == 0)
         for _ in 0..<2 {
             #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
                 try machine.send(.advance)
             }
             #expect(machine.snapshot == before)
         }
+    }
+
+    @Test("generated Swift retains valid Int results beyond TLC's integer range")
+    func arithmeticAboveTLCIntegerRange() throws {
+        var machine = try CheckedExecutionBeyondTLCIntegerRange.makeMachine()
+        let transition = try machine.send(.advance)
+        #expect(transition.after.count == 2_147_483_648)
+    }
+
+    @Test("evidence callback errors do not become model evaluation failures")
+    func callbackErrorIsNotModelFailure() throws {
+        let machine = try DuplicateExecutionPaths.makeMachine()
+        let callbackError = NativeMachineEvaluationError.integerOverflow(.addition, operands: [1, 2])
+        var modelFailureEvents = 0
+        #expect(throws: callbackError) {
+            _ = try MachineValidator.run(initialMachines: [machine], maximumStates: 3,
+                checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
+                if case .evaluationFailure = event { modelFailureEvents += 1 }
+                if case .edge = event { throw callbackError }
+            }
+        }
+        #expect(modelFailureEvents == 0)
     }
 
     @Test("invariant violations remain executable and observable")

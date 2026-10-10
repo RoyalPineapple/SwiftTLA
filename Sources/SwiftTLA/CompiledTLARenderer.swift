@@ -279,6 +279,25 @@ struct CompiledTLARenderer {
     func state(_ expression: CompiledExpression, stateNames: [VariableID: String] = [:]) throws -> String {
         var tasks = [StateRenderingTask.expression(expression)]
         var parts: [String] = []
+        let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
+            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(stateNames.values)
+        var nextDivisionName = 0
+        var nextChoiceName = 0
+
+        func divisionName(_ role: String) -> String {
+            var name = "__\(moduleName)_\(role)\(nextDivisionName)"
+            nextDivisionName += 1
+            while occupied.contains(name) { name += "_" }
+            return name
+        }
+
+        func choiceName(_ role: String) -> String {
+            var name = "__\(moduleName)_\(role)\(nextChoiceName)"
+            nextChoiceName += 1
+            while occupied.contains(name) { name += "_" }
+            return name
+        }
 
         func schedule(_ operation: CompiledOperation, _ operands: [CompiledExpression]) throws {
             let syntax = try operation.tlaSyntax(operandCount: operands.count,
@@ -461,7 +480,31 @@ struct CompiledTLARenderer {
                     rendered.append(.expression(body))
                     rendered.append(.text(")"))
                     schedule(rendered)
-                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .randomSubset, .randomElement, .setSum, .integerRange, .negate, .not, .printT, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
+                case .divide, .integerDivide:
+                    guard expression.children.count == 2 else {
+                        throw CompiledValueType.diagnostic("rendering.divide", "integer division requires two operands")
+                    }
+                    let dividend = divisionName("dividend")
+                    let divisor = divisionName("divisor")
+                    parts.append("(LET \(dividend) == ")
+                    schedule([.expression(expression.children[0]), .text(" IN (LET \(divisor) == "),
+                        .expression(expression.children[1]),
+                        .text(" IN (IF \(divisor) < 0 THEN (-\(dividend)) \\div (-\(divisor)) ELSE \(dividend) \\div \(divisor))))")])
+                case .choose(let binder) where expression.resultType == .int || expression.resultType == .bool:
+                    guard expression.children.count == 2 else {
+                        throw CompiledValueType.diagnostic("rendering.choose", "choice requires a domain and predicate")
+                    }
+                    let member = try binderName(binder)
+                    let candidates = choiceName("choiceCandidates")
+                    let other = choiceName("choiceOther")
+                    let least = expression.resultType == .int
+                        ? "\(member) <= \(other)"
+                        : "(\(member) = FALSE \\/ \(other) = TRUE)"
+                    parts.append("(LET \(candidates) == {\(member) \\in ")
+                    schedule([.expression(expression.children[0]), .text(" : "),
+                        .expression(expression.children[1]),
+                        .text("} IN (CHOOSE \(member) \\in \(candidates) : (\\A \(other) \\in \(candidates) : \(least))))")])
+                case .add, .subtract, .multiply, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .randomSubset, .randomElement, .setSum, .integerRange, .negate, .not, .printT, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
                     try schedule(expression.operation, expression.children)
 
                 }
@@ -557,9 +600,9 @@ struct CompiledTLARenderer {
         return procedure.name
     }
 
-    func controlLocationSourceName(_ id: ControlLocationID) throws -> String {
+    func controlLocationFormalName(_ id: ControlLocationID) throws -> String {
         guard let location = layout.controlLocation(id) else { throw missing("control location", id.ordinal) }
-        return location.sourceName
+        return location.formalName
     }
 
     private func operatorName(_ id: OperatorID) throws -> String {
@@ -569,7 +612,7 @@ struct CompiledTLARenderer {
 
     private func controlLocationName(_ id: ControlLocationID) throws -> String {
         guard let location = layout.controlLocation(id) else { throw missing("control location", id.ordinal) }
-        return "\"\(location.sourceName)\""
+        return "\"\(location.formalName)\""
     }
 
     private func missing(_ kind: String, _ ordinal: Int) -> CompilationDiagnostic {
@@ -599,7 +642,7 @@ extension CompiledOperation {
         case .lessOrEqual: ("(", " <= ", ")")
         case .greaterThan: ("(", " > ", ")")
         case .greaterOrEqual: ("(", " >= ", ")")
-        case .and: ("(", " /\\ ", ")")
+        case .and: ("(IF ", " THEN ", " ELSE FALSE)")
         case .or: ("(IF ", " THEN TRUE ELSE ", ")")
         case .in: ("(", " \\in ", ")")
         case .subset: ("(", " \\subseteq ", ")")
@@ -630,7 +673,6 @@ extension CompiledOperation {
         case .sequenceFromSet: ("SeqFromSet(", "", ")")
         case .setLiteral: ("{", ", ", "}")
         case .tupleLiteral: ("<<", ", ", ">>")
-        case .divide, .integerDivide: ("(", " \\div ", ")")
         default: nil
         }
     }

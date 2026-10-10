@@ -433,6 +433,15 @@ struct CompilerPipelineCanonicalizationTests {
             .procedure(algorithm: "ControlLayout", name: "second"),
             .generated(algorithm: "ControlLayout", purpose: "Done")
         ])
+        let scopedStarts = compilation.layout.controlLocations.filter { $0.sourceName == "start" }
+        #expect(Set(scopedStarts.map(\.formalName)).count == scopedStarts.count)
+        let outputs = try compilation.render()
+        let tla = outputs.tlaBundle.root.tla
+        let plusCal = try outputs.plusCalBundle().root.tla
+        for location in scopedStarts {
+            #expect(tla.contains("\"\(location.formalName)\""))
+            #expect(plusCal.contains("\(location.formalName):"))
+        }
         let processStart = try #require(compilation.layout.controlLocations.first {
             $0.owner == .process(algorithm: "ControlLayout", ordinal: 0, typeName: "CompilerPipelineNode")
                 && $0.sourceName == "start"

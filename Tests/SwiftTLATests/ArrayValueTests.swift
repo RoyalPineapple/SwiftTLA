@@ -51,13 +51,19 @@ struct ArrayValueTests {
 
     @Test("array configuration and native operations preserve ordinary Swift state and nominal members")
     func generatedArrays() throws {
-        for scenario in try ArrayValueMachine.validationScenarios() {
+        let row = try #require(TLAStateProjection.Token(validating: "row"))
+        let scenarios = try ArrayValueMachine.validationScenarios()
+        #expect(scenarios.count == 2)
+        #expect(Set(scenarios.map(\.configuration.input)) == Set([[Int](), [2, 1, 2]]))
+        for scenario in scenarios {
             var machine = try #require(scenario.initialMachines().first)
             let choices: [ArrayValueMachine.Choice] = machine.state.choices
             #expect(choices == [.one, .two, .one])
             let expected = scenario.configuration.input + [3]
             _ = try machine.send(.adopt)
             #expect(machine.state.row == expected)
+            #expect(try machine.formalProjection(of: machine.snapshot).value(for: row)
+                == .tuple(expected.map(TLAValue.int)))
             _ = try machine.send(.remove)
             #expect(machine.state.row == Array(expected.dropFirst()))
             _ = try machine.send(.select)

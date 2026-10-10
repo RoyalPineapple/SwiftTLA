@@ -4,6 +4,32 @@ import Testing
 
 @Suite("Compiled specification rendering")
 struct CompiledSpecificationRendererTests {
+    @Test("Signed division uses a positive formal divisor")
+    func rendersSignedDivision() throws {
+        let compiled = try TLASpec(name: "SignedDivision", variables: [], actions: [], invariants: []).compile()
+        let dividend = BinderID(ordinal: 0)
+        let divisor = BinderID(ordinal: 1)
+        let renderer = CompiledTLARenderer(moduleName: "SignedDivision", reservedNames: [], layout: compiled.layout,
+            bindings: .init(binders: [dividend: "dividend", divisor: "divisor"]),
+            operators: compiled.semantics.operators, actions: [], functions: [])
+        let proofFile = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/SingleAssignment.tla")
+        let proof = try String(contentsOf: proofFile, encoding: .utf8)
+        let start = try #require(proof.range(of: "RenderedSignedDivision(dividend, divisor) =="))
+        let end = try #require(proof.range(of: "THEOREM SignedDivisionUsesPositiveDivisor =="))
+        let provedExpression = proof[start.upperBound..<end.lowerBound]
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        for operation in [CompiledOperation.divide, .integerDivide] {
+            let expression = CompiledExpression(operation: operation, resultType: .int,
+                children: [.value(.integer(5)), .value(.integer(-2))])
+            #expect(try renderer.state(expression)
+                == "(LET __SignedDivision_dividend0 == 5 IN (LET __SignedDivision_divisor1 == -2 IN (IF __SignedDivision_divisor1 < 0 THEN (-__SignedDivision_dividend0) \\div (-__SignedDivision_divisor1) ELSE __SignedDivision_dividend0 \\div __SignedDivision_divisor1)))")
+            let symbolic = CompiledExpression(operation: operation, resultType: .int,
+                children: [.boundValue(dividend), .boundValue(divisor)])
+            #expect(try renderer.state(symbolic) == provedExpression)
+        }
+    }
+
     @Test("Powerset operands retain their grouping inside function domains")
     func groupsPowersetRangeOperand() throws {
         let compiled = try TLASpec(name: "PowersetDomain", variables: [], actions: [], invariants: []).compile()
@@ -271,7 +297,7 @@ struct CompiledSpecificationRendererTests {
             .init(name: "Check", body: .and(local, local))
         ])
         let rendered = try specification.compile().render().tlaBundle.tla
-        #expect(rendered.contains("Check == ((LET item == TRUE\nIN item) /\\ (LET item == TRUE\nIN item))"))
+        #expect(rendered.contains("Check == (IF (LET item == TRUE\nIN item) THEN (LET item == TRUE\nIN item) ELSE FALSE)"))
     }
 
     @Test("Nested checked views render their operands once without capturing source names")

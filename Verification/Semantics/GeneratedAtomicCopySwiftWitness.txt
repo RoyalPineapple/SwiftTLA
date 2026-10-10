@@ -1,0 +1,36 @@
+@@ State
+public struct State: Hashable, GeneratedModelFields {
+    public let first: Int
+public let second: Int
+    public static var displayNames: [PartialKeyPath<State>: String] {
+        [\State.first: "first",
+\State.second: "second"]
+    }
+    public static var fieldIdentities: [PartialKeyPath<State>: GeneratedModelFieldIdentity] {
+        [\State.first: .init(swiftName: "first", formalName: "first"),
+\State.second: .init(swiftName: "second", formalName: "second")]
+    }
+    public init(first _value0: Int, second _value1: Int) {
+        self.first = _value0
+self.second = _value1
+    }
+}
+@@ Snapshot
+public struct Snapshot: Hashable, Sendable {
+    public let state: State
+
+
+}
+@@ __swifttlaFormalProjectionTokens
+private static let __swifttlaFormalProjectionTokens: [TLAStateProjection.Token] = [TLAStateProjection.Token(validating: "first")!, TLAStateProjection.Token(validating: "second")!]
+@@ formalProjection
+public func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection {
+    try TLAStateProjection(validating: [.init(token: Self.__swifttlaFormalProjectionTokens[0], value: TLAValue.int(snapshot.state.first)),
+.init(token: Self.__swifttlaFormalProjectionTokens[1], value: TLAValue.int(snapshot.state.second))])
+}
+@@ formalCall
+public func formalCall(for action: Action) throws -> FormalActionCall {
+    switch action {
+        case .copy: return FormalActionCall(name: "copy", arguments: [])
+    }
+}

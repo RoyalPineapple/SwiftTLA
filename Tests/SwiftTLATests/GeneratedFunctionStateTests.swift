@@ -11,6 +11,9 @@ struct GeneratedFunctionStateTests {
         let transition = try machine.send(.replace)
         #expect(transition.after.clock[.one] == 10)
         #expect(transition.after.clock[.two] == 20)
+        let clock = try #require(TLAStateProjection.Token(validating: "clock"))
+        #expect(try machine.formalProjection(of: machine.snapshot).value(for: clock)
+            == .function([.int(1): .int(10), .int(2): .int(20)]))
         #expect(try !machine.isEnabled(.replace))
 
         let graph = try ReachabilityGraph(

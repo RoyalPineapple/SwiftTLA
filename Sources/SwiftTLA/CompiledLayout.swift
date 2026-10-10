@@ -165,6 +165,7 @@ package struct CompiledControlLocation: Hashable, Sendable {
     package let owner: ControlOwner
     package let sourceName: String
     package let renderedName: String
+    package var formalName: String
 }
 
 struct CompiledModuleInstanceLayout: Hashable, Sendable {
@@ -321,7 +322,7 @@ package struct CompiledLayout: Hashable, Sendable {
         }.joined(separator: "|")
         let controlEncoding = controlLocations.map { label in
             let owner = label.owner.canonicalEncoding
-            return "\(label.id.ordinal):\(owner.utf8.count):\(owner)\(label.sourceName.utf8.count):\(label.sourceName)\(label.renderedName.utf8.count):\(label.renderedName)"
+            return "\(label.id.ordinal):\(owner.utf8.count):\(owner)\(label.sourceName.utf8.count):\(label.sourceName)\(label.renderedName.utf8.count):\(label.renderedName)\(label.formalName.utf8.count):\(label.formalName)"
         }.joined(separator: "|")
         let actionEncoding = actions.map { action in
             "\(action.id.ordinal):\(action.renderedName.utf8.count):\(action.renderedName):\(action.isTermination)"
@@ -353,7 +354,8 @@ package struct CompiledLayout: Hashable, Sendable {
                         id: .init(ordinal: labels.count),
                         owner: owner,
                         sourceName: step.label.name,
-                        renderedName: renderedName(step)
+                        renderedName: renderedName(step),
+                        formalName: step.label.name
                     )
                 )
             }
@@ -390,7 +392,8 @@ package struct CompiledLayout: Hashable, Sendable {
                         id: .init(ordinal: labels.count),
                         owner: .generated(algorithm: model.name, purpose: CompilerControlSymbol.done.rawValue),
                         sourceName: CompilerControlSymbol.done.rawValue,
-                        renderedName: CompilerControlSymbol.done.rawValue
+                        renderedName: CompilerControlSymbol.done.rawValue,
+                        formalName: CompilerControlSymbol.done.rawValue
                     )
                 )
             }
@@ -402,7 +405,8 @@ package struct CompiledLayout: Hashable, Sendable {
                     id: .init(ordinal: labels.count),
                     owner: .generated(algorithm: algorithms.first?.model.name ?? "", purpose: action.name),
                     sourceName: action.name,
-                    renderedName: action.name
+                    renderedName: action.name,
+                    formalName: action.name
                 )
             )
         }
@@ -412,9 +416,17 @@ package struct CompiledLayout: Hashable, Sendable {
                     id: .init(ordinal: labels.count),
                     owner: .generated(algorithm: algorithms.first?.model.name ?? "", purpose: CompilerControlSymbol.done.rawValue),
                     sourceName: CompilerControlSymbol.done.rawValue,
-                    renderedName: CompilerControlSymbol.done.rawValue
+                    renderedName: CompilerControlSymbol.done.rawValue,
+                    formalName: CompilerControlSymbol.done.rawValue
                 )
             )
+        }
+        let counts = Dictionary(grouping: labels, by: \.sourceName).mapValues(\.count)
+        var used = Set(labels.map(\.sourceName))
+        for index in labels.indices where counts[labels[index].sourceName, default: 0] > 1 {
+            var name = "__pcal_location_\(index)"
+            while !used.insert(name).inserted { name += "_" }
+            labels[index].formalName = name
         }
         return labels
     }

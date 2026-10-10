@@ -2,6 +2,21 @@
 import Testing
 
 @Suite struct SignedIntegerSemanticsTests {
+    @Test("Generated Swift machine uses floor division for negative divisors")
+    func generatedSignedDivision() throws {
+        var machine = try SignedDivisionOutputModel.makeMachine()
+        #expect(machine.state.quotient == 0)
+        let transition = try machine.send(.divide)
+        #expect(transition.after.quotient == -3)
+    }
+
+    @Test("Generated Swift machine uses nonnegative modulo for positive divisors")
+    func generatedSignedModulo() throws {
+        var machine = try SignedModuloOutputModel.makeMachine()
+        let transition = try machine.send(.modulo)
+        #expect(transition.after.remainder == 1)
+    }
+
     @Test("Right-first operations preserve the first operand failure")
     func rightOperandFailurePrecedesLeft() {
         let overflow = StateExpr.add(.int(Int.max), .int(1))
@@ -20,6 +35,16 @@ import Testing
         #expect(throws: EvalError.integerOverflow(.addition, operands: [Int.max, 1])) {
             try compiledValue(.add(overflow, divisionByZero))
         }
+    }
+
+    @Test("Generated arithmetic evaluates the right failure before a left overflow")
+    func generatedRightOperandFailurePrecedesLeft() throws {
+        var machine = try GeneratedArithmeticFailureOrderModel.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.send(.compute)
+        }
+        #expect(machine.snapshot == before)
     }
 
     @Test("integer division rounds toward negative infinity")

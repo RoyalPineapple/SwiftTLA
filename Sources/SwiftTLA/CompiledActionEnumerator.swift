@@ -8,11 +8,14 @@ struct CompiledActionEnumerator {
 
     func enumerateSuccessors(_ action: CompiledAction) throws -> [CompiledSuccessor] {
         try actionBindings(action.bindings).flatMap { binding in
-            try execute(action.body, bindings: binding.values).map { delta in
-                CompiledSuccessor(
+            var emitted = Set<CompiledState>()
+            return try execute(action.body, bindings: binding.values).compactMap { delta -> CompiledSuccessor? in
+                let candidate = try state.updating(delta.assignments)
+                guard emitted.insert(candidate).inserted else { return nil }
+                return CompiledSuccessor(
                     action: action.id,
                     arguments: binding.arguments,
-                    state: try state.updating(delta.assignments)
+                    state: candidate
                 )
             }
         }
@@ -55,9 +58,8 @@ struct CompiledActionEnumerator {
         case .and(let lhs, let rhs):
             let left = try execute(lhs, bindings: bindings)
             guard !left.isEmpty else { return [] }
-            let right = try execute(rhs, bindings: bindings)
             return try left.flatMap { first in
-                try right.map { try first.merging($0) }
+                try execute(rhs, bindings: bindings).compactMap { first.merging($0) }
             }
         case .or(let lhs, let rhs):
             return try execute(lhs, bindings: bindings) + execute(rhs, bindings: bindings)
@@ -90,12 +92,12 @@ private struct CompiledActionBindingValues {
 private struct CompiledActionDelta {
     var assignments: [VariableID: CompiledValue] = [:]
 
-    func merging(_ other: Self) throws -> Self {
-        .init(assignments: try other.assignments.reduce(into: assignments) { merged, assignment in
-            if let previous = merged[assignment.key], previous != assignment.value {
-                throw CompiledEvaluationError.conflictingAssignment(assignment.key)
-            }
-            merged[assignment.key] = assignment.value
-        })
+    func merging(_ other: Self) -> Self? {
+        var merged = assignments
+        for (variable, value) in other.assignments {
+            if let previous = merged[variable], previous != value { return nil }
+            merged[variable] = value
+        }
+        return .init(assignments: merged)
     }
 }

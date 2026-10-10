@@ -198,7 +198,8 @@ extension TLAValue: Codable {
             self = .constant(value)
         case .set:
             try Self.requireKeys([.version, .tag, .elements], from: decoder, for: tag)
-            guard let elements = try? container.decode([TLAValue].self, forKey: .elements) else {
+            guard let elements = try? container.decode([TLAValue].self, forKey: .elements),
+                  Set(elements).count == elements.count else {
                 throw TLAValueCodingError.malformedValue(tag.rawValue)
             }
             self = .set(Set(elements))

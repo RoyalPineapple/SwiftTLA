@@ -18,6 +18,18 @@ public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStri
 
 /// Validated state at the explicit native-to-TLA serialization boundary.
 public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
+    @_documentation(visibility: internal)
+    public static func losslessSet<Element: Hashable & Sendable>(
+        _ source: Set<Element>, project: (Element) throws -> TLAValue
+    ) throws -> TLAValue {
+        let values = try source.map(project)
+        let projected = Set(values)
+        guard projected.count == source.count else {
+            throw TLAStateProjectionDiagnostic.invalidValue(path: "duplicate formal set element")
+        }
+        return .set(projected)
+    }
+
     /// A validated identifier for a value in a formal state projection.
     public struct Token: Sendable, Hashable, CustomStringConvertible {
         fileprivate let identifier: String

@@ -849,6 +849,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case unresolvedDirectModuleDependency
         case cyclicDirectModuleDependency
         case duplicateRenderedModuleDefinition
+        case invalidControlLocationEncoding
         case unknownControlLocation
         case unknownReference
         case outOfScopeReference
@@ -1064,6 +1065,19 @@ public extension TLASpec {
         try validateGeneratedRefinements()
         let definitionOrder = try orderedDirectDefinitions()
         let layout = CompiledLayout(source: self)
+        var formalControlNames: Set<String> = []
+        if let duplicate = layout.controlLocations.map(\.formalName).first(where: {
+            !formalControlNames.insert($0).inserted
+        }) {
+            throw CompilationDiagnostic(
+                code: .invalidControlLocationEncoding,
+                stage: .lowering,
+                path: "algorithm.controlLocations",
+                expected: "a distinct formal value for every control location",
+                actual: "multiple control locations encode as '\(duplicate)'",
+                nextSafeAction: "Report this compiler defect; no generated output is safe to use."
+            )
+        }
         var lowerer = CompiledLowerer(
             spec: self, closure: closure, layout: layout,
             incomingModuleParameters: incomingModuleParameters

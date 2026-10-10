@@ -235,7 +235,7 @@ extension NativeSwiftEmitter {
             return """
             if let value = other.\(name) {
                 if let previous = result.\(name), previous != value {
-                    throw NativeMachineEvaluationError.conflictingAssignment(variable: \(String(reflecting: slot.declaration.name)))
+                    return nil
                 }
                 result.\(name) = value
             }
@@ -245,7 +245,7 @@ extension NativeSwiftEmitter {
         return try nativeDeclarations("""
         private struct _Updates: Sendable {
             \(fields)
-            func merging(_ other: Self) throws -> Self {
+            func merging(_ other: Self) -> Self? {
                 var result = self
                 \(merges)
                 return result
@@ -386,9 +386,9 @@ extension NativeSwiftEmitter {
             let body: String
             switch node {
             case .assign(let variableID, let value):
-                body = "try emit(updates.merging(_Updates(\(variable(variableID)): \(try expression(value)))))"
+                body = "if let merged = updates.merging(_Updates(\(variable(variableID)): \(try expression(value)))) { try emit(merged) }"
             case .unchanged(let variableID):
-                body = "try emit(updates.merging(_Updates(\(variable(variableID)): \(stateValue(variableID)))))"
+                body = "if let merged = updates.merging(_Updates(\(variable(variableID)): \(stateValue(variableID)))) { try emit(merged) }"
             case .guard_(let predicate):
                 if let constant = predicate.booleanConstant {
                     body = constant ? "try emit(updates)" : "return"
@@ -633,11 +633,26 @@ extension NativeSwiftEmitter {
             var found = false
             do {
                 func _visitAction(_ action: Action) throws {
-                    try _visitSuccessors(for: action, checking: &context) { execution in
-                        found = true
-                        if try !visit(action, Self(execution: execution\(configurationArguments))) {
-                            throw _StopSuccessorTraversal()
+                    var callbackFailed = false
+                    do {
+                        try _visitSuccessors(for: action, checking: &context) { execution in
+                            found = true
+                            do {
+                                if try !visit(action, Self(execution: execution\(configurationArguments))) {
+                                    throw _StopSuccessorTraversal()
+                                }
+                            } catch {
+                                callbackFailed = true
+                                throw error
+                            }
                         }
+                    } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+                        if case .integerOverflow = reason {
+                            throw MachineActionEvaluationFailure(action: action, reason: reason)
+                        }
+                        throw reason
+                    } catch {
+                        throw error
                     }
                 }
                 \(visitorEnumeration.joined(separator: "\n"))
