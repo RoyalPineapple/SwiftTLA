@@ -29,6 +29,24 @@ THEOREM PointwiseStateEncodingIsInjective ==
                 States)
     BY SMT DEF InjectiveOn, PointwiseStateEncoding, States
 
+UniqueControlName(ids, source, location) ==
+    \A other \in ids : source[other] = source[location] => other = location
+ScopedControlName(ids, source, fresh, location) ==
+    IF UniqueControlName(ids, source, location)
+    THEN source[location]
+    ELSE fresh[location]
+
+THEOREM ScopedControlNamingIsInjective ==
+    \A ids \in SUBSET Values :
+      \A source, fresh \in [ids -> Values] :
+        (InjectiveOn(fresh, ids)
+         /\ {fresh[location] : location \in ids}
+            \cap {source[location] : location \in ids} = {})
+        => InjectiveOn(
+            [location \in ids |-> ScopedControlName(ids, source, fresh, location)],
+            ids)
+    BY SMT DEF InjectiveOn, ScopedControlName, UniqueControlName
+
 MappedSetEncoding(valueMap, members) ==
     {valueMap[value] : value \in members}
 

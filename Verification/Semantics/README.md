@@ -198,6 +198,12 @@ it restored all obligations.
 observation layer for complete state-labeled/action-labeled graphs.
 `PointwiseStateEncodingIsInjective` proves that an injective value encoding
 lifts to an injective encoding of complete states with the same variable keys.
+`ScopedControlNamingIsInjective` proves that duplicate source labels remain
+distinct when their replacement names are injective and disjoint from every
+source label. The compiled layout allocates such names for colliding control
+locations, and a generated-machine regression checks one pair of same-named
+procedure steps. The proof does not yet establish that the Swift allocation
+loop or every emitted projection satisfies its premises.
 `InjectiveSetEncoding` proves that an injective element encoding maps distinct
 sets to distinct encoded sets, without assuming a finite domain.
 `DisjointUntaggedUnionEncodingIsInjective` proves that erasing a union's branch
@@ -452,7 +458,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 956 `SingleAssignment.tla` obligations and all 192
+TLAPS 1.6.0-pre checked all 994 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
@@ -473,6 +479,9 @@ source SHA, proof-input digests, tool versions/configuration, and separate
 proof logs. A changed archive fails its checksum. This job does not yet have
 qualifying hosted evidence and is not the universal semantic-preservation
 admission check.
+The older hosted run at `e77f1689` passed its diagnostic job and retained
+logs for 931 and 192 obligations respectively; those inputs precede the
+current lemmas and do not qualify this revision.
 
 ## Observable behavior
 
