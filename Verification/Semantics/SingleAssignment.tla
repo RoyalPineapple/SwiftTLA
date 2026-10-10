@@ -2113,7 +2113,7 @@ WithinSwiftInt(value) == SwiftIntMin <= value /\ value <= SwiftIntMax
 CurrentNativeAddOutcome(lhs, rhs) ==
     IF WithinSwiftInt(lhs + rhs)
     THEN <<"value", lhs + rhs>>
-    ELSE <<"overflow">>
+    ELSE <<"overflow", "addition", <<lhs, rhs>>>>
 CurrentRenderedAddOutcome(lhs, rhs) == <<"value", lhs + rhs>>
 
 AddWouldOverflow(lhs, rhs) ==
@@ -2122,7 +2122,7 @@ AddWouldOverflow(lhs, rhs) ==
 
 GuardedAddOutcome(lhs, rhs) ==
     IF AddWouldOverflow(lhs, rhs)
-    THEN <<"overflow">>
+    THEN <<"overflow", "addition", <<lhs, rhs>>>>
     ELSE <<"value", lhs + rhs>>
 
 THEOREM AddOverflowGuardMatchesCheckedInt ==
@@ -2163,6 +2163,35 @@ THEOREM GuardedAddMatchesNativeFailureAndValue ==
     BY AddOverflowGuardMatchesCheckedInt, SMT
         DEF GuardedAddOutcome, CurrentNativeAddOutcome,
             AddWouldOverflow, WithinSwiftInt
+
+NativeOrderedAddOutcome(lhs, rhs, leftFailed, rightFailed,
+                        leftFailure, rightFailure) ==
+    IF leftFailed THEN leftFailure
+    ELSE IF rightFailed THEN rightFailure
+    ELSE CurrentNativeAddOutcome(lhs, rhs)
+
+GuardedOrderedAddOutcome(lhs, rhs, leftFailed, rightFailed,
+                         leftFailure, rightFailure) ==
+    IF leftFailed THEN leftFailure
+    ELSE IF rightFailed THEN rightFailure
+    ELSE GuardedAddOutcome(lhs, rhs)
+
+THEOREM GuardedOrderedAddPreservesFailurePriorityAndPayload ==
+    ASSUME NEW lhs \in Int, NEW rhs \in Int,
+           WithinSwiftInt(lhs), WithinSwiftInt(rhs),
+           NEW leftFailed \in BOOLEAN, NEW rightFailed \in BOOLEAN,
+           NEW leftFailure, NEW rightFailure
+    PROVE GuardedOrderedAddOutcome(lhs, rhs, leftFailed, rightFailed,
+              leftFailure, rightFailure)
+          = NativeOrderedAddOutcome(lhs, rhs, leftFailed, rightFailed,
+              leftFailure, rightFailure)
+    BY GuardedAddMatchesNativeFailureAndValue, SMT
+        DEF GuardedOrderedAddOutcome, NativeOrderedAddOutcome
+
+THEOREM ReversingAddOperandFailuresWouldDisagree ==
+    NativeOrderedAddOutcome(0, 0, TRUE, TRUE, <<"left">>, <<"right">>)
+      # <<"right">>
+    BY SMT DEF NativeOrderedAddOutcome
 
 THEOREM CurrentAdditionAgreementIsExactlyRangeSafety ==
     \A lhs, rhs \in Int :
@@ -2723,8 +2752,16 @@ THEOREM NativeIntegerChoiceFailureMatchesEmitted ==
         (NativeSortedFirstFailure(<<1, 2, 3>>,
              [member \in {1, 2, 3} |-> member > choiceSelected])
          <=> IntegerChoice!__SwiftTLAChoiceFailure0)
-    BY EmittedIntegerChoiceFailureMatchesSource, SMT
-        DEF NativeSortedFirstFailure, SourceIntegerChoiceFailure
+    PROOF
+    <1>1. NativeSortedFirstFailure(<<1, 2, 3>>,
+              [member \in {1, 2, 3} |-> member > choiceSelected])
+            <=> ~(1 > choiceSelected \/ 2 > choiceSelected \/ 3 > choiceSelected)
+        BY SMT DEF NativeSortedFirstFailure
+    <1>2. SourceIntegerChoiceFailure
+            <=> ~(1 > choiceSelected \/ 2 > choiceSelected \/ 3 > choiceSelected)
+        BY SMT DEF SourceIntegerChoiceFailure
+    <1>. QED
+        BY <1>1, <1>2, EmittedIntegerChoiceFailureMatchesSource, SMT
 
 THEOREM EmittedIntegerChoiceFailureAtThree ==
     choiceSelected \in 0..3 =>

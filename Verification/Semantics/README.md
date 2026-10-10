@@ -98,9 +98,16 @@ or `lhs < SwiftIntMin - rhs` when `rhs < 0` detects exactly the sums outside
 Swift `Int`. `AddOverflowGuardUsesRepresentableThresholds` proves that those
 thresholds themselves fit in `Int`. `GuardedAddMatchesNativeFailureAndValue`
 then proves that a guarded mathematical sum has the same tagged value or
-overflow outcome as checked native addition. This is a candidate TLA+ output
-rule, not the current emitter: no generated failure predicate or selected TLC
-check uses it yet, and the actual TLA+ still admits an overflow successor.
+overflow outcome, including the `addition` operation and both operands, as
+checked native addition. `GuardedOrderedAddPreservesFailurePriorityAndPayload`
+composes that rule with left-first operand evaluation: a left failure wins over
+a right failure, and either wins over root addition. A distinct-failure
+negative control shows that reversing operand priority changes the result.
+This is a candidate TLA+ output rule, not the current emitter: no generated
+overflow-failure predicate or selected TLC check uses it yet, and the actual
+TLA+ still admits an overflow successor. The composition theorem models the
+operand outcomes; it does not prove the actual emitted Swift expression or
+TLA+ action evaluates every nested operand in this order.
 
 The direct TLA+ renderer now gives each operand one local definition and
 normalizes a negative divisor into a positive one before integer division.
