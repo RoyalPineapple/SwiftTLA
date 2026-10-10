@@ -130,13 +130,13 @@ internal struct AlgorithmPlusCalRenderer {
     private func render(step: CompiledAuthoredPlusCalStep, indent: String, fairnessExcluded: Bool = false) throws -> [String] {
         let suffix = fairnessExcluded ? ":-" : ":"
         if let condition = step.loopCondition {
-            let label = try formalRenderer.controlLocationSourceName(step.label)
+            let label = try formalRenderer.controlLocationFormalName(step.label)
             var lines = ["\(indent)\(label)\(suffix) while (\(try expression(condition))) {"]
             lines += try render(statements: step.statements, indent: indent + "  ")
             lines.append("\(indent)};")
             return lines
         }
-        let label = try formalRenderer.controlLocationSourceName(step.label)
+        let label = try formalRenderer.controlLocationFormalName(step.label)
         var lines = ["\(indent)\(label)\(suffix)"]
         lines += try render(statements: step.statements, indent: indent + "  ")
         return lines
@@ -190,7 +190,7 @@ internal struct AlgorithmPlusCalRenderer {
             lines.append("\(indent)};")
             return lines
         case .goto(let label):
-            return ["\(indent)goto \(try formalRenderer.controlLocationSourceName(label));"]
+            return ["\(indent)goto \(try formalRenderer.controlLocationFormalName(label));"]
         case .call(let target, let arguments):
             let name = try formalRenderer.procedureName(target)
             let values = try arguments.map(expression).joined(separator: ", ")

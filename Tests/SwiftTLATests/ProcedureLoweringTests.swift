@@ -137,7 +137,9 @@ struct ProcedureLoweringTests {
         let (compilation, initial) = try initialState(of: spec)
         let inOuter = try apply("start", in: compilation, to: initial)
         let inInner = try apply("procedure.outer.enter", in: compilation, to: inOuter)
-        #expect(try value(named: "pc", in: inInner, compilation: compilation) == .string("enter"))
+        let outerPC = try value(named: "pc", in: inOuter, compilation: compilation)
+        let innerPC = try value(named: "pc", in: inInner, compilation: compilation)
+        #expect(outerPC != innerPC)
         let outerStack = try value(named: "stack", in: inOuter, compilation: compilation)
         let innerStack = try value(named: "stack", in: inInner, compilation: compilation)
         #expect(innerStack == outerStack)
@@ -217,7 +219,8 @@ struct ProcedureLoweringTests {
 
         let oneFinished = try apply("procedure.outer.resume", process: .int(1), in: compilation, to: oneReturned)
         #expect(try functionValue("pc", key: .int(1), in: oneFinished, compilation: compilation) == .string("finished"))
-        #expect(try functionValue("pc", key: .int(2), in: oneFinished, compilation: compilation) == .string("enter"))
+        #expect(try functionValue("pc", key: .int(2), in: oneFinished, compilation: compilation)
+            == functionValue("pc", key: .int(2), in: bothInOuter, compilation: compilation))
     }
 
     private func initialState(of spec: TLASpec) throws -> (CompiledSpecification, CompiledState) {

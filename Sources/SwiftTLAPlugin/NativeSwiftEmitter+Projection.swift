@@ -35,7 +35,7 @@ extension NativeSwiftEmitter {
         case .modelValue: return "TLAValue.constant(\(value).rawValue)"
         case .controlLocation:
             return switching(program.layout.controlLocations.map {
-                "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.sourceName)))"
+                "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.formalName)))"
             })
         case .named(let name):
             guard let members = program.enums.cases[name] else { throw unsupported("unresolved formal enum: \(name)") }

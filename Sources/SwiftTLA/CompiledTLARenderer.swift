@@ -578,9 +578,9 @@ struct CompiledTLARenderer {
         return procedure.name
     }
 
-    func controlLocationSourceName(_ id: ControlLocationID) throws -> String {
+    func controlLocationFormalName(_ id: ControlLocationID) throws -> String {
         guard let location = layout.controlLocation(id) else { throw missing("control location", id.ordinal) }
-        return location.sourceName
+        return location.formalName
     }
 
     private func operatorName(_ id: OperatorID) throws -> String {
@@ -590,7 +590,7 @@ struct CompiledTLARenderer {
 
     private func controlLocationName(_ id: ControlLocationID) throws -> String {
         guard let location = layout.controlLocation(id) else { throw missing("control location", id.ordinal) }
-        return "\"\(location.sourceName)\""
+        return "\"\(location.formalName)\""
     }
 
     private func missing(_ kind: String, _ ordinal: Int) -> CompilationDiagnostic {
