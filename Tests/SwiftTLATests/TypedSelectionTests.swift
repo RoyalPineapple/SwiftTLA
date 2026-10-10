@@ -37,8 +37,8 @@ struct TypedSelectionTests {
         #expect(module == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
-    @Test("Authored PlusCal retains the proved empty-choice failure predicate")
-    func plusCalRetainsSelectionFailure() throws {
+    @Test("Authored PlusCal guards empty choice before evaluating it")
+    func plusCalGuardsSelectionFailure() throws {
         let rendered = try IncreasingSelection.render()
         let direct = rendered.tlaBundle.root.tla
         let plusCal = try rendered.plusCalBundle().root.tla
@@ -46,6 +46,16 @@ struct TypedSelectionTests {
             $0.hasPrefix("__SwiftTLAChoiceFailure0 ==")
         })
         #expect(plusCal.split(separator: "\n").contains(failure))
+        let action = try #require(direct.split(separator: "\n").first { $0.hasPrefix("advance ==") })
+        let guardStart = try #require(action.range(of: "IF "))
+        let guardEnd = try #require(action.range(of: " THEN "))
+        let condition = action[guardStart.upperBound..<guardEnd.lowerBound]
+        let lines = plusCal.split(separator: "\n")
+        let choiceLine = try #require(lines.firstIndex { $0.contains("with (__atomic_0 =") && $0.contains("(CHOOSE ") })
+        #expect(choiceLine > 0)
+        if choiceLine > 0 {
+            #expect(lines[choiceLine - 1].trimmingCharacters(in: .whitespaces) == "when \(condition);")
+        }
     }
 
     @Test("Boolean selection prefers false in both generated outputs")

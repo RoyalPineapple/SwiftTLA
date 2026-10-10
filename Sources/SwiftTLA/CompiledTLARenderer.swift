@@ -170,7 +170,7 @@ struct CompiledTLARenderer {
         }
     }
 
-    private func choiceDefined(_ value: CompiledExpression) throws -> String? {
+    func choiceDefined(_ value: CompiledExpression) throws -> String? {
         guard case .choose(let binder) = value.operation,
               value.resultType == .int || value.resultType == .bool else { return nil }
         guard value.children.count == 2 else {

@@ -210,11 +210,13 @@ step relation over positions `0..3`; reversing the failure predicate is a
 negative control. The focused generated Swift test confirms the matching
 `noSatisfyingChoice` failure without changing state. This is an output-linked
 finite slice, not a general compiler theorem. The failure predicate is not
-yet selected as a TLC checking outcome. Authored PlusCal now carries the same
-failure predicate declaration as the exact generated TLA+ module; a focused
-output test checks that link. The PlusCal translation and checking outcome are
-not proved by that declaration. Nested choice, effectful or fallible operands,
-other value orders, and general generated Swift semantics remain uncovered.
+yet selected as a TLC checking outcome. Authored PlusCal carries the same
+failure predicate declaration and guards the `with` that evaluates this choice
+with the same definedness predicate used by direct TLA+. A focused output test
+checks that the guard precedes evaluation. The translated PlusCal action and
+checking outcome are not yet proved by this source-level guard. Nested choice,
+effectful or fallible operands, other value orders, and general generated Swift
+semantics remain uncovered.
 
 `BooleanSelection.tla` is likewise the complete emitted module for a
 non-unique Boolean choice. `TypedSelectionTests.booleanSelectionUsesLeastMember`
