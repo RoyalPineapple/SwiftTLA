@@ -156,6 +156,14 @@ struct ProcedureLoweringTests {
 
     @Test("generated projection distinguishes the same label in different procedures")
     func generatedProjectionPreservesScopedControlLocations() throws {
+        let compilation = try ScopedControlProjectionMachine.spec.compile()
+        func formalName(ofProcedure name: String) throws -> String {
+            let location = try #require(compilation.layout.controlLocations.first {
+                guard case .procedure(_, let ownerName) = $0.owner else { return false }
+                return ownerName == name && $0.sourceName == "enter"
+            })
+            return location.formalName
+        }
         var machine = try ScopedControlProjectionMachine.makeMachine()
         let pc = try #require(TLAStateProjection.Token(validating: "pc"))
 
@@ -164,7 +172,8 @@ struct ProcedureLoweringTests {
         _ = try machine.send(.procedure_outer_enter)
         let inner = try #require(machine.formalProjection(of: machine.snapshot).value(for: pc))
 
-        #expect(outer != inner)
+        #expect(outer == .string(try formalName(ofProcedure: "outer")))
+        #expect(inner == .string(try formalName(ofProcedure: "inner")))
     }
 
     @Test("Each processes keep recursive procedure frames and parameter slots independent")

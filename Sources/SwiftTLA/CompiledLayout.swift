@@ -322,7 +322,7 @@ package struct CompiledLayout: Hashable, Sendable {
         }.joined(separator: "|")
         let controlEncoding = controlLocations.map { label in
             let owner = label.owner.canonicalEncoding
-            return "\(label.id.ordinal):\(owner.utf8.count):\(owner)\(label.sourceName.utf8.count):\(label.sourceName)\(label.renderedName.utf8.count):\(label.renderedName)"
+            return "\(label.id.ordinal):\(owner.utf8.count):\(owner)\(label.sourceName.utf8.count):\(label.sourceName)\(label.renderedName.utf8.count):\(label.renderedName)\(label.formalName.utf8.count):\(label.formalName)"
         }.joined(separator: "|")
         let actionEncoding = actions.map { action in
             "\(action.id.ordinal):\(action.renderedName.utf8.count):\(action.renderedName):\(action.isTermination)"
