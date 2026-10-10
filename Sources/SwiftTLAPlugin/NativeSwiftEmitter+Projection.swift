@@ -51,7 +51,7 @@ extension NativeSwiftEmitter {
                 "case .\(unionCase(type, index: $0.offset))(let payload): return \(try formalValue("payload", type: $0.element))"
             })
         case .set(let element):
-            return "TLAValue.set(try Set(\(value).map { (element) throws -> TLAValue in \(try formalValue("element", type: element)) }))"
+            return "try TLAStateProjection.losslessSet(\(value)) { (element) throws -> TLAValue in \(try formalValue("element", type: element)) }"
         case .array(let element):
             return "TLAValue.tuple(try \(value).map { (element) throws -> TLAValue in \(try formalValue("element", type: element)) })"
         case .tuple(let elements):
