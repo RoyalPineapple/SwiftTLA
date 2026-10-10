@@ -104,6 +104,12 @@ compares the actual symbolic renderer output with the expression in this proof
 module. These checks do not yet establish the native Swift output link or the
 overflow and evaluation-failure cases.
 
+`SignedIntegerSemanticsTests.generatedRightOperandFailurePrecedesLeft` checks
+the actual generated Swift machine when its left operand overflows and its
+right operand divides by zero. It requires the right-side failure and an
+unchanged state. This is a concrete output regression, not a proof of failure
+order for every expression or agreement with rendered TLA+ on failures.
+
 `ModeledSwiftModuloMatchesEuclideanRemainder` proves that the helper's modeled
 signed-remainder adjustment equals the mathematical nonnegative remainder for
 every positive divisor. `ModeledSwiftModuloStaysWithinSwiftInt` proves that

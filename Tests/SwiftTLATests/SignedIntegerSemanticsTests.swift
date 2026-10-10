@@ -37,6 +37,16 @@ import Testing
         }
     }
 
+    @Test("Generated arithmetic evaluates the right failure before a left overflow")
+    func generatedRightOperandFailurePrecedesLeft() throws {
+        var machine = try GeneratedArithmeticFailureOrderModel.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.send(.compute)
+        }
+        #expect(machine.snapshot == before)
+    }
+
     @Test("integer division rounds toward negative infinity")
     func floorDivision() throws {
         let cases: [(Int, Int, Int)] = [
