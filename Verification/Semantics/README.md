@@ -418,6 +418,14 @@ This makes those emitted bodies reviewable proof inputs rather than assumed
 templates. The Swift output link is **not closed**: the pin does not establish
 the Swift syntax-to-semantics interpretation, the generated state and snapshot
 representations, or the macro glue that installs those members.
+`GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
+update merge and apply path for any two distinct state fields, including
+successful accumulation and complete-state replacement.
+`GeneratedCopyMatchesEmittedTLA` specializes that path to the generated
+callback chain: the second write uses the first captured read, and its complete
+transition relation equals the emitted TLA `copy` action. The model of these
+Swift members is still a manually stated interpretation of pinned emitted
+syntax; no independent syntax-to-semantics checker certifies that link yet.
 `PreStepSecondReadIsObservable` is a machine-checked negative witness: at
 `(first, second) = (0, 1)`, reading the pre-step `first` for the second write
 produces `(1, 0)`, which the emitted TLA action rejects. The generated-machine
@@ -502,7 +510,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 1120 `SingleAssignment.tla` obligations and all 192
+TLAPS 1.6.0-pre checked all 1134 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

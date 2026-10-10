@@ -1800,6 +1800,76 @@ THEOREM EmittedCopyMatchesOrderedInstructions ==
         BY <1>1, <1>2, <1>7, EmittedCopyStep,
             OrderedDoTransitionEquivalence
 
+GeneratedEmptyUpdates(state) ==
+    [accepted |-> TRUE, written |-> {}, values |-> state]
+GeneratedMerge(updates, key, value) ==
+    IF updates.accepted
+       /\ (key \notin updates.written \/ updates.values[key] = value)
+    THEN [accepted |-> TRUE,
+          written |-> updates.written \cup {key},
+          values |-> [updates.values EXCEPT ![key] = value]]
+    ELSE [accepted |-> FALSE,
+          written |-> updates.written,
+          values |-> updates.values]
+GeneratedApply(state, updates) ==
+    [key \in Vars |->
+        IF key \in updates.written THEN updates.values[key] ELSE state[key]]
+GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
+    LET firstUpdate ==
+            GeneratedMerge(GeneratedEmptyUpdates(state), firstKey, firstValue)
+        secondUpdate ==
+            GeneratedMerge(firstUpdate, secondKey, secondValue)
+    IN [accepted |-> secondUpdate.accepted,
+        target |-> GeneratedApply(state, secondUpdate)]
+
+THEOREM GeneratedDisjointWritesPreserveCompleteState ==
+    ASSUME NEW state \in States,
+           NEW firstKey \in Vars,
+           NEW secondKey \in Vars,
+           firstKey # secondKey,
+           NEW firstValue \in Values,
+           NEW secondValue \in Values
+    PROVE /\ GeneratedTwoWrites(state, firstKey, firstValue,
+                secondKey, secondValue).accepted
+          /\ GeneratedTwoWrites(state, firstKey, firstValue,
+                secondKey, secondValue).target
+             = [state EXCEPT ![firstKey] = firstValue,
+                             ![secondKey] = secondValue]
+    BY SMT DEF GeneratedTwoWrites, GeneratedApply, GeneratedMerge,
+        GeneratedEmptyUpdates, States
+
+GeneratedCopyStep(source, target) ==
+    LET firstRead == source["second"]
+        secondRead == firstRead
+        outcome == GeneratedTwoWrites(source, "first", firstRead,
+            "second", secondRead)
+    IN outcome.accepted /\ target = outcome.target
+
+THEOREM GeneratedCopyMatchesEmittedTLA ==
+    ASSUME Vars = {"first", "second"},
+           Values = Int,
+           first \in Int,
+           second \in Int,
+           first' \in Int,
+           second' \in Int
+    PROVE GeneratedCopyStep(CopySourceState, CopyTargetState) <=> copy
+    PROOF
+    <1>1. CopySourceState \in States /\ CopyTargetState \in States
+        BY SMT DEF CopySourceState, CopyTargetState, States
+    <1>2. /\ GeneratedTwoWrites(CopySourceState, "first", second,
+                    "second", second).accepted
+          /\ GeneratedTwoWrites(CopySourceState, "first", second,
+                    "second", second).target
+             = [CopySourceState EXCEPT !["first"] = second,
+                                       !["second"] = second]
+        BY <1>1, GeneratedDisjointWritesPreserveCompleteState, SMT
+    <1>3. GeneratedCopyStep(CopySourceState, CopyTargetState)
+            <=> SourceOrderedCopy
+        BY <1>2, SMT DEF GeneratedCopyStep, CopySourceState,
+            CopyTargetState, SourceOrderedCopy, States
+    <1>. QED
+        BY <1>3, EmittedCopyStep
+
 VARIABLES orderedPC, orderedX, orderedY
 Repeated == INSTANCE OrderedCopy WITH pc <- orderedPC, x <- orderedX, y <- orderedY
 
