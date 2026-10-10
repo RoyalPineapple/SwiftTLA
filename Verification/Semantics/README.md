@@ -198,6 +198,12 @@ it restored all obligations.
 observation layer for complete state-labeled/action-labeled graphs.
 `PointwiseStateEncodingIsInjective` proves that an injective value encoding
 lifts to an injective encoding of complete states with the same variable keys.
+`PerFieldStateEncodingIsInjective` extends this to the generated machine's
+heterogeneous state shape: each field may have its own value domain and
+encoding, provided that encoding is injective on that field's domain. TLAPS
+proves that distinct complete typed states then remain distinct after
+projection. The compiler has not yet established the premise for every
+emitted field encoder, nor has the emitted projection been machine-checked.
 `ScopedControlNamingIsInjective` proves that duplicate source labels remain
 distinct when their replacement names are injective and disjoint from every
 source label. The compiled layout allocates replacement names for colliding
@@ -462,7 +468,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 994 `SingleAssignment.tla` obligations and all 192
+TLAPS 1.6.0-pre checked all 1021 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

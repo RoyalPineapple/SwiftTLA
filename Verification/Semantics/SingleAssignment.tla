@@ -20,6 +20,10 @@ InjectiveOn(mapping, domain) ==
     \A first, second \in domain : mapping[first] = mapping[second] => first = second
 PointwiseStateEncoding(valueMap, state) ==
     [key \in Vars |-> valueMap[state[key]]]
+TypedStates(domains) ==
+    {state \in States : \A key \in Vars : state[key] \in domains[key]}
+PerFieldStateEncoding(valueMaps, state) ==
+    [key \in Vars |-> valueMaps[key][state[key]]]
 
 THEOREM PointwiseStateEncodingIsInjective ==
     \A valueMap \in [Values -> Values] :
@@ -28,6 +32,57 @@ THEOREM PointwiseStateEncodingIsInjective ==
                 [state \in States |-> PointwiseStateEncoding(valueMap, state)],
                 States)
     BY SMT DEF InjectiveOn, PointwiseStateEncoding, States
+
+THEOREM PerFieldStateEncodingIsInjective ==
+    \A domains \in [Vars -> SUBSET Values],
+       valueMaps \in [Vars -> [Values -> Values]] :
+        (\A key \in Vars : InjectiveOn(valueMaps[key], domains[key]))
+        => InjectiveOn(
+            [state \in TypedStates(domains) |-> PerFieldStateEncoding(valueMaps, state)],
+            TypedStates(domains))
+    PROOF
+    <1>. SUFFICES ASSUME NEW domains \in [Vars -> SUBSET Values],
+                          NEW valueMaps \in [Vars -> [Values -> Values]],
+                          \A key \in Vars : InjectiveOn(valueMaps[key], domains[key])
+                  PROVE InjectiveOn(
+                      [state \in TypedStates(domains) |-> PerFieldStateEncoding(valueMaps, state)],
+                      TypedStates(domains))
+    <1>1. \A first, second \in TypedStates(domains) :
+             PerFieldStateEncoding(valueMaps, first)
+                 = PerFieldStateEncoding(valueMaps, second)
+             => first = second
+        PROOF
+        <2>. SUFFICES ASSUME NEW first \in TypedStates(domains),
+                              NEW second \in TypedStates(domains),
+                              PerFieldStateEncoding(valueMaps, first)
+                                  = PerFieldStateEncoding(valueMaps, second)
+                      PROVE first = second
+        <2>1. \A key \in Vars : first[key] = second[key]
+            PROOF
+            <3>. SUFFICES ASSUME NEW key \in Vars
+                          PROVE first[key] = second[key]
+            <3>1. first[key] \in domains[key]
+                BY SMT DEF TypedStates, States
+            <3>2. second[key] \in domains[key]
+                BY SMT DEF TypedStates, States
+            <3>3. PerFieldStateEncoding(valueMaps, first)[key]
+                    = PerFieldStateEncoding(valueMaps, second)[key]
+                BY SMT
+            <3>4. PerFieldStateEncoding(valueMaps, first)[key]
+                    = valueMaps[key][first[key]]
+                BY DEF PerFieldStateEncoding
+            <3>5. PerFieldStateEncoding(valueMaps, second)[key]
+                    = valueMaps[key][second[key]]
+                BY DEF PerFieldStateEncoding
+            <3>6. valueMaps[key][first[key]] = valueMaps[key][second[key]]
+                BY <3>3, <3>4, <3>5, SMT
+            <3>7. first[key] = second[key]
+                BY <3>1, <3>2, <3>6, SMT DEF InjectiveOn
+            <3>8. QED BY <3>7
+        <2>2. first = second
+            BY <2>1, SMT DEF TypedStates, States
+        <2>3. QED BY <2>2
+    <1>2. QED BY <1>1 DEF InjectiveOn
 
 UniqueControlName(ids, source, location) ==
     \A other \in ids : source[other] = source[location] => other = location
