@@ -198,6 +198,8 @@ it restored all obligations.
 observation layer for complete state-labeled/action-labeled graphs.
 `PointwiseStateEncodingIsInjective` proves that an injective value encoding
 lifts to an injective encoding of complete states with the same variable keys.
+`InjectiveSetEncoding` proves that an injective element encoding maps distinct
+sets to distinct encoded sets, without assuming a finite domain.
 `DisjointUntaggedUnionEncodingIsInjective` proves that erasing a union's branch
 tag preserves identity when each branch encoding is injective and their images
 are disjoint. The generated projection does erase that tag, and type resolution

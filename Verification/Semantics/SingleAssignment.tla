@@ -29,6 +29,70 @@ THEOREM PointwiseStateEncodingIsInjective ==
                 States)
     BY SMT DEF InjectiveOn, PointwiseStateEncoding, States
 
+MappedSetEncoding(valueMap, members) ==
+    {valueMap[value] : value \in members}
+
+THEOREM MappedSetMembership ==
+    \A valueMap \in [Values -> Values], members \in SUBSET Values,
+       encoded \in Values :
+        (encoded \in MappedSetEncoding(valueMap, members))
+        <=> (\E value \in members : valueMap[value] = encoded)
+    BY SMT DEF MappedSetEncoding
+
+THEOREM EqualEncodedSetsHaveSubset ==
+    \A valueMap \in [Values -> Values] :
+        InjectiveOn(valueMap, Values) =>
+            \A first, second \in SUBSET Values :
+                MappedSetEncoding(valueMap, first)
+                    = MappedSetEncoding(valueMap, second)
+                => first \subseteq second
+    PROOF
+    <1>. SUFFICES ASSUME NEW valueMap \in [Values -> Values],
+                          InjectiveOn(valueMap, Values),
+                          NEW first \in SUBSET Values,
+                          NEW second \in SUBSET Values,
+                          MappedSetEncoding(valueMap, first)
+                            = MappedSetEncoding(valueMap, second),
+                          NEW value \in first
+                  PROVE value \in second
+        BY SMT DEF InjectiveOn
+    <1>1. valueMap[value] \in MappedSetEncoding(valueMap, first)
+        BY SMT DEF MappedSetEncoding
+    <1>2. valueMap[value] \in MappedSetEncoding(valueMap, second)
+        BY <1>1, SMT
+    <1>3. \E other \in second : valueMap[other] = valueMap[value]
+        BY <1>2, MappedSetMembership, SMT
+    <1>4. PICK other \in second : valueMap[other] = valueMap[value]
+        BY <1>3
+    <1>5. other = value
+        BY <1>4, SMT DEF InjectiveOn
+    <1>. QED
+        BY <1>4, <1>5
+
+THEOREM InjectiveSetEncoding ==
+    \A valueMap \in [Values -> Values] :
+        InjectiveOn(valueMap, Values) =>
+            InjectiveOn(
+                [members \in SUBSET Values |-> MappedSetEncoding(valueMap, members)],
+                SUBSET Values)
+    PROOF
+    <1>. SUFFICES ASSUME NEW valueMap \in [Values -> Values],
+                          InjectiveOn(valueMap, Values),
+                          NEW first \in SUBSET Values,
+                          NEW second \in SUBSET Values,
+                          MappedSetEncoding(valueMap, first)
+                            = MappedSetEncoding(valueMap, second)
+                  PROVE first = second
+        BY SMT DEF InjectiveOn
+    <1>1. first \subseteq second
+        BY EqualEncodedSetsHaveSubset, SMT
+    <1>2. second \subseteq first
+        BY EqualEncodedSetsHaveSubset, SMT
+    <1>3. \A value : (value \in first) <=> (value \in second)
+        BY <1>1, <1>2, SMT
+    <1>. QED
+        BY <1>3, SetExtensionality
+
 UntaggedUnionEncoding(leftDomain, rightDomain, leftMap, rightMap) ==
     [tagged \in ({"left"} \X leftDomain) \cup ({"right"} \X rightDomain) |->
         IF tagged[1] = "left"
