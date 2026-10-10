@@ -396,7 +396,12 @@ behavior, branch selection, or control transfers; those remain separate
 compiler-to-semantics obligations.
 
 `GeneratedAtomicCopyProofModel.tla` is the complete TLA module emitted from a
-small `#spec` model. `GeneratedAtomicUpdateProofTests` requires byte-for-byte
+small `#spec` model. `GeneratedAtomicUpdateProofTests` checks that parsing and
+lowering that actual source produces two ordered `define` captures: the first
+reads `second`, the second reads the first capture, and the complete action
+assigns those captures to `first` and `second` with a true guard. This is a
+fixture-specific compiled-output link, not a proof of the general `Do` lowerer.
+The test also requires byte-for-byte
 equality with `GeneratedAtomicCopyProofModel.render()` and checks the generated
 Swift machine's concrete `(0, 1) -> (1, 1)` step. This module is imported by
 `SingleAssignment.tla`, which proves its generated `Init`, `copy`, and `Next`

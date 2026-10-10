@@ -2,20 +2,14 @@ import Foundation
 import Testing
 import SwiftParser
 import SwiftSyntax
+import SwiftTLA
 @testable import SwiftTLAPlugin
 
 @Suite("Generated atomic update proof input")
 struct GeneratedAtomicUpdateProofTests {
     @Test("The proof input contains the generated Swift state and copy paths")
     func emittedSwiftTransitionMatchesProofInput() throws {
-        let fixture = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("GeneratedAtomicUpdateProofFixtures.swift")
-        let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
-        let declaration = try #require(source.statements.compactMap {
-            $0.item.as(StructDeclSyntax.self)
-        }.first { $0.name.text == "GeneratedAtomicCopyProofModel" })
-        let model = try TLASpecVerifier.parseAndVerify(declaration)
+        let model = try compiledProofModel()
         var emitter = NativeSwiftEmitter(model: model)
         let members = try emitter.machineMembers()
         let names = ["State", "Snapshot", "__swifttlaFormalProjectionTokens",
@@ -69,6 +63,38 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(templateBindings(wrongMergeMember, expectedUpdates) == nil)
     }
 
+    @Test("Do lowering captures the ordered copy as complete compiled updates")
+    func compiledCopyKeepsOrderedReadsAndTargets() throws {
+        let program = try compiledProofModel().program
+        let variables = program.layout.variables
+        let first = try #require(variables.first { $0.declaration.name == "first" })
+        let second = try #require(variables.first { $0.declaration.name == "second" })
+        let action = try #require(program.behavior.actions.first)
+        guard variables.count == 2, program.behavior.actions.count == 1, action.bindings.isEmpty,
+              case .define(let firstCapture, let firstRead, let firstTail) = action.body,
+              case .stateVariable(let source) = firstRead.operation,
+              case .define(let secondCapture, let secondRead, let writes) = firstTail,
+              case .boundValue(let copiedFirst) = secondRead.operation,
+              case .and(let firstPart, let secondWrite) = writes,
+              case .and(let guardPart, let firstWrite) = firstPart,
+              case .guard_(let guardValue) = guardPart,
+              case .value(.boolean(true)) = guardValue.operation,
+              case .assign(let firstTarget, let firstValue) = firstWrite,
+              case .boundValue(let firstValueBinding) = firstValue.operation,
+              case .assign(let secondTarget, let secondValue) = secondWrite,
+              case .boundValue(let secondValueBinding) = secondValue.operation else {
+            Issue.record("The compiled action no longer has the proved ordered-copy structure")
+            return
+        }
+        #expect(source == second.id)
+        #expect(copiedFirst == firstCapture)
+        #expect(firstTarget == first.id && firstValueBinding == firstCapture)
+        #expect(secondTarget == second.id && secondValueBinding == secondCapture)
+        let onlyLeafExpressions = [firstRead, secondRead, guardValue, firstValue, secondValue]
+            .allSatisfy { $0.children.isEmpty }
+        #expect(onlyLeafExpressions)
+    }
+
     @Test("The checked TLA module is the model's actual generated output")
     func renderedModuleMatchesProofInput() throws {
         let rendered = try GeneratedAtomicCopyProofModel.render().tlaBundle.root.tla
@@ -108,6 +134,17 @@ struct GeneratedAtomicUpdateProofTests {
               let first = Int(text.substring(with: match.range(at: 1))),
               let second = Int(text.substring(with: match.range(at: 2))) else { return nil }
         return (first, second)
+    }
+
+    private func compiledProofModel() throws -> MacroCompilation {
+        let fixture = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("GeneratedAtomicUpdateProofFixtures.swift")
+        let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "GeneratedAtomicCopyProofModel" })
+        return try TLASpecVerifier.parseAndVerify(declaration)
     }
 
     private func member(named name: String, in declarations: [DeclSyntax]) -> DeclSyntax? {
