@@ -18,7 +18,7 @@ struct GeneratedAtomicUpdateProofTests {
         let model = try TLASpecVerifier.parseAndVerify(declaration)
         var emitter = NativeSwiftEmitter(model: model)
         let members = try emitter.machineMembers()
-        let names = ["_Updates", "_initialStates", "_visitUpdates0", "_visitSuccessors0",
+        let names = ["State", "Snapshot", "_Updates", "_initialStates", "_visitUpdates0", "_visitSuccessors0",
             "__swifttlaFormalProjectionTokens", "formalProjection", "formalCall"]
         let actual = try names.map { name in
             let member = try #require(members.first { item in
@@ -27,7 +27,9 @@ struct GeneratedAtomicUpdateProofTests {
                     || item.as(VariableDeclSyntax.self)?.bindings.first?
                         .pattern.as(IdentifierPatternSyntax.self)?.identifier.text == name
             })
-            return "@@ \(name)\n" + member.description.trimmingCharacters(in: .newlines)
+            return "@@ \(name)\n" + member.description
+                .replacingOccurrences(of: #"(?m)^[ \t]+$"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .newlines)
         }.joined(separator: "\n")
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

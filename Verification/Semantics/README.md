@@ -411,14 +411,14 @@ complete pre- and post-states, to the two independently stated instructions
 under the general ordered-schedule relation. Neither result proves the Swift
 emitter or arbitrary accepted models.
 
-The same test now pins seven actual generated Swift members—including the update
-helpers, initial-state construction, per-action successor visitation, formal
-projection tokens and values, and action identity—to
+The same test now pins nine actual generated Swift members—including `State`,
+`Snapshot`, the update helpers, initial-state construction, per-action
+successor visitation, formal projection tokens and values, and action identity—to
 `GeneratedAtomicCopySwiftWitness.txt`.
 This makes those emitted bodies reviewable proof inputs rather than assumed
 templates. The Swift output link is **not closed**: the pin does not establish
-the Swift syntax-to-semantics interpretation, the generated state and snapshot
-representations, or the macro glue that installs those members.
+the Swift syntax-to-semantics interpretation, the runtime behavior of the
+pinned state and snapshot declarations, or the macro glue that installs them.
 `GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
 update merge and apply path for any two distinct state fields, including
 successful accumulation and complete-state replacement.
@@ -435,8 +435,8 @@ composed into one theorem. The projection theorem
 proves that both formal fields preserve every typed value, and the token
 declaration is pinned to their actual TLA names. The copy-step theorem covers
 every typed source and target state, not only the test's concrete step.
-Generated `State` and `Snapshot` declarations, global action dispatch, and
-macro installation are not yet certified by this slice.
+The pinned `State` and `Snapshot` declarations, global action dispatch, and
+macro installation are not yet semantically certified by this slice.
 `PreStepSecondReadIsObservable` is a machine-checked negative witness: at
 `(first, second) = (0, 1)`, reading the pre-step `first` for the second write
 produces `(1, 0)`, which the emitted TLA action rejects. The generated-machine
