@@ -298,7 +298,8 @@ struct MachineValidationTests {
         let scenario = try #require(RecordedOverflowModel.validationScenarios().first)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        #expect(throws: NativeValidationRunnerError.unavailable("declared checking outcome")) {
+        #expect(throws: NativeValidationRunnerError.evaluationFailure(
+            .integerOverflow(.addition, operands: [Int.max, 1]))) {
             try NativeValidationRunner.run(scenario: scenario, caseID: "recorded-overflow",
                 maximumStates: 2, to: directory)
         }

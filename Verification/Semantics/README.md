@@ -57,7 +57,9 @@ retains the source state ID, action, and applicable operation and operands.
 Errors from the evidence callback are not reclassified as model failures.
 Binary evidence now retains the typed failure, action identity, and operands
 with a checked completion footer. The independent comparison path still rejects
-that outcome until generated TLA+ has a matching failure rule. Errors from
+that outcome until generated TLA+ has a matching failure rule. The native
+validation runner reports the typed failure reason rather than an unavailable
+checking outcome; this is a diagnostic, not parity evidence. Errors from
 action-domain enumeration, initializers, constraints, and selected claims need
 their own matching output rules and checking evidence.
 `EWD998TerminationModel` presents a different case: while a sender remains
