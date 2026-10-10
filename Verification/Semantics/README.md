@@ -429,8 +429,10 @@ optionals, comparisons, nested `if` statements, append, return, and the pinned
 public machine construction. The test also token-checks the complete emitted
 `_Updates`, `_visitUpdates0`, and `_visitSuccessors0` declarations against
 `GeneratedAtomicCopySwiftTemplate.txt`, extracting the source field read by
-the ordered copy. Changing that read changes the extracted obligation; a
-wrong target merge makes the template check fail. Under the ordinary Swift
+the ordered copy. Its field and update-slot bindings are checked consistently
+across all three declarations; a second `#spec` fixture with renamed fields
+passes the same template. Changing the read changes the extracted obligation;
+a wrong target merge makes the template check fail. Under the ordinary Swift
 meaning of the matched callback, optional-merge, state-construction, and
 deduplication syntax, this links the private successor path to the relation
 proved below. It does not yet certify global action dispatch, the runtime
@@ -443,7 +445,8 @@ callback chain: the second write uses the first captured read, and its complete
 transition relation equals the emitted TLA `copy` action. The token template
 checks the actual private Swift output against this modeled callback path;
 its interpretation of those Swift constructs remains a stated trusted boundary,
-not a theorem about the Swift compiler/runtime.
+not a theorem about the Swift compiler/runtime. The template currently covers
+this two-field, integer, ordered-copy rule, not all eight action constructors.
 `GeneratedCopyInitialsMatchSourcePredicate` proves both unfiltered
 initialization and filtering by a selected complete initial state against the
 source-state predicate. `GeneratedCopyInitialMembershipMatchesActualInit`

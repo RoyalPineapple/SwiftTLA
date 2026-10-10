@@ -1,27 +1,27 @@
 private struct _Updates: Sendable {
-    var _value_first_0: Int? = nil
-    var _value_second_1: Int? = nil
+    var __PROOF_FIRST_SLOT__: Int? = nil
+    var __PROOF_SECOND_SLOT__: Int? = nil
 
     func merging(_ other: Self) -> Self? {
         var result = self
-        if let value = other._value_first_0 {
-            if let previous = result._value_first_0, previous != value {
+        if let value = other.__PROOF_FIRST_SLOT__ {
+            if let previous = result.__PROOF_FIRST_SLOT__, previous != value {
                 return nil
             }
-            result._value_first_0 = value
+            result.__PROOF_FIRST_SLOT__ = value
         }
-        if let value = other._value_second_1 {
-            if let previous = result._value_second_1, previous != value {
+        if let value = other.__PROOF_SECOND_SLOT__ {
+            if let previous = result.__PROOF_SECOND_SLOT__, previous != value {
                 return nil
             }
-            result._value_second_1 = value
+            result.__PROOF_SECOND_SLOT__ = value
         }
         return result
     }
 
     func applying(to state: Snapshot) -> Snapshot {
-        Snapshot(state: State(first: _value_first_0 ?? state.state.first,
-                              second: _value_second_1 ?? state.state.second))
+        Snapshot(state: State(__PROOF_FIRST_FIELD__: __PROOF_FIRST_SLOT__ ?? state.state.__PROOF_FIRST_FIELD__,
+                              __PROOF_SECOND_FIELD__: __PROOF_SECOND_SLOT__ ?? state.state.__PROOF_SECOND_FIELD__))
     }
 }
 
@@ -52,12 +52,12 @@ private static func _visitUpdates0(
         try emit(updates)
     }
     func _actionPart5(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-        if let merged = updates.merging(_Updates(_value_first_0: ___atomic_0_0)) {
+        if let merged = updates.merging(_Updates(__PROOF_FIRST_SLOT__: ___atomic_0_0)) {
             try emit(merged)
         }
     }
     func _actionPart3(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-        if let merged = updates.merging(_Updates(_value_second_1: ___atomic_1_1)) {
+        if let merged = updates.merging(_Updates(__PROOF_SECOND_SLOT__: ___atomic_1_1)) {
             try emit(merged)
         }
     }

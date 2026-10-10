@@ -43,12 +43,10 @@ struct GeneratedAtomicUpdateProofTests {
             .standardizedFileURL
         let template = Parser.parse(source: try String(contentsOf: templateFile, encoding: .utf8))
         let templateMembers = template.statements.compactMap { $0.item.as(DeclSyntax.self) }
-        for name in ["_Updates", "_visitUpdates0", "_visitSuccessors0"] {
-            let emitted = try #require(member(named: name, in: members))
-            let expected = try #require(member(named: name, in: templateMembers))
-            let bindings = try #require(templateBindings(emitted, expected))
-            #expect(bindings["__PROOF_READ__"] == (name == "_visitUpdates0" ? "second" : nil))
-        }
+        let bindings = try checkedTransitionBindings(members, templateMembers)
+        #expect(bindings["__PROOF_FIRST_FIELD__"] == "first")
+        #expect(bindings["__PROOF_SECOND_FIELD__"] == "second")
+        #expect(bindings["__PROOF_READ__"] == "second")
         let emittedUpdate = try #require(member(named: "_visitUpdates0", in: members))
         let expectedUpdate = try #require(member(named: "_visitUpdates0", in: templateMembers))
         let wrongRead = Parser.parse(source: emittedUpdate.description.replacingOccurrences(
@@ -63,36 +61,58 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(templateBindings(wrongMergeMember, expectedUpdates) == nil)
     }
 
+    @Test("Ordered copy emission is independent of field names")
+    func generatedCopyRuleUsesResolvedFieldNames() throws {
+        let model = try compiledProofModel(named: "RenamedAtomicCopyProofModel")
+        var emitter = NativeSwiftEmitter(model: model)
+        let members = try emitter.machineMembers()
+        let templateFile = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/GeneratedAtomicCopySwiftTemplate.txt")
+            .standardizedFileURL
+        let template = Parser.parse(source: try String(contentsOf: templateFile, encoding: .utf8))
+        let bindings = try checkedTransitionBindings(
+            members, template.statements.compactMap { $0.item.as(DeclSyntax.self) })
+        #expect(bindings["__PROOF_FIRST_FIELD__"] == "left")
+        #expect(bindings["__PROOF_SECOND_FIELD__"] == "right")
+        #expect(bindings["__PROOF_READ__"] == "right")
+    }
+
     @Test("Do lowering captures the ordered copy as complete compiled updates")
     func compiledCopyKeepsOrderedReadsAndTargets() throws {
-        let program = try compiledProofModel().program
-        let variables = program.layout.variables
-        let first = try #require(variables.first { $0.declaration.name == "first" })
-        let second = try #require(variables.first { $0.declaration.name == "second" })
-        let action = try #require(program.behavior.actions.first)
-        guard variables.count == 2, program.behavior.actions.count == 1, action.bindings.isEmpty,
-              case .define(let firstCapture, let firstRead, let firstTail) = action.body,
-              case .stateVariable(let source) = firstRead.operation,
-              case .define(let secondCapture, let secondRead, let writes) = firstTail,
-              case .boundValue(let copiedFirst) = secondRead.operation,
-              case .and(let firstPart, let secondWrite) = writes,
-              case .and(let guardPart, let firstWrite) = firstPart,
-              case .guard_(let guardValue) = guardPart,
-              case .value(.boolean(true)) = guardValue.operation,
-              case .assign(let firstTarget, let firstValue) = firstWrite,
-              case .boundValue(let firstValueBinding) = firstValue.operation,
-              case .assign(let secondTarget, let secondValue) = secondWrite,
-              case .boundValue(let secondValueBinding) = secondValue.operation else {
-            Issue.record("The compiled action no longer has the proved ordered-copy structure")
-            return
+        for (modelName, firstName, secondName) in [
+            ("GeneratedAtomicCopyProofModel", "first", "second"),
+            ("RenamedAtomicCopyProofModel", "left", "right"),
+        ] {
+            let program = try compiledProofModel(named: modelName).program
+            let variables = program.layout.variables
+            let first = try #require(variables.first { $0.declaration.name == firstName })
+            let second = try #require(variables.first { $0.declaration.name == secondName })
+            let action = try #require(program.behavior.actions.first)
+            guard variables.count == 2, program.behavior.actions.count == 1, action.bindings.isEmpty,
+                  case .define(let firstCapture, let firstRead, let firstTail) = action.body,
+                  case .stateVariable(let source) = firstRead.operation,
+                  case .define(let secondCapture, let secondRead, let writes) = firstTail,
+                  case .boundValue(let copiedFirst) = secondRead.operation,
+                  case .and(let firstPart, let secondWrite) = writes,
+                  case .and(let guardPart, let firstWrite) = firstPart,
+                  case .guard_(let guardValue) = guardPart,
+                  case .value(.boolean(true)) = guardValue.operation,
+                  case .assign(let firstTarget, let firstValue) = firstWrite,
+                  case .boundValue(let firstValueBinding) = firstValue.operation,
+                  case .assign(let secondTarget, let secondValue) = secondWrite,
+                  case .boundValue(let secondValueBinding) = secondValue.operation else {
+                Issue.record("The compiled action no longer has the proved ordered-copy structure")
+                return
+            }
+            #expect(source == second.id)
+            #expect(copiedFirst == firstCapture)
+            #expect(firstTarget == first.id && firstValueBinding == firstCapture)
+            #expect(secondTarget == second.id && secondValueBinding == secondCapture)
+            let onlyLeafExpressions = [firstRead, secondRead, guardValue, firstValue, secondValue]
+                .allSatisfy { $0.children.isEmpty }
+            #expect(onlyLeafExpressions)
         }
-        #expect(source == second.id)
-        #expect(copiedFirst == firstCapture)
-        #expect(firstTarget == first.id && firstValueBinding == firstCapture)
-        #expect(secondTarget == second.id && secondValueBinding == secondCapture)
-        let onlyLeafExpressions = [firstRead, secondRead, guardValue, firstValue, secondValue]
-            .allSatisfy { $0.children.isEmpty }
-        #expect(onlyLeafExpressions)
     }
 
     @Test("The checked TLA module is the model's actual generated output")
@@ -136,15 +156,31 @@ struct GeneratedAtomicUpdateProofTests {
         return (first, second)
     }
 
-    private func compiledProofModel() throws -> MacroCompilation {
+    private func compiledProofModel(named name: String = "GeneratedAtomicCopyProofModel") throws -> MacroCompilation {
         let fixture = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("GeneratedAtomicUpdateProofFixtures.swift")
         let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
         let declaration = try #require(source.statements.compactMap {
             $0.item.as(StructDeclSyntax.self)
-        }.first { $0.name.text == "GeneratedAtomicCopyProofModel" })
+        }.first { $0.name.text == name })
         return try TLASpecVerifier.parseAndVerify(declaration)
+    }
+
+    private func checkedTransitionBindings(
+        _ actualMembers: [DeclSyntax], _ templateMembers: [DeclSyntax]
+    ) throws -> [String: String] {
+        var all: [String: String] = [:]
+        for name in ["_Updates", "_visitUpdates0", "_visitSuccessors0"] {
+            let emitted = try #require(member(named: name, in: actualMembers))
+            let expected = try #require(member(named: name, in: templateMembers))
+            let bindings = try #require(templateBindings(emitted, expected))
+            for (key, value) in bindings {
+                if let previous = all[key] { _ = try #require(previous == value) }
+                all[key] = value
+            }
+        }
+        return all
     }
 
     private func member(named name: String, in declarations: [DeclSyntax]) -> DeclSyntax? {
