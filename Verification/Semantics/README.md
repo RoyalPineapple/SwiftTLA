@@ -509,7 +509,11 @@ that flips a Boolean before an `If`/`else` assignment in the same atomic
 `Do`, with sequential weak fairness. The fixture test pins those bytes,
 including `WF_<<pc, chooseFirst, value>>(Next)`, and checks that the generated
 Swift machine selects the branch from the updated value for both initial
-Boolean values. `ConditionalStep.tla` separately proves that the emitted initial
+Boolean values. `GeneratedConditionalStepSwiftWitness.txt` now pins the actual
+emitted `_visitUpdates0` token stream: both paths compute `!chooseFirst`, use
+opposite guards, and merge the selected Boolean, value, and control-location
+updates. Inverting the true-branch guard is rejected by the output check.
+`ConditionalStep.tla` separately proves that the emitted initial
 states, both conditional branches, terminating action, and `Next` match
 independently stated source relations over Boolean condition states. It also
 proves the generated temporal `Spec` equivalent to the source temporal spec
@@ -519,7 +523,8 @@ every typed state. Direct `ENABLED` theorems also establish that the emitted
 `choose` and `Next` actions agree with the source relations on enabledness and
 deadlock for typed states. It covers one emitted
 conditional with a prior write, not arbitrary conditions, expression failures,
-or the Swift emitter for all states.
+or the Swift emitter rule for arbitrary compiled programs. The Swift-output
+check is a fixture-specific link, not a machine-checked Swift semantics.
 
 `EmittedConditionalValueRefinement` projects that exact generated module onto
 the non-injective value-only abstraction: initial value `0`, at most one

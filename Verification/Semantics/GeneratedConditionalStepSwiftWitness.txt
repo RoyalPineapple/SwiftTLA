@@ -1,0 +1,87 @@
+private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                           _ emit: (_Updates) throws -> Void) throws {
+    func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart2(updates, { candidate in try _actionPart1(candidate, emit) })
+}
+func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    guard (state._value_pc_0 == _ControlLocation.location0) else { return }
+try emit(updates)
+}
+func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart3(updates, emit)
+try _actionPart4(updates, emit)
+}
+func _actionPart4(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_0_2 = (!state.state.chooseFirst)
+try _actionPart5(___atomic_0_2, updates, emit)
+}
+func _actionPart5(_ ___atomic_0_2: Bool, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart7(___atomic_0_2, updates, { candidate in try _actionPart6(___atomic_0_2, candidate, emit) })
+}
+func _actionPart7(_ ___atomic_0_2: Bool, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    guard (!___atomic_0_2) else { return }
+try emit(updates)
+}
+func _actionPart6(_ ___atomic_0_2: Bool, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_2_3 = 2
+try _actionPart8(___atomic_0_2, ___atomic_2_3, updates, emit)
+}
+func _actionPart8(_ ___atomic_0_2: Bool, _ ___atomic_2_3: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart10(___atomic_0_2, ___atomic_2_3, updates, { candidate in try _actionPart9(___atomic_0_2, ___atomic_2_3, candidate, emit) })
+}
+func _actionPart10(_ ___atomic_0_2: Bool, _ ___atomic_2_3: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart12(___atomic_0_2, ___atomic_2_3, updates, { candidate in try _actionPart11(___atomic_0_2, ___atomic_2_3, candidate, emit) })
+}
+func _actionPart12(_ ___atomic_0_2: Bool, _ ___atomic_2_3: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+}
+func _actionPart11(_ ___atomic_0_2: Bool, _ ___atomic_2_3: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_chooseFirst_1: ___atomic_0_2)) { try emit(merged) }
+}
+func _actionPart9(_ ___atomic_0_2: Bool, _ ___atomic_2_3: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart14(___atomic_0_2, ___atomic_2_3, updates, { candidate in try _actionPart13(___atomic_0_2, ___atomic_2_3, candidate, emit) })
+}
+func _actionPart14(_ ___atomic_0_2: Bool, _ ___atomic_2_3: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_value_2: ___atomic_2_3)) { try emit(merged) }
+}
+func _actionPart13(_ ___atomic_0_2: Bool, _ ___atomic_2_3: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_pc_0: _ControlLocation.location1)) { try emit(merged) }
+}
+func _actionPart3(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_0_0 = (!state.state.chooseFirst)
+try _actionPart15(___atomic_0_0, updates, emit)
+}
+func _actionPart15(_ ___atomic_0_0: Bool, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart17(___atomic_0_0, updates, { candidate in try _actionPart16(___atomic_0_0, candidate, emit) })
+}
+func _actionPart17(_ ___atomic_0_0: Bool, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    guard ___atomic_0_0 else { return }
+try emit(updates)
+}
+func _actionPart16(_ ___atomic_0_0: Bool, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_1_1 = 1
+try _actionPart18(___atomic_0_0, ___atomic_1_1, updates, emit)
+}
+func _actionPart18(_ ___atomic_0_0: Bool, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart20(___atomic_0_0, ___atomic_1_1, updates, { candidate in try _actionPart19(___atomic_0_0, ___atomic_1_1, candidate, emit) })
+}
+func _actionPart20(_ ___atomic_0_0: Bool, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart22(___atomic_0_0, ___atomic_1_1, updates, { candidate in try _actionPart21(___atomic_0_0, ___atomic_1_1, candidate, emit) })
+}
+func _actionPart22(_ ___atomic_0_0: Bool, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+}
+func _actionPart21(_ ___atomic_0_0: Bool, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_chooseFirst_1: ___atomic_0_0)) { try emit(merged) }
+}
+func _actionPart19(_ ___atomic_0_0: Bool, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart24(___atomic_0_0, ___atomic_1_1, updates, { candidate in try _actionPart23(___atomic_0_0, ___atomic_1_1, candidate, emit) })
+}
+func _actionPart24(_ ___atomic_0_0: Bool, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_value_2: ___atomic_1_1)) { try emit(merged) }
+}
+func _actionPart23(_ ___atomic_0_0: Bool, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_pc_0: _ControlLocation.location1)) { try emit(merged) }
+}
+try _actionPart0(_Updates(), emit)
+}
