@@ -203,6 +203,13 @@ They do not prove that compiler outputs meet these graph and claim premises
 or that the abstract run formulas implement every emitted `WF_`/`SF_` form.
 Those output and temporal links remain required.
 
+`EveryConcreteRunRefines` covers the distinct, one-way refinement case. A
+state projection may be non-injective: if it maps concrete initial states into
+abstract initial states and every concrete labeled edge projects to either an
+abstract edge or a stutter, then every concrete infinite run projects to a
+valid abstract run. This does not establish the edge/initial premises for an
+emitted refinement declaration, nor does it preserve fairness automatically.
+
 `InitialMembershipMatchesEnumeration` proves that one native initializer's
 candidate sequence produces exactly the complete states admitted by a TLA+
 membership clause when the sequence contains precisely the declared domain.
@@ -397,7 +404,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 922 `SingleAssignment.tla` obligations and all 122
+TLAPS 1.6.0-pre checked all 924 `SingleAssignment.tla` obligations and all 122
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

@@ -333,6 +333,26 @@ THEOREM ExactReachabilityClaimCorrespondence ==
             <=> EventuallyClaim(MappedRun(run, stateMap), targetClaim))
     BY SMT DEF ClaimsAgreeUnderMap, EventuallyClaim, MappedRun, States
 
+RefinementSteps(concreteEdges, abstractEdges, projection) ==
+    \A edge \in concreteEdges :
+        TraceStep(abstractEdges, projection[edge[1]], projection[edge[3]])
+
+THEOREM EveryConcreteRunRefines ==
+    ASSUME NEW concreteInitial \in SUBSET States,
+           NEW abstractInitial \in SUBSET States,
+           NEW concreteEdges \in SUBSET LabeledEdges,
+           NEW abstractEdges \in SUBSET LabeledEdges,
+           NEW projection \in [States -> States],
+           NEW run \in [Nat -> States],
+           MappedStates(concreteInitial, projection) \subseteq abstractInitial,
+           RefinementSteps(concreteEdges, abstractEdges, projection),
+           run[0] \in concreteInitial,
+           ValidRun(concreteEdges, run)
+    PROVE /\ MappedRun(run, projection)[0] \in abstractInitial
+          /\ ValidRun(abstractEdges, MappedRun(run, projection))
+    BY SMT DEF MappedStates, RefinementSteps, TraceStep, ValidRun,
+        MappedRun, LabeledEdges, States
+
 THEOREM GuardedChoiceComposition ==
     \A domain \in SUBSET Values :
         \A source, rendered \in [domain -> SUBSET LabeledEdges] :
