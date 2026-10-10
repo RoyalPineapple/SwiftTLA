@@ -142,8 +142,10 @@ struct CompiledTLARenderer {
                         .expression(then), .text(") ELSE ("), .expression(otherwise), .text("))")
                     ])
                 case .define(let binder, let value, let body):
+                    let defined = try choiceDefined(value)
+                    if let defined { parts.append("(IF \(defined) THEN ") }
                     parts.append("(LET \(try binderName(binder)) == \(try state(value)) IN ")
-                    schedule([.expression(body), .text(")")])
+                    schedule([.expression(body), .text(defined == nil ? ")" : ") ELSE FALSE)")])
                 case .and(let lhs, let rhs):
                     parts.append("(")
                     schedule([.expression(lhs), .text(" /\\ "), .expression(rhs), .text(")")])
@@ -154,6 +156,40 @@ struct CompiledTLARenderer {
             }
         }
         return parts.joined()
+    }
+
+    func choiceFailure(_ action: CompiledActionExpr) throws -> String? {
+        switch action {
+        case .define(_, let value, _):
+            guard let defined = try choiceDefined(value) else { return nil }
+            return "~(\(defined))"
+        case .and(.guard_(let condition), let body):
+            guard repeatable(condition), let failure = try choiceFailure(body) else { return nil }
+            return "((\(try state(condition))) = TRUE /\\ \(failure))"
+        default: return nil
+        }
+    }
+
+    private func choiceDefined(_ value: CompiledExpression) throws -> String? {
+        guard case .choose(let binder) = value.operation,
+              value.resultType == .int || value.resultType == .bool else { return nil }
+        guard value.children.count == 2 else {
+            throw CompiledValueType.diagnostic("rendering.choose", "choice requires a domain and predicate")
+        }
+        // shortcut: only repeatable total operands may be guarded; extend with per-operation proofs.
+        guard value.children.allSatisfy(repeatable) else { return nil }
+        return "(\\E \(try binderName(binder)) \\in \(try state(value.children[0])) : \(try state(value.children[1])))"
+    }
+
+    private func repeatable(_ expression: CompiledExpression) -> Bool {
+        switch expression.operation {
+        case .value, .stateVariable, .boundValue, .controlLocation,
+             .setLiteral, .equal, .notEqual, .lessThan, .lessOrEqual,
+             .greaterThan, .greaterOrEqual, .and, .or, .not:
+            return expression.children.allSatisfy(repeatable)
+        default:
+            return false
+        }
     }
 
     func temporal(_ property: CompiledTemporal<CompiledStateQuery>) throws -> String {

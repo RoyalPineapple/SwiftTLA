@@ -2287,6 +2287,11 @@ private extension CompiledModuleMetadata {
             lines.append("vars == \(varsTuple)")
             lines.append("")
         }
+        let occupied = renderer.reservedNames.union(renderer.bindings.binders.values)
+            .union(renderer.bindings.operatorNames.values)
+            .union(layout.declarations.map(\.name))
+            .union(layout.actions.map(\.renderedName))
+            .union(renderedActions.flatMap(\.calls).map(\.renderedName))
         for index in behavior.enabledActionIndices {
             let renderedAction = renderedActions[index]
             guard !renderedAction.sourceName.isEmpty else { continue }
@@ -2294,6 +2299,12 @@ private extension CompiledModuleMetadata {
             let emittedName = renderedAction.renderedName
             let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
             lines.append("\(header) == \(renderedAction.renderedBody)")
+            if let failure = try renderer.choiceFailure(behavior.actions[index].body) {
+                var failureName = "__SwiftTLAChoiceFailure\(index)"
+                while occupied.contains(failureName) { failureName += "_" }
+                let failureHeader = parameters.isEmpty ? failureName : "\(failureName)(\(parameters))"
+                lines.append("\(failureHeader) == \(failure)")
+            }
             for call in renderedAction.calls where call.arguments.isEmpty == false {
                 lines.append("\(call.renderedName) == \(formalActionCall(named: emittedName, arguments: call.arguments))")
             }

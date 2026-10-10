@@ -199,12 +199,19 @@ actual emitted action advances from each position in `0..2` to the least
 matching member, matching the generated Swift machine's focused behavior test.
 `ReversedIntegerChoiceAtZeroDisagrees` is the negative control: reversing the
 ordering selects `3` where the source and emitted rule select `1`.
-This is a finite integer, nonempty-choice slice, not a general output theorem:
-empty domains, predicate evaluation failures, and other value orders remain
-open. At position `3`, Swift reports `noSatisfyingChoice` but the rendered
-TLA+ expression still has an unspecified `CHOOSE` value. The generated checking
-visitor now retains that action's identity and reports a typed failure; the
-rendered failure relation and its output proof remain open.
+For this pure, total integer choice, the emitted action now guards `CHOOSE`
+with a matching-witness test. At position `3` it has no successor and the
+emitted `__SwiftTLAChoiceFailure0` predicate matches the independently stated
+source failure. `EmittedIntegerChoiceFailureMatchesSource` and
+`EmittedIntegerChoiceCompleteStepWhenReachable` prove the failure and complete
+step relation over positions `0..3`; reversing the failure predicate is a
+negative control. The focused generated Swift test confirms the matching
+`noSatisfyingChoice` failure without changing state. This is an output-linked
+finite slice, not a general compiler theorem. The failure predicate is not
+yet selected as a TLC checking outcome, and nested choice, effectful or
+fallible operands, other value orders, and general generated Swift semantics
+remain uncovered.
+
 `BooleanSelection.tla` is likewise the complete emitted module for a
 non-unique Boolean choice. `TypedSelectionTests.booleanSelectionUsesLeastMember`
 checks the actual generated Swift transition and exact TLA+ output;
@@ -213,7 +220,8 @@ prove the imported module's initial condition and complete labeled `select`
 step. `ReversedBooleanChoiceWouldChangeStep` proves that reversing the Boolean
 order selects `TRUE` instead. This is one concrete nonempty Boolean output
 pair, not a proof for every Boolean predicate or generated Swift expression;
-no-match and predicate-evaluation failures remain unmatched.
+its guarded output is pinned, but general no-match and predicate-evaluation
+failures remain uncovered.
 
 ## Checked kernel lemma
 
@@ -601,7 +609,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 1163 `SingleAssignment.tla` obligations and all 192
+TLAPS 1.6.0-pre checked all 1253 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

@@ -2623,7 +2623,13 @@ THEOREM EmittedIntegerChoiceAtZero ==
 THEOREM EmittedIntegerChoiceAtOne ==
     choiceSelected = 1 =>
         (IntegerChoice!advance <=> choiceSelected' = 2)
-    BY UniqueMinimumIntegerChoice, SMT DEF IntegerChoice!advance
+    PROOF
+    <1>1. {member \in {1, 2, 3} : member > 1} = {2, 3}
+        BY SMT
+    <1>2. (CHOOSE member \in {2, 3} :
+              \A other \in {2, 3} : member <= other) = 2
+        BY UniqueMinimumIntegerChoice, SMT
+    <1>. QED BY <1>1, <1>2, SMT DEF IntegerChoice!advance
 
 THEOREM EmittedIntegerChoiceAtTwo ==
     choiceSelected = 2 =>
@@ -2636,6 +2642,44 @@ THEOREM EmittedIntegerChoiceMatchesSourceWhenDefined ==
             choiceSelected' = choiceSelected + 1)
     BY EmittedIntegerChoiceAtZero, EmittedIntegerChoiceAtOne,
         EmittedIntegerChoiceAtTwo, SMT
+
+SourceIntegerChoiceFailure ==
+    ~(\E member \in {1, 2, 3} : member > choiceSelected)
+
+THEOREM EmittedIntegerChoiceFailureMatchesSource ==
+    choiceSelected \in 0..3 =>
+        (IntegerChoice!__SwiftTLAChoiceFailure0
+         <=> SourceIntegerChoiceFailure)
+    BY SMT DEF IntegerChoice!__SwiftTLAChoiceFailure0,
+        SourceIntegerChoiceFailure
+
+THEOREM EmittedIntegerChoiceFailureAtThree ==
+    choiceSelected \in 0..3 =>
+        (IntegerChoice!__SwiftTLAChoiceFailure0 <=> choiceSelected = 3)
+    BY EmittedIntegerChoiceFailureMatchesSource, SMT
+        DEF SourceIntegerChoiceFailure
+
+THEOREM EmittedIntegerChoiceHasNoStepOnFailure ==
+    choiceSelected = 3 => ~IntegerChoice!advance
+    BY SMT DEF IntegerChoice!advance
+
+THEOREM EmittedIntegerChoiceCompleteStepWhenReachable ==
+    choiceSelected \in 0..3 =>
+        (IntegerChoice!advance <=>
+            (choiceSelected \in 0..2 /\
+             choiceSelected' = choiceSelected + 1))
+    BY EmittedIntegerChoiceAtZero, EmittedIntegerChoiceAtOne,
+        EmittedIntegerChoiceAtTwo, EmittedIntegerChoiceHasNoStepOnFailure,
+        SMT
+
+WrongIntegerChoiceFailure ==
+    \E member \in {1, 2, 3} : member > choiceSelected
+
+THEOREM ReversedIntegerChoiceFailureWouldDisagree ==
+    choiceSelected = 3 =>
+        SourceIntegerChoiceFailure /\
+        ~WrongIntegerChoiceFailure
+    BY SMT DEF SourceIntegerChoiceFailure, WrongIntegerChoiceFailure
 
 THEOREM ReversedIntegerChoiceAtZeroDisagrees ==
     (CHOOSE member \in {1, 2, 3} :

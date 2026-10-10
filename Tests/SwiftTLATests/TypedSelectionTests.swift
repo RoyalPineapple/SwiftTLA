@@ -19,8 +19,16 @@ struct TypedSelectionTests {
         #expect(machine.snapshot == before)
     }
 
-    @Test("Rendered integer selection chooses the same least matching member")
+    @Test("Integer selection retains its compiled choice and exact formal output")
     func renderedSelectionUsesLeastMember() throws {
+        let compilation = try IncreasingSelection.spec.compile()
+        let action = try #require(compilation.semantics.behavior.actions.first)
+        guard case .define(_, let choice, _) = action.body,
+              case .choose = choice.operation else {
+            Issue.record("The authored selection no longer lowers to the proved choice rule")
+            return
+        }
+        #expect(choice.children.count == 2)
         let module = try IncreasingSelection.render().tlaBundle.root.tla
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
