@@ -1436,9 +1436,66 @@ THEOREM AdjustedTruncatingDivisionMatchesRendered ==
     <1>. QED
         BY <1>1, <1>2, <1>3, <1>4, SMT
 
+ModeledTruncatingQuotient(dividend, divisor) ==
+    LET magnitude == IF dividend < 0 THEN -dividend ELSE dividend
+        positiveDivisor == IF divisor < 0 THEN -divisor ELSE divisor
+        magnitudeQuotient == magnitude \div positiveDivisor
+    IN IF (dividend < 0) # (divisor < 0)
+       THEN 0 - magnitudeQuotient
+       ELSE magnitudeQuotient
+
+ModeledTruncatingRemainder(dividend, divisor) ==
+    dividend - divisor * ModeledTruncatingQuotient(dividend, divisor)
+
+ModeledSwiftDivisionAlgorithm(dividend, divisor) ==
+    LET quotient == ModeledTruncatingQuotient(dividend, divisor)
+    IN IF ((dividend < 0) # (divisor < 0))
+          /\ ModeledTruncatingRemainder(dividend, divisor) # 0
+       THEN quotient - 1
+       ELSE quotient
+
+THEOREM ModeledSwiftDivisionAlgorithmMatchesAdjusted ==
+    \A dividend, divisor \in Int :
+        divisor # 0 =>
+            ModeledSwiftDivisionAlgorithm(dividend, divisor)
+                = AdjustedTruncatingDivision(dividend, divisor)
+    PROOF
+    <1>. SUFFICES ASSUME NEW dividend \in Int,
+                          NEW divisor \in Int,
+                          divisor # 0
+                  PROVE ModeledSwiftDivisionAlgorithm(dividend, divisor)
+                      = AdjustedTruncatingDivision(dividend, divisor)
+        OBVIOUS
+    <1>1. CASE dividend >= 0 /\ divisor > 0
+        BY <1>1, SMT DEF ModeledSwiftDivisionAlgorithm,
+            ModeledTruncatingQuotient, ModeledTruncatingRemainder,
+            AdjustedTruncatingDivision
+    <1>2. CASE dividend < 0 /\ divisor > 0
+        BY <1>2, SMT DEF ModeledSwiftDivisionAlgorithm,
+            ModeledTruncatingQuotient, ModeledTruncatingRemainder,
+            AdjustedTruncatingDivision
+    <1>3. CASE dividend >= 0 /\ divisor < 0
+        BY <1>3, SMT DEF ModeledSwiftDivisionAlgorithm,
+            ModeledTruncatingQuotient, ModeledTruncatingRemainder,
+            AdjustedTruncatingDivision
+    <1>4. CASE dividend < 0 /\ divisor < 0
+        BY <1>4, SMT DEF ModeledSwiftDivisionAlgorithm,
+            ModeledTruncatingQuotient, ModeledTruncatingRemainder,
+            AdjustedTruncatingDivision
+    <1>. QED
+        BY <1>1, <1>2, <1>3, <1>4, SMT
+
+THEOREM ModeledSwiftDivisionAlgorithmMatchesRendered ==
+    \A dividend, divisor \in Int :
+        divisor # 0 =>
+            ModeledSwiftDivisionAlgorithm(dividend, divisor)
+                = RenderedSignedDivision(dividend, divisor)
+    BY ModeledSwiftDivisionAlgorithmMatchesAdjusted,
+        AdjustedTruncatingDivisionMatchesRendered, SMT
+
 CurrentNativeDivisionOutcome(dividend, divisor) ==
-    IF WithinSwiftInt(AdjustedTruncatingDivision(dividend, divisor))
-    THEN <<"value", AdjustedTruncatingDivision(dividend, divisor)>>
+    IF WithinSwiftInt(ModeledSwiftDivisionAlgorithm(dividend, divisor))
+    THEN <<"value", ModeledSwiftDivisionAlgorithm(dividend, divisor)>>
     ELSE <<"overflow">>
 CurrentRenderedDivisionOutcome(dividend, divisor) ==
     <<"value", RenderedSignedDivision(dividend, divisor)>>
@@ -1450,7 +1507,7 @@ THEOREM CurrentDivisionAgreementIsExactlyRangeSafety ==
             ((CurrentNativeDivisionOutcome(dividend, divisor)
               = CurrentRenderedDivisionOutcome(dividend, divisor))
              <=> WithinSwiftInt(RenderedSignedDivision(dividend, divisor)))
-    BY AdjustedTruncatingDivisionMatchesRendered, SMT
+    BY ModeledSwiftDivisionAlgorithmMatchesRendered, SMT
         DEF CurrentNativeDivisionOutcome, CurrentRenderedDivisionOutcome,
             WithinSwiftInt
 

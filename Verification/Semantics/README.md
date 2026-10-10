@@ -89,10 +89,14 @@ quotient. `PositiveDivisionNegation` and
 `AdjustedTruncatingDivisionMatchesRendered` prove that the mathematical
 truncating quotient with a nonzero-remainder sign correction equals the exact
 rendered expression for every nonzero divisor. Under the same division-law
-assumption, `CurrentDivisionAgreementIsExactlyRangeSafety` proves that this
-abstract checked outcome agrees with rendered TLA+ exactly when the quotient
-fits Swift `Int`. This does not prove the emitted Swift helper implements the
-abstract calculation or make the current outputs agree on overflow.
+assumption, `ModeledSwiftDivisionAlgorithmMatchesRendered` connects a model of
+the helper's truncating quotient, signed remainder, and correction to that
+rendered expression. `CurrentDivisionAgreementIsExactlyRangeSafety` proves
+that the modeled checked outcome agrees with rendered TLA+ exactly when the
+quotient fits Swift `Int`. This still trusts Swift's primitive division and
+remainder behavior, the emitted call to `_NativeMachineOperations.divide`, and
+its checked-overflow behavior; the actual output link and agreement on overflow
+are not proved.
 
 `CompiledSpecificationRendererTests`
 compares the actual symbolic renderer output with the expression in this proof
@@ -349,7 +353,7 @@ no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
 with a prior write, not arbitrary conditions, expression failures, or the
 Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 738 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 761 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
