@@ -1314,6 +1314,146 @@ THEOREM PositiveDivisionQuotientUnique ==
         => first = second
     BY SMT
 
+THEOREM NegatedDivisionFromRemainders ==
+    \A magnitude, divisor, quotient, remainder, negativeQuotient,
+       negativeRemainder \in Int :
+        (divisor > 0
+         /\ 0 <= remainder /\ remainder < divisor
+         /\ 0 <= negativeRemainder /\ negativeRemainder < divisor
+         /\ magnitude = divisor * quotient + remainder
+         /\ -magnitude = divisor * negativeQuotient + negativeRemainder)
+        => negativeQuotient =
+            IF remainder = 0 THEN 0 - quotient ELSE 0 - quotient - 1
+    PROOF
+    <1>. SUFFICES ASSUME NEW magnitude \in Int,
+                          NEW divisor \in Int,
+                          NEW quotient \in Int,
+                          NEW remainder \in Int,
+                          NEW negativeQuotient \in Int,
+                          NEW negativeRemainder \in Int,
+                          divisor > 0,
+                          0 <= remainder,
+                          remainder < divisor,
+                          0 <= negativeRemainder,
+                          negativeRemainder < divisor,
+                          magnitude = divisor * quotient + remainder,
+                          -magnitude = divisor * negativeQuotient
+                              + negativeRemainder
+                  PROVE negativeQuotient =
+                      IF remainder = 0 THEN 0 - quotient
+                      ELSE 0 - quotient - 1
+        OBVIOUS
+    <1>1. CASE remainder = 0
+        <2>1. -magnitude = divisor * (0 - quotient) + 0
+            BY <1>1, SMT
+        <2>2. negativeQuotient = 0 - quotient
+            BY <1>1, <2>1, PositiveDivisionQuotientUnique, SMT
+        <2>. QED
+            BY <1>1, <2>2
+    <1>2. CASE remainder # 0
+        <2>1. 0 < remainder /\ remainder < divisor
+            BY <1>2, SMT
+        <2>2. 0 <= divisor - remainder /\ divisor - remainder < divisor
+            BY <1>2, <2>1, SMT
+        <2>3. -magnitude = divisor * (0 - quotient - 1)
+                + (divisor - remainder)
+            BY <1>2, SMT
+        <2>4. negativeQuotient = 0 - quotient - 1
+            BY <1>2, <2>2, <2>3, PositiveDivisionQuotientUnique, SMT
+        <2>. QED
+            BY <1>2, <2>4
+    <1>. QED
+        BY <1>1, <1>2
+
+THEOREM PositiveDivisionNegation ==
+    \A magnitude, divisor \in Int :
+        (magnitude >= 0 /\ divisor > 0) =>
+            ((-magnitude) \div divisor
+             = IF magnitude - divisor * (magnitude \div divisor) = 0
+               THEN 0 - (magnitude \div divisor)
+               ELSE 0 - (magnitude \div divisor) - 1)
+    PROOF
+    <1>. SUFFICES ASSUME NEW magnitude \in Int,
+                          NEW divisor \in Int,
+                          magnitude >= 0,
+                          divisor > 0
+                  PROVE (-magnitude) \div divisor
+                      = IF magnitude - divisor * (magnitude \div divisor) = 0
+                        THEN 0 - (magnitude \div divisor)
+                        ELSE 0 - (magnitude \div divisor) - 1
+        OBVIOUS
+    <1>1. PICK remainder \in 0..(divisor - 1) :
+            magnitude = divisor * (magnitude \div divisor) + remainder
+        BY PositiveDivisionLaw
+    <1>2. PICK negativeRemainder \in 0..(divisor - 1) :
+            -magnitude = divisor * ((-magnitude) \div divisor)
+                + negativeRemainder
+        BY PositiveDivisionLaw
+    <1>3. 0 <= remainder /\ remainder < divisor
+           /\ 0 <= negativeRemainder /\ negativeRemainder < divisor
+        BY <1>1, <1>2, SMT
+    <1>4. (-magnitude) \div divisor =
+            IF remainder = 0
+            THEN 0 - (magnitude \div divisor)
+            ELSE 0 - (magnitude \div divisor) - 1
+        BY <1>1, <1>2, <1>3, NegatedDivisionFromRemainders, SMT
+    <1>. QED
+        BY <1>1, <1>4, SMT
+
+AdjustedTruncatingDivision(dividend, divisor) ==
+    LET magnitude == IF dividend < 0 THEN -dividend ELSE dividend
+        positiveDivisor == IF divisor < 0 THEN -divisor ELSE divisor
+        quotient == magnitude \div positiveDivisor
+        remainder == magnitude - positiveDivisor * quotient
+    IN IF (dividend < 0) # (divisor < 0)
+       THEN IF remainder = 0 THEN 0 - quotient ELSE 0 - quotient - 1
+       ELSE quotient
+
+THEOREM AdjustedTruncatingDivisionMatchesRendered ==
+    \A dividend, divisor \in Int :
+        divisor # 0 =>
+            AdjustedTruncatingDivision(dividend, divisor)
+                = RenderedSignedDivision(dividend, divisor)
+    PROOF
+    <1>. SUFFICES ASSUME NEW dividend \in Int,
+                          NEW divisor \in Int,
+                          divisor # 0
+                  PROVE AdjustedTruncatingDivision(dividend, divisor)
+                      = RenderedSignedDivision(dividend, divisor)
+        OBVIOUS
+    <1>1. CASE dividend >= 0 /\ divisor > 0
+        BY <1>1, SMT DEF AdjustedTruncatingDivision,
+            RenderedSignedDivision
+    <1>2. CASE dividend < 0 /\ divisor > 0
+        BY <1>2, PositiveDivisionNegation, SMT
+            DEF AdjustedTruncatingDivision, RenderedSignedDivision
+    <1>3. CASE dividend >= 0 /\ divisor < 0
+        BY <1>3, PositiveDivisionNegation, SMT
+            DEF AdjustedTruncatingDivision, RenderedSignedDivision
+    <1>4. CASE dividend < 0 /\ divisor < 0
+        BY <1>4, SMT DEF AdjustedTruncatingDivision,
+            RenderedSignedDivision
+    <1>. QED
+        BY <1>1, <1>2, <1>3, <1>4, SMT
+
+CurrentNativeDivisionOutcome(dividend, divisor) ==
+    IF WithinSwiftInt(AdjustedTruncatingDivision(dividend, divisor))
+    THEN <<"value", AdjustedTruncatingDivision(dividend, divisor)>>
+    ELSE <<"overflow">>
+CurrentRenderedDivisionOutcome(dividend, divisor) ==
+    <<"value", RenderedSignedDivision(dividend, divisor)>>
+
+THEOREM CurrentDivisionAgreementIsExactlyRangeSafety ==
+    \A dividend, divisor \in Int :
+        (WithinSwiftInt(dividend) /\ WithinSwiftInt(divisor)
+         /\ divisor # 0) =>
+            ((CurrentNativeDivisionOutcome(dividend, divisor)
+              = CurrentRenderedDivisionOutcome(dividend, divisor))
+             <=> WithinSwiftInt(RenderedSignedDivision(dividend, divisor)))
+    BY AdjustedTruncatingDivisionMatchesRendered, SMT
+        DEF CurrentNativeDivisionOutcome, CurrentRenderedDivisionOutcome,
+            WithinSwiftInt
+
 StrictlyIncreasingIntegers(sequence) ==
     \A first, second \in 1..Len(sequence) :
         first < second => sequence[first] < sequence[second]

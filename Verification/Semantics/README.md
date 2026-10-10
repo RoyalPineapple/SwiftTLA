@@ -63,15 +63,14 @@ outputs would be false.
 
 The same exact range-safety equivalence is proved for the emitted subtraction,
 multiplication, and unary negation forms. These are operator-level obligations,
-not certificates for every occurrence in an accepted program. Division and
-modulo additionally require their operand-domain and rounding rules to match;
-those rules are not covered by these theorems.
+not certificates for every occurrence in an accepted program. Division needs
+its own nonzero-divisor and rounding rule; modulo remains separate.
 
 The direct TLA+ renderer now gives each operand one local definition and
 normalizes a negative divisor into a positive one before integer division.
 This avoids relying on TLC's negative-divisor extension to the mathematical
 `\div` operator. The output link is still incomplete: `Int.min / -1`, division
-by zero, target integer bounds, and evaluation-failure order still need
+by zero, actual target integer bounds, and evaluation-failure order still need
 matching outcome proofs. TLC's bounded integer evaluator may also overflow
 while evaluating an intermediate negation that is valid in mathematical TLA+.
 
@@ -86,8 +85,14 @@ comment states the positive-divisor quotient/remainder equation, but those
 dummy definitions cannot prove the bounded-remainder premise used here.
 `PositiveDivisionQuotientUnique` additionally proves that two bounded
 positive-divisor remainder decompositions of the same integer have the same
-quotient. The connection from Swift's truncating quotient plus correction to
-the rendered signed-division expression remains unproved.
+quotient. `PositiveDivisionNegation` and
+`AdjustedTruncatingDivisionMatchesRendered` prove that the mathematical
+truncating quotient with a nonzero-remainder sign correction equals the exact
+rendered expression for every nonzero divisor. Under the same division-law
+assumption, `CurrentDivisionAgreementIsExactlyRangeSafety` proves that this
+abstract checked outcome agrees with rendered TLA+ exactly when the quotient
+fits Swift `Int`. This does not prove the emitted Swift helper implements the
+abstract calculation or make the current outputs agree on overflow.
 
 `CompiledSpecificationRendererTests`
 compares the actual symbolic renderer output with the expression in this proof
@@ -344,7 +349,7 @@ no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
 with a prior write, not arbitrary conditions, expression failures, or the
 Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 661 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 738 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
