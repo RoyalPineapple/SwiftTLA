@@ -411,12 +411,19 @@ complete pre- and post-states, to the two independently stated instructions
 under the general ordered-schedule relation. Neither result proves the Swift
 emitter or arbitrary accepted models.
 
-The same test now pins nine actual generated Swift members—including `State`,
-`Snapshot`, the update helpers, initial-state construction, per-action
-successor visitation, formal projection tokens and values, and action identity—to
-`GeneratedAtomicCopySwiftWitness.txt`.
-This makes those emitted bodies reviewable proof inputs rather than assumed
-templates. The Swift output link is **not closed**: the pin does not establish
+The same test pins eight actual generated Swift members—including `State`,
+`Snapshot`, the update helpers, per-action successor visitation, formal
+projection tokens and values, and action identity—to
+`GeneratedAtomicCopySwiftWitness.txt`. It checks the full emitted
+`_initialStates` body against a restricted two-field Swift pattern, extracts
+its two literals, and requires the values used by the formal initial-state
+theorem. Mutating the selected-state guard to inspect the wrong field makes
+this check fail. This establishes the private `_initialStates` output link for
+this fixture conditional on the ordinary Swift meaning of the matched literals,
+optionals, comparisons, nested `if` statements, append, return, and the pinned
+`State`/`Snapshot` constructors. It does not certify arbitrary initializers or
+public machine construction. The Swift transition output link is
+**not closed**: the remaining pins do not establish
 the Swift syntax-to-semantics interpretation, the runtime behavior of the
 pinned state and snapshot declarations, or the macro glue that installs them.
 `GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
@@ -429,9 +436,9 @@ Swift members is still a manually stated interpretation of pinned emitted
 syntax; no independent syntax-to-semantics checker certifies that link yet.
 `GeneratedCopyInitialsMatchSourcePredicate` proves both unfiltered
 initialization and filtering by a selected complete initial state against the
-source-state predicate. `EmittedCopyInitialState` separately proves the emitted
-TLA `Init` predicate, but their state-to-variable substitution has not been
-composed into one theorem. The projection theorem
+source-state predicate. `GeneratedCopyInitialMembershipMatchesActualInit`
+composes that set result with the actual emitted TLA `Init` predicate for every
+typed pair of integer variables. The projection theorem
 proves that both formal fields preserve every typed value, and the token
 declaration is pinned to their actual TLA names. The copy-step theorem covers
 every typed source and target state, not only the test's concrete step.
@@ -521,7 +528,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 1150 `SingleAssignment.tla` obligations and all 192
+TLAPS 1.6.0-pre checked all 1163 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

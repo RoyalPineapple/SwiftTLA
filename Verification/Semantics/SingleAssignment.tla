@@ -1902,6 +1902,31 @@ THEOREM GeneratedCopyInitialsMatchSourcePredicate ==
     BY FormalCopyInitialsAreSingleton, SMT
         DEF GeneratedCopyInitials, GeneratedCopyFilteredInitials, States
 
+VariableCopyState == [first |-> first, second |-> second]
+
+THEOREM VariableCopyStateIsTyped ==
+    ASSUME Vars = {"first", "second"}, Values = Int,
+           first \in Int, second \in Int
+    PROVE VariableCopyState \in States
+    BY SMT DEF VariableCopyState, States
+
+THEOREM GeneratedCopyInitialMembershipMatchesActualInit ==
+    ASSUME Vars = {"first", "second"}, Values = Int,
+           first \in Int, second \in Int
+    PROVE (VariableCopyState \in GeneratedCopyInitials) <=> Init
+    PROOF
+    <1>1. VariableCopyState \in States
+        BY VariableCopyStateIsTyped
+    <1>2. (VariableCopyState \in FormalCopyInitials)
+            <=> SourceInitialCopyState
+        BY <1>1, SMT DEF FormalCopyInitials, VariableCopyState,
+            SourceInitialCopyState
+    <1>3. (VariableCopyState \in GeneratedCopyInitials)
+            <=> SourceInitialCopyState
+        BY <1>2, GeneratedCopyInitialsMatchSourcePredicate
+    <1>. QED
+        BY <1>3, EmittedCopyInitialState
+
 GeneratedCopyProjection(state) ==
     [key \in Vars |->
         IF key = "first" THEN state["first"] ELSE state["second"]]

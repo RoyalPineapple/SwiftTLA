@@ -45,18 +45,6 @@ if let value = other._value_second_1 {
         Snapshot(state: State(first: _value_first_0 ?? state.state.first, second: _value_second_1 ?? state.state.second))
     }
 }
-@@ _initialStates
-private static func _initialStates(_selectedInitial: State? = nil) throws -> [Snapshot] {
-    var result: [Snapshot] = []
-let _value_first_0: Int = 0
-if _selectedInitial == nil || _selectedInitial!.first == _value_first_0 {
-let _value_second_1: Int = 1
-if _selectedInitial == nil || _selectedInitial!.second == _value_second_1 {
-result.append(Snapshot(state: State(first: _value_first_0, second: _value_second_1)))
-}
-}
-return result
-}
 @@ _visitUpdates0
 private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
                                            _ emit: (_Updates) throws -> Void) throws {
