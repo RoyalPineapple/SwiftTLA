@@ -200,10 +200,14 @@ observation layer for complete state-labeled/action-labeled graphs.
 lifts to an injective encoding of complete states with the same variable keys.
 `ScopedControlNamingIsInjective` proves that duplicate source labels remain
 distinct when their replacement names are injective and disjoint from every
-source label. The compiled layout allocates such names for colliding control
-locations, and a generated-machine regression checks one pair of same-named
-procedure steps. The proof does not yet establish that the Swift allocation
-loop or every emitted projection satisfies its premises.
+source label. The compiled layout allocates replacement names for colliding
+control locations. Compilation now rejects a layout whose final formal names
+are not injective, before either output can use it; this checks the theorem's
+required conclusion on each accepted layout, without assuming the allocation
+loop is correct. A generated-machine regression checks one pair of same-named
+procedure steps. The Swift check and the use of these names in every emitted
+projection are not themselves machine-checked, so the general output link
+remains open.
 `InjectiveSetEncoding` proves that an injective element encoding maps distinct
 sets to distinct encoded sets, without assuming a finite domain.
 `DisjointUntaggedUnionEncodingIsInjective` proves that erasing a union's branch
