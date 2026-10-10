@@ -204,6 +204,8 @@ matching member, matching the generated Swift machine's focused behavior test.
 first-matching-step relation for every strictly increasing integer sequence
 and typed predicate that has a first match; its result value is exactly the
 canonical TLA+ choice value, not just one checked example.
+`NativeSortedFirstFailureMatchesCandidateEmptiness` proves the complementary
+no-match rule for every integer sequence and typed predicate.
 `ReversedIntegerChoiceAtZeroDisagrees` is the negative control: reversing the
 ordering selects `3` where the source and emitted rule select `1`.
 For this pure, total integer choice, the emitted action now guards `CHOOSE`
@@ -211,8 +213,10 @@ with a matching-witness test. At position `3` it has no successor and the
 emitted `__SwiftTLAChoiceFailure0` predicate matches the independently stated
 source failure. `EmittedIntegerChoiceFailureMatchesSource` and
 `EmittedIntegerChoiceCompleteStepWhenReachable` prove the failure and complete
-step relation over positions `0..3`; reversing the failure predicate is a
-negative control. The focused generated Swift test confirms the matching
+step relation over positions `0..3`;
+`NativeIntegerChoiceFailureMatchesEmitted` connects that failure to the
+first-match rule. Reversing the failure predicate is a negative control. The
+focused generated Swift test confirms the matching
 `noSatisfyingChoice` failure without changing state. This is an output-linked
 finite slice, not a general compiler theorem. The failure predicate is not
 yet selected as a TLC checking outcome.

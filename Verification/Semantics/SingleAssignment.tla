@@ -2620,6 +2620,17 @@ NativeSortedFirstStep(sequence, predicate, nextValue) ==
         FirstMatchingInteger(sequence, predicate, index)
         /\ nextValue = sequence[index]
 
+NativeSortedFirstFailure(sequence, predicate) ==
+    \A index \in 1..Len(sequence) : ~predicate[sequence[index]]
+
+THEOREM NativeSortedFirstFailureMatchesCandidateEmptiness ==
+    \A sequence \in Seq(Int) :
+        \A predicate \in [SequenceMembers(sequence) -> BOOLEAN] :
+            (NativeSortedFirstFailure(sequence, predicate)
+             <=> IntegerChoiceCandidates(sequence, predicate) = {})
+    BY SMT DEF NativeSortedFirstFailure, IntegerChoiceCandidates,
+        SequenceMembers
+
 THEOREM NativeSortedFirstStepMatchesCanonicalChoice ==
     \A sequence \in Seq(Int) :
         \A predicate \in [SequenceMembers(sequence) -> BOOLEAN] :
@@ -2706,6 +2717,14 @@ THEOREM EmittedIntegerChoiceFailureMatchesSource ==
          <=> SourceIntegerChoiceFailure)
     BY SMT DEF IntegerChoice!__SwiftTLAChoiceFailure0,
         SourceIntegerChoiceFailure
+
+THEOREM NativeIntegerChoiceFailureMatchesEmitted ==
+    choiceSelected \in 0..3 =>
+        (NativeSortedFirstFailure(<<1, 2, 3>>,
+             [member \in {1, 2, 3} |-> member > choiceSelected])
+         <=> IntegerChoice!__SwiftTLAChoiceFailure0)
+    BY EmittedIntegerChoiceFailureMatchesSource, SMT
+        DEF NativeSortedFirstFailure, SourceIntegerChoiceFailure
 
 THEOREM EmittedIntegerChoiceFailureAtThree ==
     choiceSelected \in 0..3 =>
