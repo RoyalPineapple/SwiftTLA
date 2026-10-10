@@ -191,6 +191,59 @@ THEOREM InjectiveSequenceEncoding ==
     <1>. QED
         BY <1>1, <1>2, SeqEqual
 
+PartialFunctions == UNION {[keys -> Values] : keys \in SUBSET Values}
+MappedFunctionGraph(keyMap, valueMap, mapping) ==
+    {<<keyMap[key], valueMap[mapping[key]]>> : key \in DOMAIN mapping}
+
+THEOREM InjectiveFunctionGraphEncoding ==
+    \A keyMap, valueMap \in [Values -> Values] :
+        (InjectiveOn(keyMap, Values) /\ InjectiveOn(valueMap, Values))
+        => InjectiveOn(
+            [mapping \in PartialFunctions |->
+                MappedFunctionGraph(keyMap, valueMap, mapping)],
+            PartialFunctions)
+    PROOF
+    <1>. SUFFICES ASSUME NEW keyMap \in [Values -> Values],
+                          NEW valueMap \in [Values -> Values],
+                          InjectiveOn(keyMap, Values),
+                          InjectiveOn(valueMap, Values),
+                          NEW first \in PartialFunctions,
+                          NEW second \in PartialFunctions,
+                          MappedFunctionGraph(keyMap, valueMap, first)
+                            = MappedFunctionGraph(keyMap, valueMap, second)
+                  PROVE first = second
+        BY SMT DEF InjectiveOn
+    <1>1. \A key \in DOMAIN first :
+             \E other \in DOMAIN second :
+                 keyMap[key] = keyMap[other]
+                 /\ valueMap[first[key]] = valueMap[second[other]]
+        BY SMT DEF MappedFunctionGraph
+    <1>2. \A key \in DOMAIN first :
+             key \in DOMAIN second /\ first[key] = second[key]
+        BY <1>1, SMT DEF InjectiveOn, PartialFunctions
+    <1>3. \A key \in DOMAIN second : key \in DOMAIN first
+        PROOF
+        <2>. SUFFICES ASSUME NEW key \in DOMAIN second
+                      PROVE key \in DOMAIN first
+        <2>1. <<keyMap[key], valueMap[second[key]]>>
+                \in MappedFunctionGraph(keyMap, valueMap, second)
+            BY SMT DEF MappedFunctionGraph
+        <2>2. <<keyMap[key], valueMap[second[key]]>>
+                \in MappedFunctionGraph(keyMap, valueMap, first)
+            BY <2>1, SMT
+        <2>3. \E other \in DOMAIN first : keyMap[key] = keyMap[other]
+            BY <2>2, SMT DEF MappedFunctionGraph
+        <2>4. PICK other \in DOMAIN first : keyMap[key] = keyMap[other]
+            BY <2>3
+        <2>5. other = key
+            BY <2>4, SMT DEF InjectiveOn, PartialFunctions
+        <2>. QED
+            BY <2>4, <2>5
+    <1>4. DOMAIN first = DOMAIN second
+        BY <1>2, <1>3, SetExtensionality
+    <1>. QED
+        BY <1>2, <1>4, SMT DEF PartialFunctions
+
 UntaggedUnionEncoding(leftDomain, rightDomain, leftMap, rightMap) ==
     [tagged \in ({"left"} \X leftDomain) \cup ({"right"} \X rightDomain) |->
         IF tagged[1] = "left"
