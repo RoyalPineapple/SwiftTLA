@@ -411,9 +411,8 @@ complete pre- and post-states, to the two independently stated instructions
 under the general ordered-schedule relation. Neither result proves the Swift
 emitter or arbitrary accepted models.
 
-The same test pins eight actual generated Swift members—including `State`,
-`Snapshot`, the update helpers, per-action successor visitation, formal
-projection tokens and values, and action identity—to
+The same test pins five actual generated Swift members—`State`, `Snapshot`,
+formal projection tokens and values, and action identity—to
 `GeneratedAtomicCopySwiftWitness.txt`. It checks the full emitted
 `_initialStates` body against a restricted two-field Swift pattern, extracts
 its two literals, and requires the values used by the formal initial-state
@@ -422,18 +421,24 @@ this check fail. This establishes the private `_initialStates` output link for
 this fixture conditional on the ordinary Swift meaning of the matched literals,
 optionals, comparisons, nested `if` statements, append, return, and the pinned
 `State`/`Snapshot` constructors. It does not certify arbitrary initializers or
-public machine construction. The Swift transition output link is
-**not closed**: the remaining pins do not establish
-the Swift syntax-to-semantics interpretation, the runtime behavior of the
-pinned state and snapshot declarations, or the macro glue that installs them.
+public machine construction. The test also token-checks the complete emitted
+`_Updates`, `_visitUpdates0`, and `_visitSuccessors0` declarations against
+`GeneratedAtomicCopySwiftTemplate.txt`, extracting the source field read by
+the ordered copy. Changing that read changes the extracted obligation; a
+wrong target merge makes the template check fail. Under the ordinary Swift
+meaning of the matched callback, optional-merge, state-construction, and
+deduplication syntax, this links the private successor path to the relation
+proved below. It does not yet certify global action dispatch, the runtime
+behavior of pinned `State`/`Snapshot` declarations, or macro installation.
 `GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
 update merge and apply path for any two distinct state fields, including
 successful accumulation and complete-state replacement.
 `GeneratedCopyMatchesEmittedTLA` specializes that path to the generated
 callback chain: the second write uses the first captured read, and its complete
-transition relation equals the emitted TLA `copy` action. The model of these
-Swift members is still a manually stated interpretation of pinned emitted
-syntax; no independent syntax-to-semantics checker certifies that link yet.
+transition relation equals the emitted TLA `copy` action. The token template
+checks the actual private Swift output against this modeled callback path;
+its interpretation of those Swift constructs remains a stated trusted boundary,
+not a theorem about the Swift compiler/runtime.
 `GeneratedCopyInitialsMatchSourcePredicate` proves both unfiltered
 initialization and filtering by a selected complete initial state against the
 source-state predicate. `GeneratedCopyInitialMembershipMatchesActualInit`

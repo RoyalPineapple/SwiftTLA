@@ -18,16 +18,11 @@ struct GeneratedAtomicUpdateProofTests {
         let model = try TLASpecVerifier.parseAndVerify(declaration)
         var emitter = NativeSwiftEmitter(model: model)
         let members = try emitter.machineMembers()
-        let names = ["State", "Snapshot", "_Updates", "_visitUpdates0", "_visitSuccessors0",
-            "__swifttlaFormalProjectionTokens", "formalProjection", "formalCall"]
+        let names = ["State", "Snapshot", "__swifttlaFormalProjectionTokens",
+            "formalProjection", "formalCall"]
         let actual = try names.map { name in
-            let member = try #require(members.first { item in
-                item.as(StructDeclSyntax.self)?.name.text == name
-                    || item.as(FunctionDeclSyntax.self)?.name.text == name
-                    || item.as(VariableDeclSyntax.self)?.bindings.first?
-                        .pattern.as(IdentifierPatternSyntax.self)?.identifier.text == name
-            })
-            return "@@ \(name)\n" + member.description
+            let selected = try #require(member(named: name, in: members))
+            return "@@ \(name)\n" + selected.description
                 .replacingOccurrences(of: #"(?m)^[ \t]+$"#, with: "", options: .regularExpression)
                 .trimmingCharacters(in: .newlines)
         }.joined(separator: "\n")
@@ -47,6 +42,31 @@ struct GeneratedAtomicUpdateProofTests {
             of: "_selectedInitial!.second", with: "_selectedInitial!.first")
         #expect(wrongGuard != initials.description)
         #expect(try checkedInitialValues(wrongGuard).map { _ in true } == nil)
+
+        let templateFile = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/GeneratedAtomicCopySwiftTemplate.txt")
+            .standardizedFileURL
+        let template = Parser.parse(source: try String(contentsOf: templateFile, encoding: .utf8))
+        let templateMembers = template.statements.compactMap { $0.item.as(DeclSyntax.self) }
+        for name in ["_Updates", "_visitUpdates0", "_visitSuccessors0"] {
+            let emitted = try #require(member(named: name, in: members))
+            let expected = try #require(member(named: name, in: templateMembers))
+            let bindings = try #require(templateBindings(emitted, expected))
+            #expect(bindings["__PROOF_READ__"] == (name == "_visitUpdates0" ? "second" : nil))
+        }
+        let emittedUpdate = try #require(member(named: "_visitUpdates0", in: members))
+        let expectedUpdate = try #require(member(named: "_visitUpdates0", in: templateMembers))
+        let wrongRead = Parser.parse(source: emittedUpdate.description.replacingOccurrences(
+            of: "state.state.second", with: "state.state.first"))
+        let wrongReadMember = try #require(wrongRead.statements.first?.item.as(DeclSyntax.self))
+        #expect(templateBindings(wrongReadMember, expectedUpdate)?["__PROOF_READ__"] == "first")
+        let emittedUpdates = try #require(member(named: "_Updates", in: members))
+        let expectedUpdates = try #require(member(named: "_Updates", in: templateMembers))
+        let wrongMerge = Parser.parse(source: emittedUpdates.description.replacingOccurrences(
+            of: "result._value_second_1 = value", with: "result._value_first_0 = value"))
+        let wrongMergeMember = try #require(wrongMerge.statements.first?.item.as(DeclSyntax.self))
+        #expect(templateBindings(wrongMergeMember, expectedUpdates) == nil)
     }
 
     @Test("The checked TLA module is the model's actual generated output")
@@ -88,5 +108,30 @@ struct GeneratedAtomicUpdateProofTests {
               let first = Int(text.substring(with: match.range(at: 1))),
               let second = Int(text.substring(with: match.range(at: 2))) else { return nil }
         return (first, second)
+    }
+
+    private func member(named name: String, in declarations: [DeclSyntax]) -> DeclSyntax? {
+        declarations.first { item in
+            item.as(StructDeclSyntax.self)?.name.text == name
+                || item.as(FunctionDeclSyntax.self)?.name.text == name
+                || item.as(VariableDeclSyntax.self)?.bindings.first?
+                    .pattern.as(IdentifierPatternSyntax.self)?.identifier.text == name
+        }
+    }
+
+    private func templateBindings(_ actual: DeclSyntax, _ template: DeclSyntax) -> [String: String]? {
+        let actualTokens = Array(actual.tokens(viewMode: .sourceAccurate)).map(\.text)
+        let expectedTokens = Array(template.tokens(viewMode: .sourceAccurate)).map(\.text)
+        guard actualTokens.count == expectedTokens.count else { return nil }
+        var bindings: [String: String] = [:]
+        for (actual, expected) in zip(actualTokens, expectedTokens) {
+            if expected.hasPrefix("__PROOF_") {
+                if let previous = bindings[expected], previous != actual { return nil }
+                bindings[expected] = actual
+            } else if actual != expected {
+                return nil
+            }
+        }
+        return bindings
     }
 }
