@@ -56,6 +56,81 @@ THEOREM EmittedConditionalDeadlockAgreement ==
             SourceConditionalNext, SourceConditionalChoose,
             SourceConditionalTerminating
 
+ConditionalWeakFair(action) ==
+    (<>[]ENABLED <<action>>_vars) => []<><<action>>_vars
+ConditionalStrongFair(action) ==
+    ([]<>ENABLED <<action>>_vars) => []<><<action>>_vars
+
+THEOREM EmittedConditionalWeakFairnessExpansion ==
+    WF_vars(choose) <=> ConditionalWeakFair(choose)
+    BY PTL DEF ConditionalWeakFair
+
+THEOREM SourceConditionalWeakFairnessExpansion ==
+    WF_vars(SourceConditionalChoose)
+        <=> ConditionalWeakFair(SourceConditionalChoose)
+    BY PTL DEF ConditionalWeakFair
+
+THEOREM EmittedConditionalStrongFairnessExpansion ==
+    SF_vars(choose) <=> ConditionalStrongFair(choose)
+    BY PTL DEF ConditionalStrongFair
+
+THEOREM SourceConditionalStrongFairnessExpansion ==
+    SF_vars(SourceConditionalChoose)
+        <=> ConditionalStrongFair(SourceConditionalChoose)
+    BY PTL DEF ConditionalStrongFair
+
+THEOREM EmittedConditionalActionAlwaysSame ==
+    ASSUME []ConditionalTypeOK
+    PROVE [](choose <=> SourceConditionalChoose)
+    BY EmittedConditionalBothBranches, PTL DEF ConditionalTypeOK
+
+THEOREM EmittedConditionalFairEnabledness ==
+    ASSUME ConditionalTypeOK
+    PROVE ENABLED <<choose>>_vars
+        <=> ENABLED <<SourceConditionalChoose>>_vars
+    BY EmittedConditionalBothBranches, ExpandENABLED, SMT
+        DEF ConditionalTypeOK, choose, SourceConditionalChoose, vars
+
+THEOREM EmittedConditionalFairEnabledAlwaysSame ==
+    ASSUME []ConditionalTypeOK
+    PROVE [](ENABLED <<choose>>_vars
+        <=> ENABLED <<SourceConditionalChoose>>_vars)
+    BY EmittedConditionalFairEnabledness, PTL DEF ConditionalTypeOK
+
+THEOREM EmittedConditionalWeakFairnessFormula ==
+    ASSUME [](choose <=> SourceConditionalChoose),
+           [](ENABLED <<choose>>_vars
+             <=> ENABLED <<SourceConditionalChoose>>_vars)
+    PROVE ConditionalWeakFair(choose)
+        <=> ConditionalWeakFair(SourceConditionalChoose)
+    BY PTL DEF ConditionalWeakFair
+
+THEOREM EmittedConditionalWeakFairness ==
+    ASSUME []ConditionalTypeOK
+    PROVE WF_vars(choose) <=> WF_vars(SourceConditionalChoose)
+    BY EmittedConditionalActionAlwaysSame,
+        EmittedConditionalFairEnabledAlwaysSame,
+        EmittedConditionalWeakFairnessFormula,
+        EmittedConditionalWeakFairnessExpansion,
+        SourceConditionalWeakFairnessExpansion
+
+THEOREM EmittedConditionalStrongFairnessFormula ==
+    ASSUME [](choose <=> SourceConditionalChoose),
+           [](ENABLED <<choose>>_vars
+             <=> ENABLED <<SourceConditionalChoose>>_vars)
+    PROVE ConditionalStrongFair(choose)
+        <=> ConditionalStrongFair(SourceConditionalChoose)
+    BY PTL DEF ConditionalStrongFair
+
+THEOREM EmittedConditionalStrongFairness ==
+    ASSUME []ConditionalTypeOK
+    PROVE SF_vars(choose) <=> SF_vars(SourceConditionalChoose)
+    BY EmittedConditionalActionAlwaysSame,
+        EmittedConditionalFairEnabledAlwaysSame,
+        EmittedConditionalStrongFairnessFormula,
+        EmittedConditionalStrongFairnessExpansion,
+        SourceConditionalStrongFairnessExpansion
+
 THEOREM ConditionalInitialType ==
     Init => ConditionalTypeOK
     BY EmittedConditionalInitial,
@@ -112,6 +187,18 @@ THEOREM EmittedConditionalTemporalSpec ==
     <1>. QED
         BY <1>1, <1>2, <1>3, EmittedConditionalInitial, PTL
             DEF Spec, SourceConditionalSpec
+
+THEOREM EmittedConditionalWeakFairTemporalSpec ==
+    (Spec /\ WF_vars(choose))
+        <=> (SourceConditionalSpec /\ WF_vars(SourceConditionalChoose))
+    BY EmittedConditionalTemporalSpec, EmittedConditionalTypeInvariant,
+        EmittedConditionalWeakFairness, PTL
+
+THEOREM EmittedConditionalStrongFairTemporalSpec ==
+    (Spec /\ SF_vars(choose))
+        <=> (SourceConditionalSpec /\ SF_vars(SourceConditionalChoose))
+    BY EmittedConditionalTemporalSpec, EmittedConditionalTypeInvariant,
+        EmittedConditionalStrongFairness, PTL
 
 ConditionalStates ==
     [pc: {"choose", "Done"}, chooseFirst: BOOLEAN, value: {0, 1, 2}]

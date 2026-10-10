@@ -368,7 +368,16 @@ relations on enabledness and deadlock for typed states. It covers one emitted
 conditional with a prior write, not arbitrary conditions, expression failures,
 or the Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 761 `SingleAssignment.tla` obligations and all 62
+For this same emitted `choose` action, TLAPS expands TLA+'s `WF_vars` and
+`SF_vars` operators and proves that conjoining either obligation to the
+emitted `Spec` gives the same temporal formula as conjoining it to the
+independently stated source spec and action. The proof uses action and
+enabledness equality under the reachable-state type invariant. The pinned
+fixture does not itself declare fairness, so this is a conditional extension
+of its actual output, not a test of the fairness renderer or generated Swift
+fairness callbacks.
+
+TLAPS 1.6.0-pre checked all 761 `SingleAssignment.tla` obligations and all 106
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
