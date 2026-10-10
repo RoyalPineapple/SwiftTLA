@@ -19,22 +19,25 @@ that either backend implements the author's `#spec`.
 
 Generated Swift retains Swift `Int`; arbitrary-precision integer values are
 not part of the native model API. This is the chosen representation, not a
-temporary implementation detail. Rendered TLA+ currently uses mathematical
-integers. For every accepted program, the outputs must either agree on an
-explicit overflow outcome or establish that every evaluated integer stays
-within the target Swift `Int` bounds. This includes intermediate arithmetic
-in initializers, action guards and updates, and selected claims. The bounds
-are target-dependent, not an assumed constant width. Division by zero and
-other specified evaluation failures need separate matching rules. A finite
-TLC or native exploration is not a range proof. Whether unproved programs
-receive a diagnostic or a matched overflow outcome is not yet decided.
+temporary implementation detail. The accepted source rule is a checked `Int`
+operation: if a mathematical intermediate result is outside the target Swift
+`Int` bounds, evaluation fails explicitly on both generated paths, without a
+successor or partial state update. Programs are not rejected merely because
+such a failure is reachable. The failure must identify the same operation and
+operand values after the same evaluation order in both outputs, including
+initializers, action guards and updates, and selected claims. The bounds are
+target-dependent, not an assumed constant width. Division by zero and other
+specified evaluation failures need separate matching rules. A finite TLC or
+native exploration is not a proof that overflow is unreachable.
+Rendered TLA+ currently uses mathematical integers, so it does not yet obey
+this source rule.
 Using TLC's operational `Assert` failure alone would not establish this
 agreement: the [standard TLA+ definition of `Assert`](https://github.com/tlaplus/tlaplus/blob/master/tlatools/org.lamport.tlatools/src/tla2sany/StandardModules/TLC.tla)
 does not define a matching mathematical error outcome. The failure must be
 represented in the semantics of both outputs, or the program must carry a
 proved range obligation.
 
-This gate is **not implemented**. `CheckedExecutionOverflow` in
+This matched-failure rule is **not implemented**. `CheckedExecutionOverflow` in
 `NativeExecutionBoundaryTests` is a concrete accepted counterexample: its
 `count + 1` step starts at `Int.max`, so the generated machine throws while
 the rendered TLA+ arithmetic has a successor. Until the gate and both output
@@ -44,10 +47,11 @@ active, `SendMsg` can increment a receiver's `pending` count indefinitely.
 Its `pending <= 3` state constraint limits checking, not the generated
 machine's transition relation. A proof that this model always fits Swift
 `Int` would be false. Under the `Int` contract, this unbounded model cannot
-receive an unconditional range-safety certificate. A matched overflow outcome
-could preserve bounded source semantics, but would not establish parity with
-the upstream unbounded transition relation. A bounded replacement would be a
-different source model and cannot silently count as that parity either.
+receive an unconditional range-safety certificate. The required matched
+overflow failure would preserve bounded source semantics, but would not
+establish parity with the upstream unbounded transition relation. A bounded
+replacement would be a different source model and cannot silently count as
+that parity either.
 
 `CurrentAdditionAgreementIsExactlyRangeSafety` models checked native addition
 as a tagged value or overflow outcome and the currently emitted TLA+ `+` as a
