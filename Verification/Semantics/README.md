@@ -197,6 +197,11 @@ tag preserves identity when each branch encoding is injective and their images
 are disjoint. The generated projection does erase that tag, and type resolution
 rejects overlapping alternatives, but these theorems do not prove that the
 actual emitted encodings satisfy their premises.
+Generated set projection now rejects a collision when its formal set has fewer
+members than the native set. The missing proof link is that, for every finite
+source set, equality of those cardinalities is equivalent to injectivity of
+the emitted element encoding on that set. The guard prevents a silent lossy
+result; it does not establish that all accepted models project successfully.
 If state and action encodings are injective and the target initial set and
 edge relation are their exact images, they preserve initial membership,
 labeled edges, default deadlock, nonstuttering enabledness, mapped infinite
