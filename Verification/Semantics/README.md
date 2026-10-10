@@ -189,9 +189,12 @@ it restored all obligations.
 observation layer for complete state-labeled/action-labeled graphs.
 If state and action encodings are injective and the target initial set and
 edge relation are their exact images, they preserve initial membership,
-labeled edges, nonstuttering enabledness, mapped infinite runs, and weak/strong
-fairness observations on those runs. The run definitions permit stuttering;
+labeled edges, default deadlock, nonstuttering enabledness, mapped infinite
+runs, and weak/strong fairness observations on those runs. The run definitions
+permit stuttering;
 action occurrence requires a changing state, as TLA+'s `<<A>>_vars` does.
+Default deadlock instead asks whether any explicit labeled edge exists, so an
+explicit self-loop is outgoing while implicit temporal stuttering is not.
 The reverse theorem proves that every valid target run from the mapped initial
 set remains in the state image and lifts to a valid source run. These theorems
 also preserve invariant and reachability observations along mapped runs when
@@ -394,7 +397,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 917 `SingleAssignment.tla` obligations and all 122
+TLAPS 1.6.0-pre checked all 922 `SingleAssignment.tla` obligations and all 122
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

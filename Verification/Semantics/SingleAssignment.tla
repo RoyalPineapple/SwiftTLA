@@ -58,6 +58,31 @@ THEOREM ExactChangingEnablednessCorrespondence ==
     BY ExactLabeledEdgeCorrespondence, SMT
         DEF EnabledChanging, InjectiveOn, MappedEdges, LabeledEdges, States
 
+HasOutgoing(edges, state) ==
+    \E action \in ActionLabels, successor \in States :
+        <<state, action, successor>> \in edges
+Deadlocked(edges, state) == ~HasOutgoing(edges, state)
+
+THEOREM ExactOutgoingCorrespondence ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        InjectiveOn(stateMap, States) =>
+            \A edges \in SUBSET LabeledEdges, state \in States :
+                HasOutgoing(MappedEdges(edges, stateMap, actionMap),
+                    stateMap[state])
+                <=> HasOutgoing(edges, state)
+    BY SMT DEF HasOutgoing, MappedEdges, InjectiveOn, LabeledEdges, States
+
+THEOREM ExactDeadlockCorrespondence ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        InjectiveOn(stateMap, States) =>
+            \A edges \in SUBSET LabeledEdges, state \in States :
+                Deadlocked(MappedEdges(edges, stateMap, actionMap),
+                    stateMap[state])
+                <=> Deadlocked(edges, state)
+    BY ExactOutgoingCorrespondence, SMT DEF Deadlocked
+
 TraceStep(edges, before, after) ==
     before = after
     \/ (\E action \in ActionLabels : <<before, action, after>> \in edges)
