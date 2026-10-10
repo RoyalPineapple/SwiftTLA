@@ -283,6 +283,31 @@ THEOREM ExactStrongFairRunCorrespondence ==
         ExactRunActionOccurrenceCorrespondence, SMT
         DEF StrongFairRun, MappedRun, States
 
+ClaimsAgreeUnderMap(sourceClaim, targetClaim, stateMap) ==
+    \A state \in States : sourceClaim[state] = targetClaim[stateMap[state]]
+AlwaysClaim(run, claim) ==
+    \A index \in Nat : claim[run[index]]
+EventuallyClaim(run, claim) ==
+    \E index \in Nat : claim[run[index]]
+
+THEOREM ExactInvariantClaimCorrespondence ==
+    \A stateMap \in [States -> States],
+       sourceClaim, targetClaim \in [States -> BOOLEAN],
+       run \in [Nat -> States] :
+        ClaimsAgreeUnderMap(sourceClaim, targetClaim, stateMap)
+        => (AlwaysClaim(run, sourceClaim)
+            <=> AlwaysClaim(MappedRun(run, stateMap), targetClaim))
+    BY SMT DEF ClaimsAgreeUnderMap, AlwaysClaim, MappedRun, States
+
+THEOREM ExactReachabilityClaimCorrespondence ==
+    \A stateMap \in [States -> States],
+       sourceClaim, targetClaim \in [States -> BOOLEAN],
+       run \in [Nat -> States] :
+        ClaimsAgreeUnderMap(sourceClaim, targetClaim, stateMap)
+        => (EventuallyClaim(run, sourceClaim)
+            <=> EventuallyClaim(MappedRun(run, stateMap), targetClaim))
+    BY SMT DEF ClaimsAgreeUnderMap, EventuallyClaim, MappedRun, States
+
 THEOREM GuardedChoiceComposition ==
     \A domain \in SUBSET Values :
         \A source, rendered \in [domain -> SUBSET LabeledEdges] :
