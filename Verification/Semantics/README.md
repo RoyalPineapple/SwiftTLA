@@ -50,6 +50,10 @@ This matched-failure rule is **not implemented**. `CheckedExecutionOverflow` in
 `count + 1` step starts at `Int.max`, so the generated machine throws while
 the rendered TLA+ arithmetic has a successor. Until the gate and both output
 links are proved, the universal theorem does not hold for accepted `#spec`.
+`MachineValidator.run` currently propagates that throw; its event and summary
+types have no evaluation-failure outcome. Matched checking therefore also
+requires retaining the typed native failure rather than treating this model
+error as an incomplete validation run.
 `EWD998TerminationModel` presents a different case: while a sender remains
 active, `SendMsg` can increment a receiver's `pending` count indefinitely.
 Its `pending <= 3` state constraint limits checking, not the generated
@@ -445,26 +449,32 @@ this fixture conditional on the ordinary Swift meaning of the matched literals,
 optionals, comparisons, nested `if` statements, append, return, and the pinned
 `State`/`Snapshot` constructors. It does not certify arbitrary initializers or
 public machine construction. The test also token-checks the complete emitted
-`_Updates`, `_visitUpdates0`, and `_visitSuccessors0` declarations against
-`GeneratedAtomicCopySwiftTemplate.txt`, extracting the source field read by
+`_Updates`, `_visitUpdates0`, `_visitSuccessors0`, the action-specific and
+whole-machine `_visitSuccessors` dispatchers, and the public checking visitor
+against `GeneratedAtomicCopySwiftTemplate.txt`, extracting the source field read by
 the ordered copy. Its field and update-slot bindings are checked consistently
-across all three declarations; a second `#spec` fixture with renamed fields
+across those declarations; a second `#spec` fixture with renamed fields
 passes the same template. Changing the read changes the extracted obligation;
-a wrong target merge makes the template check fail. Under the ordinary Swift
-meaning of the matched callback, optional-merge, state-construction, and
-deduplication syntax, this links the private successor path to the relation
-proved below. It does not yet certify global action dispatch, the runtime
-behavior of pinned `State`/`Snapshot` declarations, or macro installation.
+a wrong target merge or a false `found` result makes the template check fail.
+The global visitor forwards the single `copy` action to the proved private
+successor path, and an executable check confirms that dispatch from the initial
+state. Under the ordinary Swift meaning of the matched callback, optional-merge,
+state-construction, and
+deduplication syntax, this links the checking visitor to the relation proved
+below. It does not yet certify public machine construction, the runtime behavior
+of pinned `State`/`Snapshot` declarations, or macro installation.
 `GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
 update merge and apply path for any two distinct state fields, including
 successful accumulation and complete-state replacement.
 `GeneratedCopyMatchesEmittedTLA` specializes that path to the generated
 callback chain: the second write uses the first captured read, and its complete
 transition relation equals the emitted TLA `copy` action. The token template
-checks the actual private Swift output against this modeled callback path;
+checks the actual Swift checking path against this modeled callback chain;
 its interpretation of those Swift constructs remains a stated trusted boundary,
 not a theorem about the Swift compiler/runtime. The template currently covers
 this two-field, integer, ordered-copy rule, not all eight action constructors.
+`GeneratedCopyLabeledStepMatchesSource` carries the emitted action label through
+that relation for every typed source and target state.
 `GeneratedCopyInitialsMatchSourcePredicate` proves both unfiltered
 initialization and filtering by a selected complete initial state against the
 source-state predicate. `GeneratedCopyInitialMembershipMatchesActualInit`

@@ -1870,6 +1870,18 @@ THEOREM GeneratedCopyMatchesEmittedTLA ==
     <1>. QED
         BY <1>3, EmittedCopyStep
 
+THEOREM GeneratedCopyLabeledStepMatchesSource ==
+    ASSUME Vars = {"first", "second"},
+           Values = Int,
+           first \in Int,
+           second \in Int,
+           first' \in Int,
+           second' \in Int
+    PROVE \A label \in ActionLabels :
+        (label = "copy" /\ GeneratedCopyStep(CopySourceState, CopyTargetState))
+            <=> (label = "copy" /\ SourceOrderedCopy)
+    BY GeneratedCopyMatchesEmittedTLA, EmittedCopyStep, SMT
+
 GeneratedCopyInitialState ==
     [key \in Vars |-> IF key = "first" THEN 0 ELSE 1]
 GeneratedCopyInitials == {GeneratedCopyInitialState}

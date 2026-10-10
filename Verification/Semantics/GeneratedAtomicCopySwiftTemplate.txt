@@ -78,3 +78,38 @@ private static func _visitSuccessors0(
         }
     }
 }
+
+public func visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>,
+                            _ visit: (Action, Self) throws -> Bool) throws -> Bool {
+    var run: CheckingContext<CheckingRegisters>? = context
+    defer { context = run! }
+    return try _visitSuccessors(checking: &run, visit)
+}
+
+private func _visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?,
+                              _ visit: (Snapshot) throws -> Void) throws {
+    switch action {
+    case .__PROOF_ACTION__:
+        try Self._visitSuccessors0(from: _execution, checking: &context, visit)
+    }
+}
+
+private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
+                              _ visit: (Action, Self) throws -> Bool) throws -> Bool {
+    var found = false
+    do {
+        func _visitAction(_ action: Action) throws {
+            try _visitSuccessors(for: action, checking: &context) { execution in
+                found = true
+                if try !visit(action, Self(execution: execution)) {
+                    throw _StopSuccessorTraversal()
+                }
+            }
+        }
+        do {
+            try _visitAction(.__PROOF_ACTION__)
+        }
+    } catch is _StopSuccessorTraversal {
+    }
+    return found
+}

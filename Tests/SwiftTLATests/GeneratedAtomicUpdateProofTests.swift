@@ -47,6 +47,7 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(bindings["__PROOF_FIRST_FIELD__"] == "first")
         #expect(bindings["__PROOF_SECOND_FIELD__"] == "second")
         #expect(bindings["__PROOF_READ__"] == "second")
+        #expect(bindings["__PROOF_ACTION__"] == "copy")
         let emittedUpdate = try #require(member(named: "_visitUpdates0", in: members))
         let expectedUpdate = try #require(member(named: "_visitUpdates0", in: templateMembers))
         let wrongRead = Parser.parse(source: emittedUpdate.description.replacingOccurrences(
@@ -59,6 +60,12 @@ struct GeneratedAtomicUpdateProofTests {
             of: "result._value_second_1 = value", with: "result._value_first_0 = value"))
         let wrongMergeMember = try #require(wrongMerge.statements.first?.item.as(DeclSyntax.self))
         #expect(templateBindings(wrongMergeMember, expectedUpdates) == nil)
+        let emittedDispatch = try #require(member(named: "_visitSuccessors", parameterCount: 2, in: members))
+        let expectedDispatch = try #require(member(named: "_visitSuccessors", parameterCount: 2, in: templateMembers))
+        let wrongFound = Parser.parse(source: emittedDispatch.description.replacingOccurrences(
+            of: "found = true", with: "found = false"))
+        let wrongFoundMember = try #require(wrongFound.statements.first?.item.as(DeclSyntax.self))
+        #expect(templateBindings(wrongFoundMember, expectedDispatch) == nil)
     }
 
     @Test("Ordered copy emission is independent of field names")
@@ -76,6 +83,7 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(bindings["__PROOF_FIRST_FIELD__"] == "left")
         #expect(bindings["__PROOF_SECOND_FIELD__"] == "right")
         #expect(bindings["__PROOF_READ__"] == "right")
+        #expect(bindings["__PROOF_ACTION__"] == "copy")
     }
 
     @Test("Do lowering captures the ordered copy as complete compiled updates")
@@ -132,6 +140,11 @@ struct GeneratedAtomicUpdateProofTests {
         let successor = try #require(successors.first)
         #expect(machine.state.first == 0 && machine.state.second == 1)
         #expect(successor.state.first == 1 && successor.state.second == 1)
+        let dispatched = try machine.successors()
+        #expect(dispatched.count == 1)
+        #expect(dispatched.first?.action == .copy)
+        #expect(dispatched.first?.machine.state.first == 1)
+        #expect(dispatched.first?.machine.state.second == 1)
     }
 
     private func checkedInitialValues(_ source: String) throws -> (first: Int, second: Int)? {
@@ -171,9 +184,13 @@ struct GeneratedAtomicUpdateProofTests {
         _ actualMembers: [DeclSyntax], _ templateMembers: [DeclSyntax]
     ) throws -> [String: String] {
         var all: [String: String] = [:]
-        for name in ["_Updates", "_visitUpdates0", "_visitSuccessors0"] {
-            let emitted = try #require(member(named: name, in: actualMembers))
-            let expected = try #require(member(named: name, in: templateMembers))
+        let declarations: [(String, Int?)] = [
+            ("_Updates", nil), ("_visitUpdates0", 3), ("_visitSuccessors0", 3),
+            ("visitSuccessors", 2), ("_visitSuccessors", 3), ("_visitSuccessors", 2),
+        ]
+        for (name, parameterCount) in declarations {
+            let emitted = try #require(member(named: name, parameterCount: parameterCount, in: actualMembers))
+            let expected = try #require(member(named: name, parameterCount: parameterCount, in: templateMembers))
             let bindings = try #require(templateBindings(emitted, expected))
             for (key, value) in bindings {
                 if let previous = all[key] { _ = try #require(previous == value) }
@@ -183,12 +200,15 @@ struct GeneratedAtomicUpdateProofTests {
         return all
     }
 
-    private func member(named name: String, in declarations: [DeclSyntax]) -> DeclSyntax? {
+    private func member(named name: String, parameterCount: Int? = nil, in declarations: [DeclSyntax]) -> DeclSyntax? {
         declarations.first { item in
-            item.as(StructDeclSyntax.self)?.name.text == name
-                || item.as(FunctionDeclSyntax.self)?.name.text == name
+            if let function = item.as(FunctionDeclSyntax.self) {
+                return function.name.text == name && (parameterCount == nil
+                    || function.signature.parameterClause.parameters.count == parameterCount)
+            }
+            return parameterCount == nil && (item.as(StructDeclSyntax.self)?.name.text == name
                 || item.as(VariableDeclSyntax.self)?.bindings.first?
-                    .pattern.as(IdentifierPatternSyntax.self)?.identifier.text == name
+                    .pattern.as(IdentifierPatternSyntax.self)?.identifier.text == name)
         }
     }
 
