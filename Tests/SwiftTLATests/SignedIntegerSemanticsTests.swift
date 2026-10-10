@@ -10,6 +10,13 @@ import Testing
         #expect(transition.after.quotient == -3)
     }
 
+    @Test("Generated Swift machine uses nonnegative modulo for positive divisors")
+    func generatedSignedModulo() throws {
+        var machine = try SignedModuloOutputModel.makeMachine()
+        let transition = try machine.send(.modulo)
+        #expect(transition.after.remainder == 1)
+    }
+
     @Test("Right-first operations preserve the first operand failure")
     func rightOperandFailurePrecedesLeft() {
         let overflow = StateExpr.add(.int(Int.max), .int(1))

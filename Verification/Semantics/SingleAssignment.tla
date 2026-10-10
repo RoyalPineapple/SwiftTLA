@@ -1511,6 +1511,86 @@ THEOREM CurrentDivisionAgreementIsExactlyRangeSafety ==
         DEF CurrentNativeDivisionOutcome, CurrentRenderedDivisionOutcome,
             WithinSwiftInt
 
+ModeledSwiftModuloAlgorithm(dividend, divisor) ==
+    LET remainder == ModeledTruncatingRemainder(dividend, divisor)
+    IN IF remainder < 0 THEN remainder + divisor ELSE remainder
+
+THEOREM ModeledSwiftModuloMatchesEuclideanRemainder ==
+    \A dividend, divisor \in Int :
+        divisor > 0 =>
+            ModeledSwiftModuloAlgorithm(dividend, divisor)
+                = dividend - divisor * (dividend \div divisor)
+    PROOF
+    <1>. SUFFICES ASSUME NEW dividend \in Int,
+                          NEW divisor \in Int,
+                          divisor > 0
+                  PROVE ModeledSwiftModuloAlgorithm(dividend, divisor)
+                      = dividend - divisor * (dividend \div divisor)
+        OBVIOUS
+    <1>1. CASE dividend >= 0
+        <2>1. PICK remainder \in 0..(divisor - 1) :
+                dividend = divisor * (dividend \div divisor) + remainder
+            BY PositiveDivisionLaw
+        <2>2. 0 <= remainder /\ remainder < divisor
+            BY <2>1, SMT
+        <2>3. ModeledTruncatingQuotient(dividend, divisor)
+                = dividend \div divisor
+            BY <1>1, SMT DEF ModeledTruncatingQuotient
+        <2>4. ModeledTruncatingRemainder(dividend, divisor) = remainder
+            BY <2>1, <2>3, SMT DEF ModeledTruncatingRemainder
+        <2>. QED
+            BY <2>1, <2>2, <2>4, SMT
+                DEF ModeledSwiftModuloAlgorithm
+    <1>2. CASE dividend < 0
+        <2>1. PICK remainder \in 0..(divisor - 1) :
+                -dividend = divisor * ((-dividend) \div divisor) + remainder
+            BY PositiveDivisionLaw
+        <2>. QED
+            BY <1>2, <2>1, PositiveDivisionNegation, SMT
+                DEF ModeledSwiftModuloAlgorithm,
+                    ModeledTruncatingQuotient, ModeledTruncatingRemainder
+    <1>. QED
+        BY <1>1, <1>2, SMT
+
+ASSUME PositiveModuloLaw ==
+    \A dividend, divisor \in Int :
+        divisor > 0 =>
+            dividend % divisor
+                = dividend - divisor * (dividend \div divisor)
+
+THEOREM ModeledSwiftModuloMatchesRendered ==
+    \A dividend, divisor \in Int :
+        divisor > 0 =>
+            ModeledSwiftModuloAlgorithm(dividend, divisor)
+                = dividend % divisor
+    BY ModeledSwiftModuloMatchesEuclideanRemainder,
+        PositiveModuloLaw, SMT
+
+THEOREM ModeledSwiftModuloStaysWithinSwiftInt ==
+    \A dividend, divisor \in Int :
+        (WithinSwiftInt(dividend) /\ WithinSwiftInt(divisor)
+         /\ divisor > 0) =>
+            WithinSwiftInt(ModeledSwiftModuloAlgorithm(dividend, divisor))
+    PROOF
+    <1>. SUFFICES ASSUME NEW dividend \in Int,
+                          NEW divisor \in Int,
+                          WithinSwiftInt(dividend),
+                          WithinSwiftInt(divisor),
+                          divisor > 0
+                  PROVE WithinSwiftInt(
+                      ModeledSwiftModuloAlgorithm(dividend, divisor))
+        OBVIOUS
+    <1>1. PICK remainder \in 0..(divisor - 1) :
+            dividend = divisor * (dividend \div divisor) + remainder
+        BY PositiveDivisionLaw
+    <1>2. 0 <= remainder /\ remainder < divisor
+        BY <1>1, SMT
+    <1>3. ModeledSwiftModuloAlgorithm(dividend, divisor) = remainder
+        BY <1>1, ModeledSwiftModuloMatchesEuclideanRemainder, SMT
+    <1>. QED
+        BY <1>2, <1>3, SwiftIntBounds, SMT
+            DEF WithinSwiftInt, SwiftIntBounds
+
 StrictlyIncreasingIntegers(sequence) ==
     \A first, second \in 1..Len(sequence) :
         first < second => sequence[first] < sequence[second]

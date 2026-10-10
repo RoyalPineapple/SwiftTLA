@@ -64,7 +64,8 @@ outputs would be false.
 The same exact range-safety equivalence is proved for the emitted subtraction,
 multiplication, and unary negation forms. These are operator-level obligations,
 not certificates for every occurrence in an accepted program. Division needs
-its own nonzero-divisor and rounding rule; modulo remains separate.
+its own nonzero-divisor and rounding rule; modulo has a separate
+positive-divisor rule below.
 
 The direct TLA+ renderer now gives each operand one local definition and
 normalizes a negative divisor into a positive one before integer division.
@@ -102,6 +103,19 @@ are not proved.
 compares the actual symbolic renderer output with the expression in this proof
 module. These checks do not yet establish the native Swift output link or the
 overflow and evaluation-failure cases.
+
+`ModeledSwiftModuloMatchesEuclideanRemainder` proves that the helper's modeled
+signed-remainder adjustment equals the mathematical nonnegative remainder for
+every positive divisor. `ModeledSwiftModuloStaysWithinSwiftInt` proves that
+this result fits Swift `Int` whenever both operands do; unlike division, the
+result needs no additional range premise. The link to the renderer's `%` is
+conditional on `PositiveModuloLaw`, matching the [standard Naturals operator
+contract](https://github.com/tlaplus/tlaplus/blob/master/tlatools/org.lamport.tlatools/src/tla2sany/StandardModules/Naturals.tla).
+TLAPS cannot unfold the distributed module's dummy `%` definition to prove
+that law. The proof still trusts Swift's primitive `%` behavior and has not
+verified that every emitted call or evaluation failure matches the model.
+Zero and negative divisors remain separate error/undefined-operation cases;
+this lemma does not claim parity for them.
 
 ## Choice-expression obligation
 
