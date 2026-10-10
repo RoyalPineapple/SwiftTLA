@@ -362,12 +362,13 @@ states, both conditional branches, terminating action, and `Next` match
 independently stated source relations over Boolean condition states. It also
 proves the generated temporal `Spec` equivalent to the source temporal spec
 under a reachable-state type invariant, and proves the complete state
-relation has a successor for every typed state. This is relational
-no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
-with a prior write, not arbitrary conditions, expression failures, or the
-Swift emitter for all states.
+relation has a successor for every typed state. Direct `ENABLED` theorems also
+establish that the emitted `choose` and `Next` actions agree with the source
+relations on enabledness and deadlock for typed states. It covers one emitted
+conditional with a prior write, not arbitrary conditions, expression failures,
+or the Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 761 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 761 `SingleAssignment.tla` obligations and all 62
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

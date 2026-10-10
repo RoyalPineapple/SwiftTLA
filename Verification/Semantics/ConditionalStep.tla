@@ -42,6 +42,20 @@ ConditionalTypeOK ==
     /\ chooseFirst \in BOOLEAN
     /\ value \in {0, 1, 2}
 
+THEOREM EmittedConditionalEnabledness ==
+    ASSUME ConditionalTypeOK
+    PROVE ENABLED choose <=> ENABLED SourceConditionalChoose
+    BY EmittedConditionalBothBranches, ExpandENABLED, SMT
+        DEF ConditionalTypeOK, choose, SourceConditionalChoose
+
+THEOREM EmittedConditionalDeadlockAgreement ==
+    ASSUME ConditionalTypeOK
+    PROVE ~ENABLED Next <=> ~ENABLED SourceConditionalNext
+    BY EmittedConditionalNext, ExpandENABLED, SMT
+        DEF ConditionalTypeOK, Next, choose, Terminating,
+            SourceConditionalNext, SourceConditionalChoose,
+            SourceConditionalTerminating
+
 THEOREM ConditionalInitialType ==
     Init => ConditionalTypeOK
     BY EmittedConditionalInitial,
