@@ -1115,17 +1115,50 @@ THEOREM OrderedHistoriesExist ==
             \in ScheduledRecords
             BY <2>1, SMT DEF AdvanceScheduleRecord, ScheduledRecords,
                 Instructions, ApplyDelta, States
-        <2>4. ExtendSourceHistory(source, Len(prior), instruction)
+        <2>4. Len(Append(prior, instruction)) = Len(prior) + 1
+            BY AppendProperties
+        <2>5. \A index \in 0..Len(prior) : source[index] \in States
+            BY <2>1, SMT
+        <2>6. \A index \in 0..Len(prior) : scheduled[index] \in ScheduledRecords
+            BY <2>1, SMT
+        <2>7. ExtendSourceHistory(source, Len(prior), instruction)
             \in [0..Len(Append(prior, instruction)) -> States]
-            BY <2>1, <2>2, AppendProperties, SMT DEF ExtendSourceHistory
-        <2>5. ExtendScheduledHistory(original, scheduled, Len(prior), instruction)
+            BY <2>2, <2>4, <2>5, SMT DEF ExtendSourceHistory
+        <2>8. ExtendScheduledHistory(original, scheduled, Len(prior), instruction)
             \in [0..Len(Append(prior, instruction)) -> ScheduledRecords]
-            BY <2>1, <2>3, AppendProperties, SMT DEF ExtendScheduledHistory
-        <2>6. SourceHistory(original, Append(prior, instruction),
+            BY <2>3, <2>4, <2>6, SMT DEF ExtendScheduledHistory
+        <2>9. SourceHistory(original, Append(prior, instruction),
                  ExtendSourceHistory(source, Len(prior), instruction))
-            BY <2>1, AppendProperties, SMT DEF SourceHistory,
-                ExtendSourceHistory
-        <2>7. ScheduledHistory(original, Append(prior, instruction),
+            <3>1. \A index \in 0..Len(prior) :
+                    ExtendSourceHistory(source, Len(prior), instruction)[index]
+                    = source[index]
+                BY SMT DEF ExtendSourceHistory
+            <3>2. ExtendSourceHistory(source, Len(prior), instruction)
+                    [Len(prior) + 1] = AdvanceSource(source[Len(prior)], instruction)
+                BY SMT DEF ExtendSourceHistory
+            <3>3. \A index \in 1..Len(prior) :
+                    Append(prior, instruction)[index] = prior[index]
+                BY AppendProperties, SMT
+            <3>4. Append(prior, instruction)[Len(prior) + 1] = instruction
+                BY AppendProperties, SMT
+            <3>5. ExtendSourceHistory(source, Len(prior), instruction)[0]
+                    = original
+                BY <2>1, <3>1, SMT DEF SourceHistory
+            <3>6. \A index \in 1..Len(prior) :
+                    ExtendSourceHistory(source, Len(prior), instruction)[index]
+                    = AdvanceSource(
+                        ExtendSourceHistory(source, Len(prior), instruction)[index - 1],
+                        Append(prior, instruction)[index])
+                BY <2>1, <3>1, <3>3, SMT DEF SourceHistory
+            <3>7. ExtendSourceHistory(source, Len(prior), instruction)
+                    [Len(prior) + 1]
+                    = AdvanceSource(
+                        ExtendSourceHistory(source, Len(prior), instruction)[Len(prior)],
+                        Append(prior, instruction)[Len(prior) + 1])
+                BY <3>1, <3>2, <3>4, SMT
+            <3>. QED
+                BY <2>4, <3>5, <3>6, <3>7, SMT DEF SourceHistory
+        <2>10. ScheduledHistory(original, Append(prior, instruction),
                  ExtendScheduledHistory(original, scheduled, Len(prior), instruction))
             <3>1. \A index \in 0..Len(prior) :
                     ExtendScheduledHistory(original, scheduled, Len(prior), instruction)[index]
@@ -1139,7 +1172,7 @@ THEOREM OrderedHistoriesExist ==
                 BY <2>1, <3>1, <3>2, AppendProperties,
                     SMT DEF ScheduledHistory
         <2>. QED
-            BY <2>4, <2>5, <2>6, <2>7 DEF HistoriesExist
+            BY <2>7, <2>8, <2>9, <2>10 DEF HistoriesExist
     <1>3. QED
         BY <1>1, <1>2, SequencesInductionAppend
 
@@ -2006,8 +2039,13 @@ THEOREM AdjustedTruncatingDivisionMatchesRendered ==
                       = RenderedSignedDivision(dividend, divisor)
         OBVIOUS
     <1>1. CASE dividend >= 0 /\ divisor > 0
-        BY <1>1, SMT DEF AdjustedTruncatingDivision,
-            RenderedSignedDivision
+        <2>1. AdjustedTruncatingDivision(dividend, divisor)
+                = dividend \div divisor
+            BY <1>1, SMT DEF AdjustedTruncatingDivision
+        <2>2. RenderedSignedDivision(dividend, divisor)
+                = dividend \div divisor
+            BY <1>1, SMT DEF RenderedSignedDivision
+        <2>. QED BY <2>1, <2>2
     <1>2. CASE dividend < 0 /\ divisor > 0
         BY <1>2, PositiveDivisionNegation, SMT
             DEF AdjustedTruncatingDivision, RenderedSignedDivision
