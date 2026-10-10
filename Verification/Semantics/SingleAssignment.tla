@@ -166,6 +166,31 @@ THEOREM InjectiveSetEncoding ==
     <1>. QED
         BY <1>3, SetExtensionality
 
+MappedSequenceEncoding(valueMap, sequence) ==
+    [index \in 1..Len(sequence) |-> valueMap[sequence[index]]]
+
+THEOREM InjectiveSequenceEncoding ==
+    \A valueMap \in [Values -> Values] :
+        InjectiveOn(valueMap, Values) =>
+            InjectiveOn(
+                [sequence \in Seq(Values) |-> MappedSequenceEncoding(valueMap, sequence)],
+                Seq(Values))
+    PROOF
+    <1>. SUFFICES ASSUME NEW valueMap \in [Values -> Values],
+                          InjectiveOn(valueMap, Values),
+                          NEW first \in Seq(Values),
+                          NEW second \in Seq(Values),
+                          MappedSequenceEncoding(valueMap, first)
+                            = MappedSequenceEncoding(valueMap, second)
+                  PROVE first = second
+        BY SMT DEF InjectiveOn
+    <1>1. Len(first) = Len(second)
+        BY SMT DEF MappedSequenceEncoding
+    <1>2. \A index \in 1..Len(first) : first[index] = second[index]
+        BY <1>1, SMT DEF MappedSequenceEncoding, InjectiveOn
+    <1>. QED
+        BY <1>1, <1>2, SeqEqual
+
 UntaggedUnionEncoding(leftDomain, rightDomain, leftMap, rightMap) ==
     [tagged \in ({"left"} \X leftDomain) \cup ({"right"} \X rightDomain) |->
         IF tagged[1] = "left"

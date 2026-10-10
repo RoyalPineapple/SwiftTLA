@@ -216,6 +216,11 @@ projection are not themselves machine-checked, so the general output link
 remains open.
 `InjectiveSetEncoding` proves that an injective element encoding maps distinct
 sets to distinct encoded sets, without assuming a finite domain.
+`InjectiveSequenceEncoding` proves the corresponding rule for every finite
+sequence: elementwise encoding preserves length, order, repeated values, and
+sequence identity. The generated-machine array regression checks the emitted
+projection for both empty and repeated input. This is a concrete output
+witness, not a proof that every emitted element encoder is injective.
 `DisjointUntaggedUnionEncodingIsInjective` proves that erasing a union's branch
 tag preserves identity when each branch encoding is injective and their images
 are disjoint. The generated projection does erase that tag, and type resolution
@@ -468,7 +473,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 1061 `SingleAssignment.tla` obligations and all 192
+TLAPS 1.6.0-pre checked all 1072 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
