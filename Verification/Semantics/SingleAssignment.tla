@@ -330,9 +330,8 @@ THEOREM OrderedInitialHistoriesExist ==
             BY <2>2, <2>3, InitialMembershipComposesAcrossPriorChoices,
                 SMT DEF nextStates, InitializationPlanAgrees, InitializationPlans
         <2>5. nextStates \in SUBSET States
-            BY <2>3, SMT DEF ExtendEnumeratedInitialStates,
-                EnumeratedInitialStates, InitializationPlans, States,
-                nextStates
+            BY <2>4, SMT DEF ExtendMembershipInitialStates,
+                MembershipInitialStates, nextStates
         <2>6. ExtendInitialHistory(history, Len(prior), nextStates)
             \in [0..Len(Append(prior, plan)) -> SUBSET States]
             BY <2>3, <2>5, AppendProperties, SMT DEF ExtendInitialHistory
@@ -352,10 +351,16 @@ THEOREM OrderedInitialHistoriesExist ==
                 BY AppendProperties, SMT
             <3>4. Append(prior, plan)[Len(prior) + 1] = plan
                 BY AppendProperties, SMT
-            <3>. QED
+            <3>5. EnumeratedInitialHistory(start, Append(prior, plan),
+                    ExtendInitialHistory(history, Len(prior), nextStates))
+                BY <2>3, <3>1, <3>2, <3>3, <3>4,
+                    AppendProperties, SMT DEF EnumeratedInitialHistory
+            <3>6. MembershipInitialHistory(start, Append(prior, plan),
+                    ExtendInitialHistory(history, Len(prior), nextStates))
                 BY <2>3, <2>4, <3>1, <3>2, <3>3, <3>4,
-                    AppendProperties,
-                    SMT DEF EnumeratedInitialHistory, MembershipInitialHistory
+                    AppendProperties, SMT DEF MembershipInitialHistory
+            <3>. QED
+                BY <3>5, <3>6
         <2>. QED
             BY <2>6, <2>7 DEF InitialHistoriesExist
     <1>3. \A plans \in Seq(InitializationPlans) : P(plans)
@@ -654,10 +659,63 @@ THEOREM OrderedGuardedDoTransitionEquivalence ==
            NEW guards \in GuardPlans(steps)
     PROVE SourceGuardedDoStep(original, steps, guards, target)
           <=> ScheduledGuardedDoStep(original, steps, guards, target)
-    BY OrderedHistoriesExist, OrderedHistoriesAgree,
-        OrderedGuardedHistoriesAgree,
-        SMT DEF SourceGuardedDoStep, ScheduledGuardedDoStep,
-            HistoriesExist, HistoryAgrees
+    PROOF
+    <1>1. HistoriesExist(original, steps)
+        BY OrderedHistoriesExist
+    <1>2. SourceGuardedDoStep(original, steps, guards, target)
+           => ScheduledGuardedDoStep(original, steps, guards, target)
+        <2>. SUFFICES ASSUME SourceGuardedDoStep(original, steps, guards, target)
+                     PROVE ScheduledGuardedDoStep(original, steps, guards, target)
+            BY SMT
+        <2>1. PICK source \in [0..Len(steps) -> States] :
+                    /\ SourceHistory(original, steps, source)
+                    /\ \A index \in 0..Len(steps) : guards[index][source[index]]
+                    /\ source[Len(steps)] = target
+            BY DEF SourceGuardedDoStep
+        <2>2. PICK existingSource \in [0..Len(steps) -> States],
+                    scheduled \in [0..Len(steps) -> ScheduledRecords] :
+                    SourceHistory(original, steps, existingSource)
+                    /\ ScheduledHistory(original, steps, scheduled)
+            BY <1>1 DEF HistoriesExist
+        <2>3. HistoryAgrees(original, source, scheduled, Len(steps))
+            BY <2>1, <2>2, OrderedHistoriesAgree, SMT
+        <2>4. \A index \in 0..Len(steps) :
+                    guards[index][ApplyDelta(original, scheduled[index].keys,
+                        scheduled[index].values)]
+            BY <2>1, <2>2, OrderedGuardedHistoriesAgree, SMT
+        <2>5. ApplyDelta(original, scheduled[Len(steps)].keys,
+                    scheduled[Len(steps)].values) = target
+            BY <2>1, <2>3, SMT DEF HistoryAgrees
+        <2>. QED
+            BY <2>2, <2>4, <2>5, SMT DEF ScheduledGuardedDoStep
+    <1>3. ScheduledGuardedDoStep(original, steps, guards, target)
+           => SourceGuardedDoStep(original, steps, guards, target)
+        <2>. SUFFICES ASSUME ScheduledGuardedDoStep(original, steps, guards, target)
+                     PROVE SourceGuardedDoStep(original, steps, guards, target)
+            BY SMT
+        <2>1. PICK scheduled \in [0..Len(steps) -> ScheduledRecords] :
+                    /\ ScheduledHistory(original, steps, scheduled)
+                    /\ \A index \in 0..Len(steps) :
+                        guards[index][ApplyDelta(original, scheduled[index].keys,
+                            scheduled[index].values)]
+                    /\ ApplyDelta(original, scheduled[Len(steps)].keys,
+                        scheduled[Len(steps)].values) = target
+            BY DEF ScheduledGuardedDoStep
+        <2>2. PICK source \in [0..Len(steps) -> States],
+                    existingScheduled \in [0..Len(steps) -> ScheduledRecords] :
+                    SourceHistory(original, steps, source)
+                    /\ ScheduledHistory(original, steps, existingScheduled)
+            BY <1>1 DEF HistoriesExist
+        <2>3. HistoryAgrees(original, source, scheduled, Len(steps))
+            BY <2>1, <2>2, OrderedHistoriesAgree, SMT
+        <2>4. \A index \in 0..Len(steps) : guards[index][source[index]]
+            BY <2>1, <2>2, OrderedGuardedHistoriesAgree, SMT
+        <2>5. source[Len(steps)] = target
+            BY <2>1, <2>3, SMT DEF HistoryAgrees
+        <2>. QED
+            BY <2>2, <2>4, <2>5, SMT DEF SourceGuardedDoStep
+    <1>. QED
+        BY <1>2, <1>3, SMT
 
 ConditionalSteps(prefix, branch, suffix) == (prefix \o branch) \o suffix
 AlwaysGuard == [state \in States |-> TRUE]
