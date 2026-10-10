@@ -200,6 +200,10 @@ module emitted from the corresponding `#spec` fixture, and
 with that output. `EmittedIntegerChoiceMatchesSourceWhenDefined` proves its
 actual emitted action advances from each position in `0..2` to the least
 matching member, matching the generated Swift machine's focused behavior test.
+`NativeSortedFirstStepMatchesCanonicalChoice` composes that rule with a
+first-matching-step relation for every strictly increasing integer sequence
+and typed predicate that has a first match; its result value is exactly the
+canonical TLA+ choice value, not just one checked example.
 `ReversedIntegerChoiceAtZeroDisagrees` is the negative control: reversing the
 ordering selects `3` where the source and emitted rule select `1`.
 For this pure, total integer choice, the emitted action now guards `CHOOSE`
@@ -211,7 +215,19 @@ step relation over positions `0..3`; reversing the failure predicate is a
 negative control. The focused generated Swift test confirms the matching
 `noSatisfyingChoice` failure without changing state. This is an output-linked
 finite slice, not a general compiler theorem. The failure predicate is not
-yet selected as a TLC checking outcome. Authored PlusCal carries the same
+yet selected as a TLC checking outcome.
+
+`GeneratedSelectionProofTests` also token-checks the complete emitted Swift
+`_visitUpdates0` function against `GeneratedSelectionSwiftWitness.txt`,
+normalizing only the source-location-derived choice binder identifier. The checked
+function sorts `{1, 2, 3}` ascending, selects the first member greater than
+the current position, and merges that value into the complete update. The
+generic least-member theorem covers the choice rule; interpreting the emitted
+Swift call, `choose` helper, and update merge retains their ordinary Swift
+semantics as a trusted boundary. This check does not establish the generator's
+behavior for arbitrary choices or binders.
+
+Authored PlusCal carries the same
 failure predicate declaration and guards the `with` that evaluates this choice
 with the same definedness predicate used by direct TLA+. A focused output test
 checks that the guard precedes evaluation. The translated PlusCal action and

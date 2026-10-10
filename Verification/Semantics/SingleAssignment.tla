@@ -2615,6 +2615,39 @@ THEOREM CanonicalIntegerChoiceMatchesSortedFirst ==
             DEF CanonicalIntegerChoice
     <1>. QED BY <1>4
 
+NativeSortedFirstStep(sequence, predicate, nextValue) ==
+    \E index \in 1..Len(sequence) :
+        FirstMatchingInteger(sequence, predicate, index)
+        /\ nextValue = sequence[index]
+
+THEOREM NativeSortedFirstStepMatchesCanonicalChoice ==
+    \A sequence \in Seq(Int) :
+        \A predicate \in [SequenceMembers(sequence) -> BOOLEAN] :
+            \A firstIndex \in 1..Len(sequence) :
+                (StrictlyIncreasingIntegers(sequence)
+                 /\ FirstMatchingInteger(sequence, predicate, firstIndex))
+                => \A nextValue \in Int :
+                    (NativeSortedFirstStep(sequence, predicate, nextValue)
+                     <=> nextValue = CanonicalIntegerChoice(sequence, predicate))
+    PROOF
+    <1>. SUFFICES ASSUME NEW sequence \in Seq(Int),
+                         NEW predicate \in [SequenceMembers(sequence) -> BOOLEAN],
+                         NEW firstIndex \in 1..Len(sequence),
+                         StrictlyIncreasingIntegers(sequence),
+                         FirstMatchingInteger(sequence, predicate, firstIndex)
+                  PROVE \A nextValue \in Int :
+                      (NativeSortedFirstStep(sequence, predicate, nextValue)
+                       <=> nextValue = CanonicalIntegerChoice(sequence, predicate))
+        BY SMT
+    <1>1. CanonicalIntegerChoice(sequence, predicate) = sequence[firstIndex]
+        BY CanonicalIntegerChoiceMatchesSortedFirst
+    <1>2. \A index \in 1..Len(sequence) :
+            FirstMatchingInteger(sequence, predicate, index)
+            => index = firstIndex
+        BY SMT DEF FirstMatchingInteger
+    <1>. QED
+        BY <1>1, <1>2, SMT DEF NativeSortedFirstStep, FirstMatchingInteger
+
 THEOREM EmittedIntegerChoiceAtZero ==
     choiceSelected = 0 =>
         (IntegerChoice!advance <=> choiceSelected' = 1)
@@ -2649,10 +2682,13 @@ THEOREM EmittedIntegerChoiceAtTwo ==
     PROOF
     <1>1. {member \in {1, 2, 3} : member > 2} = {3}
         BY SMT
-    <1>2. (CHOOSE member \in {3} :
+    <1>2. {3} \in SUBSET Int /\ 3 \in {3}
+        /\ (\A other \in {3} : 3 <= other)
+        BY SMT
+    <1>3. (CHOOSE member \in {3} :
               \A other \in {3} : member <= other) = 3
-        BY UniqueMinimumIntegerChoice, SMT
-    <1>. QED BY <1>1, <1>2, SMT DEF IntegerChoice!advance
+        BY <1>2, UniqueMinimumIntegerChoice, SMT
+    <1>. QED BY <1>1, <1>3, SMT DEF IntegerChoice!advance
 
 THEOREM EmittedIntegerChoiceMatchesSourceWhenDefined ==
     choiceSelected \in 0..2 =>
