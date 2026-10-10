@@ -181,6 +181,19 @@ THEOREM InitialMembershipMatchesEnumeration ==
     BY SMT DEF EnumeratedInitialStates,
         MembershipInitialStates, SequenceMembers, States
 
+EqualityInitialStates(prior, key, value) ==
+    {state \in States :
+        /\ state[key] = value
+        /\ \A variable \in Vars \ {key} : state[variable] = prior[variable]}
+
+THEOREM InitialEqualityMatchesSingletonEnumeration ==
+    \A key \in Vars, prior \in States, value \in Values :
+        EnumeratedInitialStates(prior, key, <<value>>)
+        = EqualityInitialStates(prior, key, value)
+    BY InitialMembershipMatchesEnumeration,
+        SMT DEF EnumeratedInitialStates, MembershipInitialStates,
+            EqualityInitialStates, SequenceMembers, States
+
 ExtendEnumeratedInitialStates(priorStates, key, candidates) ==
     UNION {EnumeratedInitialStates(prior, key, candidates[prior]) : prior \in priorStates}
 ExtendMembershipInitialStates(priorStates, key, domains) ==
