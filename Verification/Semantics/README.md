@@ -84,6 +84,11 @@ from the imported arithmetic module. The distributed
 deliberately contains dummy arithmetic definitions for tools to override; its
 comment states the positive-divisor quotient/remainder equation, but those
 dummy definitions cannot prove the bounded-remainder premise used here.
+`PositiveDivisionQuotientUnique` additionally proves that two bounded
+positive-divisor remainder decompositions of the same integer have the same
+quotient. The connection from Swift's truncating quotient plus correction to
+the rendered signed-division expression remains unproved.
+
 `CompiledSpecificationRendererTests`
 compares the actual symbolic renderer output with the expression in this proof
 module. These checks do not yet establish the native Swift output link or the
@@ -338,7 +343,7 @@ no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
 with a prior write, not arbitrary conditions, expression failures, or the
 Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 659 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 661 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

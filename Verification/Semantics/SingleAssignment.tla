@@ -1304,6 +1304,16 @@ THEOREM SignedDivisionHasEuclideanRemainder ==
     <1>. QED
         BY <1>3, <1>4
 
+THEOREM PositiveDivisionQuotientUnique ==
+    \A dividend, divisor, first, second, firstRemainder, secondRemainder \in Int :
+        (divisor > 0
+         /\ 0 <= firstRemainder /\ firstRemainder < divisor
+         /\ 0 <= secondRemainder /\ secondRemainder < divisor
+         /\ dividend = divisor * first + firstRemainder
+         /\ dividend = divisor * second + secondRemainder)
+        => first = second
+    BY SMT
+
 StrictlyIncreasingIntegers(sequence) ==
     \A first, second \in 1..Len(sequence) :
         first < second => sequence[first] < sequence[second]
