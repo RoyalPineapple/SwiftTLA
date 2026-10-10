@@ -221,6 +221,13 @@ sequence: elementwise encoding preserves length, order, repeated values, and
 sequence identity. The generated-machine array regression checks the emitted
 projection for both empty and repeated input. This is a concrete output
 witness, not a proof that every emitted element encoder is injective.
+`InjectiveActionCallEncoding` proves that an injective action-name mapping and
+injective argument encoding preserve the identity of a structured action call,
+including argument order and repeated arguments. The generated-machine typed
+action-parameter regression checks emitted `FormalActionCall` values for
+concrete steps. The compiler has not yet proved that every emitted action name
+and argument encoder satisfies the theorem's premises, nor that every emitted
+TLA+ action uses exactly that call.
 `InjectiveFunctionGraphEncoding` proves that injective key and value encodings
 preserve every partial function's domain and values through its graph of
 key/value pairs. A generated-machine regression checks one emitted dictionary
@@ -478,7 +485,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 1103 `SingleAssignment.tla` obligations and all 192
+TLAPS 1.6.0-pre checked all 1118 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

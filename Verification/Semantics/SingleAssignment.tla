@@ -191,6 +191,40 @@ THEOREM InjectiveSequenceEncoding ==
     <1>. QED
         BY <1>1, <1>2, SeqEqual
 
+ActionCalls == ActionLabels \X Seq(Values)
+MappedActionCall(nameMap, valueMap, call) ==
+    <<nameMap[call[1]], MappedSequenceEncoding(valueMap, call[2])>>
+
+THEOREM InjectiveActionCallEncoding ==
+    \A nameMap \in [ActionLabels -> ActionLabels],
+       valueMap \in [Values -> Values] :
+        (InjectiveOn(nameMap, ActionLabels)
+         /\ InjectiveOn(valueMap, Values))
+        => InjectiveOn(
+            [call \in ActionCalls |-> MappedActionCall(nameMap, valueMap, call)],
+            ActionCalls)
+    PROOF
+    <1>. SUFFICES ASSUME NEW nameMap \in [ActionLabels -> ActionLabels],
+                          NEW valueMap \in [Values -> Values],
+                          InjectiveOn(nameMap, ActionLabels),
+                          InjectiveOn(valueMap, Values),
+                          NEW first \in ActionCalls,
+                          NEW second \in ActionCalls,
+                          MappedActionCall(nameMap, valueMap, first)
+                            = MappedActionCall(nameMap, valueMap, second)
+                  PROVE first = second
+        BY SMT DEF InjectiveOn
+    <1>1. nameMap[first[1]] = nameMap[second[1]]
+          /\ MappedSequenceEncoding(valueMap, first[2])
+                = MappedSequenceEncoding(valueMap, second[2])
+        BY SMT DEF MappedActionCall
+    <1>2. first[1] = second[1]
+        BY <1>1, SMT DEF InjectiveOn, ActionCalls
+    <1>3. first[2] = second[2]
+        BY <1>1, InjectiveSequenceEncoding, SMT DEF InjectiveOn, ActionCalls
+    <1>. QED
+        BY <1>2, <1>3, SMT DEF ActionCalls
+
 PartialFunctions == UNION {[keys -> Values] : keys \in SUBSET Values}
 MappedFunctionGraph(keyMap, valueMap, mapping) ==
     {<<keyMap[key], valueMap[mapping[key]]>> : key \in DOMAIN mapping}
