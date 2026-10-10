@@ -50,7 +50,7 @@ struct TypedSelectionTests {
         #expect(throws: EvalError.noSatisfyingChoice) { try evaluateClosed(choice.stateExpr) }
     }
 
-    @Test("A closed missing selection fails only when its generated action runs")
+    @Test("An empty selection fails transactionally with action identity during checking")
     func closedMissingSelectionDoesNotChangeTheMachine() throws {
         var machine = try ClosedMissingSelection.makeMachine()
         let before = machine.snapshot
@@ -58,5 +58,16 @@ struct TypedSelectionTests {
             _ = try machine.send(.advance)
         }
         #expect(machine.snapshot == before)
+        var observedFailure = false
+        let result = try MachineValidator.run(initialMachines: [machine], maximumStates: 2,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
+            if case .evaluationFailure(let source, let action, let reason) = event {
+                observedFailure = true
+                #expect(source == 0 && action == .advance && reason == .noSatisfyingChoice)
+            }
+        }
+        #expect(observedFailure)
+        #expect(result.completion == .evaluationFailure(.noSatisfyingChoice))
+        #expect(result.states == 1 && result.edges == 0)
     }
 }

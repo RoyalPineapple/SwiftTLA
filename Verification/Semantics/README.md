@@ -51,10 +51,11 @@ This matched-failure rule is **not implemented**. `CheckedExecutionOverflow` in
 the rendered TLA+ arithmetic has a successor. Until the gate and both output
 links are proved, the universal theorem does not hold for accepted `#spec`.
 `MachineValidator.run` now reports a typed early evaluation-failure event and
-completion for integer overflow while evaluating a generated action body. The
-event retains the source state ID, action, operation, and operands; errors from
-the evidence callback are not reclassified as model failures. The binary
-evidence writer now retains the typed failure, action identity, and operands
+completion for value failures while evaluating a generated action body,
+including integer overflow and an empty expression-level `CHOOSE`. The event
+retains the source state ID, action, and applicable operation and operands.
+Errors from the evidence callback are not reclassified as model failures.
+Binary evidence now retains the typed failure, action identity, and operands
 with a checked completion footer. The independent comparison path still rejects
 that outcome until generated TLA+ has a matching failure rule. Errors from
 action-domain enumeration, initializers, constraints, and selected claims need
@@ -201,7 +202,9 @@ ordering selects `3` where the source and emitted rule select `1`.
 This is a finite integer, nonempty-choice slice, not a general output theorem:
 empty domains, predicate evaluation failures, and other value orders remain
 open. At position `3`, Swift reports `noSatisfyingChoice` but the rendered
-TLA+ expression still has an unspecified `CHOOSE` value.
+TLA+ expression still has an unspecified `CHOOSE` value. The generated checking
+visitor now retains that action's identity and reports a typed failure; the
+rendered failure relation and its output proof remain open.
 `BooleanSelection.tla` is likewise the complete emitted module for a
 non-unique Boolean choice. `TypedSelectionTests.booleanSelectionUsesLeastMember`
 checks the actual generated Swift transition and exact TLA+ output;

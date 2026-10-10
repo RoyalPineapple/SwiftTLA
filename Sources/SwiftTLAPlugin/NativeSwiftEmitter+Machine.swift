@@ -647,10 +647,7 @@ extension NativeSwiftEmitter {
                             }
                         }
                     } catch let reason as NativeMachineEvaluationError where !callbackFailed {
-                        if case .integerOverflow = reason {
-                            throw MachineActionEvaluationFailure(action: action, reason: reason)
-                        }
-                        throw reason
+                        throw MachineActionEvaluationFailure(action: action, reason: reason)
                     } catch {
                         throw error
                     }
