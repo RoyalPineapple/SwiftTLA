@@ -355,29 +355,31 @@ not a general proof of guarded choice or of the Swift emitter.
 
 `ConditionalStepProofModel.tla` is the complete output from a `#spec` step
 that flips a Boolean before an `If`/`else` assignment in the same atomic
-`Do`. The fixture test pins those bytes and checks that the generated Swift
-machine selects the branch from the updated value for both initial Boolean
-values. `ConditionalStep.tla` separately proves that the emitted initial
+`Do`, with sequential weak fairness. The fixture test pins those bytes,
+including `WF_<<pc, chooseFirst, value>>(Next)`, and checks that the generated
+Swift machine selects the branch from the updated value for both initial
+Boolean values. `ConditionalStep.tla` separately proves that the emitted initial
 states, both conditional branches, terminating action, and `Next` match
 independently stated source relations over Boolean condition states. It also
 proves the generated temporal `Spec` equivalent to the source temporal spec
-under a reachable-state type invariant, and proves the complete state
-relation has a successor for every typed state. Direct `ENABLED` theorems also
-establish that the emitted `choose` and `Next` actions agree with the source
-relations on enabledness and deadlock for typed states. It covers one emitted
+conjoined with weak fairness on the source step, under a reachable-state type
+invariant. It proves that the complete state relation has a successor for
+every typed state. Direct `ENABLED` theorems also establish that the emitted
+`choose` and `Next` actions agree with the source relations on enabledness and
+deadlock for typed states. It covers one emitted
 conditional with a prior write, not arbitrary conditions, expression failures,
 or the Swift emitter for all states.
 
-For this same emitted `choose` action, TLAPS expands TLA+'s `WF_vars` and
-`SF_vars` operators and proves that conjoining either obligation to the
-emitted `Spec` gives the same temporal formula as conjoining it to the
-independently stated source spec and action. The proof uses action and
-enabledness equality under the reachable-state type invariant. The pinned
-fixture does not itself declare fairness, so this is a conditional extension
-of its actual output, not a test of the fairness renderer or generated Swift
-fairness callbacks.
+TLAPS expands TLA+'s `WF_vars` and `SF_vars` operators and proves that weak
+fairness on the emitted `Next` equals weak fairness on the source `choose`:
+the additional emitted `Terminating` action only stutters. The exact rendered
+`Spec` therefore carries the declared weak fairness. A separate theorem
+covers strong fairness if conjoined to that `Spec`; strong fairness is not
+declared by this fixture. The proof uses action and enabledness equality under
+the reachable-state type invariant. It does not verify generated Swift
+fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 761 `SingleAssignment.tla` obligations and all 106
+TLAPS 1.6.0-pre checked all 761 `SingleAssignment.tla` obligations and all 122
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

@@ -20,5 +20,6 @@ Next ==
 Spec ==
   /\ Init
   /\ [][Next]_<<pc, chooseFirst, value>>
+  /\ WF_<<pc, chooseFirst, value>>(Next)
 
 ====

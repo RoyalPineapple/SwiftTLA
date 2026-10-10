@@ -97,6 +97,24 @@ THEOREM EmittedConditionalFairEnabledAlwaysSame ==
         <=> ENABLED <<SourceConditionalChoose>>_vars)
     BY EmittedConditionalFairEnabledness, PTL DEF ConditionalTypeOK
 
+THEOREM EmittedConditionalNextNonstuttering ==
+    ASSUME ConditionalTypeOK
+    PROVE <<Next>>_vars <=> <<choose>>_vars
+    BY SMT DEF ConditionalTypeOK, Next, choose, Terminating, vars
+
+THEOREM EmittedConditionalNextFairEnabledness ==
+    ASSUME ConditionalTypeOK
+    PROVE ENABLED <<Next>>_vars <=> ENABLED <<choose>>_vars
+    BY EmittedConditionalNextNonstuttering, ExpandENABLED, SMT
+        DEF ConditionalTypeOK, Next, choose, Terminating, vars
+
+THEOREM EmittedConditionalNextWeakFairness ==
+    ASSUME []ConditionalTypeOK
+    PROVE WF_vars(Next) <=> WF_vars(choose)
+    BY EmittedConditionalNextNonstuttering,
+        EmittedConditionalNextFairEnabledness, PTL
+        DEF ConditionalTypeOK
+
 THEOREM EmittedConditionalWeakFairnessFormula ==
     ASSUME [](choose <=> SourceConditionalChoose),
            [](ENABLED <<choose>>_vars
@@ -113,6 +131,11 @@ THEOREM EmittedConditionalWeakFairness ==
         EmittedConditionalWeakFairnessFormula,
         EmittedConditionalWeakFairnessExpansion,
         SourceConditionalWeakFairnessExpansion
+
+THEOREM EmittedConditionalNextWeakFairnessAgreesWithSource ==
+    ASSUME []ConditionalTypeOK
+    PROVE WF_vars(Next) <=> WF_vars(SourceConditionalChoose)
+    BY EmittedConditionalNextWeakFairness, EmittedConditionalWeakFairness
 
 THEOREM EmittedConditionalStrongFairnessFormula ==
     ASSUME [](choose <=> SourceConditionalChoose),
@@ -143,8 +166,12 @@ THEOREM ConditionalStepPreservesType ==
         SourceConditionalNext, SourceConditionalChoose,
         SourceConditionalTerminating
 
-THEOREM EmittedConditionalTypeInvariant ==
-    Spec => []ConditionalTypeOK
+CoreConditionalSpec ==
+    /\ Init
+    /\ [][Next]_<<pc, chooseFirst, value>>
+
+THEOREM EmittedConditionalCoreTypeInvariant ==
+    CoreConditionalSpec => []ConditionalTypeOK
     PROOF
     <1>1. ConditionalTypeOK /\ [Next]_<<pc, chooseFirst, value>>
             => ConditionalTypeOK'
@@ -153,7 +180,12 @@ THEOREM EmittedConditionalTypeInvariant ==
             => []ConditionalTypeOK
         BY <1>1, PTL
     <1>. QED
-        BY ConditionalInitialType, <1>2, PTL DEF Spec
+        BY ConditionalInitialType, <1>2, PTL DEF CoreConditionalSpec
+
+THEOREM EmittedConditionalTypeInvariant ==
+    Spec => []ConditionalTypeOK
+    BY EmittedConditionalCoreTypeInvariant, PTL
+        DEF Spec, CoreConditionalSpec
 
 SourceConditionalSpec ==
     /\ SourceConditionalInit
@@ -174,30 +206,33 @@ THEOREM SourceConditionalTypeInvariant ==
             DEF SourceConditionalSpec
 
 THEOREM EmittedConditionalTemporalSpec ==
-    Spec <=> SourceConditionalSpec
+    CoreConditionalSpec <=> SourceConditionalSpec
     PROOF
     <1>1. []ConditionalTypeOK =>
         ([][Next]_<<pc, chooseFirst, value>>
          <=> [][SourceConditionalNext]_<<pc, chooseFirst, value>>)
         BY EmittedConditionalNext, PTL DEF ConditionalTypeOK
-    <1>2. Spec => []ConditionalTypeOK
-        BY EmittedConditionalTypeInvariant
+    <1>2. CoreConditionalSpec => []ConditionalTypeOK
+        BY EmittedConditionalCoreTypeInvariant
     <1>3. SourceConditionalSpec => []ConditionalTypeOK
         BY SourceConditionalTypeInvariant
     <1>. QED
         BY <1>1, <1>2, <1>3, EmittedConditionalInitial, PTL
-            DEF Spec, SourceConditionalSpec
+            DEF CoreConditionalSpec, SourceConditionalSpec
 
-THEOREM EmittedConditionalWeakFairTemporalSpec ==
-    (Spec /\ WF_vars(choose))
+THEOREM EmittedConditionalSequentialFairTemporalSpec ==
+    Spec
         <=> (SourceConditionalSpec /\ WF_vars(SourceConditionalChoose))
-    BY EmittedConditionalTemporalSpec, EmittedConditionalTypeInvariant,
-        EmittedConditionalWeakFairness, PTL
+    BY EmittedConditionalTemporalSpec, EmittedConditionalCoreTypeInvariant,
+        EmittedConditionalNextWeakFairnessAgreesWithSource, PTL
+        DEF Spec, CoreConditionalSpec, vars
 
 THEOREM EmittedConditionalStrongFairTemporalSpec ==
     (Spec /\ SF_vars(choose))
-        <=> (SourceConditionalSpec /\ SF_vars(SourceConditionalChoose))
-    BY EmittedConditionalTemporalSpec, EmittedConditionalTypeInvariant,
+        <=> (SourceConditionalSpec /\ WF_vars(SourceConditionalChoose)
+             /\ SF_vars(SourceConditionalChoose))
+    BY EmittedConditionalSequentialFairTemporalSpec,
+        EmittedConditionalTypeInvariant,
         EmittedConditionalStrongFairness, PTL
 
 ConditionalStates ==

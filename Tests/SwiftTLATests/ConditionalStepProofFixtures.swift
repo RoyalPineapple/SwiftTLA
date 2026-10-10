@@ -7,7 +7,7 @@ struct ConditionalStepProofModel {
 
     static var spec: TLASpec {
         #spec("ConditionalStepProofModel") {
-            let algorithm = Algorithm(label: "ConditionalStepProofModel", scoped: { scope in
+            let algorithm = Algorithm(label: "ConditionalStepProofModel", fairness: .weak, scoped: { scope in
                 let chooseFirst = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
                 let value = scope.sharedVar(initial: 0)
                 Do(Step.choose) {
