@@ -271,4 +271,67 @@ THEOREM EmittedConditionalExactRelation ==
         ConditionalSuccessor, ConditionalStates, ConditionalTypeOK,
         ConditionalBefore, ConditionalAfter, SourceConditionalNext,
         SourceConditionalChoose, SourceConditionalTerminating
+
+RefinementInvariant ==
+    /\ ConditionalTypeOK
+    /\ (pc = "choose" => value = 0)
+
+AbstractValueStep == value = 0 /\ value' \in {1, 2}
+AbstractValueSpec == value = 0 /\ [][AbstractValueStep]_value
+
+THEOREM EmittedRefinementInitial ==
+    Init => RefinementInvariant
+    BY EmittedConditionalInitial, SMT
+        DEF RefinementInvariant, ConditionalTypeOK, SourceConditionalInit
+
+THEOREM EmittedRefinementStepInvariant ==
+    ASSUME RefinementInvariant, [Next]_vars
+    PROVE RefinementInvariant'
+    BY EmittedConditionalNext, SMT
+        DEF RefinementInvariant, ConditionalTypeOK, SourceConditionalNext,
+            SourceConditionalChoose, SourceConditionalTerminating, vars
+
+THEOREM EmittedRefinementInvariant ==
+    CoreConditionalSpec => []RefinementInvariant
+    PROOF
+    <1>1. RefinementInvariant /\ [Next]_vars => RefinementInvariant'
+        BY EmittedRefinementStepInvariant
+    <1>2. RefinementInvariant /\ [][Next]_vars => []RefinementInvariant
+        BY <1>1, PTL
+    <1>3. CoreConditionalSpec => Init
+        BY DEF CoreConditionalSpec
+    <1>4. CoreConditionalSpec => [][Next]_vars
+        BY PTL DEF CoreConditionalSpec, vars
+    <1>5. CoreConditionalSpec => RefinementInvariant
+        BY <1>3, EmittedRefinementInitial
+    <1>. QED
+        BY <1>2, <1>4, <1>5, PTL
+
+THEOREM EmittedRefinementStep ==
+    ASSUME RefinementInvariant, [Next]_vars
+    PROVE [AbstractValueStep]_value
+    BY EmittedConditionalNext, SMT
+        DEF RefinementInvariant, ConditionalTypeOK, SourceConditionalNext,
+            SourceConditionalChoose, SourceConditionalTerminating,
+            AbstractValueStep, vars
+
+THEOREM EmittedConditionalValueRefinement ==
+    Spec => AbstractValueSpec
+    PROOF
+    <1>1. []RefinementInvariant /\ [][Next]_vars
+            => [][AbstractValueStep]_value
+        BY EmittedRefinementStep, PTL
+    <1>2. Spec => CoreConditionalSpec
+        BY PTL DEF Spec, CoreConditionalSpec
+    <1>3. Spec => []RefinementInvariant
+        BY <1>2, EmittedRefinementInvariant
+    <1>4. Spec => value = 0
+        BY PTL DEF Spec, Init
+    <1>5. Spec => [][Next]_vars
+        BY PTL DEF Spec, vars
+    <1>6. Spec => value = 0 /\ []RefinementInvariant
+                    /\ [][Next]_vars
+        BY <1>3, <1>4, <1>5
+    <1>. QED
+        BY <1>1, <1>6, PTL DEF AbstractValueSpec
 =======================================================================

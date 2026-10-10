@@ -395,6 +395,14 @@ deadlock for typed states. It covers one emitted
 conditional with a prior write, not arbitrary conditions, expression failures,
 or the Swift emitter for all states.
 
+`EmittedConditionalValueRefinement` projects that exact generated module onto
+the non-injective value-only abstraction: initial value `0`, at most one
+choice of `1` or `2`, and then stuttering. TLAPS proves every behavior of the
+emitted `Spec` satisfies this abstract temporal specification, using a
+reachable-state invariant that the choice location still has value `0`.
+This is one output-linked one-way refinement witness; it does not certify an
+arbitrary emitted `Refinement` mapping or its abstract module.
+
 TLAPS expands TLA+'s `WF_vars` and `SF_vars` operators and proves that weak
 fairness on the emitted `Next` equals weak fairness on the source `choose`:
 the additional emitted `Terminating` action only stutters. The exact rendered
@@ -404,7 +412,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 924 `SingleAssignment.tla` obligations and all 122
+TLAPS 1.6.0-pre checked all 924 `SingleAssignment.tla` obligations and all 167
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
