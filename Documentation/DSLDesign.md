@@ -352,6 +352,16 @@ The compiler must resolve these ordered reads and writes once, then derive both
 native Swift execution and equivalent TLA+ next-state expressions from that
 result. Intermediate compiler values are not separately observable model states.
 
+Swift `Int` arithmetic is checked against the target platform's `Int` bounds.
+If an intermediate result overflows, evaluation fails explicitly, identifying
+the operation and evaluated operands. The step has no successor and commits no
+partial state. The generated Swift machine and generated TLA+/PlusCal must
+report the same failure after the same operand evaluation order; TLC's own
+integer overflow is not a substitute for this model failure. A program remains
+accepted when overflow is reachable—it is not rejected for lacking a
+range-safety proof. Initialization and selected checking claims follow the
+same matched-failure rule.
+
 **Migration requirement:** this changes the existing simultaneous-update
 contract. Existing swaps and other pre-state-dependent assignments must capture
 the original values explicitly before writing. Audit and migrate every affected

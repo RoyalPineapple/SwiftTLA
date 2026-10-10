@@ -42,8 +42,9 @@ range. Do not equate a TLC arithmetic error with the source failure outcome.
 Using TLC's operational `Assert` failure alone would not establish this
 agreement: the [standard TLA+ definition of `Assert`](https://github.com/tlaplus/tlaplus/blob/master/tlatools/org.lamport.tlatools/src/tla2sany/StandardModules/TLC.tla)
 does not define a matching mathematical error outcome. The failure must be
-represented in the semantics of both outputs, or the program must carry a
-proved range obligation.
+represented in the semantics of both outputs. A range-safety proof may establish
+that a particular configuration never reaches the failure, but is not a
+condition for accepting the program.
 
 This matched-failure rule is **not implemented**. `CheckedExecutionOverflow` in
 `NativeExecutionBoundaryTests` is a concrete accepted counterexample: its
