@@ -199,6 +199,17 @@ ExtendEnumeratedInitialStates(priorStates, key, candidates) ==
 ExtendMembershipInitialStates(priorStates, key, domains) ==
     UNION {MembershipInitialStates(prior, key, domains[prior]) : prior \in priorStates}
 
+THEOREM DependentDeterministicInitializationComposes ==
+    \A key \in Vars, priorStates \in SUBSET States :
+        \A valueByPrior \in [States -> Values] :
+            ExtendEnumeratedInitialStates(
+                priorStates, key,
+                [prior \in States |-> <<valueByPrior[prior]>>])
+            = UNION {EqualityInitialStates(prior, key, valueByPrior[prior])
+                : prior \in priorStates}
+    BY InitialEqualityMatchesSingletonEnumeration,
+        SMT DEF ExtendEnumeratedInitialStates
+
 THEOREM InitialMembershipComposesAcrossPriorChoices ==
     \A key \in Vars, priorStates \in SUBSET States :
         \A candidates \in [States -> Seq(Values)] :

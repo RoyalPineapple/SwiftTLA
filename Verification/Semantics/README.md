@@ -164,8 +164,8 @@ membership clause when the sequence contains precisely the declared domain.
 each previously selected state, including an empty domain.
 `InitialEqualityMatchesSingletonEnumeration` covers a deterministic initializer:
 one native candidate admits exactly the complete states described by TLA+
-equality. It can be applied to each prior state before the existing composition
-rule, so the value may depend on earlier initialization choices.
+equality. `DependentDeterministicInitializationComposes` applies that equality
+to every prior state, so the value may depend on earlier initialization choices.
 `OrderedInitialHistoriesAgree` extends the equality to every position in any
 finite ordered initialization plan. `OrderedInitialHistoriesExist` constructs a
 shared history for every such plan, so the equality is not vacuous. These are
