@@ -353,6 +353,36 @@ THEOREM EveryConcreteRunRefines ==
     BY SMT DEF MappedStates, RefinementSteps, TraceStep, ValidRun,
         MappedRun, LabeledEdges, States
 
+FairnessProjection(concreteEdges, abstractEdges, projection, run,
+                   concreteAction, abstractAction) ==
+    /\ \A index \in Nat :
+        EnabledChanging(abstractEdges, projection[run[index]], abstractAction)
+        => EnabledChanging(concreteEdges, run[index], concreteAction)
+    /\ \A index \in Nat :
+        TakenChanging(concreteEdges, run, concreteAction, index)
+        => TakenChanging(abstractEdges, MappedRun(run, projection),
+            abstractAction, index)
+
+THEOREM WeakFairnessSurvivesRefinement ==
+    \A concreteEdges, abstractEdges \in SUBSET LabeledEdges,
+       projection \in [States -> States], run \in [Nat -> States],
+       concreteAction, abstractAction \in ActionLabels :
+        FairnessProjection(concreteEdges, abstractEdges, projection, run,
+            concreteAction, abstractAction)
+        => (WeakFairRun(concreteEdges, run, concreteAction)
+            => WeakFairRun(abstractEdges, MappedRun(run, projection), abstractAction))
+    BY SMT DEF FairnessProjection, WeakFairRun, MappedRun, States
+
+THEOREM StrongFairnessSurvivesRefinement ==
+    \A concreteEdges, abstractEdges \in SUBSET LabeledEdges,
+       projection \in [States -> States], run \in [Nat -> States],
+       concreteAction, abstractAction \in ActionLabels :
+        FairnessProjection(concreteEdges, abstractEdges, projection, run,
+            concreteAction, abstractAction)
+        => (StrongFairRun(concreteEdges, run, concreteAction)
+            => StrongFairRun(abstractEdges, MappedRun(run, projection), abstractAction))
+    BY SMT DEF FairnessProjection, StrongFairRun, MappedRun, States
+
 THEOREM GuardedChoiceComposition ==
     \A domain \in SUBSET Values :
         \A source, rendered \in [domain -> SUBSET LabeledEdges] :

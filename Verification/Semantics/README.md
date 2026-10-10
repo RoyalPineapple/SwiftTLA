@@ -209,6 +209,13 @@ abstract initial states and every concrete labeled edge projects to either an
 abstract edge or a stutter, then every concrete infinite run projects to a
 valid abstract run. This does not establish the edge/initial premises for an
 emitted refinement declaration, nor does it preserve fairness automatically.
+`WeakFairnessSurvivesRefinement` and `StrongFairnessSurvivesRefinement` add the
+separate fairness premises: whenever the abstract action is enabled, its
+concrete counterpart is enabled, and every changing concrete occurrence maps
+to a changing abstract occurrence. Under those premises, concrete fairness
+implies abstract fairness even for a non-injective state projection. Compiler
+refinement exports must still establish these premises for their actual
+actions and mappings.
 
 `InitialMembershipMatchesEnumeration` proves that one native initializer's
 candidate sequence produces exactly the complete states admitted by a TLA+
@@ -415,7 +422,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 924 `SingleAssignment.tla` obligations and all 192
+TLAPS 1.6.0-pre checked all 928 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
