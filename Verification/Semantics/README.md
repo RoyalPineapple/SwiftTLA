@@ -31,6 +31,14 @@ specified evaluation failures need separate matching rules. A finite TLC or
 native exploration is not a proof that overflow is unreachable.
 Rendered TLA+ currently uses mathematical integers, so it does not yet obey
 this source rule.
+The pinned TLC evaluator is not an overflow oracle for Swift `Int`: its
+[`IntValue` stores a Java `int`](https://github.com/tlaplus/tlaplus/blob/b123b22654942bd7f8b1bcadcc47da4ee2cf4c0e/tlatools/org.lamport.tlatools/src/tlc2/value/impl/IntValue.java),
+and its [addition override fails on 32-bit overflow](https://github.com/tlaplus/tlaplus/blob/b123b22654942bd7f8b1bcadcc47da4ee2cf4c0e/tlatools/org.lamport.tlatools/src/tlc2/module/Naturals.java).
+That failure can precede a valid generated-Swift result on a 64-bit target,
+while a large Swift literal is outside TLC's `IntValue` range. The TLA+ output
+therefore needs an explicit mathematical failure relation tied to the selected
+Swift `Int` bounds; TLC execution is evidence only within its own numeric
+range. Do not equate a TLC arithmetic error with the source failure outcome.
 Using TLC's operational `Assert` failure alone would not establish this
 agreement: the [standard TLA+ definition of `Assert`](https://github.com/tlaplus/tlaplus/blob/master/tlatools/org.lamport.tlatools/src/tla2sany/StandardModules/TLC.tla)
 does not define a matching mathematical error outcome. The failure must be

@@ -102,6 +102,20 @@ private struct CheckedExecutionOverflow {
 }
 
 @TLAModel
+private struct CheckedExecutionBeyondTLCIntegerRange {
+    enum Step: String, CaseIterable { case advance }
+    static var spec: TLASpec {
+        #spec("CheckedExecutionBeyondTLCIntegerRange") {
+            let algorithm = Algorithm(label: "CheckedExecutionBeyondTLCIntegerRange", scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: 2_147_483_647)
+                Do(Step.advance) { Assign(count, to: count + 1) }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
 private struct ReachableInvariantFailure {
     enum Step: String, CaseIterable { case advance }
     static var spec: TLASpec {
@@ -206,6 +220,13 @@ private struct ReachableInvariantFailure {
             }
             #expect(machine.snapshot == before)
         }
+    }
+
+    @Test("generated Swift retains valid Int results beyond TLC's integer range")
+    func arithmeticAboveTLCIntegerRange() throws {
+        var machine = try CheckedExecutionBeyondTLCIntegerRange.makeMachine()
+        let transition = try machine.send(.advance)
+        #expect(transition.after.count == 2_147_483_648)
     }
 
     @Test("invariant violations remain executable and observable")
