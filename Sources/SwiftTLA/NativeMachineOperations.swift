@@ -64,6 +64,17 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
     }
 }
 
+/// A generated action failed while evaluating a successor, before committing state.
+public struct MachineActionEvaluationFailure<Action: Hashable & Sendable>: Error, Equatable, Sendable {
+    public let action: Action
+    public let reason: NativeMachineEvaluationError
+
+    public init(action: Action, reason: NativeMachineEvaluationError) {
+        self.action = action
+        self.reason = reason
+    }
+}
+
 /// Value operations emitted by the native machine generator.
 @_documentation(visibility: internal)
 public enum _NativeMachineOperations: Sendable {

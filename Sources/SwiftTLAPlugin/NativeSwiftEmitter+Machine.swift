@@ -633,11 +633,26 @@ extension NativeSwiftEmitter {
             var found = false
             do {
                 func _visitAction(_ action: Action) throws {
-                    try _visitSuccessors(for: action, checking: &context) { execution in
-                        found = true
-                        if try !visit(action, Self(execution: execution\(configurationArguments))) {
-                            throw _StopSuccessorTraversal()
+                    var callbackFailed = false
+                    do {
+                        try _visitSuccessors(for: action, checking: &context) { execution in
+                            found = true
+                            do {
+                                if try !visit(action, Self(execution: execution\(configurationArguments))) {
+                                    throw _StopSuccessorTraversal()
+                                }
+                            } catch {
+                                callbackFailed = true
+                                throw error
+                            }
                         }
+                    } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+                        if case .integerOverflow = reason {
+                            throw MachineActionEvaluationFailure(action: action, reason: reason)
+                        }
+                        throw reason
+                    } catch {
+                        throw error
                     }
                 }
                 \(visitorEnumeration.joined(separator: "\n"))
