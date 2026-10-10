@@ -1,5 +1,6 @@
 @testable import SwiftTLA
 import Testing
+import SwiftTLAMacros
 
 @Suite("Procedure Lowering")
 struct ProcedureLoweringTests {
@@ -153,6 +154,19 @@ struct ProcedureLoweringTests {
         #expect(try value(named: "pc", in: afterReturn, compilation: compilation) == .string("finished"))
     }
 
+    @Test("generated projection distinguishes the same label in different procedures")
+    func generatedProjectionPreservesScopedControlLocations() throws {
+        var machine = try ScopedControlProjectionMachine.makeMachine()
+        let pc = try #require(TLAStateProjection.Token(validating: "pc"))
+
+        _ = try machine.send(.start)
+        let outer = try #require(machine.formalProjection(of: machine.snapshot).value(for: pc))
+        _ = try machine.send(.procedure_outer_enter)
+        let inner = try #require(machine.formalProjection(of: machine.snapshot).value(for: pc))
+
+        #expect(outer != inner)
+    }
+
     @Test("Each processes keep recursive procedure frames and parameter slots independent")
     func eachProcessesIsolateProcedureFrames() throws {
         let workers: [TLAValue] = [.int(1), .int(2)]
@@ -279,4 +293,27 @@ struct ProcedureLoweringTests {
 
 private enum ProcedureLoweringTestError: Error {
     case expectedFunction
+}
+
+@TLAModel
+struct ScopedControlProjectionMachine {
+    enum Step: String, CaseIterable { case start, enter, resume, finish }
+    enum Routine: String, CaseIterable { case outer, inner }
+
+    static var spec: TLASpec {
+        #spec("ScopedControlProjectionMachine") {
+            let algorithm = Algorithm(label: "ScopedControlProjectionMachine", scoped: { scope in
+                Procedure(Routine.outer) {
+                    Do(Step.enter) { Call(Routine.inner) }
+                    Do(Step.resume) { Return() }
+                }
+                Procedure(Routine.inner) {
+                    Do(Step.enter) { Return() }
+                }
+                Do(Step.start) { Call(Routine.outer) }
+                Do(Step.finish) { Stop() }
+            })
+            algorithm
+        }
+    }
 }
