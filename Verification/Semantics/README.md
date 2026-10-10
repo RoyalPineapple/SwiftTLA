@@ -411,9 +411,10 @@ complete pre- and post-states, to the two independently stated instructions
 under the general ordered-schedule relation. Neither result proves the Swift
 emitter or arbitrary accepted models.
 
-The same test now pins six actual generated Swift members—including the update
+The same test now pins seven actual generated Swift members—including the update
 helpers, initial-state construction, per-action successor visitation, formal
-projection, and action identity—to `GeneratedAtomicCopySwiftWitness.txt`.
+projection tokens and values, and action identity—to
+`GeneratedAtomicCopySwiftWitness.txt`.
 This makes those emitted bodies reviewable proof inputs rather than assumed
 templates. The Swift output link is **not closed**: the pin does not establish
 the Swift syntax-to-semantics interpretation, the generated state and snapshot
@@ -426,6 +427,16 @@ callback chain: the second write uses the first captured read, and its complete
 transition relation equals the emitted TLA `copy` action. The model of these
 Swift members is still a manually stated interpretation of pinned emitted
 syntax; no independent syntax-to-semantics checker certifies that link yet.
+`GeneratedCopyInitialsMatchSourcePredicate` proves both unfiltered
+initialization and filtering by a selected complete initial state against the
+source-state predicate. `EmittedCopyInitialState` separately proves the emitted
+TLA `Init` predicate, but their state-to-variable substitution has not been
+composed into one theorem. The projection theorem
+proves that both formal fields preserve every typed value, and the token
+declaration is pinned to their actual TLA names. The copy-step theorem covers
+every typed source and target state, not only the test's concrete step.
+Generated `State` and `Snapshot` declarations, global action dispatch, and
+macro installation are not yet certified by this slice.
 `PreStepSecondReadIsObservable` is a machine-checked negative witness: at
 `(first, second) = (0, 1)`, reading the pre-step `first` for the second write
 produces `(1, 0)`, which the emitted TLA action rejects. The generated-machine
@@ -510,7 +521,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 1134 `SingleAssignment.tla` obligations and all 192
+TLAPS 1.6.0-pre checked all 1150 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

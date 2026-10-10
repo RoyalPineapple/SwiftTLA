@@ -74,6 +74,8 @@ private static func _visitSuccessors0(from state: Snapshot, checking context: in
         }
     }
 }
+@@ __swifttlaFormalProjectionTokens
+private static let __swifttlaFormalProjectionTokens: [TLAStateProjection.Token] = [TLAStateProjection.Token(validating: "first")!, TLAStateProjection.Token(validating: "second")!]
 @@ formalProjection
 public func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection {
     try TLAStateProjection(validating: [.init(token: Self.__swifttlaFormalProjectionTokens[0], value: TLAValue.int(snapshot.state.first)),

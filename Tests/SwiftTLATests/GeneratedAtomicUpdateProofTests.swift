@@ -6,7 +6,7 @@ import SwiftSyntax
 
 @Suite("Generated atomic update proof input")
 struct GeneratedAtomicUpdateProofTests {
-    @Test("The proof input contains the actual generated Swift copy transition")
+    @Test("The proof input contains the generated Swift state and copy paths")
     func emittedSwiftTransitionMatchesProofInput() throws {
         let fixture = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -19,11 +19,13 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: model)
         let members = try emitter.machineMembers()
         let names = ["_Updates", "_initialStates", "_visitUpdates0", "_visitSuccessors0",
-            "formalProjection", "formalCall"]
+            "__swifttlaFormalProjectionTokens", "formalProjection", "formalCall"]
         let actual = try names.map { name in
             let member = try #require(members.first { item in
                 item.as(StructDeclSyntax.self)?.name.text == name
                     || item.as(FunctionDeclSyntax.self)?.name.text == name
+                    || item.as(VariableDeclSyntax.self)?.bindings.first?
+                        .pattern.as(IdentifierPatternSyntax.self)?.identifier.text == name
             })
             return "@@ \(name)\n" + member.description.trimmingCharacters(in: .newlines)
         }.joined(separator: "\n")

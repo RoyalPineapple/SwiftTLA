@@ -1870,6 +1870,58 @@ THEOREM GeneratedCopyMatchesEmittedTLA ==
     <1>. QED
         BY <1>3, EmittedCopyStep
 
+GeneratedCopyInitialState ==
+    [key \in Vars |-> IF key = "first" THEN 0 ELSE 1]
+GeneratedCopyInitials == {GeneratedCopyInitialState}
+GeneratedCopyFilteredInitials(selected) ==
+    IF selected = GeneratedCopyInitialState
+    THEN {GeneratedCopyInitialState}
+    ELSE {}
+FormalCopyInitials ==
+    {state \in States : state["first"] = 0 /\ state["second"] = 1}
+
+THEOREM FormalCopyInitialsAreSingleton ==
+    ASSUME Vars = {"first", "second"}, Values = Int
+    PROVE FormalCopyInitials = {GeneratedCopyInitialState}
+    PROOF
+    <1>1. GeneratedCopyInitialState \in States
+        BY SMT DEF GeneratedCopyInitialState, States
+    <1>2. \A state \in States :
+            (state["first"] = 0 /\ state["second"] = 1)
+            <=> state = GeneratedCopyInitialState
+        BY SMT DEF GeneratedCopyInitialState, States
+    <1>. QED
+        BY <1>1, <1>2, SMT DEF FormalCopyInitials
+
+THEOREM GeneratedCopyInitialsMatchSourcePredicate ==
+    ASSUME Vars = {"first", "second"}, Values = Int
+    PROVE /\ GeneratedCopyInitials = FormalCopyInitials
+          /\ \A selected \in States :
+                GeneratedCopyFilteredInitials(selected)
+                = FormalCopyInitials \cap {selected}
+    BY FormalCopyInitialsAreSingleton, SMT
+        DEF GeneratedCopyInitials, GeneratedCopyFilteredInitials, States
+
+GeneratedCopyProjection(state) ==
+    [key \in Vars |->
+        IF key = "first" THEN state["first"] ELSE state["second"]]
+
+THEOREM GeneratedCopyProjectionPreservesCompleteState ==
+    ASSUME Vars = {"first", "second"},
+           NEW state \in States
+    PROVE GeneratedCopyProjection(state) = state
+    BY SMT DEF GeneratedCopyProjection, States
+
+THEOREM GeneratedCopyStepPreservesCompleteRelation ==
+    ASSUME Vars = {"first", "second"}, Values = Int
+    PROVE \A source, target \in States :
+        GeneratedCopyStep(source, target)
+        <=> target = [source EXCEPT !["first"] = source["second"],
+                                     !["second"] = source["second"]]
+    BY GeneratedDisjointWritesPreserveCompleteState, SMT
+        DEF GeneratedCopyStep, GeneratedTwoWrites, GeneratedApply,
+            GeneratedMerge, GeneratedEmptyUpdates, States
+
 VARIABLES orderedPC, orderedX, orderedY
 Repeated == INSTANCE OrderedCopy WITH pc <- orderedPC, x <- orderedX, y <- orderedY
 
