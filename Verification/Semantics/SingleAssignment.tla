@@ -18,6 +18,17 @@ EnabledIn(edges, state, action) ==
 
 InjectiveOn(mapping, domain) ==
     \A first, second \in domain : mapping[first] = mapping[second] => first = second
+PointwiseStateEncoding(valueMap, state) ==
+    [key \in Vars |-> valueMap[state[key]]]
+
+THEOREM PointwiseStateEncodingIsInjective ==
+    \A valueMap \in [Values -> Values] :
+        InjectiveOn(valueMap, Values) =>
+            InjectiveOn(
+                [state \in States |-> PointwiseStateEncoding(valueMap, state)],
+                States)
+    BY SMT DEF InjectiveOn, PointwiseStateEncoding, States
+
 MappedStates(states, stateMap) ==
     {stateMap[state] : state \in states}
 MappedEdges(edges, stateMap, actionMap) ==
