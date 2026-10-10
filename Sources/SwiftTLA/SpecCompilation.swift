@@ -120,6 +120,7 @@ package struct RenderedModule: Sendable, Equatable {
     package var importedOwnership: [TLAModuleBundle.OwnershipEntry] = []
     package var dependencies: [TLAModuleBundle.ModuleDependency] = []
     package let renderedModuleSource: String
+    let choiceFailureDeclarations: [String]
     package let configuration: TLCConfiguration
     package let renderedActions: [RenderedAction]
     package let symbolicActions: [ActionID]
@@ -2165,27 +2166,29 @@ private extension CompiledModuleMetadata {
                     ? try renderer.actionReference(compiled.id) : nil
             )
         }
+        let directOutput = try renderedDirectModuleSource(
+            definitionsBeforeInstances: definitionsBeforeInstances,
+            definitionsAfterInstances: definitionsAfterInstances,
+            renderedInstances: instances,
+            recursiveFunctions: recursiveFunctions,
+            renderedInvariants: invariants.map(\.1),
+            renderedTemporalProperties: temporalProperties.map(\.1),
+            renderedConstraint: constraint,
+            renderedActionConstraint: actionConstraint,
+            renderedActions: directModuleActions,
+            emittedActionCallNames: emittedActionCallNames,
+            renderedRefinements: renderedRefinements,
+            renderedFormalModuleReplacements: renderedFormalModuleReplacements,
+            renderer: renderer,
+            layout: layout,
+            behavior: behavior,
+            requiredStandardModules: requiredStandardModules,
+            importedNames: importedNames,
+            instancesAfterBehavior: instancesAfterBehavior
+        )
         return RenderedModule(
-            renderedModuleSource: try renderedDirectModuleSource(
-                definitionsBeforeInstances: definitionsBeforeInstances,
-                definitionsAfterInstances: definitionsAfterInstances,
-                renderedInstances: instances,
-                recursiveFunctions: recursiveFunctions,
-                renderedInvariants: invariants.map(\.1),
-                renderedTemporalProperties: temporalProperties.map(\.1),
-                renderedConstraint: constraint,
-                renderedActionConstraint: actionConstraint,
-                renderedActions: directModuleActions,
-                emittedActionCallNames: emittedActionCallNames,
-                renderedRefinements: renderedRefinements,
-                renderedFormalModuleReplacements: renderedFormalModuleReplacements,
-                renderer: renderer,
-                layout: layout,
-                behavior: behavior,
-                requiredStandardModules: requiredStandardModules,
-                importedNames: importedNames,
-                instancesAfterBehavior: instancesAfterBehavior
-            ),
+            renderedModuleSource: directOutput.source,
+            choiceFailureDeclarations: directOutput.choiceFailureDeclarations,
             configuration: configuration,
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             symbolicActions: behavior.actions.filter { $0.bindings.contains { $0.literalMembers == nil } }.map(\.id),
@@ -2219,7 +2222,7 @@ private extension CompiledModuleMetadata {
         requiredStandardModules: Set<StandardModule>,
         importedNames: [String],
         instancesAfterBehavior: Bool
-    ) throws -> String {
+    ) throws -> (source: String, choiceFailureDeclarations: [String]) {
         let varNames = layout.variables.map(\.declaration.name)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = varNames.isEmpty && renderedActions.isEmpty
@@ -2292,6 +2295,7 @@ private extension CompiledModuleMetadata {
             .union(layout.declarations.map(\.name))
             .union(layout.actions.map(\.renderedName))
             .union(renderedActions.flatMap(\.calls).map(\.renderedName))
+        var choiceFailureDeclarations: [String] = []
         for index in behavior.enabledActionIndices {
             let renderedAction = renderedActions[index]
             guard !renderedAction.sourceName.isEmpty else { continue }
@@ -2303,7 +2307,9 @@ private extension CompiledModuleMetadata {
                 var failureName = "__SwiftTLAChoiceFailure\(index)"
                 while occupied.contains(failureName) { failureName += "_" }
                 let failureHeader = parameters.isEmpty ? failureName : "\(failureName)(\(parameters))"
-                lines.append("\(failureHeader) == \(failure)")
+                let declaration = "\(failureHeader) == \(failure)"
+                lines.append(declaration)
+                choiceFailureDeclarations.append(declaration)
             }
             for call in renderedAction.calls where call.arguments.isEmpty == false {
                 lines.append("\(call.renderedName) == \(formalActionCall(named: emittedName, arguments: call.arguments))")
@@ -2323,7 +2329,7 @@ private extension CompiledModuleMetadata {
         }
         guard !isLibraryModule else {
             lines.append("====")
-            return lines.joined(separator: "\n") + "\n"
+            return (lines.joined(separator: "\n") + "\n", choiceFailureDeclarations)
         }
 
         let initializations = Dictionary(
@@ -2440,7 +2446,7 @@ private extension CompiledModuleMetadata {
         if !renderedTemporalProperties.isEmpty { lines.append("") }
         if instancesAfterBehavior { lines += instanceDeclarations }
         lines.append("====")
-        return lines.joined(separator: "\n") + "\n"
+        return (lines.joined(separator: "\n") + "\n", choiceFailureDeclarations)
     }
 
     func tlcConfiguration(behavior: CompiledBehavior, replacements: [TLCModuleReplacement],

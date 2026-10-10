@@ -273,6 +273,7 @@ extension CompiledModuleMetadata {
       return definition
     }
     let postTranslationDeclarations = postTranslation
+      + declarations.choiceFailureDeclarations
       + (declarations.constraint.map { [$0] } ?? [])
       + (declarations.actionConstraint.map { [$0] } ?? [])
       + renderedProperties

@@ -37,6 +37,17 @@ struct TypedSelectionTests {
         #expect(module == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
+    @Test("Authored PlusCal retains the proved empty-choice failure predicate")
+    func plusCalRetainsSelectionFailure() throws {
+        let rendered = try IncreasingSelection.render()
+        let direct = rendered.tlaBundle.root.tla
+        let plusCal = try rendered.plusCalBundle().root.tla
+        let failure = try #require(direct.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAChoiceFailure0 ==")
+        })
+        #expect(plusCal.split(separator: "\n").contains(failure))
+    }
+
     @Test("Boolean selection prefers false in both generated outputs")
     func booleanSelectionUsesLeastMember() throws {
         var machine = try BooleanSelection.makeMachine()
