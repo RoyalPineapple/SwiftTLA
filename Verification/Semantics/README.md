@@ -169,6 +169,17 @@ generic initialization rules; they do not yet prove that the actual initializer
 expressions, generated Swift loops, and rendered `Init` satisfy the candidate
 equality premise for every accepted `#spec`.
 
+`DependentInitializationOutputProofModel.tla` is an exact generated module for
+a `#spec` whose second variable's candidate set depends on the first variable's
+choice. `DependentInitializationOutputProofTests` pins the complete emitted TLA
+text and observes the generated Swift machine's three initial states.
+`EmittedDependentInitializationMatchesSource` proves the imported `Init`
+equivalent to an independently stated source relation, and
+`EmittedDependentInitializationHasExactlyThreeStates` proves that complete
+initial-state set. This connects one actual output pair to the generic rule's
+intended behavior; it does not establish the candidate-set premise or generated
+Swift output semantics for arbitrary accepted models.
+
 The TLA renderer now prints action conjunction as `IF left THEN right ELSE
 FALSE`, matching the native machine's left-first disabled-branch evaluation.
 `LazyConjunctionPreservesBooleanValue` proves equivalence to mathematical
@@ -323,7 +334,7 @@ no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
 with a prior write, not arbitrary conditions, expression failures, or the
 Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 574 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 593 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

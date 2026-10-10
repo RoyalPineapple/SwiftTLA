@@ -2,6 +2,9 @@
 EXTENDS TLAPS, NaturalsInduction, SequenceTheorems, GeneratedAtomicCopyProofModel
 VARIABLE choiceSelected
 Choice == INSTANCE GeneratedGuardedChoiceProofModel WITH selected <- choiceSelected
+VARIABLES dependentPC, dependentSeed, dependentChoice
+DependentInit == INSTANCE DependentInitializationOutputProofModel
+    WITH pc <- dependentPC, seed <- dependentSeed, choice <- dependentChoice
 CONSTANTS Vars, Values, Key, ActionLabels
 ASSUME KeyIsVariable == Key \in Vars
 
@@ -296,36 +299,61 @@ THEOREM OrderedInitialHistoriesExist ==
                     EnumeratedInitialHistory(start, prior, history)
                     /\ MembershipInitialHistory(start, prior, history)
             BY P(prior), <2>1, SMT DEF P, InitialHistoriesExist
-        <2>4. LET nextStates == ExtendEnumeratedInitialStates(
-                    history[Len(prior)], plan.key, plan.candidates)
-              IN nextStates = ExtendMembershipInitialStates(
+        <2>. DEFINE nextStates == ExtendEnumeratedInitialStates(
+            history[Len(prior)], plan.key, plan.candidates)
+        <2>4. nextStates = ExtendMembershipInitialStates(
                     history[Len(prior)], plan.key, plan.domains)
             BY <2>2, <2>3, InitialMembershipComposesAcrossPriorChoices,
-                SMT DEF InitializationPlanAgrees, InitializationPlans
-        <2>5. ExtendEnumeratedInitialStates(
-                    history[Len(prior)], plan.key, plan.candidates) \in SUBSET States
+                SMT DEF nextStates, InitializationPlanAgrees, InitializationPlans
+        <2>5. nextStates \in SUBSET States
             BY <2>3, SMT DEF ExtendEnumeratedInitialStates,
-                EnumeratedInitialStates, InitializationPlans, States
-        <2>6. LET nextStates == ExtendEnumeratedInitialStates(
-                    history[Len(prior)], plan.key, plan.candidates)
-              IN ExtendInitialHistory(history, Len(prior), nextStates)
-                 \in [0..Len(Append(prior, plan)) -> SUBSET States]
+                EnumeratedInitialStates, InitializationPlans, States,
+                nextStates
+        <2>6. ExtendInitialHistory(history, Len(prior), nextStates)
+            \in [0..Len(Append(prior, plan)) -> SUBSET States]
             BY <2>3, <2>5, AppendProperties, SMT DEF ExtendInitialHistory
-        <2>7. LET nextStates == ExtendEnumeratedInitialStates(
-                    history[Len(prior)], plan.key, plan.candidates)
-              IN /\ EnumeratedInitialHistory(start, Append(prior, plan),
+        <2>7. /\ EnumeratedInitialHistory(start, Append(prior, plan),
                         ExtendInitialHistory(history, Len(prior), nextStates))
-                 /\ MembershipInitialHistory(start, Append(prior, plan),
+              /\ MembershipInitialHistory(start, Append(prior, plan),
                         ExtendInitialHistory(history, Len(prior), nextStates))
-            BY <2>3, <2>4, AppendProperties,
-                SMT DEF EnumeratedInitialHistory, MembershipInitialHistory,
-                    ExtendInitialHistory
+            <3>1. \A index \in 0..Len(prior) :
+                    ExtendInitialHistory(history, Len(prior), nextStates)[index]
+                    = history[index]
+                BY SMT DEF ExtendInitialHistory
+            <3>2. ExtendInitialHistory(history, Len(prior), nextStates)
+                    [Len(prior) + 1] = nextStates
+                BY SMT DEF ExtendInitialHistory
+            <3>3. \A index \in 1..Len(prior) :
+                    Append(prior, plan)[index] = prior[index]
+                BY AppendProperties, SMT
+            <3>4. Append(prior, plan)[Len(prior) + 1] = plan
+                BY AppendProperties, SMT
+            <3>. QED
+                BY <2>3, <2>4, <3>1, <3>2, <3>3, <3>4,
+                    AppendProperties,
+                    SMT DEF EnumeratedInitialHistory, MembershipInitialHistory
         <2>. QED
             BY <2>6, <2>7 DEF InitialHistoriesExist
     <1>3. \A plans \in Seq(InitializationPlans) : P(plans)
         BY <1>1, <1>2, SequencesInductionAppend
     <1>. QED
         BY <1>3 DEF P
+
+DependentSourceInit ==
+    /\ dependentPC = "finish"
+    /\ ((dependentSeed = 0 /\ dependentChoice = 0)
+        \/ (dependentSeed = 1 /\ dependentChoice \in {0, 1}))
+
+THEOREM EmittedDependentInitializationMatchesSource ==
+    DependentInit!Init <=> DependentSourceInit
+    BY SMT DEF DependentInit!Init, DependentSourceInit
+
+THEOREM EmittedDependentInitializationHasExactlyThreeStates ==
+    DependentInit!Init <=>
+        <<dependentPC, dependentSeed, dependentChoice>> \in
+            {<<"finish", 0, 0>>, <<"finish", 1, 0>>, <<"finish", 1, 1>>}
+    BY EmittedDependentInitializationMatchesSource,
+        SMT DEF DependentSourceInit
 
 Instructions == [target: Vars, rhs: [States -> Values]]
 AdvanceSource(current, instruction) ==
