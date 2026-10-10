@@ -29,6 +29,21 @@ struct TypedSelectionTests {
         #expect(module == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
+    @Test("Boolean selection prefers false in both generated outputs")
+    func booleanSelectionUsesLeastMember() throws {
+        var machine = try BooleanSelection.makeMachine()
+        #expect(machine.state.flag)
+        _ = try machine.send(.select)
+        #expect(!machine.state.flag)
+
+        let module = try BooleanSelection.render().tlaBundle.root.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/BooleanSelection.tla")
+            .standardizedFileURL
+        #expect(module == (try String(contentsOf: proofInput, encoding: .utf8)))
+    }
+
     @Test("An empty matching domain fails when the choice is evaluated")
     func missingSelectionFailsDuringEvaluation() throws {
         let choice = Select(from: SetExpr<Int>.literal(1)) { _ in false }

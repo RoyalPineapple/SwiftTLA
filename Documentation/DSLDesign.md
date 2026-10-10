@@ -84,8 +84,8 @@ TLA+ emitter. It still renders unbounded integer arithmetic; the missing
 failure relation and output proof are tracked in
 `Verification/Semantics/README.md`.
 The expression-selection row records the generated Swift behavior. The TLA+
-output currently matches its nonempty integer case only; empty choices and
-other value orders remain proof and implementation gaps in the same record.
+output has demonstrated matching nonempty integer and Boolean fixtures; a
+general output proof, empty choices, and other value orders remain open.
 
 “SwiftUI-like” means readable composition, scoped builders, and focused modifiers.
 It does not require an environment system, property-wrapper storage, or a generic

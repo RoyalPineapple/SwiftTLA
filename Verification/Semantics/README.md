@@ -201,6 +201,15 @@ This is a finite integer, nonempty-choice slice, not a general output theorem:
 empty domains, predicate evaluation failures, and other value orders remain
 open. At position `3`, Swift reports `noSatisfyingChoice` but the rendered
 TLA+ expression still has an unspecified `CHOOSE` value.
+`BooleanSelection.tla` is likewise the complete emitted module for a
+non-unique Boolean choice. `TypedSelectionTests.booleanSelectionUsesLeastMember`
+checks the actual generated Swift transition and exact TLA+ output;
+`EmittedBooleanChoiceInitialState` and `EmittedBooleanChoiceMatchesSource`
+prove the imported module's initial condition and complete labeled `select`
+step. `ReversedBooleanChoiceWouldChangeStep` proves that reversing the Boolean
+order selects `TRUE` instead. This is one concrete nonempty Boolean output
+pair, not a proof for every Boolean predicate or generated Swift expression;
+no-match and predicate-evaluation failures remain unmatched.
 
 ## Checked kernel lemma
 

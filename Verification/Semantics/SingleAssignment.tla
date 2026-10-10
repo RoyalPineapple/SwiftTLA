@@ -2642,6 +2642,36 @@ THEOREM ReversedIntegerChoiceAtZeroDisagrees ==
         \A other \in {1, 2, 3} : member >= other) = 3
     BY SMT
 
+BooleanChoice == INSTANCE BooleanSelection
+    WITH pc <- dependentPC, flag <- choiceSelected
+
+THEOREM LeastBooleanChoice ==
+    (CHOOSE member \in {FALSE, TRUE} :
+        \A other \in {FALSE, TRUE} :
+            member = FALSE \/ other = TRUE) = FALSE
+    BY SMT
+
+THEOREM EmittedBooleanChoiceInitialState ==
+    BooleanChoice!Init <=>
+        (dependentPC = "select" /\ choiceSelected = TRUE)
+    BY SMT DEF BooleanChoice!Init
+
+SourceBooleanChoice ==
+    dependentPC = "select"
+    /\ choiceSelected' = FALSE
+    /\ dependentPC' = "Done"
+
+THEOREM EmittedBooleanChoiceMatchesSource ==
+    BooleanChoice!select <=> SourceBooleanChoice
+    BY LeastBooleanChoice, SMT
+        DEF BooleanChoice!select, SourceBooleanChoice
+
+THEOREM ReversedBooleanChoiceWouldChangeStep ==
+    (CHOOSE member \in {FALSE, TRUE} :
+        \A other \in {FALSE, TRUE} :
+            member = TRUE \/ other = FALSE) = TRUE
+    BY SMT
+
 CurrentNativeSubtractOutcome(lhs, rhs) ==
     IF WithinSwiftInt(lhs - rhs)
     THEN <<"value", lhs - rhs>>

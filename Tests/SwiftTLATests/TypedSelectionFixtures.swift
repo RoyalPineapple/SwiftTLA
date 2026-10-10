@@ -36,3 +36,20 @@ struct ClosedMissingSelection {
         }
     }
 }
+
+@TLAModel
+struct BooleanSelection {
+    enum Step: String, CaseIterable { case select }
+
+    static var spec: TLASpec {
+        #spec("BooleanSelection") { scope in
+            let booleanSelection = Algorithm(scoped: { scope in
+                let flag = scope.sharedVar(initial: true)
+                Do(Step.select) {
+                    Assign(flag, to: Select(from: Set<Bool>([true, false])) { _ in true })
+                }
+            })
+            booleanSelection
+        }
+    }
+}

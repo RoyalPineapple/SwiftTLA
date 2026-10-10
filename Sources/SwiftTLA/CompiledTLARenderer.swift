@@ -490,17 +490,20 @@ struct CompiledTLARenderer {
                     schedule([.expression(expression.children[0]), .text(" IN (LET \(divisor) == "),
                         .expression(expression.children[1]),
                         .text(" IN (IF \(divisor) < 0 THEN (-\(dividend)) \\div (-\(divisor)) ELSE \(dividend) \\div \(divisor))))")])
-                case .choose(let binder) where expression.resultType == .int:
+                case .choose(let binder) where expression.resultType == .int || expression.resultType == .bool:
                     guard expression.children.count == 2 else {
                         throw CompiledValueType.diagnostic("rendering.choose", "choice requires a domain and predicate")
                     }
                     let member = try binderName(binder)
                     let candidates = choiceName("choiceCandidates")
                     let other = choiceName("choiceOther")
+                    let least = expression.resultType == .int
+                        ? "\(member) <= \(other)"
+                        : "(\(member) = FALSE \\/ \(other) = TRUE)"
                     parts.append("(LET \(candidates) == {\(member) \\in ")
                     schedule([.expression(expression.children[0]), .text(" : "),
                         .expression(expression.children[1]),
-                        .text("} IN (CHOOSE \(member) \\in \(candidates) : (\\A \(other) \\in \(candidates) : \(member) <= \(other))))")])
+                        .text("} IN (CHOOSE \(member) \\in \(candidates) : (\\A \(other) \\in \(candidates) : \(least))))")])
                 case .add, .subtract, .multiply, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .randomSubset, .randomElement, .setSum, .integerRange, .negate, .not, .printT, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
                     try schedule(expression.operation, expression.children)
 
