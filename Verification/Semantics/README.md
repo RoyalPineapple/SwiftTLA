@@ -407,6 +407,19 @@ complete pre- and post-states, to the two independently stated instructions
 under the general ordered-schedule relation. Neither result proves the Swift
 emitter or arbitrary accepted models.
 
+The same test now pins six actual generated Swift members—including the update
+helpers, initial-state construction, per-action successor visitation, formal
+projection, and action identity—to `GeneratedAtomicCopySwiftWitness.txt`.
+This makes those emitted bodies reviewable proof inputs rather than assumed
+templates. The Swift output link is **not closed**: the pin does not establish
+the Swift syntax-to-semantics interpretation, the generated state and snapshot
+representations, or the macro glue that installs those members.
+`PreStepSecondReadIsObservable` is a machine-checked negative witness: at
+`(first, second) = (0, 1)`, reading the pre-step `first` for the second write
+produces `(1, 0)`, which the emitted TLA action rejects. The generated-machine
+test independently requires `(1, 1)` for that state; neither finite check
+establishes the universal Swift output link.
+
 The existing `OrderedCopyModel` fixture now pins its complete generated TLA+
 module byte-for-byte in `OrderedCopy.tla`. For integer `x`, TLAPS proves its
 emitted `Init`, both ordered actions (including two writes to `x` in one
@@ -485,7 +498,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 1118 `SingleAssignment.tla` obligations and all 192
+TLAPS 1.6.0-pre checked all 1120 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

@@ -1740,6 +1740,15 @@ THEOREM EmittedCopyPreservesSourceOrder ==
     Next <=> SourceSequentialCopy
     BY EmittedCopyNext, OrderedCopySemantics
 
+WrongPreStepCopy ==
+    /\ first' = second
+    /\ second' = first
+
+THEOREM PreStepSecondReadIsObservable ==
+    ASSUME first = 0, second = 1, first' = 1, second' = 0
+    PROVE WrongPreStepCopy /\ ~copy
+    BY SMT DEF WrongPreStepCopy, copy
+
 CopySourceState ==
     [key \in Vars |-> IF key = "first" THEN first ELSE second]
 CopyTargetState ==

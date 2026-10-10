@@ -1,0 +1,87 @@
+@@ _Updates
+private struct _Updates: Sendable {
+    var _value_first_0: Int? = nil
+var _value_second_1: Int? = nil
+    func merging(_ other: Self) -> Self? {
+        var result = self
+        if let value = other._value_first_0 {
+    if let previous = result._value_first_0, previous != value {
+        return nil
+    }
+    result._value_first_0 = value
+}
+if let value = other._value_second_1 {
+    if let previous = result._value_second_1, previous != value {
+        return nil
+    }
+    result._value_second_1 = value
+}
+        return result
+    }
+    func applying(to state: Snapshot) -> Snapshot {
+        Snapshot(state: State(first: _value_first_0 ?? state.state.first, second: _value_second_1 ?? state.state.second))
+    }
+}
+@@ _initialStates
+private static func _initialStates(_selectedInitial: State? = nil) throws -> [Snapshot] {
+    var result: [Snapshot] = []
+let _value_first_0: Int = 0
+if _selectedInitial == nil || _selectedInitial!.first == _value_first_0 {
+let _value_second_1: Int = 1
+if _selectedInitial == nil || _selectedInitial!.second == _value_second_1 {
+result.append(Snapshot(state: State(first: _value_first_0, second: _value_second_1)))
+}
+}
+return result
+}
+@@ _visitUpdates0
+private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                           _ emit: (_Updates) throws -> Void) throws {
+    func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_0_0 = state.state.second
+try _actionPart1(___atomic_0_0, updates, emit)
+}
+func _actionPart1(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_1_1 = ___atomic_0_0
+try _actionPart2(___atomic_0_0, ___atomic_1_1, updates, emit)
+}
+func _actionPart2(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart4(___atomic_0_0, ___atomic_1_1, updates, { candidate in try _actionPart3(___atomic_0_0, ___atomic_1_1, candidate, emit) })
+}
+func _actionPart4(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart6(___atomic_0_0, ___atomic_1_1, updates, { candidate in try _actionPart5(___atomic_0_0, ___atomic_1_1, candidate, emit) })
+}
+func _actionPart6(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+}
+func _actionPart5(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_first_0: ___atomic_0_0)) { try emit(merged) }
+}
+func _actionPart3(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_second_1: ___atomic_1_1)) { try emit(merged) }
+}
+try _actionPart0(_Updates(), emit)
+}
+@@ _visitSuccessors0
+private static func _visitSuccessors0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                              _ visit: (Snapshot) throws -> Void) throws {
+    var emitted: [Snapshot] = []
+    try _visitUpdates0(from: state, checking: &context) { updates in
+        let candidate = updates.applying(to: state)
+        if !emitted.contains(candidate) {
+            emitted.append(candidate)
+            try visit(candidate)
+        }
+    }
+}
+@@ formalProjection
+public func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection {
+    try TLAStateProjection(validating: [.init(token: Self.__swifttlaFormalProjectionTokens[0], value: TLAValue.int(snapshot.state.first)),
+.init(token: Self.__swifttlaFormalProjectionTokens[1], value: TLAValue.int(snapshot.state.second))])
+}
+@@ formalCall
+public func formalCall(for action: Action) throws -> FormalActionCall {
+    switch action {
+        case .copy: return FormalActionCall(name: "copy", arguments: [])
+    }
+}
