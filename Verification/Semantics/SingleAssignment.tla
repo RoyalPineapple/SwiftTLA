@@ -357,8 +357,27 @@ THEOREM OrderedInitialHistoriesExist ==
                     AppendProperties, SMT DEF EnumeratedInitialHistory
             <3>6. MembershipInitialHistory(start, Append(prior, plan),
                     ExtendInitialHistory(history, Len(prior), nextStates))
-                BY <2>3, <2>4, <3>1, <3>2, <3>3, <3>4,
-                    AppendProperties, SMT DEF MembershipInitialHistory
+                <4>1. ExtendInitialHistory(history, Len(prior), nextStates)[0]
+                        = start
+                    BY <2>3, <3>1, SMT DEF MembershipInitialHistory
+                <4>2. \A index \in 1..Len(prior) :
+                        ExtendInitialHistory(history, Len(prior), nextStates)[index]
+                        = ExtendMembershipInitialStates(
+                            ExtendInitialHistory(history, Len(prior), nextStates)[index - 1],
+                            Append(prior, plan)[index].key,
+                            Append(prior, plan)[index].domains)
+                    BY <2>3, <3>1, <3>3, SMT
+                        DEF MembershipInitialHistory
+                <4>3. ExtendInitialHistory(history, Len(prior), nextStates)
+                        [Len(prior) + 1]
+                        = ExtendMembershipInitialStates(
+                            ExtendInitialHistory(history, Len(prior), nextStates)[Len(prior)],
+                            Append(prior, plan)[Len(prior) + 1].key,
+                            Append(prior, plan)[Len(prior) + 1].domains)
+                    BY <2>4, <3>1, <3>2, <3>4, SMT
+                <4>. QED
+                    BY <4>1, <4>2, <4>3, AppendProperties, SMT
+                        DEF MembershipInitialHistory
             <3>. QED
                 BY <3>5, <3>6
         <2>. QED
