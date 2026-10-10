@@ -399,7 +399,10 @@ or the Swift emitter for all states.
 the non-injective value-only abstraction: initial value `0`, at most one
 choice of `1` or `2`, and then stuttering. TLAPS proves every behavior of the
 emitted `Spec` satisfies this abstract temporal specification, using a
-reachable-state invariant that the choice location still has value `0`.
+reachable-state invariant that the choice location still has value `0` and
+the done location has value `1` or `2`. `EmittedConditionalFairValueRefinement`
+also carries the emitted weak-fairness obligation through that projection, so
+the choice cannot stutter forever at `0`.
 This is one output-linked one-way refinement witness; it does not certify an
 arbitrary emitted `Refinement` mapping or its abstract module.
 
@@ -412,7 +415,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 924 `SingleAssignment.tla` obligations and all 167
+TLAPS 1.6.0-pre checked all 924 `SingleAssignment.tla` obligations and all 192
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

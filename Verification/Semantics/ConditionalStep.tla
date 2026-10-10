@@ -275,6 +275,7 @@ THEOREM EmittedConditionalExactRelation ==
 RefinementInvariant ==
     /\ ConditionalTypeOK
     /\ (pc = "choose" => value = 0)
+    /\ (pc = "Done" => value \in {1, 2})
 
 AbstractValueStep == value = 0 /\ value' \in {1, 2}
 AbstractValueSpec == value = 0 /\ [][AbstractValueStep]_value
@@ -334,4 +335,40 @@ THEOREM EmittedConditionalValueRefinement ==
         BY <1>3, <1>4, <1>5
     <1>. QED
         BY <1>1, <1>6, PTL DEF AbstractValueSpec
+
+THEOREM EmittedAbstractFairEnabledness ==
+    ASSUME RefinementInvariant
+    PROVE ENABLED <<Next>>_vars
+        <=> ENABLED <<AbstractValueStep>>_value
+    BY EmittedConditionalNext, ExpandENABLED, SMT
+        DEF RefinementInvariant, ConditionalTypeOK, SourceConditionalNext,
+            SourceConditionalChoose, SourceConditionalTerminating,
+            AbstractValueStep, Next, choose, Terminating, vars
+
+THEOREM EmittedAbstractFairOccurrence ==
+    ASSUME RefinementInvariant
+    PROVE <<Next>>_vars => <<AbstractValueStep>>_value
+    BY EmittedConditionalNext, SMT
+        DEF RefinementInvariant, ConditionalTypeOK, SourceConditionalNext,
+            SourceConditionalChoose, SourceConditionalTerminating,
+            AbstractValueStep, vars
+
+THEOREM EmittedAbstractFairnessTransfer ==
+    ASSUME []RefinementInvariant
+    PROVE WF_vars(Next) => WF_value(AbstractValueStep)
+    BY EmittedAbstractFairEnabledness, EmittedAbstractFairOccurrence, PTL
+
+THEOREM EmittedConditionalFairValueRefinement ==
+    Spec => (AbstractValueSpec /\ WF_value(AbstractValueStep))
+    PROOF
+    <1>1. Spec => CoreConditionalSpec
+        BY PTL DEF Spec, CoreConditionalSpec
+    <1>2. Spec => []RefinementInvariant
+        BY <1>1, EmittedRefinementInvariant
+    <1>3. Spec => WF_vars(Next)
+        BY PTL DEF Spec, vars
+    <1>4. Spec => WF_value(AbstractValueStep)
+        BY <1>2, <1>3, EmittedAbstractFairnessTransfer
+    <1>. QED
+        BY <1>4, EmittedConditionalValueRefinement
 =======================================================================
