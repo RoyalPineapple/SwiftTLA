@@ -5,8 +5,8 @@ VARIABLES pc, seed, choice
 
 vars == <<pc, seed, choice>>
 
-finish == (IF ((pc = "finish")) = TRUE THEN (LET __atomic_0 == choice IN (IF (IF TRUE THEN choice' = __atomic_0 ELSE FALSE) THEN (IF pc' = "Done" THEN UNCHANGED seed ELSE FALSE) ELSE FALSE)) ELSE FALSE)
-Terminating == (IF (IF (IF ((pc = "Done")) = TRUE THEN UNCHANGED pc ELSE FALSE) THEN (IF UNCHANGED seed THEN UNCHANGED choice ELSE FALSE) ELSE FALSE) THEN UNCHANGED pc ELSE FALSE)
+finish == (((pc = "finish")) = TRUE /\ (LET __atomic_0 == choice IN ((TRUE /\ choice' = __atomic_0) /\ (pc' = "Done" /\ UNCHANGED seed))))
+Terminating == (((((pc = "Done")) = TRUE /\ UNCHANGED pc) /\ (UNCHANGED seed /\ UNCHANGED choice)) /\ UNCHANGED pc)
 
 Init ==
   /\ pc = "finish"
