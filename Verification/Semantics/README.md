@@ -185,6 +185,18 @@ general output links remain to be proved. Removing the merge-compatibility
 guard in a local negative control made the successor theorem fail; restoring
 it restored all obligations.
 
+`ExactStateCorrespondence` through `ExactStrongFairRunCorrespondence` give a
+generic observation layer for complete state-labeled/action-labeled graphs.
+If state and action encodings are injective and the target initial set and
+edge relation are their exact images, they preserve initial membership,
+labeled edges, nonstuttering enabledness, mapped infinite runs, and weak/strong
+fairness observations on those runs. The run definitions permit stuttering;
+action occurrence requires a changing state, as TLA+'s `<<A>>_vars` does.
+These theorems do not prove that compiler outputs meet the image premises,
+that every target run lifts back to a source run, or that the abstract run
+formulas implement every emitted `WF_`/`SF_` form. Those output and temporal
+links remain required.
+
 `InitialMembershipMatchesEnumeration` proves that one native initializer's
 candidate sequence produces exactly the complete states admitted by a TLA+
 membership clause when the sequence contains precisely the declared domain.
@@ -379,7 +391,7 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 821 `SingleAssignment.tla` obligations and all 122
+TLAPS 1.6.0-pre checked all 857 `SingleAssignment.tla` obligations and all 122
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

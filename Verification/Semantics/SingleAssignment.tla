@@ -16,6 +16,158 @@ GuardEdges(enabled, edges) == IF enabled THEN edges ELSE {}
 EnabledIn(edges, state, action) ==
     \E successor \in States : <<state, action, successor>> \in edges
 
+InjectiveOn(mapping, domain) ==
+    \A first, second \in domain : mapping[first] = mapping[second] => first = second
+MappedStates(states, stateMap) ==
+    {stateMap[state] : state \in states}
+MappedEdges(edges, stateMap, actionMap) ==
+    {<<stateMap[edge[1]], actionMap[edge[2]], stateMap[edge[3]]>> : edge \in edges}
+
+THEOREM ExactStateCorrespondence ==
+    \A stateMap \in [States -> States] :
+        InjectiveOn(stateMap, States) =>
+            \A initial \in SUBSET States, state \in States :
+                (stateMap[state] \in MappedStates(initial, stateMap))
+                <=> (state \in initial)
+    BY SMT DEF InjectiveOn, MappedStates, States
+
+THEOREM ExactLabeledEdgeCorrespondence ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        InjectiveOn(stateMap, States) /\ InjectiveOn(actionMap, ActionLabels) =>
+            \A edges \in SUBSET LabeledEdges,
+               source, target \in States, action \in ActionLabels :
+                (<<stateMap[source], actionMap[action], stateMap[target]>>
+                 \in MappedEdges(edges, stateMap, actionMap))
+                <=> (<<source, action, target>> \in edges)
+    BY SMT DEF InjectiveOn, MappedEdges, LabeledEdges, States
+
+EnabledChanging(edges, state, action) ==
+    \E successor \in States :
+        successor # state /\ <<state, action, successor>> \in edges
+
+THEOREM ExactChangingEnablednessCorrespondence ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        InjectiveOn(stateMap, States) /\ InjectiveOn(actionMap, ActionLabels) =>
+            \A edges \in SUBSET LabeledEdges,
+               state \in States, action \in ActionLabels :
+                EnabledChanging(MappedEdges(edges, stateMap, actionMap),
+                    stateMap[state], actionMap[action])
+                <=> EnabledChanging(edges, state, action)
+    BY ExactLabeledEdgeCorrespondence, SMT
+        DEF EnabledChanging, InjectiveOn, MappedEdges, LabeledEdges, States
+
+TraceStep(edges, before, after) ==
+    before = after
+    \/ (\E action \in ActionLabels : <<before, action, after>> \in edges)
+MappedRun(run, stateMap) ==
+    [index \in Nat |-> stateMap[run[index]]]
+ValidRun(edges, run) ==
+    \A index \in Nat : TraceStep(edges, run[index], run[index + 1])
+
+THEOREM ExactTraceStepCorrespondence ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        InjectiveOn(stateMap, States) /\ InjectiveOn(actionMap, ActionLabels) =>
+            \A edges \in SUBSET LabeledEdges, before, after \in States :
+                TraceStep(MappedEdges(edges, stateMap, actionMap),
+                    stateMap[before], stateMap[after])
+                <=> TraceStep(edges, before, after)
+    BY ExactLabeledEdgeCorrespondence, SMT
+        DEF TraceStep, InjectiveOn, MappedEdges, LabeledEdges, States
+
+THEOREM ExactRunCorrespondence ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        InjectiveOn(stateMap, States) /\ InjectiveOn(actionMap, ActionLabels) =>
+            \A edges \in SUBSET LabeledEdges, run \in [Nat -> States] :
+                ValidRun(MappedEdges(edges, stateMap, actionMap),
+                    MappedRun(run, stateMap))
+                <=> ValidRun(edges, run)
+    BY ExactTraceStepCorrespondence, SMT
+        DEF ValidRun, MappedRun, States
+
+TakenChangingPair(edges, before, after, action) ==
+    before # after /\ <<before, action, after>> \in edges
+TakenChanging(edges, run, action, index) ==
+    TakenChangingPair(edges, run[index], run[index + 1], action)
+
+THEOREM ExactChangingActionEdgeCorrespondence ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        InjectiveOn(stateMap, States) /\ InjectiveOn(actionMap, ActionLabels) =>
+            \A edges \in SUBSET LabeledEdges,
+               before, after \in States, action \in ActionLabels :
+                TakenChangingPair(MappedEdges(edges, stateMap, actionMap),
+                    stateMap[before], stateMap[after], actionMap[action])
+                <=> TakenChangingPair(edges, before, after, action)
+    BY ExactLabeledEdgeCorrespondence, SMT
+        DEF TakenChangingPair, InjectiveOn, States
+
+THEOREM ExactRunEnablednessCorrespondence ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        InjectiveOn(stateMap, States) /\ InjectiveOn(actionMap, ActionLabels) =>
+            \A edges \in SUBSET LabeledEdges,
+               run \in [Nat -> States], action \in ActionLabels,
+               index \in Nat :
+                EnabledChanging(MappedEdges(edges, stateMap, actionMap),
+                    stateMap[run[index]], actionMap[action])
+                <=> EnabledChanging(edges, run[index], action)
+    BY ExactChangingEnablednessCorrespondence, SMT DEF States
+
+THEOREM ExactRunActionOccurrenceCorrespondence ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        InjectiveOn(stateMap, States) /\ InjectiveOn(actionMap, ActionLabels) =>
+            \A edges \in SUBSET LabeledEdges,
+               run \in [Nat -> States], action \in ActionLabels,
+               index \in Nat :
+                TakenChanging(MappedEdges(edges, stateMap, actionMap),
+                    MappedRun(run, stateMap), actionMap[action], index)
+                <=> TakenChanging(edges, run, action, index)
+    BY ExactChangingActionEdgeCorrespondence, SMT
+        DEF TakenChanging, MappedRun, States
+
+WeakFairRun(edges, run, action) ==
+    \A start \in Nat :
+        (\A index \in Nat :
+            index >= start => EnabledChanging(edges, run[index], action))
+        => (\E index \in Nat :
+            index >= start /\ TakenChanging(edges, run, action, index))
+StrongFairRun(edges, run, action) ==
+    (\A start \in Nat : \E index \in Nat :
+        index >= start /\ EnabledChanging(edges, run[index], action))
+    => (\A start \in Nat : \E index \in Nat :
+        index >= start /\ TakenChanging(edges, run, action, index))
+
+THEOREM ExactWeakFairRunCorrespondence ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        InjectiveOn(stateMap, States) /\ InjectiveOn(actionMap, ActionLabels) =>
+            \A edges \in SUBSET LabeledEdges,
+               run \in [Nat -> States], action \in ActionLabels :
+                WeakFairRun(MappedEdges(edges, stateMap, actionMap),
+                    MappedRun(run, stateMap), actionMap[action])
+                <=> WeakFairRun(edges, run, action)
+    BY ExactRunEnablednessCorrespondence,
+        ExactRunActionOccurrenceCorrespondence, SMT
+        DEF WeakFairRun, MappedRun, States
+
+THEOREM ExactStrongFairRunCorrespondence ==
+    \A stateMap \in [States -> States],
+       actionMap \in [ActionLabels -> ActionLabels] :
+        InjectiveOn(stateMap, States) /\ InjectiveOn(actionMap, ActionLabels) =>
+            \A edges \in SUBSET LabeledEdges,
+               run \in [Nat -> States], action \in ActionLabels :
+                StrongFairRun(MappedEdges(edges, stateMap, actionMap),
+                    MappedRun(run, stateMap), actionMap[action])
+                <=> StrongFairRun(edges, run, action)
+    BY ExactRunEnablednessCorrespondence,
+        ExactRunActionOccurrenceCorrespondence, SMT
+        DEF StrongFairRun, MappedRun, States
+
 THEOREM GuardedChoiceComposition ==
     \A domain \in SUBSET Values :
         \A source, rendered \in [domain -> SUBSET LabeledEdges] :
@@ -1296,6 +1448,24 @@ ASSUME PositiveDivisionLaw ==
             \E remainder \in 0..(divisor - 1) :
                 dividend = divisor * (dividend \div divisor) + remainder
 
+THEOREM PositiveDivisionLawForNegatedDividend ==
+    \A dividend, divisor \in Int :
+        divisor > 0 =>
+            \E remainder \in 0..(divisor - 1) :
+                -dividend = divisor * ((-dividend) \div divisor) + remainder
+    PROOF
+    <1>. SUFFICES ASSUME NEW dividend \in Int,
+                          NEW divisor \in Int,
+                          divisor > 0
+                  PROVE \E remainder \in 0..(divisor - 1) :
+                      -dividend = divisor * ((-dividend) \div divisor)
+                          + remainder
+        OBVIOUS
+    <1>1. -dividend \in Int
+        BY SMT
+    <1>. QED
+        BY <1>1, PositiveDivisionLaw
+
 THEOREM SignedDivisionHasEuclideanRemainder ==
     \A dividend, divisor \in Int :
         divisor < 0 =>
@@ -1563,7 +1733,7 @@ THEOREM ModeledSwiftModuloMatchesEuclideanRemainder ==
     <1>2. CASE dividend < 0
         <2>1. PICK remainder \in 0..(divisor - 1) :
                 -dividend = divisor * ((-dividend) \div divisor) + remainder
-            BY PositiveDivisionLaw
+            BY PositiveDivisionLawForNegatedDividend
         <2>. QED
             BY <1>2, <2>1, PositiveDivisionNegation, SMT
                 DEF ModeledSwiftModuloAlgorithm,
