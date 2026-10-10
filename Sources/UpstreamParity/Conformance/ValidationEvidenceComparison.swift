@@ -411,6 +411,7 @@ package enum ValidationEvidenceComparison {
         var violationCount = 0
         var deadlockCount = 0
         var reachabilityCount = 0
+        var evaluationFailureSeen = false
         var depths: [Int?] = []
         var witness: NativeDecisiveWitness?
         var pendingRepresentative: UInt64?
@@ -594,17 +595,31 @@ package enum ValidationEvidenceComparison {
                 do { try CanonicalBinaryState.validate(representative) }
                 catch { throw ValidationEvidenceComparisonError.invalidEvidence("view property representative value") }
                 pendingPropertyRepresentative = false
+            case 11:
+                let source = try reader.uint64()
+                let action = try reader.uint32()
+                guard producer == 2, !expectedComplete, !evaluationFailureSeen,
+                      source < UInt64(stateCount), UInt64(action) < UInt64(actionIDs.count) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("native evaluation failure identity")
+                }
+                _ = try BinaryEvaluationFailure.read(from: &reader)
+                evaluationFailureSeen = true
             case 255:
                 let counts = try (0..<8).map { _ in try reader.uint64() }
                 let completion = try reader.byte()
                 let checksum = try reader.bytes(32)
                 let expectedCompletion = producer == 1 ? completion == 0
-                    : expectedComplete ? completion == 0 : completion == 1 || completion == 2
+                    : expectedComplete ? completion == 0 && !evaluationFailureSeen
+                    : completion == 3 ? evaluationFailureSeen
+                    : (completion == 1 || completion == 2) && !evaluationFailureSeen
                 guard counts == [stateCount, initialCount, edgeCount, excludedCount,
                     unsupportedCount, violationCount, deadlockCount, reachabilityCount].map(UInt64.init),
                     expectedCompletion, (try reader.isAtEnd()),
                     checksum == (try reader.sha256Prefix(endingAt: footerOffset)) else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("binary graph footer")
+                }
+                if evaluationFailureSeen {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("unmatched native evaluation failure")
                 }
                 if producer == 2 && !expectedComplete {
                     guard let witness,
