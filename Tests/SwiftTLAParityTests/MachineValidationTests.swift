@@ -233,6 +233,78 @@ struct MachineValidationTests {
         #expect(profile["edgeEvents"] as? Int == summary.edges)
     }
 
+    @Test("generated arithmetic failure retains its exact action and operands in closed native evidence")
+    func retainsGeneratedEvaluationFailure() throws {
+        let scenario = try #require(RecordedOverflowModel.validationScenarios().first)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = directory.appendingPathComponent("native.bin")
+        let summary = try MachineValidationEvidence.write(
+            scenario: scenario, initialMachines: scenario.initialMachines(),
+            caseID: "recorded-overflow", maximumStates: 2,
+            stopOnViolation: false, to: output)
+        if case .evaluationFailure(let reason) = summary.completion {
+            #expect(reason == .integerOverflow(.addition, operands: [Int.max, 1]))
+        } else {
+            Issue.record("Expected a typed evaluation failure")
+        }
+        #expect(summary.states == 1 && summary.edges == 0)
+
+        var reader = try BinaryGraphEvidenceReader(output, checksumFooterLength: 98)
+        defer { reader.close() }
+        #expect(try reader.bytes(8) == Data("STLAGRF2".utf8))
+        #expect(try reader.byte() == 2)
+        #expect(try reader.string() == "recorded-overflow")
+        #expect(try reader.string().isEmpty)
+        var recordedFailure = false
+        records: while true {
+            let footerOffset = reader.offset
+            switch try reader.byte() {
+            case 1:
+                #expect(try reader.uint32() == 0)
+                #expect(try reader.string() == "advance")
+                #expect(try reader.string().isEmpty)
+            case 2:
+                #expect(try reader.uint64() == 0)
+                #expect(try reader.byte() == 1)
+                #expect(try !reader.bytes(Int(reader.uint32())).isEmpty)
+            case 11:
+                #expect(try reader.uint64() == 0)
+                #expect(try reader.uint32() == 0)
+                #expect(try reader.byte() == 9)
+                #expect(try reader.string() == "addition")
+                #expect(try reader.uint32() == 2)
+                #expect(try [Int64(bitPattern: reader.uint64()), Int64(bitPattern: reader.uint64())]
+                    == [Int64(Int.max), 1])
+                recordedFailure = true
+            case 255:
+                #expect(try (0..<8).map { _ in try reader.uint64() } == [1, 1, 0, 0, 0, 0, 0, 0])
+                #expect(try reader.byte() == 3)
+                let checksum = try reader.bytes(32)
+                #expect(try reader.isAtEnd())
+                #expect(checksum == (try reader.sha256Prefix(endingAt: footerOffset)))
+                break records
+            default:
+                Issue.record("Unexpected binary evidence event")
+                break records
+            }
+        }
+        #expect(recordedFailure)
+    }
+
+    @Test("native failure evidence cannot be admitted as complete parity")
+    func rejectsUnmatchedEvaluationFailure() throws {
+        let scenario = try #require(RecordedOverflowModel.validationScenarios().first)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        #expect(throws: NativeValidationRunnerError.unavailable("declared checking outcome")) {
+            try NativeValidationRunner.run(scenario: scenario, caseID: "recorded-overflow",
+                maximumStates: 2, to: directory)
+        }
+        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("machine.bin.gz").path))
+    }
+
     @Test("binary view evidence uses the same checking level as native state identity")
     func recordsCheckerLevelInViewEvidence() throws {
         let scenario = try #require(ReachabilityExportModel.validationScenarios().first)

@@ -54,10 +54,11 @@ links are proved, the universal theorem does not hold for accepted `#spec`.
 completion for integer overflow while evaluating a generated action body. The
 event retains the source state ID, action, operation, and operands; errors from
 the evidence callback are not reclassified as model failures. The binary
-evidence writer still propagates this failure without a completion footer, so
-the independent comparison path cannot yet admit it. Errors from action-domain
-enumeration, initializers, constraints, and selected claims also need their own
-matching output rules and checking evidence.
+evidence writer now retains the typed failure, action identity, and operands
+with a checked completion footer. The independent comparison path still rejects
+that outcome until generated TLA+ has a matching failure rule. Errors from
+action-domain enumeration, initializers, constraints, and selected claims need
+their own matching output rules and checking evidence.
 `EWD998TerminationModel` presents a different case: while a sender remains
 active, `SendMsg` can increment a receiver's `pending` count indefinitely.
 Its `pending <= 3` state constraint limits checking, not the generated
