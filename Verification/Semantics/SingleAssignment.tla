@@ -2618,7 +2618,19 @@ THEOREM CanonicalIntegerChoiceMatchesSortedFirst ==
 THEOREM EmittedIntegerChoiceAtZero ==
     choiceSelected = 0 =>
         (IntegerChoice!advance <=> choiceSelected' = 1)
-    BY UniqueMinimumIntegerChoice, SMT DEF IntegerChoice!advance
+    PROOF
+    <1>1. {member \in {1, 2, 3} : member > 0} = {1, 2, 3}
+        BY SMT
+    <1>2. {1, 2, 3} \in SUBSET Int
+        BY SMT
+    <1>3. 1 \in {1, 2, 3}
+        BY SMT
+    <1>4. \A other \in {1, 2, 3} : 1 <= other
+        BY SMT
+    <1>5. (CHOOSE member \in {1, 2, 3} :
+              \A other \in {1, 2, 3} : member <= other) = 1
+        BY <1>2, <1>3, <1>4, UniqueMinimumIntegerChoice, SMT
+    <1>. QED BY <1>1, <1>5, SMT DEF IntegerChoice!advance
 
 THEOREM EmittedIntegerChoiceAtOne ==
     choiceSelected = 1 =>
@@ -2634,7 +2646,13 @@ THEOREM EmittedIntegerChoiceAtOne ==
 THEOREM EmittedIntegerChoiceAtTwo ==
     choiceSelected = 2 =>
         (IntegerChoice!advance <=> choiceSelected' = 3)
-    BY UniqueMinimumIntegerChoice, SMT DEF IntegerChoice!advance
+    PROOF
+    <1>1. {member \in {1, 2, 3} : member > 2} = {3}
+        BY SMT
+    <1>2. (CHOOSE member \in {3} :
+              \A other \in {3} : member <= other) = 3
+        BY UniqueMinimumIntegerChoice, SMT
+    <1>. QED BY <1>1, <1>2, SMT DEF IntegerChoice!advance
 
 THEOREM EmittedIntegerChoiceMatchesSourceWhenDefined ==
     choiceSelected \in 0..2 =>
