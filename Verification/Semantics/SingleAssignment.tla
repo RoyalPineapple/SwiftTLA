@@ -1,14 +1,23 @@
 ----------------------- MODULE SingleAssignment -----------------------
 EXTENDS TLAPS, NaturalsInduction, SequenceTheorems, GeneratedAtomicCopyProofModel,
-        Int64LiteralArithmetic
+        Integers
 VARIABLE choiceSelected
 Choice == INSTANCE GeneratedGuardedChoiceProofModel WITH selected <- choiceSelected
 IntegerChoice == INSTANCE IncreasingSelection WITH position <- choiceSelected
 VARIABLES dependentPC, dependentSeed, dependentChoice
 DependentInit == INSTANCE DependentInitializationOutputProofModel
     WITH pc <- dependentPC, seed <- dependentSeed, choice <- dependentChoice
-CONSTANTS Vars, Values, Key, ActionLabels
+CONSTANTS Vars, Values, Key, ActionLabels, SwiftIntMin, SwiftIntMax
 ASSUME KeyIsVariable == Key \in Vars
+ASSUME SwiftIntBounds ==
+    /\ SwiftIntMin \in Int
+    /\ SwiftIntMax \in Int
+    /\ SwiftIntMin <= -2000000000
+    /\ 2000000000 <= SwiftIntMax
+
+THEOREM SmallAdditionFitsSwiftInt ==
+    \A value \in Int : value <= 1000000000 => value <= SwiftIntMax - 1
+    BY SwiftIntBounds, SMT DEF SwiftIntBounds
 
 States == [Vars -> Values]
 LabeledEdges == States \X ActionLabels \X States
@@ -1977,21 +1986,22 @@ THEOREM GeneratedCopyStepPreservesCompleteRelation ==
             GeneratedMerge, GeneratedEmptyUpdates, States
 
 VARIABLES orderedPC, orderedX, orderedY
-Repeated == INSTANCE OrderedCopy WITH pc <- orderedPC, x <- orderedX, y <- orderedY
+Repeated == INSTANCE OrderedCopy WITH pc <- orderedPC, x <- orderedX, y <- orderedY,
+    OrderedIntMin <- SwiftIntMin, OrderedIntMax <- SwiftIntMax
 
 SourceOrderedInitial ==
     /\ orderedPC = "copy"
     /\ orderedX = 1
     /\ orderedY = 0
 
-OrderedAddDefined(value) == value <= 9223372036854775806
+OrderedAddDefined(value) == value <= SwiftIntMax - 1
 
 OrderedRenderedAddGuard(value) ==
     IF value >= -1000000000 /\ value <= 1000000000
        /\ 1 >= -1000000000 /\ 1 <= 1000000000
     THEN TRUE
-    ELSE IF 1 > 0 THEN value <= 9223372036854775807 - 1
-    ELSE IF 1 < 0 THEN value >= -9223372036854775808 - 1
+    ELSE IF 1 > 0 THEN value <= SwiftIntMax - 1
+    ELSE IF 1 < 0 THEN value >= SwiftIntMin - 1
     ELSE TRUE
 
 THEOREM OrderedRenderedAddGuardMatchesRange ==
@@ -2000,19 +2010,15 @@ THEOREM OrderedRenderedAddGuardMatchesRange ==
     PROOF
     <1>1. 1 > 0 /\ ~(1 < 0)
         BY SMT
-    <1>2. 9223372036854775807 - 1 = 9223372036854775806
-        BY Int64MaximumMinusOne
-    <1>3. 1000000000 <= 9223372036854775806
-        BY BillionBelowInt64MaximumMinusOne
-    <1>4. value <= 1000000000 => OrderedAddDefined(value)
-        BY <1>3, SMT DEF OrderedAddDefined
-    <1>5. OrderedRenderedAddGuard(value)
+    <1>2. value <= 1000000000 => OrderedAddDefined(value)
+        BY SmallAdditionFitsSwiftInt, SMT DEF OrderedAddDefined
+    <1>3. OrderedRenderedAddGuard(value)
             <=> IF value >= -1000000000 /\ value <= 1000000000
                    THEN TRUE ELSE OrderedAddDefined(value)
-        BY <1>1, <1>2, SMT DEF OrderedRenderedAddGuard,
+        BY <1>1, SMT DEF OrderedRenderedAddGuard,
             OrderedAddDefined
     <1>. QED
-        BY <1>4, <1>5, SMT DEF OrderedAddDefined
+        BY <1>2, <1>3, SMT DEF OrderedAddDefined
 
 THEOREM EmittedOrderedInitial ==
     Repeated!Init <=> SourceOrderedInitial
@@ -2151,10 +2157,11 @@ THEOREM OrderedReachableAdditionsDefined ==
         /\ (orderedPC = "repeatWrites" =>
             OrderedAddDefined(orderedX) /\ OrderedAddDefined(orderedX + 1))
     PROOF
-    <1>1. 4 <= 9223372036854775806
-        BY FourBelowInt64MaximumMinusOne
+    <1>1. OrderedAddDefined(1) /\ OrderedAddDefined(2)
+            /\ OrderedAddDefined(3)
+        BY SmallAdditionFitsSwiftInt, SMT DEF OrderedAddDefined
     <1>. QED
-        BY <1>1, SMT DEF OrderedReachable, OrderedAddDefined
+        BY <1>1, SMT DEF OrderedReachable
 
 THEOREM OrderedInitialReachable ==
     Repeated!Init => OrderedReachable
@@ -2177,13 +2184,6 @@ THEOREM EmittedOrderedReachableInvariant ==
         BY <1>1, PTL
     <1>. QED
         BY OrderedInitialReachable, <1>2 DEF Repeated!Spec
-
-CONSTANTS SwiftIntMin, SwiftIntMax
-ASSUME SwiftIntBounds ==
-    /\ SwiftIntMin \in Int
-    /\ SwiftIntMax \in Int
-    /\ SwiftIntMin <= 0
-    /\ 4 <= SwiftIntMax
 
 WithinSwiftInt(value) == SwiftIntMin <= value /\ value <= SwiftIntMax
 
@@ -2896,12 +2896,12 @@ THEOREM EmittedIntegerChoiceAtTwo ==
     <1>1. {member \in {1, 2, 3} : member > 2} = {3}
         BY SMT
     <1>2. {3} \in SUBSET Int /\ 3 \in {3}
-        /\ (\A other \in {3} : 3 <= other)
+        /\ (\A other \in {3} : 3 <= other) /\ (\E member \in {1, 2, 3} : member > 2)
         BY SMT
     <1>3. (CHOOSE member \in {3} :
               \A other \in {3} : member <= other) = 3
         BY <1>2, UniqueMinimumIntegerChoice, SMT
-    <1>. QED BY <1>1, <1>3, SMT DEF IntegerChoice!advance
+    <1>. QED BY <1>1, <1>2, <1>3, SMT DEF IntegerChoice!advance
 
 THEOREM EmittedIntegerChoiceMatchesSourceWhenDefined ==
     choiceSelected \in 0..2 =>
@@ -2981,11 +2981,16 @@ CurrentNativeMultiplyOutcome(lhs, rhs) ==
     ELSE <<"overflow">>
 CurrentRenderedMultiplyOutcome(lhs, rhs) == <<"value", lhs * rhs>>
 
-CurrentNativeNegateOutcome(value) ==
+NativeNegateOutcome(value) ==
     IF WithinSwiftInt(-value)
     THEN <<"value", -value>>
-    ELSE <<"overflow">>
-CurrentRenderedNegateOutcome(value) == <<"value", -value>>
+    ELSE <<"overflow", "negation", <<value>>>>
+UncheckedRenderedNegateOutcome(value) == <<"value", -value>>
+EmittedNegateDefined(value) == value # SwiftIntMin
+CheckedRenderedNegateOutcome(value) ==
+    IF EmittedNegateDefined(value)
+    THEN <<"value", -value>>
+    ELSE <<"overflow", "negation", <<value>>>>
 
 THEOREM CurrentSubtractionAgreementIsExactlyRangeSafety ==
     \A lhs, rhs \in Int :
@@ -3005,14 +3010,82 @@ THEOREM CurrentMultiplicationAgreementIsExactlyRangeSafety ==
     BY SMT DEF CurrentNativeMultiplyOutcome,
         CurrentRenderedMultiplyOutcome, WithinSwiftInt
 
-THEOREM CurrentNegationAgreementIsExactlyRangeSafety ==
+THEOREM UncheckedNegationAgreementIsExactlyRangeSafety ==
     \A value \in Int :
         WithinSwiftInt(value) =>
-            ((CurrentNativeNegateOutcome(value)
-              = CurrentRenderedNegateOutcome(value))
+            ((NativeNegateOutcome(value)
+              = UncheckedRenderedNegateOutcome(value))
              <=> WithinSwiftInt(-value))
-    BY SMT DEF CurrentNativeNegateOutcome,
-        CurrentRenderedNegateOutcome, WithinSwiftInt
+    BY SMT DEF NativeNegateOutcome,
+        UncheckedRenderedNegateOutcome, WithinSwiftInt
+
+THEOREM CheckedNegationGuardMatchesSwiftInt ==
+    ASSUME NEW value \in Int, WithinSwiftInt(value),
+           SwiftIntMin = -SwiftIntMax - 1
+    PROVE EmittedNegateDefined(value) <=> WithinSwiftInt(-value)
+    BY SwiftIntBounds, SMT DEF EmittedNegateDefined,
+        WithinSwiftInt, SwiftIntBounds
+
+THEOREM CheckedNegationPreservesValueAndFailure ==
+    ASSUME NEW value \in Int, WithinSwiftInt(value),
+           SwiftIntMin = -SwiftIntMax - 1
+    PROVE CheckedRenderedNegateOutcome(value) = NativeNegateOutcome(value)
+    BY CheckedNegationGuardMatchesSwiftInt, SMT
+        DEF CheckedRenderedNegateOutcome, NativeNegateOutcome
+
+SourceNegateEdges(state, action) ==
+    IF WithinSwiftInt(-state[Key])
+    THEN {<<state, action, [state EXCEPT ![Key] = -state[Key]]>>}
+    ELSE {}
+EmittedNegateEdges(state, action) ==
+    IF EmittedNegateDefined(state[Key])
+    THEN {<<state, action, [state EXCEPT ![Key] = -state[Key]]>>}
+    ELSE {}
+UncheckedNegateEdges(state, action) ==
+    {<<state, action, [state EXCEPT ![Key] = -state[Key]]>>}
+SourceNegateFailures(state, action) ==
+    IF WithinSwiftInt(-state[Key])
+    THEN {}
+    ELSE {<<state, action, "negation", <<state[Key]>>>>}
+EmittedNegateFailures(state, action) ==
+    IF EmittedNegateDefined(state[Key])
+    THEN {}
+    ELSE {<<state, action, "negation", <<state[Key]>>>>}
+
+THEOREM RootNegationPreservesCompleteLabeledEdgesAndFailures ==
+    ASSUME NEW state \in [Vars -> Int],
+           NEW action \in ActionLabels,
+           WithinSwiftInt(state[Key]),
+           SwiftIntMin = -SwiftIntMax - 1
+    PROVE /\ SourceNegateEdges(state, action)
+                = EmittedNegateEdges(state, action)
+          /\ SourceNegateFailures(state, action)
+                = EmittedNegateFailures(state, action)
+    PROOF
+    <1>1. state[Key] \in Int BY KeyIsVariable, SMT DEF KeyIsVariable
+    <1>2. EmittedNegateDefined(state[Key])
+            <=> WithinSwiftInt(-state[Key])
+        BY <1>1, CheckedNegationGuardMatchesSwiftInt, SMT
+    <1>. QED BY <1>2, SMT DEF SourceNegateEdges,
+        EmittedNegateEdges, SourceNegateFailures,
+        EmittedNegateFailures
+
+THEOREM UncheckedNegationAddsAnInvalidLabeledEdge ==
+    ASSUME SwiftIntMin = -SwiftIntMax - 1,
+           NEW action \in ActionLabels
+    PROVE SourceNegateEdges([key \in Vars |-> SwiftIntMin], action)
+          # UncheckedNegateEdges([key \in Vars |-> SwiftIntMin], action)
+    PROOF
+    <1>1. Key \in Vars BY KeyIsVariable DEF KeyIsVariable
+    <1>2. ~WithinSwiftInt(-SwiftIntMin)
+        BY SwiftIntBounds, SMT DEF WithinSwiftInt, SwiftIntBounds
+    <1>3. [key \in Vars |-> SwiftIntMin][Key] = SwiftIntMin
+        BY <1>1, SMT
+    <1>4. SourceNegateEdges([key \in Vars |-> SwiftIntMin], action) = {}
+        BY <1>2, <1>3, SMT DEF SourceNegateEdges
+    <1>5. UncheckedNegateEdges([key \in Vars |-> SwiftIntMin], action) # {}
+        BY SMT DEF UncheckedNegateEdges
+    <1>. QED BY <1>4, <1>5
 
 THEOREM EmittedOrderedArithmeticIsRepresentable ==
     OrderedReachable =>
@@ -3188,7 +3261,7 @@ THEOREM EmittedRepeatedWritesMatchesGuardedHistory ==
         BY <1>1, SMT DEF RepeatedInstructions, Instructions, States
     <1>3. RepeatedGuards \in GuardPlans(RepeatedInstructions)
         BY <1>1, <1>2, SMT DEF RepeatedGuards, GuardPlans, States,
-            RepeatedInstructions
+            RepeatedInstructions, OrderedAddDefined
     <1>4. RepeatedWitnessHistory \in [0..Len(RepeatedInstructions) -> States]
         BY <1>1, SMT DEF RepeatedWitnessHistory, RepeatedAfterFirst,
             RepeatedAfterSecond, RepeatedAfterThird, RepeatedInstructions, States

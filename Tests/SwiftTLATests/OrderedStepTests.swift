@@ -22,7 +22,7 @@ import Testing
         #expect(Set(graph.transitions.keys.map { [$0.state.x, $0.state.y] }) == [[1, 0], [2, 2], [4, 2]])
     }
 
-    @Test("The checked repeated-write module is the generated TLA output")
+    @Test("The checked repeated-write module matches normalized generated TLA")
     func renderedRepeatedWriteProofInput() throws {
         let rendered = try OrderedCopyModel.render().tlaBundle.root.tla
         let proofInput = URL(fileURLWithPath: #filePath)
@@ -30,7 +30,13 @@ import Testing
             .appendingPathComponent("../../Verification/Semantics/OrderedCopy.tla")
             .standardizedFileURL
         let checkedModule = try String(contentsOf: proofInput, encoding: .utf8)
-        #expect(rendered == checkedModule)
+        #expect(Int.min <= -2_000_000_000 && 2_000_000_000 <= Int.max)
+        let normalized = rendered
+            .replacingOccurrences(of: "EXTENDS Integers, FiniteSets, Sequences\n\nVARIABLES",
+                with: "EXTENDS Integers, FiniteSets, Sequences\n\nCONSTANTS OrderedIntMin, OrderedIntMax\n\nVARIABLES")
+            .replacingOccurrences(of: String(Int.min), with: "OrderedIntMin")
+            .replacingOccurrences(of: String(Int.max), with: "OrderedIntMax")
+        #expect(normalized == checkedModule)
     }
 
     @Test("A later checked addition reports the failing operands")

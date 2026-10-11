@@ -258,7 +258,7 @@ struct CompiledTLARenderer {
     }
 
     private func orderedChoiceArithmeticSites(_ expression: CompiledExpression) throws -> [OrderedEvaluationSite]? {
-        // shortcut: only addition, subtraction, and total choice have ordered sites; extend to other fallible operations before universal fidelity.
+        // shortcut: only checked addition, subtraction, negation, and total choice have ordered sites; extend to other fallible operations before universal fidelity.
         func collect(_ value: CompiledExpression) throws -> [OrderedEvaluationSite]? {
             switch value.operation {
             case .convert:
@@ -267,12 +267,16 @@ struct CompiledTLARenderer {
             case .choose:
                 guard let defined = try choiceDefined(value) else { return nil }
                 return [.choice(guard_: defined)]
-            case .add, .subtract:
-                guard value.resultType == .int, value.children.count == 2,
-                      let left = try collect(value.children[0]),
-                      let right = try collect(value.children[1]) else { return nil }
+            case .add, .subtract, .negate:
+                guard value.resultType == .int,
+                      value.children.count == (value.operation == .negate ? 1 : 2) else { return nil }
+                var preceding: [OrderedEvaluationSite] = []
+                for child in value.children {
+                    guard let sites = try collect(child) else { return nil }
+                    preceding += sites
+                }
                 let site = try arithmeticSite(value)
-                return left + right + [.arithmetic(operation: site.operation,
+                return preceding + [.arithmetic(operation: site.operation,
                     guard_: site.guard_, operands: site.operands)]
             default:
                 return repeatable(value) ? [] : nil
@@ -293,13 +297,13 @@ struct CompiledTLARenderer {
     private func arithmeticSites(_ value: CompiledExpression) throws -> [(
         guard_: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
     )] {
-        // shortcut: only pure addition/subtraction trees are guarded; extend to ordered outcomes for other expression operations.
+        // shortcut: only pure addition/subtraction/negation trees are guarded; extend to ordered outcomes for other expression operations.
         guard arithmeticTreeIsRepeatable(value) else { return [] }
         var operations: [CompiledExpression] = []
         func collect(_ expression: CompiledExpression) {
             for child in expression.children { collect(child) }
             switch expression.operation {
-            case .add, .subtract: operations.append(expression)
+            case .add, .subtract, .negate: operations.append(expression)
             default: break
             }
         }
@@ -311,6 +315,9 @@ struct CompiledTLARenderer {
         guard_: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
     ) {
         let lhs = try state(expression.children[0])
+        if case .negate = expression.operation {
+            return ("(\(lhs) # \(Int.min))", "<<\(lhs)>>", .negation)
+        }
         let rhs = try state(expression.children[1])
         let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000 /\\ \(rhs) >= -1000000000 /\\ \(rhs) <= 1000000000)"
         let exact: String
@@ -323,15 +330,16 @@ struct CompiledTLARenderer {
             operation = .subtraction
             exact = "(IF \(rhs) > 0 THEN \(lhs) >= \(Int.min) + (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) <= \(Int.max) + (\(rhs)) ELSE TRUE)"
         default:
-            throw CompiledValueType.diagnostic("rendering.arithmetic", "expected addition or subtraction")
+            throw CompiledValueType.diagnostic("rendering.arithmetic", "expected checked arithmetic")
         }
         return ("(IF \(small) THEN TRUE ELSE \(exact))", "<<\(lhs), \(rhs)>>", operation)
     }
 
     private func arithmeticTreeIsRepeatable(_ expression: CompiledExpression) -> Bool {
         switch expression.operation {
-        case .add, .subtract:
-            return expression.resultType == .int && expression.children.count == 2
+        case .add, .subtract, .negate:
+            return expression.resultType == .int
+                && expression.children.count == (expression.operation == .negate ? 1 : 2)
                 && expression.children.allSatisfy(arithmeticTreeIsRepeatable)
         default:
             return repeatable(expression)

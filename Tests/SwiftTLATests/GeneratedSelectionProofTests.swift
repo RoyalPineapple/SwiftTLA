@@ -6,7 +6,7 @@ import SwiftSyntax
 
 @Suite("Generated selection proof input")
 struct GeneratedSelectionProofTests {
-    @Test("Integer and Boolean generated selections match their proof witnesses")
+    @Test("Generated selections match their proof witnesses")
     func generatedSelectionOutputsMatchProofWitnesses() throws {
         let fixture = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -14,7 +14,8 @@ struct GeneratedSelectionProofTests {
         let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
         let cases = [
             (model: "IncreasingSelection", witness: "GeneratedSelectionSwiftWitness.txt", cache: false),
-            (model: "BooleanSelection", witness: "GeneratedBooleanSelectionSwiftWitness.txt", cache: true)
+            (model: "BooleanSelection", witness: "GeneratedBooleanSelectionSwiftWitness.txt", cache: true),
+            (model: "MissingStringSelection", witness: "GeneratedMissingStringSelectionSwiftWitness.txt", cache: true)
         ]
         for entry in cases {
             let declaration = try #require(source.statements.compactMap {

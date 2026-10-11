@@ -1,9 +1,13 @@
 ------------------- MODULE CheckedExecutionOverflowProof -------------------
-EXTENDS TLAPS, CheckedExecutionOverflow
+EXTENDS TLAPS, CheckedExecutionOverflowSymbolic
 
-SwiftIntMin == -9223372036854775808
-SwiftIntMax == 9223372036854775807
 WithinSwiftInt(value) == SwiftIntMin <= value /\ value <= SwiftIntMax
+SwiftIntBounds ==
+    /\ SwiftIntMin \in Int
+    /\ SwiftIntMax \in Int
+    /\ SwiftIntMin <= -2000000000
+    /\ 2000000000 <= SwiftIntMax
+ASSUME SwiftIntBounds
 
 SourceInit == pc = "advance" /\ count = SwiftIntMax
 SourceStep ==
@@ -45,7 +49,7 @@ EmittedFailures ==
 
 THEOREM EmittedInitMatchesSource ==
     Init <=> SourceInit
-    BY DEF Init, SourceInit, SwiftIntMax
+    BY DEF Init, SourceInit
 
 THEOREM CompiledStepAndFailureMatchSource ==
     /\ (CompiledStep <=> SourceStep)
@@ -56,8 +60,9 @@ THEOREM CompiledStepAndFailureMatchSource ==
 THEOREM EmittedStepMatchesSource ==
     ASSUME count \in Int, WithinSwiftInt(count)
     PROVE advance <=> SourceStep
-    BY SMT DEF advance, SourceStep, WithinSwiftInt,
-        SwiftIntMin, SwiftIntMax
+    PROOF
+    <1>0. USE SwiftIntBounds DEF SwiftIntBounds
+    <1>. QED BY SMT DEF advance, SourceStep, WithinSwiftInt
 
 THEOREM EmittedStepMatchesCompiled ==
     ASSUME count \in Int, WithinSwiftInt(count)
@@ -85,10 +90,11 @@ THEOREM EmittedFailureMatchesSource ==
     PROVE /\ (__SwiftTLAOverflowFailure0 <=> SourceFailure)
           /\ __SwiftTLAOverflowOperands0 = <<count, 1>>
           /\ __SwiftTLAOverflowOperation0 = "addition"
-    BY SMT DEF __SwiftTLAOverflowFailure0,
+    PROOF
+    <1>0. USE SwiftIntBounds DEF SwiftIntBounds
+    <1>. QED BY SMT DEF __SwiftTLAOverflowFailure0,
         __SwiftTLAOverflowOperands0, __SwiftTLAOverflowOperation0,
-        SourceFailure,
-        WithinSwiftInt, SwiftIntMin, SwiftIntMax
+        SourceFailure, WithinSwiftInt
 
 THEOREM EmittedFailureRecordMatchesSource ==
     ASSUME count \in Int, WithinSwiftInt(count)
@@ -126,15 +132,19 @@ THEOREM InitialStateHasFailureAndNoStep ==
         /\ ~__SwiftTLAEvaluationOK
         /\ __SwiftTLAOverflowOperands0 = <<SwiftIntMax, 1>>
         /\ __SwiftTLAOverflowOperation0 = "addition"
-    BY EmittedInitMatchesSource, EmittedNextMatchesSource,
+    PROOF
+    <1>0. USE SwiftIntBounds DEF SwiftIntBounds
+    <1>. QED BY EmittedInitMatchesSource, EmittedNextMatchesSource,
         EmittedFailureMatchesSource, EmittedEvaluationCheckMatchesSource, SMT
         DEF SourceInit, SourceNext, SourceStep,
             SourceTerminating, SourceFailure, SourceEvaluationOK,
-            WithinSwiftInt, SwiftIntMax, SwiftIntMin
+            WithinSwiftInt
 
 THEOREM UncheckedAdditionNegativeControl ==
     Init => \E result \in Int :
         result = count + 1 /\ ~WithinSwiftInt(result)
-    BY SMT DEF Init, WithinSwiftInt, SwiftIntMax, SwiftIntMin
+    PROOF
+    <1>0. USE SwiftIntBounds DEF SwiftIntBounds
+    <1>. QED BY SMT DEF Init, WithinSwiftInt
 
 =============================================================================

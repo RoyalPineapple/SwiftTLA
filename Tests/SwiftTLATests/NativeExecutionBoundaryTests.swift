@@ -134,6 +134,20 @@ private struct CheckedSubtractionUnderflow {
 }
 
 @TLAModel
+private struct CheckedNestedNegation {
+    enum Step: String, CaseIterable { case advance }
+    static var spec: TLASpec {
+        #spec("CheckedNestedNegation") {
+            let algorithm = Algorithm(label: "CheckedNestedNegation", scoped: { scope in
+                let count = scope.sharedVar(_name: "count", in: Set<Int>([3, -9_223_372_036_854_775_807]))
+                Do(Step.advance) { Assign(count, to: -(count - 1)) }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
 private struct CheckedExecutionBeyondTLCIntegerRange {
     enum Step: String, CaseIterable { case advance }
     static var spec: TLASpec {
@@ -345,6 +359,17 @@ private struct ReachableInvariantFailure {
             .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflow.tla")
             .standardizedFileURL
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let symbolicProofInput = proofInput.deletingLastPathComponent()
+            .appendingPathComponent("CheckedExecutionOverflowSymbolic.tla")
+        #expect(Int.min <= -2_000_000_000 && 2_000_000_000 <= Int.max)
+        let symbolicOutput = rendered.tlaBundle.root.tla
+            .replacingOccurrences(of: "MODULE CheckedExecutionOverflow ----",
+                with: "MODULE CheckedExecutionOverflowSymbolic ----")
+            .replacingOccurrences(of: "EXTENDS Integers, FiniteSets, Sequences\n\nVARIABLES",
+                with: "EXTENDS Integers, FiniteSets, Sequences\n\nCONSTANTS SwiftIntMin, SwiftIntMax\n\nVARIABLES")
+            .replacingOccurrences(of: String(Int.min), with: "SwiftIntMin")
+            .replacingOccurrences(of: String(Int.max), with: "SwiftIntMax")
+        #expect(symbolicOutput == (try String(contentsOf: symbolicProofInput, encoding: .utf8)))
         let direct = rendered.tlaBundle.root.tla.split(separator: "\n")
         let action = try #require(direct.first { $0.hasPrefix("advance ==") })
         let machine = try CheckedExecutionOverflow.makeMachine()
@@ -461,6 +486,33 @@ private struct ReachableInvariantFailure {
         #expect(underflowTLA.contains("IF 2 > 0 THEN count >= \(Int.min) + (2)"))
         #expect(underflowTLA.contains("__SwiftTLAOverflowOperation0 == \"subtraction\""))
         #expect(underflowTLA.contains("__SwiftTLAOverflowOperands0 == <<count, 2>>"))
+    }
+
+    @Test("nested negation preserves ordered failure and complete state")
+    func negationPreservesGeneratedOutcomes() throws {
+        #expect(Int.min == -Int.max - 1)
+        var successful = try CheckedNestedNegation.makeMachine(.init(count: 3))
+        let transition = try successful.send(.advance)
+        #expect(transition.before.count == 3 && transition.after.count == -2)
+        let controlToken = try #require(TLAStateProjection.Token(validating: "pc"))
+        #expect(try successful.formalProjection(of: successful.snapshot).value(for: controlToken) == .string("Done"))
+
+        let failing = try CheckedNestedNegation.makeMachine(.init(count: -Int.max))
+        let before = failing.snapshot
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(
+            .negation, operands: [Int.min])) {
+            try failing.successors(for: .advance)
+        }
+        #expect(failing.snapshot == before)
+
+        let rendered = try CheckedNestedNegation.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let output = rendered.tlaBundle.root.tla
+        #expect(output.contains("__SwiftTLAOverflowOperation0 == \"subtraction\""))
+        #expect(output.contains("__SwiftTLAOverflowOperation0_1 == \"negation\""))
+        #expect(output.contains("__SwiftTLAOverflowOperands0_1 == <<(count - 1)>>"))
+        #expect(output.contains("(count - 1) # \(Int.min)"))
+        #expect(output.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLAOverflowFailure0) /\\ ~(__SwiftTLAOverflowFailure0_1)"))
     }
 
     @Test("generated TLA export rejects a different target Int width")

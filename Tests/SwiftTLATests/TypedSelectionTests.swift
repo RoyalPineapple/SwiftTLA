@@ -149,8 +149,13 @@ struct TypedSelectionTests {
 
         let rendered = try MissingStringSelection.render()
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
-        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
-        #expect(declarations.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        let actual = rendered.tlaBundle.root.tla.replacing(binder, with: "__PROOF_MEMBER__")
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/MissingStringSelection.tla")
+            .standardizedFileURL
+        #expect(actual == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
     @Test("A nested empty selection fails natively and emits a TLA failure check")

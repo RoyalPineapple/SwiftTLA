@@ -266,7 +266,7 @@ run_guarded() {
     set -m
     case "$mode" in
         swiftpm-test)
-            swift test -Xswiftc -warnings-as-errors --filter "$selector" -j 1 --scratch-path "$build_dir" &
+            swift test -Xswiftc -warnings-as-errors --disable-automatic-resolution --filter "$selector" -j 1 --scratch-path "$build_dir" &
             ;;
         xcode-test)
             package_dir="$PWD"
