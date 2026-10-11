@@ -126,3 +126,20 @@ struct EnumSelection {
         }
     }
 }
+
+@TLAModel
+struct StringSelection {
+    enum Step: String, CaseIterable { case select }
+
+    static var spec: TLASpec {
+        #spec {
+            let stringSelection = Algorithm(scoped: { scope in
+                let selected = scope.sharedVar(initial: "zed")
+                Do(Step.select) {
+                    Assign(selected, to: Select(from: Set<String>(["zed", "alpha"])) { _ in true })
+                }
+            })
+            stringSelection
+        }
+    }
+}

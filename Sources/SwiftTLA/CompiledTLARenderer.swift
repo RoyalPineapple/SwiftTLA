@@ -746,7 +746,7 @@ struct CompiledTLARenderer {
                         .expression(expression.children[1]),
                         .text(" IN (IF \(divisor) < 0 THEN (-\(dividend)) \\div (-\(divisor)) ELSE \(dividend) \\div \(divisor))))")])
                 case .choose(let binder) where expression.resultType == .int || expression.resultType == .bool
-                    || choiceMembers(expression.resultType) != nil:
+                    || choiceMembers(expression) != nil:
                     guard expression.children.count == 2 else {
                         throw CompiledValueType.diagnostic("rendering.choose", "choice requires a domain and predicate")
                     }
@@ -759,7 +759,7 @@ struct CompiledTLARenderer {
                     } else if expression.resultType == .bool {
                         least = "(\(member) = FALSE \\/ \(other) = TRUE)"
                     } else {
-                        guard let members = choiceMembers(expression.resultType) else {
+                        guard let members = choiceMembers(expression) else {
                             throw CompiledValueType.diagnostic("rendering.choose", "choice has no finite member order")
                         }
                         func rank(_ value: String) throws -> String {
@@ -791,6 +791,32 @@ struct CompiledTLARenderer {
             return members
         default: return nil
         }
+    }
+
+    private func choiceMembers(_ expression: CompiledExpression) -> [CompiledValue]? {
+        if let members = choiceMembers(expression.resultType) { return members }
+        // shortcut: only closed ASCII String domains have a renderable rank; dynamic or Unicode domains need a general value order.
+        guard expression.resultType == .string || expression.resultType == .unknown,
+              let domain = expression.children.first else { return nil }
+        let members: [CompiledValue]
+        switch domain.computation.operation {
+        case .value(.set(let values)):
+            members = Array(values)
+        case .setLiteral:
+            members = domain.children.compactMap {
+                guard case .value(let value) = $0.computation.operation else { return nil }
+                return value
+            }
+            guard members.count == domain.children.count else { return nil }
+        default:
+            return nil
+        }
+        guard members.count > 1,
+              members.allSatisfy({
+                  guard case .string(let value) = $0 else { return false }
+                  return value.utf8.allSatisfy { $0 >= 0x20 && $0 <= 0x7e }
+              }) else { return nil }
+        return Array(Set(members)).sorted()
     }
 
     /// Serialize a bijective, independent record comprehension without materializing a UNION of sets.

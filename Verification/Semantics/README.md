@@ -301,8 +301,9 @@ this lemma does not claim parity for them.
 The expression-level `StateExpr.choose` is distinct from the nondeterministic
 `Choose` algorithm statement. The generated Swift expression sorts its finite
 domain and returns the first satisfying member, or throws when none exists;
-the TLA+ renderer emits a least-member `CHOOSE` for integer, Boolean, and
-finite-enum results, but ordinary `CHOOSE` for other result types. Ordinary
+the TLA+ renderer emits a least-member `CHOOSE` for integer, Boolean,
+finite-enum, and closed multi-member printable-ASCII String domains, but ordinary
+`CHOOSE` for other result types. Ordinary
 TLA+ `CHOOSE`
 permits an unspecified consistent witness and gives an arbitrary value when
 none satisfies the predicate ([Specifying Systems, §16.1.2](https://lamport.azurewebsites.net/tla/book-01-08-21.pdf)).
@@ -437,6 +438,23 @@ selection value types still need
 an explicit shared ordering rule and output-link proof; these tests do not
 establish universal choice fidelity or prove either emitter correct.
 
+`StringSelection` closes one more concrete boundary: the authored closed
+`{"alpha", "zed"}` domain lowers to a compiled choice, and the generated
+Swift machine selects `"alpha"`. Direct compilation represents the domain as
+a constant set with an unknown result type, while macro compilation represents
+it as a `setLiteral` with a String result type. The renderer accepts both only
+after checking every member is a printable-ASCII literal String, then emits the same ranks.
+`TypedSelectionTests.stringSelectionUsesLeastMember` requires the two complete
+TLA+ outputs to agree and the generated module to equal the proved
+`EnumSelection.tla` module after only model/helper and binder renaming.
+`EnumSelectionProof.tla` therefore covers this emitted TLA+ instance through
+that exact-output, alpha-renaming test; `GeneratedSelectionProofTests` pins the
+complete emitted Swift choice cache and update function to
+`GeneratedStringSelectionSwiftWitness.txt`. Interpreting Swift's `String` order,
+`Result`, `choose`, and update merge remains a trusted runtime boundary.
+This link covers the two ASCII literals, not arbitrary or dynamic String
+domains, Unicode equivalence, or every accepted compound value type.
+
 For a repeatable String selection with no matching member,
 `TypedSelectionTests.missingStringSelectionHasMatchingFailure` checks the
 generated machine's transactional `noSatisfyingChoice` failure and the rendered
@@ -450,13 +468,10 @@ previous renderer, which guarded only integer and Boolean choices.
 states, complete labeled steps, no-match failure, and evaluation check, with a
 missing-check negative control. All 47 obligations passed locally; hosted
 evidence is pending. The interpretation of the emitted Swift `Result`, `choose`, and
-update merge remains a trusted runtime boundary. This is not a solution to
-non-unique String choice: the generated Swift machine still takes the first
-ordered member while rendered TLA+ uses unrestricted `CHOOSE` for that type.
-The chosen rule for this gap is a shared canonical order for every accepted
-selection type, emitted on both sides. It remains unimplemented until the
-ordering is defined for every value family, both outputs use it, and an
-output-linked proof checks observable non-unique choices.
+update merge remains a trusted runtime boundary. The chosen general rule is a
+shared canonical order for every accepted selection type, emitted on both
+sides. It remains incomplete: outside supported numeric, Boolean, enum, and
+closed printable-ASCII String domains, observable non-unique choices can still differ.
 
 ## Checked kernel lemma
 
