@@ -1,5 +1,6 @@
 ----------------------- MODULE SingleAssignment -----------------------
-EXTENDS TLAPS, NaturalsInduction, SequenceTheorems, GeneratedAtomicCopyProofModel
+EXTENDS TLAPS, NaturalsInduction, SequenceTheorems, GeneratedAtomicCopyProofModel,
+        Int64LiteralArithmetic
 VARIABLE choiceSelected
 Choice == INSTANCE GeneratedGuardedChoiceProofModel WITH selected <- choiceSelected
 IntegerChoice == INSTANCE IncreasingSelection WITH position <- choiceSelected
@@ -1983,12 +1984,43 @@ SourceOrderedInitial ==
     /\ orderedX = 1
     /\ orderedY = 0
 
+OrderedAddDefined(value) == value <= 9223372036854775806
+
+OrderedRenderedAddGuard(value) ==
+    IF value >= -1000000000 /\ value <= 1000000000
+       /\ 1 >= -1000000000 /\ 1 <= 1000000000
+    THEN TRUE
+    ELSE IF 1 > 0 THEN value <= 9223372036854775807 - 1
+    ELSE IF 1 < 0 THEN value >= -9223372036854775808 - 1
+    ELSE TRUE
+
+THEOREM OrderedRenderedAddGuardMatchesRange ==
+    ASSUME NEW value \in Int
+    PROVE OrderedRenderedAddGuard(value) <=> OrderedAddDefined(value)
+    PROOF
+    <1>1. 1 > 0 /\ ~(1 < 0)
+        BY SMT
+    <1>2. 9223372036854775807 - 1 = 9223372036854775806
+        BY Int64MaximumMinusOne
+    <1>3. 1000000000 <= 9223372036854775806
+        BY BillionBelowInt64MaximumMinusOne
+    <1>4. value <= 1000000000 => OrderedAddDefined(value)
+        BY <1>3, SMT DEF OrderedAddDefined
+    <1>5. OrderedRenderedAddGuard(value)
+            <=> IF value >= -1000000000 /\ value <= 1000000000
+                   THEN TRUE ELSE OrderedAddDefined(value)
+        BY <1>1, <1>2, SMT DEF OrderedRenderedAddGuard,
+            OrderedAddDefined
+    <1>. QED
+        BY <1>4, <1>5, SMT DEF OrderedAddDefined
+
 THEOREM EmittedOrderedInitial ==
     Repeated!Init <=> SourceOrderedInitial
     BY SMT DEF Repeated!Init, SourceOrderedInitial
 
 SourceOrderedCopyStep ==
     /\ orderedPC = "copy"
+    /\ OrderedAddDefined(orderedX)
     /\ orderedX' = orderedX + 1
     /\ orderedY' = orderedX + 1
     /\ orderedPC' = "repeatWrites"
@@ -1996,10 +2028,18 @@ SourceOrderedCopyStep ==
 THEOREM EmittedOrderedCopyStep ==
     ASSUME orderedX \in Int
     PROVE Repeated!copy <=> SourceOrderedCopyStep
-    BY SMT DEF Repeated!copy, SourceOrderedCopyStep
+    PROOF
+    <1>1. OrderedRenderedAddGuard(orderedX)
+            <=> OrderedAddDefined(orderedX)
+        BY OrderedRenderedAddGuardMatchesRange
+    <1>. QED
+        BY <1>1, SMT DEF Repeated!copy, SourceOrderedCopyStep,
+            OrderedRenderedAddGuard
 
 SourceRepeatedWrites ==
     /\ orderedPC = "repeatWrites"
+    /\ OrderedAddDefined(orderedX)
+    /\ OrderedAddDefined(orderedX + 1)
     /\ orderedX' = orderedX + 2
     /\ orderedY' = orderedY
     /\ orderedPC' = "Done"
@@ -2007,7 +2047,18 @@ SourceRepeatedWrites ==
 THEOREM EmittedRepeatedWrites ==
     ASSUME orderedX \in Int
     PROVE Repeated!repeatWrites <=> SourceRepeatedWrites
-    BY SMT DEF Repeated!repeatWrites, SourceRepeatedWrites
+    PROOF
+    <1>1. orderedX + 1 \in Int
+        BY SMT
+    <1>2. OrderedRenderedAddGuard(orderedX)
+            <=> OrderedAddDefined(orderedX)
+        BY OrderedRenderedAddGuardMatchesRange
+    <1>3. OrderedRenderedAddGuard(orderedX + 1)
+            <=> OrderedAddDefined(orderedX + 1)
+        BY <1>1, OrderedRenderedAddGuardMatchesRange
+    <1>. QED
+        BY <1>2, <1>3, SMT DEF Repeated!repeatWrites,
+            SourceRepeatedWrites, OrderedRenderedAddGuard
 
 SourceOrderedTerminating ==
     /\ orderedPC = "Done"
@@ -2093,6 +2144,17 @@ OrderedReachable ==
     \/ (orderedPC = "copy" /\ orderedX = 1 /\ orderedY = 0)
     \/ (orderedPC = "repeatWrites" /\ orderedX = 2 /\ orderedY = 2)
     \/ (orderedPC = "Done" /\ orderedX = 4 /\ orderedY = 2)
+
+THEOREM OrderedReachableAdditionsDefined ==
+    OrderedReachable =>
+        /\ (orderedPC = "copy" => OrderedAddDefined(orderedX))
+        /\ (orderedPC = "repeatWrites" =>
+            OrderedAddDefined(orderedX) /\ OrderedAddDefined(orderedX + 1))
+    PROOF
+    <1>1. 4 <= 9223372036854775806
+        BY FourBelowInt64MaximumMinusOne
+    <1>. QED
+        BY <1>1, SMT DEF OrderedReachable, OrderedAddDefined
 
 THEOREM OrderedInitialReachable ==
     Repeated!Init => OrderedReachable
@@ -2993,9 +3055,15 @@ THEOREM EmittedOrderedArithmeticIsRepresentable ==
     BY SwiftIntBounds, SMT DEF OrderedReachable, WithinSwiftInt, SwiftIntBounds
 
 OrderedStates ==
-    [pc: {"copy", "repeatWrites", "Done"}, x: Int, y: Int]
+    {[pc |-> "copy", x |-> 1, y |-> 0],
+     [pc |-> "repeatWrites", x |-> 2, y |-> 2],
+     [pc |-> "Done", x |-> 4, y |-> 2]}
 OrderedBefore == [pc |-> orderedPC, x |-> orderedX, y |-> orderedY]
 OrderedAfter == [pc |-> orderedPC', x |-> orderedX', y |-> orderedY']
+
+THEOREM OrderedStateSetIsReachable ==
+    OrderedReachable <=> OrderedBefore \in OrderedStates
+    BY SMT DEF OrderedReachable, OrderedBefore, OrderedStates
 
 OrderedSuccessor(state) ==
     IF state.pc = "copy"
@@ -3020,27 +3088,33 @@ THEOREM OrderedHasNoRelationalDeadlock ==
     BY OrderedSuccessorIsTotal
 
 THEOREM EmittedOrderedCompleteStateRelation ==
-    ASSUME OrderedTypeOK,
+    ASSUME OrderedReachable,
            OrderedAfter \in OrderedStates
     PROVE Repeated!Next <=> OrderedStepRelation(OrderedBefore, OrderedAfter)
-    BY EmittedOrderedNext, SMT DEF OrderedStepRelation,
-        OrderedSuccessor, OrderedStates, OrderedTypeOK,
+    BY EmittedOrderedNext, OrderedStateSetIsReachable,
+        OrderedReachableAdditionsDefined, SMT
+        DEF OrderedStepRelation,
+        OrderedSuccessor, OrderedStates, OrderedReachable,
         OrderedBefore, OrderedAfter, SourceOrderedNext,
         SourceOrderedCopyStep, SourceRepeatedWrites,
-        SourceOrderedTerminating
+        SourceOrderedTerminating, OrderedAddDefined
 
 THEOREM EmittedOrderedExactRelation ==
-    ASSUME OrderedTypeOK
+    ASSUME OrderedReachable
     PROVE Repeated!Next <=> OrderedStepRelation(OrderedBefore, OrderedAfter)
     PROOF
     <1>1. Repeated!Next => OrderedAfter \in OrderedStates
-        BY OrderedStepPreservesType,
-            SMT DEF OrderedAfter, OrderedStates, OrderedTypeOK
+        BY EmittedOrderedNext, OrderedStateSetIsReachable,
+            OrderedReachableAdditionsDefined, SMT
+            DEF OrderedAfter, OrderedStates,
+            OrderedReachable, SourceOrderedNext, SourceOrderedCopyStep,
+            SourceRepeatedWrites, SourceOrderedTerminating,
+            OrderedAddDefined
     <1>2. OrderedStepRelation(OrderedBefore, OrderedAfter)
             => OrderedAfter \in OrderedStates
         BY OrderedSuccessorIsTotal,
             SMT DEF OrderedStepRelation, OrderedBefore, OrderedStates,
-                OrderedTypeOK
+                OrderedReachable
     <1>. QED
         BY <1>1, <1>2, EmittedOrderedCompleteStateRelation
 
@@ -3108,7 +3182,15 @@ RepeatedInstructions ==
       [target |-> "orderedPC", rhs |-> [state \in States |-> "Done"]]>>
 RepeatedGuards ==
     [index \in 0..3 |-> [state \in States |->
-        IF index = 0 THEN state["orderedPC"] = "repeatWrites" ELSE TRUE]]
+        IF index = 0 THEN state["orderedPC"] = "repeatWrites"
+            /\ (IF state["orderedX"] \in Int
+                THEN OrderedAddDefined(state["orderedX"])
+                ELSE FALSE)
+        ELSE IF index = 1 THEN
+            IF state["orderedX"] \in Int
+            THEN OrderedAddDefined(state["orderedX"])
+            ELSE FALSE
+        ELSE TRUE]]
 RepeatedAfterFirst == [RepeatedBefore EXCEPT !["orderedX"] = orderedX + 1]
 RepeatedAfterSecond == [RepeatedAfterFirst EXCEPT !["orderedX"] = orderedX + 2]
 RepeatedAfterThird == [RepeatedAfterSecond EXCEPT !["orderedPC"] = "Done"]
@@ -3165,17 +3247,28 @@ THEOREM EmittedRepeatedWritesMatchesGuardedHistory ==
                 /\ orderedPC' = "Done"
         BY SMT DEF RepeatedAfterThird, RepeatedAfterSecond,
             RepeatedAfterFirst, RepeatedBefore, RepeatedAfter, States
-    <1>9. RepeatedGuards[0][RepeatedWitnessHistory[0]]
-            <=> orderedPC = "repeatWrites"
-        BY <1>4, SMT DEF RepeatedGuards, RepeatedWitnessHistory,
+    <1>8a. /\ RepeatedWitnessHistory[0]["orderedX"] = orderedX
+             /\ RepeatedWitnessHistory[1]["orderedX"] = orderedX + 1
+        BY <1>4, SMT DEF RepeatedWitnessHistory, RepeatedAfterFirst,
             RepeatedBefore, States
-    <1>10. \A index \in 1..3 :
+    <1>9. RepeatedGuards[0][RepeatedWitnessHistory[0]]
+            <=> orderedPC = "repeatWrites" /\ OrderedAddDefined(orderedX)
+        BY <1>4, <1>8a, SMT DEF RepeatedGuards,
+            RepeatedWitnessHistory, RepeatedBefore, States
+    <1>10. RepeatedGuards[1][RepeatedWitnessHistory[1]]
+            <=> OrderedAddDefined(orderedX + 1)
+        BY <1>4, <1>8a, SMT DEF RepeatedGuards,
+            RepeatedWitnessHistory, RepeatedAfterFirst,
+            RepeatedBefore, States
+    <1>10a. \A index \in 2..3 :
             RepeatedGuards[index][RepeatedWitnessHistory[index]]
         BY <1>4, SMT DEF RepeatedGuards, RepeatedWitnessHistory, States
     <1>11. (\A index \in 0..Len(RepeatedInstructions) :
             RepeatedGuards[index][RepeatedWitnessHistory[index]])
             <=> orderedPC = "repeatWrites"
-        BY <1>9, <1>10, SMT DEF RepeatedInstructions
+                /\ OrderedAddDefined(orderedX)
+                /\ OrderedAddDefined(orderedX + 1)
+        BY <1>9, <1>10, <1>10a, SMT DEF RepeatedInstructions
     <1>12. SourceGuardedDoStep(
             RepeatedBefore, RepeatedInstructions, RepeatedGuards, RepeatedAfter)
             => SourceRepeatedWrites

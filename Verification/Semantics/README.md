@@ -97,8 +97,12 @@ quantifies the failure over each declared argument and retains that intrinsic
 check under empty user-check selection. A second test checks the emitted
 failure guard and quantifier for a symbolic parameter domain. Neither case
 has a general output-linked proof for every parameterized action.
-Nested additions, initialization, guards, other arithmetic, and target-width
-differences remain open. The universal theorem does not yet hold.
+Pure nested additive trees now emit one ordered failure site per addition and
+guard the action on every site. A focused regression checks the native outer
+overflow and both generated TLA+ failure records. This has no TLAPS or TLC
+proof yet. Additions under other expression operations, effectful operands,
+initialization, guards, other arithmetic, and target-width differences remain
+open. The universal theorem does not yet hold.
 `MachineValidator.run` now reports a typed early evaluation-failure event and
 completion for value failures while evaluating a generated action body,
 including integer overflow and an empty expression-level `CHOOSE`. The event
@@ -164,9 +168,9 @@ native branch trusts Swift's `addingReportingOverflow` contract and the small
 `_NativeMachineOperations.add` wrapper; the fixture's generated-Swift witness
 and runtime failure test check that link, but are not a proof of the Swift
 compiler or every accepted addition lowering to this root form.
-The direct emitter now uses this guard for pure root additions in action
-bindings and emits an overflow-failure predicate, operation identity, and
-operand tuple. The
+The direct emitter now uses this guard for pure additive trees in action
+bindings and emits ordered overflow-failure predicates, operation identities,
+and operand tuples. The
 generic theorem models operand outcomes; it does not yet prove the actual
 emitted Swift expression or TLA+ action evaluates every nested operand in
 this order. The generated TLC configuration selects the emitted failure
@@ -707,13 +711,15 @@ declared by this fixture. The proof uses action and enabledness equality under
 the reachable-state type invariant. It does not verify generated Swift
 fairness callbacks or every fairness scope supported by the DSL.
 
-TLAPS 1.6.0-pre checked all 1333 `SingleAssignment.tla` obligations and all 192
-`ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
+Before the checked-overflow edits, TLAPS 1.6.0-pre checked all 1333
+`SingleAssignment.tla` obligations and all 192 `ConditionalStep.tla`
+obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
 SHA-256 `8bb3439772cafd75240d61abf255e89122850bab93563d1283b048359ab4e88f`.
-This is local diagnostic evidence, not hosted admission. The generic lemmas
+This is historical local diagnostic evidence, not proof of the current worktree
+or hosted admission. The generic lemmas
 do not yet prove expression evaluation or compiler lowering. The imported
 fixtures connect actual TLA outputs, but the general TLA-emitter and
 generated-Swift output links remain mandatory.
@@ -723,13 +729,18 @@ the official Linux TLAPS archive against SHA-256
 `13eff4e3dd0a4570c1c33c46f052fd4eb3afad465eb201ebade607961f09d43c`,
 replaces only its bundled Z3 with official Linux Z3 4.15.4 pinned to SHA-256
 `a41b690e89c343931471506cdc6d957b6044a200fd2d240cc017432afdff7d3e`,
-checks the declared proof modules without fingerprint reuse, and retains the exact
+checks the declared proof modules, including `Int64LiteralArithmetic.tla`,
+without fingerprint reuse, and retains the exact
 source SHA, TLA and Swift-witness input digests, tool versions/configuration, and separate
 proof logs. A changed archive fails its checksum. The new
-`CheckedExecutionOverflowProof.tla` module is declared in the job but has not
-yet passed its local or hosted check. This job does not yet have
-qualifying hosted evidence and is not the universal semantic-preservation
-admission check.
+`CheckedExecutionOverflowProof.tla` and the isolated arithmetic module are
+declared in the job but have not yet passed local or hosted checks. This job
+does not yet have qualifying hosted evidence and is not the universal
+semantic-preservation admission check.
+The ordered two-addition regression passes focused Swift tests and its TLA
+fixture matches the actual renderer output; its revised `SingleAssignment.tla`
+proof is still open, and TLAPS stack-overflowed while processing the large
+module. Neither test result establishes the ordered failure theorem.
 The older hosted run at `e77f1689` passed its diagnostic job and retained
 logs for 931 and 192 obligations respectively; those inputs precede the
 current lemmas and do not qualify this revision.

@@ -170,15 +170,37 @@ struct CompiledTLARenderer {
         }
     }
 
-    func overflowFailure(_ action: CompiledActionExpr) throws -> (predicate: String, operands: String)? {
+    func overflowFailures(_ action: CompiledActionExpr) throws -> [(predicate: String, operands: String)] {
         switch action {
-        case .define(_, let value, _):
-            guard let defined = try additionDefined(value) else { return nil }
-            return ("~(\(defined))", "<<\(try state(value.children[0])), \(try state(value.children[1]))>>")
+        case .define(let binder, let value, let body):
+            let defined = try evaluationDefined(value)
+            var failures: [(predicate: String, operands: String)] = []
+            var precedingGuards: [String] = []
+            for site in try additionSites(value) {
+                let failure = "~(\(site.guard_))"
+                let predicate = precedingGuards.isEmpty
+                    ? failure
+                    : "(\(precedingGuards.joined(separator: " /\\ ")) /\\ \(failure))"
+                failures.append((predicate, site.operands))
+                precedingGuards.append(site.guard_)
+            }
+            // shortcut: nonrepeatable values stop later-failure enumeration; replace with ordered outcomes before universal fidelity.
+            guard failures.isEmpty == false || repeatable(value) else { return failures }
+            let name = try binderName(binder)
+            let renderedValue = try state(value)
+            for failure in try overflowFailures(body) {
+                let predicate = "(LET \(name) == \(renderedValue) IN \(failure.predicate))"
+                let operands = "(LET \(name) == \(renderedValue) IN \(failure.operands))"
+                failures.append((defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate, operands))
+            }
+            return failures
         case .and(.guard_(let condition), let body):
-            guard repeatable(condition), let failure = try overflowFailure(body) else { return nil }
-            return ("((\(try state(condition))) = TRUE /\\ \(failure.predicate))", failure.operands)
-        default: return nil
+            guard repeatable(condition) else { return [] }
+            let guardPredicate = try state(condition)
+            return try overflowFailures(body).map {
+                ("((\(guardPredicate)) = TRUE /\\ \($0.predicate))", $0.operands)
+            }
+        default: return []
         }
     }
 
@@ -187,14 +209,35 @@ struct CompiledTLARenderer {
     }
 
     private func additionDefined(_ value: CompiledExpression) throws -> String? {
-        // shortcut: only pure root additions are guarded; extend to ordered expression outcomes for nested or effectful operands.
-        guard case .add = value.operation, value.resultType == .int,
-              value.children.count == 2, value.children.allSatisfy(repeatable) else { return nil }
-        let lhs = try state(value.children[0])
-        let rhs = try state(value.children[1])
-        let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000 /\\ \(rhs) >= -1000000000 /\\ \(rhs) <= 1000000000)"
-        let exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(Int.max) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(Int.min) - (\(rhs)) ELSE TRUE)"
-        return "(IF \(small) THEN TRUE ELSE \(exact))"
+        let sites = try additionSites(value)
+        guard !sites.isEmpty else { return nil }
+        return sites.count == 1 ? sites[0].guard_ : "(\(sites.map(\.guard_).joined(separator: " /\\ ")))"
+    }
+
+    private func additionSites(_ value: CompiledExpression) throws -> [(guard_: String, operands: String)] {
+        // shortcut: only pure additive trees are guarded; extend to ordered outcomes for other expression operations.
+        guard additiveTreeIsRepeatable(value) else { return [] }
+        var additions: [CompiledExpression] = []
+        func collect(_ expression: CompiledExpression) {
+            for child in expression.children { collect(child) }
+            if case .add = expression.operation { additions.append(expression) }
+        }
+        collect(value)
+        return try additions.map { addition in
+            let lhs = try state(addition.children[0])
+            let rhs = try state(addition.children[1])
+            let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000 /\\ \(rhs) >= -1000000000 /\\ \(rhs) <= 1000000000)"
+            let exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(Int.max) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(Int.min) - (\(rhs)) ELSE TRUE)"
+            return ("(IF \(small) THEN TRUE ELSE \(exact))", "<<\(lhs), \(rhs)>>")
+        }
+    }
+
+    private func additiveTreeIsRepeatable(_ expression: CompiledExpression) -> Bool {
+        if case .add = expression.operation {
+            return expression.resultType == .int && expression.children.count == 2
+                && expression.children.allSatisfy(additiveTreeIsRepeatable)
+        }
+        return repeatable(expression)
     }
 
     func choiceDefined(_ value: CompiledExpression) throws -> String? {

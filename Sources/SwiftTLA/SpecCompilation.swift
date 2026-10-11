@@ -2327,14 +2327,15 @@ private extension CompiledModuleMetadata {
                 failureReferences.append(try renderer.actionReference(behavior.actions[index].id, named: failureName))
                 occupied.insert(failureName)
             }
-            if let overflow = try renderer.overflowFailure(behavior.actions[index].body) {
-                var failureName = "__SwiftTLAOverflowFailure\(index)"
+            for (occurrence, overflow) in try renderer.overflowFailures(behavior.actions[index].body).enumerated() {
+                let suffix = occurrence == 0 ? "\(index)" : "\(index)_\(occurrence)"
+                var failureName = "__SwiftTLAOverflowFailure\(suffix)"
                 while occupied.contains(failureName) { failureName += "_" }
                 let failureHeader = parameters.isEmpty ? failureName : "\(failureName)(\(parameters))"
-                var operandsName = "__SwiftTLAOverflowOperands\(index)"
+                var operandsName = "__SwiftTLAOverflowOperands\(suffix)"
                 while occupied.contains(operandsName) { operandsName += "_" }
                 let operandsHeader = parameters.isEmpty ? operandsName : "\(operandsName)(\(parameters))"
-                var operationName = "__SwiftTLAOverflowOperation\(index)"
+                var operationName = "__SwiftTLAOverflowOperation\(suffix)"
                 while occupied.contains(operationName) { operationName += "_" }
                 let operationHeader = parameters.isEmpty ? operationName : "\(operationName)(\(parameters))"
                 let failureDeclaration = "\(failureHeader) == \(overflow.predicate)"
