@@ -577,7 +577,7 @@ private struct ReachableInvariantFailure {
         #expect(output.contains("__SwiftTLAOverflowOperation0 == \"subtraction\""))
         #expect(output.contains("__SwiftTLAOverflowOperation0_1 == \"negation\""))
         #expect(output.contains("__SwiftTLAOverflowOperands0_1 == <<(count - 1)>>"))
-        #expect(output.contains("(count - 1) # \(TLAValue.int(.min).description)"))
+        #expect(output.contains("IF ((count - 1) >= -1000000000 /\\ (count - 1) <= 1000000000) THEN TRUE ELSE (count - 1) # \(TLAValue.int(.min).description)"))
         #expect(output.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLAOverflowFailure0) /\\ ~(__SwiftTLAOverflowFailure0_1)"))
     }
 

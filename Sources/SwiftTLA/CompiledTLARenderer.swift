@@ -352,7 +352,8 @@ struct CompiledTLARenderer {
         let swiftIntMinimum = TLAValue.int(.min).description
         let swiftIntMaximum = TLAValue.int(.max).description
         if case .negate = expression.operation {
-            return ("(\(lhs) # \(swiftIntMinimum))", "<<\(lhs)>>", .negation)
+            let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000)"
+            return ("(IF \(small) THEN TRUE ELSE \(lhs) # \(swiftIntMinimum))", "<<\(lhs)>>", .negation)
         }
         let rhs = try state(expression.children[1])
         let smallLimit = expression.operation == .multiply ? 40000 : 1000000000

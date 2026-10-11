@@ -2986,7 +2986,10 @@ NativeNegateOutcome(value) ==
     THEN <<"value", -value>>
     ELSE <<"overflow", "negation", <<value>>>>
 UncheckedRenderedNegateOutcome(value) == <<"value", -value>>
-EmittedNegateDefined(value) == value # SwiftIntMin
+EmittedNegateDefined(value) ==
+    IF -1000000000 <= value /\ value <= 1000000000
+    THEN TRUE
+    ELSE value # SwiftIntMin
 CheckedRenderedNegateOutcome(value) ==
     IF EmittedNegateDefined(value)
     THEN <<"value", -value>>
