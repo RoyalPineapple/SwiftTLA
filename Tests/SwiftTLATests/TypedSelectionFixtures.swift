@@ -38,6 +38,23 @@ struct ClosedMissingSelection {
 }
 
 @TLAModel
+struct MissingStringSelection {
+    enum Step: String, CaseIterable { case select }
+
+    static var spec: TLASpec {
+        #spec {
+            let missingStringSelection = Algorithm(scoped: { scope in
+                let selected = scope.sharedVar(initial: "none")
+                Do(Step.select) {
+                    Assign(selected, to: Select(from: Set<String>(["alpha"])) { _ in false })
+                }
+            })
+            missingStringSelection
+        }
+    }
+}
+
+@TLAModel
 struct NestedMissingSelection {
     enum Step: String, CaseIterable { case advance }
 

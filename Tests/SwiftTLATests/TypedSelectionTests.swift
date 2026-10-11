@@ -138,6 +138,21 @@ struct TypedSelectionTests {
         #expect(result.states == 1 && result.edges == 0)
     }
 
+    @Test("A missing String selection has the same evaluation failure in Swift and TLA+")
+    func missingStringSelectionHasMatchingFailure() throws {
+        var machine = try MissingStringSelection.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+            _ = try machine.send(.select)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try MissingStringSelection.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(declarations.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })
+    }
+
     @Test("A nested empty selection fails natively and emits a TLA failure check")
     func nestedMissingSelectionHasNoTransition() throws {
         var machine = try NestedMissingSelection.makeMachine()

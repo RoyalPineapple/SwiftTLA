@@ -367,6 +367,15 @@ closed for these two shapes. Other accepted selection value types still need
 an explicit shared ordering rule and output-link proof; these tests do not
 establish universal choice fidelity or prove either emitter correct.
 
+For a repeatable String selection with no matching member,
+`TypedSelectionTests.missingStringSelectionHasMatchingFailure` checks the
+generated machine's transactional `noSatisfyingChoice` failure and the rendered
+TLA+ evaluation-failure declaration. The test failed on the previous renderer,
+which guarded only integer and Boolean choices. This is a tested failure
+boundary, not a TLAPS proof or a solution to non-unique String choice: the
+generated Swift machine still takes the first ordered member while rendered
+TLA+ uses unrestricted `CHOOSE` for that type.
+
 ## Checked kernel lemma
 
 `SingleAssignment.tla` proves that replacing one value in a complete state
