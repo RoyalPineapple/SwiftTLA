@@ -310,9 +310,15 @@ Authored PlusCal carries the same
 failure predicate declaration and guards the `with` that evaluates this choice
 with the same definedness predicate used by direct TLA+. A focused output test
 checks that the guard precedes evaluation. The translated PlusCal action and
-checking outcome are not yet proved by this source-level guard. Nested choice,
-effectful or fallible operands, other value orders, and general generated Swift
-semantics remain uncovered.
+checking outcome are not yet proved by this source-level guard. For integer
+`CHOOSE` nested in a straight-line addition tree with total choice operands,
+the renderer now emits ordered choice and overflow guards. Two focused
+`#spec` regressions check a missing nested witness and a successful witness
+followed by addition overflow against the generated Swift machine and TLA+
+failure declarations. This is tested behavior, not an output-linked TLAPS
+proof or independent TLC outcome comparison. Choice nested under other
+expression operations, effectful or fallible operands, other value orders,
+and general generated Swift semantics remain uncovered.
 
 `BooleanSelection.tla` is likewise the complete emitted module for a
 non-unique Boolean choice. `TypedSelectionTests.booleanSelectionUsesLeastMember`

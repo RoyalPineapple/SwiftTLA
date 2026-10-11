@@ -15,6 +15,17 @@ private enum ActionRenderingTask {
     case text(String)
 }
 
+private enum OrderedEvaluationSite {
+    case choice(guard_: String)
+    case addition(guard_: String, operands: String)
+
+    var guard_: String {
+        switch self {
+        case .choice(let guard_), .addition(let guard_, _): guard_
+        }
+    }
+}
+
 struct CompiledTLARenderer {
     let moduleName: String
     let reservedNames: Set<String>
@@ -161,6 +172,17 @@ struct CompiledTLARenderer {
     func choiceFailure(_ action: CompiledActionExpr) throws -> String? {
         switch action {
         case .define(_, let value, _):
+            if let sites = try orderedChoiceAdditionSites(value) {
+                var preceding: [String] = []
+                var failures: [String] = []
+                for site in sites {
+                    if case .choice(let guard_) = site {
+                        failures.append(preceded("~(\(guard_))", by: preceding))
+                    }
+                    preceding.append(site.guard_)
+                }
+                return failures.count == 1 ? failures[0] : "(\(failures.joined(separator: " \\/ ")))"
+            }
             guard let defined = try choiceDefined(value) else { return nil }
             return "~(\(defined))"
         case .and(.guard_(let condition), let body):
@@ -175,14 +197,24 @@ struct CompiledTLARenderer {
         case .define(let binder, let value, let body):
             let defined = try evaluationDefined(value)
             var failures: [(predicate: String, operands: String)] = []
-            var precedingGuards: [String] = []
-            for site in try additionSites(value) {
-                let failure = "~(\(site.guard_))"
-                let predicate = precedingGuards.isEmpty
-                    ? failure
-                    : "(\(precedingGuards.joined(separator: " /\\ ")) /\\ \(failure))"
-                failures.append((predicate, site.operands))
-                precedingGuards.append(site.guard_)
+            if let sites = try orderedChoiceAdditionSites(value) {
+                var preceding: [String] = []
+                for site in sites {
+                    if case .addition(let guard_, let operands) = site {
+                        failures.append((preceded("~(\(guard_))", by: preceding), operands))
+                    }
+                    preceding.append(site.guard_)
+                }
+            } else {
+                var precedingGuards: [String] = []
+                for site in try additionSites(value) {
+                    let failure = "~(\(site.guard_))"
+                    let predicate = precedingGuards.isEmpty
+                        ? failure
+                        : "(\(precedingGuards.joined(separator: " /\\ ")) /\\ \(failure))"
+                    failures.append((predicate, site.operands))
+                    precedingGuards.append(site.guard_)
+                }
             }
             // shortcut: nonrepeatable values stop later-failure enumeration; replace with ordered outcomes before universal fidelity.
             guard failures.isEmpty == false || repeatable(value) else { return failures }
@@ -205,7 +237,45 @@ struct CompiledTLARenderer {
     }
 
     func evaluationDefined(_ value: CompiledExpression) throws -> String? {
-        try choiceDefined(value) ?? additionDefined(value)
+        if let sites = try orderedChoiceAdditionSites(value) {
+            let defined: String = sites.reversed().reduce("TRUE") { result, site in
+                "(IF \(site.guard_) THEN \(result) ELSE FALSE)"
+            }
+            return defined
+        }
+        return try choiceDefined(value) ?? additionDefined(value)
+    }
+
+    private func preceded(_ predicate: String, by guards: [String]) -> String {
+        guards.reversed().reduce(predicate) { result, guard_ in
+            "(IF \(guard_) THEN \(result) ELSE FALSE)"
+        }
+    }
+
+    private func orderedChoiceAdditionSites(_ expression: CompiledExpression) throws -> [OrderedEvaluationSite]? {
+        // shortcut: only addition and total choice have ordered sites; extend to other fallible operations before universal fidelity.
+        func collect(_ value: CompiledExpression) throws -> [OrderedEvaluationSite]? {
+            switch value.operation {
+            case .convert:
+                guard value.children.count == 1 else { return nil }
+                return try collect(value.children[0])
+            case .choose:
+                guard let defined = try choiceDefined(value) else { return nil }
+                return [.choice(guard_: defined)]
+            case .add:
+                guard value.resultType == .int, value.children.count == 2,
+                      let left = try collect(value.children[0]),
+                      let right = try collect(value.children[1]) else { return nil }
+                let site = try additionSite(value)
+                return left + right + [.addition(guard_: site.guard_, operands: site.operands)]
+            default:
+                return repeatable(value) ? [] : nil
+            }
+        }
+        guard let sites = try collect(expression),
+              sites.contains(where: { if case .choice = $0 { return true }; return false }),
+              sites.contains(where: { if case .addition = $0 { return true }; return false }) else { return nil }
+        return sites
     }
 
     private func additionDefined(_ value: CompiledExpression) throws -> String? {
@@ -223,13 +293,15 @@ struct CompiledTLARenderer {
             if case .add = expression.operation { additions.append(expression) }
         }
         collect(value)
-        return try additions.map { addition in
-            let lhs = try state(addition.children[0])
-            let rhs = try state(addition.children[1])
-            let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000 /\\ \(rhs) >= -1000000000 /\\ \(rhs) <= 1000000000)"
-            let exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(Int.max) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(Int.min) - (\(rhs)) ELSE TRUE)"
-            return ("(IF \(small) THEN TRUE ELSE \(exact))", "<<\(lhs), \(rhs)>>")
-        }
+        return try additions.map(additionSite)
+    }
+
+    private func additionSite(_ addition: CompiledExpression) throws -> (guard_: String, operands: String) {
+        let lhs = try state(addition.children[0])
+        let rhs = try state(addition.children[1])
+        let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000 /\\ \(rhs) >= -1000000000 /\\ \(rhs) <= 1000000000)"
+        let exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(Int.max) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(Int.min) - (\(rhs)) ELSE TRUE)"
+        return ("(IF \(small) THEN TRUE ELSE \(exact))", "<<\(lhs), \(rhs)>>")
     }
 
     private func additiveTreeIsRepeatable(_ expression: CompiledExpression) -> Bool {

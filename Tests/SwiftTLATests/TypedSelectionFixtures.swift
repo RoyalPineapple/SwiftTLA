@@ -38,6 +38,40 @@ struct ClosedMissingSelection {
 }
 
 @TLAModel
+struct NestedMissingSelection {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec {
+            let nestedMissingSelection = Algorithm(scoped: { scope in
+                let position = scope.sharedVar(initial: 0)
+                Do(Step.advance) {
+                    Assign(position, to: Select(from: Set<Int>([1])) { _ in false } + 1)
+                }
+            })
+            nestedMissingSelection
+        }
+    }
+}
+
+@TLAModel
+struct NestedOverflowSelection {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec {
+            let nestedOverflowSelection = Algorithm(scoped: { scope in
+                let position = scope.sharedVar(initial: 0)
+                Do(Step.advance) {
+                    Assign(position, to: Select(from: Set<Int>([9_223_372_036_854_775_807])) { _ in true } + 1)
+                }
+            })
+            nestedOverflowSelection
+        }
+    }
+}
+
+@TLAModel
 struct BooleanSelection {
     enum Step: String, CaseIterable { case select }
 

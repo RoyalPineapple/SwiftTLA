@@ -106,4 +106,36 @@ struct TypedSelectionTests {
         #expect(result.completion == .evaluationFailure(.noSatisfyingChoice))
         #expect(result.states == 1 && result.edges == 0)
     }
+
+    @Test("A nested empty selection fails natively and emits a TLA failure check")
+    func nestedMissingSelectionHasNoTransition() throws {
+        var machine = try NestedMissingSelection.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+            _ = try machine.send(.advance)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try NestedMissingSelection.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(declarations.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })
+    }
+
+    @Test("A successful nested selection emits a check for subsequent addition overflow")
+    func nestedSelectionOverflowHasNoTransition() throws {
+        var machine = try NestedOverflowSelection.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            _ = try machine.send(.advance)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try NestedOverflowSelection.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(declarations.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })
+        #expect(declarations.contains { $0.hasPrefix("__SwiftTLAOverflowFailure0 ==") })
+        #expect(declarations.contains { $0.hasPrefix("__SwiftTLAOverflowOperands0 ==") })
+    }
 }
