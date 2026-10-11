@@ -346,13 +346,15 @@ That witness sorts `FALSE` before `TRUE`, reads the cached selection, and
 merges the flag and control-location writes. The interpretation of Swift's
 `Result`, `_NativeMachineOperations.choose`, and update merging remains a
 trusted runtime boundary, not a TLAPS theorem.
-`EmittedBooleanChoiceInitialState` and `EmittedBooleanChoiceMatchesSource`
-prove the imported module's initial condition and complete labeled `select`
-step. `ReversedBooleanChoiceWouldChangeStep` proves that reversing the Boolean
-order selects `TRUE` instead. The newly stated failure, internal termination,
-and full-`Next` obligations in `SingleAssignment.tla` still require a TLAPS
-check; they are not counted as proved. This is one concrete nonempty Boolean output
-pair, not a proof for every Boolean predicate or generated Swift expression;
+`BooleanSelectionProof.tla` now isolates the source, compiled, and exact emitted
+Boolean rules from the unrelated Int64 proof. Its compositional obligation
+compares complete initial states, full `Next`, the `select` and internal
+`Terminating` labeled steps, and
+the empty failure outcome and passing generated evaluation check. Its
+reversed-order theorem is a negative control:
+choosing `TRUE` would change the emitted step. CI checks this module separately,
+but the new module has not yet passed TLAPS and is not counted as proved. This is
+one concrete nonempty Boolean output pair, not a proof for every Boolean predicate or generated Swift expression;
 its guarded output is pinned, but general no-match and predicate-evaluation
 failures remain uncovered.
 

@@ -91,8 +91,13 @@ struct TypedSelectionTests {
 
         var machine = try BooleanSelection.makeMachine()
         #expect(machine.state.flag)
+        #expect(try machine.enabledActions() == [.select])
         _ = try machine.send(.select)
         #expect(!machine.state.flag)
+        #expect(try machine.enabledActions() == [.Terminating])
+        let completed = machine.snapshot
+        _ = try machine.send(.Terminating)
+        #expect(machine.snapshot == completed)
 
         let module = try BooleanSelection.render().tlaBundle.root.tla
         let direct = try compilation.render().tlaBundle.root.tla
