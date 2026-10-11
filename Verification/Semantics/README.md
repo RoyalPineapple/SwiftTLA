@@ -496,6 +496,16 @@ trusted. This is one output-linked sequence instance, not a proof for arbitrary
 literal lengths, computed domains, nested conversions, or every accepted
 compound value type.
 
+`RankedChoiceProof.tla` generalizes the sorted-first argument: for any finite
+ordered sequence, predicate, integer rank that strictly increases along that
+sequence, complete-state update function, and action label, its source and
+ranked-TLA choices have identical labeled edges and no-match failures. The
+edge theorem assumes that a matching sequence has a first matching index;
+TLAPS has not yet discharged this finite-minimum existence premise. It also
+does not link arbitrary Swift and TLA+ emitter outputs to the modeled order,
+rank, predicate, or update. All 11 current obligations passed locally;
+hosted evidence is pending.
+
 ## Checked kernel lemma
 
 `SingleAssignment.tla` proves that replacing one value in a complete state
