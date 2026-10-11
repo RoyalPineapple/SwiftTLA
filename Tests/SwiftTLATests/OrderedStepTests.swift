@@ -34,8 +34,8 @@ import Testing
         let normalized = rendered
             .replacingOccurrences(of: "EXTENDS Integers, FiniteSets, Sequences\n\nVARIABLES",
                 with: "EXTENDS Integers, FiniteSets, Sequences\n\nCONSTANTS OrderedIntMin, OrderedIntMax\n\nVARIABLES")
-            .replacingOccurrences(of: "(-\(Int.max) - 1)", with: "OrderedIntMin")
-            .replacingOccurrences(of: String(Int.max), with: "OrderedIntMax")
+            .replacingOccurrences(of: TLAValue.int(.min).description, with: "OrderedIntMin")
+            .replacingOccurrences(of: TLAValue.int(.max).description, with: "OrderedIntMax")
         #expect(normalized == checkedModule)
     }
 

@@ -368,8 +368,8 @@ private struct ReachableInvariantFailure {
                 with: "MODULE CheckedExecutionOverflowSymbolic ----")
             .replacingOccurrences(of: "EXTENDS Integers, FiniteSets, Sequences\n\nVARIABLES",
                 with: "EXTENDS Integers, FiniteSets, Sequences\n\nCONSTANTS SwiftIntMin, SwiftIntMax\n\nVARIABLES")
-            .replacingOccurrences(of: "(-\(Int.max) - 1)", with: "SwiftIntMin")
-            .replacingOccurrences(of: String(Int.max), with: "SwiftIntMax")
+            .replacingOccurrences(of: TLAValue.int(.min).description, with: "SwiftIntMin")
+            .replacingOccurrences(of: TLAValue.int(.max).description, with: "SwiftIntMax")
         #expect(symbolicOutput == (try String(contentsOf: symbolicProofInput, encoding: .utf8)))
         let direct = rendered.tlaBundle.root.tla.split(separator: "\n")
         let action = try #require(direct.first { $0.hasPrefix("advance ==") })
@@ -471,7 +471,7 @@ private struct ReachableInvariantFailure {
         let guard_ = try #require(guardLine.hasPrefix("when ") && guardLine.hasSuffix(";")
             ? String(guardLine.dropFirst(5).dropLast()) : nil)
         let small = "(count >= -1000000000 /\\ count <= 1000000000 /\\ -1 >= -1000000000 /\\ -1 <= 1000000000)"
-        let exact = "(IF -1 > 0 THEN count >= (-\(Int.max) - 1) + (-1) ELSE IF -1 < 0 THEN count <= \(Int.max) + (-1) ELSE TRUE)"
+        let exact = "(IF -1 > 0 THEN count >= \(TLAValue.int(.min).description) + (-1) ELSE IF -1 < 0 THEN count <= \(TLAValue.int(.max).description) + (-1) ELSE TRUE)"
         #expect(guard_ == "(IF \(small) THEN TRUE ELSE \(exact))")
         #expect(output.contains("IF \(guard_) THEN"))
         #expect(output.contains("__SwiftTLAOverflowFailure0 == (((pc = \"advance\")) = TRUE /\\ ~(\(guard_)))"))
@@ -484,7 +484,7 @@ private struct ReachableInvariantFailure {
             try underflow.successors(for: .advance)
         }
         let underflowTLA = try CheckedSubtractionUnderflow.render().tlaBundle.root.tla
-        #expect(underflowTLA.contains("IF 2 > 0 THEN count >= (-\(Int.max) - 1) + (2)"))
+        #expect(underflowTLA.contains("IF 2 > 0 THEN count >= \(TLAValue.int(.min).description) + (2)"))
         #expect(underflowTLA.contains("__SwiftTLAOverflowOperation0 == \"subtraction\""))
         #expect(underflowTLA.contains("__SwiftTLAOverflowOperands0 == <<count, 2>>"))
     }
@@ -540,7 +540,7 @@ private struct ReachableInvariantFailure {
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
         let output = rendered.tlaBundle.root.tla
         let small = "(count >= -40000 /\\ count <= 40000 /\\ 2 >= -40000 /\\ 2 <= 40000)"
-        let exact = "(count * 2 >= (-\(Int.max) - 1) /\\ count * 2 <= \(Int.max))"
+        let exact = "(count * 2 >= \(TLAValue.int(.min).description) /\\ count * 2 <= \(TLAValue.int(.max).description))"
         let guard_ = "(IF \(small) THEN TRUE ELSE \(exact))"
         #expect(output.contains("IF \(guard_) THEN"))
         #expect(output.contains("__SwiftTLAOverflowFailure0 == (((pc = \"advance\")) = TRUE /\\ ~(\(guard_)))"))
@@ -577,7 +577,7 @@ private struct ReachableInvariantFailure {
         #expect(output.contains("__SwiftTLAOverflowOperation0 == \"subtraction\""))
         #expect(output.contains("__SwiftTLAOverflowOperation0_1 == \"negation\""))
         #expect(output.contains("__SwiftTLAOverflowOperands0_1 == <<(count - 1)>>"))
-        #expect(output.contains("(count - 1) # (-\(Int.max) - 1)"))
+        #expect(output.contains("(count - 1) # \(TLAValue.int(.min).description)"))
         #expect(output.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLAOverflowFailure0) /\\ ~(__SwiftTLAOverflowFailure0_1)"))
     }
 

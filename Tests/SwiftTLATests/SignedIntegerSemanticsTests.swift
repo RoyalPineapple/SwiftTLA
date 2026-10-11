@@ -2,11 +2,15 @@
 import Testing
 
 @Suite struct SignedIntegerSemanticsTests {
-    @Test("minimum machine integer uses TLC-readable syntax in scalar and nested values")
-    func minimumIntegerRendering() throws {
-        let minimum = "(-\(Int.max) - 1)"
+    @Test("large machine integers use small TLA literals in scalar and nested values")
+    func largeIntegerRendering() throws {
+        let minimum = "((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)"
+        let maximum = "((9 * 1000000000 + 223372036) * 1000000000 + 854775807)"
         #expect(TLAValue.int(.min).description == minimum)
-        #expect(TLAValue.tuple([.int(.min), .int(Int.max)]).description == "<<\(minimum), \(Int.max)>>")
+        #expect(TLAValue.int(.max).description == maximum)
+        #expect(TLAValue.int(2_147_483_648).description == "(2 * 1000000000 + 147483648)")
+        #expect(TLAValue.int(-2_147_483_648).description == "(-2 * 1000000000 - 147483648)")
+        #expect(TLAValue.tuple([.int(.min), .int(Int.max)]).description == "<<\(minimum), \(maximum)>>")
         #expect(TLAValue.set([.int(.min)]).description == "{\(minimum)}")
         let specification = TLASpec("MinimumIntegerLiteral") {
             Variable(Var<Int>("minimum"), Int.min)

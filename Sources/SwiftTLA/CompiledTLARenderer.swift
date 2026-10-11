@@ -350,6 +350,7 @@ struct CompiledTLARenderer {
     ) {
         let lhs = try state(expression.children[0])
         let swiftIntMinimum = TLAValue.int(.min).description
+        let swiftIntMaximum = TLAValue.int(.max).description
         if case .negate = expression.operation {
             return ("(\(lhs) # \(swiftIntMinimum))", "<<\(lhs)>>", .negation)
         }
@@ -361,13 +362,13 @@ struct CompiledTLARenderer {
         switch expression.operation {
         case .add:
             operation = .addition
-            exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(Int.max) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(swiftIntMinimum) - (\(rhs)) ELSE TRUE)"
+            exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(swiftIntMaximum) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(swiftIntMinimum) - (\(rhs)) ELSE TRUE)"
         case .subtract:
             operation = .subtraction
-            exact = "(IF \(rhs) > 0 THEN \(lhs) >= \(swiftIntMinimum) + (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) <= \(Int.max) + (\(rhs)) ELSE TRUE)"
+            exact = "(IF \(rhs) > 0 THEN \(lhs) >= \(swiftIntMinimum) + (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) <= \(swiftIntMaximum) + (\(rhs)) ELSE TRUE)"
         case .multiply:
             operation = .multiplication
-            exact = "(\(lhs) * \(rhs) >= \(swiftIntMinimum) /\\ \(lhs) * \(rhs) <= \(Int.max))"
+            exact = "(\(lhs) * \(rhs) >= \(swiftIntMinimum) /\\ \(lhs) * \(rhs) <= \(swiftIntMaximum))"
         default:
             throw CompiledValueType.diagnostic("rendering.arithmetic", "expected checked arithmetic")
         }

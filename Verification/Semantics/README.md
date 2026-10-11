@@ -78,15 +78,19 @@ Swift machine reports `Int.max + 1` as an evaluation failure; the rendered
 TLA+ action has no overflowing successor and exposes a failure predicate,
 the `addition` operation identity, and the complete operands. An exact-output
 test pins the emitted module. Because the pinned TLAPS backend has not discharged
-these obligations using the full-width emitted integer bounds, the test requires a byte-for-byte
-match between that module after replacing only its module name, the emitted
-minimum-bound expression `(-Int.max - 1)`, the maximum-bound literal, and the
-constant declaration, and the
+these obligations using the full-width emitted integer bounds, the test requires
+a byte-for-byte match between that module after replacing only its module name,
+both emitted bound expressions, and the constant declaration, and the
 `CheckedExecutionOverflowSymbolic.tla` module imported by the proof. The proof
 assumes integer bounds enclosing the renderer's fast path; the test ties the
-symbolic constants to the emitted `(-Int.max - 1)` and `Int.max` text. This
+symbolic constants to the emitted exact minimum and maximum expressions. This
 normalization and the target Swift `Int` contract are trusted links, not TLAPS
-theorems. `SingleAssignment.tla` separately proves the generic addition guard.
+theorems. The renderer splits large integers into arithmetic over small decimal
+literals. This preserves their TLA+ value, but [TLC cannot evaluate naturals
+above 2^31 - 1](https://github.com/tlaplus/tlaplus/blob/master/general/docs/current-tools.md).
+TLC graph parity therefore cannot establish full-width overflow behavior;
+symbolic proof and native execution remain separate evidence for that boundary.
+`SingleAssignment.tla` separately proves the generic addition guard.
 The same focused test checks the complete
 compiled `advance` action. It requires the control guard, bound `count + 1`
 addition, count update, and transition to `Done`. It identifies the separate
