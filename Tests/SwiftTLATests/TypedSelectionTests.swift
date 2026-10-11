@@ -67,6 +67,24 @@ struct TypedSelectionTests {
 
     @Test("Boolean selection prefers false in both generated outputs")
     func booleanSelectionUsesLeastMember() throws {
+        let compilation = try BooleanSelection.spec.compile()
+        let action = try #require(compilation.semantics.behavior.actions.first)
+        guard case .and(.guard_(let control), let body) = action.body,
+              case .equal = control.operation,
+              case .define(_, let choice, _) = body,
+              case .choose = choice.operation else {
+            Issue.record("The authored Boolean selection no longer lowers to the proved choice rule")
+            return
+        }
+        #expect(choice.children.count == 2)
+        guard choice.children.count == 2 else { return }
+        guard case .value(.set(let members)) = choice.children[0].computation.operation,
+              case .value(.boolean(true)) = choice.children[1].computation.operation else {
+            Issue.record("The authored Boolean domain and predicate did not survive lowering")
+            return
+        }
+        #expect(members == Set([.boolean(false), .boolean(true)]))
+
         var machine = try BooleanSelection.makeMachine()
         #expect(machine.state.flag)
         _ = try machine.send(.select)

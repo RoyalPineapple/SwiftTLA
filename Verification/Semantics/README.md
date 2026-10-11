@@ -323,11 +323,15 @@ and general generated Swift semantics remain uncovered.
 
 `BooleanSelection.tla` is likewise the complete emitted module for a
 non-unique Boolean choice. `TypedSelectionTests.booleanSelectionUsesLeastMember`
-checks the actual generated Swift transition and exact TLA+ output;
+checks that the authored Boolean domain and predicate lower to the compiled
+choice operation, then checks the actual generated Swift transition and exact
+TLA+ output;
 `EmittedBooleanChoiceInitialState` and `EmittedBooleanChoiceMatchesSource`
 prove the imported module's initial condition and complete labeled `select`
 step. `ReversedBooleanChoiceWouldChangeStep` proves that reversing the Boolean
-order selects `TRUE` instead. This is one concrete nonempty Boolean output
+order selects `TRUE` instead. The newly stated failure, internal termination,
+and full-`Next` obligations in `SingleAssignment.tla` still require a TLAPS
+check; they are not counted as proved. This is one concrete nonempty Boolean output
 pair, not a proof for every Boolean predicate or generated Swift expression;
 its guarded output is pinned, but general no-match and predicate-evaluation
 failures remain uncovered.

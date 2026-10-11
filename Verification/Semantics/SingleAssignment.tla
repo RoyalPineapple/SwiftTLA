@@ -3023,6 +3023,25 @@ THEOREM EmittedBooleanChoiceMatchesSource ==
     BY LeastBooleanChoice, SMT
         DEF BooleanChoice!select, SourceBooleanChoice
 
+THEOREM EmittedBooleanChoiceHasNoFailure ==
+    ~BooleanChoice!__SwiftTLAChoiceFailure0
+    BY SMT DEF BooleanChoice!__SwiftTLAChoiceFailure0
+
+SourceBooleanTerminating ==
+    dependentPC = "Done" /\ UNCHANGED <<dependentPC, choiceSelected>>
+
+THEOREM EmittedBooleanTerminatingMatchesSource ==
+    BooleanChoice!Terminating <=> SourceBooleanTerminating
+    BY SMT DEF BooleanChoice!Terminating, SourceBooleanTerminating
+
+SourceBooleanNext == SourceBooleanChoice \/ SourceBooleanTerminating
+
+THEOREM EmittedBooleanCompleteNext ==
+    BooleanChoice!Next <=> SourceBooleanNext
+    BY EmittedBooleanChoiceMatchesSource,
+        EmittedBooleanTerminatingMatchesSource
+        DEF BooleanChoice!Next, SourceBooleanNext
+
 THEOREM ReversedBooleanChoiceWouldChangeStep ==
     (CHOOSE member \in {FALSE, TRUE} :
         \A other \in {FALSE, TRUE} :
