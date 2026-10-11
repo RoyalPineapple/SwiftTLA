@@ -138,12 +138,15 @@ struct CompiledTLARenderer {
                     parts.append("UNCHANGED \(try variableName(variable))")
                 case .guard_(let condition):
                     let predicate = try state(condition)
+                    let defined = try evaluationDefined(condition)
                     // A state predicate produces one Boolean, not a successor per existential witness.
+                    let rendered: String
                     if case .value(.boolean) = condition.operation {
-                        parts.append(predicate)
+                        rendered = predicate
                     } else {
-                        parts.append("(\(predicate)) = TRUE")
+                        rendered = "(\(predicate)) = TRUE"
                     }
+                    parts.append(defined.map { "(IF \($0) THEN \(rendered) ELSE FALSE)" } ?? rendered)
                 case .existsAction(let binder, let set, let body):
                     parts.append("(\\E \(try binderName(binder)) \\in \(try state(set)): ")
                     schedule([.expression(body), .text(")")])
@@ -186,8 +189,9 @@ struct CompiledTLARenderer {
             guard let defined = try choiceDefined(value) else { return nil }
             return "~(\(defined))"
         case .and(.guard_(let condition), let body):
-            guard repeatable(condition), let failure = try choiceFailure(body) else { return nil }
-            return "((\(try state(condition))) = TRUE /\\ \(failure))"
+            guard arithmeticTreeIsRepeatable(condition), let failure = try choiceFailure(body) else { return nil }
+            let predicate = "((\(try state(condition))) = TRUE /\\ \(failure))"
+            return try evaluationDefined(condition).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
         default: return nil
         }
     }
@@ -198,28 +202,7 @@ struct CompiledTLARenderer {
         switch action {
         case .define(let binder, let value, let body):
             let defined = try evaluationDefined(value)
-            var failures: [(
-                predicate: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
-            )] = []
-            if let sites = try orderedChoiceArithmeticSites(value) {
-                var preceding: [String] = []
-                for site in sites {
-                    if case .arithmetic(let operation, let guard_, let operands) = site {
-                        failures.append((preceded("~(\(guard_))", by: preceding), operands, operation))
-                    }
-                    preceding.append(site.guard_)
-                }
-            } else {
-                var precedingGuards: [String] = []
-                for site in try arithmeticSites(value) {
-                    let failure = "~(\(site.guard_))"
-                    let predicate = precedingGuards.isEmpty
-                        ? failure
-                        : "(\(precedingGuards.joined(separator: " /\\ ")) /\\ \(failure))"
-                    failures.append((predicate, site.operands, site.operation))
-                    precedingGuards.append(site.guard_)
-                }
-            }
+            var failures = try expressionOverflowFailures(value)
             // shortcut: nonrepeatable values stop later-failure enumeration; replace with ordered outcomes before universal fidelity.
             guard failures.isEmpty == false || repeatable(value) else { return failures }
             let name = try binderName(binder)
@@ -231,14 +214,65 @@ struct CompiledTLARenderer {
                     operands, failure.operation))
             }
             return failures
+        case .guard_(let condition):
+            return try expressionOverflowFailures(condition)
         case .and(.guard_(let condition), let body):
-            guard repeatable(condition) else { return [] }
+            let conditionFailures = try expressionOverflowFailures(condition)
+            guard arithmeticTreeIsRepeatable(condition) else { return conditionFailures }
             let guardPredicate = try state(condition)
-            return try overflowFailures(body).map {
-                ("((\(guardPredicate)) = TRUE /\\ \($0.predicate))", $0.operands, $0.operation)
+            let defined = try evaluationDefined(condition)
+            return try conditionFailures + overflowFailures(body).map {
+                let predicate = "((\(guardPredicate)) = TRUE /\\ \($0.predicate))"
+                return (defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
+                    $0.operands, $0.operation)
+            }
+        case .and(let lhs, let rhs):
+            let leftFailures = try overflowFailures(lhs)
+            let rightFailures = try overflowFailures(rhs)
+            // shortcut: right-side failures after non-guard actions need ordered outcome semantics.
+            guard !rightFailures.isEmpty, repeatableGuards(lhs) else { return leftFailures }
+            let guardPredicate = try self.action(lhs)
+            return leftFailures + rightFailures.map {
+                ("(\(guardPredicate) /\\ \($0.predicate))", $0.operands, $0.operation)
             }
         default: return []
         }
+    }
+
+    private func repeatableGuards(_ action: CompiledActionExpr) -> Bool {
+        switch action {
+        case .guard_(let condition): arithmeticTreeIsRepeatable(condition)
+        case .and(let lhs, let rhs): repeatableGuards(lhs) && repeatableGuards(rhs)
+        default: false
+        }
+    }
+
+    private func expressionOverflowFailures(_ value: CompiledExpression) throws -> [(
+        predicate: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
+    )] {
+        var failures: [(
+            predicate: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
+        )] = []
+        if let sites = try orderedChoiceArithmeticSites(value) {
+            var preceding: [String] = []
+            for site in sites {
+                if case .arithmetic(let operation, let guard_, let operands) = site {
+                    failures.append((preceded("~(\(guard_))", by: preceding), operands, operation))
+                }
+                preceding.append(site.guard_)
+            }
+        } else {
+            var precedingGuards: [String] = []
+            for site in try arithmeticSites(value) {
+                let failure = "~(\(site.guard_))"
+                let predicate = precedingGuards.isEmpty
+                    ? failure
+                    : "(\(precedingGuards.joined(separator: " /\\ ")) /\\ \(failure))"
+                failures.append((predicate, site.operands, site.operation))
+                precedingGuards.append(site.guard_)
+            }
+        }
+        return failures
     }
 
     func evaluationDefined(_ value: CompiledExpression) throws -> String? {
@@ -258,7 +292,7 @@ struct CompiledTLARenderer {
     }
 
     private func orderedChoiceArithmeticSites(_ expression: CompiledExpression) throws -> [OrderedEvaluationSite]? {
-        // shortcut: only checked addition, subtraction, negation, and total choice have ordered sites; extend to other fallible operations before universal fidelity.
+        // shortcut: only checked arithmetic and total choice have ordered sites; extend to other fallible operations before universal fidelity.
         func collect(_ value: CompiledExpression) throws -> [OrderedEvaluationSite]? {
             switch value.operation {
             case .convert:
@@ -267,7 +301,7 @@ struct CompiledTLARenderer {
             case .choose:
                 guard let defined = try choiceDefined(value) else { return nil }
                 return [.choice(guard_: defined)]
-            case .add, .subtract, .negate:
+            case .add, .subtract, .multiply, .negate:
                 guard value.resultType == .int,
                       value.children.count == (value.operation == .negate ? 1 : 2) else { return nil }
                 var preceding: [OrderedEvaluationSite] = []
@@ -297,13 +331,13 @@ struct CompiledTLARenderer {
     private func arithmeticSites(_ value: CompiledExpression) throws -> [(
         guard_: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
     )] {
-        // shortcut: only pure addition/subtraction/negation trees are guarded; extend to ordered outcomes for other expression operations.
+        // shortcut: only pure checked arithmetic, including total comparisons, is guarded; extend to other fallible expressions.
         guard arithmeticTreeIsRepeatable(value) else { return [] }
         var operations: [CompiledExpression] = []
         func collect(_ expression: CompiledExpression) {
             for child in expression.children { collect(child) }
             switch expression.operation {
-            case .add, .subtract, .negate: operations.append(expression)
+            case .add, .subtract, .multiply, .negate: operations.append(expression)
             default: break
             }
         }
@@ -315,20 +349,26 @@ struct CompiledTLARenderer {
         guard_: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
     ) {
         let lhs = try state(expression.children[0])
+        let swiftIntMinimum = TLAValue.int(.min).description
+        let swiftIntMaximum = TLAValue.int(.max).description
         if case .negate = expression.operation {
-            return ("(\(lhs) # \(Int.min))", "<<\(lhs)>>", .negation)
+            return ("(\(lhs) # \(swiftIntMinimum))", "<<\(lhs)>>", .negation)
         }
         let rhs = try state(expression.children[1])
-        let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000 /\\ \(rhs) >= -1000000000 /\\ \(rhs) <= 1000000000)"
+        let smallLimit = expression.operation == .multiply ? 40000 : 1000000000
+        let small = "(\(lhs) >= -\(smallLimit) /\\ \(lhs) <= \(smallLimit) /\\ \(rhs) >= -\(smallLimit) /\\ \(rhs) <= \(smallLimit))"
         let exact: String
         let operation: NativeMachineEvaluationError.IntegerOperation
         switch expression.operation {
         case .add:
             operation = .addition
-            exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(Int.max) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(Int.min) - (\(rhs)) ELSE TRUE)"
+            exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(swiftIntMaximum) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(swiftIntMinimum) - (\(rhs)) ELSE TRUE)"
         case .subtract:
             operation = .subtraction
-            exact = "(IF \(rhs) > 0 THEN \(lhs) >= \(Int.min) + (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) <= \(Int.max) + (\(rhs)) ELSE TRUE)"
+            exact = "(IF \(rhs) > 0 THEN \(lhs) >= \(swiftIntMinimum) + (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) <= \(swiftIntMaximum) + (\(rhs)) ELSE TRUE)"
+        case .multiply:
+            operation = .multiplication
+            exact = "(\(lhs) * \(rhs) >= \(swiftIntMinimum) /\\ \(lhs) * \(rhs) <= \(swiftIntMaximum))"
         default:
             throw CompiledValueType.diagnostic("rendering.arithmetic", "expected checked arithmetic")
         }
@@ -337,10 +377,12 @@ struct CompiledTLARenderer {
 
     private func arithmeticTreeIsRepeatable(_ expression: CompiledExpression) -> Bool {
         switch expression.operation {
-        case .add, .subtract, .negate:
+        case .add, .subtract, .multiply, .negate:
             return expression.resultType == .int
                 && expression.children.count == (expression.operation == .negate ? 1 : 2)
                 && expression.children.allSatisfy(arithmeticTreeIsRepeatable)
+        case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not:
+            return expression.children.allSatisfy(arithmeticTreeIsRepeatable)
         default:
             return repeatable(expression)
         }

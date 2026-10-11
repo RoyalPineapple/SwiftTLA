@@ -69,4 +69,25 @@ struct GuardedStepExecutionTests {
             #expect(try successor.isEnabled(.Terminating))
         }
     }
+
+    @Test("An overflowing step guard reports failure without a successor")
+    func guardOverflowMatchesGeneratedFailure() throws {
+        var successful = try CheckedGuardOverflow.makeMachine(.init(count: 1))
+        let transition = try successful.send(.advance)
+        #expect(transition.before.count == 1 && transition.after.count == 0)
+
+        let failing = try CheckedGuardOverflow.makeMachine(.init(count: Int.max))
+        let before = failing.snapshot
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(
+            .addition, operands: [Int.max, 1])) {
+            try failing.successors(for: .advance)
+        }
+        #expect(failing.snapshot == before)
+
+        let rendered = try CheckedGuardOverflow.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let output = rendered.tlaBundle.root.tla
+        #expect(output.contains("__SwiftTLAOverflowOperation0 == \"addition\""))
+        #expect(output.contains("__SwiftTLAOverflowOperands0 == <<count, 1>>"))
+    }
 }

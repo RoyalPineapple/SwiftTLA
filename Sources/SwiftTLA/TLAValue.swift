@@ -62,7 +62,7 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
     private func _tlaForm(_ depth: Int = 0) -> String {
         let xs = "__tla_fn_\(depth)"
         switch self {
-        case .int(let n): return "\(n)"
+        case .int(let n): return Self._integerForm(n)
         case .bool(let b): return b ? "TRUE" : "FALSE"
         case .string(let value):
             var literal = "\""
@@ -100,6 +100,15 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
 
         case .constant(let name): return name
         }
+    }
+
+    private static func _integerForm(_ value: Int) -> String {
+        // TLC parses only 32-bit natural literals; split larger values into small operands.
+        let radix = 1_000_000_000
+        guard value < -radix || value > radix else { return "\(value)" }
+        let quotient = value / radix
+        let remainder = value % radix
+        return "(\(_integerForm(quotient)) * \(radix) \(remainder < 0 ? "-" : "+") \(remainder.magnitude))"
     }
 }
 

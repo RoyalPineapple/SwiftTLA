@@ -50,7 +50,8 @@ output by a narrowly normalized exact-output test. Its bounds are assumptions
 about the target Swift `Int`, not TLAPS-proved numeric facts. All 1,423
 obligations in the revised `SingleAssignment.tla` passed locally with
 fingerprint reuse disabled; hosted evidence for these inputs is still pending.
-Rendered TLA+ now guards pure addition/subtraction trees in an action binding
+Rendered TLA+ now guards pure addition, subtraction, multiplication, and
+negation trees in an action binding
 and emits ordered overflow-failure predicates with operand tuples. Other
 arithmetic operations and evaluation positions still use mathematical integers,
 so the source rule is not yet implemented for every accepted program.
@@ -76,15 +77,20 @@ This matched-failure rule is **partially implemented**. For
 Swift machine reports `Int.max + 1` as an evaluation failure; the rendered
 TLA+ action has no overflowing successor and exposes a failure predicate,
 the `addition` operation identity, and the complete operands. An exact-output
-test pins the emitted module. Because the pinned TLAPS backend cannot parse
-Swift's full-width `Int` literals, the test also requires a byte-for-byte
-match between that module after replacing only its module name, the two bound
-literals, and the constant declaration, and the
+test pins the emitted module. Because the pinned TLAPS backend has not discharged
+these obligations using the full-width emitted integer bounds, the test requires
+a byte-for-byte match between that module after replacing only its module name,
+both emitted bound expressions, and the constant declaration, and the
 `CheckedExecutionOverflowSymbolic.tla` module imported by the proof. The proof
 assumes integer bounds enclosing the renderer's fast path; the test ties the
-symbolic constants to the emitted `Int.min` and `Int.max` text. This
+symbolic constants to the emitted exact minimum and maximum expressions. This
 normalization and the target Swift `Int` contract are trusted links, not TLAPS
-theorems. `SingleAssignment.tla` separately proves the generic addition guard.
+theorems. The renderer splits large integers into arithmetic over small decimal
+literals. This preserves their TLA+ value, but [TLC cannot evaluate naturals
+above 2^31 - 1](https://github.com/tlaplus/tlaplus/blob/master/general/docs/current-tools.md).
+TLC graph parity therefore cannot establish full-width overflow behavior;
+symbolic proof and native execution remain separate evidence for that boundary.
+`SingleAssignment.tla` separately proves the generic addition guard.
 The same focused test checks the complete
 compiled `advance` action. It requires the control guard, bound `count + 1`
 addition, count update, and transition to `Done`. It identifies the separate
@@ -122,8 +128,9 @@ quantifies the failure over each declared argument and retains that intrinsic
 check under empty user-check selection. A second test checks the emitted
 failure guard and quantifier for a symbolic parameter domain. Neither case
 has a general output-linked proof for every parameterized action.
-Pure addition/subtraction/negation trees now emit ordered failure sites and guard the
-action on every site. One focused regression checks a nested addition's native
+Pure addition, subtraction, multiplication, and negation trees now emit
+ordered failure sites and guard the action on every site. One focused
+regression checks a nested addition's native
 outer overflow and both TLA+ failure records. A second regression first failed
 because `Int.max - (-1)` threw in generated Swift while TLA+ allowed a
 successor; it now checks the compiled subtraction node, the complete emitted
@@ -133,14 +140,30 @@ predicate, operation, and operands.
 `CheckedSubtractionProof.tla` states the symbolic guard and complete labeled
 edge/failure obligations; all 40 obligations passed locally. The output test checks the
 subtraction instance of that guard; Swift's checked-arithmetic primitive and
-the test's output extraction remain trusted boundaries. `SingleAssignment.tla`
+the test's output extraction remain trusted boundaries. `CheckedMultiplicationProof.tla`
+proves the multiplication fast-path bound and exact fallback preserve complete
+labeled edges and failure records for representable operands; its unguarded
+negative control adds an invalid edge. All 12 obligations passed locally.
+A focused generated-machine test checks successful multiplication, positive and
+negative overflow without state changes, the emitted Swift action tokens, and
+the rendered TLA+/PlusCal guard, operation, and operands. It does not prove
+arbitrary emitter output or TLC execution beyond TLC's integer range.
+`CheckedGuardFailureProof.tla` proves a symbolic simplification of the emitted fast-path addition guard,
+source rule, and modeled native rule have the same complete labeled edge and
+addition-failure sets for a pure `When(count + 1 > 0)` condition; its unguarded
+negative control adds an invalid edge. All 10 obligations passed locally. The focused generated-machine
+test checks the successful native step, exact typed overflow and unchanged
+state, and emitted failure metadata. This proof is a symbolic rule, not yet an
+exact-output proof of the complete module or a proof of the Swift emitter.
+`SingleAssignment.tla`
 also proves the root negation guard, complete labeled edge/failure relation,
 and an unguarded counterexample under the explicit Swift signed-`Int` bound
 relation. A focused generated-machine test exercises both a successful nested
 negation and `-Int.min` failure, and checks both ordered emitted failure sites;
 it does not yet pin the complete emitted module or prove the Swift emitter.
 Arithmetic under other expression operations, effectful operands,
-initialization, guards, multiplication, division, and target-width differences
+initialization, non-pure guards, failures after non-guard action prefixes,
+division, and target-width differences
 remain open. The universal theorem does
 not yet hold.
 `MachineValidator.run` now reports a typed early evaluation-failure event and
@@ -208,11 +231,11 @@ native branch trusts Swift's `addingReportingOverflow` contract and the small
 `_NativeMachineOperations.add` wrapper; the fixture's generated-Swift witness
 and runtime failure test check that link, but are not a proof of the Swift
 compiler or every accepted addition lowering to this root form.
-The direct emitter now uses checked guards for pure addition/subtraction trees
-in action bindings and emits ordered overflow-failure predicates, operation
-identities, and operand tuples. The proved generic theorem above covers
-addition only; the subtraction guard is locally tested, not proved. The
-generic theorem models operand outcomes; it does not yet prove the actual
+The direct emitter now uses checked guards for pure addition, subtraction,
+multiplication, and negation trees in action bindings and emits ordered
+overflow-failure predicates, operation identities, and operand tuples. The
+generic addition, subtraction, and multiplication theorems cover their
+mathematical guards and modeled operand outcomes; they do not yet prove the actual
 emitted Swift expression or TLA+ action evaluates every nested operand in
 this order. The generated TLC configuration selects the emitted failure
 predicate, but native-versus-TLC outcome comparison remains open.
@@ -410,6 +433,10 @@ evidence is pending. The interpretation of the emitted Swift `Result`, `choose`,
 update merge remains a trusted runtime boundary. This is not a solution to
 non-unique String choice: the generated Swift machine still takes the first
 ordered member while rendered TLA+ uses unrestricted `CHOOSE` for that type.
+The chosen rule for this gap is a shared canonical order for every accepted
+selection type, emitted on both sides. It remains unimplemented until the
+ordering is defined for every value family, both outputs use it, and an
+output-linked proof checks observable non-unique choices.
 
 ## Checked kernel lemma
 
@@ -820,6 +847,7 @@ without fingerprint reuse, and retains the exact
 source SHA, TLA and Swift-witness input digests, tool versions/configuration, and separate
 proof logs. A changed archive fails its checksum. The revised
 `CheckedExecutionOverflowProof.tla`, `CheckedSubtractionProof.tla`,
+`CheckedMultiplicationProof.tla`, `CheckedGuardFailureProof.tla`,
 `MissingStringSelectionProof.tla`, and `SingleAssignment.tla` have passed
 locally on the current side-worktree inputs. None has qualifying hosted
 evidence. This job
