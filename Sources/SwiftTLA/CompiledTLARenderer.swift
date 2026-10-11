@@ -258,7 +258,7 @@ struct CompiledTLARenderer {
     }
 
     private func orderedChoiceArithmeticSites(_ expression: CompiledExpression) throws -> [OrderedEvaluationSite]? {
-        // shortcut: only checked addition, subtraction, negation, and total choice have ordered sites; extend to other fallible operations before universal fidelity.
+        // shortcut: only checked arithmetic and total choice have ordered sites; extend to other fallible operations before universal fidelity.
         func collect(_ value: CompiledExpression) throws -> [OrderedEvaluationSite]? {
             switch value.operation {
             case .convert:
@@ -267,7 +267,7 @@ struct CompiledTLARenderer {
             case .choose:
                 guard let defined = try choiceDefined(value) else { return nil }
                 return [.choice(guard_: defined)]
-            case .add, .subtract, .negate:
+            case .add, .subtract, .multiply, .negate:
                 guard value.resultType == .int,
                       value.children.count == (value.operation == .negate ? 1 : 2) else { return nil }
                 var preceding: [OrderedEvaluationSite] = []
@@ -297,13 +297,13 @@ struct CompiledTLARenderer {
     private func arithmeticSites(_ value: CompiledExpression) throws -> [(
         guard_: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
     )] {
-        // shortcut: only pure addition/subtraction/negation trees are guarded; extend to ordered outcomes for other expression operations.
+        // shortcut: only pure add/subtract/multiply/negate trees are guarded; extend to other fallible operations.
         guard arithmeticTreeIsRepeatable(value) else { return [] }
         var operations: [CompiledExpression] = []
         func collect(_ expression: CompiledExpression) {
             for child in expression.children { collect(child) }
             switch expression.operation {
-            case .add, .subtract, .negate: operations.append(expression)
+            case .add, .subtract, .multiply, .negate: operations.append(expression)
             default: break
             }
         }
@@ -319,7 +319,8 @@ struct CompiledTLARenderer {
             return ("(\(lhs) # \(Int.min))", "<<\(lhs)>>", .negation)
         }
         let rhs = try state(expression.children[1])
-        let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000 /\\ \(rhs) >= -1000000000 /\\ \(rhs) <= 1000000000)"
+        let smallLimit = expression.operation == .multiply ? 40000 : 1000000000
+        let small = "(\(lhs) >= -\(smallLimit) /\\ \(lhs) <= \(smallLimit) /\\ \(rhs) >= -\(smallLimit) /\\ \(rhs) <= \(smallLimit))"
         let exact: String
         let operation: NativeMachineEvaluationError.IntegerOperation
         switch expression.operation {
@@ -329,6 +330,9 @@ struct CompiledTLARenderer {
         case .subtract:
             operation = .subtraction
             exact = "(IF \(rhs) > 0 THEN \(lhs) >= \(Int.min) + (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) <= \(Int.max) + (\(rhs)) ELSE TRUE)"
+        case .multiply:
+            operation = .multiplication
+            exact = "(\(lhs) * \(rhs) >= \(Int.min) /\\ \(lhs) * \(rhs) <= \(Int.max))"
         default:
             throw CompiledValueType.diagnostic("rendering.arithmetic", "expected checked arithmetic")
         }
@@ -337,7 +341,7 @@ struct CompiledTLARenderer {
 
     private func arithmeticTreeIsRepeatable(_ expression: CompiledExpression) -> Bool {
         switch expression.operation {
-        case .add, .subtract, .negate:
+        case .add, .subtract, .multiply, .negate:
             return expression.resultType == .int
                 && expression.children.count == (expression.operation == .negate ? 1 : 2)
                 && expression.children.allSatisfy(arithmeticTreeIsRepeatable)

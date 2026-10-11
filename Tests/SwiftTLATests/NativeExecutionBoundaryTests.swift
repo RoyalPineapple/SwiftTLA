@@ -488,6 +488,71 @@ private struct ReachableInvariantFailure {
         #expect(underflowTLA.contains("__SwiftTLAOverflowOperands0 == <<count, 2>>"))
     }
 
+    @Test("generated multiplication preserves complete transitions and overflow failures")
+    func multiplicationPreservesGeneratedOutcomes() throws {
+        let compiled = try CheckedMultiplicationOverflow.spec.compile()
+        let step = try #require(compiled.semantics.behavior.actions.first)
+        guard case .and(.guard_(let control), let body) = step.body,
+              case .equal = control.operation,
+              case .define(_, let value, _) = body,
+              case .multiply = value.operation,
+              value.children.count == 2,
+              case .stateVariable = value.children[0].operation,
+              case .value(.integer(2)) = value.children[1].operation else {
+            Issue.record("The authored step no longer lowers to checked multiplication")
+            return
+        }
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "CheckedMultiplicationOverflow", program: program))
+        let swiftAction = try #require(try emitter.machineMembers().first {
+            $0.description.contains("private static func _visitUpdates0(")
+        }?.description)
+        let witness = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
+            .standardizedFileURL
+        let expectedSwift = try String(contentsOf: witness, encoding: .utf8)
+            .replacingOccurrences(of: "let _arithmetic1: Int = 1", with: "let _arithmetic1: Int = 2")
+            .replacingOccurrences(of: "_NativeMachineOperations.add", with: "_NativeMachineOperations.multiply")
+        #expect(Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text))
+
+        var successful = try CheckedMultiplicationOverflow.makeMachine(.init(count: 3))
+        let transition = try successful.send(.advance)
+        #expect(transition.before.count == 3 && transition.after.count == 6)
+        let controlToken = try #require(TLAStateProjection.Token(validating: "pc"))
+        #expect(try successful.formalProjection(of: successful.snapshot).value(for: controlToken) == .string("Done"))
+
+        for count in [Int.max, -Int.max] {
+            let failing = try CheckedMultiplicationOverflow.makeMachine(.init(count: count))
+            let before = failing.snapshot
+            #expect(throws: NativeMachineEvaluationError.integerOverflow(
+                .multiplication, operands: [count, 2])) {
+                try failing.successors(for: .advance)
+            }
+            #expect(failing.snapshot == before)
+        }
+
+        let rendered = try CheckedMultiplicationOverflow.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let output = rendered.tlaBundle.root.tla
+        let small = "(count >= -40000 /\\ count <= 40000 /\\ 2 >= -40000 /\\ 2 <= 40000)"
+        let exact = "(count * 2 >= \(Int.min) /\\ count * 2 <= \(Int.max))"
+        let guard_ = "(IF \(small) THEN TRUE ELSE \(exact))"
+        #expect(output.contains("IF \(guard_) THEN"))
+        #expect(output.contains("__SwiftTLAOverflowFailure0 == (((pc = \"advance\")) = TRUE /\\ ~(\(guard_)))"))
+        #expect(output.contains("__SwiftTLAOverflowOperation0 == \"multiplication\""))
+        #expect(output.contains("__SwiftTLAOverflowOperands0 == <<count, 2>>"))
+
+        let plusCal = try rendered.plusCalBundle().root.tla.split(separator: "\n")
+        let binding = try #require(plusCal.firstIndex { $0.contains("with (__atomic_0 =") })
+        #expect(plusCal[binding - 1].trimmingCharacters(in: .whitespaces) == "when \(guard_);")
+        #expect(plusCal.contains("__SwiftTLAOverflowOperation0 == \"multiplication\""))
+        #expect(plusCal.contains("__SwiftTLAOverflowOperands0 == <<count, 2>>"))
+    }
+
     @Test("nested negation preserves ordered failure and complete state")
     func negationPreservesGeneratedOutcomes() throws {
         #expect(Int.min == -Int.max - 1)
