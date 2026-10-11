@@ -1556,6 +1556,7 @@ struct CompiledLowerer {
                     let resultType: CompiledValueType = switch preferredType?.shape {
                     case .integer: .int
                     case .boolean: .bool
+                    case .finite(_, let values): .finite(Set(values.map(CompiledValue.init(formal:))).sorted())
                     default: .unknown
                     }
                     scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested,

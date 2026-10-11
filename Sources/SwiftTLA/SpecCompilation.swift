@@ -1884,7 +1884,7 @@ extension CompiledProgram {
         let renderer = CompiledTLARenderer(moduleName: metadata.name,
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions)
+            actions: behavior.actions, functions: functions, enums: enums)
         let constants = metadata.constants.sorted { $0.name < $1.name }.map { "ASSUME \($0.name) = \($0.value)" }
         let prelude = try constants + renderer.resolvedFunctionDefinitions()
             + formalModuleReplacements.map(renderer.formalModuleReplacement) + renderer.assumptions(behavior)
@@ -1913,7 +1913,7 @@ extension CompiledProgram {
         let renderer = CompiledTLARenderer(moduleName: moduleName,
             reservedNames: exportedModelValueNames.union(moduleMetadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions)
+            actions: behavior.actions, functions: functions, enums: enums)
         return try renderer.state(value.expression)
     }
 
@@ -1958,7 +1958,7 @@ extension CompiledProgram {
         let renderer = CompiledTLARenderer(moduleName: name,
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions)
+            actions: behavior.actions, functions: functions, enums: enums)
         var imports: [TLAModuleFile] = []
         var ownership: [TLAModuleBundle.OwnershipEntry] = []
         var dependencies: [TLAModuleBundle.ModuleDependency] = []

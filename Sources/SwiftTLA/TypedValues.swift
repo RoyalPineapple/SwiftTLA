@@ -276,6 +276,7 @@ public func Select<Domain: FormalSetValue, Predicate: TypedExpression<Bool>>(
   let preferredType: _SelectionResultTypeHint? = switch Domain.Element.formalValueShape {
   case .integer: .init(.integer)
   case .boolean: .init(.boolean)
+  case .finite(let name, let values): .init(.finite(typeName: name, values: values))
   default: nil
   }
   return Expr(.choose(

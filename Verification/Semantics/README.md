@@ -301,8 +301,9 @@ this lemma does not claim parity for them.
 The expression-level `StateExpr.choose` is distinct from the nondeterministic
 `Choose` algorithm statement. The generated Swift expression sorts its finite
 domain and returns the first satisfying member, or throws when none exists;
-the TLA+ renderer emits a least-member `CHOOSE` for integer and Boolean
-results, but ordinary `CHOOSE` for other result types. Ordinary TLA+ `CHOOSE`
+the TLA+ renderer emits a least-member `CHOOSE` for integer, Boolean, and
+finite-enum results, but ordinary `CHOOSE` for other result types. Ordinary
+TLA+ `CHOOSE`
 permits an unspecified consistent witness and gives an arbitrary value when
 none satisfies the predicate ([Specifying Systems, §16.1.2](https://lamport.azurewebsites.net/tla/book-01-08-21.pdf)).
 Therefore the outputs are not generally equal for observable choices of other
@@ -414,12 +415,22 @@ This is one concrete nonempty Boolean output pair, not an output link for
 every Boolean predicate or generated Swift expression. Its guarded output is
 pinned, but actual no-match and predicate-evaluation paths remain uncovered.
 
-Typed `Select` now carries its integer or Boolean result type through source
-lowering, so `spec.compile().render()` uses the same least-member rule as the
-generated model export. Focused tests compare the two complete TLA modules for
-`IncreasingSelection` and `BooleanSelection`, normalizing only binder names
-derived from different source locations. The earlier direct-render mismatch is
-closed for these two shapes. Other accepted selection value types still need
+`EnumSelectionProof.tla` proves that the two-case sorted enum rank chooses the
+same member as generated Swift for every predicate, with equal labeled edges
+and no-match failures. Reversing the rank changes an edge. The authored
+`EnumSelection` test checks its compiled choice, actual Swift transition, and
+the rank in both generated and direct TLA+ outputs. This is a concrete
+finite-enum instance, not a proof for every enum cardinality or every emitted
+program. It still trusts the Swift execution kernel and the unverified emitter
+link; other accepted value families remain uncovered.
+
+Typed `Select` now carries its integer, Boolean, or finite-enum result type
+through source lowering, so `spec.compile().render()` uses the same least-member
+rule as the generated model export. Focused tests compare the two complete TLA
+modules for `IncreasingSelection`, `BooleanSelection`, and `EnumSelection`,
+normalizing only binder names derived from different source locations. The
+earlier direct-render mismatch is closed for these three shapes. Other accepted
+selection value types still need
 an explicit shared ordering rule and output-link proof; these tests do not
 establish universal choice fidelity or prove either emitter correct.
 

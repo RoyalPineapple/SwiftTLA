@@ -111,6 +111,40 @@ struct TypedSelectionTests {
         #expect(module == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
+    @Test("Enum selection uses the same canonical case order in Swift and TLA+")
+    func enumSelectionUsesLeastMember() throws {
+        let compilation = try EnumSelection.spec.compile()
+        let action = try #require(compilation.semantics.behavior.actions.first)
+        guard case .and(.guard_, let body) = action.body,
+              case .define(_, let choice, _) = body,
+              case .choose = choice.operation else {
+            Issue.record("The authored enum selection no longer lowers to the compiled choice rule")
+            return
+        }
+        switch choice.resultType {
+        case .finite(let members):
+            #expect(members == [.string("alpha"), .string("zed")])
+        case .named: break
+        default:
+            Issue.record("The enum selection lost its finite type during lowering: \(choice.resultType)")
+            return
+        }
+
+        var machine = try EnumSelection.makeMachine()
+        #expect(machine.state.selected == .zed)
+        _ = try machine.send(.select)
+        #expect(machine.state.selected == .alpha)
+
+        let module = try EnumSelection.render().tlaBundle.root.tla
+        let direct = try compilation.render().tlaBundle.root.tla
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        #expect(direct.replacing(binder, with: "__SELECT_MEMBER__")
+            == module.replacing(binder, with: "__SELECT_MEMBER__"))
+        let renderedAction = try #require(module.split(separator: "\n").first { $0.hasPrefix("select ==") })
+        #expect(renderedAction.contains("= \"alpha\" -> 0 []"))
+        #expect(renderedAction.contains("= \"zed\" -> 1"))
+    }
+
     @Test("An empty matching domain fails when the choice is evaluated")
     func missingSelectionFailsDuringEvaluation() throws {
         let choice = Select(from: SetExpr<Int>.literal(1)) { _ in false }
