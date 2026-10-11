@@ -1782,9 +1782,24 @@ THEOREM EmittedCopyMatchesOrderedInstructions ==
         BY <1>1, SMT DEF CopyWitnessHistory, CopyIntermediateState,
             CopyInstructions, States
     <1>4. SourceHistory(CopySourceState, CopyInstructions, CopyWitnessHistory)
-        BY <1>1, <1>2, <1>3, SMT DEF SourceHistory, CopyWitnessHistory,
-            CopyIntermediateState, CopyInstructions, CopySourceState,
-            AdvanceSource, States
+        PROOF
+        <2>1. Len(CopyInstructions) = 2
+            BY SMT DEF CopyInstructions
+        <2>2. CopyWitnessHistory[0] = CopySourceState
+            BY SMT DEF CopyWitnessHistory
+        <2>3. CopyWitnessHistory[1]
+                = AdvanceSource(CopyWitnessHistory[0], CopyInstructions[1])
+            BY <2>2, SMT DEF CopyWitnessHistory, CopyIntermediateState,
+                CopyInstructions, CopySourceState, AdvanceSource, States
+        <2>4. CopyWitnessHistory[1] = CopyIntermediateState
+            BY SMT DEF CopyWitnessHistory
+        <2>5. CopyIntermediateState \in States
+            BY <1>1, SMT DEF CopyIntermediateState, CopySourceState, States
+        <2>6. CopyWitnessHistory[2]
+                = AdvanceSource(CopyWitnessHistory[1], CopyInstructions[2])
+            BY <2>4, <2>5, SMT DEF CopyWitnessHistory, CopyIntermediateState,
+                CopyInstructions, AdvanceSource, States
+        <2>. QED BY <2>1, <2>2, <2>3, <2>6, SMT DEF SourceHistory
     <1>5. \A history \in [0..Len(CopyInstructions) -> States] :
             SourceHistory(CopySourceState, CopyInstructions, history)
             => history = CopyWitnessHistory
