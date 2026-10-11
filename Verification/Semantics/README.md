@@ -77,13 +77,14 @@ This matched-failure rule is **partially implemented**. For
 Swift machine reports `Int.max + 1` as an evaluation failure; the rendered
 TLA+ action has no overflowing successor and exposes a failure predicate,
 the `addition` operation identity, and the complete operands. An exact-output
-test pins the emitted module. Because the pinned TLAPS backend cannot parse
-Swift's full-width `Int` literals, the test also requires a byte-for-byte
-match between that module after replacing only its module name, the two bound
-literals, and the constant declaration, and the
+test pins the emitted module. Because the pinned TLAPS backend has not discharged
+these obligations using the full-width emitted integer bounds, the test requires a byte-for-byte
+match between that module after replacing only its module name, the emitted
+minimum-bound expression `(-Int.max - 1)`, the maximum-bound literal, and the
+constant declaration, and the
 `CheckedExecutionOverflowSymbolic.tla` module imported by the proof. The proof
 assumes integer bounds enclosing the renderer's fast path; the test ties the
-symbolic constants to the emitted `Int.min` and `Int.max` text. This
+symbolic constants to the emitted `(-Int.max - 1)` and `Int.max` text. This
 normalization and the target Swift `Int` contract are trusted links, not TLAPS
 theorems. `SingleAssignment.tla` separately proves the generic addition guard.
 The same focused test checks the complete

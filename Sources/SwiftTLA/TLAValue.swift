@@ -62,7 +62,7 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
     private func _tlaForm(_ depth: Int = 0) -> String {
         let xs = "__tla_fn_\(depth)"
         switch self {
-        case .int(let n): return "\(n)"
+        case .int(let n): return n == .min ? "(-\(Int.max) - 1)" : "\(n)"
         case .bool(let b): return b ? "TRUE" : "FALSE"
         case .string(let value):
             var literal = "\""

@@ -2,6 +2,18 @@
 import Testing
 
 @Suite struct SignedIntegerSemanticsTests {
+    @Test("minimum machine integer uses TLC-readable syntax in scalar and nested values")
+    func minimumIntegerRendering() throws {
+        let minimum = "(-\(Int.max) - 1)"
+        #expect(TLAValue.int(.min).description == minimum)
+        #expect(TLAValue.tuple([.int(.min), .int(Int.max)]).description == "<<\(minimum), \(Int.max)>>")
+        #expect(TLAValue.set([.int(.min)]).description == "{\(minimum)}")
+        let specification = TLASpec("MinimumIntegerLiteral") {
+            Variable(Var<Int>("minimum"), Int.min)
+        }
+        #expect(try specification.compile().render().tlaBundle.tla.contains("minimum = \(minimum)"))
+    }
+
     @Test("Generated Swift machine uses floor division for negative divisors")
     func generatedSignedDivision() throws {
         var machine = try SignedDivisionOutputModel.makeMachine()

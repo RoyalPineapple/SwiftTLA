@@ -349,8 +349,9 @@ struct CompiledTLARenderer {
         guard_: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
     ) {
         let lhs = try state(expression.children[0])
+        let swiftIntMinimum = TLAValue.int(.min).description
         if case .negate = expression.operation {
-            return ("(\(lhs) # \(Int.min))", "<<\(lhs)>>", .negation)
+            return ("(\(lhs) # \(swiftIntMinimum))", "<<\(lhs)>>", .negation)
         }
         let rhs = try state(expression.children[1])
         let smallLimit = expression.operation == .multiply ? 40000 : 1000000000
@@ -360,13 +361,13 @@ struct CompiledTLARenderer {
         switch expression.operation {
         case .add:
             operation = .addition
-            exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(Int.max) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(Int.min) - (\(rhs)) ELSE TRUE)"
+            exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(Int.max) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(swiftIntMinimum) - (\(rhs)) ELSE TRUE)"
         case .subtract:
             operation = .subtraction
-            exact = "(IF \(rhs) > 0 THEN \(lhs) >= \(Int.min) + (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) <= \(Int.max) + (\(rhs)) ELSE TRUE)"
+            exact = "(IF \(rhs) > 0 THEN \(lhs) >= \(swiftIntMinimum) + (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) <= \(Int.max) + (\(rhs)) ELSE TRUE)"
         case .multiply:
             operation = .multiplication
-            exact = "(\(lhs) * \(rhs) >= \(Int.min) /\\ \(lhs) * \(rhs) <= \(Int.max))"
+            exact = "(\(lhs) * \(rhs) >= \(swiftIntMinimum) /\\ \(lhs) * \(rhs) <= \(Int.max))"
         default:
             throw CompiledValueType.diagnostic("rendering.arithmetic", "expected checked arithmetic")
         }
