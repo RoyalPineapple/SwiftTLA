@@ -18,14 +18,61 @@ SourceConditionalTerminating ==
 
 SourceConditionalNext == SourceConditionalChoose \/ SourceConditionalTerminating
 
+CompiledConditionalInit ==
+    \/ (pc = "choose" /\ chooseFirst = FALSE /\ value = 0)
+    \/ (pc = "choose" /\ chooseFirst = TRUE /\ value = 0)
+
+CompiledConditionalChoose ==
+    /\ pc = "choose"
+    /\ LET updated == ~chooseFirst
+       IN \/ (updated = TRUE /\ chooseFirst' = updated
+              /\ value' = 1 /\ pc' = "Done")
+          \/ (updated = FALSE /\ chooseFirst' = updated
+              /\ value' = 2 /\ pc' = "Done")
+
+CompiledConditionalTerminating ==
+    pc = "Done" /\ UNCHANGED <<pc, chooseFirst, value>>
+CompiledConditionalNext ==
+    CompiledConditionalChoose \/ CompiledConditionalTerminating
+
+THEOREM CompiledConditionalInitial ==
+    CompiledConditionalInit <=> SourceConditionalInit
+    BY SMT DEF CompiledConditionalInit, SourceConditionalInit
+
+THEOREM CompiledConditionalBothBranches ==
+    ASSUME chooseFirst \in BOOLEAN
+    PROVE CompiledConditionalChoose <=> SourceConditionalChoose
+    BY SMT DEF CompiledConditionalChoose, SourceConditionalChoose
+
+THEOREM CompiledConditionalCompleteNext ==
+    ASSUME chooseFirst \in BOOLEAN
+    PROVE CompiledConditionalNext <=> SourceConditionalNext
+    BY CompiledConditionalBothBranches, SMT
+        DEF CompiledConditionalNext, SourceConditionalNext,
+            CompiledConditionalTerminating, SourceConditionalTerminating
+
+WrongCompiledConditionalChoose ==
+    /\ pc = "choose"
+    /\ chooseFirst' = ~chooseFirst
+    /\ value' = IF chooseFirst THEN 1 ELSE 2
+    /\ pc' = "Done"
+
+THEOREM InvertedCompiledBranchWouldDisagree ==
+    ASSUME pc = "choose", chooseFirst = FALSE, pc' = "Done",
+           chooseFirst' = TRUE, value' = 1
+    PROVE CompiledConditionalChoose /\ ~WrongCompiledConditionalChoose
+    BY SMT DEF CompiledConditionalChoose,
+        WrongCompiledConditionalChoose
+
 THEOREM EmittedConditionalInitial ==
     Init <=> SourceConditionalInit
-    BY SMT DEF Init, SourceConditionalInit
+    BY CompiledConditionalInitial, SMT DEF Init, CompiledConditionalInit
 
 THEOREM EmittedConditionalBothBranches ==
     ASSUME chooseFirst \in BOOLEAN
     PROVE choose <=> SourceConditionalChoose
-    BY SMT DEF choose, SourceConditionalChoose
+    BY CompiledConditionalBothBranches, SMT
+        DEF choose, CompiledConditionalChoose
 
 THEOREM EmittedConditionalTerminating ==
     Terminating <=> SourceConditionalTerminating

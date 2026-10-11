@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import SwiftParser
 import SwiftSyntax
+@testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
 @Suite("Conditional step proof input")
@@ -58,5 +59,35 @@ struct ConditionalStepProofTests {
             .appendingPathComponent("../../Verification/Semantics/ConditionalStepProofModel.tla")
             .standardizedFileURL
         #expect(rendered == (try String(contentsOf: proofInput, encoding: .utf8)))
+    }
+
+    @Test("Compiled conditional selects the branch from the prior atomic write")
+    func compiledConditionalBranches() throws {
+        let compilation = try ConditionalStepProofModel.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let pc = try #require(compilation.layout.testVariableID(named: "pc"))
+        let chooseFirst = try #require(compilation.layout.testVariableID(named: "chooseFirst"))
+        let value = try #require(compilation.layout.testVariableID(named: "value"))
+        let action = try #require(compilation.layout.actions.first { $0.renderedName == "choose" })
+        let start = try #require(compilation.layout.controlLocations.first { $0.renderedName == "choose" })
+        let done = try #require(compilation.layout.controlLocations.first { $0.renderedName == "Done" })
+        let initial = try runtime.initialStates()
+        #expect(initial.count == 2)
+        #expect(try Set(initial.map { try $0.value(for: chooseFirst) })
+            == Set([.boolean(false), .boolean(true)]))
+        for state in initial {
+            #expect(try state.value(for: pc) == .controlLocation(start.id))
+            #expect(try state.value(for: value) == .integer(0))
+            let first = try state.value(for: chooseFirst) == .boolean(true)
+            let successors = try runtime.successors(for: action.id, from: state)
+            #expect(successors.count == 1)
+            let successor = try #require(successors.first)
+            #expect(successor.action == action.id)
+            #expect(successor.arguments.isEmpty)
+            #expect(try successor.state.value(for: pc) == .controlLocation(done.id))
+            #expect(try successor.state.value(for: chooseFirst) == .boolean(!first))
+            #expect(try successor.state.value(for: value) == .integer(first ? 2 : 1))
+            #expect(try runtime.successors(for: action.id, from: successor.state).isEmpty)
+        }
     }
 }
