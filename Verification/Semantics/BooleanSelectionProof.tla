@@ -31,6 +31,59 @@ THEOREM BooleanFirstOutcomeMatchesSource ==
     BY CanonicalBooleanFirstMatchesSortedFirst,
         BooleanFirstFailureMatchesEmptySet, SMT
 
+SourceBooleanRuleEdges(predicate, state) ==
+    IF state.pc # "select" THEN {}
+    ELSE IF predicate[FALSE] THEN
+        {<<state, "select", [state EXCEPT !.pc = "Done", !.flag = FALSE]>>}
+    ELSE IF predicate[TRUE] THEN
+        {<<state, "select", [state EXCEPT !.pc = "Done", !.flag = TRUE]>>}
+    ELSE {}
+CompiledBooleanRuleEdges(predicate, state) ==
+    IF state.pc = "select" /\ (predicate[FALSE] \/ predicate[TRUE])
+    THEN {<<state, "select",
+            [state EXCEPT !.pc = "Done", !.flag = NativeBooleanFirst(predicate)]>>}
+    ELSE {}
+RenderedBooleanRuleEdges(predicate, state) ==
+    IF state.pc = "select" /\ BooleanMatches(predicate) # {}
+    THEN {<<state, "select",
+            [state EXCEPT !.pc = "Done", !.flag = CanonicalBooleanFirst(predicate)]>>}
+    ELSE {}
+SourceBooleanRuleFailures(predicate, state) ==
+    IF state.pc = "select" /\ ~predicate[FALSE] /\ ~predicate[TRUE]
+    THEN {<<state, "select", "noSatisfyingChoice">>}
+    ELSE {}
+RenderedBooleanRuleFailures(predicate, state) ==
+    IF state.pc = "select" /\ BooleanMatches(predicate) = {}
+    THEN {<<state, "select", "noSatisfyingChoice">>}
+    ELSE {}
+
+THEOREM BooleanChoiceRulePreservesCompleteEdgesAndFailures ==
+    ASSUME NEW predicate \in [BOOLEAN -> BOOLEAN],
+           NEW state \in [pc: {"select", "Done"}, flag: BOOLEAN]
+    PROVE /\ SourceBooleanRuleEdges(predicate, state)
+                = CompiledBooleanRuleEdges(predicate, state)
+          /\ CompiledBooleanRuleEdges(predicate, state)
+                = RenderedBooleanRuleEdges(predicate, state)
+          /\ SourceBooleanRuleFailures(predicate, state)
+                = RenderedBooleanRuleFailures(predicate, state)
+    PROOF
+    <1>1. BooleanMatches(predicate) # {}
+            <=> predicate[FALSE] \/ predicate[TRUE]
+        BY BooleanFirstFailureMatchesEmptySet, SMT DEF BooleanMatches
+    <1>2. SourceBooleanRuleEdges(predicate, state)
+            = CompiledBooleanRuleEdges(predicate, state)
+        BY <1>1, SMT DEF SourceBooleanRuleEdges,
+            CompiledBooleanRuleEdges, NativeBooleanFirst
+    <1>3. CompiledBooleanRuleEdges(predicate, state)
+            = RenderedBooleanRuleEdges(predicate, state)
+        BY <1>1, CanonicalBooleanFirstMatchesSortedFirst, SMT
+            DEF CompiledBooleanRuleEdges, RenderedBooleanRuleEdges
+    <1>4. SourceBooleanRuleFailures(predicate, state)
+            = RenderedBooleanRuleFailures(predicate, state)
+        BY <1>1, SMT DEF SourceBooleanRuleFailures,
+            RenderedBooleanRuleFailures
+    <1>. QED BY <1>2, <1>3, <1>4
+
 THEOREM LeastBooleanChoice ==
     (CHOOSE member \in {FALSE, TRUE} :
         \A other \in {FALSE, TRUE} :
@@ -111,10 +164,34 @@ THEOREM CompleteBooleanSelectionSlice ==
             EmittedLabeledChoice, SourceLabeledTerminating,
             CompiledLabeledTerminating, EmittedLabeledTerminating
 
+ReversedBooleanFirst(predicate) ==
+    CHOOSE member \in BooleanMatches(predicate) :
+        \A other \in BooleanMatches(predicate) :
+            member = TRUE \/ other = FALSE
+
 THEOREM ReversedBooleanChoiceWouldChangeStep ==
-    (CHOOSE member \in {FALSE, TRUE} :
-        \A other \in {FALSE, TRUE} :
-            member = TRUE \/ other = FALSE) = TRUE
-    BY SMT
+    ReversedBooleanFirst([member \in BOOLEAN |-> TRUE]) = TRUE
+    BY SMT DEF ReversedBooleanFirst, BooleanMatches
+
+WrongBooleanRuleEdges(state) ==
+    {<<state, "select", [state EXCEPT !.pc = "Done",
+        !.flag = ReversedBooleanFirst([member \in BOOLEAN |-> TRUE])]>>}
+
+THEOREM ReversedBooleanOrderChangesCompleteEdge ==
+    ASSUME NEW state \in [pc: {"select", "Done"}, flag: BOOLEAN],
+           state.pc = "select"
+    PROVE SourceBooleanRuleEdges([member \in BOOLEAN |-> TRUE], state)
+            # WrongBooleanRuleEdges(state)
+    PROOF
+    <1>1. BooleanMatches([member \in BOOLEAN |-> TRUE]) # {}
+        BY SMT DEF BooleanMatches
+    <1>2. NativeBooleanFirst([member \in BOOLEAN |-> TRUE]) = FALSE
+        BY SMT DEF NativeBooleanFirst
+    <1>3. [state EXCEPT !.pc = "Done", !.flag = FALSE]
+            # [state EXCEPT !.pc = "Done", !.flag = TRUE]
+        BY SMT
+    <1>. QED BY <1>1, <1>2, <1>3,
+        ReversedBooleanChoiceWouldChangeStep, SMT
+        DEF SourceBooleanRuleEdges, WrongBooleanRuleEdges
 
 =======================================================================

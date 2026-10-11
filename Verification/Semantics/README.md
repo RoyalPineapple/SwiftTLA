@@ -301,8 +301,10 @@ this lemma does not claim parity for them.
 The expression-level `StateExpr.choose` is distinct from the nondeterministic
 `Choose` algorithm statement. The generated Swift expression sorts its finite
 domain and returns the first satisfying member, or throws when none exists;
-the TLA+ renderer emits a least-member `CHOOSE` for integer and Boolean
-results, but ordinary `CHOOSE` for other result types. Ordinary TLA+ `CHOOSE`
+the TLA+ renderer emits a least-member `CHOOSE` for integer, Boolean,
+finite-enum, and closed multi-member printable-ASCII String domains, but ordinary
+`CHOOSE` for other result types. Ordinary
+TLA+ `CHOOSE`
 permits an unspecified consistent witness and gives an arbitrary value when
 none satisfies the predicate ([Specifying Systems, §16.1.2](https://lamport.azurewebsites.net/tla/book-01-08-21.pdf)).
 Therefore the outputs are not generally equal for observable choices of other
@@ -404,18 +406,54 @@ the empty failure outcome and passing generated evaluation check. Its
 reversed-order theorem is a negative control:
 choosing `TRUE` would change the emitted step. CI checks this module separately,
 and the frozen diagnostic on SHA `337c76cf` [proved all 37 obligations](https://github.com/RoyalPineapple/SwiftTLA/actions/runs/38134117416/job/114454364613).
-This is one concrete nonempty Boolean output pair, not a proof for every Boolean predicate or generated Swift expression;
-its guarded output is pinned, but general no-match and predicate-evaluation
-failures remain uncovered.
+The reusable rule now quantifies over every Boolean predicate and every complete
+`pc`/`flag` state. It proves equality of source case-split, compiled sorted-first,
+and TLA+ least-member labeled edge sets, plus the no-match failure set. A
+reversed-order rule changes the complete edge, not merely the selected value.
+The generated-output test links one instance to actual Swift and TLA+ emissions;
+it does not yet certify those emitters for every accepted predicate.
+This is one concrete nonempty Boolean output pair, not an output link for
+every Boolean predicate or generated Swift expression. Its guarded output is
+pinned, but actual no-match and predicate-evaluation paths remain uncovered.
 
-Typed `Select` now carries its integer or Boolean result type through source
-lowering, so `spec.compile().render()` uses the same least-member rule as the
-generated model export. Focused tests compare the two complete TLA modules for
-`IncreasingSelection` and `BooleanSelection`, normalizing only binder names
-derived from different source locations. The earlier direct-render mismatch is
-closed for these two shapes. Other accepted selection value types still need
+`EnumSelectionProof.tla` proves that the two-case sorted enum rank chooses the
+same member as generated Swift for every predicate, with equal labeled edges
+and no-match failures. Reversing the rank changes an edge. It also imports the
+complete generated `EnumSelection.tla` module and proves its initial state,
+`Next`, labeled actions, and passing evaluation check match this source case.
+The authored test pins that exact TLA+ module, checks direct rendering and the
+actual Swift transition, while `GeneratedSelectionProofTests` pins the emitted
+Swift choice cache and complete update function. This is a concrete finite-enum
+output link, not a proof for every enum cardinality or every emitted program.
+It still trusts Swift's `Result`, `_NativeMachineOperations.choose`, and update
+merging; other accepted value families remain uncovered.
+
+Typed `Select` now carries its integer, Boolean, or finite-enum result type
+through source lowering, so `spec.compile().render()` uses the same least-member
+rule as the generated model export. Focused tests compare the two complete TLA
+modules for `IncreasingSelection`, `BooleanSelection`, and `EnumSelection`,
+normalizing only binder names derived from different source locations. The
+earlier direct-render mismatch is closed for these three shapes. Other accepted
+selection value types still need
 an explicit shared ordering rule and output-link proof; these tests do not
 establish universal choice fidelity or prove either emitter correct.
+
+`StringSelection` closes one more concrete boundary: the authored closed
+`{"alpha", "zed"}` domain lowers to a compiled choice, and the generated
+Swift machine selects `"alpha"`. Direct compilation represents the domain as
+a constant set with an unknown result type, while macro compilation represents
+it as a `setLiteral` with a String result type. The renderer accepts both only
+after checking every member is a printable-ASCII literal String, then emits the same ranks.
+`TypedSelectionTests.stringSelectionUsesLeastMember` requires the two complete
+TLA+ outputs to agree and the generated module to equal the proved
+`EnumSelection.tla` module after only model/helper and binder renaming.
+`EnumSelectionProof.tla` therefore covers this emitted TLA+ instance through
+that exact-output, alpha-renaming test; `GeneratedSelectionProofTests` pins the
+complete emitted Swift choice cache and update function to
+`GeneratedStringSelectionSwiftWitness.txt`. Interpreting Swift's `String` order,
+`Result`, `choose`, and update merge remains a trusted runtime boundary.
+This link covers the two ASCII literals, not arbitrary or dynamic String
+domains, Unicode equivalence, or every accepted compound value type.
 
 For a repeatable String selection with no matching member,
 `TypedSelectionTests.missingStringSelectionHasMatchingFailure` checks the
@@ -430,13 +468,10 @@ previous renderer, which guarded only integer and Boolean choices.
 states, complete labeled steps, no-match failure, and evaluation check, with a
 missing-check negative control. All 47 obligations passed locally; hosted
 evidence is pending. The interpretation of the emitted Swift `Result`, `choose`, and
-update merge remains a trusted runtime boundary. This is not a solution to
-non-unique String choice: the generated Swift machine still takes the first
-ordered member while rendered TLA+ uses unrestricted `CHOOSE` for that type.
-The chosen rule for this gap is a shared canonical order for every accepted
-selection type, emitted on both sides. It remains unimplemented until the
-ordering is defined for every value family, both outputs use it, and an
-output-linked proof checks observable non-unique choices.
+update merge remains a trusted runtime boundary. The chosen general rule is a
+shared canonical order for every accepted selection type, emitted on both
+sides. It remains incomplete: outside supported numeric, Boolean, enum, and
+closed printable-ASCII String domains, observable non-unique choices can still differ.
 
 ## Checked kernel lemma
 

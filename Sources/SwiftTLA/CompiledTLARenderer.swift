@@ -34,6 +34,7 @@ struct CompiledTLARenderer {
     let operators: CompiledOperators
     let actions: [CompiledAction]
     let functions: [ResolvedFunction]
+    var enums: CompiledEnums = .init()
     var moduleNames: [String: String] = [:]
 
     func assumptions(_ behavior: CompiledBehavior) throws -> [String] {
@@ -352,7 +353,8 @@ struct CompiledTLARenderer {
         let swiftIntMinimum = TLAValue.int(.min).description
         let swiftIntMaximum = TLAValue.int(.max).description
         if case .negate = expression.operation {
-            return ("(\(lhs) # \(swiftIntMinimum))", "<<\(lhs)>>", .negation)
+            let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000)"
+            return ("(IF \(small) THEN TRUE ELSE \(lhs) # \(swiftIntMinimum))", "<<\(lhs)>>", .negation)
         }
         let rhs = try state(expression.children[1])
         let smallLimit = expression.operation == .multiply ? 40000 : 1000000000
@@ -743,16 +745,31 @@ struct CompiledTLARenderer {
                     schedule([.expression(expression.children[0]), .text(" IN (LET \(divisor) == "),
                         .expression(expression.children[1]),
                         .text(" IN (IF \(divisor) < 0 THEN (-\(dividend)) \\div (-\(divisor)) ELSE \(dividend) \\div \(divisor))))")])
-                case .choose(let binder) where expression.resultType == .int || expression.resultType == .bool:
+                case .choose(let binder) where expression.resultType == .int || expression.resultType == .bool
+                    || choiceMembers(expression) != nil:
                     guard expression.children.count == 2 else {
                         throw CompiledValueType.diagnostic("rendering.choose", "choice requires a domain and predicate")
                     }
                     let member = try binderName(binder)
                     let candidates = choiceName("choiceCandidates")
                     let other = choiceName("choiceOther")
-                    let least = expression.resultType == .int
-                        ? "\(member) <= \(other)"
-                        : "(\(member) = FALSE \\/ \(other) = TRUE)"
+                    let least: String
+                    if expression.resultType == .int {
+                        least = "\(member) <= \(other)"
+                    } else if expression.resultType == .bool {
+                        least = "(\(member) = FALSE \\/ \(other) = TRUE)"
+                    } else {
+                        guard let members = choiceMembers(expression) else {
+                            throw CompiledValueType.diagnostic("rendering.choose", "choice has no finite member order")
+                        }
+                        func rank(_ value: String) throws -> String {
+                            let cases = try members.enumerated().map { index, member in
+                                "\(value) = \(try member.rendered(using: layout)) -> \(index)"
+                            }.joined(separator: " [] ")
+                            return "(CASE \(cases))"
+                        }
+                        least = try "\(rank(member)) <= \(rank(other))"
+                    }
                     parts.append("(LET \(candidates) == {\(member) \\in ")
                     schedule([.expression(expression.children[0]), .text(" : "),
                         .expression(expression.children[1]),
@@ -764,6 +781,42 @@ struct CompiledTLARenderer {
             }
         }
         return parts.joined()
+    }
+
+    private func choiceMembers(_ type: CompiledValueType) -> [CompiledValue]? {
+        switch type {
+        case .finite(let members): return members.isEmpty ? nil : members
+        case .named(let name):
+            guard let members = enums.cases[name]?.map(\.value), !members.isEmpty else { return nil }
+            return members
+        default: return nil
+        }
+    }
+
+    private func choiceMembers(_ expression: CompiledExpression) -> [CompiledValue]? {
+        if let members = choiceMembers(expression.resultType) { return members }
+        // shortcut: only closed ASCII String domains have a renderable rank; dynamic or Unicode domains need a general value order.
+        guard expression.resultType == .string || expression.resultType == .unknown,
+              let domain = expression.children.first else { return nil }
+        let members: [CompiledValue]
+        switch domain.computation.operation {
+        case .value(.set(let values)):
+            members = Array(values)
+        case .setLiteral:
+            members = domain.children.compactMap {
+                guard case .value(let value) = $0.computation.operation else { return nil }
+                return value
+            }
+            guard members.count == domain.children.count else { return nil }
+        default:
+            return nil
+        }
+        guard members.count > 1,
+              members.allSatisfy({
+                  guard case .string(let value) = $0 else { return false }
+                  return value.utf8.allSatisfy { $0 >= 0x20 && $0 <= 0x7e }
+              }) else { return nil }
+        return Array(Set(members)).sorted()
     }
 
     /// Serialize a bijective, independent record comprehension without materializing a UNION of sets.
