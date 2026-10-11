@@ -237,14 +237,15 @@ this lemma does not claim parity for them.
 The expression-level `StateExpr.choose` is distinct from the nondeterministic
 `Choose` algorithm statement. The generated Swift expression sorts its finite
 domain and returns the first satisfying member, or throws when none exists;
-the TLA+ renderer emits ordinary `CHOOSE`. TLA+ permits an unspecified
-consistent witness and gives `CHOOSE` an arbitrary value when none satisfies
-the predicate ([Specifying Systems, §16.1.2](https://lamport.azurewebsites.net/tla/book-01-08-21.pdf)).
-Therefore the current outputs are not generally equal for observable
-expression-level choice. A sound output link must either emit the same
-canonical selection in TLA+ or prove that every accepted use has a unique
-satisfying witness and define matching no-witness behavior. Agreement on a
-finite TLC run cannot discharge this obligation.
+the TLA+ renderer emits a least-member `CHOOSE` for integer and Boolean
+results, but ordinary `CHOOSE` for other result types. Ordinary TLA+ `CHOOSE`
+permits an unspecified consistent witness and gives an arbitrary value when
+none satisfies the predicate ([Specifying Systems, §16.1.2](https://lamport.azurewebsites.net/tla/book-01-08-21.pdf)).
+Therefore the outputs are not generally equal for observable choices of other
+accepted types. A sound output link must either emit the same canonical
+selection in TLA+ or prove that every accepted use has a unique satisfying
+witness and define matching no-witness behavior. Agreement on a finite TLC
+run cannot discharge this obligation.
 
 `SingleAssignment.tla` now proves the general unique-witness rule for every
 typed domain and Boolean predicate: if exactly one member satisfies
