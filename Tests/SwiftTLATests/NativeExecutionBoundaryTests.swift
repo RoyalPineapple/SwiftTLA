@@ -1,5 +1,9 @@
+import Foundation
 import Testing
+import SwiftParser
+import SwiftSyntax
 @testable import SwiftTLA
+@testable import SwiftTLAPlugin
 import SwiftTLAMacros
 
 @TLAModel
@@ -237,6 +241,104 @@ private struct ReachableInvariantFailure {
                 try machine.send(.advance)
             }
             #expect(machine.snapshot == before)
+        }
+    }
+
+    @Test("Generated addition uses checked Swift execution and a matching TLA failure rule")
+    func renderedOverflowMatchesGeneratedFailure() throws {
+        let compiled = try CheckedExecutionOverflow.spec.compile()
+        let count = try #require(compiled.layout.variables.first { $0.declaration.name == "count" })
+        let compiledAction = try #require(compiled.semantics.behavior.actions.first)
+        guard case .and(.guard_, let body) = compiledAction.body,
+              case .define(_, let addition, _) = body,
+              case .add = addition.operation,
+              addition.children.count == 2,
+              case .stateVariable(let source) = addition.children[0].operation,
+              case .value(.integer(1)) = addition.children[1].operation else {
+            Issue.record("The authored addition no longer lowers to the checked root-addition rule")
+            return
+        }
+        #expect(source == count.id)
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "CheckedExecutionOverflow", program: program))
+        let members = try emitter.machineMembers()
+        let swiftAction = try #require(members.first {
+            $0.description.contains("private static func _visitUpdates0(")
+        }?.description)
+        let swiftWitness = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
+            .standardizedFileURL
+        let expectedSwift = try String(contentsOf: swiftWitness, encoding: .utf8)
+        let emittedTokens = Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
+        let witnessTokens = Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text)
+        #expect(emittedTokens == witnessTokens)
+
+        let rendered = try CheckedExecutionOverflow.render()
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflow.tla")
+            .standardizedFileURL
+        #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let direct = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let action = try #require(direct.first { $0.hasPrefix("advance ==") })
+        let machine = try CheckedExecutionOverflow.makeMachine()
+        #expect(try machine.formalCall(for: .advance) == FormalActionCall(name: "advance", arguments: []))
+        let initial = try machine.formalProjection(of: machine.snapshot)
+        #expect(try renderedInitialStates(in: compiled) == [initial])
+        let control = try #require(TLAStateProjection.Token(validating: "pc"))
+        let countToken = try #require(TLAStateProjection.Token(validating: "count"))
+        #expect(initial.entries.count == 2)
+        #expect(initial.value(for: control) == .string("advance"))
+        #expect(initial.value(for: countToken) == .int(Int.max))
+        let failure = try #require(direct.first { $0.hasPrefix("__SwiftTLAOverflowFailure0 ==") })
+        let operands = try #require(direct.first { $0.hasPrefix("__SwiftTLAOverflowOperands0 ==") })
+        let operation = try #require(direct.first { $0.hasPrefix("__SwiftTLAOverflowOperation0 ==") })
+        let evaluation = try #require(direct.first { $0.hasPrefix("__SwiftTLAEvaluationOK ==") })
+        #expect(operands == "__SwiftTLAOverflowOperands0 == <<count, 1>>")
+        #expect(operation == "__SwiftTLAOverflowOperation0 == \"addition\"")
+        #expect(evaluation == "__SwiftTLAEvaluationOK == ~(__SwiftTLAOverflowFailure0)")
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        for checkDeadlock in [false, true] {
+            let selected = try rendered.tlaBundle(checking: [], checkDeadlock: checkDeadlock)
+            let cfg = try #require(selected.root.cfg)
+            #expect(cfg.contains("INVARIANT __SwiftTLAEvaluationOK\n"))
+            #expect(cfg.contains("CHECK_DEADLOCK \(checkDeadlock ? "TRUE" : "FALSE")\n"))
+        }
+
+        let plusCal = try rendered.plusCalBundle().root.tla.split(separator: "\n")
+        let binding = try #require(plusCal.firstIndex { $0.contains("with (__atomic_0 =") })
+        #expect(binding > 0)
+        if binding > 0 {
+            let line = plusCal[binding - 1].trimmingCharacters(in: .whitespaces)
+            let prefix = "when "
+            let defined = try #require(line.hasPrefix(prefix) && line.hasSuffix(";")
+                ? String(line.dropFirst(prefix.count).dropLast()) : nil)
+            #expect(action.contains("IF \(defined) THEN"))
+            #expect(action.contains("ELSE FALSE"))
+            #expect(failure == "__SwiftTLAOverflowFailure0 == (((pc = \"advance\")) = TRUE /\\ ~(\(defined)))")
+        }
+        #expect(plusCal.contains(failure))
+        #expect(plusCal.contains(operands))
+        #expect(plusCal.contains(operation))
+        #expect(plusCal.contains(evaluation))
+    }
+
+    @Test("generated TLA export rejects a different target Int width")
+    func rejectsCrossWidthExport() throws {
+        let source = "---- MODULE WidthMismatch ----\n====\n"
+        do {
+            _ = try RenderedSpecification(_generatedModule: "WidthMismatch", source: source,
+                compilationIdentity: "width-mismatch", declarations: [], checkDeadlock: false,
+                _generatedIntegerBitWidth: Int.bitWidth - 1, _generatedIntrinsicInvariants: [],
+                invariants: [], reachabilityProperties: [], properties: [], refinements: [],
+                symmetry: [], actions: [])
+            Issue.record("Expected a target-width diagnostic")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .compilationIdentityMismatch)
+            #expect(diagnostic.path == "generatedIntegerBitWidth")
         }
     }
 

@@ -35,6 +35,8 @@ struct ConfigurationValueExportTests {
         """
         return try RenderedSpecification(_generatedModule: "ConfigurationValue", source: source,
             compilationIdentity: "configuration-value", declarations: [], checkDeadlock: true,
+            _generatedIntegerBitWidth: Int.bitWidth,
+            _generatedIntrinsicInvariants: [],
             invariants: [], reachabilityProperties: [], properties: [], refinements: [], symmetry: [],
             actions: [], _generatedPlusCal: .success(source),
             _generatedParameters: [(name: "Input", value: value)])

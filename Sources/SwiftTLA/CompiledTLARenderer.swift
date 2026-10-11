@@ -142,7 +142,7 @@ struct CompiledTLARenderer {
                         .expression(then), .text(") ELSE ("), .expression(otherwise), .text("))")
                     ])
                 case .define(let binder, let value, let body):
-                    let defined = try choiceDefined(value)
+                    let defined = try evaluationDefined(value)
                     if let defined { parts.append("(IF \(defined) THEN ") }
                     parts.append("(LET \(try binderName(binder)) == \(try state(value)) IN ")
                     schedule([.expression(body), .text(defined == nil ? ")" : ") ELSE FALSE)")])
@@ -168,6 +168,33 @@ struct CompiledTLARenderer {
             return "((\(try state(condition))) = TRUE /\\ \(failure))"
         default: return nil
         }
+    }
+
+    func overflowFailure(_ action: CompiledActionExpr) throws -> (predicate: String, operands: String)? {
+        switch action {
+        case .define(_, let value, _):
+            guard let defined = try additionDefined(value) else { return nil }
+            return ("~(\(defined))", "<<\(try state(value.children[0])), \(try state(value.children[1]))>>")
+        case .and(.guard_(let condition), let body):
+            guard repeatable(condition), let failure = try overflowFailure(body) else { return nil }
+            return ("((\(try state(condition))) = TRUE /\\ \(failure.predicate))", failure.operands)
+        default: return nil
+        }
+    }
+
+    func evaluationDefined(_ value: CompiledExpression) throws -> String? {
+        try choiceDefined(value) ?? additionDefined(value)
+    }
+
+    private func additionDefined(_ value: CompiledExpression) throws -> String? {
+        // shortcut: only pure root additions are guarded; extend to ordered expression outcomes for nested or effectful operands.
+        guard case .add = value.operation, value.resultType == .int,
+              value.children.count == 2, value.children.allSatisfy(repeatable) else { return nil }
+        let lhs = try state(value.children[0])
+        let rhs = try state(value.children[1])
+        let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000 /\\ \(rhs) >= -1000000000 /\\ \(rhs) <= 1000000000)"
+        let exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(Int.max) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(Int.min) - (\(rhs)) ELSE TRUE)"
+        return "(IF \(small) THEN TRUE ELSE \(exact))"
     }
 
     func choiceDefined(_ value: CompiledExpression) throws -> String? {
@@ -606,10 +633,10 @@ struct CompiledTLARenderer {
         return layout.variables[id.ordinal].declaration.name
     }
 
-    func actionReference(_ id: ActionID) throws -> String {
+    func actionReference(_ id: ActionID, named operatorName: String? = nil) throws -> String {
         guard layout.actions.indices.contains(id.ordinal),
               actions.indices.contains(id.ordinal) else { throw missing("action", id.ordinal) }
-        let name = layout.actions[id.ordinal].renderedName
+        let name = operatorName ?? layout.actions[id.ordinal].renderedName
         let action = actions[id.ordinal]
         guard !action.bindings.isEmpty else { return name }
         let parameters = try action.bindings.map { try binderName($0.binder) }

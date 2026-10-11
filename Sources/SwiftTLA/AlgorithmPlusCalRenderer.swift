@@ -162,7 +162,7 @@ internal struct AlgorithmPlusCalRenderer {
         case .letBinding(let variable, let value, let body):
             let binder = try formalRenderer.binderName(variable)
             var lines: [String] = []
-            if let defined = try formalRenderer.choiceDefined(value) {
+            if let defined = try formalRenderer.evaluationDefined(value) {
                 lines.append("\(indent)when \(defined);")
             }
             lines.append("\(indent)with (\(binder) = \(try expression(value))) {")

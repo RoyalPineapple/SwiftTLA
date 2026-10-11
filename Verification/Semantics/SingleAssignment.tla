@@ -2193,6 +2193,102 @@ THEOREM ReversingAddOperandFailuresWouldDisagree ==
       # <<"right">>
     BY SMT DEF NativeOrderedAddOutcome
 
+SmallAddOperands(lhs, rhs) ==
+    /\ -1000000000 <= lhs
+    /\ lhs <= 1000000000
+    /\ -1000000000 <= rhs
+    /\ rhs <= 1000000000
+
+EmittedAddDefined(lhs, rhs) ==
+    IF SmallAddOperands(lhs, rhs) THEN TRUE
+    ELSE IF rhs > 0 THEN lhs <= SwiftIntMax - rhs
+    ELSE IF rhs < 0 THEN lhs >= SwiftIntMin - rhs
+    ELSE TRUE
+
+THEOREM EmittedAddGuardMatchesCheckedInt ==
+    ASSUME NEW lhs \in Int, NEW rhs \in Int,
+           WithinSwiftInt(lhs), WithinSwiftInt(rhs),
+           SwiftIntMin <= -2000000000,
+           2000000000 <= SwiftIntMax
+    PROVE EmittedAddDefined(lhs, rhs) <=> WithinSwiftInt(lhs + rhs)
+    PROOF
+    <1>0. USE SwiftIntBounds DEF SwiftIntBounds
+    <1>1. SmallAddOperands(lhs, rhs) =>
+            /\ -2000000000 <= lhs + rhs
+            /\ lhs + rhs <= 2000000000
+        BY SMT DEF SmallAddOperands
+    <1>2. SmallAddOperands(lhs, rhs) => WithinSwiftInt(lhs + rhs)
+        BY <1>1, SMT DEF WithinSwiftInt
+    <1>3. ~SmallAddOperands(lhs, rhs) =>
+            (EmittedAddDefined(lhs, rhs) <=> ~AddWouldOverflow(lhs, rhs))
+        BY SMT DEF EmittedAddDefined, AddWouldOverflow,
+            SmallAddOperands
+    <1>4. ~AddWouldOverflow(lhs, rhs) <=> WithinSwiftInt(lhs + rhs)
+        BY AddOverflowGuardMatchesCheckedInt
+    <1>. QED BY <1>2, <1>3, <1>4, SMT DEF EmittedAddDefined
+
+SourceCheckedAddEdges(state, action, rhs) ==
+    IF WithinSwiftInt(state[Key] + rhs)
+    THEN {<<state, action,
+             [state EXCEPT ![Key] = state[Key] + rhs]>>}
+    ELSE {}
+
+EmittedCheckedAddEdges(state, action, rhs) ==
+    IF EmittedAddDefined(state[Key], rhs)
+    THEN {<<state, action,
+             [state EXCEPT ![Key] = state[Key] + rhs]>>}
+    ELSE {}
+
+NativeCheckedAddEdges(state, action, rhs) ==
+    IF AddWouldOverflow(state[Key], rhs)
+    THEN {}
+    ELSE {<<state, action,
+             [state EXCEPT ![Key] = state[Key] + rhs]>>}
+
+SourceCheckedAddFailures(state, action, rhs) ==
+    IF WithinSwiftInt(state[Key] + rhs)
+    THEN {}
+    ELSE {<<state, action, "addition", <<state[Key], rhs>>>>}
+
+EmittedCheckedAddFailures(state, action, rhs) ==
+    IF EmittedAddDefined(state[Key], rhs)
+    THEN {}
+    ELSE {<<state, action, "addition", <<state[Key], rhs>>>>}
+
+NativeCheckedAddFailures(state, action, rhs) ==
+    IF AddWouldOverflow(state[Key], rhs)
+    THEN {<<state, action, "addition", <<state[Key], rhs>>>>}
+    ELSE {}
+
+THEOREM RootAdditionPreservesCompleteLabeledEdgesAndFailures ==
+    ASSUME NEW state \in [Vars -> Int],
+           NEW action \in ActionLabels,
+           NEW rhs \in Int,
+           WithinSwiftInt(state[Key]),
+           WithinSwiftInt(rhs),
+           SwiftIntMin <= -2000000000,
+           2000000000 <= SwiftIntMax
+    PROVE /\ SourceCheckedAddEdges(state, action, rhs)
+               = EmittedCheckedAddEdges(state, action, rhs)
+          /\ SourceCheckedAddEdges(state, action, rhs)
+               = NativeCheckedAddEdges(state, action, rhs)
+          /\ SourceCheckedAddFailures(state, action, rhs)
+               = EmittedCheckedAddFailures(state, action, rhs)
+          /\ SourceCheckedAddFailures(state, action, rhs)
+               = NativeCheckedAddFailures(state, action, rhs)
+    PROOF
+    <1>1. state[Key] \in Int BY KeyIsVariable, SMT DEF KeyIsVariable
+    <1>2. EmittedAddDefined(state[Key], rhs)
+            <=> WithinSwiftInt(state[Key] + rhs)
+        BY <1>1, EmittedAddGuardMatchesCheckedInt, SMT
+    <1>3. AddWouldOverflow(state[Key], rhs)
+            <=> ~WithinSwiftInt(state[Key] + rhs)
+        BY <1>1, AddOverflowGuardMatchesCheckedInt, SMT
+    <1>. QED BY <1>2, <1>3, SMT DEF SourceCheckedAddEdges,
+        EmittedCheckedAddEdges, SourceCheckedAddFailures,
+        EmittedCheckedAddFailures, NativeCheckedAddEdges,
+        NativeCheckedAddFailures
+
 THEOREM CurrentAdditionAgreementIsExactlyRangeSafety ==
     \A lhs, rhs \in Int :
         (WithinSwiftInt(lhs) /\ WithinSwiftInt(rhs)) =>
