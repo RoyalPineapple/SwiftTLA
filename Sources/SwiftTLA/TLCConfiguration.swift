@@ -27,6 +27,7 @@ package struct TLCConfiguration: Equatable, Sendable {
     package let assumptionsOnly: Bool
     package let declarations: [String]
     package let checkDeadlock: Bool
+    package let intrinsicInvariants: [String]
     package let invariants: [String]
     package let reachabilityProperties: [String]
     package let properties: [String]
@@ -39,7 +40,7 @@ package struct TLCConfiguration: Equatable, Sendable {
 
     package init(behavior: ModelBehavior = .specification, specificationName: String = "Spec",
         assumptionsOnly: Bool = false,
-        declarations: [String], checkDeadlock: Bool, invariants: [String],
+        declarations: [String], checkDeadlock: Bool, intrinsicInvariants: [String] = [], invariants: [String],
         reachabilityProperties: [String] = [], properties: [String], refinements: [String] = [], symmetry: [String],
         viewOperators: [String] = [], view: String? = nil,
         postconditionOperators: [String] = [], postcondition: String? = nil) {
@@ -48,6 +49,7 @@ package struct TLCConfiguration: Equatable, Sendable {
         self.assumptionsOnly = assumptionsOnly
         self.declarations = declarations
         self.checkDeadlock = checkDeadlock
+        self.intrinsicInvariants = intrinsicInvariants
         self.invariants = invariants
         self.reachabilityProperties = reachabilityProperties
         self.properties = properties
@@ -80,7 +82,7 @@ package struct TLCConfiguration: Equatable, Sendable {
         }
         return Self(behavior: behavior ?? self.behavior,
             specificationName: specificationName ?? self.specificationName, assumptionsOnly: assumptionsOnly,
-            declarations: declarations, checkDeadlock: checkDeadlock,
+            declarations: declarations, checkDeadlock: checkDeadlock, intrinsicInvariants: intrinsicInvariants,
             invariants: invariants.filter(checks.contains),
             reachabilityProperties: reachabilityProperties.filter(checks.contains),
             properties: properties.filter(checks.contains),
@@ -99,7 +101,7 @@ package struct TLCConfiguration: Equatable, Sendable {
             try validateSymmetryChecks()
         }
         return Self(behavior: behavior, specificationName: specificationName, assumptionsOnly: assumptionsOnly,
-            declarations: declarations, checkDeadlock: checkDeadlock,
+            declarations: declarations, checkDeadlock: checkDeadlock, intrinsicInvariants: intrinsicInvariants,
             invariants: invariants, reachabilityProperties: reachabilityProperties,
             properties: properties, refinements: refinements,
             symmetry: name.map { [$0] } ?? [], viewOperators: viewOperators, view: view,
@@ -113,7 +115,7 @@ package struct TLCConfiguration: Equatable, Sendable {
                 nextSafeAction: "Select a view declared by this model.")
         }
         return Self(behavior: behavior, specificationName: specificationName, assumptionsOnly: assumptionsOnly,
-            declarations: declarations, checkDeadlock: checkDeadlock,
+            declarations: declarations, checkDeadlock: checkDeadlock, intrinsicInvariants: intrinsicInvariants,
             invariants: invariants, reachabilityProperties: reachabilityProperties,
             properties: properties, refinements: refinements, symmetry: symmetry,
             viewOperators: viewOperators, view: name,
@@ -127,7 +129,7 @@ package struct TLCConfiguration: Equatable, Sendable {
                 nextSafeAction: "Select a postcondition declared by this model.")
         }
         return Self(behavior: behavior, specificationName: specificationName, assumptionsOnly: assumptionsOnly,
-            declarations: declarations, checkDeadlock: checkDeadlock,
+            declarations: declarations, checkDeadlock: checkDeadlock, intrinsicInvariants: intrinsicInvariants,
             invariants: invariants, reachabilityProperties: reachabilityProperties,
             properties: properties, refinements: refinements, symmetry: symmetry,
             viewOperators: viewOperators, view: view,
@@ -159,11 +161,22 @@ package struct TLCConfiguration: Equatable, Sendable {
         }
     }
 
+    func includingIntrinsicInvariant(_ name: String?) -> Self {
+        guard let name else { return self }
+        return Self(behavior: behavior, specificationName: specificationName, assumptionsOnly: assumptionsOnly,
+            declarations: declarations, checkDeadlock: checkDeadlock,
+            intrinsicInvariants: intrinsicInvariants + [name], invariants: invariants,
+            reachabilityProperties: reachabilityProperties, properties: properties,
+            refinements: refinements, symmetry: symmetry, viewOperators: viewOperators, view: view,
+            postconditionOperators: postconditionOperators, postcondition: postcondition)
+    }
+
     func render(usesSymmetryReduction: Bool) -> String {
         if assumptionsOnly { return declarations.joined(separator: "\n") + (declarations.isEmpty ? "" : "\n") }
         let header = behavior.directives(specificationName: specificationName)
             + [checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
-        let checks = (invariants + reachabilityProperties).map { "INVARIANT \($0)" } + (properties + refinements).map { "PROPERTY \($0)" }
+        let checks = (intrinsicInvariants + invariants + reachabilityProperties).map { "INVARIANT \($0)" }
+            + (properties + refinements).map { "PROPERTY \($0)" }
         // TLC cannot soundly check liveness on a symmetry-reduced graph.
         let reduction = usesSymmetryReduction && properties.isEmpty && refinements.isEmpty ? symmetry.map { "SYMMETRY \($0)" } : []
         var lines = header

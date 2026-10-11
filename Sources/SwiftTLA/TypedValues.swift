@@ -273,10 +273,16 @@ public func Select<Domain: FormalSetValue, Predicate: TypedExpression<Bool>>(
   matching predicate: (WithValue<Domain.Element>) -> Predicate
 ) -> Expr<Domain.Element> {
   let binding = generatedBinderName(file: file, line: line, column: column)
+  let preferredType: _SelectionResultTypeHint? = switch Domain.Element.formalValueShape {
+  case .integer: .init(.integer)
+  case .boolean: .init(.boolean)
+  default: nil
+  }
   return Expr(.choose(
     candidates.stateExpr,
     binding,
-    predicate(WithValue<Domain.Element>(expression: .variable(binding))).stateExpr
+    predicate(WithValue<Domain.Element>(expression: .variable(binding))).stateExpr,
+    preferredType: preferredType
   ))
 }
 

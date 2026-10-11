@@ -14,4 +14,5 @@ variables
 }
 } *)
 __SwiftTLAChoiceFailure0 == ~((\E __binder_SpecParser_383_0 \in {1, 2, 3} : (__binder_SpecParser_383_0 > position)))
+__SwiftTLAEvaluationOK == ~(__SwiftTLAChoiceFailure0)
 ====

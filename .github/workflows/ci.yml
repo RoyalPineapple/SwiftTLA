@@ -100,7 +100,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
           mkdir -p .build/semantic-proof-evidence
           git rev-parse HEAD > .build/semantic-proof-evidence/source-sha.txt
-          sha256sum Verification/Semantics/*.tla > .build/semantic-proof-evidence/proof-inputs.sha256
+          sha256sum Verification/Semantics/*.tla Verification/Semantics/*.txt \
+            > .build/semantic-proof-evidence/proof-inputs.sha256
           proof_tool_dir="$(mktemp -d)"
           curl -fsSL \
             https://github.com/tlaplus/tlapm/releases/download/1.6.0-pre/tlapm-1.6.0-pre-x86_64-linux-gnu.tar.gz \
@@ -122,13 +123,20 @@ jobs:
             > .build/semantic-proof-evidence/z3-version.txt
           "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/semantic-proof-evidence/tlapm-version.txt
           "$proof_tool_dir/tlapm/bin/tlapm" --config > .build/semantic-proof-evidence/tlapm-config.txt
-          for proof in SingleAssignment ConditionalStep; do
-            "$proof_tool_dir/tlapm/bin/tlapm" --nofp "Verification/Semantics/$proof.tla" \
-              2>&1 | tee ".build/semantic-proof-evidence/$proof.log"
-            grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \
-              ".build/semantic-proof-evidence/$proof.log"
-            ! grep -q '^\[ERROR\]' ".build/semantic-proof-evidence/$proof.log"
+          proof_failure=0
+          for proof in BooleanSelectionProof MissingStringSelectionProof CheckedExecutionOverflowProof CheckedSubtractionProof SingleAssignment ConditionalStep; do
+            if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "Verification/Semantics/$proof.tla" \
+                2>&1 | tee ".build/semantic-proof-evidence/$proof.log" \
+              && grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \
+                ".build/semantic-proof-evidence/$proof.log" \
+              && ! grep -q '^\[ERROR\]' ".build/semantic-proof-evidence/$proof.log"; then
+              echo "$proof: proved"
+            else
+              echo "$proof: failed" >&2
+              proof_failure=1
+            fi
           done
+          test "$proof_failure" -eq 0
 
       - name: Retain diagnostic proof evidence
         if: always()

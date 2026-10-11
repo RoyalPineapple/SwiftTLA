@@ -30,6 +30,10 @@ struct TypedSelectionTests {
         }
         #expect(choice.children.count == 2)
         let module = try IncreasingSelection.render().tlaBundle.root.tla
+        let direct = try compilation.render().tlaBundle.root.tla
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        #expect(direct.replacing(binder, with: "__SELECT_MEMBER__")
+            == module.replacing(binder, with: "__SELECT_MEMBER__"))
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/IncreasingSelection.tla")
@@ -67,12 +71,39 @@ struct TypedSelectionTests {
 
     @Test("Boolean selection prefers false in both generated outputs")
     func booleanSelectionUsesLeastMember() throws {
+        let compilation = try BooleanSelection.spec.compile()
+        let action = try #require(compilation.semantics.behavior.actions.first)
+        guard case .and(.guard_(let control), let body) = action.body,
+              case .equal = control.operation,
+              case .define(_, let choice, _) = body,
+              case .choose = choice.operation else {
+            Issue.record("The authored Boolean selection no longer lowers to the proved choice rule")
+            return
+        }
+        #expect(choice.children.count == 2)
+        guard choice.children.count == 2 else { return }
+        guard case .value(.set(let members)) = choice.children[0].computation.operation,
+              case .value(.boolean(true)) = choice.children[1].computation.operation else {
+            Issue.record("The authored Boolean domain and predicate did not survive lowering")
+            return
+        }
+        #expect(members == Set([.boolean(false), .boolean(true)]))
+
         var machine = try BooleanSelection.makeMachine()
         #expect(machine.state.flag)
+        #expect(try machine.enabledActions() == [.select])
         _ = try machine.send(.select)
         #expect(!machine.state.flag)
+        #expect(try machine.enabledActions() == [.Terminating])
+        let completed = machine.snapshot
+        _ = try machine.send(.Terminating)
+        #expect(machine.snapshot == completed)
 
         let module = try BooleanSelection.render().tlaBundle.root.tla
+        let direct = try compilation.render().tlaBundle.root.tla
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        #expect(direct.replacing(binder, with: "__SELECT_MEMBER__")
+            == module.replacing(binder, with: "__SELECT_MEMBER__"))
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/BooleanSelection.tla")
@@ -105,5 +136,57 @@ struct TypedSelectionTests {
         #expect(observedFailure)
         #expect(result.completion == .evaluationFailure(.noSatisfyingChoice))
         #expect(result.states == 1 && result.edges == 0)
+    }
+
+    @Test("A missing String selection has the same evaluation failure in Swift and TLA+")
+    func missingStringSelectionHasMatchingFailure() throws {
+        var machine = try MissingStringSelection.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+            _ = try machine.send(.select)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try MissingStringSelection.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        let actual = rendered.tlaBundle.root.tla.replacing(binder, with: "__PROOF_MEMBER__")
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/MissingStringSelection.tla")
+            .standardizedFileURL
+        #expect(actual == (try String(contentsOf: proofInput, encoding: .utf8)))
+    }
+
+    @Test("A nested empty selection fails natively and emits a TLA failure check")
+    func nestedMissingSelectionHasNoTransition() throws {
+        var machine = try NestedMissingSelection.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+            _ = try machine.send(.advance)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try NestedMissingSelection.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(declarations.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })
+    }
+
+    @Test("A successful nested selection emits a check for subsequent addition overflow")
+    func nestedSelectionOverflowHasNoTransition() throws {
+        var machine = try NestedOverflowSelection.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            _ = try machine.send(.advance)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try NestedOverflowSelection.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(declarations.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })
+        #expect(declarations.contains { $0.hasPrefix("__SwiftTLAOverflowFailure0 ==") })
+        #expect(declarations.contains { $0.hasPrefix("__SwiftTLAOverflowOperands0 ==") })
     }
 }

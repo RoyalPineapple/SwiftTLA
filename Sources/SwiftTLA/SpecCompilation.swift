@@ -120,7 +120,7 @@ package struct RenderedModule: Sendable, Equatable {
     package var importedOwnership: [TLAModuleBundle.OwnershipEntry] = []
     package var dependencies: [TLAModuleBundle.ModuleDependency] = []
     package let renderedModuleSource: String
-    let choiceFailureDeclarations: [String]
+    let evaluationFailureDeclarations: [String]
     package let configuration: TLCConfiguration
     package let renderedActions: [RenderedAction]
     package let symbolicActions: [ActionID]
@@ -159,11 +159,13 @@ public struct RenderedAction: Sendable, Equatable {
 
 /// Resolved TLC directive kinds for checks selected from a rendered model.
 public struct RenderedCheckSelection: Sendable, Equatable {
+    public let intrinsicInvariantNames: [String]
     public let tlcInvariantNames: [String]
     public let tlcPropertyNames: [String]
     public let checkDeadlock: Bool
 
     fileprivate init(configuration: TLCConfiguration) {
+        intrinsicInvariantNames = configuration.intrinsicInvariants
         tlcInvariantNames = configuration.invariants + configuration.reachabilityProperties
         tlcPropertyNames = configuration.properties + configuration.refinements
         checkDeadlock = configuration.checkDeadlock
@@ -443,7 +445,9 @@ public struct RenderedSpecification: Sendable {
     /// Final artifact boundary used by generated machines; this does not compile or interpret a model.
     @_documentation(visibility: internal)
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
-        declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
+        declarations: [String], checkDeadlock: Bool, _generatedIntegerBitWidth: Int,
+        _generatedIntrinsicInvariants: [String],
+        invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
         symmetry: [String], viewOperators: [String] = [], postconditionOperators: [String] = [],
         actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil,
         _generatedPlusCalProfiles: [String: Result<String, CompilationDiagnostic>] = [:],
@@ -453,6 +457,12 @@ public struct RenderedSpecification: Sendable {
         _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = [],
         _generatedFairnessProfileOperators: [String: String] = [:],
         _generatedTemporalObligations: [String: [_RenderedTemporalObligation]] = [:]) throws {
+        guard _generatedIntegerBitWidth == Int.bitWidth else {
+            throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "generatedIntegerBitWidth", expected: "target Int width \(Int.bitWidth)",
+                actual: "generated Int width \(_generatedIntegerBitWidth)",
+                nextSafeAction: "Regenerate the model for the target architecture.")
+        }
         var declarations = declarations
         var definitions: [String] = []
         var prefix = "__SwiftTLAParameter"
@@ -485,6 +495,7 @@ public struct RenderedSpecification: Sendable {
         }
         let configuration = TLCConfiguration(assumptionsOnly: _assumptionsOnly,
             declarations: declarations, checkDeadlock: checkDeadlock,
+            intrinsicInvariants: _generatedIntrinsicInvariants,
             invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements,
             symmetry: symmetry, viewOperators: viewOperators,
             postconditionOperators: postconditionOperators)
@@ -572,6 +583,7 @@ public struct RenderedSpecification: Sendable {
         let selected = TLCConfiguration(behavior: configuration.behavior,
             specificationName: configuration.specificationName, assumptionsOnly: configuration.assumptionsOnly,
             declarations: configuration.declarations, checkDeadlock: configuration.checkDeadlock,
+            intrinsicInvariants: configuration.intrinsicInvariants,
             invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
             properties: configuration.properties, refinements: configuration.refinements + [name],
             symmetry: configuration.symmetry, viewOperators: configuration.viewOperators, view: configuration.view,
@@ -643,6 +655,7 @@ public struct RenderedSpecification: Sendable {
     }
 
     public var invariantNames: Set<String> { Set(configuration.invariants) }
+    public var intrinsicInvariantNames: Set<String> { Set(configuration.intrinsicInvariants) }
     public var reachabilityNames: Set<String> { Set(configuration.reachabilityProperties) }
     public var temporalNames: Set<String> { Set(configuration.properties) }
     public var refinementNames: Set<String> { Set(configuration.refinements) }
@@ -2188,8 +2201,8 @@ private extension CompiledModuleMetadata {
         )
         return RenderedModule(
             renderedModuleSource: directOutput.source,
-            choiceFailureDeclarations: directOutput.choiceFailureDeclarations,
-            configuration: configuration,
+            evaluationFailureDeclarations: directOutput.evaluationFailureDeclarations,
+            configuration: configuration.includingIntrinsicInvariant(directOutput.evaluationInvariant),
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             symbolicActions: behavior.actions.filter { $0.bindings.contains { $0.literalMembers == nil } }.map(\.id),
             definitions: definitions, instances: instances, refinements: renderedRefinements,
@@ -2222,7 +2235,7 @@ private extension CompiledModuleMetadata {
         requiredStandardModules: Set<StandardModule>,
         importedNames: [String],
         instancesAfterBehavior: Bool
-    ) throws -> (source: String, choiceFailureDeclarations: [String]) {
+    ) throws -> (source: String, evaluationFailureDeclarations: [String], evaluationInvariant: String?) {
         let varNames = layout.variables.map(\.declaration.name)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = varNames.isEmpty && renderedActions.isEmpty
@@ -2290,12 +2303,13 @@ private extension CompiledModuleMetadata {
             lines.append("vars == \(varsTuple)")
             lines.append("")
         }
-        let occupied = renderer.reservedNames.union(renderer.bindings.binders.values)
+        var occupied = renderer.reservedNames.union(renderer.bindings.binders.values)
             .union(renderer.bindings.operatorNames.values)
             .union(layout.declarations.map(\.name))
             .union(layout.actions.map(\.renderedName))
             .union(renderedActions.flatMap(\.calls).map(\.renderedName))
-        var choiceFailureDeclarations: [String] = []
+        var evaluationFailureDeclarations: [String] = []
+        var failureReferences: [String] = []
         for index in behavior.enabledActionIndices {
             let renderedAction = renderedActions[index]
             guard !renderedAction.sourceName.isEmpty else { continue }
@@ -2309,11 +2323,45 @@ private extension CompiledModuleMetadata {
                 let failureHeader = parameters.isEmpty ? failureName : "\(failureName)(\(parameters))"
                 let declaration = "\(failureHeader) == \(failure)"
                 lines.append(declaration)
-                choiceFailureDeclarations.append(declaration)
+                evaluationFailureDeclarations.append(declaration)
+                failureReferences.append(try renderer.actionReference(behavior.actions[index].id, named: failureName))
+                occupied.insert(failureName)
+            }
+            for (occurrence, overflow) in try renderer.overflowFailures(behavior.actions[index].body).enumerated() {
+                let suffix = occurrence == 0 ? "\(index)" : "\(index)_\(occurrence)"
+                var failureName = "__SwiftTLAOverflowFailure\(suffix)"
+                while occupied.contains(failureName) { failureName += "_" }
+                let failureHeader = parameters.isEmpty ? failureName : "\(failureName)(\(parameters))"
+                var operandsName = "__SwiftTLAOverflowOperands\(suffix)"
+                while occupied.contains(operandsName) { operandsName += "_" }
+                let operandsHeader = parameters.isEmpty ? operandsName : "\(operandsName)(\(parameters))"
+                var operationName = "__SwiftTLAOverflowOperation\(suffix)"
+                while occupied.contains(operationName) { operationName += "_" }
+                let operationHeader = parameters.isEmpty ? operationName : "\(operationName)(\(parameters))"
+                let failureDeclaration = "\(failureHeader) == \(overflow.predicate)"
+                let operandsDeclaration = "\(operandsHeader) == \(overflow.operands)"
+                let operationDeclaration = "\(operationHeader) == \"\(overflow.operation.rawValue)\""
+                lines.append(failureDeclaration)
+                lines.append(operandsDeclaration)
+                lines.append(operationDeclaration)
+                evaluationFailureDeclarations += [failureDeclaration, operandsDeclaration, operationDeclaration]
+                failureReferences.append(try renderer.actionReference(behavior.actions[index].id, named: failureName))
+                occupied.formUnion([failureName, operandsName, operationName])
             }
             for call in renderedAction.calls where call.arguments.isEmpty == false {
                 lines.append("\(call.renderedName) == \(formalActionCall(named: emittedName, arguments: call.arguments))")
             }
+        }
+        let evaluationInvariant: String?
+        if failureReferences.isEmpty {
+            evaluationInvariant = nil
+        } else {
+            var name = "__SwiftTLAEvaluationOK"
+            while occupied.contains(name) { name += "_" }
+            let declaration = "\(name) == " + failureReferences.map { "~(\($0))" }.joined(separator: " /\\ ")
+            lines.append(declaration)
+            evaluationFailureDeclarations.append(declaration)
+            evaluationInvariant = name
         }
         lines.append("")
 
@@ -2329,7 +2377,7 @@ private extension CompiledModuleMetadata {
         }
         guard !isLibraryModule else {
             lines.append("====")
-            return (lines.joined(separator: "\n") + "\n", choiceFailureDeclarations)
+            return (lines.joined(separator: "\n") + "\n", evaluationFailureDeclarations, evaluationInvariant)
         }
 
         let initializations = Dictionary(
@@ -2446,7 +2494,7 @@ private extension CompiledModuleMetadata {
         if !renderedTemporalProperties.isEmpty { lines.append("") }
         if instancesAfterBehavior { lines += instanceDeclarations }
         lines.append("====")
-        return (lines.joined(separator: "\n") + "\n", choiceFailureDeclarations)
+        return (lines.joined(separator: "\n") + "\n", evaluationFailureDeclarations, evaluationInvariant)
     }
 
     func tlcConfiguration(behavior: CompiledBehavior, replacements: [TLCModuleReplacement],

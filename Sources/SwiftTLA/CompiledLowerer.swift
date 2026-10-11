@@ -1551,9 +1551,15 @@ struct CompiledLowerer {
                 case .exists(let domain, let name, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
                     scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.exists, on: &tasks)
-                case .choose(let domain, let name, let body):
+                case .choose(let domain, let name, let body, let preferredType):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.choose, on: &tasks)
+                    let resultType: CompiledValueType = switch preferredType?.shape {
+                    case .integer: .int
+                    case .boolean: .bool
+                    default: .unknown
+                    }
+                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested,
+                        build: { .choose($0, $1, $2, preferredType: resultType) }, on: &tasks)
                 case .foldFunction(let lambda, let initial, let sequence):
                     if let issue = lambda.sourceIssue {
                         throw issue.compilationDiagnostic(stage: .binding, path: "\(path).operator")

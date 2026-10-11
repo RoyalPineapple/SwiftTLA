@@ -79,7 +79,7 @@ extension StateExpr {
                 pending.append((body, bound.union([name])))
             case .forAll(let set, let name, let predicate),
                  .exists(let set, let name, let predicate),
-                 .choose(let set, let name, let predicate):
+                 .choose(let set, let name, let predicate, _):
                 pending.append((set, bound))
                 pending.append((predicate, bound.union([name])))
             case .setSum(let function, let set):

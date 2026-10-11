@@ -16,6 +16,30 @@ struct TypedActionParameterTests {
             #expect(try next.formalProjection(of: next.snapshot).value(for: result) == .int(selection + 1))
         }
     }
+
+    @Test("Evaluation failures quantify every typed action argument and remain selected")
+    func parameterizedEvaluationFailuresCoverEveryInvocation() throws {
+        let rendered = try TypedParameterSelection.render()
+        let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(definitions.contains("__SwiftTLAOverflowOperands0(selection) == <<selection, 1>>"))
+        #expect(definitions.contains(#"__SwiftTLAEvaluationOK == ~((\E selection \in {1, 2}: __SwiftTLAOverflowFailure0(selection)))"#))
+        let selected = try rendered.checkSelection(checking: [], checkDeadlock: false)
+        #expect(selected.intrinsicInvariantNames == ["__SwiftTLAEvaluationOK"])
+        let cfg = try #require(rendered.tlaBundle(checking: [], checkDeadlock: false).root.cfg)
+        #expect(cfg.contains("INVARIANT __SwiftTLAEvaluationOK\n"))
+    }
+
+    @Test("Symbolic parameter failures retain the action guard and domain")
+    func symbolicEvaluationFailuresUseGuardedDomain() throws {
+        let scenario = try #require(BoundStepEnabledness.validationScenarios().first)
+        let rendered = try scenario.render()
+        let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(definitions.contains { $0.hasPrefix("__SwiftTLAOverflowFailure0(amount) == (((count < 2)) = TRUE /\\ ") })
+        #expect(definitions.contains("__SwiftTLAOverflowOperands0(amount) == <<count, amount>>"))
+        #expect(definitions.contains(#"__SwiftTLAEvaluationOK == ~((\E amount \in choices: __SwiftTLAOverflowFailure0(amount)))"#))
+        let cfg = try #require(rendered.tlaBundle(checking: [], checkDeadlock: false).root.cfg)
+        #expect(cfg.contains("INVARIANT __SwiftTLAEvaluationOK\n"))
+    }
 }
 
 extension TypedActionParameterTests {

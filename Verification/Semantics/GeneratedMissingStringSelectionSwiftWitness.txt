@@ -1,0 +1,33 @@
+private static let _closedChoice0: Result<String, any Error> = Result { (try _NativeMachineOperations.choose(Set<String>(["alpha"]).sorted(by: { (lhs: String, rhs: String) -> Bool in
+return lhs < rhs
+})) { __PROOF_MEMBER__ in false }) }
+private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                           _ emit: (_Updates) throws -> Void) throws {
+    func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart2(updates, { candidate in try _actionPart1(candidate, emit) })
+}
+func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    guard (state._value_pc_0 == _ControlLocation.location0) else { return }
+try emit(updates)
+}
+func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_0_0 = (try Self._closedChoice0.get())
+try _actionPart3(___atomic_0_0, updates, emit)
+}
+func _actionPart3(_ ___atomic_0_0: String, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart5(___atomic_0_0, updates, { candidate in try _actionPart4(___atomic_0_0, candidate, emit) })
+}
+func _actionPart5(_ ___atomic_0_0: String, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart7(___atomic_0_0, updates, { candidate in try _actionPart6(___atomic_0_0, candidate, emit) })
+}
+func _actionPart7(_ ___atomic_0_0: String, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+}
+func _actionPart6(_ ___atomic_0_0: String, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_selected_1: ___atomic_0_0)) { try emit(merged) }
+}
+func _actionPart4(_ ___atomic_0_0: String, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_pc_0: _ControlLocation.location1)) { try emit(merged) }
+}
+try _actionPart0(_Updates(), emit)
+}

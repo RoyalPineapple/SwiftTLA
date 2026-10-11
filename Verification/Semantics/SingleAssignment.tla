@@ -1,13 +1,23 @@
 ----------------------- MODULE SingleAssignment -----------------------
-EXTENDS TLAPS, NaturalsInduction, SequenceTheorems, GeneratedAtomicCopyProofModel
+EXTENDS TLAPS, NaturalsInduction, SequenceTheorems, GeneratedAtomicCopyProofModel,
+        Integers
 VARIABLE choiceSelected
 Choice == INSTANCE GeneratedGuardedChoiceProofModel WITH selected <- choiceSelected
 IntegerChoice == INSTANCE IncreasingSelection WITH position <- choiceSelected
 VARIABLES dependentPC, dependentSeed, dependentChoice
 DependentInit == INSTANCE DependentInitializationOutputProofModel
     WITH pc <- dependentPC, seed <- dependentSeed, choice <- dependentChoice
-CONSTANTS Vars, Values, Key, ActionLabels
+CONSTANTS Vars, Values, Key, ActionLabels, SwiftIntMin, SwiftIntMax
 ASSUME KeyIsVariable == Key \in Vars
+ASSUME SwiftIntBounds ==
+    /\ SwiftIntMin \in Int
+    /\ SwiftIntMax \in Int
+    /\ SwiftIntMin <= -2000000000
+    /\ 2000000000 <= SwiftIntMax
+
+THEOREM SmallAdditionFitsSwiftInt ==
+    \A value \in Int : value <= 1000000000 => value <= SwiftIntMax - 1
+    BY SwiftIntBounds, SMT DEF SwiftIntBounds
 
 States == [Vars -> Values]
 LabeledEdges == States \X ActionLabels \X States
@@ -1782,9 +1792,24 @@ THEOREM EmittedCopyMatchesOrderedInstructions ==
         BY <1>1, SMT DEF CopyWitnessHistory, CopyIntermediateState,
             CopyInstructions, States
     <1>4. SourceHistory(CopySourceState, CopyInstructions, CopyWitnessHistory)
-        BY <1>1, <1>2, <1>3, SMT DEF SourceHistory, CopyWitnessHistory,
-            CopyIntermediateState, CopyInstructions, CopySourceState,
-            AdvanceSource, States
+        PROOF
+        <2>1. Len(CopyInstructions) = 2
+            BY SMT DEF CopyInstructions
+        <2>2. CopyWitnessHistory[0] = CopySourceState
+            BY SMT DEF CopyWitnessHistory
+        <2>3. CopyWitnessHistory[1]
+                = AdvanceSource(CopyWitnessHistory[0], CopyInstructions[1])
+            BY <2>2, SMT DEF CopyWitnessHistory, CopyIntermediateState,
+                CopyInstructions, CopySourceState, AdvanceSource, States
+        <2>4. CopyWitnessHistory[1] = CopyIntermediateState
+            BY SMT DEF CopyWitnessHistory
+        <2>5. CopyIntermediateState \in States
+            BY <1>1, SMT DEF CopyIntermediateState, CopySourceState, States
+        <2>6. CopyWitnessHistory[2]
+                = AdvanceSource(CopyWitnessHistory[1], CopyInstructions[2])
+            BY <2>4, <2>5, SMT DEF CopyWitnessHistory, CopyIntermediateState,
+                CopyInstructions, AdvanceSource, States
+        <2>. QED BY <2>1, <2>2, <2>3, <2>6, SMT DEF SourceHistory
     <1>5. \A history \in [0..Len(CopyInstructions) -> States] :
             SourceHistory(CopySourceState, CopyInstructions, history)
             => history = CopyWitnessHistory
@@ -1961,12 +1986,39 @@ THEOREM GeneratedCopyStepPreservesCompleteRelation ==
             GeneratedMerge, GeneratedEmptyUpdates, States
 
 VARIABLES orderedPC, orderedX, orderedY
-Repeated == INSTANCE OrderedCopy WITH pc <- orderedPC, x <- orderedX, y <- orderedY
+Repeated == INSTANCE OrderedCopy WITH pc <- orderedPC, x <- orderedX, y <- orderedY,
+    OrderedIntMin <- SwiftIntMin, OrderedIntMax <- SwiftIntMax
 
 SourceOrderedInitial ==
     /\ orderedPC = "copy"
     /\ orderedX = 1
     /\ orderedY = 0
+
+OrderedAddDefined(value) == value <= SwiftIntMax - 1
+
+OrderedRenderedAddGuard(value) ==
+    IF value >= -1000000000 /\ value <= 1000000000
+       /\ 1 >= -1000000000 /\ 1 <= 1000000000
+    THEN TRUE
+    ELSE IF 1 > 0 THEN value <= SwiftIntMax - 1
+    ELSE IF 1 < 0 THEN value >= SwiftIntMin - 1
+    ELSE TRUE
+
+THEOREM OrderedRenderedAddGuardMatchesRange ==
+    ASSUME NEW value \in Int
+    PROVE OrderedRenderedAddGuard(value) <=> OrderedAddDefined(value)
+    PROOF
+    <1>1. 1 > 0 /\ ~(1 < 0)
+        BY SMT
+    <1>2. value <= 1000000000 => OrderedAddDefined(value)
+        BY SmallAdditionFitsSwiftInt, SMT DEF OrderedAddDefined
+    <1>3. OrderedRenderedAddGuard(value)
+            <=> IF value >= -1000000000 /\ value <= 1000000000
+                   THEN TRUE ELSE OrderedAddDefined(value)
+        BY <1>1, SMT DEF OrderedRenderedAddGuard,
+            OrderedAddDefined
+    <1>. QED
+        BY <1>2, <1>3, SMT DEF OrderedAddDefined
 
 THEOREM EmittedOrderedInitial ==
     Repeated!Init <=> SourceOrderedInitial
@@ -1974,6 +2026,7 @@ THEOREM EmittedOrderedInitial ==
 
 SourceOrderedCopyStep ==
     /\ orderedPC = "copy"
+    /\ OrderedAddDefined(orderedX)
     /\ orderedX' = orderedX + 1
     /\ orderedY' = orderedX + 1
     /\ orderedPC' = "repeatWrites"
@@ -1981,10 +2034,18 @@ SourceOrderedCopyStep ==
 THEOREM EmittedOrderedCopyStep ==
     ASSUME orderedX \in Int
     PROVE Repeated!copy <=> SourceOrderedCopyStep
-    BY SMT DEF Repeated!copy, SourceOrderedCopyStep
+    PROOF
+    <1>1. OrderedRenderedAddGuard(orderedX)
+            <=> OrderedAddDefined(orderedX)
+        BY OrderedRenderedAddGuardMatchesRange
+    <1>. QED
+        BY <1>1, SMT DEF Repeated!copy, SourceOrderedCopyStep,
+            OrderedRenderedAddGuard
 
 SourceRepeatedWrites ==
     /\ orderedPC = "repeatWrites"
+    /\ OrderedAddDefined(orderedX)
+    /\ OrderedAddDefined(orderedX + 1)
     /\ orderedX' = orderedX + 2
     /\ orderedY' = orderedY
     /\ orderedPC' = "Done"
@@ -1992,7 +2053,18 @@ SourceRepeatedWrites ==
 THEOREM EmittedRepeatedWrites ==
     ASSUME orderedX \in Int
     PROVE Repeated!repeatWrites <=> SourceRepeatedWrites
-    BY SMT DEF Repeated!repeatWrites, SourceRepeatedWrites
+    PROOF
+    <1>1. orderedX + 1 \in Int
+        BY SMT
+    <1>2. OrderedRenderedAddGuard(orderedX)
+            <=> OrderedAddDefined(orderedX)
+        BY OrderedRenderedAddGuardMatchesRange
+    <1>3. OrderedRenderedAddGuard(orderedX + 1)
+            <=> OrderedAddDefined(orderedX + 1)
+        BY <1>1, OrderedRenderedAddGuardMatchesRange
+    <1>. QED
+        BY <1>2, <1>3, SMT DEF Repeated!repeatWrites,
+            SourceRepeatedWrites, OrderedRenderedAddGuard
 
 SourceOrderedTerminating ==
     /\ orderedPC = "Done"
@@ -2079,6 +2151,18 @@ OrderedReachable ==
     \/ (orderedPC = "repeatWrites" /\ orderedX = 2 /\ orderedY = 2)
     \/ (orderedPC = "Done" /\ orderedX = 4 /\ orderedY = 2)
 
+THEOREM OrderedReachableAdditionsDefined ==
+    OrderedReachable =>
+        /\ (orderedPC = "copy" => OrderedAddDefined(orderedX))
+        /\ (orderedPC = "repeatWrites" =>
+            OrderedAddDefined(orderedX) /\ OrderedAddDefined(orderedX + 1))
+    PROOF
+    <1>1. OrderedAddDefined(1) /\ OrderedAddDefined(2)
+            /\ OrderedAddDefined(3)
+        BY SmallAdditionFitsSwiftInt, SMT DEF OrderedAddDefined
+    <1>. QED
+        BY <1>1, SMT DEF OrderedReachable
+
 THEOREM OrderedInitialReachable ==
     Repeated!Init => OrderedReachable
     BY EmittedOrderedInitial, SMT DEF SourceOrderedInitial, OrderedReachable
@@ -2100,13 +2184,6 @@ THEOREM EmittedOrderedReachableInvariant ==
         BY <1>1, PTL
     <1>. QED
         BY OrderedInitialReachable, <1>2 DEF Repeated!Spec
-
-CONSTANTS SwiftIntMin, SwiftIntMax
-ASSUME SwiftIntBounds ==
-    /\ SwiftIntMin \in Int
-    /\ SwiftIntMax \in Int
-    /\ SwiftIntMin <= 0
-    /\ 4 <= SwiftIntMax
 
 WithinSwiftInt(value) == SwiftIntMin <= value /\ value <= SwiftIntMax
 
@@ -2192,6 +2269,102 @@ THEOREM ReversingAddOperandFailuresWouldDisagree ==
     NativeOrderedAddOutcome(0, 0, TRUE, TRUE, <<"left">>, <<"right">>)
       # <<"right">>
     BY SMT DEF NativeOrderedAddOutcome
+
+SmallAddOperands(lhs, rhs) ==
+    /\ -1000000000 <= lhs
+    /\ lhs <= 1000000000
+    /\ -1000000000 <= rhs
+    /\ rhs <= 1000000000
+
+EmittedAddDefined(lhs, rhs) ==
+    IF SmallAddOperands(lhs, rhs) THEN TRUE
+    ELSE IF rhs > 0 THEN lhs <= SwiftIntMax - rhs
+    ELSE IF rhs < 0 THEN lhs >= SwiftIntMin - rhs
+    ELSE TRUE
+
+THEOREM EmittedAddGuardMatchesCheckedInt ==
+    ASSUME NEW lhs \in Int, NEW rhs \in Int,
+           WithinSwiftInt(lhs), WithinSwiftInt(rhs),
+           SwiftIntMin <= -2000000000,
+           2000000000 <= SwiftIntMax
+    PROVE EmittedAddDefined(lhs, rhs) <=> WithinSwiftInt(lhs + rhs)
+    PROOF
+    <1>0. USE SwiftIntBounds DEF SwiftIntBounds
+    <1>1. SmallAddOperands(lhs, rhs) =>
+            /\ -2000000000 <= lhs + rhs
+            /\ lhs + rhs <= 2000000000
+        BY SMT DEF SmallAddOperands
+    <1>2. SmallAddOperands(lhs, rhs) => WithinSwiftInt(lhs + rhs)
+        BY <1>1, SMT DEF WithinSwiftInt
+    <1>3. ~SmallAddOperands(lhs, rhs) =>
+            (EmittedAddDefined(lhs, rhs) <=> ~AddWouldOverflow(lhs, rhs))
+        BY SMT DEF EmittedAddDefined, AddWouldOverflow,
+            SmallAddOperands
+    <1>4. ~AddWouldOverflow(lhs, rhs) <=> WithinSwiftInt(lhs + rhs)
+        BY AddOverflowGuardMatchesCheckedInt
+    <1>. QED BY <1>2, <1>3, <1>4, SMT DEF EmittedAddDefined
+
+SourceCheckedAddEdges(state, action, rhs) ==
+    IF WithinSwiftInt(state[Key] + rhs)
+    THEN {<<state, action,
+             [state EXCEPT ![Key] = state[Key] + rhs]>>}
+    ELSE {}
+
+EmittedCheckedAddEdges(state, action, rhs) ==
+    IF EmittedAddDefined(state[Key], rhs)
+    THEN {<<state, action,
+             [state EXCEPT ![Key] = state[Key] + rhs]>>}
+    ELSE {}
+
+NativeCheckedAddEdges(state, action, rhs) ==
+    IF AddWouldOverflow(state[Key], rhs)
+    THEN {}
+    ELSE {<<state, action,
+             [state EXCEPT ![Key] = state[Key] + rhs]>>}
+
+SourceCheckedAddFailures(state, action, rhs) ==
+    IF WithinSwiftInt(state[Key] + rhs)
+    THEN {}
+    ELSE {<<state, action, "addition", <<state[Key], rhs>>>>}
+
+EmittedCheckedAddFailures(state, action, rhs) ==
+    IF EmittedAddDefined(state[Key], rhs)
+    THEN {}
+    ELSE {<<state, action, "addition", <<state[Key], rhs>>>>}
+
+NativeCheckedAddFailures(state, action, rhs) ==
+    IF AddWouldOverflow(state[Key], rhs)
+    THEN {<<state, action, "addition", <<state[Key], rhs>>>>}
+    ELSE {}
+
+THEOREM RootAdditionPreservesCompleteLabeledEdgesAndFailures ==
+    ASSUME NEW state \in [Vars -> Int],
+           NEW action \in ActionLabels,
+           NEW rhs \in Int,
+           WithinSwiftInt(state[Key]),
+           WithinSwiftInt(rhs),
+           SwiftIntMin <= -2000000000,
+           2000000000 <= SwiftIntMax
+    PROVE /\ SourceCheckedAddEdges(state, action, rhs)
+               = EmittedCheckedAddEdges(state, action, rhs)
+          /\ SourceCheckedAddEdges(state, action, rhs)
+               = NativeCheckedAddEdges(state, action, rhs)
+          /\ SourceCheckedAddFailures(state, action, rhs)
+               = EmittedCheckedAddFailures(state, action, rhs)
+          /\ SourceCheckedAddFailures(state, action, rhs)
+               = NativeCheckedAddFailures(state, action, rhs)
+    PROOF
+    <1>1. state[Key] \in Int BY KeyIsVariable, SMT DEF KeyIsVariable
+    <1>2. EmittedAddDefined(state[Key], rhs)
+            <=> WithinSwiftInt(state[Key] + rhs)
+        BY <1>1, EmittedAddGuardMatchesCheckedInt, SMT
+    <1>3. AddWouldOverflow(state[Key], rhs)
+            <=> ~WithinSwiftInt(state[Key] + rhs)
+        BY <1>1, AddOverflowGuardMatchesCheckedInt, SMT
+    <1>. QED BY <1>2, <1>3, SMT DEF SourceCheckedAddEdges,
+        EmittedCheckedAddEdges, SourceCheckedAddFailures,
+        EmittedCheckedAddFailures, NativeCheckedAddEdges,
+        NativeCheckedAddFailures
 
 THEOREM CurrentAdditionAgreementIsExactlyRangeSafety ==
     \A lhs, rhs \in Int :
@@ -2723,12 +2896,12 @@ THEOREM EmittedIntegerChoiceAtTwo ==
     <1>1. {member \in {1, 2, 3} : member > 2} = {3}
         BY SMT
     <1>2. {3} \in SUBSET Int /\ 3 \in {3}
-        /\ (\A other \in {3} : 3 <= other)
+        /\ (\A other \in {3} : 3 <= other) /\ (\E member \in {1, 2, 3} : member > 2)
         BY SMT
     <1>3. (CHOOSE member \in {3} :
               \A other \in {3} : member <= other) = 3
         BY <1>2, UniqueMinimumIntegerChoice, SMT
-    <1>. QED BY <1>1, <1>3, SMT DEF IntegerChoice!advance
+    <1>. QED BY <1>1, <1>2, <1>3, SMT DEF IntegerChoice!advance
 
 THEOREM EmittedIntegerChoiceMatchesSourceWhenDefined ==
     choiceSelected \in 0..2 =>
@@ -2796,36 +2969,6 @@ THEOREM ReversedIntegerChoiceAtZeroDisagrees ==
         \A other \in {1, 2, 3} : member >= other) = 3
     BY SMT
 
-BooleanChoice == INSTANCE BooleanSelection
-    WITH pc <- dependentPC, flag <- choiceSelected
-
-THEOREM LeastBooleanChoice ==
-    (CHOOSE member \in {FALSE, TRUE} :
-        \A other \in {FALSE, TRUE} :
-            member = FALSE \/ other = TRUE) = FALSE
-    BY SMT
-
-THEOREM EmittedBooleanChoiceInitialState ==
-    BooleanChoice!Init <=>
-        (dependentPC = "select" /\ choiceSelected = TRUE)
-    BY SMT DEF BooleanChoice!Init
-
-SourceBooleanChoice ==
-    dependentPC = "select"
-    /\ choiceSelected' = FALSE
-    /\ dependentPC' = "Done"
-
-THEOREM EmittedBooleanChoiceMatchesSource ==
-    BooleanChoice!select <=> SourceBooleanChoice
-    BY LeastBooleanChoice, SMT
-        DEF BooleanChoice!select, SourceBooleanChoice
-
-THEOREM ReversedBooleanChoiceWouldChangeStep ==
-    (CHOOSE member \in {FALSE, TRUE} :
-        \A other \in {FALSE, TRUE} :
-            member = TRUE \/ other = FALSE) = TRUE
-    BY SMT
-
 CurrentNativeSubtractOutcome(lhs, rhs) ==
     IF WithinSwiftInt(lhs - rhs)
     THEN <<"value", lhs - rhs>>
@@ -2838,11 +2981,16 @@ CurrentNativeMultiplyOutcome(lhs, rhs) ==
     ELSE <<"overflow">>
 CurrentRenderedMultiplyOutcome(lhs, rhs) == <<"value", lhs * rhs>>
 
-CurrentNativeNegateOutcome(value) ==
+NativeNegateOutcome(value) ==
     IF WithinSwiftInt(-value)
     THEN <<"value", -value>>
-    ELSE <<"overflow">>
-CurrentRenderedNegateOutcome(value) == <<"value", -value>>
+    ELSE <<"overflow", "negation", <<value>>>>
+UncheckedRenderedNegateOutcome(value) == <<"value", -value>>
+EmittedNegateDefined(value) == value # SwiftIntMin
+CheckedRenderedNegateOutcome(value) ==
+    IF EmittedNegateDefined(value)
+    THEN <<"value", -value>>
+    ELSE <<"overflow", "negation", <<value>>>>
 
 THEOREM CurrentSubtractionAgreementIsExactlyRangeSafety ==
     \A lhs, rhs \in Int :
@@ -2862,14 +3010,82 @@ THEOREM CurrentMultiplicationAgreementIsExactlyRangeSafety ==
     BY SMT DEF CurrentNativeMultiplyOutcome,
         CurrentRenderedMultiplyOutcome, WithinSwiftInt
 
-THEOREM CurrentNegationAgreementIsExactlyRangeSafety ==
+THEOREM UncheckedNegationAgreementIsExactlyRangeSafety ==
     \A value \in Int :
         WithinSwiftInt(value) =>
-            ((CurrentNativeNegateOutcome(value)
-              = CurrentRenderedNegateOutcome(value))
+            ((NativeNegateOutcome(value)
+              = UncheckedRenderedNegateOutcome(value))
              <=> WithinSwiftInt(-value))
-    BY SMT DEF CurrentNativeNegateOutcome,
-        CurrentRenderedNegateOutcome, WithinSwiftInt
+    BY SMT DEF NativeNegateOutcome,
+        UncheckedRenderedNegateOutcome, WithinSwiftInt
+
+THEOREM CheckedNegationGuardMatchesSwiftInt ==
+    ASSUME NEW value \in Int, WithinSwiftInt(value),
+           SwiftIntMin = -SwiftIntMax - 1
+    PROVE EmittedNegateDefined(value) <=> WithinSwiftInt(-value)
+    BY SwiftIntBounds, SMT DEF EmittedNegateDefined,
+        WithinSwiftInt, SwiftIntBounds
+
+THEOREM CheckedNegationPreservesValueAndFailure ==
+    ASSUME NEW value \in Int, WithinSwiftInt(value),
+           SwiftIntMin = -SwiftIntMax - 1
+    PROVE CheckedRenderedNegateOutcome(value) = NativeNegateOutcome(value)
+    BY CheckedNegationGuardMatchesSwiftInt, SMT
+        DEF CheckedRenderedNegateOutcome, NativeNegateOutcome
+
+SourceNegateEdges(state, action) ==
+    IF WithinSwiftInt(-state[Key])
+    THEN {<<state, action, [state EXCEPT ![Key] = -state[Key]]>>}
+    ELSE {}
+EmittedNegateEdges(state, action) ==
+    IF EmittedNegateDefined(state[Key])
+    THEN {<<state, action, [state EXCEPT ![Key] = -state[Key]]>>}
+    ELSE {}
+UncheckedNegateEdges(state, action) ==
+    {<<state, action, [state EXCEPT ![Key] = -state[Key]]>>}
+SourceNegateFailures(state, action) ==
+    IF WithinSwiftInt(-state[Key])
+    THEN {}
+    ELSE {<<state, action, "negation", <<state[Key]>>>>}
+EmittedNegateFailures(state, action) ==
+    IF EmittedNegateDefined(state[Key])
+    THEN {}
+    ELSE {<<state, action, "negation", <<state[Key]>>>>}
+
+THEOREM RootNegationPreservesCompleteLabeledEdgesAndFailures ==
+    ASSUME NEW state \in [Vars -> Int],
+           NEW action \in ActionLabels,
+           WithinSwiftInt(state[Key]),
+           SwiftIntMin = -SwiftIntMax - 1
+    PROVE /\ SourceNegateEdges(state, action)
+                = EmittedNegateEdges(state, action)
+          /\ SourceNegateFailures(state, action)
+                = EmittedNegateFailures(state, action)
+    PROOF
+    <1>1. state[Key] \in Int BY KeyIsVariable, SMT DEF KeyIsVariable
+    <1>2. EmittedNegateDefined(state[Key])
+            <=> WithinSwiftInt(-state[Key])
+        BY <1>1, CheckedNegationGuardMatchesSwiftInt, SMT
+    <1>. QED BY <1>2, SMT DEF SourceNegateEdges,
+        EmittedNegateEdges, SourceNegateFailures,
+        EmittedNegateFailures
+
+THEOREM UncheckedNegationAddsAnInvalidLabeledEdge ==
+    ASSUME SwiftIntMin = -SwiftIntMax - 1,
+           NEW action \in ActionLabels
+    PROVE SourceNegateEdges([key \in Vars |-> SwiftIntMin], action)
+          # UncheckedNegateEdges([key \in Vars |-> SwiftIntMin], action)
+    PROOF
+    <1>1. Key \in Vars BY KeyIsVariable DEF KeyIsVariable
+    <1>2. ~WithinSwiftInt(-SwiftIntMin)
+        BY SwiftIntBounds, SMT DEF WithinSwiftInt, SwiftIntBounds
+    <1>3. [key \in Vars |-> SwiftIntMin][Key] = SwiftIntMin
+        BY <1>1, SMT
+    <1>4. SourceNegateEdges([key \in Vars |-> SwiftIntMin], action) = {}
+        BY <1>2, <1>3, SMT DEF SourceNegateEdges
+    <1>5. UncheckedNegateEdges([key \in Vars |-> SwiftIntMin], action) # {}
+        BY SMT DEF UncheckedNegateEdges
+    <1>. QED BY <1>4, <1>5
 
 THEOREM EmittedOrderedArithmeticIsRepresentable ==
     OrderedReachable =>
@@ -2882,9 +3098,15 @@ THEOREM EmittedOrderedArithmeticIsRepresentable ==
     BY SwiftIntBounds, SMT DEF OrderedReachable, WithinSwiftInt, SwiftIntBounds
 
 OrderedStates ==
-    [pc: {"copy", "repeatWrites", "Done"}, x: Int, y: Int]
+    {[pc |-> "copy", x |-> 1, y |-> 0],
+     [pc |-> "repeatWrites", x |-> 2, y |-> 2],
+     [pc |-> "Done", x |-> 4, y |-> 2]}
 OrderedBefore == [pc |-> orderedPC, x |-> orderedX, y |-> orderedY]
 OrderedAfter == [pc |-> orderedPC', x |-> orderedX', y |-> orderedY']
+
+THEOREM OrderedStateSetIsReachable ==
+    OrderedReachable <=> OrderedBefore \in OrderedStates
+    BY SMT DEF OrderedReachable, OrderedBefore, OrderedStates
 
 OrderedSuccessor(state) ==
     IF state.pc = "copy"
@@ -2909,27 +3131,33 @@ THEOREM OrderedHasNoRelationalDeadlock ==
     BY OrderedSuccessorIsTotal
 
 THEOREM EmittedOrderedCompleteStateRelation ==
-    ASSUME OrderedTypeOK,
+    ASSUME OrderedReachable,
            OrderedAfter \in OrderedStates
     PROVE Repeated!Next <=> OrderedStepRelation(OrderedBefore, OrderedAfter)
-    BY EmittedOrderedNext, SMT DEF OrderedStepRelation,
-        OrderedSuccessor, OrderedStates, OrderedTypeOK,
+    BY EmittedOrderedNext, OrderedStateSetIsReachable,
+        OrderedReachableAdditionsDefined, SMT
+        DEF OrderedStepRelation,
+        OrderedSuccessor, OrderedStates, OrderedReachable,
         OrderedBefore, OrderedAfter, SourceOrderedNext,
         SourceOrderedCopyStep, SourceRepeatedWrites,
-        SourceOrderedTerminating
+        SourceOrderedTerminating, OrderedAddDefined
 
 THEOREM EmittedOrderedExactRelation ==
-    ASSUME OrderedTypeOK
+    ASSUME OrderedReachable
     PROVE Repeated!Next <=> OrderedStepRelation(OrderedBefore, OrderedAfter)
     PROOF
     <1>1. Repeated!Next => OrderedAfter \in OrderedStates
-        BY OrderedStepPreservesType,
-            SMT DEF OrderedAfter, OrderedStates, OrderedTypeOK
+        BY EmittedOrderedNext, OrderedStateSetIsReachable,
+            OrderedReachableAdditionsDefined, SMT
+            DEF OrderedAfter, OrderedStates,
+            OrderedReachable, SourceOrderedNext, SourceOrderedCopyStep,
+            SourceRepeatedWrites, SourceOrderedTerminating,
+            OrderedAddDefined
     <1>2. OrderedStepRelation(OrderedBefore, OrderedAfter)
             => OrderedAfter \in OrderedStates
         BY OrderedSuccessorIsTotal,
             SMT DEF OrderedStepRelation, OrderedBefore, OrderedStates,
-                OrderedTypeOK
+                OrderedReachable
     <1>. QED
         BY <1>1, <1>2, EmittedOrderedCompleteStateRelation
 
@@ -2997,7 +3225,15 @@ RepeatedInstructions ==
       [target |-> "orderedPC", rhs |-> [state \in States |-> "Done"]]>>
 RepeatedGuards ==
     [index \in 0..3 |-> [state \in States |->
-        IF index = 0 THEN state["orderedPC"] = "repeatWrites" ELSE TRUE]]
+        IF index = 0 THEN state["orderedPC"] = "repeatWrites"
+            /\ (IF state["orderedX"] \in Int
+                THEN OrderedAddDefined(state["orderedX"])
+                ELSE FALSE)
+        ELSE IF index = 1 THEN
+            IF state["orderedX"] \in Int
+            THEN OrderedAddDefined(state["orderedX"])
+            ELSE FALSE
+        ELSE TRUE]]
 RepeatedAfterFirst == [RepeatedBefore EXCEPT !["orderedX"] = orderedX + 1]
 RepeatedAfterSecond == [RepeatedAfterFirst EXCEPT !["orderedX"] = orderedX + 2]
 RepeatedAfterThird == [RepeatedAfterSecond EXCEPT !["orderedPC"] = "Done"]
@@ -3025,7 +3261,7 @@ THEOREM EmittedRepeatedWritesMatchesGuardedHistory ==
         BY <1>1, SMT DEF RepeatedInstructions, Instructions, States
     <1>3. RepeatedGuards \in GuardPlans(RepeatedInstructions)
         BY <1>1, <1>2, SMT DEF RepeatedGuards, GuardPlans, States,
-            RepeatedInstructions
+            RepeatedInstructions, OrderedAddDefined
     <1>4. RepeatedWitnessHistory \in [0..Len(RepeatedInstructions) -> States]
         BY <1>1, SMT DEF RepeatedWitnessHistory, RepeatedAfterFirst,
             RepeatedAfterSecond, RepeatedAfterThird, RepeatedInstructions, States
@@ -3054,17 +3290,28 @@ THEOREM EmittedRepeatedWritesMatchesGuardedHistory ==
                 /\ orderedPC' = "Done"
         BY SMT DEF RepeatedAfterThird, RepeatedAfterSecond,
             RepeatedAfterFirst, RepeatedBefore, RepeatedAfter, States
-    <1>9. RepeatedGuards[0][RepeatedWitnessHistory[0]]
-            <=> orderedPC = "repeatWrites"
-        BY <1>4, SMT DEF RepeatedGuards, RepeatedWitnessHistory,
+    <1>8a. /\ RepeatedWitnessHistory[0]["orderedX"] = orderedX
+             /\ RepeatedWitnessHistory[1]["orderedX"] = orderedX + 1
+        BY <1>4, SMT DEF RepeatedWitnessHistory, RepeatedAfterFirst,
             RepeatedBefore, States
-    <1>10. \A index \in 1..3 :
+    <1>9. RepeatedGuards[0][RepeatedWitnessHistory[0]]
+            <=> orderedPC = "repeatWrites" /\ OrderedAddDefined(orderedX)
+        BY <1>4, <1>8a, SMT DEF RepeatedGuards,
+            RepeatedWitnessHistory, RepeatedBefore, States
+    <1>10. RepeatedGuards[1][RepeatedWitnessHistory[1]]
+            <=> OrderedAddDefined(orderedX + 1)
+        BY <1>4, <1>8a, SMT DEF RepeatedGuards,
+            RepeatedWitnessHistory, RepeatedAfterFirst,
+            RepeatedBefore, States
+    <1>10a. \A index \in 2..3 :
             RepeatedGuards[index][RepeatedWitnessHistory[index]]
         BY <1>4, SMT DEF RepeatedGuards, RepeatedWitnessHistory, States
     <1>11. (\A index \in 0..Len(RepeatedInstructions) :
             RepeatedGuards[index][RepeatedWitnessHistory[index]])
             <=> orderedPC = "repeatWrites"
-        BY <1>9, <1>10, SMT DEF RepeatedInstructions
+                /\ OrderedAddDefined(orderedX)
+                /\ OrderedAddDefined(orderedX + 1)
+        BY <1>9, <1>10, <1>10a, SMT DEF RepeatedInstructions
     <1>12. SourceGuardedDoStep(
             RepeatedBefore, RepeatedInstructions, RepeatedGuards, RepeatedAfter)
             => SourceRepeatedWrites
