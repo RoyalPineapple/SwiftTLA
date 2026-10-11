@@ -1,5 +1,5 @@
 --------------------- MODULE EnumSelectionProof ---------------------
-EXTENDS TLAPS, Integers
+EXTENDS TLAPS, Integers, EnumSelection
 
 Members == {"alpha", "zed"}
 Rank(value) == CASE value = "alpha" -> 0 [] value = "zed" -> 1
@@ -67,5 +67,40 @@ THEOREM ReversedEnumOrderChangesCompleteEdge ==
             ReversedFirst([member \in Members |-> TRUE])]>>}
     BY ReversedEnumOrderChangesResult, SMT
         DEF NativeEdges, NativeFirst, Matches, Members
+
+SourceInit == pc = "select" /\ selected = "zed"
+SourceSelect == pc = "select" /\ selected' = "alpha" /\ pc' = "Done"
+SourceTerminating == pc = "Done" /\ UNCHANGED <<pc, selected>>
+SourceNext == SourceSelect \/ SourceTerminating
+SourceLabeledSelect(label) == label = "select" /\ SourceSelect
+SourceLabeledTerminating(label) ==
+    label = "Terminating" /\ SourceTerminating
+EmittedLabeledSelect(label) == label = "select" /\ select
+EmittedLabeledTerminating(label) ==
+    label = "Terminating" /\ Terminating
+
+THEOREM EmittedEnumChoiceMatchesSource ==
+    select <=> SourceSelect
+    BY CanonicalEnumSelectionMatchesSwiftOrder, SMT
+        DEF select, SourceSelect, CanonicalFirst, NativeFirst, Matches, Members, Rank
+
+THEOREM EmittedEnumChoiceHasNoFailure ==
+    ~__SwiftTLAChoiceFailure0
+    BY SMT DEF __SwiftTLAChoiceFailure0
+
+THEOREM CompleteEmittedEnumSelection ==
+    ASSUME NEW label
+    PROVE /\ (Init <=> SourceInit)
+          /\ (Next <=> SourceNext)
+          /\ (SourceLabeledSelect(label) <=> EmittedLabeledSelect(label))
+          /\ (SourceLabeledTerminating(label)
+                <=> EmittedLabeledTerminating(label))
+          /\ ~__SwiftTLAChoiceFailure0
+          /\ __SwiftTLAEvaluationOK
+    BY EmittedEnumChoiceMatchesSource, EmittedEnumChoiceHasNoFailure, SMT
+        DEF Init, SourceInit, Next, SourceNext, Terminating,
+            SourceTerminating, SourceLabeledSelect, EmittedLabeledSelect,
+            SourceLabeledTerminating, EmittedLabeledTerminating,
+            __SwiftTLAEvaluationOK
 
 =====================================================================

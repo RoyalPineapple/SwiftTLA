@@ -143,6 +143,11 @@ struct TypedSelectionTests {
         let renderedAction = try #require(module.split(separator: "\n").first { $0.hasPrefix("select ==") })
         #expect(renderedAction.contains("= \"alpha\" -> 0 []"))
         #expect(renderedAction.contains("= \"zed\" -> 1"))
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/EnumSelection.tla")
+            .standardizedFileURL
+        #expect(module == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
     @Test("An empty matching domain fails when the choice is evaluated")

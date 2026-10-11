@@ -417,12 +417,15 @@ pinned, but actual no-match and predicate-evaluation paths remain uncovered.
 
 `EnumSelectionProof.tla` proves that the two-case sorted enum rank chooses the
 same member as generated Swift for every predicate, with equal labeled edges
-and no-match failures. Reversing the rank changes an edge. The authored
-`EnumSelection` test checks its compiled choice, actual Swift transition, and
-the rank in both generated and direct TLA+ outputs. This is a concrete
-finite-enum instance, not a proof for every enum cardinality or every emitted
-program. It still trusts the Swift execution kernel and the unverified emitter
-link; other accepted value families remain uncovered.
+and no-match failures. Reversing the rank changes an edge. It also imports the
+complete generated `EnumSelection.tla` module and proves its initial state,
+`Next`, labeled actions, and passing evaluation check match this source case.
+The authored test pins that exact TLA+ module, checks direct rendering and the
+actual Swift transition, while `GeneratedSelectionProofTests` pins the emitted
+Swift choice cache and complete update function. This is a concrete finite-enum
+output link, not a proof for every enum cardinality or every emitted program.
+It still trusts Swift's `Result`, `_NativeMachineOperations.choose`, and update
+merging; other accepted value families remain uncovered.
 
 Typed `Select` now carries its integer, Boolean, or finite-enum result type
 through source lowering, so `spec.compile().render()` uses the same least-member

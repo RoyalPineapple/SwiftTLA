@@ -15,6 +15,7 @@ struct GeneratedSelectionProofTests {
         let cases = [
             (model: "IncreasingSelection", witness: "GeneratedSelectionSwiftWitness.txt", cache: false),
             (model: "BooleanSelection", witness: "GeneratedBooleanSelectionSwiftWitness.txt", cache: true),
+            (model: "EnumSelection", witness: "GeneratedEnumSelectionSwiftWitness.txt", cache: true),
             (model: "MissingStringSelection", witness: "GeneratedMissingStringSelectionSwiftWitness.txt", cache: true)
         ]
         for entry in cases {
