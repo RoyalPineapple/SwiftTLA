@@ -248,17 +248,52 @@ private struct ReachableInvariantFailure {
     func renderedOverflowMatchesGeneratedFailure() throws {
         let compiled = try CheckedExecutionOverflow.spec.compile()
         let count = try #require(compiled.layout.variables.first { $0.declaration.name == "count" })
+        let pc = try #require(compiled.layout.variables.first { $0.declaration.name == "pc" })
+        let advance = try #require(compiled.layout.controlLocations.first { $0.renderedName == "advance" })
+        let done = try #require(compiled.layout.controlLocations.first { $0.renderedName == "Done" })
+        let actionLayout = try #require(compiled.layout.actions.first { $0.renderedName == "advance" })
+        let termination = try #require(compiled.layout.actions.first { $0.isTermination })
         let compiledAction = try #require(compiled.semantics.behavior.actions.first)
-        guard case .and(.guard_, let body) = compiledAction.body,
-              case .define(_, let addition, _) = body,
+        #expect(compiled.layout.variables.count == 2)
+        #expect(compiled.layout.controlLocations.count == 2)
+        #expect(compiled.layout.actions.count == 2)
+        #expect(compiled.semantics.behavior.actions.count == 2)
+        #expect(!actionLayout.isTermination)
+        #expect(compiledAction.id == actionLayout.id)
+        #expect(compiledAction.bindings.isEmpty)
+        #expect(compiled.semantics.behavior.actions[1].id == termination.id)
+        guard case .and(.guard_(let controlGuard), let body) = compiledAction.body,
+              case .equal = controlGuard.operation, controlGuard.children.count == 2,
+              case .stateVariable(let controlRead) = controlGuard.children[0].operation,
+              case .controlLocation(let start) = controlGuard.children[1].operation else {
+            Issue.record("The authored step no longer lowers to the proved control guard")
+            return
+        }
+        guard case .define(let result, let addition, let writes) = body,
               case .add = addition.operation,
               addition.children.count == 2,
               case .stateVariable(let source) = addition.children[0].operation,
               case .value(.integer(1)) = addition.children[1].operation else {
-            Issue.record("The authored addition no longer lowers to the checked root-addition rule")
+            Issue.record("The authored step no longer lowers to the proved checked-addition binding")
             return
         }
+        guard case .and(let stepBody, let controlWrite) = writes,
+              case .and(.guard_(let stepGuard), let countWrite) = stepBody,
+              case .value(.boolean(true)) = stepGuard.operation,
+              case .assign(let countTarget, let countValue) = countWrite,
+              case .boundValue(let usedResult) = countValue.operation,
+              case .assign(let controlTarget, let controlValue) = controlWrite,
+              case .controlLocation(let next) = controlValue.operation else {
+            Issue.record("The authored step no longer lowers to the proved complete-state updates")
+            return
+        }
+        #expect(controlRead == pc.id && start == advance.id)
         #expect(source == count.id)
+        #expect(countTarget == count.id && usedResult == result)
+        #expect(controlTarget == pc.id && next == done.id)
+        #expect([controlGuard.children[0], controlGuard.children[1], addition.children[0],
+                 addition.children[1], stepGuard, countValue, controlValue]
+            .allSatisfy { $0.children.isEmpty })
 
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(

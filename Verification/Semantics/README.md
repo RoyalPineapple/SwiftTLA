@@ -61,10 +61,11 @@ TLA+ action has no overflowing successor and exposes a failure predicate,
 the `addition` operation identity, and the complete operands. An exact-output
 test pins the generated module used
 by `CheckedExecutionOverflowProof.tla`; `SingleAssignment.tla` separately
-proves the generic addition guard. The same focused test checks that this
-authored `count + 1` lowers to a guarded root addition of the `count` state
-variable and literal `1`. It checks the complete token stream of the emitted
-Swift action against `CheckedExecutionOverflowSwiftWitness.txt`, including the
+proves the generic addition guard. The same focused test checks the complete
+compiled `advance` action. It requires the control guard, bound `count + 1`
+addition, count update, and transition to `Done`. It identifies the separate
+internal terminating action. The test checks every token of the emitted Swift
+action against `CheckedExecutionOverflowSwiftWitness.txt`, including the
 control guard, ordered operands, checked-addition call, count update, and
 control-state update. It also checks that the generated machine identifies
 that action as the rendered `advance` action with no arguments and projects
