@@ -404,9 +404,15 @@ the empty failure outcome and passing generated evaluation check. Its
 reversed-order theorem is a negative control:
 choosing `TRUE` would change the emitted step. CI checks this module separately,
 and the frozen diagnostic on SHA `337c76cf` [proved all 37 obligations](https://github.com/RoyalPineapple/SwiftTLA/actions/runs/38134117416/job/114454364613).
-This is one concrete nonempty Boolean output pair, not a proof for every Boolean predicate or generated Swift expression;
-its guarded output is pinned, but general no-match and predicate-evaluation
-failures remain uncovered.
+The reusable rule now quantifies over every Boolean predicate and every complete
+`pc`/`flag` state. It proves equality of source case-split, compiled sorted-first,
+and TLA+ least-member labeled edge sets, plus the no-match failure set. A
+reversed-order rule changes the complete edge, not merely the selected value.
+The generated-output test links one instance to actual Swift and TLA+ emissions;
+it does not yet certify those emitters for every accepted predicate.
+This is one concrete nonempty Boolean output pair, not an output link for
+every Boolean predicate or generated Swift expression. Its guarded output is
+pinned, but actual no-match and predicate-evaluation paths remain uncovered.
 
 Typed `Select` now carries its integer or Boolean result type through source
 lowering, so `spec.compile().render()` uses the same least-member rule as the
