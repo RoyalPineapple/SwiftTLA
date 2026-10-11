@@ -2340,7 +2340,7 @@ private extension CompiledModuleMetadata {
                 let operationHeader = parameters.isEmpty ? operationName : "\(operationName)(\(parameters))"
                 let failureDeclaration = "\(failureHeader) == \(overflow.predicate)"
                 let operandsDeclaration = "\(operandsHeader) == \(overflow.operands)"
-                let operationDeclaration = "\(operationHeader) == \"\(NativeMachineEvaluationError.IntegerOperation.addition.rawValue)\""
+                let operationDeclaration = "\(operationHeader) == \"\(overflow.operation.rawValue)\""
                 lines.append(failureDeclaration)
                 lines.append(operandsDeclaration)
                 lines.append(operationDeclaration)

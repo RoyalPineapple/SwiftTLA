@@ -106,6 +106,34 @@ private struct CheckedExecutionOverflow {
 }
 
 @TLAModel
+private struct CheckedSubtractionOverflow {
+    enum Step: String, CaseIterable { case advance }
+    static var spec: TLASpec {
+        #spec("CheckedSubtractionOverflow") {
+            let algorithm = Algorithm(label: "CheckedSubtractionOverflow", scoped: { scope in
+                let count = scope.sharedVar(_name: "count", in: Set<Int>([3, 9_223_372_036_854_775_807]))
+                Do(Step.advance) { Assign(count, to: count - (-1)) }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
+private struct CheckedSubtractionUnderflow {
+    enum Step: String, CaseIterable { case advance }
+    static var spec: TLASpec {
+        #spec("CheckedSubtractionUnderflow") {
+            let algorithm = Algorithm(label: "CheckedSubtractionUnderflow", scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: -9_223_372_036_854_775_807)
+                Do(Step.advance) { Assign(count, to: count - 2) }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
 private struct CheckedExecutionBeyondTLCIntegerRange {
     enum Step: String, CaseIterable { case advance }
     static var spec: TLASpec {
@@ -359,6 +387,80 @@ private struct ReachableInvariantFailure {
         #expect(plusCal.contains(operands))
         #expect(plusCal.contains(operation))
         #expect(plusCal.contains(evaluation))
+    }
+
+    @Test("generated subtraction preserves complete transitions and overflow failures")
+    func subtractionPreservesGeneratedOutcomes() throws {
+        let compiled = try CheckedSubtractionOverflow.spec.compile()
+        let step = try #require(compiled.semantics.behavior.actions.first)
+        guard case .and(.guard_(let control), let body) = step.body,
+              case .equal = control.operation,
+              case .define(_, let value, _) = body,
+              case .subtract = value.operation,
+              value.children.count == 2,
+              case .stateVariable = value.children[0].operation,
+              case .value(.integer(-1)) = value.children[1].operation else {
+            Issue.record("The authored step no longer lowers to the checked subtraction rule")
+            return
+        }
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "CheckedSubtractionOverflow", program: program))
+        let swiftAction = try #require(try emitter.machineMembers().first {
+            $0.description.contains("private static func _visitUpdates0(")
+        }?.description)
+        let additionWitness = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
+            .standardizedFileURL
+        let expectedSwift = try String(contentsOf: additionWitness, encoding: .utf8)
+            .replacingOccurrences(of: "let _arithmetic1: Int = 1", with: "let _arithmetic1: Int = -1")
+            .replacingOccurrences(of: "_NativeMachineOperations.add", with: "_NativeMachineOperations.subtract")
+        let actualTokens = Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
+        let expectedTokens = Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text)
+        #expect(actualTokens == expectedTokens)
+
+        let initial = try CheckedSubtractionOverflow.initialMachines()
+        #expect(Set(initial.map(\.state.count)) == [3, Int.max])
+        var successful = try CheckedSubtractionOverflow.makeMachine(.init(count: 3))
+        let transition = try successful.send(.advance)
+        #expect(transition.before.count == 3 && transition.after.count == 4)
+        let controlToken = try #require(TLAStateProjection.Token(validating: "pc"))
+        #expect(try successful.formalProjection(of: successful.snapshot).value(for: controlToken) == .string("Done"))
+
+        let machine = try CheckedSubtractionOverflow.makeMachine(.init(count: Int.max))
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(
+            .subtraction, operands: [Int.max, -1])) {
+            try machine.successors(for: .advance)
+        }
+
+        let rendered = try CheckedSubtractionOverflow.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let output = rendered.tlaBundle.root.tla
+        #expect(output.contains("__SwiftTLAOverflowOperation0 == \"subtraction\""))
+        #expect(output.contains("__SwiftTLAOverflowOperands0 == <<count, -1>>"))
+        let plusCal = try rendered.plusCalBundle().root.tla.split(separator: "\n")
+        let binding = try #require(plusCal.firstIndex { $0.contains("with (__atomic_0 =") })
+        let guardLine = plusCal[binding - 1].trimmingCharacters(in: .whitespaces)
+        let guard_ = try #require(guardLine.hasPrefix("when ") && guardLine.hasSuffix(";")
+            ? String(guardLine.dropFirst(5).dropLast()) : nil)
+        let small = "(count >= -1000000000 /\\ count <= 1000000000 /\\ -1 >= -1000000000 /\\ -1 <= 1000000000)"
+        let exact = "(IF -1 > 0 THEN count >= \(Int.min) + (-1) ELSE IF -1 < 0 THEN count <= \(Int.max) + (-1) ELSE TRUE)"
+        #expect(guard_ == "(IF \(small) THEN TRUE ELSE \(exact))")
+        #expect(output.contains("IF \(guard_) THEN"))
+        #expect(output.contains("__SwiftTLAOverflowFailure0 == (((pc = \"advance\")) = TRUE /\\ ~(\(guard_)))"))
+        #expect(plusCal.contains("__SwiftTLAOverflowOperation0 == \"subtraction\""))
+        #expect(plusCal.contains("__SwiftTLAOverflowOperands0 == <<count, -1>>"))
+
+        let underflow = try CheckedSubtractionUnderflow.makeMachine()
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(
+            .subtraction, operands: [Int.min + 1, 2])) {
+            try underflow.successors(for: .advance)
+        }
+        let underflowTLA = try CheckedSubtractionUnderflow.render().tlaBundle.root.tla
+        #expect(underflowTLA.contains("IF 2 > 0 THEN count >= \(Int.min) + (2)"))
+        #expect(underflowTLA.contains("__SwiftTLAOverflowOperation0 == \"subtraction\""))
+        #expect(underflowTLA.contains("__SwiftTLAOverflowOperands0 == <<count, 2>>"))
     }
 
     @Test("generated TLA export rejects a different target Int width")
