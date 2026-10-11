@@ -732,12 +732,20 @@ updates. Inverting the true-branch guard is rejected by the output check.
 `ConditionalStep.tla` separately proves that the emitted initial
 states, both conditional branches, terminating action, and `Next` match
 independently stated source relations over Boolean condition states. It also
-proves the generated temporal `Spec` equivalent to the source temporal spec
-conjoined with weak fairness on the source step, under a reachable-state type
-invariant. It proves that the complete state relation has a successor for
-every typed state. Direct `ENABLED` theorems also establish that the emitted
-`choose` and `Next` actions agree with the source relations on enabledness and
-deadlock for typed states. It covers one emitted
+states the compiled conditional as an explicit two-branch relation and proves
+its complete initial states and `Next` agree with the source before connecting
+the emitted TLA+ action. `ConditionalStepProofTests.compiledConditionalBranches`
+checks the actual compiled runtime's two initial states, labeled successor,
+prior-write branch selection, and disabledness after the step. A reversed
+compiled branch is a TLAPS negative control. The local proof passed all 203
+obligations, and the focused suite passed all three tests; this revision has
+not yet been hosted.
+The module also proves the generated temporal `Spec` equivalent to the source
+temporal spec conjoined with weak fairness on the source step, under a
+reachable-state type invariant. It proves that the complete state relation has
+a successor for every typed state. Direct `ENABLED` theorems establish that
+the emitted `choose` and `Next` actions agree with the source relations on
+enabledness and deadlock for typed states. It covers one emitted
 conditional with a prior write, not arbitrary conditions, expression failures,
 or the Swift emitter rule for arbitrary compiled programs. The Swift-output
 check is a fixture-specific link, not a machine-checked Swift semantics.
