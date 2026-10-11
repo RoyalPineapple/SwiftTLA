@@ -2972,6 +2972,36 @@ THEOREM ReversedIntegerChoiceAtZeroDisagrees ==
 BooleanChoice == INSTANCE BooleanSelection
     WITH pc <- dependentPC, flag <- choiceSelected
 
+BooleanMatches(predicate) ==
+    {member \in BOOLEAN : predicate[member]}
+CanonicalBooleanFirst(predicate) ==
+    CHOOSE member \in BooleanMatches(predicate) :
+        \A other \in BooleanMatches(predicate) :
+            member = FALSE \/ other = TRUE
+NativeBooleanFirst(predicate) ==
+    IF predicate[FALSE] THEN FALSE ELSE TRUE
+
+THEOREM CanonicalBooleanFirstMatchesSortedFirst ==
+    \A predicate \in [BOOLEAN -> BOOLEAN] :
+        BooleanMatches(predicate) # {} =>
+            CanonicalBooleanFirst(predicate) = NativeBooleanFirst(predicate)
+    BY SMT DEF BooleanMatches, CanonicalBooleanFirst, NativeBooleanFirst
+
+THEOREM BooleanFirstFailureMatchesEmptySet ==
+    \A predicate \in [BOOLEAN -> BOOLEAN] :
+        (~predicate[FALSE] /\ ~predicate[TRUE])
+            <=> BooleanMatches(predicate) = {}
+    BY SMT DEF BooleanMatches
+
+THEOREM BooleanFirstOutcomeMatchesSource ==
+    \A predicate \in [BOOLEAN -> BOOLEAN] :
+        /\ (BooleanMatches(predicate) = {}
+                <=> ~predicate[FALSE] /\ ~predicate[TRUE])
+        /\ (BooleanMatches(predicate) # {}
+                => CanonicalBooleanFirst(predicate) = NativeBooleanFirst(predicate))
+    BY CanonicalBooleanFirstMatchesSortedFirst,
+        BooleanFirstFailureMatchesEmptySet, SMT
+
 THEOREM LeastBooleanChoice ==
     (CHOOSE member \in {FALSE, TRUE} :
         \A other \in {FALSE, TRUE} :
