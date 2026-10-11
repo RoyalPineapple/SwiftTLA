@@ -326,6 +326,12 @@ non-unique Boolean choice. `TypedSelectionTests.booleanSelectionUsesLeastMember`
 checks that the authored Boolean domain and predicate lower to the compiled
 choice operation, then checks the actual generated Swift transition and exact
 TLA+ output;
+`GeneratedSelectionProofTests` token-checks the emitted closed-choice cache and
+complete update function against `GeneratedBooleanSelectionSwiftWitness.txt`.
+That witness sorts `FALSE` before `TRUE`, reads the cached selection, and
+merges the flag and control-location writes. The interpretation of Swift's
+`Result`, `_NativeMachineOperations.choose`, and update merging remains a
+trusted runtime boundary, not a TLAPS theorem.
 `EmittedBooleanChoiceInitialState` and `EmittedBooleanChoiceMatchesSource`
 prove the imported module's initial condition and complete labeled `select`
 step. `ReversedBooleanChoiceWouldChangeStep` proves that reversing the Boolean
