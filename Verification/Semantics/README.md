@@ -353,8 +353,8 @@ compares complete initial states, full `Next`, the `select` and internal
 the empty failure outcome and passing generated evaluation check. Its
 reversed-order theorem is a negative control:
 choosing `TRUE` would change the emitted step. CI checks this module separately,
-but the new module has not yet passed TLAPS and is not counted as proved. This is
-one concrete nonempty Boolean output pair, not a proof for every Boolean predicate or generated Swift expression;
+and the frozen diagnostic on SHA `337c76cf` [proved all 37 obligations](https://github.com/RoyalPineapple/SwiftTLA/actions/runs/38134117416/job/114454364613).
+This is one concrete nonempty Boolean output pair, not a proof for every Boolean predicate or generated Swift expression;
 its guarded output is pinned, but general no-match and predicate-evaluation
 failures remain uncovered.
 
@@ -790,8 +790,15 @@ does not yet have qualifying hosted evidence and is not the universal
 semantic-preservation admission check.
 The ordered two-addition regression passes focused Swift tests and its TLA
 fixture matches the actual renderer output; its revised `SingleAssignment.tla`
-proof is still open, and TLAPS stack-overflowed while processing the large
-module. Neither test result establishes the ordered failure theorem.
+proof is still open. On SHA `337c76cf`, the pinned TLAPS job reported five
+Zenon search exhaustions and then stack-overflowed in `Zenon.fmt_expr` while
+processing that module; it did not produce a proved-obligation total or identify
+one failed theorem. The same job proved all 192 `ConditionalStep.tla`
+obligations, but failed three of six `Int64LiteralArithmetic.tla` and five of
+41 `CheckedExecutionOverflowProof.tla` obligations at the known full-width
+literal boundary. The [retained diagnostic artifact](https://github.com/RoyalPineapple/SwiftTLA/actions/runs/38134117416/artifacts/11700481152)
+is evidence for these scoped results, not universal semantic admission. Neither
+test result establishes the ordered failure theorem.
 The older hosted run at `e77f1689` passed its diagnostic job and retained
 logs for 931 and 192 obligations respectively; those inputs precede the
 current lemmas and do not qualify this revision.
