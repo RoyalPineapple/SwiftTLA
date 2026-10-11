@@ -30,6 +30,10 @@ struct TypedSelectionTests {
         }
         #expect(choice.children.count == 2)
         let module = try IncreasingSelection.render().tlaBundle.root.tla
+        let direct = try compilation.render().tlaBundle.root.tla
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        #expect(direct.replacing(binder, with: "__SELECT_MEMBER__")
+            == module.replacing(binder, with: "__SELECT_MEMBER__"))
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/IncreasingSelection.tla")
@@ -91,6 +95,10 @@ struct TypedSelectionTests {
         #expect(!machine.state.flag)
 
         let module = try BooleanSelection.render().tlaBundle.root.tla
+        let direct = try compilation.render().tlaBundle.root.tla
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        #expect(direct.replacing(binder, with: "__SELECT_MEMBER__")
+            == module.replacing(binder, with: "__SELECT_MEMBER__"))
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/BooleanSelection.tla")

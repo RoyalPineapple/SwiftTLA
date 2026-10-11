@@ -342,17 +342,14 @@ pair, not a proof for every Boolean predicate or generated Swift expression;
 its guarded output is pinned, but general no-match and predicate-evaluation
 failures remain uncovered.
 
-There is a separate public-rendering discrepancy: for this same source model,
-`BooleanSelection.spec.compile().render()` does not equal
-`BooleanSelection.render()`. The direct compiled specification still carries
-the choice result as `.unknown` and its renderer falls back to ordinary
-`CHOOSE`; the generated model's type-resolved export emits the Boolean
-least-member rule. A focused local regression demonstrated the unequal
-outputs before this gap was recorded. The proof fixture is the actual
-generated-model export, not the direct untyped rendering. Universal output
-fidelity must either carry the source type context through the direct route
-or remove that route from the accepted `#spec` output contract; it cannot
-count these two outputs as equivalent.
+Typed `Select` now carries its integer or Boolean result type through source
+lowering, so `spec.compile().render()` uses the same least-member rule as the
+generated model export. Focused tests compare the two complete TLA modules for
+`IncreasingSelection` and `BooleanSelection`, normalizing only binder names
+derived from different source locations. The earlier direct-render mismatch is
+closed for these two shapes. Other accepted selection value types still need
+an explicit shared ordering rule and output-link proof; these tests do not
+establish universal choice fidelity or prove either emitter correct.
 
 ## Checked kernel lemma
 

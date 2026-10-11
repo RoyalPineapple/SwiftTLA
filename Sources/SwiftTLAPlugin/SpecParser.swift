@@ -727,11 +727,12 @@ final class ParserSession {
                     shape: typedFacadeValueType(candidatesSyntax, scope: scope)?.selectedElement)
               )
         else { return nil }
-        return .choose(
-            candidates,
-            canonicalBinding,
-            predicate
-        )
+        let preferredType: _SelectionResultTypeHint? = switch typedFacadeValueType(candidatesSyntax, scope: scope)?.selectedElement {
+        case .int: .init(.integer)
+        case .bool: .init(.boolean)
+        default: nil
+        }
+        return .choose(candidates, canonicalBinding, predicate, preferredType: preferredType)
     }
 
     private func decodeBoundedFilteredDomain(

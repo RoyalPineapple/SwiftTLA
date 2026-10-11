@@ -67,7 +67,7 @@ import SwiftTLAMacros
             try parseSpecTestExpression("x.becomes(StateExpr.any(from: StateExpr.set([1, 2, 3])))")
         )
         let expectedSet = StateExpr.setLiteral([.value(.int(1)), .value(.int(2)), .value(.int(3))])
-        guard case .assign(.named("x"), .choose(let domain, _, let predicate)) = decodedAction else {
+        guard case .assign(.named("x"), .choose(let domain, _, let predicate, _)) = decodedAction else {
             Issue.record("Expected a deterministic CHOOSE expression assignment")
             return
         }

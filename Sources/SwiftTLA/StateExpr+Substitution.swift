@@ -161,9 +161,9 @@ extension StateExpr {
         case .exists(let set, let binder, let predicate):
             let scoped = underBinder(binder, body: predicate)
             return .exists(sub(set), scoped.name, scoped.body)
-        case .choose(let set, let binder, let predicate):
+        case .choose(let set, let binder, let predicate, let preferredType):
             let scoped = underBinder(binder, body: predicate)
-            return .choose(sub(set), scoped.name, scoped.body)
+            return .choose(sub(set), scoped.name, scoped.body, preferredType: preferredType)
         case .sequenceFromSet(let s): return .sequenceFromSet(sub(s))
         case .sequenceFromFunction(let function): return .sequenceFromFunction(sub(function))
         case .printT(let value): return .printT(sub(value))
@@ -313,7 +313,8 @@ extension StateExpr {
             case .caseExpr(let pairs, let fallback): return .caseExpr(pairs.map(visit), fallback.map(visit))
             case .forAll(let set, let name, let body): return .forAll(visit(set), name, visitUnderBindings([name], body))
             case .exists(let set, let name, let body): return .exists(visit(set), name, visitUnderBindings([name], body))
-            case .choose(let set, let name, let body): return .choose(visit(set), name, visitUnderBindings([name], body))
+            case .choose(let set, let name, let body, let preferredType):
+                return .choose(visit(set), name, visitUnderBindings([name], body), preferredType: preferredType)
             case .sequenceFromSet(let value): return .sequenceFromSet(visit(value))
             case .sequenceFromFunction(let function): return .sequenceFromFunction(visit(function))
             case .printT(let value): return .printT(visit(value))
