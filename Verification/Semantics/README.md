@@ -143,6 +143,13 @@ A focused generated-machine test checks successful multiplication, positive and
 negative overflow without state changes, the emitted Swift action tokens, and
 the rendered TLA+/PlusCal guard, operation, and operands. It does not prove
 arbitrary emitter output or TLC execution beyond TLC's integer range.
+`CheckedGuardFailureProof.tla` proves a symbolic simplification of the emitted fast-path addition guard,
+source rule, and modeled native rule have the same complete labeled edge and
+addition-failure sets for a pure `When(count + 1 > 0)` condition; its unguarded
+negative control adds an invalid edge. All 10 obligations passed locally. The focused generated-machine
+test checks the successful native step, exact typed overflow and unchanged
+state, and emitted failure metadata. This proof is a symbolic rule, not yet an
+exact-output proof of the complete module or a proof of the Swift emitter.
 `SingleAssignment.tla`
 also proves the root negation guard, complete labeled edge/failure relation,
 and an unguarded counterexample under the explicit Swift signed-`Int` bound
@@ -150,7 +157,8 @@ relation. A focused generated-machine test exercises both a successful nested
 negation and `-Int.min` failure, and checks both ordered emitted failure sites;
 it does not yet pin the complete emitted module or prove the Swift emitter.
 Arithmetic under other expression operations, effectful operands,
-initialization, guards, multiplication, division, and target-width differences
+initialization, non-pure guards, failures after non-guard action prefixes,
+division, and target-width differences
 remain open. The universal theorem does
 not yet hold.
 `MachineValidator.run` now reports a typed early evaluation-failure event and
@@ -420,6 +428,10 @@ evidence is pending. The interpretation of the emitted Swift `Result`, `choose`,
 update merge remains a trusted runtime boundary. This is not a solution to
 non-unique String choice: the generated Swift machine still takes the first
 ordered member while rendered TLA+ uses unrestricted `CHOOSE` for that type.
+The chosen rule for this gap is a shared canonical order for every accepted
+selection type, emitted on both sides. It remains unimplemented until the
+ordering is defined for every value family, both outputs use it, and an
+output-linked proof checks observable non-unique choices.
 
 ## Checked kernel lemma
 
@@ -830,7 +842,7 @@ without fingerprint reuse, and retains the exact
 source SHA, TLA and Swift-witness input digests, tool versions/configuration, and separate
 proof logs. A changed archive fails its checksum. The revised
 `CheckedExecutionOverflowProof.tla`, `CheckedSubtractionProof.tla`,
-`CheckedMultiplicationProof.tla`,
+`CheckedMultiplicationProof.tla`, `CheckedGuardFailureProof.tla`,
 `MissingStringSelectionProof.tla`, and `SingleAssignment.tla` have passed
 locally on the current side-worktree inputs. None has qualifying hosted
 evidence. This job

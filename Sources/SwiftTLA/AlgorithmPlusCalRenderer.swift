@@ -150,7 +150,10 @@ internal struct AlgorithmPlusCalRenderer {
 
     private func render(statement: CompiledAuthoredPlusCalStatement, indent: String) throws -> [String] {
         switch statement {
-        case .when(let condition): return ["\(indent)when \(try expression(condition));"]
+        case .when(let condition):
+            let defined = try formalRenderer.evaluationDefined(condition)
+            return (defined.map { ["\(indent)when \($0);"] } ?? [])
+                + ["\(indent)when \(try expression(condition));"]
         case .assert(let condition): return ["\(indent)assert \(try expression(condition));"]
         case .set(let target, let value):
             return ["\(indent)\(try lvalue(target)) := \(try expression(value));"]
