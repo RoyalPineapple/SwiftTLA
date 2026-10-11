@@ -33,6 +33,20 @@ The current macro embeds TLA+ bounds using its build host's `Int` width.
 Generated export now rejects a different target `Int` width explicitly;
 cross-width builds remain unsupported rather than silently producing the
 wrong bounds.
+The pinned TLAPS 1.6.0-pre diagnostic cannot discharge the 64-bit literal
+lemmas in `Int64LiteralArithmetic.tla`: its [SMT standardizer converts each
+numeric literal with OCaml `int_of_string`](https://github.com/tlaplus/tlapm/blob/d8b9747/src/encode/n_standardize.ml#L244-L254),
+while a 64-bit OCaml host's `int` has only [63 bits](https://ocaml.org/manual/5.1/api/Sys.html).
+Switching these obligations to `BY Isa` does not solve the literal boundary:
+the pinned [Isabelle translator also calls `int_of_string`](https://github.com/tlaplus/tlapm/blob/d8b9747/src/backend/isabelle.ml#L451-L456).
+The hosted diagnostic failed on all three lemmas containing Swift `Int.max` or
+`Int.max - 1`; this is not a proof that the compiler's arithmetic is correct or
+incorrect. Do not merely spell the bounds as arithmetic over smaller literals:
+the same pinned tool [constant-folds with OCaml `int`
+arithmetic](https://github.com/tlaplus/tlapm/blob/d8b9747/src/smt/rewrite_arith.ml#L40-L62),
+which needs an independent overflow-safety argument. The full-width numeric
+facts need a proof-capable backend or a checked representation bridge before
+this output-linked slice can be admitted.
 Rendered TLA+ now guards a pure, root-level addition in an action binding
 and emits an overflow-failure predicate with the operand tuple. Other
 arithmetic forms and evaluation positions still use mathematical integers,
