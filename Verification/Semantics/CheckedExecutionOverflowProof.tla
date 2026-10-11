@@ -11,11 +11,19 @@ SourceStep ==
     /\ WithinSwiftInt(count + 1)
     /\ count' = count + 1
     /\ pc' = "Done"
+CompiledStep ==
+    /\ pc = "advance"
+    /\ LET result == count + 1 IN
+         /\ WithinSwiftInt(result)
+         /\ TRUE
+         /\ count' = result
+         /\ pc' = "Done"
 SourceTerminating ==
     /\ pc = "Done"
     /\ UNCHANGED <<pc, count>>
 SourceNext == SourceStep \/ SourceTerminating
 SourceLabeledMachineStep(label) == label = "advance" /\ SourceStep
+CompiledLabeledMachineStep(label) == label = "advance" /\ CompiledStep
 EmittedLabeledMachineStep(label) == label = "advance" /\ advance
 SourceFailure ==
     /\ pc = "advance"
@@ -23,6 +31,10 @@ SourceFailure ==
 SourceEvaluationOK == ~SourceFailure
 SourceFailures ==
     IF SourceFailure
+    THEN {<<pc, count, "advance", "addition", <<count, 1>>>>}
+    ELSE {}
+CompiledFailures ==
+    IF pc = "advance" /\ ~WithinSwiftInt(count + 1)
     THEN {<<pc, count, "advance", "addition", <<count, 1>>>>}
     ELSE {}
 EmittedFailures ==
@@ -35,11 +47,22 @@ THEOREM EmittedInitMatchesSource ==
     Init <=> SourceInit
     BY DEF Init, SourceInit, SwiftIntMax
 
+THEOREM CompiledStepAndFailureMatchSource ==
+    /\ (CompiledStep <=> SourceStep)
+    /\ CompiledFailures = SourceFailures
+    BY SMT DEF CompiledStep, SourceStep, CompiledFailures,
+        SourceFailures, SourceFailure
+
 THEOREM EmittedStepMatchesSource ==
     ASSUME count \in Int, WithinSwiftInt(count)
     PROVE advance <=> SourceStep
     BY SMT DEF advance, SourceStep, WithinSwiftInt,
         SwiftIntMin, SwiftIntMax
+
+THEOREM EmittedStepMatchesCompiled ==
+    ASSUME count \in Int, WithinSwiftInt(count)
+    PROVE advance <=> CompiledStep
+    BY CompiledStepAndFailureMatchSource, EmittedStepMatchesSource, SMT
 
 THEOREM EmittedTerminatingMatchesSource ==
     Terminating <=> SourceTerminating
@@ -78,6 +101,23 @@ THEOREM EmittedEvaluationCheckMatchesSource ==
     PROVE __SwiftTLAEvaluationOK <=> SourceEvaluationOK
     BY EmittedFailureMatchesSource, SMT
         DEF __SwiftTLAEvaluationOK, SourceEvaluationOK
+
+THEOREM CompleteCheckedAdditionBoundary ==
+    ASSUME count \in Int, WithinSwiftInt(count), NEW label
+    PROVE /\ (Init <=> SourceInit)
+          /\ (Next <=> SourceNext)
+          /\ (SourceLabeledMachineStep(label)
+                <=> CompiledLabeledMachineStep(label))
+          /\ (CompiledLabeledMachineStep(label)
+                <=> EmittedLabeledMachineStep(label))
+          /\ SourceFailures = CompiledFailures
+          /\ CompiledFailures = EmittedFailures
+          /\ (__SwiftTLAEvaluationOK <=> SourceEvaluationOK)
+    BY EmittedInitMatchesSource, EmittedNextMatchesSource,
+        CompiledStepAndFailureMatchSource, EmittedStepMatchesCompiled,
+        EmittedFailureRecordMatchesSource, EmittedEvaluationCheckMatchesSource,
+        SMT DEF SourceLabeledMachineStep, CompiledLabeledMachineStep,
+            EmittedLabeledMachineStep
 
 THEOREM InitialStateHasFailureAndNoStep ==
     Init =>
