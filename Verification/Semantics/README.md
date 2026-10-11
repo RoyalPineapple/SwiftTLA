@@ -302,8 +302,9 @@ The expression-level `StateExpr.choose` is distinct from the nondeterministic
 `Choose` algorithm statement. The generated Swift expression sorts its finite
 domain and returns the first satisfying member, or throws when none exists;
 the TLA+ renderer emits a least-member `CHOOSE` for integer, Boolean,
-finite-enum, and closed multi-member printable-ASCII String domains, but ordinary
-`CHOOSE` for other result types. Ordinary
+finite-enum, closed multi-member printable-ASCII String domains, and closed
+literal tuple/sequence domains with exact integer, Boolean, or printable-ASCII
+String members. It emits ordinary `CHOOSE` for other result types. Ordinary
 TLA+ `CHOOSE`
 permits an unspecified consistent witness and gives an arbitrary value when
 none satisfies the predicate ([Specifying Systems, §16.1.2](https://lamport.azurewebsites.net/tla/book-01-08-21.pdf)).
@@ -471,7 +472,29 @@ evidence is pending. The interpretation of the emitted Swift `Result`, `choose`,
 update merge remains a trusted runtime boundary. The chosen general rule is a
 shared canonical order for every accepted selection type, emitted on both
 sides. It remains incomplete: outside supported numeric, Boolean, enum, and
-closed printable-ASCII String domains, observable non-unique choices can still differ.
+closed printable-ASCII String and exact literal tuple domains, observable
+non-unique choices can still differ.
+
+`SequenceSelection` adds a closed `Set<[Int]>` case with three distinct
+sequence values. The earlier macro output used arbitrary `CHOOSE` while direct
+compilation ranked the values; after ranking the macro output, its choice
+failure guard was still absent because a `tupleLiteral` domain was not
+classified as repeatable. The renderer now extracts only literal tuple members
+and guards their total choice. `TypedSelectionTests.sequenceSelectionUsesLeastMember`
+checks the native state change, direct/macro TLA+ equality, and exact emitted
+`SequenceSelection.tla`. `GeneratedSelectionProofTests` checks the complete
+emitted Swift choice cache and action-update function against
+`GeneratedSequenceSelectionSwiftWitness.txt`.
+`SequenceSelectionProof.tla` proves, for every predicate on this three-member
+domain, equal complete labeled edges and no-match failures under the native
+lexicographic order and rendered rank. Its exact-output theorem covers the
+emitted initial state, `Next`, both action labels, and the selected evaluation
+check; reversing the rank changes a complete edge. All 16 obligations passed
+locally, but hosted proof evidence for this input is pending. The Swift
+compiler/runtime, `Result`, `choose`, array ordering, and update merge remain
+trusted. This is one output-linked sequence instance, not a proof for arbitrary
+literal lengths, computed domains, nested conversions, or every accepted
+compound value type.
 
 ## Checked kernel lemma
 

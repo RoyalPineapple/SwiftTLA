@@ -143,3 +143,20 @@ struct StringSelection {
         }
     }
 }
+
+@TLAModel
+struct SequenceSelection {
+    enum Step: String, CaseIterable { case select }
+
+    static var spec: TLASpec {
+        #spec {
+            let sequenceSelection = Algorithm(scoped: { scope in
+                let selected = scope.sharedVar(initial: [2])
+                Do(Step.select) {
+                    Assign(selected, to: Select(from: Set<[Int]>([[2], [1, 0], [1]])) { _ in true })
+                }
+            })
+            sequenceSelection
+        }
+    }
+}

@@ -403,7 +403,7 @@ struct CompiledTLARenderer {
     private func repeatable(_ expression: CompiledExpression) -> Bool {
         switch expression.operation {
         case .value, .stateVariable, .boundValue, .controlLocation,
-             .setLiteral, .equal, .notEqual, .lessThan, .lessOrEqual,
+             .setLiteral, .tupleLiteral, .equal, .notEqual, .lessThan, .lessOrEqual,
              .greaterThan, .greaterOrEqual, .and, .or, .not:
             return expression.children.allSatisfy(repeatable)
         default:
@@ -795,28 +795,46 @@ struct CompiledTLARenderer {
 
     private func choiceMembers(_ expression: CompiledExpression) -> [CompiledValue]? {
         if let members = choiceMembers(expression.resultType) { return members }
-        // shortcut: only closed ASCII String domains have a renderable rank; dynamic or Unicode domains need a general value order.
-        guard expression.resultType == .string || expression.resultType == .unknown,
-              let domain = expression.children.first else { return nil }
+        // shortcut: only closed values with exact Swift/TLA identity have a renderable rank; dynamic domains need a general value order.
+        let supportsClosedRank: Bool
+        switch expression.resultType {
+        case .string, .unknown, .array, .tuple: supportsClosedRank = true
+        default: supportsClosedRank = false
+        }
+        guard supportsClosedRank, let domain = expression.children.first else { return nil }
+        let domainValue = domain.computation
         let members: [CompiledValue]
-        switch domain.computation.operation {
+        switch domainValue.operation {
         case .value(.set(let values)):
             members = Array(values)
         case .setLiteral:
-            members = domain.children.compactMap {
-                guard case .value(let value) = $0.computation.operation else { return nil }
-                return value
-            }
-            guard members.count == domain.children.count else { return nil }
+            members = domainValue.children.compactMap(closedChoiceMember)
+            guard members.count == domainValue.children.count else { return nil }
         default:
             return nil
         }
-        guard members.count > 1,
-              members.allSatisfy({
-                  guard case .string(let value) = $0 else { return false }
-                  return value.utf8.allSatisfy { $0 >= 0x20 && $0 <= 0x7e }
-              }) else { return nil }
+        guard members.count > 1, members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }
         return Array(Set(members)).sorted()
+    }
+
+    private func closedChoiceMember(_ expression: CompiledExpression) -> CompiledValue? {
+        let value = expression.computation
+        switch value.operation {
+        case .value(let value): return value
+        case .tupleLiteral:
+            let members = value.children.compactMap(closedChoiceMember)
+            return members.count == value.children.count ? .tuple(members) : nil
+        default: return nil
+        }
+    }
+
+    private func choiceMemberHasExactIdentity(_ value: CompiledValue) -> Bool {
+        switch value {
+        case .integer, .boolean: true
+        case .string(let text): text.utf8.allSatisfy { $0 >= 0x20 && $0 <= 0x7e }
+        case .tuple(let members): members.allSatisfy(choiceMemberHasExactIdentity)
+        default: false
+        }
     }
 
     /// Serialize a bijective, independent record comprehension without materializing a UNION of sets.

@@ -187,6 +187,36 @@ struct TypedSelectionTests {
             == provedModule.replacing(binder, with: "__SELECT_MEMBER__"))
     }
 
+    @Test("Closed sequence selection retains the lexicographically first complete value")
+    func sequenceSelectionUsesLeastMember() throws {
+        let compilation = try SequenceSelection.spec.compile()
+        let action = try #require(compilation.semantics.behavior.actions.first)
+        guard case .and(.guard_, let body) = action.body,
+              case .define(_, let choice, _) = body,
+              case .choose = choice.operation else {
+            Issue.record("The authored sequence selection no longer lowers to a choice")
+            return
+        }
+
+        var machine = try SequenceSelection.makeMachine()
+        #expect(machine.state.selected == [2])
+        _ = try machine.send(.select)
+        #expect(machine.state.selected == [1])
+
+        let module = try SequenceSelection.render().tlaBundle.root.tla
+        let direct = try compilation.render().tlaBundle.root.tla
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        #expect(direct.replacing(binder, with: "__SELECT_MEMBER__")
+            == module.replacing(binder, with: "__SELECT_MEMBER__"))
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/SequenceSelection.tla")
+            .standardizedFileURL
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(module.replacing(binder, with: "__SELECT_MEMBER__")
+            == expected.replacing(binder, with: "__SELECT_MEMBER__"))
+    }
+
     @Test("An empty matching domain fails when the choice is evaluated")
     func missingSelectionFailsDuringEvaluation() throws {
         let choice = Select(from: SetExpr<Int>.literal(1)) { _ in false }
