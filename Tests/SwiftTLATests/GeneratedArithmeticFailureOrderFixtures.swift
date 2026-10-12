@@ -32,3 +32,19 @@ struct GeneratedNegativeModuloFailureModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct GeneratedMembershipFailureOrderModel: Sendable {
+    enum Step: String, CaseIterable { case compute }
+
+    static var spec: TLASpec {
+        #spec("GeneratedMembershipFailureOrderModel") { scope in
+            let numerator = scope.sharedVar(initial: 9_223_372_036_854_775_807)
+            let divisor = scope.sharedVar(initial: 0)
+            let found = scope.sharedVar(initial: false)
+            Do(Step.compute) {
+                Assign(found, to: SetExpr<Int>.literal(1 / divisor).contains(numerator + 1))
+            }
+        }
+    }
+}

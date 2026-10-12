@@ -291,6 +291,17 @@ every later failure. The adjacent negative-modulo test pins the matching
 verdict on both outputs. These are concrete output regressions, not a proof
 of failure order for every accepted expression.
 
+`SignedIntegerSemanticsTests.generatedMembershipFailureOrder` closes the same
+right-first failure boundary when the outer operation is membership and its
+set is a computed literal: a division failure in the set precedes an overflow
+in the member. It failed before the renderer traversed membership and set
+literal children, then passed with the emitted first-failure, later-overflow,
+and action guards pinned. `OrderedArithmeticFailures.tla` proves the two-site
+failure outcome for every integer divisor and Boolean later-overflow outcome.
+The proof assumes the generated Swift machine evaluates the set first, as the
+fixture test observes; it does not prove every collection expression or the
+authored PlusCal output link.
+
 `ModeledSwiftModuloMatchesEuclideanRemainder` proves that the helper's modeled
 signed-remainder adjustment equals the mathematical nonnegative remainder for
 every positive divisor. `ModeledSwiftModuloStaysWithinSwiftInt` proves that

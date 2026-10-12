@@ -378,9 +378,12 @@ struct CompiledTLARenderer {
                     return preceding + [.arithmetic(operation: site.operation,
                         guard_: site.guard_, operands: site.operands)]
                 }
-            case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not:
+            case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
+                 .in, .setLiteral:
                 var preceding: [OrderedEvaluationSite] = []
-                for child in value.children {
+                let children = value.operation.evaluatesRightOperandFirst
+                    ? Array(value.children.reversed()) : value.children
+                for child in children {
                     guard let sites = try collect(child) else { return nil }
                     preceding += sites
                 }

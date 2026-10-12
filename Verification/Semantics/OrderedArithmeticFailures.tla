@@ -30,6 +30,22 @@ THEOREM ReversingFailureOrderChangesTheObservedOutcome ==
     BY SMT DEF ReversedFirstOutcome, EmittedFirstDivisionOutcome,
         EmittedDivisionByZeroFailure, SourceFirstDivisionOutcome
 
+SourceRightFirstMembershipOutcome(divisor, memberOverflows) ==
+    IF divisor = 0 THEN "divisionByZero"
+    ELSE IF memberOverflows THEN "overflow" ELSE "value"
+EmittedRightFirstMembershipOutcome(divisor, memberOverflows) ==
+    IF EmittedDivisionByZeroFailure(divisor) THEN "divisionByZero"
+    ELSE IF EmittedLaterFailure(divisor, memberOverflows)
+         THEN "overflow" ELSE "value"
+
+THEOREM MembershipFailureOrderMatchesForEveryDivisor ==
+    ASSUME NEW divisor \in Int, NEW memberOverflows \in BOOLEAN
+    PROVE SourceRightFirstMembershipOutcome(divisor, memberOverflows)
+        = EmittedRightFirstMembershipOutcome(divisor, memberOverflows)
+    BY SMT DEF SourceRightFirstMembershipOutcome,
+        EmittedRightFirstMembershipOutcome,
+        EmittedDivisionByZeroFailure, EmittedLaterFailure
+
 SourceModuloOutcome(divisor) ==
     IF divisor = 0 THEN "divisionByZero"
     ELSE IF divisor < 0 THEN "negativeModuloDivisor"

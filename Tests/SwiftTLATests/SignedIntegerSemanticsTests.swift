@@ -96,6 +96,23 @@ import Testing
         #expect(lines.contains { $0.hasPrefix("compute == (IF (IF divisor # 0 THEN (IF divisor > 0 THEN") })
     }
 
+    @Test("Membership checks its set before an overflowing member on both outputs")
+    func generatedMembershipFailureOrder() throws {
+        var machine = try GeneratedMembershipFailureOrderModel.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.send(.compute)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try GeneratedMembershipFailureOrderModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(lines.contains("__SwiftTLADivisionByZeroFailure0 == ~(divisor # 0)"))
+        #expect(lines.contains { $0.hasPrefix("__SwiftTLAOverflowFailure0 == (IF divisor # 0 THEN") })
+        #expect(lines.contains { $0.hasPrefix("compute == (IF (IF divisor # 0 THEN") })
+    }
+
     @Test("integer division rounds toward negative infinity")
     func floorDivision() throws {
         let cases: [(Int, Int, Int)] = [
