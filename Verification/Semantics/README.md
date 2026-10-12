@@ -513,13 +513,17 @@ is false. The renderer previously omitted `__SwiftTLAChoiceFailure0` because
 lowering represented `If` as guarded `or` branches. The focused test failed
 before the renderer fix, then passed after failure propagation through those
 branches; it now pins the complete emitted TLA+ module after normalizing only
-the source-location-derived binder name. `ConditionalSelectionFailureProof.tla`
+the source-location-derived binder name. `GeneratedSelectionProofTests` also
+pins the emitted Swift choice cache and complete update function to
+`GeneratedConditionalSelectionFailureSwiftWitness.txt`, normalizing only that
+binder name. `ConditionalSelectionFailureProof.tla`
 proves initial states, the complete labeled `select` and internal `Terminating`
 relation, the failure and selected invariant, both branch verdicts, and a
 reversed-branch negative control for that exact module. All 20 obligations
 passed locally. This is not a general proof for effectful conditions, nested
 conjunctions, or arbitrary choice domains, and independent TLC/native
-failure-outcome comparison remains open.
+failure-outcome comparison remains open. Interpreting the pinned Swift source,
+`Result.get`, `choose`, and update merge remains a trusted runtime boundary.
 
 ## Checked kernel lemma
 

@@ -18,7 +18,8 @@ struct GeneratedSelectionProofTests {
             (model: "EnumSelection", witness: "GeneratedEnumSelectionSwiftWitness.txt", cache: true),
             (model: "StringSelection", witness: "GeneratedStringSelectionSwiftWitness.txt", cache: true),
             (model: "SequenceSelection", witness: "GeneratedSequenceSelectionSwiftWitness.txt", cache: true),
-            (model: "MissingStringSelection", witness: "GeneratedMissingStringSelectionSwiftWitness.txt", cache: true)
+            (model: "MissingStringSelection", witness: "GeneratedMissingStringSelectionSwiftWitness.txt", cache: true),
+            (model: "ConditionalSelectionFailure", witness: "GeneratedConditionalSelectionFailureSwiftWitness.txt", cache: true)
         ]
         for entry in cases {
             let declaration = try #require(source.statements.compactMap {
