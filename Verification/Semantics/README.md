@@ -517,12 +517,16 @@ the source-location-derived binder name. `GeneratedSelectionProofTests` also
 pins the emitted Swift choice cache and complete update function to
 `GeneratedConditionalSelectionFailureSwiftWitness.txt`, normalizing only that
 binder name. `ConditionalSelectionFailureProof.tla`
-proves initial states, the complete labeled `select` and internal `Terminating`
-relation, the failure and selected invariant, both branch verdicts, and a
-reversed-branch negative control for that exact module. All 20 obligations
-passed locally. This is not a general proof for effectful conditions, nested
-conjunctions, or arbitrary choice domains, and independent TLC/native
-failure-outcome comparison remains open. Interpreting the pinned Swift source,
+proves a reusable Boolean `If`-to-guarded-branches law, then factors the source
+success and failure rules through explicit compiled-branch rules before
+comparing them to the exact emitted module. It also proves initial states, the
+complete labeled `select` and internal `Terminating` relation, the selected
+invariant, both branch verdicts, and a reversed-branch negative control. All
+27 obligations passed locally. The proof does not yet verify that the Swift
+lowerer implements this compiled rule for every accepted `If`; this fixture's
+native behavior and exact outputs are the instance links. Effectful conditions,
+nested conjunctions, arbitrary choice domains, and independent TLC/native
+failure-outcome comparison remain open. Interpreting the pinned Swift source,
 `Result.get`, `choose`, and update merge remains a trusted runtime boundary.
 
 ## Checked kernel lemma
