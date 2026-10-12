@@ -302,9 +302,10 @@ The expression-level `StateExpr.choose` is distinct from the nondeterministic
 `Choose` algorithm statement. The generated Swift expression sorts its finite
 domain and returns the first satisfying member, or throws when none exists;
 the TLA+ renderer emits a least-member `CHOOSE` for integer, Boolean,
-finite-enum, closed multi-member printable-ASCII String domains, and closed
+finite-enum, closed multi-member printable-ASCII String domains, closed
 literal tuple/sequence domains with exact integer, Boolean, or printable-ASCII
-String members. It emits ordinary `CHOOSE` for other result types. Ordinary
+String members, and state-held integer-sequence domains. It emits ordinary
+`CHOOSE` for other result types. Ordinary
 TLA+ `CHOOSE`
 permits an unspecified consistent witness and gives an arbitrary value when
 none satisfies the predicate ([Specifying Systems, §16.1.2](https://lamport.azurewebsites.net/tla/book-01-08-21.pdf)).
@@ -495,6 +496,25 @@ compiler/runtime, `Result`, `choose`, array ordering, and update merge remain
 trusted. This is one output-linked sequence instance, not a proof for arbitrary
 literal lengths, computed domains, nested conversions, or every accepted
 compound value type.
+
+`DynamicSequenceSelection` uses a state-held `Set<[Int]>`, which previously
+rendered ordinary `CHOOSE` even though generated Swift sorted candidates
+lexicographically. The renderer now emits the same first-difference and
+proper-prefix order for this value type, while preserving the existing
+closed-domain rank path. A focused test pins the complete TLA+ output, and
+`GeneratedSelectionProofTests` pins the generated Swift update function's
+state read, sorted choice, and complete update. The test failed on the old
+renderer because no ordering predicate was emitted.
+`DynamicSequenceSelectionProof.tla` proves that the rendered sequence order
+matches the three-value Swift rank for every pair, that the ranked and
+lexicographic choices agree for every nonempty subset, and that the actual
+emitted action preserves complete labeled steps on all reachable states. It
+also proves the initial candidate set remains unchanged, the no-match failure
+invariant, and a reversed-order negative control. All 32 obligations passed
+locally; hosted evidence is pending. The exact output theorem covers this
+fixture's fixed reachable candidate set, not arbitrary mutable sets or all
+integer sequences. Swift's `lexicographicallyPrecedes`, the generated update
+merge, and the Swift compiler/runtime remain trusted boundaries.
 
 `RankedChoiceProof.tla` generalizes the sorted-first argument: for any finite
 ordered sequence, predicate, integer rank that strictly increases along that

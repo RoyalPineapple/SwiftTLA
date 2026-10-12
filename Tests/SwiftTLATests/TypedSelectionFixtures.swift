@@ -203,3 +203,21 @@ struct ConditionalChoiceConditionFailure {
         }
     }
 }
+
+@TLAModel
+struct DynamicSequenceSelection {
+    enum Step: String, CaseIterable { case select }
+
+    static var spec: TLASpec {
+        #spec {
+            let dynamicSequenceSelection = Algorithm(scoped: { scope in
+                let candidates = scope.sharedVar(initial: Set<[Int]>([[2], [1, 0], [1]]))
+                let selected = scope.sharedVar(initial: [2])
+                Do(Step.select) {
+                    Assign(selected, to: Select(from: candidates) { _ in true })
+                }
+            })
+            dynamicSequenceSelection
+        }
+    }
+}

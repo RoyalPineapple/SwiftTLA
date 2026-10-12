@@ -346,4 +346,22 @@ struct TypedSelectionTests {
         let expected = try String(contentsOf: proofInput, encoding: .utf8)
         #expect(actual == expected)
     }
+
+    @Test("Selection from a state-held sequence set uses the same lexicographic order")
+    func dynamicSequenceSelectionUsesLexicographicOrder() throws {
+        var machine = try DynamicSequenceSelection.makeMachine()
+        _ = try machine.send(.select)
+        #expect(machine.state.selected == [1])
+
+        let rendered = try DynamicSequenceSelection.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/DynamicSequenceSelection.tla")
+            .standardizedFileURL
+        let actual = rendered.tlaBundle.root.tla.replacing(binder, with: "__PROOF_MEMBER__")
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(actual == expected)
+    }
 }
