@@ -1054,6 +1054,22 @@ enabledness theorems at lines 706–730 were re-proved locally with TLAPS
 pure, finite guarded-choice fixture. It does not prove the emitter for every
 accepted choice domain or cover candidate evaluation failures.
 
+`MixedCandidateDivisionFailureModel.tla` is byte-for-byte generated from a
+`#spec` choice over `0..1`. Candidate `0` divides by zero; candidate `1`
+produces the labeled successor with `result = 1`. The native validator test
+requires that successor state and edge before the typed failure event.
+`MixedCandidateDivisionFailureProof.tla` independently defines those source
+outcomes and proves the emitted initial state, step, division-failure
+predicate, complete set of failing divisors, absent overflow, and evaluation
+verdict (21 local TLAPS obligations). The Swift visitor witness above pins
+the shared choice-emission rule that defers a candidate failure until the
+remaining candidates have been visited. This is a closed finite Int-division
+case, not a proof of failure preservation for every accepted choice body or
+value type. In particular, when several paths fail differently, the native
+checker currently reports the first failure while TLA+ retains all failing
+operand sets; exact multi-failure reporting is not established. This case has
+not yet been hosted.
+
 `ConditionalStepProofModel.tla` is the complete output from a `#spec` step
 that flips a Boolean before an `If`/`else` assignment in the same atomic
 `Do`, with sequential weak fairness. The fixture test pins those bytes,

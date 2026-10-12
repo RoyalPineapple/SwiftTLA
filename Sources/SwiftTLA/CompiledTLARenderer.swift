@@ -240,6 +240,22 @@ struct CompiledTLARenderer {
 
     func arithmeticFailures(_ action: CompiledActionExpr) throws -> [RenderedArithmeticFailure] {
         switch action {
+        case .existsAction(let binder, let domain, let body):
+            let domainFailures = try expressionArithmeticFailures(domain)
+            let bodyFailures = try arithmeticFailures(body)
+            guard !bodyFailures.isEmpty else { return domainFailures }
+            let name = try binderName(binder)
+            let renderedDomain = try state(domain)
+            let defined = try evaluationDefined(domain)
+            return domainFailures + bodyFailures.map { failure in
+                let failedMembers = "{\(name) \\in \(renderedDomain): \(failure.predicate)}"
+                let predicate = "~(\(failedMembers) = {})"
+                // Preserve operands from every failing member without choosing an arbitrary witness.
+                return .init(
+                    predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
+                    operands: "{\(failure.operands): \(name) \\in \(failedMembers)}",
+                    kind: failure.kind)
+            }
         case .define(let binder, let value, let body):
             let defined = try evaluationDefined(value)
             var failures = try expressionArithmeticFailures(value)

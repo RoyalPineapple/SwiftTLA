@@ -205,6 +205,9 @@ Do(Step.select) {
 Each accepted candidate contributes a possible successor. A choice must not
 silently select the first member. Application dispatch must report ambiguity
 unless the caller has supplied enough information to select a transition.
+An evaluation path that fails contributes no successor. Checking retains
+successors from other successful paths, including other candidates, and
+reports the failure. A failed path never commits a partial state update.
 
 ### Independent atomic steps
 

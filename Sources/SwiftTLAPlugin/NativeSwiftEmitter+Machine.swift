@@ -399,9 +399,17 @@ extension NativeSwiftEmitter {
                 let element = program.bindingTypes[binding]!
                 let domain = try expression(domainExpression)
                 body = """
+                var candidateFailure: NativeMachineEvaluationError?
                 for \(binder(binding)) in \(domain).sorted(by: \(try ordering(element))) {
-                    \(childCall(child, binding: binding))
+                    var candidateUpdates: [_Updates] = []
+                    do {
+                        \(childCall(child, binding: binding, emit: "{ candidateUpdates.append($0) }"))
+                    } catch let failure as NativeMachineEvaluationError {
+                        if candidateFailure == nil { candidateFailure = failure }
+                    }
+                    for candidate in candidateUpdates { try emit(candidate) }
                 }
+                if let candidateFailure { throw candidateFailure }
                 """
             case .define(let binding, let value, let child):
                 body = "let \(binder(binding)) = \(try expression(value))\n\(childCall(child, binding: binding))"

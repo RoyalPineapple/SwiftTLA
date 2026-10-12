@@ -8,11 +8,19 @@ private static func _visitUpdates0(from state: Snapshot, checking context: inout
         try emit(updates)
     }
     func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+        var candidateFailure: NativeMachineEvaluationError?
         for ___atomic_0_0 in (try _NativeMachineOperations.integerRange(1, 2)).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
             return lhs < rhs
         }) {
-            try _actionPart3(___atomic_0_0, updates, emit)
+            var candidateUpdates: [_Updates] = []
+            do {
+                try _actionPart3(___atomic_0_0, updates, { candidateUpdates.append($0) })
+            } catch let failure as NativeMachineEvaluationError {
+                if candidateFailure == nil { candidateFailure = failure }
+            }
+            for candidate in candidateUpdates { try emit(candidate) }
         }
+        if let candidateFailure { throw candidateFailure }
     }
     func _actionPart3(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
         let ___atomic_1_1 = ___atomic_0_0
