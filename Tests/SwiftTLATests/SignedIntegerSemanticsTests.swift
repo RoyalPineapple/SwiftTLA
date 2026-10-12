@@ -61,6 +61,39 @@ import Testing
             try machine.send(.compute)
         }
         #expect(machine.snapshot == before)
+
+        let rendered = try GeneratedArithmeticFailureOrderModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(lines.contains("__SwiftTLADivisionByZeroFailure0 == ~(divisor # 0)"))
+        let laterFailures = lines.filter {
+            $0.hasPrefix("__SwiftTLAOverflowFailure0 ==")
+                || $0.hasPrefix("__SwiftTLAOverflowFailure0_1 ==")
+                || $0.hasPrefix("__SwiftTLADivisionByZeroFailure0_1 ==")
+                || $0.hasPrefix("__SwiftTLAOverflowFailure0_2 ==")
+        }
+        #expect(laterFailures.count == 4)
+        #expect(laterFailures.allSatisfy { $0.contains("== (IF divisor # 0 THEN") })
+        #expect(lines.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLADivisionByZeroFailure0) /\\ ~(__SwiftTLAOverflowFailure0) /\\ ~(__SwiftTLAOverflowFailure0_1) /\\ ~(__SwiftTLADivisionByZeroFailure0_1) /\\ ~(__SwiftTLAOverflowFailure0_2)"))
+        #expect(lines.contains { $0.hasPrefix("compute == (IF (IF divisor # 0 THEN") })
+    }
+
+    @Test("Generated modulo rejects a negative divisor on both checking paths")
+    func generatedNegativeModuloFailure() throws {
+        var machine = try GeneratedNegativeModuloFailureModel.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.negativeModuloDivisor(-1)) {
+            try machine.send(.compute)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try GeneratedNegativeModuloFailureModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(lines.contains("__SwiftTLADivisionByZeroFailure0 == ~(divisor # 0)"))
+        #expect(lines.contains("__SwiftTLANegativeModuloDivisorFailure0 == (IF divisor # 0 THEN ~(divisor > 0) ELSE FALSE)"))
+        #expect(lines.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLADivisionByZeroFailure0) /\\ ~(__SwiftTLANegativeModuloDivisorFailure0)"))
+        #expect(lines.contains { $0.hasPrefix("compute == (IF (IF divisor # 0 THEN (IF divisor > 0 THEN") })
     }
 
     @Test("integer division rounds toward negative infinity")

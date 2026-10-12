@@ -16,3 +16,19 @@ struct GeneratedArithmeticFailureOrderModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct GeneratedNegativeModuloFailureModel: Sendable {
+    enum Step: String, CaseIterable { case compute }
+
+    static var spec: TLASpec {
+        #spec("GeneratedNegativeModuloFailureModel") { scope in
+            let dividend = scope.sharedVar(initial: -7)
+            let divisor = scope.sharedVar(initial: -1)
+            let remainder = scope.sharedVar(initial: 0)
+            Do(Step.compute) {
+                Assign(remainder, to: dividend % divisor)
+            }
+        }
+    }
+}

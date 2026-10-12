@@ -18,12 +18,27 @@ private enum ActionRenderingTask {
 private enum OrderedEvaluationSite {
     case choice(guard_: String)
     case arithmetic(operation: NativeMachineEvaluationError.IntegerOperation, guard_: String, operands: String)
+    case divisionByZero(guard_: String, divisor: String)
+    case negativeModuloDivisor(guard_: String, divisor: String)
 
     var guard_: String {
         switch self {
-        case .choice(let guard_), .arithmetic(_, let guard_, _): guard_
+        case .choice(let guard_), .arithmetic(_, let guard_, _),
+             .divisionByZero(let guard_, _), .negativeModuloDivisor(let guard_, _): guard_
         }
     }
+}
+
+enum RenderedArithmeticFailureKind {
+    case overflow(NativeMachineEvaluationError.IntegerOperation)
+    case divisionByZero
+    case negativeModuloDivisor
+}
+
+struct RenderedArithmeticFailure {
+    let predicate: String
+    let operands: String
+    let kind: RenderedArithmeticFailureKind
 }
 
 struct CompiledTLARenderer {
@@ -204,7 +219,7 @@ struct CompiledTLARenderer {
     }
 
     private func expressionChoiceFailure(_ value: CompiledExpression) throws -> String? {
-        if let sites = try orderedChoiceArithmeticSites(value) {
+        if let sites = try orderedFallibleSites(value) {
             var preceding: [String] = []
             var failures: [String] = []
             for site in sites {
@@ -213,50 +228,52 @@ struct CompiledTLARenderer {
                 }
                 preceding.append(site.guard_)
             }
+            if failures.isEmpty { return nil }
             return failures.count == 1 ? failures[0] : "(\(failures.joined(separator: " \\/ ")))"
         }
         guard let defined = try choiceDefined(value) else { return nil }
         return "~(\(defined))"
     }
 
-    func overflowFailures(_ action: CompiledActionExpr) throws -> [(
-        predicate: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
-    )] {
+    func arithmeticFailures(_ action: CompiledActionExpr) throws -> [RenderedArithmeticFailure] {
         switch action {
         case .define(let binder, let value, let body):
             let defined = try evaluationDefined(value)
-            var failures = try expressionOverflowFailures(value)
+            var failures = try expressionArithmeticFailures(value)
             // shortcut: nonrepeatable values stop later-failure enumeration; replace with ordered outcomes before universal fidelity.
             guard failures.isEmpty == false || repeatable(value) else { return failures }
             let name = try binderName(binder)
             let renderedValue = try state(value)
-            for failure in try overflowFailures(body) {
+            for failure in try arithmeticFailures(body) {
                 let predicate = "(LET \(name) == \(renderedValue) IN \(failure.predicate))"
                 let operands = "(LET \(name) == \(renderedValue) IN \(failure.operands))"
-                failures.append((defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
-                    operands, failure.operation))
+                failures.append(.init(predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
+                    operands: operands, kind: failure.kind))
             }
             return failures
         case .guard_(let condition):
-            return try expressionOverflowFailures(condition)
+            return try expressionArithmeticFailures(condition)
         case .and(.guard_(let condition), let body):
-            let conditionFailures = try expressionOverflowFailures(condition)
-            guard arithmeticTreeIsRepeatable(condition) else { return conditionFailures }
+            let conditionFailures = try expressionArithmeticFailures(condition)
+            let ordered = try orderedFallibleSites(condition)
+            guard arithmeticTreeIsRepeatable(condition) || ordered != nil else {
+                return conditionFailures
+            }
             let guardPredicate = try state(condition)
             let defined = try evaluationDefined(condition)
-            return try conditionFailures + overflowFailures(body).map {
+            return try conditionFailures + arithmeticFailures(body).map {
                 let predicate = "((\(guardPredicate)) = TRUE /\\ \($0.predicate))"
-                return (defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
-                    $0.operands, $0.operation)
+                return .init(predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
+                    operands: $0.operands, kind: $0.kind)
             }
         case .and(let lhs, let rhs):
-            let leftFailures = try overflowFailures(lhs)
-            let rightFailures = try overflowFailures(rhs)
+            let leftFailures = try arithmeticFailures(lhs)
+            let rightFailures = try arithmeticFailures(rhs)
             // shortcut: right-side failures after non-guard actions need ordered outcome semantics.
             guard !rightFailures.isEmpty, repeatableGuards(lhs) else { return leftFailures }
             let guardPredicate = try self.action(lhs)
             return leftFailures + rightFailures.map {
-                ("(\(guardPredicate) /\\ \($0.predicate))", $0.operands, $0.operation)
+                .init(predicate: "(\(guardPredicate) /\\ \($0.predicate))", operands: $0.operands, kind: $0.kind)
             }
         default: return []
         }
@@ -270,17 +287,22 @@ struct CompiledTLARenderer {
         }
     }
 
-    private func expressionOverflowFailures(_ value: CompiledExpression) throws -> [(
-        predicate: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
-    )] {
-        var failures: [(
-            predicate: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
-        )] = []
-        if let sites = try orderedChoiceArithmeticSites(value) {
+    private func expressionArithmeticFailures(_ value: CompiledExpression) throws -> [RenderedArithmeticFailure] {
+        var failures: [RenderedArithmeticFailure] = []
+        if let sites = try orderedFallibleSites(value) {
             var preceding: [String] = []
             for site in sites {
-                if case .arithmetic(let operation, let guard_, let operands) = site {
-                    failures.append((preceded("~(\(guard_))", by: preceding), operands, operation))
+                switch site {
+                case .choice: break
+                case .arithmetic(let operation, let guard_, let operands):
+                    failures.append(.init(predicate: preceded("~(\(guard_))", by: preceding),
+                        operands: operands, kind: .overflow(operation)))
+                case .divisionByZero(let guard_, let divisor):
+                    failures.append(.init(predicate: preceded("~(\(guard_))", by: preceding),
+                        operands: divisor, kind: .divisionByZero))
+                case .negativeModuloDivisor(let guard_, let divisor):
+                    failures.append(.init(predicate: preceded("~(\(guard_))", by: preceding),
+                        operands: divisor, kind: .negativeModuloDivisor))
                 }
                 preceding.append(site.guard_)
             }
@@ -291,7 +313,8 @@ struct CompiledTLARenderer {
                 let predicate = precedingGuards.isEmpty
                     ? failure
                     : "(\(precedingGuards.joined(separator: " /\\ ")) /\\ \(failure))"
-                failures.append((predicate, site.operands, site.operation))
+                failures.append(.init(predicate: predicate, operands: site.operands,
+                    kind: .overflow(site.operation)))
                 precedingGuards.append(site.guard_)
             }
         }
@@ -299,7 +322,7 @@ struct CompiledTLARenderer {
     }
 
     func evaluationDefined(_ value: CompiledExpression) throws -> String? {
-        if let sites = try orderedChoiceArithmeticSites(value) {
+        if let sites = try orderedFallibleSites(value) {
             let defined: String = sites.reversed().reduce("TRUE") { result, site in
                 "(IF \(site.guard_) THEN \(result) ELSE FALSE)"
             }
@@ -314,8 +337,8 @@ struct CompiledTLARenderer {
         }
     }
 
-    private func orderedChoiceArithmeticSites(_ expression: CompiledExpression) throws -> [OrderedEvaluationSite]? {
-        // shortcut: only checked arithmetic and total choice have ordered sites; extend to other fallible operations before universal fidelity.
+    private func orderedFallibleSites(_ expression: CompiledExpression) throws -> [OrderedEvaluationSite]? {
+        // shortcut: branching and effectful expressions still need path-sensitive outcome rules.
         func collect(_ value: CompiledExpression) throws -> [OrderedEvaluationSite]? {
             switch value.operation {
             case .convert:
@@ -324,24 +347,57 @@ struct CompiledTLARenderer {
             case .choose:
                 guard let defined = try choiceDefined(value) else { return nil }
                 return [.choice(guard_: defined)]
-            case .add, .subtract, .multiply, .negate:
+            case .add, .subtract, .multiply, .negate, .divide, .integerDivide, .modulo:
                 guard value.resultType == .int,
                       value.children.count == (value.operation == .negate ? 1 : 2) else { return nil }
+                var preceding: [OrderedEvaluationSite] = []
+                let children = value.operation.evaluatesRightOperandFirst ? Array(value.children.reversed()) : value.children
+                for child in children {
+                    guard let sites = try collect(child) else { return nil }
+                    preceding += sites
+                }
+                switch value.operation {
+                case .divide, .integerDivide:
+                    let dividend = try state(value.children[0])
+                    let divisor = try state(value.children[1])
+                    let minimum = TLAValue.int(.min).description
+                    return preceding + [
+                        .divisionByZero(guard_: "\(divisor) # 0", divisor: divisor),
+                        .arithmetic(operation: .division,
+                            guard_: "(\(dividend) # \(minimum) \\/ \(divisor) # -1)",
+                            operands: "<<\(dividend), \(divisor)>>")
+                    ]
+                case .modulo:
+                    let divisor = try state(value.children[1])
+                    return preceding + [
+                        .divisionByZero(guard_: "\(divisor) # 0", divisor: divisor),
+                        .negativeModuloDivisor(guard_: "\(divisor) > 0", divisor: divisor)
+                    ]
+                default:
+                    let site = try arithmeticSite(value)
+                    return preceding + [.arithmetic(operation: site.operation,
+                        guard_: site.guard_, operands: site.operands)]
+                }
+            case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not:
                 var preceding: [OrderedEvaluationSite] = []
                 for child in value.children {
                     guard let sites = try collect(child) else { return nil }
                     preceding += sites
                 }
-                let site = try arithmeticSite(value)
-                return preceding + [.arithmetic(operation: site.operation,
-                    guard_: site.guard_, operands: site.operands)]
+                return preceding
             default:
                 return repeatable(value) ? [] : nil
             }
         }
         guard let sites = try collect(expression),
-              sites.contains(where: { if case .choice = $0 { return true }; return false }),
-              sites.contains(where: { if case .arithmetic = $0 { return true }; return false }) else { return nil }
+              sites.contains(where: {
+                  switch $0 {
+                  case .divisionByZero, .negativeModuloDivisor: true
+                  default: false
+                  }
+              }) || (sites.contains(where: { if case .choice = $0 { return true }; return false })
+                    && sites.contains(where: { if case .arithmetic = $0 { return true }; return false }))
+        else { return nil }
         return sites
     }
 

@@ -2327,26 +2327,57 @@ private extension CompiledModuleMetadata {
                 failureReferences.append(try renderer.actionReference(behavior.actions[index].id, named: failureName))
                 occupied.insert(failureName)
             }
-            for (occurrence, overflow) in try renderer.overflowFailures(behavior.actions[index].body).enumerated() {
+            var overflowOccurrence = 0
+            var divisionByZeroOccurrence = 0
+            var negativeModuloOccurrence = 0
+            for failure in try renderer.arithmeticFailures(behavior.actions[index].body) {
+                let occurrence: Int
+                let failurePrefix: String
+                let operandsPrefix: String
+                let operation: String?
+                switch failure.kind {
+                case .overflow(let name):
+                    occurrence = overflowOccurrence
+                    overflowOccurrence += 1
+                    failurePrefix = "__SwiftTLAOverflowFailure"
+                    operandsPrefix = "__SwiftTLAOverflowOperands"
+                    operation = name.rawValue
+                case .divisionByZero:
+                    occurrence = divisionByZeroOccurrence
+                    divisionByZeroOccurrence += 1
+                    failurePrefix = "__SwiftTLADivisionByZeroFailure"
+                    operandsPrefix = "__SwiftTLADivisionByZeroDivisor"
+                    operation = nil
+                case .negativeModuloDivisor:
+                    occurrence = negativeModuloOccurrence
+                    negativeModuloOccurrence += 1
+                    failurePrefix = "__SwiftTLANegativeModuloDivisorFailure"
+                    operandsPrefix = "__SwiftTLANegativeModuloDivisorValue"
+                    operation = nil
+                }
                 let suffix = occurrence == 0 ? "\(index)" : "\(index)_\(occurrence)"
-                var failureName = "__SwiftTLAOverflowFailure\(suffix)"
+                var failureName = "\(failurePrefix)\(suffix)"
                 while occupied.contains(failureName) { failureName += "_" }
                 let failureHeader = parameters.isEmpty ? failureName : "\(failureName)(\(parameters))"
-                var operandsName = "__SwiftTLAOverflowOperands\(suffix)"
+                var operandsName = "\(operandsPrefix)\(suffix)"
                 while occupied.contains(operandsName) { operandsName += "_" }
                 let operandsHeader = parameters.isEmpty ? operandsName : "\(operandsName)(\(parameters))"
-                var operationName = "__SwiftTLAOverflowOperation\(suffix)"
-                while occupied.contains(operationName) { operationName += "_" }
-                let operationHeader = parameters.isEmpty ? operationName : "\(operationName)(\(parameters))"
-                let failureDeclaration = "\(failureHeader) == \(overflow.predicate)"
-                let operandsDeclaration = "\(operandsHeader) == \(overflow.operands)"
-                let operationDeclaration = "\(operationHeader) == \"\(overflow.operation.rawValue)\""
+                let failureDeclaration = "\(failureHeader) == \(failure.predicate)"
+                let operandsDeclaration = "\(operandsHeader) == \(failure.operands)"
                 lines.append(failureDeclaration)
                 lines.append(operandsDeclaration)
-                lines.append(operationDeclaration)
-                evaluationFailureDeclarations += [failureDeclaration, operandsDeclaration, operationDeclaration]
+                evaluationFailureDeclarations += [failureDeclaration, operandsDeclaration]
                 failureReferences.append(try renderer.actionReference(behavior.actions[index].id, named: failureName))
-                occupied.formUnion([failureName, operandsName, operationName])
+                occupied.formUnion([failureName, operandsName])
+                if let operation {
+                    var operationName = "__SwiftTLAOverflowOperation\(suffix)"
+                    while occupied.contains(operationName) { operationName += "_" }
+                    let operationHeader = parameters.isEmpty ? operationName : "\(operationName)(\(parameters))"
+                    let declaration = "\(operationHeader) == \"\(operation)\""
+                    lines.append(declaration)
+                    evaluationFailureDeclarations.append(declaration)
+                    occupied.insert(operationName)
+                }
             }
             for call in renderedAction.calls where call.arguments.isEmpty == false {
                 lines.append("\(call.renderedName) == \(formalActionCall(named: emittedName, arguments: call.arguments))")

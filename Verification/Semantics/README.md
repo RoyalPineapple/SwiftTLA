@@ -243,9 +243,15 @@ predicate, but native-versus-TLC outcome comparison remains open.
 The direct TLA+ renderer now gives each operand one local definition and
 normalizes a negative divisor into a positive one before integer division.
 This avoids relying on TLC's negative-divisor extension to the mathematical
-`\div` operator. The output link is still incomplete: `Int.min / -1`, division
-by zero, actual target integer bounds, and evaluation-failure order still need
-matching outcome proofs. TLC's bounded integer evaluator may also overflow
+`\div` operator. The output link is still incomplete: `Int.min / -1`, actual
+target integer bounds, and general evaluation-failure order still need
+matching outcome proofs. The emitted failure checks now guard division by zero
+and negative modulo divisors in Swift evaluation order; the generated-output
+tests pin those guards, and `OrderedArithmeticFailures.tla` proves the first
+division failure masks every later failure and distinguishes the two modulo
+failure verdicts. That proof covers the ordered failure boundary, not all
+nested expressions or the complete generated machine. TLC's bounded integer
+evaluator may also overflow
 while evaluating an intermediate negation that is valid in mathematical TLA+.
 
 `SingleAssignment.tla` proves that the rendered negative-divisor branch has a
@@ -280,8 +286,10 @@ overflow and evaluation-failure cases.
 `SignedIntegerSemanticsTests.generatedRightOperandFailurePrecedesLeft` checks
 the actual generated Swift machine when its left operand overflows and its
 right operand divides by zero. It requires the right-side failure and an
-unchanged state. This is a concrete output regression, not a proof of failure
-order for every expression or agreement with rendered TLA+ on failures.
+unchanged state, then pins the emitted TLA+ first-failure rule and guards on
+every later failure. The adjacent negative-modulo test pins the matching
+verdict on both outputs. These are concrete output regressions, not a proof
+of failure order for every accepted expression.
 
 `ModeledSwiftModuloMatchesEuclideanRemainder` proves that the helper's modeled
 signed-remainder adjustment equals the mathematical nonnegative remainder for
