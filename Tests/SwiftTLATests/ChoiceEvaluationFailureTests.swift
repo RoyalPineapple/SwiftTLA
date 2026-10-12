@@ -134,9 +134,9 @@ struct ChoiceEvaluationFailureTests {
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expected.tokens(viewMode: .sourceAccurate).map(\.text))
 
-        let droppedBranch = Parser.parse(source: update.description.replacingOccurrences(
-            of: "try _actionPart2(updates, { secondUpdates.append($0) })", with: "return"))
-        let mutant = try #require(droppedBranch.statements.first?.item.as(FunctionDeclSyntax.self))
+        let droppedSuccessfulBranch = Parser.parse(source: update.description.replacingOccurrences(
+            of: "try _actionPart1(updates, branchEmit)", with: "return"))
+        let mutant = try #require(droppedSuccessfulBranch.statements.first?.item.as(FunctionDeclSyntax.self))
         #expect(mutant.tokens(viewMode: .sourceAccurate).map(\.text) != actualTokens)
     }
 }

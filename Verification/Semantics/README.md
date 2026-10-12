@@ -1082,8 +1082,19 @@ source initial state, both branch transitions, and failure verdict, then
 proves the complete emitted TLA+ outcome and a dropped-branch negative
 control (15 local TLAPS obligations). This closes this concrete `Either`
 slice, not arbitrary branch composition or multiple distinct failures.
-The Swift compiler/runtime interpretation of the pinned visitor remains a
-trusted boundary; hosted evidence for this slice is pending.
+Both `Either` and action-level `Choose` now emit calls to the same
+`_NativeMachineOperations.visitAlternatives` operation. Their full Swift
+visitor witnesses pin those actual calls. `AlternativeTraversalRule.tla`
+proves by induction that ordered traversal retains the union of successful
+updates and the first failure for any finite list of branch outcomes (60 local
+TLAPS obligations). Replacing the first failure with the last is a negative
+control.
+Focused Swift tests cover a failure after an emitted update and ensure an
+output-callback error is not mistaken for a branch failure. Swift
+compiler/runtime interpretation of the helper and pinned visitors remains a
+trusted boundary; this proof does not establish that arbitrary branch bodies
+or the TLA+ emitter implement the abstract branch outcomes.
+Hosted evidence for this slice is pending.
 
 `ConditionalStepProofModel.tla` is the complete output from a `#spec` step
 that flips a Boolean before an `If`/`else` assignment in the same atomic
@@ -1269,8 +1280,8 @@ verify the emitted code itself.
 | `assign`, `unchanged` | Complete-state delta and unchanged-frame equality | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
 | `guard_` | Pure total guards agree at abstract positions; the checked-addition `When` instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof | Generalize emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
 | `and` | Compatible delta conjunction and conflicting relational writes | Prove both emitters' evaluation order, conflict/error semantics, and frame completion. |
-| `or` | Guarded-choice preservation conditional on equal branch edges; one output-linked `Either` success-plus-failure fixture | Prove arbitrary branch construction, multiplicity policy, and multi-failure behavior in both outputs. |
-| `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges | Prove the actual emitted domain and branch expressions agree, including failures and checking effects. |
+| `or` | Guarded-choice preservation conditional on equal branch edges; one output-linked `Either` success-plus-failure fixture; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, TLA+ multi-failure equivalence, multiplicity policy, and both outputs. |
+| `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order | Prove the actual emitted domain and branch expressions agree, including TLA+ multi-failure equivalence and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
 | `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule. |
 

@@ -259,6 +259,25 @@ public enum _NativeMachineOperations: Sendable {
         }
     }
 
+    /// Visit independent alternatives, retaining successes and the first model failure.
+    public static func visitAlternatives<Alternative: Sendable, Update: Sendable>(
+        _ alternatives: [Alternative],
+        emit: (Update) throws -> Void,
+        visit: (Alternative, (Update) throws -> Void) throws -> Void
+    ) throws {
+        var firstFailure: NativeMachineEvaluationError?
+        for alternative in alternatives {
+            var updates: [Update] = []
+            do {
+                try visit(alternative) { updates.append($0) }
+            } catch let failure as NativeMachineEvaluationError {
+                if firstFailure == nil { firstFailure = failure }
+            }
+            for update in updates { try emit(update) }
+        }
+        if let firstFailure { throw firstFailure }
+    }
+
     /// The generator supplies structural order so CHOOSE remains deterministic.
     public static func choose<Element: Sendable>(
         _ orderedValues: [Element], satisfying predicate: (Element) throws -> Bool

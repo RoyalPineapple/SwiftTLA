@@ -399,17 +399,9 @@ extension NativeSwiftEmitter {
                 let element = program.bindingTypes[binding]!
                 let domain = try expression(domainExpression)
                 body = """
-                var candidateFailure: NativeMachineEvaluationError?
-                for \(binder(binding)) in \(domain).sorted(by: \(try ordering(element))) {
-                    var candidateUpdates: [_Updates] = []
-                    do {
-                        \(childCall(child, binding: binding, emit: "{ candidateUpdates.append($0) }"))
-                    } catch let failure as NativeMachineEvaluationError {
-                        if candidateFailure == nil { candidateFailure = failure }
-                    }
-                    for candidate in candidateUpdates { try emit(candidate) }
+                try _NativeMachineOperations.visitAlternatives(\(domain).sorted(by: \(try ordering(element))), emit: emit) { \(binder(binding)), branchEmit in
+                    \(childCall(child, binding: binding, emit: "branchEmit"))
                 }
-                if let candidateFailure { throw candidateFailure }
                 """
             case .define(let binding, let value, let child):
                 body = "let \(binder(binding)) = \(try expression(value))\n\(childCall(child, binding: binding))"
@@ -420,22 +412,10 @@ extension NativeSwiftEmitter {
                 body = childCall(lhs, emit: "{ candidate in \(right) }")
             case .or(let lhs, let rhs):
                 body = """
-                var branchFailure: NativeMachineEvaluationError?
-                var firstUpdates: [_Updates] = []
-                do {
-                    \(childCall(lhs, emit: "{ firstUpdates.append($0) }"))
-                } catch let failure as NativeMachineEvaluationError {
-                    branchFailure = failure
+                try _NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
+                    if second { \(childCall(rhs, emit: "branchEmit")) }
+                    else { \(childCall(lhs, emit: "branchEmit")) }
                 }
-                for candidate in firstUpdates { try emit(candidate) }
-                var secondUpdates: [_Updates] = []
-                do {
-                    \(childCall(rhs, emit: "{ secondUpdates.append($0) }"))
-                } catch let failure as NativeMachineEvaluationError {
-                    if branchFailure == nil { branchFailure = failure }
-                }
-                for candidate in secondUpdates { try emit(candidate) }
-                if let branchFailure { throw branchFailure }
                 """
             }
             let parameters = (try bindings.map {
