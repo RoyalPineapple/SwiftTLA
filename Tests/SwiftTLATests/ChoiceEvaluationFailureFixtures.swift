@@ -52,3 +52,42 @@ struct EitherBranchDivisionFailureModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct EitherDistinctFailuresModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("EitherDistinctFailuresModel") { scope in
+            let divisor = scope.sharedVar(initial: 0)
+            let modulus = scope.sharedVar(initial: -1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                Either {
+                    Assign(result, to: 1 / divisor)
+                } or: {
+                    Assign(result, to: 1 % modulus)
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
+struct EitherChoiceAfterDivisionFailureModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("EitherChoiceAfterDivisionFailureModel") { scope in
+            let divisor = scope.sharedVar(in: 0...1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                Either {
+                    Assign(result, to: 1 / divisor)
+                } or: {
+                    Assign(result, to: Select(from: Set<Int>([1])) { _ in false })
+                }
+            }
+        }
+    }
+}

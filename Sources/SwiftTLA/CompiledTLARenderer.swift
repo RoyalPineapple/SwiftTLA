@@ -206,7 +206,11 @@ struct CompiledTLARenderer {
             let bodyFailure = try evaluationDefined(condition).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
             return conditionFailure.map { "(\($0) \\/ \(bodyFailure))" } ?? bodyFailure
         case .or(let lhs, let rhs):
-            switch (try choiceFailure(lhs), try choiceFailure(rhs)) {
+            let earlier = try anyFailurePredicate(lhs)
+            let later = try choiceFailure(rhs).map { failure in
+                earlier.map { "(IF \($0) THEN FALSE ELSE \(failure))" } ?? failure
+            }
+            switch (try choiceFailure(lhs), later) {
             case (nil, nil): return nil
             case (let failure?, nil), (nil, let failure?): return failure
             case (let lhs?, let rhs?): return "(\(lhs) \\/ \(rhs))"
@@ -312,9 +316,22 @@ struct CompiledTLARenderer {
                 .init(predicate: "(\(guardPredicate) /\\ \($0.predicate))", operands: $0.operands, kind: $0.kind)
             }
         case .or(let lhs, let rhs):
-            return try arithmeticFailures(lhs) + arithmeticFailures(rhs)
+            let left = try arithmeticFailures(lhs)
+            let earlier = try anyFailurePredicate(lhs)
+            let right = try arithmeticFailures(rhs).map { failure in
+                RenderedArithmeticFailure(predicate: earlier.map { "(IF \($0) THEN FALSE ELSE \(failure.predicate))" }
+                    ?? failure.predicate, operands: failure.operands, kind: failure.kind)
+            }
+            return left + right
         default: return []
         }
+    }
+
+    private func anyFailurePredicate(_ action: CompiledActionExpr) throws -> String? {
+        let predicates = try arithmeticFailures(action).map(\.predicate)
+            + (try choiceFailure(action).map { [$0] } ?? [])
+        guard !predicates.isEmpty else { return nil }
+        return predicates.count == 1 ? predicates[0] : "(\(predicates.joined(separator: " \\/ ")))"
     }
 
     private func repeatableGuards(_ action: CompiledActionExpr) -> Bool {

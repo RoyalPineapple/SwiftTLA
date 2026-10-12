@@ -97,6 +97,101 @@ struct ChoiceEvaluationFailureTests {
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
+    @Test("An earlier Either failure wins when both branches fail differently")
+    func eitherFailureOrder() throws {
+        let machine = try EitherDistinctFailuresModel.makeMachine()
+        #expect(machine.state.divisor == 0 && machine.state.modulus == -1 && machine.state.result == 0)
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+
+        let rendered = try EitherDistinctFailuresModel.render()
+        let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let laterFailure = try #require(definitions.first {
+            $0.hasPrefix("__SwiftTLANegativeModuloDivisorFailure0 ==")
+        })
+        #expect(laterFailure.contains("divisor # 0"))
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/EitherDistinctFailuresModel.tla")
+            .standardizedFileURL
+        #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+    }
+
+    @Test("An earlier arithmetic failure suppresses a later choice failure")
+    func eitherMixedFailureOrder() throws {
+        let machines = try EitherChoiceAfterDivisionFailureModel.initialMachines()
+        #expect(Set(machines.map(\.state.divisor)) == [0, 1])
+        let firstFailure = try #require(machines.first { $0.state.divisor == 0 })
+        let laterFailure = try #require(machines.first { $0.state.divisor == 1 })
+        #expect(firstFailure.state.result == 0 && laterFailure.state.result == 0)
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try firstFailure.successors(for: .pick)
+        }
+        var states: [Int: Int] = [:]
+        var edges: [(Int, Int)] = []
+        var observedFailure = false
+        let outcome = try MachineValidator.run(initialMachines: [laterFailure], maximumStates: 2,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
+            switch event {
+            case .state(let id, let snapshot, _, _, _): states[id] = snapshot.state.result
+            case .edge(let source, let action, let target):
+                #expect(action == .pick)
+                edges.append((source, target))
+            case .evaluationFailure(let source, let action, let reason):
+                observedFailure = true
+                #expect(source == 0 && action == .pick && reason == .noSatisfyingChoice)
+            default: break
+            }
+        }
+        #expect(observedFailure)
+        #expect(outcome.completion == .evaluationFailure(.noSatisfyingChoice))
+        #expect(states == [0: 0, 1: 1])
+        #expect(edges.count == 1 && edges[0] == (0, 1))
+
+        let rendered = try EitherChoiceAfterDivisionFailureModel.render()
+        let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let laterFailurePredicate = try #require(definitions.first {
+            $0.hasPrefix("__SwiftTLAChoiceFailure0 ==")
+        })
+        #expect(laterFailurePredicate.contains("divisor # 0"))
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/EitherChoiceAfterDivisionFailureModel.tla")
+            .standardizedFileURL
+        #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+    }
+
+    @Test("Emitted Swift visits both kinds of later failure")
+    func eitherFailureOrderEmittedSwift() throws {
+        let fixture = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("ChoiceEvaluationFailureFixtures.swift")
+        let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        for (name, witnessName) in [
+            ("EitherDistinctFailuresModel", "EitherDistinctFailuresSwiftWitness.txt"),
+            ("EitherChoiceAfterDivisionFailureModel", "EitherChoiceAfterDivisionFailureSwiftWitness.txt")
+        ] {
+            let declaration = try #require(source.statements.compactMap {
+                $0.item.as(StructDeclSyntax.self)
+            }.first { $0.name.text == name })
+            let compiled = try TLASpecVerifier.parseAndVerify(declaration)
+            var emitter = NativeSwiftEmitter(model: compiled)
+            let update = try #require(try emitter.machineMembers().first {
+                $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+            })
+            let witness = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .appendingPathComponent("../../Verification/Semantics/\(witnessName)")
+                .standardizedFileURL
+            let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+                .statements.first?.item.as(FunctionDeclSyntax.self))
+            #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
+                == expected.tokens(viewMode: .sourceAccurate).map(\.text))
+        }
+    }
+
     @Test("The emitted Swift visitor preserves both Either branches")
     func eitherBranchEmittedSwift() throws {
         let fixture = URL(fileURLWithPath: #filePath)
