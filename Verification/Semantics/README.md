@@ -1213,16 +1213,21 @@ verify the emitted code itself.
 | `or` | Guarded-choice preservation conditional on equal branch edges | Prove branch construction, multiplicity policy, and failure behavior in both outputs. |
 | `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges | Prove the actual emitted domain and branch expressions agree, including failures and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
-| `ifElse` | Equal pure source/rendered predicates and branch edges preserve complete labeled edges and enabledness | Prove emitted condition evaluation, failure behavior, and both branch forms. |
+| `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `DefinedConditionalPreservesStepAndFirstFailure` proves that a failing condition precedes either branch and only the selected branch can report failure | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule. |
 
 The generated conditional arithmetic regressions check both branch selection
 and an arithmetic condition that can overflow before either branch runs.
 Native failure leaves state unchanged; generated TLA+ disables the action and
 reports that first failure. For a repeatable arithmetic condition, branch
 failures are reported only when the condition succeeded and selected that
-branch. This is focused output test evidence, not a compositional proof or a
-link to a checked TLA module; effectful conditions and other `ifElse` trees
-remain open. A separate accepted `Choose(0...1)`
+branch. `DefinedConditionalPreservesStepAndFirstFailure` proves the abstract
+Boolean step and ordered failure rule, with an unselected-branch negative
+control. The arithmetic fixture still has only focused output-test evidence:
+its actual Swift and TLA+ expressions are not linked to that theorem or to a
+checked TLA module. Nonrepeatable conditions and other `ifElse` trees remain
+open. `EmittedConditionFailureInstantiatesDefinedRule` does link the existing
+empty-choice-in-condition TLA+ fixture to this rule, but it does not establish
+the arithmetic instance or all accepted conditions. A separate accepted `Choose(0...1)`
 case still throws on its first native branch while generated TLA+ has no
 intrinsic failure predicate; ordered first-failure and whole-action semantics
 for `existsAction` remain open.
