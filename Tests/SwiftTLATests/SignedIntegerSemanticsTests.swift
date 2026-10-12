@@ -98,6 +98,68 @@ import Testing
         #expect(lines.contains { $0.hasPrefix("compute == (IF (IF divisor # 0 THEN (IF divisor > 0 THEN") })
     }
 
+    @Test("Only the selected conditional branch reports an arithmetic failure")
+    func generatedConditionalArithmeticFailure() throws {
+        let machines = try GeneratedConditionalArithmeticFailureModel.initialMachines()
+        #expect(machines.count == 4)
+        for var machine in machines {
+            let before = machine.snapshot
+            let attempt = machine.state.attempt
+            if machine.state.attempt == (machine.state.divisor == 0) {
+                #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+                    try machine.send(.compute)
+                }
+                #expect(machine.snapshot == before)
+            } else {
+                _ = try machine.send(.compute)
+                #expect(machine.state.result == (attempt ? -1 : 1))
+            }
+        }
+
+        let rendered = try GeneratedConditionalArithmeticFailureModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(lines.contains { $0.hasPrefix("compute ==") && $0.contains("divisor # 0") })
+        #expect(lines.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==") && $0.contains("IF attempt THEN") })
+        #expect(lines.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure0_1 ==") && $0.contains("IF attempt THEN FALSE ELSE") })
+    }
+
+    @Test("A conditional reports condition failure before either branch")
+    func generatedFallibleConditionFailureOrder() throws {
+        let machines = try GeneratedFallibleConditionModel.initialMachines()
+        #expect(machines.count == 4)
+        for var machine in machines {
+            let before = machine.snapshot
+            switch machine.state.divisor {
+            case Int.max:
+                #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+                    try machine.send(.compute)
+                }
+                #expect(machine.snapshot == before)
+            case 0, -2:
+                #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+                    try machine.send(.compute)
+                }
+                #expect(machine.snapshot == before)
+            case -3:
+                _ = try machine.send(.compute)
+                #expect(machine.state.result == -1)
+            default:
+                Issue.record("unexpected initial divisor")
+            }
+        }
+
+        let rendered = try GeneratedFallibleConditionModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let compute = try #require(lines.first { $0.hasPrefix("compute ==") })
+        #expect(compute.contains("THEN (IF ((divisor + 1) > 0)"))
+        #expect(compute.hasSuffix("ELSE FALSE)"))
+        #expect(lines.contains { $0.hasPrefix("__SwiftTLAOverflowFailure0 ==") })
+        #expect(lines.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==") && $0.contains("THEN (IF ((divisor + 1) > 0) THEN") })
+        #expect(lines.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure0_1 ==") && $0.contains("THEN FALSE ELSE") })
+    }
+
     @Test("Membership checks its set before an overflowing member on both outputs")
     func generatedMembershipFailureOrder() throws {
         var machine = try GeneratedMembershipFailureOrderModel.makeMachine()

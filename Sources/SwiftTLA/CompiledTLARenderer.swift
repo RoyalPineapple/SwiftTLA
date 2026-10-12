@@ -167,9 +167,12 @@ struct CompiledTLARenderer {
                     parts.append("(\\E \(try binderName(binder)) \\in \(try state(set)): ")
                     schedule([.expression(body), .text(")")])
                 case .ifElse(let condition, let then, let otherwise):
+                    let defined = try evaluationDefined(condition)
+                    if let defined { parts.append("(IF \(defined) THEN ") }
                     parts.append("(IF \(try state(condition)) THEN (")
                     schedule([
-                        .expression(then), .text(") ELSE ("), .expression(otherwise), .text("))")
+                        .expression(then), .text(") ELSE ("), .expression(otherwise),
+                        .text(defined == nil ? "))" : ")) ELSE FALSE)")
                     ])
                 case .define(let binder, let value, let body):
                     let defined = try evaluationDefined(value)
@@ -253,6 +256,23 @@ struct CompiledTLARenderer {
             return failures
         case .guard_(let condition):
             return try expressionArithmeticFailures(condition)
+        case .ifElse(let condition, let yes, let no):
+            let conditionFailures = try expressionArithmeticFailures(condition)
+            // shortcut: nonrepeatable conditions need ordered outcomes before branch failures can be reported.
+            guard arithmeticTreeIsRepeatable(condition) else { return conditionFailures }
+            let predicate = try state(condition)
+            let defined = try evaluationDefined(condition)
+            let selected = try arithmeticFailures(yes).map {
+                let failure = "(IF \(predicate) THEN \($0.predicate) ELSE FALSE)"
+                return RenderedArithmeticFailure(predicate: defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
+                    operands: $0.operands, kind: $0.kind)
+            }
+            let unselected = try arithmeticFailures(no).map {
+                let failure = "(IF \(predicate) THEN FALSE ELSE \($0.predicate))"
+                return RenderedArithmeticFailure(predicate: defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
+                    operands: $0.operands, kind: $0.kind)
+            }
+            return conditionFailures + selected + unselected
         case .and(.guard_(let condition), let body):
             let conditionFailures = try expressionArithmeticFailures(condition)
             let ordered = try orderedFallibleSites(condition)

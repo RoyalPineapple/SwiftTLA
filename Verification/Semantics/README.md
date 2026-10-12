@@ -354,10 +354,18 @@ normalization or all emitted String operations. The link assumes Swift String
 equality and Foundation's canonical normalization agree on the same Unicode
 version. Raw imported TLA+ values remain byte-exact, so an accepted imported
 String operation that reaches generated Swift still needs a separate output
-link. The closed canonical-Unicode choice below is one output-linked instance;
+link. The closed canonical-Unicode choice below is an output-linked candidate,
+not yet a proved instance;
 dynamic String-valued `CHOOSE` and arbitrary Unicode String programs remain
 outside the fidelity theorem until those links and TLC's Unicode handling are
 established.
+The [open TLC Unicode-state issue](https://github.com/tlaplus/tlaplus/issues/1076)
+reports that distinct non-ASCII strings can share a state fingerprint and that
+disk serialization can corrupt them. Our pinned TLC v1.8.0 revision predates
+the October 2026 report. Raw non-ASCII String states therefore cannot qualify as
+independent TLC parity evidence until the pinned checker is repaired or the
+formal representation is made safe; a passing local Unicode fixture or TLAPS
+proof does not establish TLC's state exploration is complete.
 
 ## Choice-expression obligation
 
@@ -532,9 +540,12 @@ complete emitted Swift choice and update function to the shared
 `GeneratedStringSelectionSwiftWitness.txt` after replacing only this fixture's
 two literal tokens. The accompanying
 `CanonicalUnicodeStringSelectionProof.tla` states the complete initial,
-labeled-step, failure, and reversed-order obligations; its local proof result
-and hosted admission remain pending. This is one canonical-Unicode instance,
-not a proof of all Unicode values or dynamic String domains.
+labeled-step, failure, and reversed-order obligations. The hosted diagnostic
+on [`fa7c7602`](https://github.com/RoyalPineapple/SwiftTLA/actions/runs/38240172815)
+left 8 of 22 obligations unproved, starting with the closed-domain choice and
+empty-match laws. The output links are tested, but the proof is not admitted.
+Even a repaired instance would not prove all Unicode values or dynamic String
+domains.
 
 For a repeatable String selection with no matching member,
 `TypedSelectionTests.missingStringSelectionHasMatchingFailure` checks the
@@ -1203,6 +1214,18 @@ verify the emitted code itself.
 | `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges | Prove the actual emitted domain and branch expressions agree, including failures and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
 | `ifElse` | Equal pure source/rendered predicates and branch edges preserve complete labeled edges and enabledness | Prove emitted condition evaluation, failure behavior, and both branch forms. |
+
+The generated conditional arithmetic regressions check both branch selection
+and an arithmetic condition that can overflow before either branch runs.
+Native failure leaves state unchanged; generated TLA+ disables the action and
+reports that first failure. For a repeatable arithmetic condition, branch
+failures are reported only when the condition succeeded and selected that
+branch. This is focused output test evidence, not a compositional proof or a
+link to a checked TLA module; effectful conditions and other `ifElse` trees
+remain open. A separate accepted `Choose(0...1)`
+case still throws on its first native branch while generated TLA+ has no
+intrinsic failure predicate; ordered first-failure and whole-action semantics
+for `existsAction` remain open.
 
 This table is a proof inventory, not a claim that these seven groups exhaust
 `#spec`: initialization, source lowering, properties, temporal behavior,

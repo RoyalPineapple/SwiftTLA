@@ -67,3 +67,42 @@ struct GeneratedTupleFailureOrderModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct GeneratedConditionalArithmeticFailureModel: Sendable {
+    enum Step: String, CaseIterable { case compute }
+
+    static var spec: TLASpec {
+        #spec("GeneratedConditionalArithmeticFailureModel") { scope in
+            let attempt = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
+            let divisor = scope.sharedVar(in: SetExpr<Int>.literal(-1, 0))
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.compute) {
+                If(attempt) {
+                    Assign(result, to: 1 / divisor)
+                } else: {
+                    Assign(result, to: 1 / (divisor + 1))
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedFallibleConditionModel: Sendable {
+    enum Step: String, CaseIterable { case compute }
+
+    static var spec: TLASpec {
+        #spec("GeneratedFallibleConditionModel") { scope in
+            let divisor = scope.sharedVar(in: SetExpr<Int>.literal(9_223_372_036_854_775_807, -3, -2, 0))
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.compute) {
+                If(divisor + 1 > 0) {
+                    Assign(result, to: 1 / divisor)
+                } else: {
+                    Assign(result, to: 1 / (divisor + 2))
+                }
+            }
+        }
+    }
+}
