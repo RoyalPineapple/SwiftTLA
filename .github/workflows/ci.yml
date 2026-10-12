@@ -124,7 +124,7 @@ jobs:
           "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/semantic-proof-evidence/tlapm-version.txt
           "$proof_tool_dir/tlapm/bin/tlapm" --config > .build/semantic-proof-evidence/tlapm-config.txt
           proof_failure=0
-          for proof in BooleanSelectionProof EnumSelectionProof SequenceSelectionProof DynamicSequenceSelectionProof RankedChoiceProof MissingStringSelectionProof ConditionalSelectionFailureProof ConditionalChoiceConditionFailureProof CheckedExecutionOverflowProof CheckedSubtractionProof CheckedMultiplicationProof CheckedGuardFailureProof OrderedArithmeticFailures SingleAssignment ConditionalStep; do
+          for proof in BooleanSelectionProof EnumSelectionProof SequenceSelectionProof DynamicSequenceSelectionProof DynamicBooleanSequenceSelectionProof RankedChoiceProof MissingStringSelectionProof AggregateMissingSelectionProof ConditionalSelectionFailureProof ConditionalChoiceConditionFailureProof CheckedExecutionOverflowProof CheckedSubtractionProof CheckedMultiplicationProof CheckedGuardFailureProof OrderedArithmeticFailures SingleAssignment ConditionalStep; do
             if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "Verification/Semantics/$proof.tla" \
                 2>&1 | tee ".build/semantic-proof-evidence/$proof.log" \
               && grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \

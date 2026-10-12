@@ -237,3 +237,21 @@ struct DynamicSequenceSelection {
         }
     }
 }
+
+@TLAModel
+struct DynamicBooleanSequenceSelection {
+    enum Step: String, CaseIterable { case select }
+
+    static var spec: TLASpec {
+        #spec {
+            let dynamicBooleanSequenceSelection = Algorithm(scoped: { scope in
+                let candidates = scope.sharedVar(initial: Set<[Bool]>([[true], [false, true], [false]]))
+                let selected = scope.sharedVar(initial: [true])
+                Do(Step.select) {
+                    Assign(selected, to: Select(from: candidates) { _ in true })
+                }
+            })
+            dynamicBooleanSequenceSelection
+        }
+    }
+}

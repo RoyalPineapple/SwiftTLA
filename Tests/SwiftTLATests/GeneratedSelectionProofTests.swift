@@ -19,6 +19,7 @@ struct GeneratedSelectionProofTests {
             (model: "StringSelection", witness: "GeneratedStringSelectionSwiftWitness.txt", cache: true),
             (model: "SequenceSelection", witness: "GeneratedSequenceSelectionSwiftWitness.txt", cache: true),
             (model: "DynamicSequenceSelection", witness: "GeneratedDynamicSequenceSelectionSwiftWitness.txt", cache: false),
+            (model: "DynamicBooleanSequenceSelection", witness: "GeneratedDynamicBooleanSequenceSelectionSwiftWitness.txt", cache: false),
             (model: "MissingStringSelection", witness: "GeneratedMissingStringSelectionSwiftWitness.txt", cache: true),
             (model: "AggregateMissingSelection", witness: "GeneratedAggregateMissingSelectionSwiftWitness.txt", cache: true),
             (model: "ConditionalSelectionFailure", witness: "GeneratedConditionalSelectionFailureSwiftWitness.txt", cache: true)

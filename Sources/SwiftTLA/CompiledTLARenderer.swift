@@ -837,7 +837,7 @@ struct CompiledTLARenderer {
                         .expression(expression.children[1]),
                         .text(" IN (IF \(divisor) < 0 THEN (-\(dividend)) \\div (-\(divisor)) ELSE \(dividend) \\div \(divisor))))")])
                 case .choose(let binder) where expression.resultType == .int || expression.resultType == .bool
-                    || expression.resultType == .array(.int)
+                    || expression.resultType == .array(.int) || expression.resultType == .array(.bool)
                     || choiceMembers(expression) != nil:
                     guard expression.children.count == 2 else {
                         throw CompiledValueType.diagnostic("rendering.choose", "choice requires a domain and predicate")
@@ -858,11 +858,14 @@ struct CompiledTLARenderer {
                             return "(CASE \(cases))"
                         }
                         least = try "\(rank(member)) <= \(rank(other))"
-                    } else if expression.resultType == .array(.int) {
+                    } else if expression.resultType == .array(.int) || expression.resultType == .array(.bool) {
                         let index = choiceName("choiceIndex")
                         let prefix = choiceName("choicePrefix")
                         let equalPrefix = "(\\A \(prefix) \\in 1..(\(index) - 1) : \(member)[\(prefix)] = \(other)[\(prefix)])"
-                        let firstDifference = "(\\E \(index) \\in 1..Len(\(member)) : IF \(index) <= Len(\(other)) THEN (\(equalPrefix) /\\ \(member)[\(index)] < \(other)[\(index)]) ELSE FALSE)"
+                        let less = expression.resultType == .array(.int)
+                            ? "\(member)[\(index)] < \(other)[\(index)]"
+                            : "(\(member)[\(index)] = FALSE /\\ \(other)[\(index)] = TRUE)"
+                        let firstDifference = "(\\E \(index) \\in 1..Len(\(member)) : IF \(index) <= Len(\(other)) THEN (\(equalPrefix) /\\ \(less)) ELSE FALSE)"
                         let properPrefix = "(IF Len(\(member)) < Len(\(other)) THEN (\\A \(prefix) \\in 1..Len(\(member)) : \(member)[\(prefix)] = \(other)[\(prefix)]) ELSE FALSE)"
                         least = "(\(member) = \(other) \\/ \(firstDifference) \\/ \(properPrefix))"
                     } else {

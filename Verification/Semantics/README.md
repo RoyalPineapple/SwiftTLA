@@ -336,7 +336,7 @@ domain and returns the first satisfying member, or throws when none exists;
 the TLA+ renderer emits a least-member `CHOOSE` for integer, Boolean,
 finite-enum, closed multi-member printable-ASCII String domains, closed
 literal tuple/sequence domains with exact integer, Boolean, or printable-ASCII
-String members, and state-held integer-sequence domains. It emits ordinary
+String members, and state-held integer- or Boolean-sequence domains. It emits ordinary
 `CHOOSE` for other result types. Ordinary
 TLA+ `CHOOSE`
 permits an unspecified consistent witness and gives an arbitrary value when
@@ -551,6 +551,22 @@ locally; hosted evidence is pending. The exact output theorem covers this
 fixture's fixed reachable candidate set, not arbitrary mutable sets or all
 integer sequences. Swift's `lexicographicallyPrecedes`, the generated update
 merge, and the Swift compiler/runtime remain trusted boundaries.
+
+`DynamicBooleanSequenceSelection` extends the output-linked boundary to a
+state-held set of Boolean sequences. The focused test first failed because
+TLA+ emitted ordinary `CHOOSE` while generated Swift sorted lexicographically;
+after the renderer change it checks the native selected state and the complete
+emitted TLA+ module byte-for-byte, normalizing only the source-location binder.
+`GeneratedSelectionProofTests` token-checks the complete emitted Swift update
+function against its witness. `DynamicBooleanSequenceSelectionProof.tla` proves
+the source rank and emitted lexicographic order agree for every pair and
+nonempty subset of this three-value domain, then composes complete initial
+states, labeled steps, no-match failure, and the selected evaluation check.
+A reversed chosen edge is a negative control. All 32 obligations pass locally;
+hosted proof evidence is pending. The Swift compiler/runtime,
+`lexicographicallyPrecedes`, `Result`, `choose`, and update merge remain
+trusted. This does not prove arbitrary mutable Boolean-sequence domains,
+other element types, or general generated Swift emission.
 
 `RankedChoiceProof.tla` generalizes the sorted-first argument: for any finite
 ordered sequence, predicate, integer rank that strictly increases along that
