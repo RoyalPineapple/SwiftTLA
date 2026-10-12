@@ -419,7 +419,24 @@ extension NativeSwiftEmitter {
                 let right = childCall(rhs, updates: "candidate")
                 body = childCall(lhs, emit: "{ candidate in \(right) }")
             case .or(let lhs, let rhs):
-                body = "\(childCall(lhs))\n\(childCall(rhs))"
+                body = """
+                var branchFailure: NativeMachineEvaluationError?
+                var firstUpdates: [_Updates] = []
+                do {
+                    \(childCall(lhs, emit: "{ firstUpdates.append($0) }"))
+                } catch let failure as NativeMachineEvaluationError {
+                    branchFailure = failure
+                }
+                for candidate in firstUpdates { try emit(candidate) }
+                var secondUpdates: [_Updates] = []
+                do {
+                    \(childCall(rhs, emit: "{ secondUpdates.append($0) }"))
+                } catch let failure as NativeMachineEvaluationError {
+                    if branchFailure == nil { branchFailure = failure }
+                }
+                for candidate in secondUpdates { try emit(candidate) }
+                if let branchFailure { throw branchFailure }
+                """
             }
             let parameters = (try bindings.map {
                 "_ \(binder($0)): \(try swiftType(program.bindingTypes[$0]!))"

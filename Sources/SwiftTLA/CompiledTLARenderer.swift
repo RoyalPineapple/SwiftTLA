@@ -311,6 +311,8 @@ struct CompiledTLARenderer {
             return leftFailures + rightFailures.map {
                 .init(predicate: "(\(guardPredicate) /\\ \($0.predicate))", operands: $0.operands, kind: $0.kind)
             }
+        case .or(let lhs, let rhs):
+            return try arithmeticFailures(lhs) + arithmeticFailures(rhs)
         default: return []
         }
     }

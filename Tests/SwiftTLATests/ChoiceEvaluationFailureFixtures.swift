@@ -33,3 +33,22 @@ struct MixedCandidateDivisionFailureModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct EitherBranchDivisionFailureModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("EitherBranchDivisionFailureModel") { scope in
+            let divisor = scope.sharedVar(initial: 0)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                Either {
+                    Assign(result, to: 1 / divisor)
+                } or: {
+                    Assign(result, to: 1)
+                }
+            }
+        }
+    }
+}
