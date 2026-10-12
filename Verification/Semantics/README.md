@@ -636,6 +636,13 @@ locally. This theorem still does not link arbitrary Swift and TLA+ emitter
 outputs to the modeled order, rank, predicate, or update; hosted evidence for
 this revision is pending.
 
+`ConditionalOutcomeRules.tla` defines one Boolean conditional operation for
+source steps, guarded compiled branches, and the TLA+ `IF` form. It proves the
+complete labeled step predicate and first-failure result agree for any Boolean
+condition-definedness and branch-failure flags. Its negative control reports
+failure from an unselected branch and is rejected. All four obligations pass
+locally. This is an abstract rule; the output links below instantiate it.
+
 `ConditionalSelectionFailure` closes one branch-scoped choice failure. Its
 generated Swift machine fails transactionally when `attempt` is true and the
 selected domain has no match, but takes the `selected = 2` edge when `attempt`
@@ -647,13 +654,15 @@ the source-location-derived binder name. `GeneratedSelectionProofTests` also
 pins the emitted Swift choice cache and complete update function to
 `GeneratedConditionalSelectionFailureSwiftWitness.txt`, normalizing only that
 binder name. `ConditionalSelectionFailureProof.tla`
-proves a reusable Boolean `If`-to-guarded-branches law, then factors the source
-success and failure rules through explicit compiled-branch rules before
+instantiates the shared conditional rule, then factors the source success and
+failure rules through explicit compiled-branch rules before
 comparing them to the exact emitted module. It also proves initial states, the
 complete labeled `select` and internal `Terminating` relation, the selected
 invariant, both branch verdicts, and a reversed-branch negative control. All
-27 obligations passed locally. The proof does not yet verify that the Swift
-lowerer implements this compiled rule for every accepted `If`; this fixture's
+29 obligations passed locally; `EmittedSelectedBranchInstantiatesDefinedRule`
+links its exact generated TLA+ step and failure predicate to the shared rule.
+The proof does not yet verify that the Swift lowerer implements this compiled
+rule for every accepted `If`; this fixture's
 native behavior and exact outputs are the instance links. Effectful conditions,
 nested conjunctions, arbitrary choice domains, and independent TLC/native
 failure-outcome comparison remain open. Interpreting the pinned Swift source,
@@ -663,11 +672,12 @@ failure-outcome comparison remain open. Interpreting the pinned Swift source,
 in an `If` condition. The generated Swift machine throws before changing state;
 the generated TLA+ module now reports the same evaluation failure and has no
 `select` edge. A focused test pins the complete emitted TLA+ module, and
-`ConditionalChoiceConditionFailureProof.tla` proves a general defined-Boolean
-conditional rule, then compares this fixture's initial state, complete labeled
+`ConditionalChoiceConditionFailureProof.tla` instantiates the shared
+defined-conditional rule, then compares this fixture's initial state, complete labeled
 steps, and failure invariant with that exact output. It rejects an unguarded
-false-branch edge as a negative control. All 21 obligations passed locally;
-hosted evidence is pending. This closes the empty-choice condition instance,
+false-branch edge as a negative control. Its emitted failure predicate also
+instantiates the shared rule. All 24 obligations passed locally; hosted evidence
+is pending. This closes the empty-choice condition instance,
 not nested or otherwise effectful conditions, arbitrary choice domains, or the
 general Swift-emitter link.
 
@@ -1213,7 +1223,7 @@ verify the emitted code itself.
 | `or` | Guarded-choice preservation conditional on equal branch edges | Prove branch construction, multiplicity policy, and failure behavior in both outputs. |
 | `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges | Prove the actual emitted domain and branch expressions agree, including failures and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
-| `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `DefinedConditionalPreservesStepAndFirstFailure` proves that a failing condition precedes either branch and only the selected branch can report failure | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule. |
+| `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule. |
 
 The generated conditional arithmetic regressions check both branch selection
 and an arithmetic condition that can overflow before either branch runs.

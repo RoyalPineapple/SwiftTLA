@@ -1,14 +1,7 @@
 --------------- MODULE ConditionalSelectionFailureProof ---------------
-EXTENDS TLAPS, ConditionalSelectionFailure
+EXTENDS TLAPS, ConditionalSelectionFailure, ConditionalOutcomeRules
 
 SourceInit == pc = "select" /\ attempt \in BOOLEAN /\ selected = 0
-Conditional(guard, yes, no) == IF guard THEN yes ELSE no
-GuardedBranches(guard, yes, no) == (guard /\ yes) \/ (~guard /\ no)
-
-THEOREM ConditionalLoweringLaw ==
-    ASSUME NEW guard \in BOOLEAN, NEW yes \in BOOLEAN, NEW no \in BOOLEAN
-    PROVE Conditional(guard, yes, no) <=> GuardedBranches(guard, yes, no)
-    BY SMT DEF Conditional, GuardedBranches
 
 MatchingChoice == \E member \in {1} : FALSE
 TrueBranch ==
@@ -17,15 +10,15 @@ FalseBranch ==
     pc' = "Done" /\ selected' = 2 /\ UNCHANGED attempt
 SourceSelect ==
     /\ pc = "select"
-    /\ Conditional(attempt, TrueBranch, FalseBranch)
+    /\ DefinedConditional(TRUE, attempt, TrueBranch, FalseBranch)
 CompiledSelect ==
-    pc = "select" /\ GuardedBranches(attempt, TrueBranch, FalseBranch)
+    pc = "select" /\ DefinedGuardedBranches(TRUE, attempt, TrueBranch, FalseBranch)
 SourceTerminating ==
     pc = "Done" /\ UNCHANGED <<pc, attempt, selected>>
 SourceNext == SourceSelect \/ SourceTerminating
-SourceFailure == pc = "select" /\ Conditional(attempt, ~MatchingChoice, FALSE)
+SourceFailure == pc = "select" /\ DefinedConditional(TRUE, attempt, ~MatchingChoice, FALSE)
 CompiledFailure ==
-    pc = "select" /\ GuardedBranches(attempt, ~MatchingChoice, FALSE)
+    pc = "select" /\ DefinedGuardedBranches(TRUE, attempt, ~MatchingChoice, FALSE)
 SourceLabeled(label) ==
     \/ label = "select" /\ SourceSelect
     \/ label = "Terminating" /\ SourceTerminating
@@ -41,16 +34,16 @@ THEOREM ConditionalChoiceLoweringPreservesStepAndFailure ==
     ASSUME attempt \in BOOLEAN
     PROVE /\ (SourceSelect <=> CompiledSelect)
           /\ (SourceFailure <=> CompiledFailure)
-    BY ConditionalLoweringLaw, SMT
+    BY DefinedConditionalPreservesStepAndFirstFailure, SMT
         DEF SourceSelect, CompiledSelect, SourceFailure,
-            CompiledFailure, Conditional, GuardedBranches
+            CompiledFailure, DefinedConditional, DefinedGuardedBranches
 
 THEOREM SelectedBranchPreservesCompleteStep ==
     ASSUME attempt \in BOOLEAN
     PROVE select <=> SourceSelect
     BY ConditionalChoiceLoweringPreservesStepAndFailure, SMT
         DEF select, CompiledSelect, TrueBranch, FalseBranch,
-            MatchingChoice, GuardedBranches
+            MatchingChoice, DefinedGuardedBranches
 
 THEOREM InternalTerminatingStepAgrees ==
     Terminating <=> SourceTerminating
@@ -70,7 +63,20 @@ THEOREM SelectedFailureAndCheckingInvariantAgree ==
           /\ (__SwiftTLAEvaluationOK <=> ~SourceFailure)
     BY ConditionalChoiceLoweringPreservesStepAndFailure, SMT
         DEF __SwiftTLAChoiceFailure0, __SwiftTLAEvaluationOK,
-            CompiledFailure, MatchingChoice, GuardedBranches
+            CompiledFailure, MatchingChoice, DefinedGuardedBranches
+
+THEOREM EmittedSelectedBranchInstantiatesDefinedRule ==
+    ASSUME attempt \in BOOLEAN
+    PROVE /\ (select <=> pc = "select"
+                /\ DefinedConditional(TRUE, attempt, TrueBranch, FalseBranch))
+          /\ (__SwiftTLAChoiceFailure0 <=> pc = "select"
+                /\ RenderedFirstFailure(TRUE, attempt, ~MatchingChoice, FALSE) = "yes")
+    BY SelectedBranchPreservesCompleteStep,
+        SelectedFailureAndCheckingInvariantAgree, SMT
+        DEF SourceSelect, SourceFailure,
+            DefinedConditional, RenderedFirstFailure,
+            RenderedConditionFailure, RenderedYesFailure,
+            RenderedNoFailure
 
 THEOREM BranchVerdictsAgree ==
     ASSUME pc = "select", attempt \in BOOLEAN
@@ -84,7 +90,7 @@ THEOREM BranchVerdictsAgree ==
         ExpandENABLED, SMT
         DEF Next, select, Terminating,
             SourceSelect, SourceTerminating, SourceFailure,
-            Conditional, TrueBranch, FalseBranch, MatchingChoice,
+            DefinedConditional, TrueBranch, FalseBranch, MatchingChoice,
             __SwiftTLAChoiceFailure0
 
 WrongBranchFailure == pc = "select" /\ attempt = FALSE
