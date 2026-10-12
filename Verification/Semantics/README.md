@@ -500,11 +500,11 @@ compound value type.
 ordered sequence, predicate, integer rank that strictly increases along that
 sequence, complete-state update function, and action label, its source and
 ranked-TLA choices have identical labeled edges and no-match failures. The
-edge theorem assumes that a matching sequence has a first matching index;
-TLAPS has not yet discharged this finite-minimum existence premise. It also
-does not link arbitrary Swift and TLA+ emitter outputs to the modeled order,
-rank, predicate, or update. All 11 current obligations passed locally;
-hosted evidence is pending.
+first matching index now follows from TLAPS's least-natural-number theorem,
+so the edge theorem no longer assumes its existence. All 20 obligations passed
+locally. This theorem still does not link arbitrary Swift and TLA+ emitter
+outputs to the modeled order, rank, predicate, or update; hosted evidence for
+this revision is pending.
 
 `ConditionalSelectionFailure` closes one branch-scoped choice failure. Its
 generated Swift machine fails transactionally when `attempt` is true and the
