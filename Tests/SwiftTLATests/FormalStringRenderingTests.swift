@@ -14,6 +14,23 @@ struct FormalStringRenderingTests {
         let text = Var<String>("text")
         let specification = TLASpec("EscapedStrings") { Variable(text, value) }
         let rendered = try specification.compile().render().tlaBundle.tla
-        #expect(rendered.contains("text = \(literal)"))
+        let canonicalLiteral = TLAValue.string(value.precomposedStringWithCanonicalMapping).description
+        #expect(rendered.contains("text = \(canonicalLiteral)"))
+    }
+
+    @Test("typed Swift strings have one formal value for canonical equivalents")
+    func typedStringIdentity() throws {
+        let composed = "\u{00E9}"
+        let decomposed = "e\u{301}"
+        #expect(composed == decomposed)
+        #expect(composed.tlaValue == decomposed.tlaValue)
+        #expect(Set([composed.tlaValue, decomposed.tlaValue]).count == 1)
+        guard case .string(let encoded) = decomposed.tlaValue else {
+            Issue.record("Expected a formal string")
+            return
+        }
+        #expect(encoded.utf8.elementsEqual(composed.utf8))
+        let decodedRawFormal = try #require(String(formalValue: .string(decomposed)))
+        #expect(decodedRawFormal.utf8.elementsEqual(decomposed.utf8))
     }
 }

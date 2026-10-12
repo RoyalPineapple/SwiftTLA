@@ -38,4 +38,25 @@ struct FormalValueEqualityTests {
             }
         }
     }
+
+    @Test("byte-distinct formal strings keep separate set and state identities")
+    func byteDistinctStringsRemainDistinctInCollections() {
+        let composed = TLAValue.string("\u{00E9}")
+        let decomposed = TLAValue.string("e\u{301}")
+        #expect(composed != decomposed)
+        #expect(Set([composed, decomposed]).count == 2)
+        #expect([composed, decomposed].sorted() == [decomposed, composed])
+
+        let compiledComposed = CompiledValue(formal: composed)
+        let compiledDecomposed = CompiledValue(formal: decomposed)
+        #expect(compiledComposed != compiledDecomposed)
+        #expect(Set([compiledComposed, compiledDecomposed]).count == 2)
+        #expect([compiledComposed, compiledDecomposed].sorted() == [compiledDecomposed, compiledComposed])
+
+        let composedField = TLARecord([.init("\u{00E9}", .int(1))])
+        let decomposedField = TLARecord([.init("e\u{301}", .int(1))])
+        #expect(composedField != decomposedField)
+        #expect(composedField.value(named: "e\u{301}") == nil)
+        #expect(TLAValue.record(composedField) != .record(decomposedField))
+    }
 }

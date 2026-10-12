@@ -75,7 +75,7 @@ extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int {
 }
 
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == String {
-  public var tlaValue: TLAValue { .string(rawValue) }
+  public var tlaValue: TLAValue { .canonicalSwiftString(rawValue) }
   public init?(formalValue: TLAValue) {
     let rawValue: String
     switch formalValue {
@@ -192,7 +192,7 @@ extension TLAValueConvertible {
 extension TLAValue: TLAValueConvertible { public var tlaValue: TLAValue { self } }
 extension Int: TLAValueConvertible { public var tlaValue: TLAValue { .int(self) } }
 extension Bool: TLAValueConvertible { public var tlaValue: TLAValue { .bool(self) } }
-extension String: TLAValueConvertible { public var tlaValue: TLAValue { .string(self) } }
+extension String: TLAValueConvertible { public var tlaValue: TLAValue { .canonicalSwiftString(self) } }
 
 // MARK: - Arithmetic (Var<Int> only)
 

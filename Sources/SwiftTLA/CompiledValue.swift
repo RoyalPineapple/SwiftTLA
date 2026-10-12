@@ -37,6 +37,35 @@ package indirect enum CompiledValue: Hashable, Sendable, Comparable {
     case function([CompiledValue: CompiledValue])
     case constant(String)
 
+    package static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.integer(let a), .integer(let b)): a == b
+        case (.boolean(let a), .boolean(let b)): a == b
+        case (.string(let a), .string(let b)), (.constant(let a), .constant(let b)):
+            FormalStringIdentity.equal(a, b)
+        case (.controlLocation(let a), .controlLocation(let b)): a == b
+        case (.set(let a), .set(let b)): a == b
+        case (.tuple(let a), .tuple(let b)): a == b
+        case (.record(let a), .record(let b)): a == b
+        case (.function(let a), .function(let b)): a == b
+        default: false
+        }
+    }
+
+    package func hash(into hasher: inout Hasher) {
+        hasher.combine(orderingKind)
+        switch self {
+        case .integer(let value): hasher.combine(value)
+        case .boolean(let value): hasher.combine(value)
+        case .string(let value), .constant(let value): FormalStringIdentity.hash(value, into: &hasher)
+        case .controlLocation(let value): hasher.combine(value)
+        case .set(let values): hasher.combine(values)
+        case .tuple(let values): hasher.combine(values)
+        case .record(let value): hasher.combine(value)
+        case .function(let value): hasher.combine(value)
+        }
+    }
+
     package static func modelValueNames(in values: some Sequence<CompiledValue>) -> Set<String> {
         var pending = Array(values)
         var names: Set<String> = []
@@ -70,7 +99,7 @@ package indirect enum CompiledValue: Hashable, Sendable, Comparable {
         case (.integer(let left), .integer(let right)): return left == right
         case (.boolean(let left), .boolean(let right)): return left == right
         case (.string(let left), .string(let right)), (.constant(let left), .constant(let right)):
-            return left.utf8.elementsEqual(right.utf8)
+            return FormalStringIdentity.equal(left, right)
         case (.controlLocation(let left), .controlLocation(let right)): return left == right
         case (.set(let left), .set(let right)):
             return left.allSatisfy { value in right.contains { value.formallyEquals($0) } }
@@ -179,7 +208,7 @@ package indirect enum CompiledValue: Hashable, Sendable, Comparable {
         case (.boolean(let lhs), .boolean(let rhs)):
             return lhs == false && rhs == true
         case (.string(let lhs), .string(let rhs)):
-            return lhs < rhs
+            return FormalStringIdentity.less(lhs, rhs)
         case (.controlLocation(let lhs), .controlLocation(let rhs)):
             return lhs.ordinal < rhs.ordinal
         case (.set(let lhs), .set(let rhs)):
@@ -193,7 +222,7 @@ package indirect enum CompiledValue: Hashable, Sendable, Comparable {
             let rhsFields = rhs.map { CompiledRecord.Field(key: $0.key, value: $0.value) }.sorted()
             return lhsFields.lexicographicallyPrecedes(rhsFields)
         case (.constant(let lhs), .constant(let rhs)):
-            return lhs < rhs
+            return FormalStringIdentity.less(lhs, rhs)
         default:
             return false
         }

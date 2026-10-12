@@ -332,6 +332,32 @@ verified that every emitted call or evaluation failure matches the model.
 Zero and negative divisors remain separate error/undefined-operation cases;
 this lemma does not claim parity for them.
 
+## Formal value identity boundary
+
+Formal and compiled String values now use byte-exact equality and a matching
+total order in sets, function keys, records, and state values. The focused
+`FormalValueEqualityTests` regression failed before the change: precomposed
+`"\u{00E9}"` and decomposed `"e\u{301}"` collapsed to one member under Swift's
+ordinary `String` equality. It now checks both values remain distinct and
+record-field lookup does not conflate their names. Typed Swift `String` inputs
+take a separate canonical-form conversion at the authoring/parser boundary and
+at generated-machine formal projection. `FormalStringRenderingTests` and
+`SpecVariableDeclarationParsingTests` exercise the input conversion;
+`SwiftStringFormalEncodingTests` checks one actual generated Swift transition,
+its complete projected String value, and the emitted TLA+ literal. The local
+`string-literals` reference fixture uses the canonical value accordingly.
+Decoding an explicitly raw formal string back to Swift retains its original
+scalars; the conversion does not rewrite data on that reverse path.
+
+These are executable boundary checks, not a TLAPS proof of Unicode
+normalization or all emitted String operations. The link assumes Swift String
+equality and Foundation's canonical normalization agree on the same Unicode
+version. Raw imported TLA+ values remain byte-exact, so an accepted imported
+String operation that reaches generated Swift still needs a separate output
+link. Arbitrary Unicode String programs and String-valued `CHOOSE` remain
+outside the fidelity theorem until those links, TLC's Unicode handling, and
+the emitted TLA+ selection order are established.
+
 ## Choice-expression obligation
 
 The expression-level `StateExpr.choose` is distinct from the nondeterministic
