@@ -155,6 +155,17 @@ negative control adds an invalid edge. All 10 obligations passed locally. The fo
 test checks the successful native step, exact typed overflow and unchanged
 state, and emitted failure metadata. This proof is a symbolic rule, not yet an
 exact-output proof of the complete module or a proof of the Swift emitter.
+`CheckedGuardOverflowProof.tla` now supplies a separate exact-output instance:
+the focused test pins the complete generated TLA+ module and the generated Swift
+update function's tokens, including its call to the shared checked-addition
+operation and the guard before update emission. TLAPS proves that module's
+initial states, complete labeled transitions, overflow failure and operands,
+and selected evaluation check match the independent source rule for every
+state in the signed-`Int` domain. The proof also establishes that this domain
+contains every initial state and is preserved by every `Next` step; an unguarded
+action is a negative control. All 14 obligations pass locally. This does not
+prove every accepted `When` or independently verify macro expansion and the
+Swift compiler/runtime interpretation of the pinned source.
 `SingleAssignment.tla`
 also proves the root negation guard, complete labeled edge/failure relation,
 and an unguarded counterexample under the explicit Swift signed-`Int` bound
@@ -1218,7 +1229,7 @@ verify the emitted code itself.
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
 | `assign`, `unchanged` | Complete-state delta and unchanged-frame equality | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
-| `guard_` | Pure, total guards agree at each abstract ordered-statement position | Prove emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
+| `guard_` | Pure total guards agree at abstract positions; the checked-addition `When` instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof | Generalize emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
 | `and` | Compatible delta conjunction and conflicting relational writes | Prove both emitters' evaluation order, conflict/error semantics, and frame completion. |
 | `or` | Guarded-choice preservation conditional on equal branch edges | Prove branch construction, multiplicity policy, and failure behavior in both outputs. |
 | `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges | Prove the actual emitted domain and branch expressions agree, including failures and checking effects. |

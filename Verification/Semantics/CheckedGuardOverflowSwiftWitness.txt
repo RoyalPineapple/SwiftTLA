@@ -1,0 +1,42 @@
+private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                           _ emit: (_Updates) throws -> Void) throws {
+    func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart2(updates, { candidate in try _actionPart1(candidate, emit) })
+}
+func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart4(updates, { candidate in try _actionPart3(candidate, emit) })
+}
+func _actionPart4(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    guard (state._value_pc_0 == _ControlLocation.location0) else { return }
+try emit(updates)
+}
+func _actionPart3(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    guard ((try { () throws -> Int in
+    let _arithmetic0: Int = state.state.count
+let _arithmetic1: Int = 1
+let _arithmetic2: Int = try _NativeMachineOperations.add(_arithmetic0, _arithmetic1)
+    return _arithmetic2
+}()) > 0) else { return }
+try emit(updates)
+}
+func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_0_0 = 0
+try _actionPart5(___atomic_0_0, updates, emit)
+}
+func _actionPart5(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart7(___atomic_0_0, updates, { candidate in try _actionPart6(___atomic_0_0, candidate, emit) })
+}
+func _actionPart7(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart9(___atomic_0_0, updates, { candidate in try _actionPart8(___atomic_0_0, candidate, emit) })
+}
+func _actionPart9(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+}
+func _actionPart8(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_count_1: ___atomic_0_0)) { try emit(merged) }
+}
+func _actionPart6(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_pc_0: _ControlLocation.location1)) { try emit(merged) }
+}
+try _actionPart0(_Updates(), emit)
+}
