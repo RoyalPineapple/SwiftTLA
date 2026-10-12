@@ -379,7 +379,7 @@ struct CompiledTLARenderer {
                         guard_: site.guard_, operands: site.operands)]
                 }
             case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
-                 .in, .setLiteral:
+                 .in, .setLiteral, .tupleLiteral:
                 var preceding: [OrderedEvaluationSite] = []
                 let children = value.operation.evaluatesRightOperandFirst
                     ? Array(value.children.reversed()) : value.children
@@ -464,7 +464,8 @@ struct CompiledTLARenderer {
             return expression.resultType == .int
                 && expression.children.count == (expression.operation == .negate ? 1 : 2)
                 && expression.children.allSatisfy(arithmeticTreeIsRepeatable)
-        case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not:
+        case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
+             .tupleLiteral:
             return expression.children.allSatisfy(arithmeticTreeIsRepeatable)
         default:
             return repeatable(expression)

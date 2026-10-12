@@ -302,6 +302,19 @@ The proof assumes the generated Swift machine evaluates the set first, as the
 fixture test observes; it does not prove every collection expression or the
 authored PlusCal output link.
 
+`SignedIntegerSemanticsTests.generatedTupleFailureOrder` checks the same
+two-site outcome for an ordered sequence literal. The first element divides
+by zero before the second can overflow; the generated Swift machine reports
+that failure without changing state, and the generated TLA+ action and check
+now guard both sites in that order. The same fixture separately checks an
+overflow-only sequence, which uses the ordinary arithmetic guard path. The
+pre-fix test failed because the TLA+ output omitted the ordered guards.
+`MembershipFailureOrderMatchesForEveryDivisor`
+proves the shared first-site/second-site outcome equation, while
+`ReversingFailureOrderChangesTheObservedOutcome` is its negative control.
+The test links that equation to this emitted sequence instance, not every
+accepted aggregate or the Swift emitter as a whole.
+
 `ModeledSwiftModuloMatchesEuclideanRemainder` proves that the helper's modeled
 signed-remainder adjustment equals the mathematical nonnegative remainder for
 every positive divisor. `ModeledSwiftModuloStaysWithinSwiftInt` proves that

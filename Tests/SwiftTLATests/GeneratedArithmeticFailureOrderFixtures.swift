@@ -48,3 +48,22 @@ struct GeneratedMembershipFailureOrderModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct GeneratedTupleFailureOrderModel: Sendable {
+    enum Step: String, CaseIterable { case compute, overflow }
+
+    static var spec: TLASpec {
+        #spec("GeneratedTupleFailureOrderModel") { scope in
+            let numerator = scope.sharedVar(initial: 9_223_372_036_854_775_807)
+            let divisor = scope.sharedVar(initial: 0)
+            let result = scope.sharedVar(initial: TupleExpr<Int>())
+            Do(Step.compute) {
+                Assign(result, to: TupleExpr<Int>.literal(1 / divisor, numerator + 1))
+            }
+            Do(Step.overflow) {
+                Assign(result, to: TupleExpr<Int>.literal(numerator + 1, 0))
+            }
+        }
+    }
+}

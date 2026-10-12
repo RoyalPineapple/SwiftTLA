@@ -76,6 +76,7 @@ import Testing
         #expect(laterFailures.allSatisfy { $0.contains("== (IF divisor # 0 THEN") })
         #expect(lines.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLADivisionByZeroFailure0) /\\ ~(__SwiftTLAOverflowFailure0) /\\ ~(__SwiftTLAOverflowFailure0_1) /\\ ~(__SwiftTLADivisionByZeroFailure0_1) /\\ ~(__SwiftTLAOverflowFailure0_2)"))
         #expect(lines.contains { $0.hasPrefix("compute == (IF (IF divisor # 0 THEN") })
+
     }
 
     @Test("Generated modulo rejects a negative divisor on both checking paths")
@@ -111,6 +112,30 @@ import Testing
         #expect(lines.contains("__SwiftTLADivisionByZeroFailure0 == ~(divisor # 0)"))
         #expect(lines.contains { $0.hasPrefix("__SwiftTLAOverflowFailure0 == (IF divisor # 0 THEN") })
         #expect(lines.contains { $0.hasPrefix("compute == (IF (IF divisor # 0 THEN") })
+    }
+
+    @Test("Tuple elements preserve the first arithmetic failure on both outputs")
+    func generatedTupleFailureOrder() throws {
+        var machine = try GeneratedTupleFailureOrderModel.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.send(.compute)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try GeneratedTupleFailureOrderModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(lines.contains("__SwiftTLADivisionByZeroFailure0 == ~(divisor # 0)"))
+        #expect(lines.contains { $0.hasPrefix("__SwiftTLAOverflowFailure0 == (IF divisor # 0 THEN") })
+        #expect(lines.contains { $0.hasPrefix("compute == (IF (IF divisor # 0 THEN") })
+
+        var overflowMachine = try GeneratedTupleFailureOrderModel.makeMachine()
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition,
+            operands: [Int.max, 1])) {
+            try overflowMachine.send(.overflow)
+        }
+        #expect(lines.contains { $0.hasPrefix("overflow == (IF ") })
     }
 
     @Test("integer division rounds toward negative infinity")
