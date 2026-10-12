@@ -1044,8 +1044,15 @@ both successors. `SingleAssignment.tla` separately states the source guard and
 the two permitted next values, then proves equivalence with the emitted
 `Init`, `choose`, and `Next` definitions and proves disabledness after a choice.
 Widening the emitted choice domain from `1..2` to `1..3` made the action proof
-fail; restoring it restored the proof. This is a second output-linked case,
-not a general proof of guarded choice or of the Swift emitter.
+fail; restoring it restored the proof. The fixture test also checks that the
+actual compiled action has a guarded existential over `1..2`, followed by a
+bound-value assignment. `GeneratedGuardedChoiceSwiftWitness.txt` pins the
+entire emitted Swift update visitor by tokens; changing its native choice
+domain to `1...1` fails the output check. The generic enumeration and
+enabledness theorems at lines 706–730 were re-proved locally with TLAPS
+(`--strict --nofp`, five obligations). This closes the output link for this
+pure, finite guarded-choice fixture. It does not prove the emitter for every
+accepted choice domain or cover candidate evaluation failures.
 
 `ConditionalStepProofModel.tla` is the complete output from a `#spec` step
 that flips a Boolean before an `If`/`else` assignment in the same atomic
