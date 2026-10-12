@@ -498,8 +498,12 @@ emitted Swift choice cache and action-update function against
 domain, equal complete labeled edges and no-match failures under the native
 lexicographic order and rendered rank. Its exact-output theorem covers the
 emitted initial state, `Next`, both action labels, and the selected evaluation
-check; reversing the rank changes a complete edge. All 16 obligations passed
-locally, but hosted proof evidence for this input is pending. The Swift
+check; reversing the rank changes a complete edge. On frozen SHA `12cb66a8`,
+hosted TLAPS left the single emitted-`select` equivalence obligation unproved
+while the other 15 obligations passed. The side-branch proof now isolates the
+exact emitted choice value and its nonempty candidate set before composing
+the emitted action; all 20 revised obligations pass locally without fingerprint
+reuse. This revision still needs hosted proof evidence. The Swift
 compiler/runtime, `Result`, `choose`, array ordering, and update merge remain
 trusted. This is one output-linked sequence instance, not a proof for arbitrary
 literal lengths, computed domains, nested conversions, or every accepted

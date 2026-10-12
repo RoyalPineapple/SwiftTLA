@@ -83,10 +83,32 @@ EmittedLabeledSelect(label) == label = "select" /\ select
 EmittedLabeledTerminating(label) ==
     label = "Terminating" /\ Terminating
 
+EmittedSelectionValue ==
+    LET __SequenceSelection_choiceCandidates0 ==
+            {__binder_SpecParser_340_0 \in {<<1, 0>>, <<1>>, <<2>>} : TRUE}
+    IN CHOOSE __binder_SpecParser_340_0 \in
+            __SequenceSelection_choiceCandidates0 :
+        \A __SequenceSelection_choiceOther1 \in
+            __SequenceSelection_choiceCandidates0 :
+            (CASE __binder_SpecParser_340_0 = <<1>> -> 0
+               [] __binder_SpecParser_340_0 = <<1, 0>> -> 1
+               [] __binder_SpecParser_340_0 = <<2>> -> 2)
+                <= (CASE __SequenceSelection_choiceOther1 = <<1>> -> 0
+                   [] __SequenceSelection_choiceOther1 = <<1, 0>> -> 1
+                   [] __SequenceSelection_choiceOther1 = <<2>> -> 2)
+
+THEOREM EmittedSelectionValueIsFirst ==
+    EmittedSelectionValue = <<1>>
+    BY SMT DEF EmittedSelectionValue
+
+THEOREM EmittedCandidatesAreNonempty ==
+    \E member \in {<<1, 0>>, <<1>>, <<2>>} : TRUE
+    BY SMT
+
 THEOREM EmittedSequenceChoiceMatchesSource ==
     select <=> SourceSelect
-    BY CanonicalSequenceChoiceMatchesSwiftOrder, SMT
-        DEF select, SourceSelect, CanonicalFirst, NativeFirst, Matches, Members, Rank
+    BY EmittedSelectionValueIsFirst, EmittedCandidatesAreNonempty
+        DEF select, SourceSelect, EmittedSelectionValue
 
 THEOREM CompleteEmittedSequenceSelection ==
     ASSUME NEW label
