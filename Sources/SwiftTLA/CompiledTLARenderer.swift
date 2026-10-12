@@ -193,6 +193,18 @@ struct CompiledTLARenderer {
             guard arithmeticTreeIsRepeatable(condition), let failure = try choiceFailure(body) else { return nil }
             let predicate = "((\(try state(condition))) = TRUE /\\ \(failure))"
             return try evaluationDefined(condition).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
+        case .or(let lhs, let rhs):
+            switch (try choiceFailure(lhs), try choiceFailure(rhs)) {
+            case (nil, nil): return nil
+            case (let failure?, nil), (nil, let failure?): return failure
+            case (let lhs?, let rhs?): return "(\(lhs) \\/ \(rhs))"
+            }
+        case .ifElse(let condition, let yes, let no):
+            guard repeatable(condition) else { return nil }
+            let yesFailure = try choiceFailure(yes)
+            let noFailure = try choiceFailure(no)
+            guard yesFailure != nil || noFailure != nil else { return nil }
+            return "(IF \(try state(condition)) THEN \(yesFailure ?? "FALSE") ELSE \(noFailure ?? "FALSE"))"
         default: return nil
         }
     }

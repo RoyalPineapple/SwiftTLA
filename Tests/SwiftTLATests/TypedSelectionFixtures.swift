@@ -160,3 +160,25 @@ struct SequenceSelection {
         }
     }
 }
+
+@TLAModel
+struct ConditionalSelectionFailure {
+    enum Step: String, CaseIterable { case select }
+
+    static var spec: TLASpec {
+        #spec {
+            let conditionalSelectionFailure = Algorithm(scoped: { scope in
+                let attempt = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
+                let selected = scope.sharedVar(initial: 0)
+                Do(Step.select) {
+                    If(attempt) {
+                        Assign(selected, to: Select(from: Set<Int>([1])) { _ in false })
+                    } else: {
+                        Assign(selected, to: 2)
+                    }
+                }
+            })
+            conditionalSelectionFailure
+        }
+    }
+}

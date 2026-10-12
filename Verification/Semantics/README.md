@@ -506,6 +506,21 @@ does not link arbitrary Swift and TLA+ emitter outputs to the modeled order,
 rank, predicate, or update. All 11 current obligations passed locally;
 hosted evidence is pending.
 
+`ConditionalSelectionFailure` closes one branch-scoped choice failure. Its
+generated Swift machine fails transactionally when `attempt` is true and the
+selected domain has no match, but takes the `selected = 2` edge when `attempt`
+is false. The renderer previously omitted `__SwiftTLAChoiceFailure0` because
+lowering represented `If` as guarded `or` branches. The focused test failed
+before the renderer fix, then passed after failure propagation through those
+branches; it now pins the complete emitted TLA+ module after normalizing only
+the source-location-derived binder name. `ConditionalSelectionFailureProof.tla`
+proves initial states, the complete labeled `select` and internal `Terminating`
+relation, the failure and selected invariant, both branch verdicts, and a
+reversed-branch negative control for that exact module. All 20 obligations
+passed locally. This is not a general proof for effectful conditions, nested
+conjunctions, or arbitrary choice domains, and independent TLC/native
+failure-outcome comparison remains open.
+
 ## Checked kernel lemma
 
 `SingleAssignment.tla` proves that replacing one value in a complete state

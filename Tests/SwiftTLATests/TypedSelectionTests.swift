@@ -295,4 +295,33 @@ struct TypedSelectionTests {
         #expect(declarations.contains { $0.hasPrefix("__SwiftTLAOverflowFailure0 ==") })
         #expect(declarations.contains { $0.hasPrefix("__SwiftTLAOverflowOperands0 ==") })
     }
+
+    @Test("Only the selected conditional branch can report an empty choice")
+    func conditionalSelectionFailureIsBranchScoped() throws {
+        let machines = try ConditionalSelectionFailure.initialMachines()
+        #expect(machines.count == 2)
+        for var machine in machines {
+            let before = machine.snapshot
+            if machine.state.attempt {
+                #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+                    _ = try machine.send(.select)
+                }
+                #expect(machine.snapshot == before)
+            } else {
+                _ = try machine.send(.select)
+                #expect(machine.state.selected == 2)
+            }
+        }
+
+        let rendered = try ConditionalSelectionFailure.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/ConditionalSelectionFailure.tla")
+            .standardizedFileURL
+        let actual = rendered.tlaBundle.root.tla.replacing(binder, with: "__SELECT_MEMBER__")
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(actual == expected)
+    }
 }
