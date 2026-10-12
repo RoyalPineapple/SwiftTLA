@@ -72,6 +72,22 @@ struct NestedMissingSelection {
 }
 
 @TLAModel
+struct AggregateMissingSelection {
+    enum Step: String, CaseIterable { case select }
+
+    static var spec: TLASpec {
+        #spec("AggregateMissingSelection") { scope in
+            let selected = scope.sharedVar(initial: TupleExpr<Int>())
+            Do(Step.select) {
+                Assign(selected, to: TupleExpr<Int>.literal(
+                    Select(from: Set<Int>([1])) { _ in false }, 0
+                ))
+            }
+        }
+    }
+}
+
+@TLAModel
 struct NestedOverflowSelection {
     enum Step: String, CaseIterable { case advance }
 

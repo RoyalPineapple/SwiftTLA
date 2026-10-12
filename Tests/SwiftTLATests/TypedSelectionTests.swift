@@ -279,6 +279,30 @@ struct TypedSelectionTests {
         #expect(declarations.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })
     }
 
+    @Test("An empty choice inside a sequence has no Swift transition and fails the TLA check")
+    func aggregateMissingSelectionHasMatchingFailure() throws {
+        var machine = try AggregateMissingSelection.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+            _ = try machine.send(.select)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try AggregateMissingSelection.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(lines.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })
+        #expect(lines.contains { $0.hasPrefix("select == (IF ") })
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/AggregateMissingSelection.tla")
+            .standardizedFileURL
+        let actual = rendered.tlaBundle.root.tla.replacing(binder, with: "__PROOF_MEMBER__")
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(actual == expected)
+    }
+
     @Test("A successful nested selection emits a check for subsequent addition overflow")
     func nestedSelectionOverflowHasNoTransition() throws {
         var machine = try NestedOverflowSelection.makeMachine()

@@ -392,15 +392,21 @@ struct CompiledTLARenderer {
                 return repeatable(value) ? [] : nil
             }
         }
-        guard let sites = try collect(expression),
-              sites.contains(where: {
-                  switch $0 {
-                  case .divisionByZero, .negativeModuloDivisor: true
-                  default: false
-                  }
-              }) || (sites.contains(where: { if case .choice = $0 { return true }; return false })
-                    && sites.contains(where: { if case .arithmetic = $0 { return true }; return false }))
-        else { return nil }
+        guard let sites = try collect(expression) else { return nil }
+        let hasDivisionFailure = sites.contains {
+            switch $0 {
+            case .divisionByZero, .negativeModuloDivisor: true
+            default: false
+            }
+        }
+        let hasChoice = sites.contains { if case .choice = $0 { return true }; return false }
+        let hasNestedChoice: Bool
+        if hasChoice {
+            hasNestedChoice = try choiceDefined(expression) == nil
+        } else {
+            hasNestedChoice = false
+        }
+        guard hasDivisionFailure || hasNestedChoice else { return nil }
         return sites
     }
 

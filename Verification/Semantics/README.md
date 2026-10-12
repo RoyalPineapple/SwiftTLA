@@ -597,6 +597,25 @@ hosted evidence is pending. This closes the empty-choice condition instance,
 not nested or otherwise effectful conditions, arbitrary choice domains, or the
 general Swift-emitter link.
 
+`AggregateMissingSelection` closes a different expression boundary: a
+no-match `Select` is the first element of a sequence literal. The focused
+regression failed before the renderer fix: generated Swift threw
+`noSatisfyingChoice` without changing state, while generated TLA+ had neither
+the failure check nor an action guard. The test now pins the complete emitted
+TLA+ module to `AggregateMissingSelection.tla`, normalizing only the generated
+binder name. `GeneratedSelectionProofTests` also pins the actual emitted Swift
+choice cache and complete update function to
+`GeneratedAggregateMissingSelectionSwiftWitness.txt` as Swift tokens.
+`AggregateMissingSelectionProof.tla` composes source, compiled, modeled-Swift,
+and emitted rules for the initial state, complete labeled `select` relation,
+no-match failure, and selected evaluation check. It proves an omitted-check
+negative control; all 14 obligations passed locally. The Swift-token witness
+and native machine test link this fixture to the modeled Swift rule, but
+interpreting `Result.get`, `choose`, eager sequence construction, the update
+merge, and Swift compiler/runtime behavior remains trusted. This does not
+prove arbitrary nested choices, effectful predicates, all aggregate shapes,
+or authored PlusCal; hosted evidence is pending.
+
 ## Checked kernel lemma
 
 `SingleAssignment.tla` proves that replacing one value in a complete state
