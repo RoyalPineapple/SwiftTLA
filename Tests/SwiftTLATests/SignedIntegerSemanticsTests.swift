@@ -66,6 +66,7 @@ import Testing
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
         let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
         #expect(lines.contains("__SwiftTLADivisionByZeroFailure0 == ~(divisor # 0)"))
+        #expect(lines.contains { $0.contains("(IF divisor # -1 THEN TRUE ELSE") })
         let laterFailures = lines.filter {
             $0.hasPrefix("__SwiftTLAOverflowFailure0 ==")
                 || $0.hasPrefix("__SwiftTLAOverflowFailure0_1 ==")

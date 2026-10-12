@@ -249,10 +249,14 @@ matching outcome proofs. The emitted failure checks now guard division by zero
 and negative modulo divisors in Swift evaluation order; the generated-output
 tests pin those guards, and `OrderedArithmeticFailures.tla` proves the first
 division failure masks every later failure and distinguishes the two modulo
-failure verdicts. That proof covers the ordered failure boundary, not all
-nested expressions or the complete generated machine. TLC's bounded integer
-evaluator may also overflow
-while evaluating an intermediate negation that is valid in mathematical TLA+.
+failure verdicts. It also proves that the emitted conditional division-overflow
+guard matches the source rule for every integer operand, with a reversed-guard
+negative control. The actual rendered-output test pins the conditional: TLC
+must not evaluate Swift's 64-bit minimum for a divisor other than `-1`.
+That proof covers the ordered failure boundary, not all nested expressions or
+the complete generated machine. TLC's bounded integer evaluator still cannot
+validate the full Swift `Int` range; it may overflow while evaluating an
+intermediate expression valid in mathematical TLA+.
 
 `SingleAssignment.tla` proves that the rendered negative-divisor branch has a
 positive divisor and a Euclidean remainder in `(divisor + 1)..0`. The latter

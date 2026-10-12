@@ -21,6 +21,25 @@ THEOREM FirstDivisionFailurePrecedesEveryLaterFailure ==
         EmittedDivisionByZeroFailure, EmittedLaterFailure,
         EmittedFirstDivisionOutcome
 
+SourceDivisionOverflowSafe(dividend, divisor, minimum) ==
+    divisor # -1 \/ dividend # minimum
+EmittedDivisionOverflowSafe(dividend, divisor, minimum) ==
+    IF divisor # -1 THEN TRUE ELSE dividend # minimum
+
+THEOREM ConditionalDivisionGuardPreservesOverflowRule ==
+    ASSUME NEW dividend \in Int, NEW divisor \in Int, NEW minimum \in Int
+    PROVE EmittedDivisionOverflowSafe(dividend, divisor, minimum)
+        = SourceDivisionOverflowSafe(dividend, divisor, minimum)
+    BY SMT DEF EmittedDivisionOverflowSafe, SourceDivisionOverflowSafe
+
+WrongDivisionOverflowGuard(dividend, divisor, minimum) ==
+    IF divisor = -1 THEN TRUE ELSE dividend # minimum
+
+THEOREM ReversedDivisionGuardMissesOverflow ==
+    WrongDivisionOverflowGuard(0, -1, 0)
+        # SourceDivisionOverflowSafe(0, -1, 0)
+    BY SMT DEF WrongDivisionOverflowGuard, SourceDivisionOverflowSafe
+
 ReversedFirstOutcome(divisor, candidate) ==
     IF candidate THEN "overflow"
     ELSE EmittedFirstDivisionOutcome(divisor)
