@@ -324,4 +324,26 @@ struct TypedSelectionTests {
         let expected = try String(contentsOf: proofInput, encoding: .utf8)
         #expect(actual == expected)
     }
+
+    @Test("An empty choice in an If condition is a matching evaluation failure")
+    func conditionalChoiceConditionFailureHasNoTransition() throws {
+        var machine = try ConditionalChoiceConditionFailure.makeMachine()
+        let before = machine.snapshot
+        #expect(machine.state.selected == 0)
+        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+            _ = try machine.send(.select)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try ConditionalChoiceConditionFailure.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/ConditionalChoiceConditionFailure.tla")
+            .standardizedFileURL
+        let actual = rendered.tlaBundle.root.tla.replacing(binder, with: "__CONDITION_MEMBER__")
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(actual == expected)
+    }
 }

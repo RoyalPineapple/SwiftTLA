@@ -529,6 +529,18 @@ nested conjunctions, arbitrary choice domains, and independent TLC/native
 failure-outcome comparison remain open. Interpreting the pinned Swift source,
 `Result.get`, `choose`, and update merge remains a trusted runtime boundary.
 
+`ConditionalChoiceConditionFailure` covers an empty expression-level `CHOOSE`
+in an `If` condition. The generated Swift machine throws before changing state;
+the generated TLA+ module now reports the same evaluation failure and has no
+`select` edge. A focused test pins the complete emitted TLA+ module, and
+`ConditionalChoiceConditionFailureProof.tla` proves a general defined-Boolean
+conditional rule, then compares this fixture's initial state, complete labeled
+steps, and failure invariant with that exact output. It rejects an unguarded
+false-branch edge as a negative control. All 21 obligations passed locally;
+hosted evidence is pending. This closes the empty-choice condition instance,
+not nested or otherwise effectful conditions, arbitrary choice domains, or the
+general Swift-emitter link.
+
 ## Checked kernel lemma
 
 `SingleAssignment.tla` proves that replacing one value in a complete state

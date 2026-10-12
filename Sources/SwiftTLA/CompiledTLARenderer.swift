@@ -176,23 +176,17 @@ struct CompiledTLARenderer {
     func choiceFailure(_ action: CompiledActionExpr) throws -> String? {
         switch action {
         case .define(_, let value, _):
-            if let sites = try orderedChoiceArithmeticSites(value) {
-                var preceding: [String] = []
-                var failures: [String] = []
-                for site in sites {
-                    if case .choice(let guard_) = site {
-                        failures.append(preceded("~(\(guard_))", by: preceding))
-                    }
-                    preceding.append(site.guard_)
-                }
-                return failures.count == 1 ? failures[0] : "(\(failures.joined(separator: " \\/ ")))"
-            }
-            guard let defined = try choiceDefined(value) else { return nil }
-            return "~(\(defined))"
+            return try expressionChoiceFailure(value)
+        case .guard_(let condition):
+            return try expressionChoiceFailure(condition)
         case .and(.guard_(let condition), let body):
-            guard arithmeticTreeIsRepeatable(condition), let failure = try choiceFailure(body) else { return nil }
+            let conditionFailure = try expressionChoiceFailure(condition)
+            guard arithmeticTreeIsRepeatable(condition), let failure = try choiceFailure(body) else {
+                return conditionFailure
+            }
             let predicate = "((\(try state(condition))) = TRUE /\\ \(failure))"
-            return try evaluationDefined(condition).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
+            let bodyFailure = try evaluationDefined(condition).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
+            return conditionFailure.map { "(\($0) \\/ \(bodyFailure))" } ?? bodyFailure
         case .or(let lhs, let rhs):
             switch (try choiceFailure(lhs), try choiceFailure(rhs)) {
             case (nil, nil): return nil
@@ -207,6 +201,22 @@ struct CompiledTLARenderer {
             return "(IF \(try state(condition)) THEN \(yesFailure ?? "FALSE") ELSE \(noFailure ?? "FALSE"))"
         default: return nil
         }
+    }
+
+    private func expressionChoiceFailure(_ value: CompiledExpression) throws -> String? {
+        if let sites = try orderedChoiceArithmeticSites(value) {
+            var preceding: [String] = []
+            var failures: [String] = []
+            for site in sites {
+                if case .choice(let guard_) = site {
+                    failures.append(preceded("~(\(guard_))", by: preceding))
+                }
+                preceding.append(site.guard_)
+            }
+            return failures.count == 1 ? failures[0] : "(\(failures.joined(separator: " \\/ ")))"
+        }
+        guard let defined = try choiceDefined(value) else { return nil }
+        return "~(\(defined))"
     }
 
     func overflowFailures(_ action: CompiledActionExpr) throws -> [(
@@ -403,6 +413,9 @@ struct CompiledTLARenderer {
     }
 
     func choiceDefined(_ value: CompiledExpression) throws -> String? {
+        if case .not = value.operation, value.children.count == 1 {
+            return try choiceDefined(value.children[0])
+        }
         guard case .choose(let binder) = value.operation else { return nil }
         guard value.children.count == 2 else {
             throw CompiledValueType.diagnostic("rendering.choose", "choice requires a domain and predicate")
