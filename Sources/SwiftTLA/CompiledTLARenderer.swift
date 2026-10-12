@@ -364,7 +364,7 @@ struct CompiledTLARenderer {
                     return preceding + [
                         .divisionByZero(guard_: "\(divisor) # 0", divisor: divisor),
                         .arithmetic(operation: .division,
-                            guard_: "(\(dividend) # \(minimum) \\/ \(divisor) # -1)",
+                            guard_: "(IF \(divisor) # -1 THEN TRUE ELSE \(dividend) # \(minimum))",
                             operands: "<<\(dividend), \(divisor)>>")
                     ]
                 case .modulo:
