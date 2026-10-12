@@ -187,6 +187,41 @@ struct TypedSelectionTests {
             == provedModule.replacing(binder, with: "__SELECT_MEMBER__"))
     }
 
+    @Test("Canonical Unicode selection has the same least value in Swift and TLA+")
+    func canonicalUnicodeSelectionUsesLeastMember() throws {
+        let compilation = try CanonicalUnicodeStringSelection.spec.compile()
+        let action = try #require(compilation.semantics.behavior.actions.first)
+        guard case .and(.guard_, let body) = action.body,
+              case .define(_, let choice, _) = body,
+              case .choose = choice.operation,
+              let domain = choice.children.first,
+              case .value(.set(let members)) = domain.computation.operation else {
+            Issue.record("The authored Unicode String selection no longer lowers to a closed choice")
+            return
+        }
+        #expect(members == Set([.string("z"), .string("é")]))
+
+        var machine = try CanonicalUnicodeStringSelection.makeMachine()
+        _ = try machine.send(.select)
+        #expect(machine.state.selected == "z")
+
+        let module = try CanonicalUnicodeStringSelection.render().tlaBundle.root.tla
+        let direct = try compilation.render().tlaBundle.root.tla
+        let binder = try Regex(#"__binder_(?:TypedSelectionFixtures|SpecParser)_[0-9]+_[0-9]+"#)
+        #expect(direct.replacing(binder, with: "__SELECT_MEMBER__")
+            == module.replacing(binder, with: "__SELECT_MEMBER__"))
+        let renderedAction = try #require(module.split(separator: "\n").first { $0.hasPrefix("select ==") })
+        #expect(renderedAction.contains("= \"z\" -> 0 []"))
+        #expect(renderedAction.contains("= \"é\" -> 1"))
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CanonicalUnicodeStringSelection.tla")
+            .standardizedFileURL
+        let provedModule = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(module.replacing(binder, with: "__SELECT_MEMBER__")
+            == provedModule.replacing(binder, with: "__SELECT_MEMBER__"))
+    }
+
     @Test("Closed sequence selection retains the lexicographically first complete value")
     func sequenceSelectionUsesLeastMember() throws {
         let compilation = try SequenceSelection.spec.compile()

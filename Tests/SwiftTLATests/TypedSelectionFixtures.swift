@@ -161,6 +161,23 @@ struct StringSelection {
 }
 
 @TLAModel
+struct CanonicalUnicodeStringSelection {
+    enum Step: String, CaseIterable { case select }
+
+    static var spec: TLASpec {
+        #spec {
+            let canonicalUnicodeStringSelection = Algorithm(scoped: { scope in
+                let selected = scope.sharedVar(initial: "é")
+                Do(Step.select) {
+                    Assign(selected, to: Select(from: Set<String>(["é", "z"])) { _ in true })
+                }
+            })
+            canonicalUnicodeStringSelection
+        }
+    }
+}
+
+@TLAModel
 struct SequenceSelection {
     enum Step: String, CaseIterable { case select }
 

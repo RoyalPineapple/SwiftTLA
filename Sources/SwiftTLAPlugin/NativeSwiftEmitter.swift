@@ -287,7 +287,8 @@ struct NativeSwiftEmitter {
         let name = try swiftType(type)
         let body: String
         switch type {
-        case .int, .string: body = "return lhs < rhs"
+        case .int: body = "return lhs < rhs"
+        case .string: body = "return TLAValue.canonicalSwiftString(lhs) < TLAValue.canonicalSwiftString(rhs)"
         case .bool: body = "return !lhs && rhs"
         case .controlLocation, .modelValue: body = "return lhs.rawValue < rhs.rawValue"
         case .finite(let members):

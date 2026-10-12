@@ -86,7 +86,7 @@ failure relation and output proof are tracked in
 The expression-selection row records the generated Swift behavior. Exact-output
 fixtures cover integer, Boolean, finite-enum, closed String and sequence, and
 state-held integer-sequence choices; selected no-match cases have matching TLA+
-failure checks. A general output proof, arbitrary String ordering, other
+failure checks. A general output proof, dynamic String ordering, other
 compound values, and nested fallible choices remain open.
 
 “SwiftUI-like” means readable composition, scoped builders, and focused modifiers.

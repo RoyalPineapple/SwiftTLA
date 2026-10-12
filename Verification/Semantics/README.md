@@ -354,9 +354,10 @@ normalization or all emitted String operations. The link assumes Swift String
 equality and Foundation's canonical normalization agree on the same Unicode
 version. Raw imported TLA+ values remain byte-exact, so an accepted imported
 String operation that reaches generated Swift still needs a separate output
-link. Arbitrary Unicode String programs and String-valued `CHOOSE` remain
-outside the fidelity theorem until those links, TLC's Unicode handling, and
-the emitted TLA+ selection order are established.
+link. The closed canonical-Unicode choice below is one output-linked instance;
+dynamic String-valued `CHOOSE` and arbitrary Unicode String programs remain
+outside the fidelity theorem until those links and TLC's Unicode handling are
+established.
 
 ## Choice-expression obligation
 
@@ -364,8 +365,8 @@ The expression-level `StateExpr.choose` is distinct from the nondeterministic
 `Choose` algorithm statement. The generated Swift expression sorts its finite
 domain and returns the first satisfying member, or throws when none exists;
 the TLA+ renderer emits a least-member `CHOOSE` for integer, Boolean,
-finite-enum, closed multi-member printable-ASCII String domains, closed
-literal tuple/sequence domains with exact integer, Boolean, or printable-ASCII
+finite-enum, closed multi-member canonical String domains, closed
+literal tuple/sequence domains with exact integer, Boolean, or canonical
 String members, and state-held integer- or Boolean-sequence domains. It emits ordinary
 `CHOOSE` for other result types. Ordinary
 TLA+ `CHOOSE`
@@ -507,17 +508,33 @@ establish universal choice fidelity or prove either emitter correct.
 Swift machine selects `"alpha"`. Direct compilation represents the domain as
 a constant set with an unknown result type, while macro compilation represents
 it as a `setLiteral` with a String result type. The renderer accepts both only
-after checking every member is a printable-ASCII literal String, then emits the same ranks.
+after checking every member has canonical formal String identity, then emits the same ranks.
 `TypedSelectionTests.stringSelectionUsesLeastMember` requires the two complete
 TLA+ outputs to agree and the generated module to equal the proved
 `EnumSelection.tla` module after only model/helper and binder renaming.
 `EnumSelectionProof.tla` therefore covers this emitted TLA+ instance through
 that exact-output, alpha-renaming test; `GeneratedSelectionProofTests` pins the
 complete emitted Swift choice cache and update function to
-`GeneratedStringSelectionSwiftWitness.txt`. Interpreting Swift's `String` order,
-`Result`, `choose`, and update merge remains a trusted runtime boundary.
+`GeneratedStringSelectionSwiftWitness.txt`. Generated Swift now calls the same
+canonical formal String order used by compiled values. Interpreting Swift's
+`String` equality and Foundation normalization, `Result`, `choose`, and update
+merge remains a trusted runtime boundary.
 This link covers the two ASCII literals, not arbitrary or dynamic String
 domains, Unicode equivalence, or every accepted compound value type.
+
+`CanonicalUnicodeStringSelection` adds the closed `{"z", "é"}` domain. Its
+regression failed before the fix because TLA+ emitted unrestricted `CHOOSE`;
+the generated machine already selected `"z"`. The test now checks the
+compiled member set, generated machine's selected value, direct and macro
+TLA+ outputs, and an exact link to
+`CanonicalUnicodeStringSelection.tla`. `GeneratedSelectionProofTests` pins the
+complete emitted Swift choice and update function to the shared
+`GeneratedStringSelectionSwiftWitness.txt` after replacing only this fixture's
+two literal tokens. The accompanying
+`CanonicalUnicodeStringSelectionProof.tla` states the complete initial,
+labeled-step, failure, and reversed-order obligations; its local proof result
+and hosted admission remain pending. This is one canonical-Unicode instance,
+not a proof of all Unicode values or dynamic String domains.
 
 For a repeatable String selection with no matching member,
 `TypedSelectionTests.missingStringSelectionHasMatchingFailure` checks the
@@ -535,7 +552,7 @@ evidence is pending. The interpretation of the emitted Swift `Result`, `choose`,
 update merge remains a trusted runtime boundary. The chosen general rule is a
 shared canonical order for every accepted selection type, emitted on both
 sides. It remains incomplete: outside supported numeric, Boolean, enum, and
-closed printable-ASCII String and exact literal tuple domains, observable
+closed canonical String and exact literal tuple domains, observable
 non-unique choices can still differ.
 
 `SequenceSelection` adds a closed `Set<[Int]>` case with three distinct
