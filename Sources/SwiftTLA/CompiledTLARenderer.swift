@@ -548,6 +548,19 @@ struct CompiledTLARenderer {
             case .choose:
                 guard let defined = try choiceDefined(value) else { return nil }
                 return [.choice(guard_: defined)]
+            case .setSum:
+                guard value.resultType == .int, value.children.count == 2 else { return nil }
+                var preceding: [OrderedEvaluationSite] = []
+                for child in value.children {
+                    guard let sites = try collect(child) else { return nil }
+                    preceding += sites
+                }
+                let sum = try state(value)
+                let minimum = TLAValue.int(.min).description
+                let maximum = TLAValue.int(.max).description
+                return preceding + [.arithmetic(operation: .summation,
+                    guard_: "(\(sum) >= \(minimum) /\\ \(sum) <= \(maximum))",
+                    operands: try sortedSummationOperands(value))]
             case .add, .subtract, .multiply, .negate, .divide, .integerDivide, .modulo:
                 guard value.resultType == .int,
                       value.children.count == (value.operation == .negate ? 1 : 2) else { return nil }
@@ -594,9 +607,10 @@ struct CompiledTLARenderer {
             }
         }
         guard let sites = try collect(expression) else { return nil }
-        let hasDivisionFailure = sites.contains {
+        let hasSpecialFailure = sites.contains {
             switch $0 {
             case .divisionByZero, .negativeModuloDivisor: true
+            case .arithmetic(operation: .summation, guard_: _, operands: _): true
             default: false
             }
         }
@@ -613,8 +627,28 @@ struct CompiledTLARenderer {
             default: return value.children.contains(where: hasLazyBranch)
             }
         }
-        guard !sites.isEmpty, hasDivisionFailure || hasNestedChoice || hasLazyBranch(expression) else { return nil }
+        guard !sites.isEmpty, hasSpecialFailure || hasNestedChoice || hasLazyBranch(expression) else { return nil }
         return sites
+    }
+
+    private func sortedSummationOperands(_ expression: CompiledExpression) throws -> String {
+        let function = try state(expression.children[0])
+        let domain = try state(expression.children[1])
+        let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
+            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+        var names: [String] = []
+        for role in ["index", "candidate", "member"] {
+            var name = "__SwiftTLASum_\(role)"
+            while occupied.contains(name) || names.contains(name) { name += "_" }
+            names.append(name)
+        }
+        let position = names[0], candidate = names[1], member = names[2]
+        let values = "{(\(function))[\(member)] : \(member) \\in (\(domain))}"
+        let earlier = "{\(member) \\in (\(domain)) : (\(function))[\(member)] < \(candidate)}"
+        let through = "{\(member) \\in (\(domain)) : (\(function))[\(member)] <= \(candidate)}"
+        return "[\(position) \\in 1..Cardinality(\(domain)) |-> "
+            + "(CHOOSE \(candidate) \\in \(values): "
+            + "Cardinality(\(earlier)) < \(position) /\\ \(position) <= Cardinality(\(through)))]"
     }
 
     private func arithmeticDefined(_ value: CompiledExpression) throws -> String? {

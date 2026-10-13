@@ -91,7 +91,23 @@ above 2^31 - 1](https://github.com/tlaplus/tlaplus/blob/master/general/docs/curr
 TLC graph parity therefore cannot establish full-width overflow behavior;
 symbolic proof and native execution remain separate evidence for that boundary.
 `SingleAssignment.tla` separately proves the generic addition guard.
-The same focused test checks the complete
+
+The checked-summation regression exercises one accepted `#spec` model whose
+finite, explicit set selects three function values totaling `Int.max + 2`,
+including a repeated value.
+Before the renderer change, the generated Swift machine reported `summation`
+overflow while the generated TLA+ module had no matching failure declaration.
+The focused test now requires the native failure with all three operands,
+the rendered range guard, the `summation` operation identity, and a ranked
+operand expression based on source-member counts. This is an output-linked
+regression, not a generic proof of `Sum`: the order reconstruction, dynamic or
+fallible domains such as `IntRange`,
+function arguments outside the function domain, and the imported fold's
+mathematical result remain separate obligations. TLC's 32-bit arithmetic
+cannot certify this full-width witness. No universal summation-fidelity claim
+depends on this test alone.
+
+The checked-execution focused test checks the complete
 compiled `advance` action. It requires the control guard, bound `count + 1`
 addition, count update, and transition to `Done`. It identifies the separate
 internal terminating action. The test checks every token of the emitted Swift
