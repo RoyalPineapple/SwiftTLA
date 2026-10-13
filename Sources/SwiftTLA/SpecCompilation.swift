@@ -832,6 +832,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateRecordField
         case compilationIdentityMismatch
         case unsupportedGeneratedValueShape
+        case unsupportedCanonicalCandidateOrder
         case unsupportedReachabilityEvaluation
         case unsupportedActionConstraintEvaluation
         case unresolvedGeneratedValueShape

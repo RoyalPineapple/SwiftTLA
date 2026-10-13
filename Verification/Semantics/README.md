@@ -1404,7 +1404,13 @@ the same first failing candidate; the regression was red when it used
 independent existential failure predicates. This is focused output-test
 evidence, not a TLAPS proof or a TLC parity run. Non-enumerable dynamic
 domains, all other value families, and the general emitter theorem remain
-open.
+open. A fallible `With` over a state-dependent `Set<String>` has no current
+renderable candidate order. Native checking still evaluates it, but TLA+
+export now fails with `unsupportedCanonicalCandidateOrder` instead of emitting
+an existential failure predicate that may select a different failure. The
+focused regression was red before this fail-closed change. This is an
+explicit output limitation, not a proof that the dynamic-domain construct is
+preserved; an ordered formal encoding and its output link remain required.
 
 The generated conditional arithmetic regressions check both branch selection
 and an arithmetic condition that can overflow before either branch runs.

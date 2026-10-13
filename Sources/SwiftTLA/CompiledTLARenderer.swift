@@ -212,11 +212,9 @@ struct CompiledTLARenderer {
         case .existsAction(let binder, let domain, let body):
             let domainFailure = try expressionChoiceFailure(domain)
             guard let bodyFailure = try choiceFailure(body) else { return domainFailure }
-            let name = try binderName(binder)
             let allFailures = try anyFailurePredicate(body)
             let predicate = try firstFailingCandidate(binder, domain: domain, anyFailure: allFailures,
                 selected: bodyFailure, otherwise: "FALSE")
-                ?? "~({\(name) \\in \(try state(domain)): \(bodyFailure)} = {})"
             let guarded = try evaluationDefined(domain).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
             return domainFailure.map { "(\($0) \\/ \(guarded))" } ?? guarded
         case .define(let binder, let value, let body):
@@ -299,17 +297,13 @@ struct CompiledTLARenderer {
             let domainFailures = try expressionArithmeticFailures(domain)
             let bodyFailures = try arithmeticFailures(body)
             guard !bodyFailures.isEmpty else { return domainFailures }
-            let name = try binderName(binder)
-            let renderedDomain = try state(domain)
             let defined = try evaluationDefined(domain)
             let allFailures = try anyFailurePredicate(body)
             return try domainFailures + bodyFailures.map { failure in
-                let failedMembers = "{\(name) \\in \(renderedDomain): \(failure.predicate)}"
                 let predicate = try firstFailingCandidate(binder, domain: domain, anyFailure: allFailures,
-                    selected: failure.predicate, otherwise: "FALSE") ?? "~(\(failedMembers) = {})"
+                    selected: failure.predicate, otherwise: "FALSE")
                 let operands = try firstFailingCandidate(binder, domain: domain, anyFailure: allFailures,
                     selected: "(IF \(failure.predicate) THEN {\(failure.operands)} ELSE {})", otherwise: "{}")
-                    ?? "{\(failure.operands): \(name) \\in \(failedMembers)}"
                 return .init(
                     predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
                     operands: operands,
@@ -425,9 +419,15 @@ struct CompiledTLARenderer {
         anyFailure: String?,
         selected: String,
         otherwise: String
-    ) throws -> String? {
+    ) throws -> String {
         guard case .set(let memberType) = domain.resultType,
-              let failure = anyFailure else { return nil }
+              let failure = anyFailure else {
+            throw CompilationDiagnostic(code: .unsupportedCanonicalCandidateOrder, stage: .rendering,
+                path: "actions.with[\(binder.ordinal)].domain",
+                expected: "a set domain and an identified branch failure",
+                actual: "the candidate failure order cannot be established",
+                nextSafeAction: "Use a set domain whose candidate order the TLA+ renderer can reproduce.")
+        }
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
             .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
         var names: [String] = []
@@ -446,7 +446,11 @@ struct CompiledTLARenderer {
         } else if let members = closedChoiceMembers(domain) ?? parameterChoiceMembers(domain) {
             ordered = try rankedLeastPredicate(members, first, earlier)
         } else {
-            return nil
+            throw CompilationDiagnostic(code: .unsupportedCanonicalCandidateOrder, stage: .rendering,
+                path: "actions.with[\(binder.ordinal)].domain",
+                expected: "a canonical order for every candidate in the domain",
+                actual: "the state-dependent candidate set has no renderable total order",
+                nextSafeAction: "Use an Int, Bool, finite enum, or finite parameter domain for a fallible With body.")
         }
         let least = "(CHOOSE \(first) \\in \(failed): \\A \(earlier) \\in \(failed): \(ordered))"
         return "(LET \(failed) == {\(bound) \\in \(try state(domain)): \(failure)} IN "

@@ -127,6 +127,21 @@ struct ChoiceEvaluationFailureTests {
         #expect(modulo.contains("= \"zed\" -> 1"))
     }
 
+    @Test("Unranked state-dependent string candidates cannot claim ordered TLA failure parity")
+    func stateDependentStringCandidateFailureOrder() throws {
+        let machine = try StateDependentStringCandidateFailuresModel.makeMachine()
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+        do {
+            _ = try StateDependentStringCandidateFailuresModel.render()
+            Issue.record("TLA+ export must reject an unranked first-failure order")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unsupportedCanonicalCandidateOrder)
+            #expect(diagnostic.stage == .rendering)
+        }
+    }
+
     @Test("A failing sole candidate is reported by both generated checking paths")
     func soleCandidateFailure() throws {
         let machine = try SingleCandidateDivisionFailureModel.makeMachine()

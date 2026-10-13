@@ -185,6 +185,27 @@ struct ParameterizedStringCandidateFailuresModel: Sendable {
 }
 
 @TLAModel
+struct StateDependentStringCandidateFailuresModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("StateDependentStringCandidateFailuresModel") { scope in
+            let members = scope.sharedVar(initial: Set<String>(["alpha", "zed"]))
+            let divisor = scope.sharedVar(initial: 0)
+            let modulus = scope.sharedVar(initial: -1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                With(members) { candidate in
+                    Assign(result, to: If(candidate == "alpha",
+                        then: 1 / divisor,
+                        else: 1 % modulus))
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
 struct BoundBodyChoiceFailureModel: Sendable {
     enum Step: String, CaseIterable { case pick }
 
