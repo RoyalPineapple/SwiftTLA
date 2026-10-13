@@ -200,8 +200,14 @@ struct CompiledTLARenderer {
             let predicate = "~({\(name) \\in \(try state(domain)): \(bodyFailure)} = {})"
             let guarded = try evaluationDefined(domain).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
             return domainFailure.map { "(\($0) \\/ \(guarded))" } ?? guarded
-        case .define(_, let value, _):
-            return try expressionChoiceFailure(value)
+        case .define(let binder, let value, let body):
+            let valueFailure = try expressionChoiceFailure(value)
+            guard let bodyFailure = try choiceFailure(body) else { return valueFailure }
+            let defined = try evaluationDefined(value)
+            guard repeatable(value) || defined != nil else { return valueFailure }
+            let predicate = "(LET \(try binderName(binder)) == \(try state(value)) IN \(bodyFailure))"
+            let guarded = defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
+            return valueFailure.map { "(\($0) \\/ \(guarded))" } ?? guarded
         case .guard_(let condition):
             return try expressionChoiceFailure(condition)
         case .and(.guard_(let condition), let body):

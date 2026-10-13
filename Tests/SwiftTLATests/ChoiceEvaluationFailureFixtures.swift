@@ -109,3 +109,22 @@ struct CandidateChoiceFailureModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct BoundBodyChoiceFailureModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("BoundBodyChoiceFailureModel") { scope in
+            let source = scope.sharedVar(in: 0...1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                Let(source) { bound in
+                    Assign(result, to: Select(from: Set<Int>([1])) { selected in
+                        selected.expr == bound.expr
+                    })
+                }
+            }
+        }
+    }
+}

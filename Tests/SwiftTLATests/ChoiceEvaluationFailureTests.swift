@@ -245,6 +245,71 @@ struct ChoiceEvaluationFailureTests {
             == expected.tokens(viewMode: .sourceAccurate).map(\.text))
     }
 
+    @Test("A Let binding preserves a choice failure in its body")
+    func boundBodyChoiceFailure() throws {
+        let machines = try BoundBodyChoiceFailureModel.initialMachines()
+        #expect(Set(machines.map(\.state.source)) == [0, 1])
+        let failing = try #require(machines.first { $0.state.source == 0 })
+        let succeeding = try #require(machines.first { $0.state.source == 1 })
+        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+            try failing.successors(for: .pick)
+        }
+        let successors = try succeeding.successors(for: .pick)
+        let successor = try #require(successors.first)
+        #expect(successors.count == 1)
+        #expect(successor.state.source == 1 && successor.state.result == 1)
+
+        let rendered = try BoundBodyChoiceFailureModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let failure = try #require(rendered.tlaBundle.root.tla.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAChoiceFailure0 ==")
+        })
+        #expect(failure.contains("LET"))
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/BoundBodyChoiceFailureModel.tla")
+            .standardizedFileURL
+        #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+
+        let sourceFile = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("ChoiceEvaluationFailureFixtures.swift")
+        let syntax = Parser.parse(source: try String(contentsOf: sourceFile, encoding: .utf8))
+        let declaration = try #require(syntax.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "BoundBodyChoiceFailureModel" })
+        let compiled = try TLASpecVerifier.parseAndVerify(declaration)
+        let action = try #require(compiled.program.behavior.actions.first)
+        guard compiled.program.behavior.actions.count == 1,
+              case .define(let bound, let boundValue, let body) = action.body,
+              case .stateVariable(let sourceID) = boundValue.operation,
+              sourceID == compiled.program.layout.variables.first?.id,
+              case .define(_, let selected, _) = body,
+              case .choose = selected.operation,
+              selected.children.count == 2,
+              case .equal = selected.children[1].operation,
+              selected.children[1].children.count == 2,
+              case .boundValue(let captured) = selected.children[1].children[1].operation,
+              captured == bound else {
+            Issue.record("The source Let no longer lowers to the proved bound-body choice rule")
+            return
+        }
+        var emitter = NativeSwiftEmitter(model: compiled)
+        let update = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let witness = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/BoundBodyChoiceFailureSwiftWitness.txt")
+            .standardizedFileURL
+        let binderPattern = try Regex(#"___binder_SpecParser_[0-9]+_0_2"#)
+        let normalized = update.description.replacing(binderPattern, with: "__PROOF_MEMBER__")
+        let actualTokens = Parser.parse(source: normalized).tokens(viewMode: .sourceAccurate).map(\.text)
+        let expectedTokens = try Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+            .tokens(viewMode: .sourceAccurate).map(\.text)
+        #expect(actualTokens == expectedTokens)
+    }
+
     @Test("The emitted Swift visitor preserves both Either branches")
     func eitherBranchEmittedSwift() throws {
         let fixture = URL(fileURLWithPath: #filePath)

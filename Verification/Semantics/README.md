@@ -887,6 +887,23 @@ action is separately proved equivalent to the stated source relation. Neither
 fact establishes those value and branch premises for arbitrary emitted code;
 undefined expressions and checking effects remain outside this rule.
 
+`DefinedActionFailureRule.tla` extends the total binding rule with ordered
+failure reporting: the bound expression is checked before the body, and a
+defined binding exposes the body's failure. Its omitted-body negative control
+rejects the old failure relation; all 4 obligations pass locally.
+`BoundBodyChoiceFailureProof.tla` independently states the source initial
+states, complete `pick` edge, bound-body `CHOOSE` failure, and selected
+evaluation check for one accepted `Let` program. Its 16 local obligations
+prove those claims against the complete emitted TLA+ module, including an
+initial-state negative control that removes the body failure. The focused
+test pins that module byte-for-byte, the lowered `define`/`CHOOSE` shape, the
+entire emitted Swift visitor token-for-token, and the native success/failure
+outcomes. The Swift compiler's interpretation of the pinned visitor remains
+a trusted boundary. The renderer still lacks a general path-sensitive
+failure rule for every nonrepeatable bound expression, and the external
+comparison path does not yet equate TLC's invariant violation with the native
+typed failure. This slice does not establish universal `Let` preservation.
+
 The conditional-action rule selects a branch by a Boolean predicate of the
 complete source state. TLAPS proves that equal source/rendered predicates and
 branch edge sets yield equal complete labeled edges, and that the conditional
