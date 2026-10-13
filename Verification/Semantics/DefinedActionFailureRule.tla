@@ -28,6 +28,49 @@ THEOREM DefinedActionPreservesStepAndFirstFailure ==
         SourceFirstFailure, RenderedFirstFailure,
         RenderedBindingFailure, RenderedBodyFailure
 
+SourceLabeledEdges(defined, value, updates, state, label) ==
+    IF defined THEN {<<state, label, target>> : target \in updates[value]}
+    ELSE {}
+RenderedLabeledEdges(defined, value, updates, state, label) ==
+    IF defined THEN
+        (LET bound == value IN
+            {<<state, label, target>> : target \in updates[bound]})
+    ELSE {}
+SourceCompleteOutcome(defined, value, updates, bodyFails, state, label) ==
+    [edges |-> SourceLabeledEdges(defined, value, updates, state, label),
+     failure |-> SourceFirstFailure(defined, value, bodyFails)]
+RenderedCompleteOutcome(defined, value, updates, bodyFails, state, label) ==
+    [edges |-> RenderedLabeledEdges(defined, value, updates, state, label),
+     failure |-> RenderedFirstFailure(defined, value, bodyFails)]
+
+THEOREM DefinedActionComposesCompleteLabeledOutcomes ==
+    ASSUME NEW States,
+           NEW domain,
+           NEW sourceValue \in domain,
+           NEW renderedValue \in domain,
+           NEW sourceDefined \in BOOLEAN,
+           NEW renderedDefined \in BOOLEAN,
+           sourceDefined = renderedDefined,
+           sourceDefined => sourceValue = renderedValue,
+           NEW sourceUpdates \in [domain -> SUBSET States],
+           NEW renderedUpdates \in [domain -> SUBSET States],
+           \A candidate \in domain :
+               sourceUpdates[candidate] = renderedUpdates[candidate],
+           NEW sourceFailures \in [domain -> BOOLEAN],
+           NEW renderedFailures \in [domain -> BOOLEAN],
+           \A candidate \in domain :
+               sourceFailures[candidate] = renderedFailures[candidate],
+           NEW state \in States,
+           NEW label
+    PROVE SourceCompleteOutcome(sourceDefined, sourceValue,
+              sourceUpdates, sourceFailures, state, label)
+          = RenderedCompleteOutcome(renderedDefined, renderedValue,
+              renderedUpdates, renderedFailures, state, label)
+    BY SMT DEF SourceCompleteOutcome, RenderedCompleteOutcome,
+        SourceLabeledEdges, RenderedLabeledEdges,
+        SourceFirstFailure, RenderedFirstFailure,
+        RenderedBindingFailure, RenderedBodyFailure
+
 DroppedBodyFailure(defined) ==
     IF ~defined THEN "binding" ELSE "none"
 

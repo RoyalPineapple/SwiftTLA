@@ -908,13 +908,18 @@ undefined expressions and checking effects remain outside this rule.
 
 `DefinedActionFailureRule.tla` extends the total binding rule with ordered
 failure reporting: the bound expression is checked before the body, and a
-defined binding exposes the body's failure. Its omitted-body negative control
-rejects the old failure relation; all 4 obligations pass locally.
+defined binding exposes the body's failure. Its compositional outcome rule
+preserves the complete state-and-action-labeled edge set and first-failure
+class when source and emitted bound values agree when defined, and their
+selected child update sets and failures agree. An omitted-body negative
+control rejects the old failure relation. The rule is conditional on those
+child premises; it does not establish them for arbitrary emitted expressions.
 `BoundBodyChoiceFailureProof.tla` independently states the source initial
 states, complete `pick` edge, bound-body `CHOOSE` failure, and selected
-evaluation check for one accepted `Let` program. Its 16 local obligations
-prove those claims against the complete emitted TLA+ module, including an
-initial-state negative control that removes the body failure. The focused
+evaluation check for one accepted `Let` program. It instantiates the generic
+outcome rule and composes it with the complete emitted TLA+ module, proving
+the labeled edge and failure relation for the fixture. Negative controls
+remove either the successful edge or the body failure. The focused
 test pins that module byte-for-byte, the lowered `define`/`CHOOSE` shape, the
 entire emitted Swift visitor token-for-token, and the native success/failure
 outcomes. The Swift compiler's interpretation of the pinned visitor remains
