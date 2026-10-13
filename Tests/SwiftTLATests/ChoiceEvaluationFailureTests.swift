@@ -311,8 +311,8 @@ struct ChoiceEvaluationFailureTests {
     }
 
     @Test("A fallible If condition preserves failures in its selected branch")
-    func conditionalChoiceThenDivisionFailure() throws {
-        let machines = try ConditionalChoiceThenDivisionFailureModel.initialMachines()
+    func conditionalChoiceThenModuloFailure() throws {
+        let machines = try ConditionalChoiceThenModuloFailureModel.initialMachines()
         #expect(machines.count == 4)
         for machine in machines {
             if machine.state.selector == 0 {
@@ -326,11 +326,52 @@ struct ChoiceEvaluationFailureTests {
             } else {
                 let successors = try machine.successors(for: .compute)
                 #expect(successors.count == 1)
-                #expect(successors.first?.state.result == 1)
+                let successor = try #require(successors.first)
+                #expect(successor.state.selector == 1)
+                #expect(successor.state.divisor == 1)
+                #expect(successor.state.result == 0)
             }
         }
 
-        let rendered = try ConditionalChoiceThenDivisionFailureModel.render()
+        let rendered = try ConditionalChoiceThenModuloFailureModel.render()
+        let sourceFile = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("ChoiceEvaluationFailureFixtures.swift")
+        let syntax = Parser.parse(source: try String(contentsOf: sourceFile, encoding: .utf8))
+        let declaration = try #require(syntax.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "ConditionalChoiceThenModuloFailureModel" })
+        let compiled = try TLASpecVerifier.parseAndVerify(declaration)
+        let action = try #require(compiled.program.behavior.actions.first)
+        guard compiled.program.behavior.actions.count == 1,
+              case .ifElse(let condition, _, _) = action.body,
+              case .choose = condition.operation else {
+            Issue.record("The source conditional no longer lowers to the proved choice-then-branch rule")
+            return
+        }
+        var emitter = NativeSwiftEmitter(model: compiled)
+        let members = try emitter.machineMembers()
+        let update = try #require(members.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let swiftBinder = try Regex(#"___binder_SpecParser_[0-9]+_0_0"#)
+        let normalizedSwift = update.description.replacing(swiftBinder, with: "__PROOF_MEMBER__")
+        let swiftWitness = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/ConditionalChoiceThenModuloFailureSwiftWitness.txt")
+            .standardizedFileURL
+        let actualTokens = Parser.parse(source: normalizedSwift).tokens(viewMode: .sourceAccurate).map(\.text)
+        let expectedTokens = try Parser.parse(source: String(contentsOf: swiftWitness, encoding: .utf8))
+            .tokens(viewMode: .sourceAccurate).map(\.text)
+        #expect(actualTokens == expectedTokens)
+
+        let tlaBinder = try Regex(#"__binder_SpecParser_[0-9]+_0"#)
+        let normalizedTLA = rendered.tlaBundle.root.tla.replacing(tlaBinder, with: "__CONDITION_MEMBER__")
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/ConditionalChoiceThenModuloFailureModel.tla")
+            .standardizedFileURL
+        #expect(normalizedTLA == (try String(contentsOf: proofInput, encoding: .utf8)))
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
         let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
         #expect(definitions.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })

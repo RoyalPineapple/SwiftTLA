@@ -130,17 +130,17 @@ struct BoundBodyChoiceFailureModel: Sendable {
 }
 
 @TLAModel
-struct ConditionalChoiceThenDivisionFailureModel: Sendable {
+struct ConditionalChoiceThenModuloFailureModel: Sendable {
     enum Step: String, CaseIterable { case compute }
 
     static var spec: TLASpec {
-        #spec("ConditionalChoiceThenDivisionFailureModel") { scope in
+        #spec("ConditionalChoiceThenModuloFailureModel") { scope in
             let selector = scope.sharedVar(in: 0...1)
             let divisor = scope.sharedVar(in: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.compute) {
                 If(Select(from: Set<Bool>([true])) { _ in selector == 1 }) {
-                    Assign(result, to: 1 / divisor)
+                    Assign(result, to: 1 % divisor)
                 } else: {
                     Assign(result, to: 2)
                 }
