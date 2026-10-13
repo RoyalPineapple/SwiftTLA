@@ -216,13 +216,29 @@ struct CompiledTLARenderer {
             let guarded = try evaluationDefined(domain).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
             return domainFailure.map { "(\($0) \\/ \(guarded))" } ?? guarded
         case .define(let binder, let value, let body):
-            let valueFailure = try expressionChoiceFailure(value)
-            guard let bodyFailure = try choiceFailure(body) else { return valueFailure }
-            let defined = try evaluationDefined(value)
-            guard repeatable(value) || defined != nil else { return valueFailure }
-            let predicate = "(LET \(try binderName(binder)) == \(try state(value)) IN \(bodyFailure))"
-            let guarded = defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
-            return valueFailure.map { "(\($0) \\/ \(guarded))" } ?? guarded
+            // shortcut: consecutive bindings use an explicit stack; mixed action trees still recurse.
+            var definitions = [(binder, value, try expressionChoiceFailure(value))]
+            var remaining = body
+            while case .define(let nestedBinder, let nestedValue, let nestedBody) = remaining {
+                definitions.append((nestedBinder, nestedValue, try expressionChoiceFailure(nestedValue)))
+                remaining = nestedBody
+            }
+            var failure = try choiceFailure(remaining)
+            for (binder, value, valueFailure) in definitions.reversed() {
+                guard let bodyFailure = failure else {
+                    failure = valueFailure
+                    continue
+                }
+                let defined = try evaluationDefined(value)
+                guard repeatable(value) || defined != nil else {
+                    failure = valueFailure
+                    continue
+                }
+                let predicate = "(LET \(try binderName(binder)) == \(try state(value)) IN \(bodyFailure))"
+                let guarded = defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
+                failure = valueFailure.map { "(\($0) \\/ \(guarded))" } ?? guarded
+            }
+            return failure
         case .guard_(let condition):
             return try expressionChoiceFailure(condition)
         case .and(.guard_(let condition), let body):
@@ -292,17 +308,32 @@ struct CompiledTLARenderer {
                     kind: failure.kind)
             }
         case .define(let binder, let value, let body):
-            let defined = try evaluationDefined(value)
-            var failures = try expressionArithmeticFailures(value)
-            // shortcut: values without a complete definedness rule still stop later-failure enumeration.
-            guard repeatable(value) || defined != nil else { return failures }
-            let name = try binderName(binder)
-            let renderedValue = try state(value)
-            for failure in try arithmeticFailures(body) {
-                let predicate = "(LET \(name) == \(renderedValue) IN \(failure.predicate))"
-                let operands = "(LET \(name) == \(renderedValue) IN \(failure.operands))"
-                failures.append(.init(predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
-                    operands: operands, kind: failure.kind))
+            // shortcut: consecutive bindings use an explicit stack; mixed action trees still recurse.
+            var definitions = [(binder, value, try evaluationDefined(value),
+                try expressionArithmeticFailures(value))]
+            var remaining = body
+            while case .define(let nestedBinder, let nestedValue, let nestedBody) = remaining {
+                definitions.append((nestedBinder, nestedValue, try evaluationDefined(nestedValue),
+                    try expressionArithmeticFailures(nestedValue)))
+                remaining = nestedBody
+            }
+            var failures = try arithmeticFailures(remaining)
+            for (binder, value, defined, originalFailures) in definitions.reversed() {
+                var valueFailures = originalFailures
+                // shortcut: values without a complete definedness rule still stop later-failure enumeration.
+                guard repeatable(value) || defined != nil else {
+                    failures = valueFailures
+                    continue
+                }
+                let name = try binderName(binder)
+                let renderedValue = try state(value)
+                for failure in failures {
+                    let predicate = "(LET \(name) == \(renderedValue) IN \(failure.predicate))"
+                    let operands = "(LET \(name) == \(renderedValue) IN \(failure.operands))"
+                    valueFailures.append(.init(predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
+                        operands: operands, kind: failure.kind))
+                }
+                failures = valueFailures
             }
             return failures
         case .guard_(let condition):
