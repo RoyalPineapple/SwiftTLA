@@ -67,7 +67,7 @@ internal struct AlgorithmPlusCalRenderer {
         lines += module.postTranslationDeclarations
         lines += module.refinements
         lines.append("====")
-        return lines.joined(separator: "\n") + "\n"
+        return FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
     }
 
     private func render(procedure: CompiledAuthoredPlusCalProcedure) throws -> [String] {

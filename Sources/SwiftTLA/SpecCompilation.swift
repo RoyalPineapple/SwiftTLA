@@ -2408,7 +2408,8 @@ private extension CompiledModuleMetadata {
         }
         guard !isLibraryModule else {
             lines.append("====")
-            return (lines.joined(separator: "\n") + "\n", evaluationFailureDeclarations, evaluationInvariant)
+            return (FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n"),
+                evaluationFailureDeclarations, evaluationInvariant)
         }
 
         let initializations = Dictionary(
@@ -2525,7 +2526,8 @@ private extension CompiledModuleMetadata {
         if !renderedTemporalProperties.isEmpty { lines.append("") }
         if instancesAfterBehavior { lines += instanceDeclarations }
         lines.append("====")
-        return (lines.joined(separator: "\n") + "\n", evaluationFailureDeclarations, evaluationInvariant)
+        return (FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n"),
+            evaluationFailureDeclarations, evaluationInvariant)
     }
 
     func tlcConfiguration(behavior: CompiledBehavior, replacements: [TLCModuleReplacement],

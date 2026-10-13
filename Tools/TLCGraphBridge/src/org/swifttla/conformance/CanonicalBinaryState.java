@@ -24,6 +24,9 @@ import tlc2.value.impl.Value;
 final class CanonicalBinaryState {
     private static final byte[] VERSION = "STLASV01".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] VIEW_VERSION = "STLAVW01".getBytes(StandardCharsets.US_ASCII);
+    private static final String STRING_PREFIX = "__SwiftTLA_UTF8_V1__";
+    private static final boolean DECODE_FORMAL_STRINGS =
+            "utf8-v1".equals(System.getProperty("swifttla.tlc.string-encoding"));
     private static final Comparator<byte[]> BYTES = Arrays::compareUnsigned;
 
     private CanonicalBinaryState() { }
@@ -68,7 +71,8 @@ final class CanonicalBinaryState {
             payload.writeByte(((BoolValue) input).val ? 1 : 0);
         } else if (input instanceof StringValue) {
             tag = 3;
-            payload.write(utf8(((StringValue) input).val.toString()));
+            String value = ((StringValue) input).val.toString();
+            payload.write(utf8(DECODE_FORMAL_STRINGS ? decodeFormalString(value) : value));
         } else if (input instanceof ModelValue) {
             tag = 4;
             payload.write(utf8(((ModelValue) input).val.toString()));
@@ -117,6 +121,36 @@ final class CanonicalBinaryState {
         return wrap(tag, bytes.toByteArray());
     }
 
+    private static String decodeFormalString(String value) throws IOException {
+        if (!value.startsWith(STRING_PREFIX)) {
+            if (value.chars().anyMatch(character -> character > 127)) {
+                throw new IOException("unencoded non-ASCII TLC state string");
+            }
+            return value;
+        }
+        String hex = value.substring(STRING_PREFIX.length());
+        if ((hex.length() & 1) != 0) { throw new IOException("malformed formal string encoding"); }
+        byte[] bytes = new byte[hex.length() / 2];
+        for (int index = 0; index < bytes.length; index++) {
+            int high = Character.digit(hex.charAt(index * 2), 16);
+            int low = Character.digit(hex.charAt(index * 2 + 1), 16);
+            if (high < 0 || low < 0
+                    || hex.charAt(index * 2) > 127 || hex.charAt(index * 2 + 1) > 127
+                    || (hex.charAt(index * 2) >= 'a' && hex.charAt(index * 2) <= 'f')
+                    || (hex.charAt(index * 2 + 1) >= 'a' && hex.charAt(index * 2 + 1) <= 'f')) {
+                throw new IOException("malformed formal string encoding");
+            }
+            bytes[index] = (byte) ((high << 4) | low);
+        }
+        String decoded = new String(bytes, StandardCharsets.UTF_8);
+        if (!Arrays.equals(bytes, decoded.getBytes(StandardCharsets.UTF_8))
+                || (decoded.chars().allMatch(character -> character < 128)
+                    && !decoded.startsWith(STRING_PREFIX))) {
+            throw new IOException("noncanonical formal string encoding");
+        }
+        return decoded;
+    }
+
     private static byte[] function(FcnRcdValue function) throws IOException {
         Value[] values = function.values;
         if (values.length == 0) { return value(new TupleValue(new Value[0])); }
@@ -146,7 +180,8 @@ final class CanonicalBinaryState {
                 tuple = false;
             }
             if (keys[index] instanceof StringValue) {
-                names[index] = ((StringValue) keys[index]).val.toString();
+                String name = ((StringValue) keys[index]).val.toString();
+                names[index] = DECODE_FORMAL_STRINGS ? decodeFormalString(name) : name;
             } else {
                 record = false;
             }

@@ -189,6 +189,8 @@ package struct TLCProcessRequest: Equatable, Sendable {
     module: URL,
     configuration: URL
   ) -> [String] {
+    let stringEncodingOptions = bundle.usesFormalStringEncoding
+      ? ["-Dswifttla.tlc.string-encoding=utf8-v1"] : []
     let graphOptions = invocation == .finiteGraph ? [
       "-Dswifttla.tlc.graph.path=\(graphEvents.path)",
       "-Dswifttla.tlc.graph.run-id=\(runID.uuidString.lowercased())",
@@ -202,6 +204,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     let mainClass = evaluationOutput == nil
       ? "tlc2.TLC" : "org.swifttla.conformance.TLCEvaluationOutput"
     let argumentGroups: [[String]] = [
+      stringEncodingOptions,
       graphOptions,
       evaluationOptions,
       ["-cp", classpath, mainClass],
@@ -392,7 +395,8 @@ package struct TLCProcessCapture: Sendable {
   package var unavailableCheckBundle: TLAModuleBundle?
 
   package init(reading request: TLCProcessRequest, outcome: TLCExecutionOutcome, retainedIn directory: URL) throws {
-    let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase)
+    let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase,
+      decodesFormalStrings: request.bundle.usesFormalStringEncoding)
     let stream = try reader.parse(contentsOf: directory.appendingPathComponent("graph-events.jsonl"))
     guard stream.runID == request.runID else {
       throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")

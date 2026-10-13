@@ -212,7 +212,7 @@ struct TypedSelectionTests {
             == module.replacing(binder, with: "__SELECT_MEMBER__"))
         let renderedAction = try #require(module.split(separator: "\n").first { $0.hasPrefix("select ==") })
         #expect(renderedAction.contains("= \"z\" -> 0 []"))
-        #expect(renderedAction.contains("= \"é\" -> 1"))
+        #expect(renderedAction.contains("= \"__SwiftTLA_UTF8_V1__C3A9\" -> 1"))
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/CanonicalUnicodeStringSelection.tla")

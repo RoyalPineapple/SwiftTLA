@@ -15,6 +15,56 @@ enum FormalStringIdentity {
     }
 }
 
+package enum FormalStringEncoding {
+    package static let prefix = "__SwiftTLA_UTF8_V1__"
+    package static let declaration = "\\* SwiftTLA formal strings: utf8-v1"
+
+    package static func declare(in source: String) -> String {
+        guard source.contains(prefix), let endOfHeader = source.firstIndex(of: "\n") else { return source }
+        let remainder = source[source.index(after: endOfHeader)...]
+        guard !remainder.hasPrefix(declaration + "\n") else { return source }
+        return String(source[...endOfHeader]) + declaration + "\n" + remainder
+    }
+
+    package static func encode(_ value: String) -> String {
+        guard value.utf8.contains(where: { $0 >= 128 }) || value.hasPrefix(prefix) else {
+            return value
+        }
+        let digits = Array("0123456789ABCDEF".utf8)
+        var encoded = prefix
+        encoded.reserveCapacity(prefix.utf8.count + value.utf8.count * 2)
+        for byte in value.utf8 {
+            encoded.append(Character(UnicodeScalar(digits[Int(byte >> 4)])))
+            encoded.append(Character(UnicodeScalar(digits[Int(byte & 0x0F)])))
+        }
+        return encoded
+    }
+
+    package static func decode(_ value: String) -> String? {
+        guard value.hasPrefix(prefix) else { return value }
+        let digits = value.utf8.dropFirst(prefix.utf8.count)
+        guard digits.count.isMultiple(of: 2) else { return nil }
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(digits.count / 2)
+        var iterator = digits.makeIterator()
+        while let high = iterator.next(), let low = iterator.next() {
+            guard let high = hexDigit(high), let low = hexDigit(low) else { return nil }
+            bytes.append(high << 4 | low)
+        }
+        guard let decoded = String(bytes: bytes, encoding: .utf8),
+              encode(decoded).utf8.elementsEqual(value.utf8) else { return nil }
+        return decoded
+    }
+
+    private static func hexDigit(_ byte: UInt8) -> UInt8? {
+        switch byte {
+        case 48...57: byte - 48
+        case 65...70: byte - 55
+        default: nil
+        }
+    }
+}
+
 public struct TLARecord: Hashable, Sendable {
     public struct Field: Hashable, Sendable {
         public let name: String
@@ -124,7 +174,7 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
         case .bool(let b): return b ? "TRUE" : "FALSE"
         case .string(let value):
             var literal = "\""
-            for scalar in value.unicodeScalars {
+            for scalar in FormalStringEncoding.encode(value).unicodeScalars {
                 switch scalar {
                 case "\"": literal += "\\\""
                 case "\\": literal += "\\\\"

@@ -83,6 +83,29 @@ package enum CanonicalValue: Hashable, Sendable {
         }
     }
 
+    package func decodingFormalStrings() throws -> Self {
+        switch self {
+        case .integer, .boolean, .constant: return self
+        case .string(let value):
+            guard value.utf8.allSatisfy({ $0 < 128 }),
+                  let decoded = FormalStringEncoding.decode(value) else {
+                throw TLCGraphEventError.unsupportedValue(value)
+            }
+            return .string(decoded)
+        case .orderedSet(let values): return .set(try values.map { try $0.decodingFormalStrings() })
+        case .orderedTuple(let values): return .tuple(try values.map { try $0.decodingFormalStrings() })
+        case .orderedRecord(let fields):
+            return .orderedRecord(try fields.map {
+                CanonicalRecordField(name: $0.name, value: try $0.value.decodingFormalStrings())
+            })
+        case .orderedFunction(let entries):
+            return try .function(entries.map {
+                try CanonicalFunctionEntry(key: $0.key.decodingFormalStrings(),
+                    value: $0.value.decodingFormalStrings())
+            })
+        }
+    }
+
     // Formal string identity follows the encoded bytes, not Swift's Unicode equivalence.
     package static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.canonicalEncoding == rhs.canonicalEncoding

@@ -365,8 +365,8 @@ normalization or all emitted String operations. The link assumes Swift String
 equality and Foundation's canonical normalization agree on the same Unicode
 version. Raw imported TLA+ values remain byte-exact, so an accepted imported
 String operation that reaches generated Swift still needs a separate output
-link. The closed canonical-Unicode choice below is an output-linked candidate,
-not yet a proved instance;
+link. The closed canonical-Unicode choice below is an output-linked candidate
+with local TLAPS proof but no hosted admission;
 dynamic String-valued `CHOOSE` and arbitrary Unicode String programs remain
 outside the fidelity theorem until those links and TLC's Unicode handling are
 established.
@@ -377,11 +377,19 @@ the October 2026 report. Raw non-ASCII String states therefore cannot qualify as
 independent TLC parity evidence until the pinned checker is repaired or the
 formal representation is made safe; a passing local Unicode fixture or TLAPS
 proof does not establish TLC's state exploration is complete.
-TLC-backed validation now rejects non-ASCII text in every declared module and
-configuration before launch and before computing a reusable oracle key. This
-conservative boundary leaves native Swift checking available, but the existing
-`string-literals` TLC parity case cannot qualify until a reversible ASCII
-formal encoding and its actual-output link are verified.
+TLC-backed validation rejects non-ASCII text in every declared module and
+configuration before launch and before computing a reusable oracle key. The
+current local candidate renders non-ASCII formal string bytes as versioned
+ASCII hex, escaping any ASCII string that begins with the reserved prefix.
+The emitted module declares that encoding when it contains an encoded literal;
+a compiled configuration-only literal also opts its bundle into decoding.
+External modules require an explicit declaration. This preserves the complete native
+state value rather than treating the ASCII surrogate as its identity. The
+text reader and binary TLC bridge both decode, while an unmarked input retains
+its literal strings. Focused rendering, binary-identity, and parity checks are
+still required; no hosted Unicode graph parity has been established for this
+candidate. Imported TLA+ string operations and dynamically constructed strings
+can bypass literal encoding and remain outside the universal theorem.
 
 ## Choice-expression obligation
 
@@ -556,10 +564,13 @@ complete emitted Swift choice and update function to the shared
 `GeneratedStringSelectionSwiftWitness.txt` after replacing only this fixture's
 two literal tokens. The accompanying
 `CanonicalUnicodeStringSelectionProof.tla` states the complete initial,
-labeled-step, failure, and reversed-order obligations. The hosted diagnostic
-on [`fa7c7602`](https://github.com/RoyalPineapple/SwiftTLA/actions/runs/38240172815)
+labeled-step, failure, and reversed-order obligations. The earlier hosted
+diagnostic on [`fa7c7602`](https://github.com/RoyalPineapple/SwiftTLA/actions/runs/38240172815)
 left 8 of 22 obligations unproved, starting with the closed-domain choice and
-empty-match laws. The output links are tested, but the proof is not admitted.
+empty-match laws. After replacing the formal literal with the versioned ASCII
+representation, all 22 obligations pass locally with TLAPS fingerprint reuse
+disabled. The Swift-string-to-formal representation link remains a tested
+runtime boundary, and the repaired proof has no hosted evidence yet.
 Even a repaired instance would not prove all Unicode values or dynamic String
 domains.
 

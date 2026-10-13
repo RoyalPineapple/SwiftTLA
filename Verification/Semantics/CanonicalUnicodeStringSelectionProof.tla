@@ -1,14 +1,14 @@
 ---- MODULE CanonicalUnicodeStringSelectionProof ---------------------
 EXTENDS TLAPS, Integers, CanonicalUnicodeStringSelection
 
-Members == {"z", "é"}
-Rank(value) == CASE value = "z" -> 0 [] value = "é" -> 1
+Members == {"z", "__SwiftTLA_UTF8_V1__C3A9"}
+Rank(value) == CASE value = "z" -> 0 [] value = "__SwiftTLA_UTF8_V1__C3A9" -> 1
 Matches(predicate) == {member \in Members : predicate[member]}
 CanonicalFirst(predicate) ==
     CHOOSE member \in Matches(predicate) :
         \A other \in Matches(predicate) : Rank(member) <= Rank(other)
 NativeFirst(predicate) ==
-    IF predicate["z"] THEN "z" ELSE "é"
+    IF predicate["z"] THEN "z" ELSE "__SwiftTLA_UTF8_V1__C3A9"
 
 THEOREM CanonicalUnicodeStringSelectionMatchesSwiftOrder ==
     \A predicate \in [Members -> BOOLEAN] :
@@ -18,7 +18,7 @@ THEOREM CanonicalUnicodeStringSelectionMatchesSwiftOrder ==
 THEOREM EmptyCanonicalUnicodeStringSelectionHasMatchingFailure ==
     \A predicate \in [Members -> BOOLEAN] :
         Matches(predicate) = {}
-            <=> ~predicate["z"] /\ ~predicate["é"]
+            <=> ~predicate["z"] /\ ~predicate["__SwiftTLA_UTF8_V1__C3A9"]
     BY SMT DEF Members, Matches
 
 NativeEdges(predicate, state) ==
@@ -32,7 +32,7 @@ RenderedEdges(predicate, state) ==
             [state EXCEPT !.pc = "Done", !.selected = CanonicalFirst(predicate)]>>}
     ELSE {}
 NativeFailures(predicate, state) ==
-    IF state.pc = "select" /\ ~predicate["z"] /\ ~predicate["é"]
+    IF state.pc = "select" /\ ~predicate["z"] /\ ~predicate["__SwiftTLA_UTF8_V1__C3A9"]
     THEN {<<state, "select", "noSatisfyingChoice">>}
     ELSE {}
 RenderedFailures(predicate, state) ==
@@ -52,11 +52,11 @@ THEOREM UnicodeStringChoicePreservesCompleteEdgesAndFailures ==
 ReversedFirst(predicate) ==
     CHOOSE member \in Matches(predicate) :
         \A other \in Matches(predicate) :
-            (CASE member = "é" -> 0 [] member = "z" -> 1)
-                <= (CASE other = "é" -> 0 [] other = "z" -> 1)
+            (CASE member = "__SwiftTLA_UTF8_V1__C3A9" -> 0 [] member = "z" -> 1)
+                <= (CASE other = "__SwiftTLA_UTF8_V1__C3A9" -> 0 [] other = "z" -> 1)
 
 THEOREM ReversedUnicodeStringOrderChangesResult ==
-    ReversedFirst([member \in Members |-> TRUE]) = "é"
+    ReversedFirst([member \in Members |-> TRUE]) = "__SwiftTLA_UTF8_V1__C3A9"
     BY SMT DEF ReversedFirst, Matches, Members
 
 THEOREM ReversedUnicodeStringOrderChangesCompleteEdge ==
@@ -68,7 +68,7 @@ THEOREM ReversedUnicodeStringOrderChangesCompleteEdge ==
     BY ReversedUnicodeStringOrderChangesResult, SMT
         DEF NativeEdges, NativeFirst, Matches, Members
 
-SourceInit == pc = "select" /\ selected = "é"
+SourceInit == pc = "select" /\ selected = "__SwiftTLA_UTF8_V1__C3A9"
 SourceSelect == pc = "select" /\ selected' = "z" /\ pc' = "Done"
 SourceTerminating == pc = "Done" /\ UNCHANGED <<pc, selected>>
 SourceNext == SourceSelect \/ SourceTerminating

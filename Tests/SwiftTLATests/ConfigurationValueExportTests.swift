@@ -11,6 +11,18 @@ struct ConfigurationValueExportTests {
         #expect(!rendered.tlaBundle.tla.contains("__SwiftTLAParameter_0 =="))
     }
 
+    @Test("a configuration-only encoded string opts into decoded TLC evidence")
+    func encodedConfigurationString() throws {
+        let bundle = try render(.string("é")).tlaBundle
+        #expect(!bundle.tla.contains(FormalStringEncoding.declaration))
+        #expect(bundle.cfg.contains(#""__SwiftTLA_UTF8_V1__C3A9""#))
+        #expect(bundle.usesFormalStringEncoding)
+
+        let unmarkedExternal = TLAModuleBundle.external(root: .init(
+            name: bundle.root.name, tla: bundle.tla, cfg: bundle.cfg))
+        #expect(!unmarkedExternal.usesFormalStringEncoding)
+    }
+
     @Test("nonliteral configuration values use collision-free definitions in both exports", arguments: [
         TLAValue.function([:]), .function([.string("small"): .int(3), .string("big"): .int(5)]),
         .tuple([.int(1), .int(2)]), .record(["count": .int(2)]), .int(-1),
