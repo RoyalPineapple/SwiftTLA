@@ -424,6 +424,7 @@ package enum GeneratedTLCOracle {
         arguments: [String], invocation: TLCInvocationKind = .finiteGraph,
         captureEvaluations: Bool = false,
         supplementalJar: PinnedTLCModuleJar? = nil) throws -> String {
+        try TLCProcessRequest.validateASCIIInput(bundle)
         let sources = bundle.files.sorted { $0.name < $1.name }.map {
             ["name": $0.name, "sha256": SHA256.hex(Data($0.tla.utf8))]
         }

@@ -88,6 +88,7 @@ package enum TLCProcessError: Error, Equatable, Sendable {
   case timedOut(partialStdout: String, partialStderr: String)
   case failedToStart(String)
   case invalidModuleBundle(TLCModuleBundleError)
+  case unsupportedNonASCIIInput(file: String, line: Int)
 }
 
 package struct PinnedTLCModuleJar: Equatable, Sendable {
@@ -227,6 +228,19 @@ package struct TLCProcessRequest: Equatable, Sendable {
       throw TLCProcessError.invalidModuleBundle(.unreadableModule(
         path: bundle.root.name + ".tla", reason: redactingSecrets(in: error.localizedDescription)
       ))
+    }
+    try Self.validateASCIIInput(bundle)
+  }
+
+  package static func validateASCIIInput(_ bundle: TLAModuleBundle) throws {
+    // TLC fingerprints can merge distinct non-ASCII strings before any graph writer sees them.
+    let inputs = bundle.files.map { ("\($0.name).tla", $0.tla) }
+      + (bundle.root.cfg.map { [("\(bundle.root.name).cfg", $0)] } ?? [])
+    for (file, source) in inputs {
+      let bytes = source.utf8
+      guard let offset = bytes.firstIndex(where: { $0 >= 128 }) else { continue }
+      let line = bytes[..<offset].filter { $0 == 10 }.count + 1
+      throw TLCProcessError.unsupportedNonASCIIInput(file: file, line: line)
     }
   }
 

@@ -377,6 +377,11 @@ the October 2026 report. Raw non-ASCII String states therefore cannot qualify as
 independent TLC parity evidence until the pinned checker is repaired or the
 formal representation is made safe; a passing local Unicode fixture or TLAPS
 proof does not establish TLC's state exploration is complete.
+TLC-backed validation now rejects non-ASCII text in every declared module and
+configuration before launch and before computing a reusable oracle key. This
+conservative boundary leaves native Swift checking available, but the existing
+`string-literals` TLC parity case cannot qualify until a reversible ASCII
+formal encoding and its actual-output link are verified.
 
 ## Choice-expression obligation
 
