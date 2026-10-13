@@ -212,11 +212,11 @@ struct CompiledTLARenderer {
             return try expressionChoiceFailure(condition)
         case .and(.guard_(let condition), let body):
             let conditionFailure = try expressionChoiceFailure(condition)
-            guard arithmeticTreeIsRepeatable(condition), let failure = try choiceFailure(body) else {
+            guard let selection = try selectedCondition(condition), let failure = try choiceFailure(body) else {
                 return conditionFailure
             }
-            let predicate = "((\(try state(condition))) = TRUE /\\ \(failure))"
-            let bodyFailure = try evaluationDefined(condition).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
+            let predicate = "((\(selection.predicate)) = TRUE /\\ \(failure))"
+            let bodyFailure = selection.defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
             return conditionFailure.map { "(\($0) \\/ \(bodyFailure))" } ?? bodyFailure
         case .or(let lhs, let rhs):
             let earlier = try anyFailurePredicate(lhs)
@@ -229,11 +229,14 @@ struct CompiledTLARenderer {
             case (let lhs?, let rhs?): return "(\(lhs) \\/ \(rhs))"
             }
         case .ifElse(let condition, let yes, let no):
-            guard repeatable(condition) else { return nil }
+            let conditionFailure = try expressionChoiceFailure(condition)
+            guard let selection = try selectedCondition(condition) else { return conditionFailure }
             let yesFailure = try choiceFailure(yes)
             let noFailure = try choiceFailure(no)
-            guard yesFailure != nil || noFailure != nil else { return nil }
-            return "(IF \(try state(condition)) THEN \(yesFailure ?? "FALSE") ELSE \(noFailure ?? "FALSE"))"
+            guard yesFailure != nil || noFailure != nil else { return conditionFailure }
+            let branch = "(IF \(selection.predicate) THEN \(yesFailure ?? "FALSE") ELSE \(noFailure ?? "FALSE"))"
+            let guarded = selection.defined.map { "(IF \($0) THEN \(branch) ELSE FALSE)" } ?? branch
+            return conditionFailure.map { "(\($0) \\/ \(guarded))" } ?? guarded
         default: return nil
         }
     }
@@ -291,32 +294,26 @@ struct CompiledTLARenderer {
             return try expressionArithmeticFailures(condition)
         case .ifElse(let condition, let yes, let no):
             let conditionFailures = try expressionArithmeticFailures(condition)
-            // shortcut: nonrepeatable conditions need ordered outcomes before branch failures can be reported.
-            guard arithmeticTreeIsRepeatable(condition) else { return conditionFailures }
-            let predicate = try state(condition)
-            let defined = try evaluationDefined(condition)
+            guard let selection = try selectedCondition(condition) else { return conditionFailures }
             let selected = try arithmeticFailures(yes).map {
-                let failure = "(IF \(predicate) THEN \($0.predicate) ELSE FALSE)"
-                return RenderedArithmeticFailure(predicate: defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
+                let failure = "(IF \(selection.predicate) THEN \($0.predicate) ELSE FALSE)"
+                return RenderedArithmeticFailure(predicate: selection.defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
                     operands: $0.operands, kind: $0.kind)
             }
             let unselected = try arithmeticFailures(no).map {
-                let failure = "(IF \(predicate) THEN FALSE ELSE \($0.predicate))"
-                return RenderedArithmeticFailure(predicate: defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
+                let failure = "(IF \(selection.predicate) THEN FALSE ELSE \($0.predicate))"
+                return RenderedArithmeticFailure(predicate: selection.defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
                     operands: $0.operands, kind: $0.kind)
             }
             return conditionFailures + selected + unselected
         case .and(.guard_(let condition), let body):
             let conditionFailures = try expressionArithmeticFailures(condition)
-            let ordered = try orderedFallibleSites(condition)
-            guard arithmeticTreeIsRepeatable(condition) || ordered != nil else {
+            guard let selection = try selectedCondition(condition) else {
                 return conditionFailures
             }
-            let guardPredicate = try state(condition)
-            let defined = try evaluationDefined(condition)
             return try conditionFailures + arithmeticFailures(body).map {
-                let predicate = "((\(guardPredicate)) = TRUE /\\ \($0.predicate))"
-                return .init(predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
+                let predicate = "((\(selection.predicate)) = TRUE /\\ \($0.predicate))"
+                return .init(predicate: selection.defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
                     operands: $0.operands, kind: $0.kind)
             }
         case .and(let lhs, let rhs):
@@ -353,6 +350,12 @@ struct CompiledTLARenderer {
         case .and(let lhs, let rhs): repeatableGuards(lhs) && repeatableGuards(rhs)
         default: false
         }
+    }
+
+    private func selectedCondition(_ condition: CompiledExpression) throws -> (predicate: String, defined: String?)? {
+        let defined = try evaluationDefined(condition)
+        guard arithmeticTreeIsRepeatable(condition) || defined != nil else { return nil }
+        return (try state(condition), defined)
     }
 
     private func expressionArithmeticFailures(_ value: CompiledExpression) throws -> [RenderedArithmeticFailure] {

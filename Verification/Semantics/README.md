@@ -1352,6 +1352,17 @@ case still throws on its first native branch while generated TLA+ has no
 intrinsic failure predicate; ordered first-failure and whole-action semantics
 for `existsAction` remain open.
 
+`ConditionalChoiceThenDivisionFailureModel` adds a focused mixed-failure
+regression. For its four initial states, generated Swift reports a missing
+`CHOOSE` result before branch selection, reports division by zero in the
+selected branch, or produces the complete successor. Before the renderer fix,
+the generated TLA+ module declared neither failure. The action renderer now
+uses the condition's definedness guard when reporting failures in a selected
+branch; the focused test checks both emitted failure declarations and the
+native outcomes. This is not yet an exact-output link to the conditional
+theorem, and it does not cover conditions without a compositional definedness
+rule. Those are still required before claiming arbitrary `ifElse` preservation.
+
 This table is a proof inventory, not a claim that these seven groups exhaust
 `#spec`: initialization, source lowering, properties, temporal behavior,
 refinement, and PlusCal export also require their own output links.

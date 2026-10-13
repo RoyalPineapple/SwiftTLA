@@ -310,6 +310,36 @@ struct ChoiceEvaluationFailureTests {
         #expect(actualTokens == expectedTokens)
     }
 
+    @Test("A fallible If condition preserves failures in its selected branch")
+    func conditionalChoiceThenDivisionFailure() throws {
+        let machines = try ConditionalChoiceThenDivisionFailureModel.initialMachines()
+        #expect(machines.count == 4)
+        for machine in machines {
+            if machine.state.selector == 0 {
+                #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+                    try machine.successors(for: .compute)
+                }
+            } else if machine.state.divisor == 0 {
+                #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+                    try machine.successors(for: .compute)
+                }
+            } else {
+                let successors = try machine.successors(for: .compute)
+                #expect(successors.count == 1)
+                #expect(successors.first?.state.result == 1)
+            }
+        }
+
+        let rendered = try ConditionalChoiceThenDivisionFailureModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(definitions.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })
+        let division = try #require(definitions.first {
+            $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==")
+        })
+        #expect(division.contains("IF"))
+    }
+
     @Test("The emitted Swift visitor preserves both Either branches")
     func eitherBranchEmittedSwift() throws {
         let fixture = URL(fileURLWithPath: #filePath)
