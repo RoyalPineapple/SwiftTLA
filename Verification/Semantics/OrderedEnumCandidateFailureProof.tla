@@ -112,4 +112,58 @@ THEOREM CompleteInitialOutcomeMatchesSource ==
             SourceEvaluationOK, SourceFirstFailure, SourceFailedCandidates,
             Members, Rank, SourceInit
 
+CanonicalOrder == <<"alpha", "zed">>
+CandidateFailure == [member \in Members |->
+    IF member = "alpha" THEN "divisionByZero" ELSE "negativeModulo"]
+CandidateRank == [member \in Members |-> Rank(member)]
+Traversal == INSTANCE CanonicalCandidateTraversalRule
+    WITH Values <- Members,
+         FailureValues <- {"divisionByZero", "negativeModulo"},
+         NoFailure <- "none"
+
+THEOREM EmittedInitialFailureUsesCanonicalTraversal ==
+    ASSUME SourceInit
+    PROVE /\ Traversal!NativeFailure(CanonicalOrder, CandidateFailure)
+                 = "divisionByZero"
+          /\ Traversal!FormalFailure(CanonicalOrder, CandidateFailure,
+                 CandidateRank) = "divisionByZero"
+          /\ EmittedFirstFailure = "alpha"
+    PROOF
+    <1>1. CanonicalOrder \in Seq(Members)
+        BY SMT DEF CanonicalOrder, Members
+    <1>2. CandidateFailure \in
+             [Members -> {"divisionByZero", "negativeModulo", "none"}]
+        BY SMT DEF CandidateFailure, Members
+    <1>3. CandidateRank \in [Members -> Int]
+        BY SMT DEF CandidateRank, Rank, Members
+    <1>4. 1 \in Traversal!FailedPositions(CanonicalOrder,
+             CandidateFailure)
+        BY SMT DEF CanonicalOrder, CandidateFailure, Members,
+            Traversal!FailedPositions, Traversal!Positions
+    <1>5. \A index \in Traversal!FailedPositions(CanonicalOrder,
+             CandidateFailure) : 1 <= index
+        BY SMT DEF CanonicalOrder, Traversal!FailedPositions,
+            Traversal!Positions
+    <1>6. \A earlier, later \in Traversal!Positions(CanonicalOrder) :
+             earlier < later =>
+                 CandidateRank[CanonicalOrder[earlier]]
+                     < CandidateRank[CanonicalOrder[later]]
+        BY SMT DEF CanonicalOrder, CandidateRank, Rank, Members,
+            Traversal!Positions
+    <1>7. Traversal!FirstIndex(CanonicalOrder, CandidateFailure) = 1
+           /\ Traversal!FirstValue(CanonicalOrder, CandidateFailure,
+                  CandidateRank) = "alpha"
+           /\ Traversal!NativeFailure(CanonicalOrder, CandidateFailure) =
+                  Traversal!FormalFailure(CanonicalOrder,
+                      CandidateFailure, CandidateRank)
+        BY Traversal!FirstFailureMatchesStrictCandidateOrder,
+           <1>1, <1>2, <1>3, <1>4, <1>5, <1>6, SMT
+            DEF CanonicalOrder
+    <1>. QED
+        BY <1>7, EmittedFirstFailureAtInitialState, SMT
+            DEF CanonicalOrder, CandidateFailure, CandidateRank,
+                Members, Traversal!NativeFailure,
+                Traversal!FormalFailure, Traversal!FailedPositions,
+                Traversal!FailedValues, Traversal!Positions
+
 =============================================================================

@@ -1116,11 +1116,17 @@ canonical formal order is `alpha, zed`. Both candidates fail at the initial
 state: `alpha` divides by zero through modulo, while `zed` uses a negative
 modulo divisor. The generated Swift machine and native checker report the
 first failure as division by zero, with the complete initial state and no
-edge. `OrderedEnumCandidateFailureProof.tla` imports the exact
-emitted module and independently defines the source initial state, failed
-candidate set, canonical first failure, and evaluation verdict. It proves the
-initial state's absent successor, selected failure, and verdict, plus a
-reversed-rank negative control (37 local TLAPS obligations). The exact-output
+edge. `CanonicalCandidateTraversalRule.tla` proves that finite ordered native
+candidate traversal and formal least-rank selection choose the same first
+failure, including the no-failure case (68 local TLAPS obligations). Its
+nonempty case assumes an existing least failed position and strictly increasing
+ranks; it does not infer these properties for arbitrary candidate domains.
+`OrderedEnumCandidateFailureProof.tla` instantiates that rule for the concrete
+canonical order, imports the exact emitted module, and independently defines
+the source initial state, failed candidate set, canonical first failure, and
+evaluation verdict. It proves the initial state's absent successor, selected
+failure, and verdict, plus a reversed-rank negative control (62 local TLAPS
+obligations). The exact-output
 test is the link to the real TLA+ emitter. The same test token-checks the
 complete emitted Swift update visitor against
 `OrderedEnumCandidateFailureSwiftWitness.txt`, including the canonical
