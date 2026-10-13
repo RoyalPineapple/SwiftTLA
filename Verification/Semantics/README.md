@@ -1070,6 +1070,21 @@ checker currently reports the first failure while TLA+ retains all failing
 operand sets; exact multi-failure reporting is not established. This case has
 not yet been hosted.
 
+`CandidateChoiceFailureModel.tla` checks the other failure class inside an
+action-level `Choose`: candidate `0` has no matching expression-level
+`CHOOSE`, while candidate `1` yields `result = 1`. The native check retains
+the complete successor and reports `noSatisfyingChoice`. The TLA+ renderer
+now reports a choice failure when any bound candidate's body fails, without
+turning the successful candidate into a disabled action. The test pins the
+complete emitted TLA+ module byte-for-byte and the emitted Swift visitor by
+tokens; it failed before the renderer fix because the TLA+ failure predicate
+was absent. `CandidateChoiceFailureProof.tla` independently states the source
+initial state, labeled step, failed candidate set, and evaluation verdict,
+then proves their equivalence to the actual emitted module (16 local TLAPS
+obligations). This closes this finite candidate/selection case, not arbitrary
+domain-expression failure order or every accepted choice body. Hosted
+evidence is pending.
+
 `EitherBranchDivisionFailureModel.tla` is byte-for-byte generated from a
 `#spec` `Either`: its first branch divides by zero in the initial state,
 while its second branch produces a complete labeled successor. The source
@@ -1299,7 +1314,7 @@ verify the emitted code itself.
 | `guard_` | Pure total guards agree at abstract positions; the checked-addition `When` instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof | Generalize emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
 | `and` | Compatible delta conjunction and conflicting relational writes | Prove both emitters' evaluation order, conflict/error semantics, and frame completion. |
 | `or` | Guarded-choice preservation conditional on equal branch edges; output-linked success-plus-failure and two distinct-failure fixtures; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, all failure kinds and TLA+ ordering, multiplicity policy, and both outputs. |
-| `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order | Prove the actual emitted domain and branch expressions agree, including TLA+ multi-failure equivalence and checking effects. |
+| `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order; one output-linked case retains a successful candidate and reports another candidate's expression-level choice failure | Prove arbitrary emitted domain and branch expressions agree, including all failure kinds, first-failure order, and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
 | `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule. |
 

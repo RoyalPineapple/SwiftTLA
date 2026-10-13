@@ -193,6 +193,13 @@ struct CompiledTLARenderer {
 
     func choiceFailure(_ action: CompiledActionExpr) throws -> String? {
         switch action {
+        case .existsAction(let binder, let domain, let body):
+            let domainFailure = try expressionChoiceFailure(domain)
+            guard let bodyFailure = try choiceFailure(body) else { return domainFailure }
+            let name = try binderName(binder)
+            let predicate = "~({\(name) \\in \(try state(domain)): \(bodyFailure)} = {})"
+            let guarded = try evaluationDefined(domain).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
+            return domainFailure.map { "(\($0) \\/ \(guarded))" } ?? guarded
         case .define(_, let value, _):
             return try expressionChoiceFailure(value)
         case .guard_(let condition):

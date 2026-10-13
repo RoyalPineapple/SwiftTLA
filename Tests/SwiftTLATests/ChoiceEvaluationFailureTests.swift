@@ -192,6 +192,59 @@ struct ChoiceEvaluationFailureTests {
         }
     }
 
+    @Test("A failing candidate retains another candidate's successor in both outputs")
+    func candidateChoiceFailure() throws {
+        let machine = try CandidateChoiceFailureModel.makeMachine()
+        var states: [Int: Int] = [:]
+        var edges: [(Int, Int)] = []
+        var failures: [NativeMachineEvaluationError] = []
+        let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 2,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
+            switch event {
+            case .state(let id, let snapshot, _, _, _): states[id] = snapshot.state.result
+            case .edge(let source, let action, let target):
+                #expect(action == .pick)
+                edges.append((source, target))
+            case .evaluationFailure(_, let action, let reason):
+                #expect(action == .pick)
+                failures.append(reason)
+            default: break
+            }
+        }
+        #expect(states == [0: 0, 1: 1])
+        #expect(edges.count == 1 && edges[0] == (0, 1))
+        #expect(failures == [.noSatisfyingChoice])
+        #expect(outcome.completion == .evaluationFailure(.noSatisfyingChoice))
+
+        let rendered = try CandidateChoiceFailureModel.render()
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CandidateChoiceFailureModel.tla")
+            .standardizedFileURL
+        #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+
+        let fixture = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("ChoiceEvaluationFailureFixtures.swift")
+        let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "CandidateChoiceFailureModel" })
+        let compiled = try TLASpecVerifier.parseAndVerify(declaration)
+        var emitter = NativeSwiftEmitter(model: compiled)
+        let update = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let witness = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CandidateChoiceFailureSwiftWitness.txt")
+            .standardizedFileURL
+        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+            .statements.first?.item.as(FunctionDeclSyntax.self))
+        #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
+            == expected.tokens(viewMode: .sourceAccurate).map(\.text))
+    }
+
     @Test("The emitted Swift visitor preserves both Either branches")
     func eitherBranchEmittedSwift() throws {
         let fixture = URL(fileURLWithPath: #filePath)

@@ -91,3 +91,21 @@ struct EitherChoiceAfterDivisionFailureModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct CandidateChoiceFailureModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("CandidateChoiceFailureModel") { scope in
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                Choose(0...1) { candidate in
+                    Assign(result, to: Select(from: Set<Int>([1])) { selected in
+                        selected.expr == candidate
+                    })
+                }
+            }
+        }
+    }
+}
