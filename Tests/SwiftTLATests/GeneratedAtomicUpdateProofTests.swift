@@ -60,8 +60,21 @@ struct GeneratedAtomicUpdateProofTests {
             of: "result._value_second_1 = value", with: "result._value_first_0 = value"))
         let wrongMergeMember = try #require(wrongMerge.statements.first?.item.as(DeclSyntax.self))
         #expect(templateBindings(wrongMergeMember, expectedUpdates) == nil)
-        let emittedDispatch = try #require(member(named: "_visitSuccessors", parameterCount: 2, in: members))
-        let expectedDispatch = try #require(member(named: "_visitSuccessors", parameterCount: 2, in: templateMembers))
+        let emittedDispatch = try #require(members.first { declaration in
+            guard let function = declaration.as(FunctionDeclSyntax.self) else { return false }
+            return function.name.text == "_visitSuccessors"
+                && function.signature.parameterClause.parameters.contains {
+                    $0.firstName.text == "onEvaluationFailure"
+                }
+        })
+        let expectedDispatch = try #require(templateMembers.first { declaration in
+            guard let function = declaration.as(FunctionDeclSyntax.self) else { return false }
+            return function.name.text == "_visitSuccessors"
+                && function.signature.parameterClause.parameters.contains {
+                    $0.firstName.text == "onEvaluationFailure"
+                }
+        })
+        #expect(templateBindings(emittedDispatch, expectedDispatch) != nil)
         let wrongFound = Parser.parse(source: emittedDispatch.description.replacingOccurrences(
             of: "found = true", with: "found = false"))
         let wrongFoundMember = try #require(wrongFound.statements.first?.item.as(DeclSyntax.self))

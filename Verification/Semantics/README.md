@@ -1410,6 +1410,26 @@ the concrete `_NativeMachineOperations` implementations, arbitrary source
 lowering, or every expression form. Hosted proof and parity evidence for this
 new instance are still pending.
 
+`ShortCircuitFailureModel` connects the same ordered-site rule to both
+expression-level Boolean operators. Its output check pins the complete
+generated TLA+ module and both emitted Swift transition visitors; reversing
+either Swift short-circuit branch or making the TLA+ conjunction failure eager
+breaks the check. `ShortCircuitFailureProof.tla` proves the two complete
+labeled relations, all four emitted failure predicates and selected invariant,
+reachable-state closure, and the instantiated ordered-site rule (22 local
+TLAPS obligations). In particular, `enabled = TRUE, divisor = 0` retains a
+valid disjunction step while the conjunction reports division by zero. The
+native test checks all four initial states, successor counts and failures.
+With non-decisive checking, the generated validation visitor reports a failing
+action and continues to later actions and states. The focused regression checks
+the disjunction edge alongside the conjunction failure; the related choice
+tests require the resulting complete two-state graph, including its self-loop
+and the failure at each expanded state. Decisive checking may still stop at
+the first failure and does not claim graph parity.
+Swift runtime interpretation of the pinned visitors and arbitrary Boolean
+expression lowering remain trusted; this exact instance is not a universal
+short-circuit theorem or hosted admission result.
+
 This table is a proof inventory, not a claim that these seven groups exhaust
 `#spec`: initialization, source lowering, properties, temporal behavior,
 refinement, and PlusCal export also require their own output links.

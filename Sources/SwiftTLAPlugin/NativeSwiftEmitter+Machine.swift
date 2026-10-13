@@ -54,6 +54,13 @@ extension NativeSwiftEmitter {
             defer { context = run! }
             return try _visitSuccessors(checking: &run, visit)
         }
+        public func visitValidationOutcomes(checking context: inout CheckingContext<CheckingRegisters>,
+                                            _ visit: (Action, Self) throws -> Bool,
+                                            onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool) throws -> Bool {
+            var run: CheckingContext<CheckingRegisters>? = context
+            defer { context = run! }
+            return try _visitSuccessors(checking: &run, visit, onEvaluationFailure: onEvaluationFailure)
+        }
         public struct Snapshot: Hashable, Sendable {
             public let state: State
             \(fields)
@@ -515,6 +522,9 @@ extension NativeSwiftEmitter {
             private func _successors(checking context: inout CheckingContext<CheckingRegisters>?) throws -> [(action: Action, machine: Self)] { [] }
             private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
                                           _ visit: (Action, Self) throws -> Bool) throws -> Bool { false }
+            private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
+                                          _ visit: (Action, Self) throws -> Bool,
+                                          onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool) throws -> Bool { false }
             public func formalCall(for action: Action) throws -> FormalActionCall {}
             """)
         }
@@ -635,6 +645,13 @@ extension NativeSwiftEmitter {
         }
         private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
                                       _ visit: (Action, Self) throws -> Bool) throws -> Bool {
+            try _visitSuccessors(checking: &context, visit, onEvaluationFailure: { action, reason in
+                throw MachineActionEvaluationFailure(action: action, reason: reason)
+            })
+        }
+        private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
+                                      _ visit: (Action, Self) throws -> Bool,
+                                      onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool) throws -> Bool {
             var found = false
             do {
                 func _visitAction(_ action: Action) throws {
@@ -652,7 +669,9 @@ extension NativeSwiftEmitter {
                             }
                         }
                     } catch let reason as NativeMachineEvaluationError where !callbackFailed {
-                        throw MachineActionEvaluationFailure(action: action, reason: reason)
+                        if try !onEvaluationFailure(action, reason) {
+                            throw _StopSuccessorTraversal()
+                        }
                     } catch {
                         throw error
                     }

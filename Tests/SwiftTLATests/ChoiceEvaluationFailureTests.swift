@@ -25,7 +25,7 @@ struct ChoiceEvaluationFailureTests {
         let machine = try MixedCandidateDivisionFailureModel.makeMachine()
         var states: [Int: Int] = [:]
         var edges: [(Int, Int)] = []
-        var observedFailure = false
+        var failureSources: [Int] = []
         let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 2,
             checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
             switch event {
@@ -34,16 +34,16 @@ struct ChoiceEvaluationFailureTests {
                 #expect(action == .pick)
                 edges.append((source, target))
             case .evaluationFailure(let source, let action, let reason):
-                observedFailure = true
-                #expect(source == 0 && action == .pick && reason == .divisionByZero)
+                failureSources.append(source)
+                #expect(action == .pick && reason == .divisionByZero)
             default: break
             }
         }
-        #expect(observedFailure)
+        #expect(failureSources == [0, 1])
         #expect(outcome.completion == .evaluationFailure(.divisionByZero))
-        #expect(outcome.states == 2 && outcome.edges == 1)
+        #expect(outcome.states == 2 && outcome.edges == 2)
         #expect(states == [0: 0, 1: 1])
-        #expect(edges.count == 1 && edges[0].0 == 0 && edges[0].1 == 1)
+        #expect(edges.count == 2 && edges[0] == (0, 1) && edges[1] == (1, 1))
 
         let rendered = try MixedCandidateDivisionFailureModel.render()
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
@@ -68,7 +68,7 @@ struct ChoiceEvaluationFailureTests {
         let machine = try EitherBranchDivisionFailureModel.makeMachine()
         var states: [Int: Int] = [:]
         var edges: [(Int, Int)] = []
-        var observedFailure = false
+        var failureSources: [Int] = []
         let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 2,
             checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
             switch event {
@@ -77,16 +77,16 @@ struct ChoiceEvaluationFailureTests {
                 #expect(action == .pick)
                 edges.append((source, target))
             case .evaluationFailure(let source, let action, let reason):
-                observedFailure = true
-                #expect(source == 0 && action == .pick && reason == .divisionByZero)
+                failureSources.append(source)
+                #expect(action == .pick && reason == .divisionByZero)
             default: break
             }
         }
-        #expect(observedFailure)
+        #expect(failureSources == [0, 1])
         #expect(outcome.completion == .evaluationFailure(.divisionByZero))
-        #expect(outcome.states == 2 && outcome.edges == 1)
+        #expect(outcome.states == 2 && outcome.edges == 2)
         #expect(states == [0: 0, 1: 1])
-        #expect(edges.count == 1 && edges[0].0 == 0 && edges[0].1 == 1)
+        #expect(edges.count == 2 && edges[0] == (0, 1) && edges[1] == (1, 1))
 
         let rendered = try EitherBranchDivisionFailureModel.render()
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
@@ -131,7 +131,7 @@ struct ChoiceEvaluationFailureTests {
         }
         var states: [Int: Int] = [:]
         var edges: [(Int, Int)] = []
-        var observedFailure = false
+        var failureSources: [Int] = []
         let outcome = try MachineValidator.run(initialMachines: [laterFailure], maximumStates: 2,
             checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
             switch event {
@@ -140,15 +140,15 @@ struct ChoiceEvaluationFailureTests {
                 #expect(action == .pick)
                 edges.append((source, target))
             case .evaluationFailure(let source, let action, let reason):
-                observedFailure = true
-                #expect(source == 0 && action == .pick && reason == .noSatisfyingChoice)
+                failureSources.append(source)
+                #expect(action == .pick && reason == .noSatisfyingChoice)
             default: break
             }
         }
-        #expect(observedFailure)
+        #expect(failureSources == [0, 1])
         #expect(outcome.completion == .evaluationFailure(.noSatisfyingChoice))
         #expect(states == [0: 0, 1: 1])
-        #expect(edges.count == 1 && edges[0] == (0, 1))
+        #expect(edges.count == 2 && edges[0] == (0, 1) && edges[1] == (1, 1))
 
         let rendered = try EitherChoiceAfterDivisionFailureModel.render()
         let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
@@ -197,7 +197,7 @@ struct ChoiceEvaluationFailureTests {
         let machine = try CandidateChoiceFailureModel.makeMachine()
         var states: [Int: Int] = [:]
         var edges: [(Int, Int)] = []
-        var failures: [NativeMachineEvaluationError] = []
+        var failures: [(Int, NativeMachineEvaluationError)] = []
         let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 2,
             checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
             switch event {
@@ -205,15 +205,16 @@ struct ChoiceEvaluationFailureTests {
             case .edge(let source, let action, let target):
                 #expect(action == .pick)
                 edges.append((source, target))
-            case .evaluationFailure(_, let action, let reason):
+            case .evaluationFailure(let source, let action, let reason):
                 #expect(action == .pick)
-                failures.append(reason)
+                failures.append((source, reason))
             default: break
             }
         }
         #expect(states == [0: 0, 1: 1])
-        #expect(edges.count == 1 && edges[0] == (0, 1))
-        #expect(failures == [.noSatisfyingChoice])
+        #expect(edges.count == 2 && edges[0] == (0, 1) && edges[1] == (1, 1))
+        #expect(failures.count == 2 && failures[0].0 == 0 && failures[1].0 == 1)
+        #expect(failures.allSatisfy { $0.1 == .noSatisfyingChoice })
         #expect(outcome.completion == .evaluationFailure(.noSatisfyingChoice))
 
         let rendered = try CandidateChoiceFailureModel.render()
@@ -418,6 +419,9 @@ struct ChoiceEvaluationFailureTests {
     func shortCircuitFailures() throws {
         let machines = try ShortCircuitFailureModel.initialMachines()
         #expect(machines.count == 4)
+        #expect(Set(machines.map { [$0.state.enabled ? 1 : 0, $0.state.divisor] })
+            == Set([[0, 0], [0, 1], [1, 0], [1, 1]]))
+        #expect(machines.allSatisfy { $0.state.result == 0 })
         for machine in machines {
             let conjunction = {
                 try machine.successors(for: .conjunction)
@@ -428,14 +432,18 @@ struct ChoiceEvaluationFailureTests {
             if machine.state.divisor == 0 {
                 if machine.state.enabled {
                     #expect(throws: NativeMachineEvaluationError.divisionByZero) { try conjunction() }
-                    #expect(try disjunction().first?.state.result == 2)
+                    let successors = try disjunction()
+                    #expect(successors.count == 1)
+                    #expect(successors.first?.state.result == 2)
                 } else {
                     #expect(try conjunction().isEmpty)
                     #expect(throws: NativeMachineEvaluationError.divisionByZero) { try disjunction() }
                 }
             } else {
                 #expect(try conjunction().count == (machine.state.enabled ? 1 : 0))
-                #expect(try disjunction().first?.state.result == 2)
+                let successors = try disjunction()
+                #expect(successors.count == 1)
+                #expect(successors.first?.state.result == 2)
             }
         }
 
@@ -444,6 +452,30 @@ struct ChoiceEvaluationFailureTests {
         let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
         #expect(definitions.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==") })
         #expect(definitions.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure1 ==") })
+    }
+
+    @Test("A successful action remains visible when another Boolean action fails")
+    func successfulActionAlongsideFailure() throws {
+        let initial = try #require(ShortCircuitFailureModel.initialMachines().first {
+            $0.state.enabled && $0.state.divisor == 0
+        })
+        var results: [Int: Int] = [:]
+        var edges: [(Int, ShortCircuitFailureModel.Action, Int)] = []
+        var failures: [(Int, ShortCircuitFailureModel.Action, NativeMachineEvaluationError)] = []
+        let outcome = try MachineValidator.run(initialMachines: [initial], maximumStates: 2,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
+            switch event {
+            case .state(let id, let snapshot, _, _, _): results[id] = snapshot.state.result
+            case .edge(let source, let action, let target): edges.append((source, action, target))
+            case .evaluationFailure(let source, let action, let reason):
+                failures.append((source, action, reason))
+            default: break
+            }
+        }
+        #expect(outcome.completion == .evaluationFailure(.divisionByZero))
+        #expect(results[0] == 0)
+        #expect(edges.contains { $0.0 == 0 && $0.1 == .disjunction && results[$0.2] == 2 })
+        #expect(failures.contains { $0.0 == 0 && $0.1 == .conjunction && $0.2 == .divisionByZero })
     }
 
     @Test("A fallible Let value preserves an arithmetic failure in its body")

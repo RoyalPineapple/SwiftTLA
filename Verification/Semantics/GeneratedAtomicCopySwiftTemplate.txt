@@ -96,6 +96,14 @@ private func _visitSuccessors(for action: Action, checking context: inout Checki
 
 private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
                               _ visit: (Action, Self) throws -> Bool) throws -> Bool {
+    try _visitSuccessors(checking: &context, visit, onEvaluationFailure: { action, reason in
+        throw MachineActionEvaluationFailure(action: action, reason: reason)
+    })
+}
+
+private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
+                              _ visit: (Action, Self) throws -> Bool,
+                              onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool) throws -> Bool {
     var found = false
     do {
         func _visitAction(_ action: Action) throws {
@@ -113,7 +121,9 @@ private func _visitSuccessors(checking context: inout CheckingContext<CheckingRe
                     }
                 }
             } catch let reason as NativeMachineEvaluationError where !callbackFailed {
-                throw MachineActionEvaluationFailure(action: action, reason: reason)
+                if try !onEvaluationFailure(action, reason) {
+                    throw _StopSuccessorTraversal()
+                }
             } catch {
                 throw error
             }

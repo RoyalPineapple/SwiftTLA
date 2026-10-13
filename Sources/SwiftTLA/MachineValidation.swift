@@ -185,6 +185,7 @@ public enum MachineValidator {
         var violated: Set<Machine.Property> = []
         var reached: Set<Machine.Property> = []
         var deadlockFound = false
+        var firstEvaluationFailure: NativeMachineEvaluationError?
         var successorNanoseconds: UInt64 = 0
         var invariantNanoseconds: UInt64 = 0
         var reachabilityNanoseconds: UInt64 = 0
@@ -340,6 +341,7 @@ public enum MachineValidator {
                 let successorStartedAt = DispatchTime.now().uptimeNanoseconds
                 var processingNanoseconds: UInt64 = 0
                 var decision: MachineValidationSummary<Machine.Property>.Completion?
+                var stateEvaluationFailed = false
                 func inspect(_ action: Machine.Action, _ successor: Machine, permitted: Bool) throws -> Bool {
                     let processingStartedAt = DispatchTime.now().uptimeNanoseconds
                     defer {
@@ -396,41 +398,47 @@ public enum MachineValidator {
                     try emitEvent(.edge(source: source, action: action, target: target))
                     return true
                 }
-                func evaluationFailure(_ failure: MachineActionEvaluationFailure<Machine.Action>) throws
-                    -> MachineValidationSummary<Machine.Property> {
-                    try emitEvent(.evaluationFailure(source: source, action: failure.action, reason: failure.reason))
-                    return summary(.evaluationFailure(failure.reason))
+                func evaluationFailure(_ action: Machine.Action, _ reason: NativeMachineEvaluationError) throws -> Bool {
+                    stateEvaluationFailed = true
+                    if firstEvaluationFailure == nil { firstEvaluationFailure = reason }
+                    try emitEvent(.evaluationFailure(source: source, action: action, reason: reason))
+                    if stopOnViolation {
+                        decision = .evaluationFailure(reason)
+                        return false
+                    }
+                    return true
                 }
                 let hasSuccessor: Bool
                 if Machine.hasActionConstraint {
-                    let candidates: [(action: Machine.Action, machine: Machine)]
+                    var candidates: [(action: Machine.Action, machine: Machine)] = []
                     do {
-                        candidates = try machine.successors(checking: &context)
-                    } catch let failure as MachineActionEvaluationFailure<Machine.Action> {
-                        return try evaluationFailure(failure)
+                        _ = try machine.visitValidationOutcomes(checking: &context, { action, successor in
+                            candidates.append((action, successor))
+                            return true
+                        }, onEvaluationFailure: evaluationFailure)
                     } catch {
                         throw error
                     }
                     hasSuccessor = !candidates.isEmpty
-                    for (action, successor) in candidates {
-                        guard sameConfiguration(successor) else { throw ExplorationError.configurationMismatch }
-                        let constraintStartedAt = DispatchTime.now().uptimeNanoseconds
-                        let permitted = try machine.satisfiesActionConstraint(to: successor, checking: &context)
-                        let constraintDuration = DispatchTime.now().uptimeNanoseconds - constraintStartedAt
-                        constraintNanoseconds += constraintDuration
-                        processingNanoseconds += constraintDuration
-                        if try !inspect(action, successor, permitted: permitted) { break }
+                    if decision == nil {
+                        for (action, successor) in candidates {
+                            guard sameConfiguration(successor) else { throw ExplorationError.configurationMismatch }
+                            let constraintStartedAt = DispatchTime.now().uptimeNanoseconds
+                            let permitted = try machine.satisfiesActionConstraint(to: successor, checking: &context)
+                            let constraintDuration = DispatchTime.now().uptimeNanoseconds - constraintStartedAt
+                            constraintNanoseconds += constraintDuration
+                            processingNanoseconds += constraintDuration
+                            if try !inspect(action, successor, permitted: permitted) { break }
+                        }
                     }
                 } else {
                     do {
-                        hasSuccessor = try machine.visitSuccessors(checking: &context) { action, successor in
+                        hasSuccessor = try machine.visitValidationOutcomes(checking: &context, { action, successor in
                             do { return try inspect(action, successor, permitted: true) }
                             catch { throw ValidationVisitorFailure(reason: error) }
-                        }
+                        }, onEvaluationFailure: evaluationFailure)
                     } catch let failure as ValidationVisitorFailure {
                         throw failure.reason
-                    } catch let failure as MachineActionEvaluationFailure<Machine.Action> {
-                        return try evaluationFailure(failure)
                     } catch {
                         throw error
                     }
@@ -438,7 +446,7 @@ public enum MachineValidator {
                 successorNanoseconds += DispatchTime.now().uptimeNanoseconds - successorStartedAt - processingNanoseconds
                 successorCalls += 1
                 if let decision { return summary(decision) }
-                if !hasSuccessor {
+                if !hasSuccessor && !stateEvaluationFailed {
                     deadlockFound = true
                     try emitEvent(.deadlock(state: source))
                     if checking.checkDeadlock && stopOnViolation { return summary(.decisiveViolation) }
@@ -450,6 +458,6 @@ public enum MachineValidator {
                 head = 0
             }
         }
-        return summary(.exhausted)
+        return summary(firstEvaluationFailure.map { .evaluationFailure($0) } ?? .exhausted)
     }
 }
