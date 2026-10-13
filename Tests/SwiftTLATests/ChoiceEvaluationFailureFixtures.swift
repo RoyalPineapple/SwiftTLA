@@ -130,6 +130,31 @@ struct OrderedCandidateFailuresModel: Sendable {
 }
 
 @TLAModel
+struct OrderedEnumCandidateFailuresModel: Sendable {
+    enum Candidate: String, CaseIterable, FiniteTLAValueDomain {
+        case zed, alpha
+        static var defaultValue: Self { .zed }
+        static let finiteValues = allCases
+    }
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("OrderedEnumCandidateFailuresModel") { scope in
+            let divisor = scope.sharedVar(initial: 0)
+            let modulus = scope.sharedVar(initial: -1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                Choose(Candidate.all) { candidate in
+                    Assign(result, to: If(candidate == Candidate.alpha,
+                        then: 1 % divisor,
+                        else: 1 % modulus))
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
 struct BoundBodyChoiceFailureModel: Sendable {
     enum Step: String, CaseIterable { case pick }
 

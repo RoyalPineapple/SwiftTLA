@@ -30,6 +30,71 @@ struct ChoiceEvaluationFailureTests {
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
     }
 
+    @Test("Finite enum Choose candidates use canonical failure order")
+    func orderedEnumCandidateFailures() throws {
+        let machine = try OrderedEnumCandidateFailuresModel.makeMachine()
+        #expect(machine.state.divisor == 0)
+        #expect(machine.state.modulus == -1)
+        #expect(machine.state.result == 0)
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+        var states = 0
+        var edges = 0
+        var failures = 0
+        let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
+            switch event {
+            case .state: states += 1
+            case .edge: edges += 1
+            case .evaluationFailure(let source, let action, let reason):
+                failures += 1
+                #expect(source == 0 && action == .pick && reason == .divisionByZero)
+            default: break
+            }
+        }
+        #expect(states == 1 && edges == 0 && failures == 1)
+        #expect(outcome.completion == .evaluationFailure(.divisionByZero))
+
+        let rendered = try OrderedEnumCandidateFailuresModel.render()
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/OrderedEnumCandidateFailuresModel.tla")
+            .standardizedFileURL
+        #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let division = try #require(declarations.first {
+            $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==")
+        })
+        let modulo = try #require(declarations.first {
+            $0.hasPrefix("__SwiftTLANegativeModuloDivisorFailure0 ==")
+        })
+        #expect(division.contains("__SwiftTLAFirstFailingCandidate"))
+        #expect(modulo.contains("__SwiftTLAFirstFailingCandidate"))
+        #expect(division.contains("= \"alpha\" -> 0"))
+        #expect(modulo.contains("= \"zed\" -> 1"))
+
+        let fixture = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("ChoiceEvaluationFailureFixtures.swift")
+        let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "OrderedEnumCandidateFailuresModel" })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
+        let update = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let witness = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/OrderedEnumCandidateFailureSwiftWitness.txt")
+            .standardizedFileURL
+        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+            .statements.first?.item.as(FunctionDeclSyntax.self))
+        #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
+            == expected.tokens(viewMode: .sourceAccurate).map(\.text))
+    }
+
     @Test("A failing sole candidate is reported by both generated checking paths")
     func soleCandidateFailure() throws {
         let machine = try SingleCandidateDivisionFailureModel.makeMachine()

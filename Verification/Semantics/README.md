@@ -1109,10 +1109,27 @@ proves the least-candidate selection under an explicit minimum-existence
 premise, the division-before-modulo outcome for a two-candidate instance,
 and a reversed-order negative control (10 local TLAPS obligations). The
 generated-machine regression failed before the renderer change and now pins
-the canonical-order direction in the actual emitted predicates. It does not
-yet pin the complete emitted module or prove first-failure order for every
-accepted candidate type and nested body. No hosted evidence qualifies this
-new slice yet.
+the canonical-order direction in the actual emitted predicates.
+`OrderedEnumCandidateFailuresModel.tla` is byte-for-byte generated from a
+finite-enum `Choose` whose Swift declaration order is `zed, alpha` but whose
+canonical formal order is `alpha, zed`. Both candidates fail at the initial
+state: `alpha` divides by zero through modulo, while `zed` uses a negative
+modulo divisor. The generated Swift machine and native checker report the
+first failure as division by zero, with the complete initial state and no
+edge. `OrderedEnumCandidateFailureProof.tla` imports the exact
+emitted module and independently defines the source initial state, failed
+candidate set, canonical first failure, and evaluation verdict. It proves the
+initial state's absent successor, selected failure, and verdict, plus a
+reversed-rank negative control (37 local TLAPS obligations). The exact-output
+test is the link to the real TLA+ emitter. The same test token-checks the
+complete emitted Swift update visitor against
+`OrderedEnumCandidateFailureSwiftWitness.txt`, including the canonical
+String comparator, ordered `visitAlternatives` call, both modulo expressions,
+and complete-state update path. The generated Swift behavior is tested, not
+formally proved; Swift's execution of these pinned operations remains a
+trusted boundary. This fixture does not prove first-failure order
+for every accepted candidate type, dynamic domain, or nested body, nor the
+complete Swift emitter. No hosted evidence qualifies this new slice yet.
 
 `CandidateChoiceFailureModel.tla` checks the other failure class inside an
 action-level `Choose`: candidate `0` has no matching expression-level

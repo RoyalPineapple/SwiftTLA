@@ -213,7 +213,7 @@ struct CompiledTLARenderer {
             guard let bodyFailure = try choiceFailure(body) else { return domainFailure }
             let name = try binderName(binder)
             let allFailures = try anyFailurePredicate(body)
-            let predicate = try firstFailingIntegerCandidate(binder, domain: domain, anyFailure: allFailures,
+            let predicate = try firstFailingCandidate(binder, domain: domain, anyFailure: allFailures,
                 selected: bodyFailure, otherwise: "FALSE")
                 ?? "~({\(name) \\in \(try state(domain)): \(bodyFailure)} = {})"
             let guarded = try evaluationDefined(domain).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
@@ -304,9 +304,9 @@ struct CompiledTLARenderer {
             let allFailures = try anyFailurePredicate(body)
             return try domainFailures + bodyFailures.map { failure in
                 let failedMembers = "{\(name) \\in \(renderedDomain): \(failure.predicate)}"
-                let predicate = try firstFailingIntegerCandidate(binder, domain: domain, anyFailure: allFailures,
+                let predicate = try firstFailingCandidate(binder, domain: domain, anyFailure: allFailures,
                     selected: failure.predicate, otherwise: "FALSE") ?? "~(\(failedMembers) = {})"
-                let operands = try firstFailingIntegerCandidate(binder, domain: domain, anyFailure: allFailures,
+                let operands = try firstFailingCandidate(binder, domain: domain, anyFailure: allFailures,
                     selected: "(IF \(failure.predicate) THEN {\(failure.operands)} ELSE {})", otherwise: "{}")
                     ?? "{\(failure.operands): \(name) \\in \(failedMembers)}"
                 return .init(
@@ -397,14 +397,35 @@ struct CompiledTLARenderer {
         return predicates.count == 1 ? predicates[0] : "(\(predicates.joined(separator: " \\/ ")))"
     }
 
-    private func firstFailingIntegerCandidate(
+    private func canonicalLeastPredicate(_ type: CompiledValueType, _ member: String, _ other: String) throws -> String? {
+        switch type {
+        case .int: return "\(member) <= \(other)"
+        case .bool: return "(\(member) = FALSE \\/ \(other) = TRUE)"
+        default:
+            guard let members = choiceMembers(type), !members.isEmpty,
+                  members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }
+            return try rankedLeastPredicate(members.sorted(), member, other)
+        }
+    }
+
+    private func rankedLeastPredicate(_ members: [CompiledValue], _ member: String, _ other: String) throws -> String {
+        func rank(_ value: String) throws -> String {
+            let cases = try members.enumerated().map { index, member in
+                "\(value) = \(try member.rendered(using: layout)) -> \(index)"
+            }.joined(separator: " [] ")
+            return "(CASE \(cases))"
+        }
+        return try "\(rank(member)) <= \(rank(other))"
+    }
+
+    private func firstFailingCandidate(
         _ binder: BinderID,
         domain: CompiledExpression,
         anyFailure: String?,
         selected: String,
         otherwise: String
     ) throws -> String? {
-        guard case .set(.int) = domain.resultType,
+        guard case .set(let memberType) = domain.resultType,
               let failure = anyFailure else { return nil }
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
             .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
@@ -418,7 +439,15 @@ struct CompiledTLARenderer {
         let failed = names[0]
         let first = names[1]
         let earlier = names[2]
-        let least = "(CHOOSE \(first) \\in \(failed): \\A \(earlier) \\in \(failed): \(first) <= \(earlier))"
+        let ordered: String
+        if let typedOrder = try canonicalLeastPredicate(memberType, first, earlier) {
+            ordered = typedOrder
+        } else if let members = closedChoiceMembers(domain) {
+            ordered = try rankedLeastPredicate(members, first, earlier)
+        } else {
+            return nil
+        }
+        let least = "(CHOOSE \(first) \\in \(failed): \\A \(earlier) \\in \(failed): \(ordered))"
         return "(LET \(failed) == {\(bound) \\in \(try state(domain)): \(failure)} IN "
             + "(IF \(failed) = {} THEN \(otherwise) ELSE "
             + "(LET \(bound) == \(least) IN \(selected))))"
@@ -1019,18 +1048,10 @@ struct CompiledTLARenderer {
                     let candidates = choiceName("choiceCandidates")
                     let other = choiceName("choiceOther")
                     let least: String
-                    if expression.resultType == .int {
-                        least = "\(member) <= \(other)"
-                    } else if expression.resultType == .bool {
-                        least = "(\(member) = FALSE \\/ \(other) = TRUE)"
+                    if let ordered = try canonicalLeastPredicate(expression.resultType, member, other) {
+                        least = ordered
                     } else if let members = choiceMembers(expression) {
-                        func rank(_ value: String) throws -> String {
-                            let cases = try members.enumerated().map { index, member in
-                                "\(value) = \(try member.rendered(using: layout)) -> \(index)"
-                            }.joined(separator: " [] ")
-                            return "(CASE \(cases))"
-                        }
-                        least = try "\(rank(member)) <= \(rank(other))"
+                        least = try rankedLeastPredicate(members, member, other)
                     } else if expression.resultType == .array(.int) || expression.resultType == .array(.bool) {
                         let index = choiceName("choiceIndex")
                         let prefix = choiceName("choicePrefix")
@@ -1076,6 +1097,10 @@ struct CompiledTLARenderer {
         default: supportsClosedRank = false
         }
         guard supportsClosedRank, let domain = expression.children.first else { return nil }
+        return closedChoiceMembers(domain)
+    }
+
+    private func closedChoiceMembers(_ domain: CompiledExpression) -> [CompiledValue]? {
         let domainValue = domain.computation
         let members: [CompiledValue]
         switch domainValue.operation {
