@@ -1222,7 +1222,7 @@ struct CompiledTLARenderer {
 
     private func choiceMemberHasExactIdentity(_ value: CompiledValue) -> Bool {
         switch value {
-        case .integer, .boolean: true
+        case .integer, .boolean, .constant: true
         case .string(let text): TLAValue.canonicalSwiftString(text) == .string(text)
         case .tuple(let members): members.allSatisfy(choiceMemberHasExactIdentity)
         default: false

@@ -1424,14 +1424,25 @@ macro-emitted TLA+ now ranks the union of the declared members and selects
 the same first failing candidate; the regression was red when it used
 independent existential failure predicates. This is focused output-test
 evidence, not a TLAPS proof or a TLC parity run. Non-enumerable dynamic
-domains, all other value families, and the general emitter theorem remain
-open. A fallible `With` over a state-dependent `Set<String>` has no current
+domains, value families without a proved rank, and the general emitter theorem
+remain open. A fallible `With` over a state-dependent `Set<String>` has no current
 renderable candidate order. Native checking still evaluates it, but TLA+
 export now fails with `unsupportedCanonicalCandidateOrder` instead of emitting
 an existential failure predicate that may select a different failure. The
 focused regression was red before this fail-closed change. This is an
 explicit output limitation, not a proof that the dynamic-domain construct is
 preserved; an ordered formal encoding and its output link remain required.
+
+Finite model values are also exact candidates when their universe comes from
+an accepted finite enum or parameter domain. The generated Swift visitor and
+the TLA+ failure predicate both rank the same complete formal values; a
+focused two-configuration test checks different first failures and the emitted
+rank for each model value. The AsynchInterface corpus test checks the resulting
+configured native graphs and selected verdicts. The generic
+`CanonicalCandidateTraversalRule.tla` covers equal ordered candidate lists and
+their finite subsets, but the Swift emitter, parameter-domain extraction, and
+actual TLC behavior remain trusted or independently tested links. Arbitrary
+state-held sets without a renderable order still fail closed.
 
 The generated conditional arithmetic regressions check both branch selection
 and an arithmetic condition that can overflow before either branch runs.

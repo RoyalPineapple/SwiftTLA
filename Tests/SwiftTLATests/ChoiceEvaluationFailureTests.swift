@@ -127,6 +127,30 @@ struct ChoiceEvaluationFailureTests {
         #expect(modulo.contains("= \"zed\" -> 1"))
     }
 
+    @Test("Finite model-value parameters use one first-failure order in Swift and TLA+")
+    func parameterizedModelValueCandidateFailures() throws {
+        let scenarios = try ParameterizedModelValueCandidateFailuresModel.validationScenarios()
+        #expect(scenarios.count == 2)
+        let both = try #require(scenarios.first)
+        let machine = try #require(both.initialMachines().first)
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+        let later = try #require(scenarios.last?.initialMachines().first)
+        #expect(throws: NativeMachineEvaluationError.negativeModuloDivisor(-1)) {
+            try later.successors(for: .pick)
+        }
+
+        let rendered = try both.render()
+        let failures = rendered.tlaBundle.root.tla.split(separator: "\n").filter {
+            $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==")
+                || $0.hasPrefix("__SwiftTLANegativeModuloDivisorFailure0 ==")
+        }
+        #expect(failures.count == 2)
+        #expect(failures.allSatisfy { $0.contains("__SwiftTLAFirstFailingCandidate") })
+        #expect(failures.allSatisfy { $0.contains("= a -> 0") && $0.contains("= z -> 1") })
+    }
+
     @Test("Unranked state-dependent string candidates cannot claim ordered TLA failure parity")
     func stateDependentStringCandidateFailureOrder() throws {
         let machine = try StateDependentStringCandidateFailuresModel.makeMachine()

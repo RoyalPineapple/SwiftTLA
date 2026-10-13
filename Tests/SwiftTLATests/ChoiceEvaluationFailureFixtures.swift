@@ -185,6 +185,42 @@ struct ParameterizedStringCandidateFailuresModel: Sendable {
 }
 
 @TLAModel
+struct ParameterizedModelValueCandidateFailuresModel: Sendable {
+    enum Member: String, CaseIterable, FiniteTLAValueDomain {
+        case zed = "z", alpha = "a"
+        static var defaultValue: Self { .zed }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .constant(rawValue) }
+    }
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("ParameterizedModelValueCandidateFailuresModel") { scope in
+            let members = scope.parameter(as: Set<Member>.self,
+                in: Set<Set<Member>>([Set<Member>([.alpha, .zed]), Set<Member>([.zed])]))
+            let divisor = scope.sharedVar(initial: 0)
+            let modulus = scope.sharedVar(initial: -1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                With(members) { candidate in
+                    Assign(result, to: If(candidate == Member.alpha,
+                        then: 1 / divisor,
+                        else: 1 % modulus))
+                }
+            }
+            let bothFail = Validation(label: "Both fail") {
+                Bind(members, to: Set<Member>([.alpha, .zed]))
+            }
+            bothFail
+            let laterFailure = Validation(label: "Later failure") {
+                Bind(members, to: Set<Member>([.zed]))
+            }
+            laterFailure
+        }
+    }
+}
+
+@TLAModel
 struct StateDependentStringCandidateFailuresModel: Sendable {
     enum Step: String, CaseIterable { case pick }
 
