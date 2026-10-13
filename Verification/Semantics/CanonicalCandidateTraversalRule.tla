@@ -153,4 +153,51 @@ THEOREM AllFiniteCandidateFailuresAgree ==
     <1>. QED
         BY <1>1, <1>2, SMT
 
+THEOREM FiniteParameterSubsetKeepsGlobalFailureOrder ==
+    ASSUME NEW full \in Seq(Values),
+           NEW selected \in Seq(Values),
+           NEW positions \in Seq(Positions(full)),
+           Len(positions) = Len(selected),
+           \A index \in Positions(selected) :
+               selected[index] = full[positions[index]],
+           \A earlier, later \in Positions(selected) :
+               earlier < later => positions[earlier] < positions[later],
+           NEW rank \in [Values -> Int],
+           \A index \in Positions(full) : rank[full[index]] = index - 1,
+           NEW failure \in [Values -> FailureValues \cup {NoFailure}]
+    PROVE NativeFailure(selected, failure) =
+          FormalFailure(selected, failure, rank)
+    PROOF
+    <1>1. \A earlier, later \in Positions(selected) :
+             earlier < later =>
+                 rank[selected[earlier]] < rank[selected[later]]
+        BY SMT DEF Positions
+    <1>. QED
+        BY AllFiniteCandidateFailuresAgree, <1>1, SMT
+
+Members(order) == {order[index] : index \in Positions(order)}
+SourceEdges(order, updates, state, action) ==
+    UNION {{<<state, action, target>> : target \in updates[order[index]]} :
+        index \in Positions(order)}
+FormalEdges(order, updates, state, action) ==
+    UNION {{<<state, action, target>> : target \in updates[candidate]} :
+        candidate \in Members(order)}
+
+THEOREM CompleteFiniteAlternativeOutcomeAgrees ==
+    ASSUME NEW States,
+           NEW order \in Seq(Values),
+           NEW updates \in [Values -> SUBSET States],
+           NEW failure \in [Values -> FailureValues \cup {NoFailure}],
+           NEW rank \in [Values -> Int],
+           NEW state \in States,
+           NEW action,
+           \A earlier, later \in Positions(order) :
+               earlier < later => rank[order[earlier]] < rank[order[later]]
+    PROVE /\ SourceEdges(order, updates, state, action) =
+                 FormalEdges(order, updates, state, action)
+          /\ NativeFailure(order, failure) =
+                 FormalFailure(order, failure, rank)
+    BY AllFiniteCandidateFailuresAgree, SMT
+        DEF SourceEdges, FormalEdges, Members, Positions
+
 =============================================================================

@@ -111,6 +111,10 @@ struct ChoiceEvaluationFailureTests {
 
         let rendered = try scenario.render()
         let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let domain = try #require(declarations.first {
+            $0.hasPrefix("ASSUME members \\in ")
+        })
+        #expect(domain.contains("\"alpha\"") && domain.contains("\"zed\""))
         let division = try #require(declarations.first {
             $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==")
         })
