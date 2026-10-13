@@ -1532,6 +1532,17 @@ This table is a proof inventory, not a claim that these seven groups exhaust
 `#spec`: initialization, source lowering, properties, temporal behavior,
 refinement, and PlusCal export also require their own output links.
 
+`MissingFunctionKeyProof.tla` imports an exact-output-checked generated TLA+
+module. It proves that a dictionary read emits the same complete labeled step
+and missing-key failure as the independent read rule, and that omitting the
+evaluation check would disagree. The generated Swift machine test observes
+the actual missing-key error without a state change. The proof is local only;
+hosted evidence is pending. It does not cover every function-application form
+or prove Swift runtime behavior from source. Fallible `With` bodies over
+state-dependent candidates with no reproducible TLA+ order remain rejected
+with `unsupportedCanonicalCandidateOrder`, rather than claiming first-failure
+parity.
+
 Record exactly which parser, macro-expansion, Swift compiler/runtime, TLA+
 parser/TLC, PlusCal translator, serialization, and proof-checker facts remain
 assumptions. Do not describe a result as a universal guarantee if a backend

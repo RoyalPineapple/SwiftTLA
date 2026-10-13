@@ -20,11 +20,13 @@ private enum OrderedEvaluationSite {
     case arithmetic(operation: NativeMachineEvaluationError.IntegerOperation, guard_: String, operands: String)
     case divisionByZero(guard_: String, divisor: String)
     case negativeModuloDivisor(guard_: String, divisor: String)
+    case functionArgumentOutsideDomain(guard_: String)
 
     var guard_: String {
         switch self {
         case .choice(let guard_), .arithmetic(_, let guard_, _),
-             .divisionByZero(let guard_, _), .negativeModuloDivisor(let guard_, _): guard_
+             .divisionByZero(let guard_, _), .negativeModuloDivisor(let guard_, _),
+             .functionArgumentOutsideDomain(let guard_): guard_
         }
     }
 
@@ -40,20 +42,23 @@ private enum OrderedEvaluationSite {
             return .divisionByZero(guard_: guarded, divisor: divisor)
         case .negativeModuloDivisor(_, let divisor):
             return .negativeModuloDivisor(guard_: guarded, divisor: divisor)
+        case .functionArgumentOutsideDomain:
+            return .functionArgumentOutsideDomain(guard_: guarded)
         }
     }
 }
 
-enum RenderedArithmeticFailureKind {
+enum RenderedEvaluationFailureKind {
     case overflow(NativeMachineEvaluationError.IntegerOperation)
     case divisionByZero
     case negativeModuloDivisor
+    case functionArgumentOutsideDomain
 }
 
-struct RenderedArithmeticFailure {
+struct RenderedEvaluationFailure {
     let predicate: String
-    let operands: String
-    let kind: RenderedArithmeticFailureKind
+    let operands: String?
+    let kind: RenderedEvaluationFailureKind
 }
 
 struct CompiledTLARenderer {
@@ -291,19 +296,21 @@ struct CompiledTLARenderer {
         return "~(\(defined))"
     }
 
-    func arithmeticFailures(_ action: CompiledActionExpr) throws -> [RenderedArithmeticFailure] {
+    func evaluationFailures(_ action: CompiledActionExpr) throws -> [RenderedEvaluationFailure] {
         switch action {
         case .existsAction(let binder, let domain, let body):
-            let domainFailures = try expressionArithmeticFailures(domain)
-            let bodyFailures = try arithmeticFailures(body)
+            let domainFailures = try expressionEvaluationFailures(domain)
+            let bodyFailures = try evaluationFailures(body)
             guard !bodyFailures.isEmpty else { return domainFailures }
             let defined = try evaluationDefined(domain)
             let allFailures = try anyFailurePredicate(body)
             return try domainFailures + bodyFailures.map { failure in
                 let predicate = try firstFailingCandidate(binder, domain: domain, anyFailure: allFailures,
                     selected: failure.predicate, otherwise: "FALSE")
-                let operands = try firstFailingCandidate(binder, domain: domain, anyFailure: allFailures,
-                    selected: "(IF \(failure.predicate) THEN {\(failure.operands)} ELSE {})", otherwise: "{}")
+                let operands = try failure.operands.map { value in
+                    try firstFailingCandidate(binder, domain: domain, anyFailure: allFailures,
+                        selected: "(IF \(failure.predicate) THEN {\(value)} ELSE {})", otherwise: "{}")
+                }
                 return .init(
                     predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
                     operands: operands,
@@ -312,14 +319,14 @@ struct CompiledTLARenderer {
         case .define(let binder, let value, let body):
             // shortcut: consecutive bindings use an explicit stack; mixed action trees still recurse.
             var definitions = [(binder, value, try evaluationDefined(value),
-                try expressionArithmeticFailures(value))]
+                try expressionEvaluationFailures(value))]
             var remaining = body
             while case .define(let nestedBinder, let nestedValue, let nestedBody) = remaining {
                 definitions.append((nestedBinder, nestedValue, try evaluationDefined(nestedValue),
-                    try expressionArithmeticFailures(nestedValue)))
+                    try expressionEvaluationFailures(nestedValue)))
                 remaining = nestedBody
             }
-            var failures = try arithmeticFailures(remaining)
+            var failures = try evaluationFailures(remaining)
             for (binder, value, defined, originalFailures) in definitions.reversed() {
                 var valueFailures = originalFailures
                 // shortcut: values without a complete definedness rule still stop later-failure enumeration.
@@ -331,7 +338,7 @@ struct CompiledTLARenderer {
                 let renderedValue = try state(value)
                 for failure in failures {
                     let predicate = "(LET \(name) == \(renderedValue) IN \(failure.predicate))"
-                    let operands = "(LET \(name) == \(renderedValue) IN \(failure.operands))"
+                    let operands = failure.operands.map { "(LET \(name) == \(renderedValue) IN \($0))" }
                     valueFailures.append(.init(predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
                         operands: operands, kind: failure.kind))
                 }
@@ -339,34 +346,34 @@ struct CompiledTLARenderer {
             }
             return failures
         case .guard_(let condition):
-            return try expressionArithmeticFailures(condition)
+            return try expressionEvaluationFailures(condition)
         case .ifElse(let condition, let yes, let no):
-            let conditionFailures = try expressionArithmeticFailures(condition)
+            let conditionFailures = try expressionEvaluationFailures(condition)
             guard let selection = try selectedCondition(condition) else { return conditionFailures }
-            let selected = try arithmeticFailures(yes).map {
+            let selected = try evaluationFailures(yes).map {
                 let failure = "(IF \(selection.predicate) THEN \($0.predicate) ELSE FALSE)"
-                return RenderedArithmeticFailure(predicate: selection.defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
+                return RenderedEvaluationFailure(predicate: selection.defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
                     operands: $0.operands, kind: $0.kind)
             }
-            let unselected = try arithmeticFailures(no).map {
+            let unselected = try evaluationFailures(no).map {
                 let failure = "(IF \(selection.predicate) THEN FALSE ELSE \($0.predicate))"
-                return RenderedArithmeticFailure(predicate: selection.defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
+                return RenderedEvaluationFailure(predicate: selection.defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
                     operands: $0.operands, kind: $0.kind)
             }
             return conditionFailures + selected + unselected
         case .and(.guard_(let condition), let body):
-            let conditionFailures = try expressionArithmeticFailures(condition)
+            let conditionFailures = try expressionEvaluationFailures(condition)
             guard let selection = try selectedCondition(condition) else {
                 return conditionFailures
             }
-            return try conditionFailures + arithmeticFailures(body).map {
+            return try conditionFailures + evaluationFailures(body).map {
                 let predicate = "((\(selection.predicate)) = TRUE /\\ \($0.predicate))"
                 return .init(predicate: selection.defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
                     operands: $0.operands, kind: $0.kind)
             }
         case .and(let lhs, let rhs):
-            let leftFailures = try arithmeticFailures(lhs)
-            let rightFailures = try arithmeticFailures(rhs)
+            let leftFailures = try evaluationFailures(lhs)
+            let rightFailures = try evaluationFailures(rhs)
             // shortcut: right-side failures after non-guard actions need ordered outcome semantics.
             guard !rightFailures.isEmpty, repeatableGuards(lhs) else { return leftFailures }
             let guardPredicate = try self.action(lhs)
@@ -374,10 +381,10 @@ struct CompiledTLARenderer {
                 .init(predicate: "(\(guardPredicate) /\\ \($0.predicate))", operands: $0.operands, kind: $0.kind)
             }
         case .or(let lhs, let rhs):
-            let left = try arithmeticFailures(lhs)
+            let left = try evaluationFailures(lhs)
             let earlier = try anyFailurePredicate(lhs)
-            let right = try arithmeticFailures(rhs).map { failure in
-                RenderedArithmeticFailure(predicate: earlier.map { "(IF \($0) THEN FALSE ELSE \(failure.predicate))" }
+            let right = try evaluationFailures(rhs).map { failure in
+                RenderedEvaluationFailure(predicate: earlier.map { "(IF \($0) THEN FALSE ELSE \(failure.predicate))" }
                     ?? failure.predicate, operands: failure.operands, kind: failure.kind)
             }
             return left + right
@@ -386,7 +393,7 @@ struct CompiledTLARenderer {
     }
 
     private func anyFailurePredicate(_ action: CompiledActionExpr) throws -> String? {
-        let predicates = try arithmeticFailures(action).map(\.predicate)
+        let predicates = try evaluationFailures(action).map(\.predicate)
             + (try choiceFailure(action).map { [$0] } ?? [])
         guard !predicates.isEmpty else { return nil }
         return predicates.count == 1 ? predicates[0] : "(\(predicates.joined(separator: " \\/ ")))"
@@ -472,8 +479,8 @@ struct CompiledTLARenderer {
         return (try state(condition), defined)
     }
 
-    private func expressionArithmeticFailures(_ value: CompiledExpression) throws -> [RenderedArithmeticFailure] {
-        var failures: [RenderedArithmeticFailure] = []
+    private func expressionEvaluationFailures(_ value: CompiledExpression) throws -> [RenderedEvaluationFailure] {
+        var failures: [RenderedEvaluationFailure] = []
         if let sites = try orderedFallibleSites(value) {
             var preceding: [String] = []
             for site in sites {
@@ -488,6 +495,9 @@ struct CompiledTLARenderer {
                 case .negativeModuloDivisor(let guard_, let divisor):
                     failures.append(.init(predicate: preceded("~(\(guard_))", by: preceding),
                         operands: divisor, kind: .negativeModuloDivisor))
+                case .functionArgumentOutsideDomain(let guard_):
+                    failures.append(.init(predicate: preceded("~(\(guard_))", by: preceding),
+                        operands: nil, kind: .functionArgumentOutsideDomain))
                 }
                 preceding.append(site.guard_)
             }
@@ -548,13 +558,32 @@ struct CompiledTLARenderer {
             case .choose:
                 guard let defined = try choiceDefined(value) else { return nil }
                 return [.choice(guard_: defined)]
+            case .functionApply:
+                guard value.children.count == 2,
+                      case .dictionary = value.children[0].resultType else { return nil }
+                var preceding: [OrderedEvaluationSite] = []
+                let children = value.operation.evaluatesRightOperandFirst
+                    ? Array(value.children.reversed()) : value.children
+                for child in children {
+                    guard let sites = try collect(child) else { return nil }
+                    preceding += sites
+                }
+                let function = try state(value.children[0])
+                let argument = try state(value.children[1])
+                return preceding + [.functionArgumentOutsideDomain(
+                    guard_: "(\(argument) \\in DOMAIN (\(function)))")]
             case .setSum:
-                guard value.resultType == .int, value.children.count == 2 else { return nil }
+                guard value.resultType == .int, value.children.count == 2,
+                      case .dictionary = value.children[0].resultType else { return nil }
                 var preceding: [OrderedEvaluationSite] = []
                 for child in value.children {
                     guard let sites = try collect(child) else { return nil }
                     preceding += sites
                 }
+                let function = try state(value.children[0])
+                let domain = try state(value.children[1])
+                preceding.append(.functionArgumentOutsideDomain(
+                    guard_: "(\(domain) \\subseteq DOMAIN (\(function)))"))
                 let sum = try state(value)
                 let minimum = TLAValue.int(.min).description
                 let maximum = TLAValue.int(.max).description
@@ -609,7 +638,7 @@ struct CompiledTLARenderer {
         guard let sites = try collect(expression) else { return nil }
         let hasSpecialFailure = sites.contains {
             switch $0 {
-            case .divisionByZero, .negativeModuloDivisor: true
+            case .divisionByZero, .negativeModuloDivisor, .functionArgumentOutsideDomain: true
             case .arithmetic(operation: .summation, guard_: _, operands: _): true
             default: false
             }

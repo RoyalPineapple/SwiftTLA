@@ -23,4 +23,22 @@ struct CheckedSummationSemanticsTests {
         #expect(operands.contains("Cardinality("))
         #expect(declarations.contains("__SwiftTLAOverflowOperation0 == \"summation\""))
     }
+
+    @Test("A missing function value fails before summation on both outputs")
+    func missingFunctionValueHasMatchedFailure() throws {
+        let machine = try CheckedSummationMissingFunctionValueModel.makeMachine()
+        #expect(throws: NativeMachineEvaluationError.functionArgumentOutsideDomain) {
+            try machine.successors(for: .sum)
+        }
+
+        let rendered = try CheckedSummationMissingFunctionValueModel.render()
+        #expect(rendered.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let failure = try #require(declarations.first {
+            $0.hasPrefix("__SwiftTLAFunctionArgumentOutsideDomainFailure0 ==")
+        })
+        let overflow = try #require(declarations.first { $0.hasPrefix("__SwiftTLAOverflowFailure0 ==") })
+        #expect(failure.contains("\\subseteq DOMAIN (values)"))
+        #expect(overflow.contains("IF ({0, 1} \\subseteq DOMAIN (values)) THEN"))
+    }
 }

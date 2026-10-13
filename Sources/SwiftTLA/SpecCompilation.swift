@@ -2333,10 +2333,11 @@ private extension CompiledModuleMetadata {
             var overflowOccurrence = 0
             var divisionByZeroOccurrence = 0
             var negativeModuloOccurrence = 0
-            for failure in try renderer.arithmeticFailures(behavior.actions[index].body) {
+            var functionDomainOccurrence = 0
+            for failure in try renderer.evaluationFailures(behavior.actions[index].body) {
                 let occurrence: Int
                 let failurePrefix: String
-                let operandsPrefix: String
+                let operandsPrefix: String?
                 let operation: String?
                 switch failure.kind {
                 case .overflow(let name):
@@ -2357,21 +2358,34 @@ private extension CompiledModuleMetadata {
                     failurePrefix = "__SwiftTLANegativeModuloDivisorFailure"
                     operandsPrefix = "__SwiftTLANegativeModuloDivisorValue"
                     operation = nil
+                case .functionArgumentOutsideDomain:
+                    occurrence = functionDomainOccurrence
+                    functionDomainOccurrence += 1
+                    failurePrefix = "__SwiftTLAFunctionArgumentOutsideDomainFailure"
+                    operandsPrefix = nil
+                    operation = nil
                 }
                 let suffix = occurrence == 0 ? "\(index)" : "\(index)_\(occurrence)"
                 var failureName = "\(failurePrefix)\(suffix)"
                 while occupied.contains(failureName) { failureName += "_" }
                 let failureHeader = parameters.isEmpty ? failureName : "\(failureName)(\(parameters))"
-                var operandsName = "\(operandsPrefix)\(suffix)"
-                while occupied.contains(operandsName) { operandsName += "_" }
-                let operandsHeader = parameters.isEmpty ? operandsName : "\(operandsName)(\(parameters))"
                 let failureDeclaration = "\(failureHeader) == \(failure.predicate)"
-                let operandsDeclaration = "\(operandsHeader) == \(failure.operands)"
                 lines.append(failureDeclaration)
-                lines.append(operandsDeclaration)
-                evaluationFailureDeclarations += [failureDeclaration, operandsDeclaration]
+                evaluationFailureDeclarations.append(failureDeclaration)
                 failureReferences.append(try renderer.actionReference(behavior.actions[index].id, named: failureName))
-                occupied.formUnion([failureName, operandsName])
+                occupied.insert(failureName)
+                if let operandsPrefix {
+                    guard let operands = failure.operands else {
+                        throw CompiledValueType.diagnostic("rendering.evaluationFailure", "missing failure operands")
+                    }
+                    var operandsName = "\(operandsPrefix)\(suffix)"
+                    while occupied.contains(operandsName) { operandsName += "_" }
+                    let operandsHeader = parameters.isEmpty ? operandsName : "\(operandsName)(\(parameters))"
+                    let operandsDeclaration = "\(operandsHeader) == \(operands)"
+                    lines.append(operandsDeclaration)
+                    evaluationFailureDeclarations.append(operandsDeclaration)
+                    occupied.insert(operandsName)
+                }
                 if let operation {
                     var operationName = "__SwiftTLAOverflowOperation\(suffix)"
                     while occupied.contains(operationName) { operationName += "_" }
