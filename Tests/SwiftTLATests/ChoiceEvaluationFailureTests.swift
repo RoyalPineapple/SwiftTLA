@@ -95,6 +95,34 @@ struct ChoiceEvaluationFailureTests {
             == expected.tokens(viewMode: .sourceAccurate).map(\.text))
     }
 
+    @Test("Parameterized string candidates retain the first failure on both outputs")
+    func parameterizedStringCandidateFailures() throws {
+        let scenarios = try ParameterizedStringCandidateFailuresModel.validationScenarios()
+        #expect(scenarios.count == 2)
+        let scenario = try #require(scenarios.first)
+        let machine = try #require(scenario.initialMachines().first)
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+        let later = try #require(scenarios.last?.initialMachines().first)
+        #expect(throws: NativeMachineEvaluationError.negativeModuloDivisor(-1)) {
+            try later.successors(for: .pick)
+        }
+
+        let rendered = try scenario.render()
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let division = try #require(declarations.first {
+            $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==")
+        })
+        let modulo = try #require(declarations.first {
+            $0.hasPrefix("__SwiftTLANegativeModuloDivisorFailure0 ==")
+        })
+        #expect(division.contains("__SwiftTLAFirstFailingCandidate"))
+        #expect(modulo.contains("__SwiftTLAFirstFailingCandidate"))
+        #expect(division.contains("= \"alpha\" -> 0"))
+        #expect(modulo.contains("= \"zed\" -> 1"))
+    }
+
     @Test("A failing sole candidate is reported by both generated checking paths")
     func soleCandidateFailure() throws {
         let machine = try SingleCandidateDivisionFailureModel.makeMachine()

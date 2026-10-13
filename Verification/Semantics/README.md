@@ -1388,6 +1388,17 @@ verify the emitted code itself.
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
 | `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule. |
 
+`ParameterizedStringCandidateFailuresModel` exercises `existsAction` over a
+typed `Set<String>` parameter whose declared finite domain contains two
+different sets. The actual generated Swift machine reports the first failure
+in canonical candidate order for the two configurations. The actual
+macro-emitted TLA+ now ranks the union of the declared members and selects
+the same first failing candidate; the regression was red when it used
+independent existential failure predicates. This is focused output-test
+evidence, not a TLAPS proof or a TLC parity run. Non-enumerable dynamic
+domains, all other value families, and the general emitter theorem remain
+open.
+
 The generated conditional arithmetic regressions check both branch selection
 and an arithmetic condition that can overflow before either branch runs.
 Native failure leaves state unchanged; generated TLA+ disables the action and

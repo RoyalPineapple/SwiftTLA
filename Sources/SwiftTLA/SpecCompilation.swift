@@ -381,7 +381,8 @@ public struct CompiledSpecification: Sendable {
         let renderer = CompiledTLARenderer(moduleName: metadata.name,
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)).union(metadata.formalParameters.map(\.name)),
             layout: module.layout, bindings: module.bindings,
-            operators: module.semantics.operators, actions: module.semantics.behavior.actions, functions: [])
+            operators: module.semantics.operators, actions: module.semantics.behavior.actions, functions: [],
+            parameterDomains: module.semantics.behavior.parameterDomains)
         let algorithm = try module.authoredAlgorithm.map { authored in
             try metadata.authoredPlusCalModule(
                 algorithm: authored.plan, declarationOrder: authored.declarations,
@@ -1884,7 +1885,7 @@ extension CompiledProgram {
         let renderer = CompiledTLARenderer(moduleName: metadata.name,
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions, enums: enums)
+            actions: behavior.actions, functions: functions, enums: enums, parameterDomains: behavior.parameterDomains)
         let constants = metadata.constants.sorted { $0.name < $1.name }.map { "ASSUME \($0.name) = \($0.value)" }
         let prelude = try constants + renderer.resolvedFunctionDefinitions()
             + formalModuleReplacements.map(renderer.formalModuleReplacement) + renderer.assumptions(behavior)
@@ -1913,7 +1914,7 @@ extension CompiledProgram {
         let renderer = CompiledTLARenderer(moduleName: moduleName,
             reservedNames: exportedModelValueNames.union(moduleMetadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions, enums: enums)
+            actions: behavior.actions, functions: functions, enums: enums, parameterDomains: behavior.parameterDomains)
         return try renderer.state(value.expression)
     }
 
@@ -1958,7 +1959,7 @@ extension CompiledProgram {
         let renderer = CompiledTLARenderer(moduleName: name,
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions, enums: enums)
+            actions: behavior.actions, functions: functions, enums: enums, parameterDomains: behavior.parameterDomains)
         var imports: [TLAModuleFile] = []
         var ownership: [TLAModuleBundle.OwnershipEntry] = []
         var dependencies: [TLAModuleBundle.ModuleDependency] = []
@@ -2091,7 +2092,8 @@ private extension CompiledModuleMetadata {
         let renderer = CompiledTLARenderer(moduleName: name,
             reservedNames: modelValueNames.union(constants.map(\.name)).union(formalParameters.map(\.name)),
             layout: layout, bindings: bindings,
-            operators: semantics.operators, actions: semantics.behavior.actions, functions: [], moduleNames: moduleNames)
+            operators: semantics.operators, actions: semantics.behavior.actions, functions: [], moduleNames: moduleNames,
+            parameterDomains: semantics.behavior.parameterDomains)
         let definitions = try semantics.operators.formalDefinitionIDs.prefix(formalDefinitionCount).map(renderer.formalDefinition)
         let instances = try semantics.moduleInstances.map(renderer.moduleInstance)
         let renderedRefinements = try refinements.map(renderer.refinement)

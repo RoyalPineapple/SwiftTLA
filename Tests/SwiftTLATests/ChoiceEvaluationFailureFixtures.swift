@@ -155,6 +155,36 @@ struct OrderedEnumCandidateFailuresModel: Sendable {
 }
 
 @TLAModel
+struct ParameterizedStringCandidateFailuresModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("ParameterizedStringCandidateFailuresModel") { scope in
+            let members = scope.parameter(as: Set<String>.self,
+                in: Set<Set<String>>([Set<String>(["alpha", "zed"]), Set<String>(["zed"])]))
+            let divisor = scope.sharedVar(initial: 0)
+            let modulus = scope.sharedVar(initial: -1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                With(members) { candidate in
+                    Assign(result, to: If(candidate == "alpha",
+                        then: 1 / divisor,
+                        else: 1 % modulus))
+                }
+            }
+            let bothFail = Validation(label: "Both fail") {
+                Bind(members, to: Set<String>(["alpha", "zed"]))
+            }
+            bothFail
+            let laterFailure = Validation(label: "Later failure") {
+                Bind(members, to: Set<String>(["zed"]))
+            }
+            laterFailure
+        }
+    }
+}
+
+@TLAModel
 struct BoundBodyChoiceFailureModel: Sendable {
     enum Step: String, CaseIterable { case pick }
 

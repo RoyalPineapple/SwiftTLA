@@ -66,6 +66,7 @@ struct CompiledTLARenderer {
     let functions: [ResolvedFunction]
     var enums: CompiledEnums = .init()
     var moduleNames: [String: String] = [:]
+    var parameterDomains: [BinderID: CompiledExpression] = [:]
 
     func assumptions(_ behavior: CompiledBehavior) throws -> [String] {
         var result = try layout.parameters.map { parameter in
@@ -442,7 +443,7 @@ struct CompiledTLARenderer {
         let ordered: String
         if let typedOrder = try canonicalLeastPredicate(memberType, first, earlier) {
             ordered = typedOrder
-        } else if let members = closedChoiceMembers(domain) {
+        } else if let members = closedChoiceMembers(domain) ?? parameterChoiceMembers(domain) {
             ordered = try rankedLeastPredicate(members, first, earlier)
         } else {
             return nil
@@ -1116,10 +1117,35 @@ struct CompiledTLARenderer {
         return Array(Set(members)).sorted()
     }
 
+    private func parameterChoiceMembers(_ domain: CompiledExpression) -> [CompiledValue]? {
+        guard case .boundValue(let binder) = domain.computation.operation,
+              let parameterDomain = parameterDomains[binder] else { return nil }
+        let allowedValues: [CompiledValue]
+        switch parameterDomain.computation.operation {
+        case .value(.set(let values)):
+            allowedValues = Array(values)
+        case .setLiteral:
+            allowedValues = parameterDomain.computation.children.compactMap(closedChoiceMember)
+            guard allowedValues.count == parameterDomain.computation.children.count else { return nil }
+        default:
+            return nil
+        }
+        var members: Set<CompiledValue> = []
+        for allowedValue in allowedValues {
+            guard case .set(let values) = allowedValue else { return nil }
+            members.formUnion(values)
+        }
+        guard !members.isEmpty, members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }
+        return members.sorted()
+    }
+
     private func closedChoiceMember(_ expression: CompiledExpression) -> CompiledValue? {
         let value = expression.computation
         switch value.operation {
         case .value(let value): return value
+        case .setLiteral:
+            let members = value.children.compactMap(closedChoiceMember)
+            return members.count == value.children.count ? .set(Set(members)) : nil
         case .tupleLiteral:
             let members = value.children.compactMap(closedChoiceMember)
             return members.count == value.children.count ? .tuple(members) : nil
