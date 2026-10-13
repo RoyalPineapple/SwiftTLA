@@ -1,5 +1,6 @@
 --------------- MODULE ExpressionConditionalFailureProof ---------------
-EXTENDS TLAPS, ExpressionConditionalFailureModel, LazyExpressionFailureRule
+EXTENDS TLAPS, ExpressionConditionalFailureModel, LazyExpressionFailureRule,
+        OrderedFailureSites
 
 SourceInit == mode \in 0..1 /\ divisor \in 0..1 /\ result = 0
 SourceCompute ==
@@ -12,6 +13,16 @@ SourceEvaluationOK ==
     ~SourceChoiceFailure /\ ~SourceZeroFailure /\ ~SourceNegativeFailure
 SourceLabeled(label) == label = "compute" /\ SourceCompute
 EmittedLabeled(label) == label = "compute" /\ compute
+SiteGuards ==
+    <<SelectedTrueGuard(mode = 1, FALSE),
+      SelectedFalseGuard(mode = 1, divisor # 0),
+      SelectedFalseGuard(mode = 1, divisor > 0)>>
+SiteHistory ==
+    [index \in 0..3 |->
+        IF index = 0 THEN TRUE
+        ELSE IF index = 1 THEN SiteGuards[1]
+        ELSE IF index = 2 THEN SiteGuards[1] /\ SiteGuards[2]
+        ELSE SiteGuards[1] /\ SiteGuards[2] /\ SiteGuards[3]]
 
 THEOREM InitialStatesAgree ==
     Init <=> SourceInit
@@ -59,6 +70,43 @@ THEOREM LazyExpressionRuleInstance ==
                   /\ ~SelectedFalseGuard(mode = 1, divisor > 0))
     BY SMT DEF SourceChoiceFailure, SourceZeroFailure,
         SourceNegativeFailure, SelectedTrueGuard, SelectedFalseGuard
+
+THEOREM EmittedSitesFormOrderedHistory ==
+    ASSUME mode \in 0..1, divisor \in 0..1
+    PROVE /\ SiteGuards \in Seq(BOOLEAN)
+          /\ SiteHistory \in [0..Len(SiteGuards) -> BOOLEAN]
+          /\ RenderedHistory(SiteGuards, SiteHistory)
+    BY SMT DEF SiteGuards, SiteHistory, RenderedHistory,
+        SelectedTrueGuard, SelectedFalseGuard
+
+THEOREM EmittedFailuresUseOrderedSites ==
+    ASSUME mode \in 0..1, divisor \in 0..1
+    PROVE /\ (__SwiftTLAChoiceFailure0 <=>
+                  RenderedFailureAt(SiteGuards, SiteHistory, 1))
+          /\ (__SwiftTLADivisionByZeroFailure0 <=>
+                  RenderedFailureAt(SiteGuards, SiteHistory, 2))
+          /\ (__SwiftTLANegativeModuloDivisorFailure0 <=>
+                  RenderedFailureAt(SiteGuards, SiteHistory, 3))
+          /\ (__SwiftTLAEvaluationOK = SiteHistory[3])
+    BY SMT DEF __SwiftTLAChoiceFailure0, __SwiftTLADivisionByZeroFailure0,
+        __SwiftTLANegativeModuloDivisorFailure0, __SwiftTLAEvaluationOK,
+        RenderedFailureAt, SiteGuards, SiteHistory,
+        SelectedTrueGuard, SelectedFalseGuard
+
+THEOREM EmittedFailuresComposeWithGenericRule ==
+    ASSUME mode \in 0..1, divisor \in 0..1
+    PROVE /\ (__SwiftTLAChoiceFailure0 <=>
+                  SourceFailureAt(SiteGuards, 1))
+          /\ (__SwiftTLADivisionByZeroFailure0 <=>
+                  SourceFailureAt(SiteGuards, 2))
+          /\ (__SwiftTLANegativeModuloDivisorFailure0 <=>
+                  SourceFailureAt(SiteGuards, 3))
+          /\ (__SwiftTLAEvaluationOK =
+                  SourcePrefixDefined(SiteGuards, 3))
+    BY EmittedSitesFormOrderedHistory, EmittedFailuresUseOrderedSites,
+        EveryRenderedFailureIsTheSourceFirstFailure,
+        OrderedGuardHistoryPreservesDefinedness, SMT
+        DEF SiteGuards, SiteHistory
 
 THEOREM SuccessfulCheckIffActionEnabled ==
     ASSUME mode \in 0..1, divisor \in 0..1

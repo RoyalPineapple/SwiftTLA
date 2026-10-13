@@ -1382,9 +1382,14 @@ failures from its body. Focused generated-machine and renderer regressions
 cover missing `CHOOSE`, modulo by zero, successful successors, and skipped
 branches. `LazyExpressionFailureRule.tla` proves the selected-site first-failure
 algebra (10 local TLAPS obligations), including an eager-branch negative
-control. These are a generic rule and focused output tests, not an exact-output
-proof of every emitted expression: effectful expression forms without a
-compositional definedness rule and the Swift-emitter link remain open.
+control. `OrderedFailureSites.tla` then proves, by induction for every finite
+ordered list of Boolean site guards, that the renderer's guarded prefix has
+the source definedness, each emitted failure marks exactly the first failing
+site, and a later bound-body failure runs only after the value is defined.
+Its eager-body negative control and all 32 obligations passed locally. The
+rule is reusable for other expressions and `Let` bodies, but it does not by
+itself prove that every emitted expression supplies the right guard list.
+Effectful forms without a compositional definedness rule remain open.
 
 `ExpressionConditionalFailureModel` is one output-linked instance of that
 rule. Its test checks the lowered conditional expression, the emitted Swift
@@ -1396,8 +1401,10 @@ proves the pinned module's initial states, complete labeled transition,
 three failure predicates, selected evaluation invariant, and branch-selection
 rule against an independent source relation. It also proves that this action
 is enabled exactly when the evaluation check holds on the declared initial
-domain; an eager-failure negative control is included (21 local TLAPS
-obligations). The finite Swift-machine test covers the exact four initial
+domain. The three actual emitted failure predicates are connected to the
+generic ordered-site theorem, not merely proved separately; an eager-failure
+negative control is included (31 local TLAPS obligations). The finite
+Swift-machine test covers the exact four initial
 states and their successors. These facts do not prove the Swift compiler,
 the concrete `_NativeMachineOperations` implementations, arbitrary source
 lowering, or every expression form. Hosted proof and parity evidence for this
