@@ -31,7 +31,7 @@ extension NativeSwiftEmitter {
         switch type {
         case .int: return "TLAValue.int(\(value))"
         case .bool: return "TLAValue.bool(\(value))"
-        case .string: return "TLAValue.string(\(value))"
+        case .string: return "TLAValue.canonicalSwiftString(\(value))"
         case .modelValue: return "TLAValue.constant(\(value).rawValue)"
         case .controlLocation:
             return switching(program.layout.controlLocations.map {

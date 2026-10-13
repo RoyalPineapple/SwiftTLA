@@ -1,5 +1,9 @@
+import Foundation
 import Testing
-import SwiftTLA
+import SwiftParser
+import SwiftSyntax
+@testable import SwiftTLA
+@testable import SwiftTLAPlugin
 
 struct GuardedStepExecutionTests {
     @Test("Process and procedure guards suppress failing bodies and discard only blocked choice updates",
@@ -87,7 +91,28 @@ struct GuardedStepExecutionTests {
         let rendered = try CheckedGuardOverflow.render()
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
         let output = rendered.tlaBundle.root.tla
-        #expect(output.contains("__SwiftTLAOverflowOperation0 == \"addition\""))
-        #expect(output.contains("__SwiftTLAOverflowOperands0 == <<count, 1>>"))
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CheckedGuardOverflow.tla")
+            .standardizedFileURL
+        #expect(output == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let compilation = try CheckedGuardOverflow.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "CheckedGuardOverflow", program: program))
+        let action = try #require(try emitter.machineMembers().first {
+            $0.description.contains("private static func _visitUpdates0(")
+        })
+        let swiftWitness = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CheckedGuardOverflowSwiftWitness.txt")
+            .standardizedFileURL
+        let expected = Array(Parser.parse(source: try String(contentsOf: swiftWitness, encoding: .utf8))
+            .tokens(viewMode: .sourceAccurate)).map(\.text).filter { !$0.isEmpty }
+        #expect(Array(action.tokens(viewMode: .sourceAccurate)).map(\.text).filter { !$0.isEmpty } == expected)
+        let invertedGuard = action.description.replacingOccurrences(of: "> 0) else", with: "< 0) else")
+        #expect(invertedGuard != action.description)
+        #expect(Array(Parser.parse(source: invertedGuard).tokens(viewMode: .sourceAccurate))
+            .map(\.text).filter { !$0.isEmpty } != expected)
     }
 }

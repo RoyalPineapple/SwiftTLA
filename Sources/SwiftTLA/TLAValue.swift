@@ -1,3 +1,20 @@
+import Foundation
+
+enum FormalStringIdentity {
+    static func equal(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.utf8.elementsEqual(rhs.utf8)
+    }
+
+    static func less(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.utf8.lexicographicallyPrecedes(rhs.utf8)
+    }
+
+    static func hash(_ value: String, into hasher: inout Hasher) {
+        // Swift may hash byte-distinct canonical equivalents alike; byte equality resolves that collision.
+        hasher.combine(value)
+    }
+}
+
 public struct TLARecord: Hashable, Sendable {
     public struct Field: Hashable, Sendable {
         public let name: String
@@ -7,22 +24,31 @@ public struct TLARecord: Hashable, Sendable {
             self.name = name
             self.value = value
         }
+
+        public static func == (lhs: Self, rhs: Self) -> Bool {
+            FormalStringIdentity.equal(lhs.name, rhs.name) && lhs.value == rhs.value
+        }
+
+        public func hash(into hasher: inout Hasher) {
+            FormalStringIdentity.hash(name, into: &hasher)
+            hasher.combine(value)
+        }
     }
 
     public let fields: [Field]
 
     public init(_ fields: [Field]) {
-        self.fields = fields.sorted { $0.name < $1.name }
+        self.fields = fields.sorted { FormalStringIdentity.less($0.name, $1.name) }
     }
 
     public func value(named name: String) -> TLAValue? {
-        fields.first { $0.name == name }?.value
+        fields.first { FormalStringIdentity.equal($0.name, name) }?.value
     }
 
     package func replacing(_ value: TLAValue, for name: String) -> TLARecord {
         var replaced = false
         let updated = fields.map { field -> Field in
-            guard field.name == name else { return field }
+            guard FormalStringIdentity.equal(field.name, name) else { return field }
             replaced = true
             return .init(name, value)
         }
@@ -45,6 +71,38 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
     case record(TLARecord)
     case function([TLAValue: TLAValue])
     case constant(String)
+
+    @_documentation(visibility: internal)
+    public static func canonicalSwiftString(_ value: String) -> Self {
+        .string(value.precomposedStringWithCanonicalMapping)
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.int(let a), .int(let b)): a == b
+        case (.bool(let a), .bool(let b)): a == b
+        case (.string(let a), .string(let b)), (.constant(let a), .constant(let b)):
+            FormalStringIdentity.equal(a, b)
+        case (.set(let a), .set(let b)): a == b
+        case (.tuple(let a), .tuple(let b)): a == b
+        case (.record(let a), .record(let b)): a == b
+        case (.function(let a), .function(let b)): a == b
+        default: false
+        }
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(orderingKind)
+        switch self {
+        case .int(let value): hasher.combine(value)
+        case .bool(let value): hasher.combine(value)
+        case .string(let value), .constant(let value): FormalStringIdentity.hash(value, into: &hasher)
+        case .set(let values): hasher.combine(values)
+        case .tuple(let values): hasher.combine(values)
+        case .record(let value): hasher.combine(value)
+        case .function(let value): hasher.combine(value)
+        }
+    }
 
     public var description: String { _tlaForm() }
 
@@ -291,7 +349,7 @@ extension TLAValue: Comparable {
         switch (lhs, rhs) {
         case (.int(let a), .int(let b)): return a < b
         case (.bool(let a), .bool(let b)): return (a ? 1 : 0) < (b ? 1 : 0)
-        case (.string(let a), .string(let b)): return a < b
+        case (.string(let a), .string(let b)): return FormalStringIdentity.less(a, b)
         case (.set(let a), .set(let b)):
             return a.sorted().lexicographicallyPrecedes(b.sorted())
         case (.tuple(let a), .tuple(let b)):
@@ -300,7 +358,7 @@ extension TLAValue: Comparable {
             return recordFields(a.fields, precede: b.fields)
         case (.function(let a), .function(let b)):
             return functionEntries(a, precede: b)
-        case (.constant(let a), .constant(let b)): return a < b
+        case (.constant(let a), .constant(let b)): return FormalStringIdentity.less(a, b)
         default: return false
         }
     }
@@ -323,7 +381,9 @@ extension TLAValue: Comparable {
         precede rhs: [TLARecord.Field]
     ) -> Bool {
         for (left, right) in zip(lhs, rhs) {
-            if (left.name == right.name) == false { return left.name < right.name }
+            if FormalStringIdentity.equal(left.name, right.name) == false {
+                return FormalStringIdentity.less(left.name, right.name)
+            }
             if (left.value == right.value) == false { return left.value < right.value }
         }
         return lhs.count < rhs.count

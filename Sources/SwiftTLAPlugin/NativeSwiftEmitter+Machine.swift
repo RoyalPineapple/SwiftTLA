@@ -399,8 +399,8 @@ extension NativeSwiftEmitter {
                 let element = program.bindingTypes[binding]!
                 let domain = try expression(domainExpression)
                 body = """
-                for \(binder(binding)) in \(domain).sorted(by: \(try ordering(element))) {
-                    \(childCall(child, binding: binding))
+                try _NativeMachineOperations.visitAlternatives(\(domain).sorted(by: \(try ordering(element))), emit: emit) { \(binder(binding)), branchEmit in
+                    \(childCall(child, binding: binding, emit: "branchEmit"))
                 }
                 """
             case .define(let binding, let value, let child):
@@ -411,7 +411,12 @@ extension NativeSwiftEmitter {
                 let right = childCall(rhs, updates: "candidate")
                 body = childCall(lhs, emit: "{ candidate in \(right) }")
             case .or(let lhs, let rhs):
-                body = "\(childCall(lhs))\n\(childCall(rhs))"
+                body = """
+                try _NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
+                    if second { \(childCall(rhs, emit: "branchEmit")) }
+                    else { \(childCall(lhs, emit: "branchEmit")) }
+                }
+                """
             }
             let parameters = (try bindings.map {
                 "_ \(binder($0)): \(try swiftType(program.bindingTypes[$0]!))"

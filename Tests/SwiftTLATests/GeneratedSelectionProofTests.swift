@@ -17,8 +17,10 @@ struct GeneratedSelectionProofTests {
             (model: "BooleanSelection", witness: "GeneratedBooleanSelectionSwiftWitness.txt", cache: true),
             (model: "EnumSelection", witness: "GeneratedEnumSelectionSwiftWitness.txt", cache: true),
             (model: "StringSelection", witness: "GeneratedStringSelectionSwiftWitness.txt", cache: true),
+            (model: "CanonicalUnicodeStringSelection", witness: "GeneratedStringSelectionSwiftWitness.txt", cache: true),
             (model: "SequenceSelection", witness: "GeneratedSequenceSelectionSwiftWitness.txt", cache: true),
             (model: "DynamicSequenceSelection", witness: "GeneratedDynamicSequenceSelectionSwiftWitness.txt", cache: false),
+            (model: "DynamicBooleanSequenceSelection", witness: "GeneratedDynamicBooleanSequenceSelectionSwiftWitness.txt", cache: false),
             (model: "MissingStringSelection", witness: "GeneratedMissingStringSelectionSwiftWitness.txt", cache: true),
             (model: "AggregateMissingSelection", witness: "GeneratedAggregateMissingSelectionSwiftWitness.txt", cache: true),
             (model: "ConditionalSelectionFailure", witness: "GeneratedConditionalSelectionFailureSwiftWitness.txt", cache: true)
@@ -41,7 +43,11 @@ struct GeneratedSelectionProofTests {
             let binderPattern = try Regex(#"___binder_SpecParser_[0-9]+_0_1"#)
             let binders = Set(emitted.matches(of: binderPattern).map { String(emitted[$0.range]) })
             #expect(binders.count == 1)
-            let normalized = emitted.replacing(binderPattern, with: "__PROOF_MEMBER__")
+            var normalized = emitted.replacing(binderPattern, with: "__PROOF_MEMBER__")
+            if entry.model == "CanonicalUnicodeStringSelection" {
+                normalized = normalized.replacingOccurrences(of: "\"é\"", with: "\"zed\"")
+                    .replacingOccurrences(of: "\"z\"", with: "\"alpha\"")
+            }
             let witness = URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent()
                 .appendingPathComponent("../../Verification/Semantics/\(entry.witness)")

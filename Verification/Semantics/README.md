@@ -155,6 +155,17 @@ negative control adds an invalid edge. All 10 obligations passed locally. The fo
 test checks the successful native step, exact typed overflow and unchanged
 state, and emitted failure metadata. This proof is a symbolic rule, not yet an
 exact-output proof of the complete module or a proof of the Swift emitter.
+`CheckedGuardOverflowProof.tla` now supplies a separate exact-output instance:
+the focused test pins the complete generated TLA+ module and the generated Swift
+update function's tokens, including its call to the shared checked-addition
+operation and the guard before update emission. TLAPS proves that module's
+initial states, complete labeled transitions, overflow failure and operands,
+and selected evaluation check match the independent source rule for every
+state in the signed-`Int` domain. The proof also establishes that this domain
+contains every initial state and is preserved by every `Next` step; an unguarded
+action is a negative control. All 14 obligations pass locally. This does not
+prove every accepted `When` or independently verify macro expansion and the
+Swift compiler/runtime interpretation of the pinned source.
 `SingleAssignment.tla`
 also proves the root negation guard, complete labeled edge/failure relation,
 and an unguarded counterexample under the explicit Swift signed-`Int` bound
@@ -332,15 +343,50 @@ verified that every emitted call or evaluation failure matches the model.
 Zero and negative divisors remain separate error/undefined-operation cases;
 this lemma does not claim parity for them.
 
+## Formal value identity boundary
+
+Formal and compiled String values now use byte-exact equality and a matching
+total order in sets, function keys, records, and state values. The focused
+`FormalValueEqualityTests` regression failed before the change: precomposed
+`"\u{00E9}"` and decomposed `"e\u{301}"` collapsed to one member under Swift's
+ordinary `String` equality. It now checks both values remain distinct and
+record-field lookup does not conflate their names. Typed Swift `String` inputs
+take a separate canonical-form conversion at the authoring/parser boundary and
+at generated-machine formal projection. `FormalStringRenderingTests` and
+`SpecVariableDeclarationParsingTests` exercise the input conversion;
+`SwiftStringFormalEncodingTests` checks one actual generated Swift transition,
+its complete projected String value, and the emitted TLA+ literal. The local
+`string-literals` reference fixture uses the canonical value accordingly.
+Decoding an explicitly raw formal string back to Swift retains its original
+scalars; the conversion does not rewrite data on that reverse path.
+
+These are executable boundary checks, not a TLAPS proof of Unicode
+normalization or all emitted String operations. The link assumes Swift String
+equality and Foundation's canonical normalization agree on the same Unicode
+version. Raw imported TLA+ values remain byte-exact, so an accepted imported
+String operation that reaches generated Swift still needs a separate output
+link. The closed canonical-Unicode choice below is an output-linked candidate,
+not yet a proved instance;
+dynamic String-valued `CHOOSE` and arbitrary Unicode String programs remain
+outside the fidelity theorem until those links and TLC's Unicode handling are
+established.
+The [open TLC Unicode-state issue](https://github.com/tlaplus/tlaplus/issues/1076)
+reports that distinct non-ASCII strings can share a state fingerprint and that
+disk serialization can corrupt them. Our pinned TLC v1.8.0 revision predates
+the October 2026 report. Raw non-ASCII String states therefore cannot qualify as
+independent TLC parity evidence until the pinned checker is repaired or the
+formal representation is made safe; a passing local Unicode fixture or TLAPS
+proof does not establish TLC's state exploration is complete.
+
 ## Choice-expression obligation
 
 The expression-level `StateExpr.choose` is distinct from the nondeterministic
 `Choose` algorithm statement. The generated Swift expression sorts its finite
 domain and returns the first satisfying member, or throws when none exists;
 the TLA+ renderer emits a least-member `CHOOSE` for integer, Boolean,
-finite-enum, closed multi-member printable-ASCII String domains, closed
-literal tuple/sequence domains with exact integer, Boolean, or printable-ASCII
-String members, and state-held integer-sequence domains. It emits ordinary
+finite-enum, closed multi-member canonical String domains, closed
+literal tuple/sequence domains with exact integer, Boolean, or canonical
+String members, and state-held integer- or Boolean-sequence domains. It emits ordinary
 `CHOOSE` for other result types. Ordinary
 TLA+ `CHOOSE`
 permits an unspecified consistent witness and gives an arbitrary value when
@@ -481,17 +527,36 @@ establish universal choice fidelity or prove either emitter correct.
 Swift machine selects `"alpha"`. Direct compilation represents the domain as
 a constant set with an unknown result type, while macro compilation represents
 it as a `setLiteral` with a String result type. The renderer accepts both only
-after checking every member is a printable-ASCII literal String, then emits the same ranks.
+after checking every member has canonical formal String identity, then emits the same ranks.
 `TypedSelectionTests.stringSelectionUsesLeastMember` requires the two complete
 TLA+ outputs to agree and the generated module to equal the proved
 `EnumSelection.tla` module after only model/helper and binder renaming.
 `EnumSelectionProof.tla` therefore covers this emitted TLA+ instance through
 that exact-output, alpha-renaming test; `GeneratedSelectionProofTests` pins the
 complete emitted Swift choice cache and update function to
-`GeneratedStringSelectionSwiftWitness.txt`. Interpreting Swift's `String` order,
-`Result`, `choose`, and update merge remains a trusted runtime boundary.
+`GeneratedStringSelectionSwiftWitness.txt`. Generated Swift now calls the same
+canonical formal String order used by compiled values. Interpreting Swift's
+`String` equality and Foundation normalization, `Result`, `choose`, and update
+merge remains a trusted runtime boundary.
 This link covers the two ASCII literals, not arbitrary or dynamic String
 domains, Unicode equivalence, or every accepted compound value type.
+
+`CanonicalUnicodeStringSelection` adds the closed `{"z", "é"}` domain. Its
+regression failed before the fix because TLA+ emitted unrestricted `CHOOSE`;
+the generated machine already selected `"z"`. The test now checks the
+compiled member set, generated machine's selected value, direct and macro
+TLA+ outputs, and an exact link to
+`CanonicalUnicodeStringSelection.tla`. `GeneratedSelectionProofTests` pins the
+complete emitted Swift choice and update function to the shared
+`GeneratedStringSelectionSwiftWitness.txt` after replacing only this fixture's
+two literal tokens. The accompanying
+`CanonicalUnicodeStringSelectionProof.tla` states the complete initial,
+labeled-step, failure, and reversed-order obligations. The hosted diagnostic
+on [`fa7c7602`](https://github.com/RoyalPineapple/SwiftTLA/actions/runs/38240172815)
+left 8 of 22 obligations unproved, starting with the closed-domain choice and
+empty-match laws. The output links are tested, but the proof is not admitted.
+Even a repaired instance would not prove all Unicode values or dynamic String
+domains.
 
 For a repeatable String selection with no matching member,
 `TypedSelectionTests.missingStringSelectionHasMatchingFailure` checks the
@@ -509,7 +574,7 @@ evidence is pending. The interpretation of the emitted Swift `Result`, `choose`,
 update merge remains a trusted runtime boundary. The chosen general rule is a
 shared canonical order for every accepted selection type, emitted on both
 sides. It remains incomplete: outside supported numeric, Boolean, enum, and
-closed printable-ASCII String and exact literal tuple domains, observable
+closed canonical String and exact literal tuple domains, observable
 non-unique choices can still differ.
 
 `SequenceSelection` adds a closed `Set<[Int]>` case with three distinct
@@ -556,6 +621,22 @@ fixture's fixed reachable candidate set, not arbitrary mutable sets or all
 integer sequences. Swift's `lexicographicallyPrecedes`, the generated update
 merge, and the Swift compiler/runtime remain trusted boundaries.
 
+`DynamicBooleanSequenceSelection` extends the output-linked boundary to a
+state-held set of Boolean sequences. The focused test first failed because
+TLA+ emitted ordinary `CHOOSE` while generated Swift sorted lexicographically;
+after the renderer change it checks the native selected state and the complete
+emitted TLA+ module byte-for-byte, normalizing only the source-location binder.
+`GeneratedSelectionProofTests` token-checks the complete emitted Swift update
+function against its witness. `DynamicBooleanSequenceSelectionProof.tla` proves
+the source rank and emitted lexicographic order agree for every pair and
+nonempty subset of this three-value domain, then composes complete initial
+states, labeled steps, no-match failure, and the selected evaluation check.
+A reversed chosen edge is a negative control. All 32 obligations pass locally;
+hosted proof evidence is pending. The Swift compiler/runtime,
+`lexicographicallyPrecedes`, `Result`, `choose`, and update merge remain
+trusted. This does not prove arbitrary mutable Boolean-sequence domains,
+other element types, or general generated Swift emission.
+
 `RankedChoiceProof.tla` generalizes the sorted-first argument: for any finite
 ordered sequence, predicate, integer rank that strictly increases along that
 sequence, complete-state update function, and action label, its source and
@@ -565,6 +646,13 @@ so the edge theorem no longer assumes its existence. All 20 obligations passed
 locally. This theorem still does not link arbitrary Swift and TLA+ emitter
 outputs to the modeled order, rank, predicate, or update; hosted evidence for
 this revision is pending.
+
+`ConditionalOutcomeRules.tla` defines one Boolean conditional operation for
+source steps, guarded compiled branches, and the TLA+ `IF` form. It proves the
+complete labeled step predicate and first-failure result agree for any Boolean
+condition-definedness and branch-failure flags. Its negative control reports
+failure from an unselected branch and is rejected. All four obligations pass
+locally. This is an abstract rule; the output links below instantiate it.
 
 `ConditionalSelectionFailure` closes one branch-scoped choice failure. Its
 generated Swift machine fails transactionally when `attempt` is true and the
@@ -577,13 +665,15 @@ the source-location-derived binder name. `GeneratedSelectionProofTests` also
 pins the emitted Swift choice cache and complete update function to
 `GeneratedConditionalSelectionFailureSwiftWitness.txt`, normalizing only that
 binder name. `ConditionalSelectionFailureProof.tla`
-proves a reusable Boolean `If`-to-guarded-branches law, then factors the source
-success and failure rules through explicit compiled-branch rules before
+instantiates the shared conditional rule, then factors the source success and
+failure rules through explicit compiled-branch rules before
 comparing them to the exact emitted module. It also proves initial states, the
 complete labeled `select` and internal `Terminating` relation, the selected
 invariant, both branch verdicts, and a reversed-branch negative control. All
-27 obligations passed locally. The proof does not yet verify that the Swift
-lowerer implements this compiled rule for every accepted `If`; this fixture's
+29 obligations passed locally; `EmittedSelectedBranchInstantiatesDefinedRule`
+links its exact generated TLA+ step and failure predicate to the shared rule.
+The proof does not yet verify that the Swift lowerer implements this compiled
+rule for every accepted `If`; this fixture's
 native behavior and exact outputs are the instance links. Effectful conditions,
 nested conjunctions, arbitrary choice domains, and independent TLC/native
 failure-outcome comparison remain open. Interpreting the pinned Swift source,
@@ -593,11 +683,12 @@ failure-outcome comparison remain open. Interpreting the pinned Swift source,
 in an `If` condition. The generated Swift machine throws before changing state;
 the generated TLA+ module now reports the same evaluation failure and has no
 `select` edge. A focused test pins the complete emitted TLA+ module, and
-`ConditionalChoiceConditionFailureProof.tla` proves a general defined-Boolean
-conditional rule, then compares this fixture's initial state, complete labeled
+`ConditionalChoiceConditionFailureProof.tla` instantiates the shared
+defined-conditional rule, then compares this fixture's initial state, complete labeled
 steps, and failure invariant with that exact output. It rejects an unguarded
-false-branch edge as a negative control. All 21 obligations passed locally;
-hosted evidence is pending. This closes the empty-choice condition instance,
+false-branch edge as a negative control. Its emitted failure predicate also
+instantiates the shared rule. All 24 obligations passed locally; hosted evidence
+is pending. This closes the empty-choice condition instance,
 not nested or otherwise effectful conditions, arbitrary choice domains, or the
 general Swift-emitter link.
 
@@ -953,8 +1044,90 @@ both successors. `SingleAssignment.tla` separately states the source guard and
 the two permitted next values, then proves equivalence with the emitted
 `Init`, `choose`, and `Next` definitions and proves disabledness after a choice.
 Widening the emitted choice domain from `1..2` to `1..3` made the action proof
-fail; restoring it restored the proof. This is a second output-linked case,
-not a general proof of guarded choice or of the Swift emitter.
+fail; restoring it restored the proof. The fixture test also checks that the
+actual compiled action has a guarded existential over `1..2`, followed by a
+bound-value assignment. `GeneratedGuardedChoiceSwiftWitness.txt` pins the
+entire emitted Swift update visitor by tokens; changing its native choice
+domain to `1...1` fails the output check. The generic enumeration and
+enabledness theorems at lines 706–730 were re-proved locally with TLAPS
+(`--strict --nofp`, five obligations). This closes the output link for this
+pure, finite guarded-choice fixture. It does not prove the emitter for every
+accepted choice domain or cover candidate evaluation failures.
+
+`MixedCandidateDivisionFailureModel.tla` is byte-for-byte generated from a
+`#spec` choice over `0..1`. Candidate `0` divides by zero; candidate `1`
+produces the labeled successor with `result = 1`. The native validator test
+requires that successor state and edge before the typed failure event.
+`MixedCandidateDivisionFailureProof.tla` independently defines those source
+outcomes and proves the emitted initial state, step, division-failure
+predicate, complete set of failing divisors, absent overflow, and evaluation
+verdict (21 local TLAPS obligations). The Swift visitor witness above pins
+the shared choice-emission rule that defers a candidate failure until the
+remaining candidates have been visited. This is a closed finite Int-division
+case, not a proof of failure preservation for every accepted choice body or
+value type. In particular, when several paths fail differently, the native
+checker currently reports the first failure while TLA+ retains all failing
+operand sets; exact multi-failure reporting is not established. This case has
+not yet been hosted.
+
+`CandidateChoiceFailureModel.tla` checks the other failure class inside an
+action-level `Choose`: candidate `0` has no matching expression-level
+`CHOOSE`, while candidate `1` yields `result = 1`. The native check retains
+the complete successor and reports `noSatisfyingChoice`. The TLA+ renderer
+now reports a choice failure when any bound candidate's body fails, without
+turning the successful candidate into a disabled action. The test pins the
+complete emitted TLA+ module byte-for-byte and the emitted Swift visitor by
+tokens; it failed before the renderer fix because the TLA+ failure predicate
+was absent. `CandidateChoiceFailureProof.tla` independently states the source
+initial state, labeled step, failed candidate set, and evaluation verdict,
+then proves their equivalence to the actual emitted module (16 local TLAPS
+obligations). This closes this finite candidate/selection case, not arbitrary
+domain-expression failure order or every accepted choice body. Hosted
+evidence is pending.
+
+`EitherBranchDivisionFailureModel.tla` is byte-for-byte generated from a
+`#spec` `Either`: its first branch divides by zero in the initial state,
+while its second branch produces a complete labeled successor. The source
+fixture test checks that lowering creates an `or` of the division and
+constant-success branches; it pins the full emitted Swift visitor by tokens
+and rejects a visitor with the second branch removed. Native checking must
+retain the successful state and edge and report the first branch's typed
+failure. `EitherBranchDivisionFailureProof.tla` independently defines the
+source initial state, both branch transitions, and failure verdict, then
+proves the complete emitted TLA+ outcome and a dropped-branch negative
+control (15 local TLAPS obligations). This closes this concrete `Either`
+slice, not arbitrary branch composition or multiple distinct failures.
+Both `Either` and action-level `Choose` now emit calls to the same
+`_NativeMachineOperations.visitAlternatives` operation. Their full Swift
+visitor witnesses pin those actual calls. `AlternativeTraversalRule.tla`
+proves by induction that ordered traversal retains the union of successful
+updates and the first failure for any finite list of branch outcomes (60 local
+TLAPS obligations). Replacing the first failure with the last is a negative
+control.
+Focused Swift tests cover a failure after an emitted update and ensure an
+output-callback error is not mistaken for a branch failure. Swift
+compiler/runtime interpretation of the helper and pinned visitors remains a
+trusted boundary; this proof does not establish that arbitrary branch bodies
+or the TLA+ emitter implement the abstract branch outcomes.
+Hosted evidence for this slice is pending.
+
+Two further `Either` fixtures test failure precedence across different
+generated checks. `EitherDistinctFailuresModel` fails by division in its first
+branch and by negative modulo in its second; the native result reports the
+division failure, and the emitted TLA+ suppresses the later modulo predicate.
+`EitherChoiceAfterDivisionFailureModel` has initial divisors `0` and `1`:
+the first reports division failure, while the second retains its successful
+division edge and reports the later no-match `CHOOSE` failure. Focused tests
+pin the complete emitted TLA+ modules byte-for-byte and both complete Swift
+update visitors by tokens. `EitherDistinctFailuresProof.tla` and
+`EitherChoiceAfterDivisionFailureProof.tla` independently state initial
+states, complete labeled steps, selected failure predicates and evaluation
+verdicts over their typed domains, prove those domains include the initial
+states and are step-closed, and show an ungated later failure would disagree.
+All 16 obligations in each module passed locally. These are concrete output
+links, not a theorem for arbitrary `or` trees: failures that the renderer does
+not yet expose, parameterized candidate ordering, and general first-failure
+agreement with TLA+ remain open. Hosted evidence is pending.
 
 `ConditionalStepProofModel.tla` is the complete output from a `#spec` step
 that flips a Boolean before an `If`/`else` assignment in the same atomic
@@ -1138,12 +1311,29 @@ verify the emitted code itself.
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
 | `assign`, `unchanged` | Complete-state delta and unchanged-frame equality | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
-| `guard_` | Pure, total guards agree at each abstract ordered-statement position | Prove emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
+| `guard_` | Pure total guards agree at abstract positions; the checked-addition `When` instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof | Generalize emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
 | `and` | Compatible delta conjunction and conflicting relational writes | Prove both emitters' evaluation order, conflict/error semantics, and frame completion. |
-| `or` | Guarded-choice preservation conditional on equal branch edges | Prove branch construction, multiplicity policy, and failure behavior in both outputs. |
-| `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges | Prove the actual emitted domain and branch expressions agree, including failures and checking effects. |
+| `or` | Guarded-choice preservation conditional on equal branch edges; output-linked success-plus-failure and two distinct-failure fixtures; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, all failure kinds and TLA+ ordering, multiplicity policy, and both outputs. |
+| `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order; one output-linked case retains a successful candidate and reports another candidate's expression-level choice failure | Prove arbitrary emitted domain and branch expressions agree, including all failure kinds, first-failure order, and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
-| `ifElse` | Equal pure source/rendered predicates and branch edges preserve complete labeled edges and enabledness | Prove emitted condition evaluation, failure behavior, and both branch forms. |
+| `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule. |
+
+The generated conditional arithmetic regressions check both branch selection
+and an arithmetic condition that can overflow before either branch runs.
+Native failure leaves state unchanged; generated TLA+ disables the action and
+reports that first failure. For a repeatable arithmetic condition, branch
+failures are reported only when the condition succeeded and selected that
+branch. `DefinedConditionalPreservesStepAndFirstFailure` proves the abstract
+Boolean step and ordered failure rule, with an unselected-branch negative
+control. The arithmetic fixture still has only focused output-test evidence:
+its actual Swift and TLA+ expressions are not linked to that theorem or to a
+checked TLA module. Nonrepeatable conditions and other `ifElse` trees remain
+open. `EmittedConditionFailureInstantiatesDefinedRule` does link the existing
+empty-choice-in-condition TLA+ fixture to this rule, but it does not establish
+the arithmetic instance or all accepted conditions. A separate accepted `Choose(0...1)`
+case still throws on its first native branch while generated TLA+ has no
+intrinsic failure predicate; ordered first-failure and whole-action semantics
+for `existsAction` remain open.
 
 This table is a proof inventory, not a claim that these seven groups exhaust
 `#spec`: initialization, source lowering, properties, temporal behavior,

@@ -6,6 +6,18 @@ import SwiftParser
 import SwiftTLAMacros
 
 @Suite(.serialized) struct SpecVariableDeclarationParsingTests {
+    @Test("Swift string literals enter compiled specifications with canonical identity")
+    func canonicalStringLiteral() throws {
+        let parsed = SpecParser.parseSpecClosure(named: "StringIdentity", try parseSpecTestClosure(
+            #"{ scope in let text = scope.sharedVar(initial: "e\u{301}") }"#))
+        #expect(parsed.diagnostics.isEmpty)
+        guard case .value(.string(let value)) = parsed.variables.first?.initialization else {
+            Issue.record("Expected a string initializer")
+            return
+        }
+        #expect(value.utf8.elementsEqual("\u{00E9}".utf8))
+    }
+
     @Test("inferred sequence types survive specification declarations and formal initializer merging")
     func retainsInferredSequenceTypes() throws {
         for registration in ["", "Variable(values)"] {

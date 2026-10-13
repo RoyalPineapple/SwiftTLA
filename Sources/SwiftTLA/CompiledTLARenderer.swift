@@ -167,9 +167,12 @@ struct CompiledTLARenderer {
                     parts.append("(\\E \(try binderName(binder)) \\in \(try state(set)): ")
                     schedule([.expression(body), .text(")")])
                 case .ifElse(let condition, let then, let otherwise):
+                    let defined = try evaluationDefined(condition)
+                    if let defined { parts.append("(IF \(defined) THEN ") }
                     parts.append("(IF \(try state(condition)) THEN (")
                     schedule([
-                        .expression(then), .text(") ELSE ("), .expression(otherwise), .text("))")
+                        .expression(then), .text(") ELSE ("), .expression(otherwise),
+                        .text(defined == nil ? "))" : ")) ELSE FALSE)")
                     ])
                 case .define(let binder, let value, let body):
                     let defined = try evaluationDefined(value)
@@ -190,6 +193,13 @@ struct CompiledTLARenderer {
 
     func choiceFailure(_ action: CompiledActionExpr) throws -> String? {
         switch action {
+        case .existsAction(let binder, let domain, let body):
+            let domainFailure = try expressionChoiceFailure(domain)
+            guard let bodyFailure = try choiceFailure(body) else { return domainFailure }
+            let name = try binderName(binder)
+            let predicate = "~({\(name) \\in \(try state(domain)): \(bodyFailure)} = {})"
+            let guarded = try evaluationDefined(domain).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
+            return domainFailure.map { "(\($0) \\/ \(guarded))" } ?? guarded
         case .define(_, let value, _):
             return try expressionChoiceFailure(value)
         case .guard_(let condition):
@@ -203,7 +213,11 @@ struct CompiledTLARenderer {
             let bodyFailure = try evaluationDefined(condition).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
             return conditionFailure.map { "(\($0) \\/ \(bodyFailure))" } ?? bodyFailure
         case .or(let lhs, let rhs):
-            switch (try choiceFailure(lhs), try choiceFailure(rhs)) {
+            let earlier = try anyFailurePredicate(lhs)
+            let later = try choiceFailure(rhs).map { failure in
+                earlier.map { "(IF \($0) THEN FALSE ELSE \(failure))" } ?? failure
+            }
+            switch (try choiceFailure(lhs), later) {
             case (nil, nil): return nil
             case (let failure?, nil), (nil, let failure?): return failure
             case (let lhs?, let rhs?): return "(\(lhs) \\/ \(rhs))"
@@ -237,6 +251,22 @@ struct CompiledTLARenderer {
 
     func arithmeticFailures(_ action: CompiledActionExpr) throws -> [RenderedArithmeticFailure] {
         switch action {
+        case .existsAction(let binder, let domain, let body):
+            let domainFailures = try expressionArithmeticFailures(domain)
+            let bodyFailures = try arithmeticFailures(body)
+            guard !bodyFailures.isEmpty else { return domainFailures }
+            let name = try binderName(binder)
+            let renderedDomain = try state(domain)
+            let defined = try evaluationDefined(domain)
+            return domainFailures + bodyFailures.map { failure in
+                let failedMembers = "{\(name) \\in \(renderedDomain): \(failure.predicate)}"
+                let predicate = "~(\(failedMembers) = {})"
+                // Preserve operands from every failing member without choosing an arbitrary witness.
+                return .init(
+                    predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
+                    operands: "{\(failure.operands): \(name) \\in \(failedMembers)}",
+                    kind: failure.kind)
+            }
         case .define(let binder, let value, let body):
             let defined = try evaluationDefined(value)
             var failures = try expressionArithmeticFailures(value)
@@ -253,6 +283,23 @@ struct CompiledTLARenderer {
             return failures
         case .guard_(let condition):
             return try expressionArithmeticFailures(condition)
+        case .ifElse(let condition, let yes, let no):
+            let conditionFailures = try expressionArithmeticFailures(condition)
+            // shortcut: nonrepeatable conditions need ordered outcomes before branch failures can be reported.
+            guard arithmeticTreeIsRepeatable(condition) else { return conditionFailures }
+            let predicate = try state(condition)
+            let defined = try evaluationDefined(condition)
+            let selected = try arithmeticFailures(yes).map {
+                let failure = "(IF \(predicate) THEN \($0.predicate) ELSE FALSE)"
+                return RenderedArithmeticFailure(predicate: defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
+                    operands: $0.operands, kind: $0.kind)
+            }
+            let unselected = try arithmeticFailures(no).map {
+                let failure = "(IF \(predicate) THEN FALSE ELSE \($0.predicate))"
+                return RenderedArithmeticFailure(predicate: defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
+                    operands: $0.operands, kind: $0.kind)
+            }
+            return conditionFailures + selected + unselected
         case .and(.guard_(let condition), let body):
             let conditionFailures = try expressionArithmeticFailures(condition)
             let ordered = try orderedFallibleSites(condition)
@@ -275,8 +322,23 @@ struct CompiledTLARenderer {
             return leftFailures + rightFailures.map {
                 .init(predicate: "(\(guardPredicate) /\\ \($0.predicate))", operands: $0.operands, kind: $0.kind)
             }
+        case .or(let lhs, let rhs):
+            let left = try arithmeticFailures(lhs)
+            let earlier = try anyFailurePredicate(lhs)
+            let right = try arithmeticFailures(rhs).map { failure in
+                RenderedArithmeticFailure(predicate: earlier.map { "(IF \($0) THEN FALSE ELSE \(failure.predicate))" }
+                    ?? failure.predicate, operands: failure.operands, kind: failure.kind)
+            }
+            return left + right
         default: return []
         }
+    }
+
+    private func anyFailurePredicate(_ action: CompiledActionExpr) throws -> String? {
+        let predicates = try arithmeticFailures(action).map(\.predicate)
+            + (try choiceFailure(action).map { [$0] } ?? [])
+        guard !predicates.isEmpty else { return nil }
+        return predicates.count == 1 ? predicates[0] : "(\(predicates.joined(separator: " \\/ ")))"
     }
 
     private func repeatableGuards(_ action: CompiledActionExpr) -> Bool {
@@ -837,7 +899,7 @@ struct CompiledTLARenderer {
                         .expression(expression.children[1]),
                         .text(" IN (IF \(divisor) < 0 THEN (-\(dividend)) \\div (-\(divisor)) ELSE \(dividend) \\div \(divisor))))")])
                 case .choose(let binder) where expression.resultType == .int || expression.resultType == .bool
-                    || expression.resultType == .array(.int)
+                    || expression.resultType == .array(.int) || expression.resultType == .array(.bool)
                     || choiceMembers(expression) != nil:
                     guard expression.children.count == 2 else {
                         throw CompiledValueType.diagnostic("rendering.choose", "choice requires a domain and predicate")
@@ -858,11 +920,14 @@ struct CompiledTLARenderer {
                             return "(CASE \(cases))"
                         }
                         least = try "\(rank(member)) <= \(rank(other))"
-                    } else if expression.resultType == .array(.int) {
+                    } else if expression.resultType == .array(.int) || expression.resultType == .array(.bool) {
                         let index = choiceName("choiceIndex")
                         let prefix = choiceName("choicePrefix")
                         let equalPrefix = "(\\A \(prefix) \\in 1..(\(index) - 1) : \(member)[\(prefix)] = \(other)[\(prefix)])"
-                        let firstDifference = "(\\E \(index) \\in 1..Len(\(member)) : IF \(index) <= Len(\(other)) THEN (\(equalPrefix) /\\ \(member)[\(index)] < \(other)[\(index)]) ELSE FALSE)"
+                        let less = expression.resultType == .array(.int)
+                            ? "\(member)[\(index)] < \(other)[\(index)]"
+                            : "(\(member)[\(index)] = FALSE /\\ \(other)[\(index)] = TRUE)"
+                        let firstDifference = "(\\E \(index) \\in 1..Len(\(member)) : IF \(index) <= Len(\(other)) THEN (\(equalPrefix) /\\ \(less)) ELSE FALSE)"
                         let properPrefix = "(IF Len(\(member)) < Len(\(other)) THEN (\\A \(prefix) \\in 1..Len(\(member)) : \(member)[\(prefix)] = \(other)[\(prefix)]) ELSE FALSE)"
                         least = "(\(member) = \(other) \\/ \(firstDifference) \\/ \(properPrefix))"
                     } else {
@@ -929,7 +994,7 @@ struct CompiledTLARenderer {
     private func choiceMemberHasExactIdentity(_ value: CompiledValue) -> Bool {
         switch value {
         case .integer, .boolean: true
-        case .string(let text): text.utf8.allSatisfy { $0 >= 0x20 && $0 <= 0x7e }
+        case .string(let text): TLAValue.canonicalSwiftString(text) == .string(text)
         case .tuple(let members): members.allSatisfy(choiceMemberHasExactIdentity)
         default: false
         }

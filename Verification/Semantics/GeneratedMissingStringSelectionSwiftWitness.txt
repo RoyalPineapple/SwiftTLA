@@ -1,5 +1,5 @@
 private static let _closedChoice0: Result<String, any Error> = Result { (try _NativeMachineOperations.choose(Set<String>(["alpha"]).sorted(by: { (lhs: String, rhs: String) -> Bool in
-return lhs < rhs
+return TLAValue.canonicalSwiftString(lhs) < TLAValue.canonicalSwiftString(rhs)
 })) { __PROOF_MEMBER__ in false }) }
 private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
                                            _ emit: (_Updates) throws -> Void) throws {

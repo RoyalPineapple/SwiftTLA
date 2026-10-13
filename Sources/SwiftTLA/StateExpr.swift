@@ -395,7 +395,7 @@ extension StateExpr: ExpressibleByBooleanLiteral {
 }
 
 extension StateExpr: ExpressibleByStringLiteral {
-    public init(stringLiteral value: String) { self = .value(.string(value)) }
+    public init(stringLiteral value: String) { self = .value(.canonicalSwiftString(value)) }
 }
 
 /// Evaluates and records one formal value, then yields TRUE like TLC's PrintT.
