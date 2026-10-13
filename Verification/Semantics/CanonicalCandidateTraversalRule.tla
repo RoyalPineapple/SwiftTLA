@@ -6,8 +6,8 @@ CONSTANTS Values, FailureValues, NoFailure
 Positions(order) == 1..Len(order)
 FailedPositions(order, failure) ==
     {index \in Positions(order) : failure[order[index]] # NoFailure}
-FailedPrefix(order, failure, length) ==
-    {index \in 1..length : failure[order[index]] # NoFailure}
+FailedIndex(order, failure, index) ==
+    index \in Positions(order) /\ failure[order[index]] # NoFailure
 FailedValues(order, failure) ==
     {order[index] : index \in FailedPositions(order, failure)}
 FirstIndex(order, failure) ==
@@ -41,40 +41,24 @@ THEOREM NonemptyFiniteFailureHasLeast ==
     PROVE \E least \in FailedPositions(order, failure) :
               \A index \in FailedPositions(order, failure) : least <= index
     PROOF
-    <1>. DEFINE P(length) ==
-        length \in 0..Len(order) =>
-            (FailedPrefix(order, failure, length) # {} =>
-                \E least \in FailedPrefix(order, failure, length) :
-                    \A index \in FailedPrefix(order, failure, length) :
-                        least <= index)
-    <1>1. P(0)
-        BY SMT DEF P, FailedPrefix
-    <1>2. ASSUME NEW length \in Nat, P(length)
-          PROVE P(length + 1)
-        PROOF
-        <2>. SUFFICES ASSUME length + 1 \in 0..Len(order),
-                             FailedPrefix(order, failure, length + 1) # {}
-                     PROVE \E least \in FailedPrefix(order, failure, length + 1) :
-                               \A index \in FailedPrefix(order, failure, length + 1) :
-                                   least <= index
-            BY SMT DEF P
-        <2>1. length \in 0..Len(order)
-            BY SMT
-        <2>2. FailedPrefix(order, failure, length + 1) =
-                 FailedPrefix(order, failure, length) \cup
-                     (IF failure[order[length + 1]] # NoFailure
-                      THEN {length + 1} ELSE {})
-            BY <2>1, SMT DEF FailedPrefix
-        <2>3. CASE FailedPrefix(order, failure, length) = {}
-            BY <2>2, <2>3, SMT DEF FailedPrefix
-        <2>4. CASE FailedPrefix(order, failure, length) # {}
-            BY <2>1, <2>2, <2>4, P(length), SMT DEF P, FailedPrefix
-        <2>. QED
-            BY <2>3, <2>4, SMT
-    <1>3. \A length \in Nat : P(length)
-        BY <1>1, <1>2, NatInduction
+    <1>1. \E index \in Nat : FailedIndex(order, failure, index)
+        BY SMT DEF FailedIndex, FailedPositions, Positions
+    <1>2. \E index \in Nat :
+             /\ FailedIndex(order, failure, index)
+             /\ \A earlier \in 0..(index - 1) :
+                    ~FailedIndex(order, failure, earlier)
+        BY SmallestNatural, <1>1
     <1>. QED
-        BY <1>3, SMT DEF P, FailedPrefix, FailedPositions, Positions
+        BY <1>2, SMT DEF FailedIndex, FailedPositions, Positions
+
+THEOREM OrdinalRanksRespectTraversal ==
+    ASSUME NEW order \in Seq(Values),
+           NEW rank \in [Values -> Int],
+           NEW offset \in Int,
+           \A index \in Positions(order) : rank[order[index]] = index + offset
+    PROVE \A earlier, later \in Positions(order) :
+              earlier < later => rank[order[earlier]] < rank[order[later]]
+    BY SMT DEF Positions
 
 THEOREM FirstFailureMatchesStrictCandidateOrder ==
     ASSUME NEW order \in Seq(Values),

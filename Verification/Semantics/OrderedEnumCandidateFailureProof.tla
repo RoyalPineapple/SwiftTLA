@@ -144,12 +144,19 @@ THEOREM EmittedInitialFailureUsesCanonicalTraversal ==
              CandidateFailure) : 1 <= index
         BY SMT DEF CanonicalOrder, Traversal!FailedPositions,
             Traversal!Positions
+    <1>5a. \A index \in Traversal!Positions(CanonicalOrder) :
+              CandidateRank[CanonicalOrder[index]] = index - 1
+        BY SMT DEF CanonicalOrder, CandidateRank, Rank, Members,
+            Traversal!Positions
+    <1>5b. \A index \in Traversal!Positions(CanonicalOrder) :
+              CandidateRank[CanonicalOrder[index]] = index + (-1)
+        BY <1>5a, SMT DEF Traversal!Positions
     <1>6. \A earlier, later \in Traversal!Positions(CanonicalOrder) :
              earlier < later =>
                  CandidateRank[CanonicalOrder[earlier]]
                      < CandidateRank[CanonicalOrder[later]]
-        BY SMT DEF CanonicalOrder, CandidateRank, Rank, Members,
-            Traversal!Positions
+        BY Traversal!OrdinalRanksRespectTraversal,
+           <1>1, <1>3, <1>5b, SMT
     <1>7. Traversal!FirstIndex(CanonicalOrder, CandidateFailure) = 1
            /\ Traversal!FirstValue(CanonicalOrder, CandidateFailure,
                   CandidateRank) = "alpha"
