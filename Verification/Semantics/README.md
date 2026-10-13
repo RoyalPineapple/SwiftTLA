@@ -1118,9 +1118,11 @@ modulo divisor. The generated Swift machine and native checker report the
 first failure as division by zero, with the complete initial state and no
 edge. `CanonicalCandidateTraversalRule.tla` proves that finite ordered native
 candidate traversal and formal least-rank selection choose the same first
-failure, including the no-failure case (68 local TLAPS obligations). Its
-nonempty case assumes an existing least failed position and strictly increasing
-ranks; it does not infer these properties for arbitrary candidate domains.
+failure, including the no-failure case (115 local TLAPS obligations). An
+induction proves that every nonempty failed-position subset of a finite
+candidate sequence has a least member, so the composed theorem needs no
+minimum-existence premise. It still requires a strict rank in traversal order;
+this does not prove that every accepted domain has a renderable rank.
 `OrderedEnumCandidateFailureProof.tla` instantiates that rule for the concrete
 canonical order, imports the exact emitted module, and independently defines
 the source initial state, failed candidate set, canonical first failure, and

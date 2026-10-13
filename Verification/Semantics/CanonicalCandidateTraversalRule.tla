@@ -1,11 +1,13 @@
 ---------------- MODULE CanonicalCandidateTraversalRule ----------------
-EXTENDS TLAPS, Sequences, Integers
+EXTENDS TLAPS, Sequences, Integers, NaturalsInduction
 
 CONSTANTS Values, FailureValues, NoFailure
 
 Positions(order) == 1..Len(order)
 FailedPositions(order, failure) ==
     {index \in Positions(order) : failure[order[index]] # NoFailure}
+FailedPrefix(order, failure, length) ==
+    {index \in 1..length : failure[order[index]] # NoFailure}
 FailedValues(order, failure) ==
     {order[index] : index \in FailedPositions(order, failure)}
 FirstIndex(order, failure) ==
@@ -25,11 +27,54 @@ FormalFailure(order, failure, rank) ==
 THEOREM EmptyCandidateFailuresAgree ==
     ASSUME NEW order \in Seq(Values),
            NEW failure \in [Values -> FailureValues \cup {NoFailure}],
+           NEW rank \in [Values -> Int],
            FailedPositions(order, failure) = {}
     PROVE NativeFailure(order, failure) = NoFailure
-        /\ FormalFailure(order, failure, [value \in Values |-> 0]) = NoFailure
+        /\ FormalFailure(order, failure, rank) = NoFailure
     BY SMT DEF NativeFailure, FormalFailure, FailedPositions,
         FailedValues, Positions
+
+THEOREM NonemptyFiniteFailureHasLeast ==
+    ASSUME NEW order \in Seq(Values),
+           NEW failure \in [Values -> FailureValues \cup {NoFailure}],
+           FailedPositions(order, failure) # {}
+    PROVE \E least \in FailedPositions(order, failure) :
+              \A index \in FailedPositions(order, failure) : least <= index
+    PROOF
+    <1>. DEFINE P(length) ==
+        length \in 0..Len(order) =>
+            (FailedPrefix(order, failure, length) # {} =>
+                \E least \in FailedPrefix(order, failure, length) :
+                    \A index \in FailedPrefix(order, failure, length) :
+                        least <= index)
+    <1>1. P(0)
+        BY SMT DEF P, FailedPrefix
+    <1>2. ASSUME NEW length \in Nat, P(length)
+          PROVE P(length + 1)
+        PROOF
+        <2>. SUFFICES ASSUME length + 1 \in 0..Len(order),
+                             FailedPrefix(order, failure, length + 1) # {}
+                     PROVE \E least \in FailedPrefix(order, failure, length + 1) :
+                               \A index \in FailedPrefix(order, failure, length + 1) :
+                                   least <= index
+            BY SMT DEF P
+        <2>1. length \in 0..Len(order)
+            BY SMT
+        <2>2. FailedPrefix(order, failure, length + 1) =
+                 FailedPrefix(order, failure, length) \cup
+                     (IF failure[order[length + 1]] # NoFailure
+                      THEN {length + 1} ELSE {})
+            BY <2>1, SMT DEF FailedPrefix
+        <2>3. CASE FailedPrefix(order, failure, length) = {}
+            BY <2>2, <2>3, SMT DEF FailedPrefix
+        <2>4. CASE FailedPrefix(order, failure, length) # {}
+            BY <2>1, <2>2, <2>4, P(length), SMT DEF P, FailedPrefix
+        <2>. QED
+            BY <2>3, <2>4, SMT
+    <1>3. \A length \in Nat : P(length)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED
+        BY <1>3, SMT DEF P, FailedPrefix, FailedPositions, Positions
 
 THEOREM FirstFailureMatchesStrictCandidateOrder ==
     ASSUME NEW order \in Seq(Values),
@@ -100,5 +145,28 @@ THEOREM FirstFailureMatchesStrictCandidateOrder ==
     <1>. QED
         BY <1>3, <1>9, <1>10, <1>11, SMT
             DEF NativeFailure, FormalFailure
+
+THEOREM AllFiniteCandidateFailuresAgree ==
+    ASSUME NEW order \in Seq(Values),
+           NEW failure \in [Values -> FailureValues \cup {NoFailure}],
+           NEW rank \in [Values -> Int],
+           \A earlier, later \in Positions(order) :
+               earlier < later => rank[order[earlier]] < rank[order[later]]
+    PROVE NativeFailure(order, failure) = FormalFailure(order, failure, rank)
+    PROOF
+    <1>1. CASE FailedPositions(order, failure) = {}
+        BY EmptyCandidateFailuresAgree, <1>1, SMT
+    <1>2. CASE FailedPositions(order, failure) # {}
+        PROOF
+        <2>1. \E least \in FailedPositions(order, failure) :
+                 \A index \in FailedPositions(order, failure) : least <= index
+            BY NonemptyFiniteFailureHasLeast, <1>2
+        <2>2. PICK least \in FailedPositions(order, failure) :
+                 \A index \in FailedPositions(order, failure) : least <= index
+            BY <2>1
+        <2>. QED
+            BY FirstFailureMatchesStrictCandidateOrder, <2>2, SMT
+    <1>. QED
+        BY <1>1, <1>2, SMT
 
 =============================================================================
