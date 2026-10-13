@@ -5,12 +5,26 @@ import SwiftTLA
 
 @Suite("TLC input safety")
 struct TLCInputSafetyTests {
+    @Test("Unicode in comments does not block otherwise ASCII TLC evidence")
+    func permitsUnicodeComments() throws {
+        let bundle = TLAModuleBundle.external(root: .init(name: "Commented", tla: """
+            ---- MODULE Commented ----
+            (* TLA⁺ notes (* nested café *) remain comments. *)
+            \\* A second comment mentions naïve checking.
+            Init == x = "ASCII"
+            ====
+            """, cfg: "\\* réglages\nSPECIFICATION Spec"))
+        try TLCProcessRequest.validateASCIIInput(bundle)
+    }
+
     @Test("non-ASCII formal inputs cannot start TLC or identify reusable evidence")
     func rejectsNonASCIIInputsBeforeLaunchAndCacheLookup() throws {
         let root = TLAModuleFile(name: "Unicode", tla: "---- MODULE Unicode ----\n====",
             cfg: "SPECIFICATION Spec")
         let samples: [(bundle: TLAModuleBundle, file: String)] = [
             (.external(root: .init(name: "Unicode", tla: "---- MODULE Unicode ----\nInit == x = \"é\"\n====",
+                cfg: root.cfg)), "Unicode.tla"),
+            (.external(root: .init(name: "Unicode", tla: "---- MODULE Unicode ----\nInit == x = \"(* é *)\"\n====",
                 cfg: root.cfg)), "Unicode.tla"),
             (.external(root: .init(name: "Unicode", tla: root.tla,
                 cfg: "CONSTANT Name = \"é\"")), "Unicode.cfg"),

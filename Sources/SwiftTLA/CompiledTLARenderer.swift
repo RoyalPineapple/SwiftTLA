@@ -212,7 +212,10 @@ struct CompiledTLARenderer {
             let domainFailure = try expressionChoiceFailure(domain)
             guard let bodyFailure = try choiceFailure(body) else { return domainFailure }
             let name = try binderName(binder)
-            let predicate = "~({\(name) \\in \(try state(domain)): \(bodyFailure)} = {})"
+            let allFailures = try anyFailurePredicate(body)
+            let predicate = try firstFailingIntegerCandidate(binder, domain: domain, anyFailure: allFailures,
+                selected: bodyFailure, otherwise: "FALSE")
+                ?? "~({\(name) \\in \(try state(domain)): \(bodyFailure)} = {})"
             let guarded = try evaluationDefined(domain).map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
             return domainFailure.map { "(\($0) \\/ \(guarded))" } ?? guarded
         case .define(let binder, let value, let body):
@@ -298,13 +301,17 @@ struct CompiledTLARenderer {
             let name = try binderName(binder)
             let renderedDomain = try state(domain)
             let defined = try evaluationDefined(domain)
-            return domainFailures + bodyFailures.map { failure in
+            let allFailures = try anyFailurePredicate(body)
+            return try domainFailures + bodyFailures.map { failure in
                 let failedMembers = "{\(name) \\in \(renderedDomain): \(failure.predicate)}"
-                let predicate = "~(\(failedMembers) = {})"
-                // Preserve operands from every failing member without choosing an arbitrary witness.
+                let predicate = try firstFailingIntegerCandidate(binder, domain: domain, anyFailure: allFailures,
+                    selected: failure.predicate, otherwise: "FALSE") ?? "~(\(failedMembers) = {})"
+                let operands = try firstFailingIntegerCandidate(binder, domain: domain, anyFailure: allFailures,
+                    selected: "(IF \(failure.predicate) THEN {\(failure.operands)} ELSE {})", otherwise: "{}")
+                    ?? "{\(failure.operands): \(name) \\in \(failedMembers)}"
                 return .init(
                     predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
-                    operands: "{\(failure.operands): \(name) \\in \(failedMembers)}",
+                    operands: operands,
                     kind: failure.kind)
             }
         case .define(let binder, let value, let body):
@@ -388,6 +395,33 @@ struct CompiledTLARenderer {
             + (try choiceFailure(action).map { [$0] } ?? [])
         guard !predicates.isEmpty else { return nil }
         return predicates.count == 1 ? predicates[0] : "(\(predicates.joined(separator: " \\/ ")))"
+    }
+
+    private func firstFailingIntegerCandidate(
+        _ binder: BinderID,
+        domain: CompiledExpression,
+        anyFailure: String?,
+        selected: String,
+        otherwise: String
+    ) throws -> String? {
+        guard case .set(.int) = domain.resultType,
+              let failure = anyFailure else { return nil }
+        let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
+            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+        var names: [String] = []
+        for stem in ["FailedCandidates", "FirstFailingCandidate", "EarlierCandidate"] {
+            var name = "__SwiftTLA\(stem)\(binder.ordinal)"
+            while occupied.contains(name) || names.contains(name) { name += "_" }
+            names.append(name)
+        }
+        let bound = try binderName(binder)
+        let failed = names[0]
+        let first = names[1]
+        let earlier = names[2]
+        let least = "(CHOOSE \(first) \\in \(failed): \\A \(earlier) \\in \(failed): \(first) <= \(earlier))"
+        return "(LET \(failed) == {\(bound) \\in \(try state(domain)): \(failure)} IN "
+            + "(IF \(failed) = {} THEN \(otherwise) ELSE "
+            + "(LET \(bound) == \(least) IN \(selected))))"
     }
 
     private func repeatableGuards(_ action: CompiledActionExpr) -> Bool {

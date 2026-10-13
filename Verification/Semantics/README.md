@@ -377,10 +377,13 @@ the October 2026 report. Raw non-ASCII String states therefore cannot qualify as
 independent TLC parity evidence until the pinned checker is repaired or the
 formal representation is made safe; a passing local Unicode fixture or TLAPS
 proof does not establish TLC's state exploration is complete.
-TLC-backed validation rejects non-ASCII text in every declared module and
-configuration before launch and before computing a reusable oracle key. The
-current local candidate renders non-ASCII formal string bytes as versioned
-ASCII hex, escaping any ASCII string that begins with the reserved prefix.
+TLC-backed validation rejects non-ASCII text outside TLA+ comments in every
+declared module and configuration before launch and before computing a
+reusable oracle key. Unicode in comments cannot become a state string; the
+guard still rejects Unicode inside string literals, including text that looks
+like a comment. The current local candidate renders non-ASCII formal string
+bytes as versioned ASCII hex, escaping any ASCII string that begins with the
+reserved prefix.
 The emitted module declares that encoding when it contains an encoded literal;
 a compiled configuration-only literal also opts its bundle into decoding.
 External modules require an explicit declaration. This preserves the complete native
@@ -1093,15 +1096,23 @@ produces the labeled successor with `result = 1`. The native validator test
 requires that successor state and edge before the typed failure event.
 `MixedCandidateDivisionFailureProof.tla` independently defines those source
 outcomes and proves the emitted initial state, step, division-failure
-predicate, complete set of failing divisors, absent overflow, and evaluation
-verdict (21 local TLAPS obligations). The Swift visitor witness above pins
+predicate, selected first failing divisor, absent overflow, and evaluation
+verdict (36 local TLAPS obligations). The Swift visitor witness above pins
 the shared choice-emission rule that defers a candidate failure until the
 remaining candidates have been visited. This is a closed finite Int-division
 case, not a proof of failure preservation for every accepted choice body or
-value type. In particular, when several paths fail differently, the native
-checker currently reports the first failure while TLA+ retains all failing
-operand sets; exact multi-failure reporting is not established. This case has
-not yet been hosted.
+value type. The native checker reports the first failure when several paths
+fail differently. For an integer-valued candidate domain, the TLA+ renderer
+now selects the least failing candidate before classifying its failure and
+emits operands only for that candidate. `OrderedCandidateFailureRule.tla`
+proves the least-candidate selection under an explicit minimum-existence
+premise, the division-before-modulo outcome for a two-candidate instance,
+and a reversed-order negative control (10 local TLAPS obligations). The
+generated-machine regression failed before the renderer change and now pins
+the canonical-order direction in the actual emitted predicates. It does not
+yet pin the complete emitted module or prove first-failure order for every
+accepted candidate type and nested body. No hosted evidence qualifies this
+new slice yet.
 
 `CandidateChoiceFailureModel.tla` checks the other failure class inside an
 action-level `Choose`: candidate `0` has no matching expression-level
@@ -1113,7 +1124,7 @@ complete emitted TLA+ module byte-for-byte and the emitted Swift visitor by
 tokens; it failed before the renderer fix because the TLA+ failure predicate
 was absent. `CandidateChoiceFailureProof.tla` independently states the source
 initial state, labeled step, failed candidate set, and evaluation verdict,
-then proves their equivalence to the actual emitted module (16 local TLAPS
+then proves their equivalence to the actual emitted module (22 local TLAPS
 obligations). This closes this finite candidate/selection case, not arbitrary
 domain-expression failure order or every accepted choice body. Hosted
 evidence is pending.

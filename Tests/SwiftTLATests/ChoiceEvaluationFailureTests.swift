@@ -7,6 +7,29 @@ import Testing
 
 @Suite("Choice evaluation failures")
 struct ChoiceEvaluationFailureTests {
+    @Test("The first failing Choose candidate determines the reported failure")
+    func orderedCandidateFailures() throws {
+        let machine = try OrderedCandidateFailuresModel.makeMachine()
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+        #expect(machine.state.modulus == -1 && machine.state.result == 0)
+
+        let rendered = try OrderedCandidateFailuresModel.render()
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let division = try #require(declarations.first {
+            $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==")
+        })
+        let modulo = try #require(declarations.first {
+            $0.hasPrefix("__SwiftTLANegativeModuloDivisorFailure0 ==")
+        })
+        #expect(division.contains("__SwiftTLAFirstFailingCandidate"))
+        #expect(modulo.contains("__SwiftTLAFirstFailingCandidate"))
+        #expect(division.contains(" <= __SwiftTLAEarlierCandidate"))
+        #expect(modulo.contains(" <= __SwiftTLAEarlierCandidate"))
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+    }
+
     @Test("A failing sole candidate is reported by both generated checking paths")
     func soleCandidateFailure() throws {
         let machine = try SingleCandidateDivisionFailureModel.makeMachine()
@@ -55,7 +78,8 @@ struct ChoiceEvaluationFailureTests {
         let divisors = try #require(definitions.first {
             $0.hasPrefix("__SwiftTLADivisionByZeroDivisor0 ==")
         })
-        #expect(divisors.contains("__atomic_0 \\in {__atomic_0 \\in 0..1:"))
+        #expect(divisors.contains("__SwiftTLAFirstFailingCandidate"))
+        #expect(divisors.contains(" <= __SwiftTLAEarlierCandidate"))
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/MixedCandidateDivisionFailureModel.tla")

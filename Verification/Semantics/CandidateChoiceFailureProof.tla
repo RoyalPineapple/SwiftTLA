@@ -8,6 +8,18 @@ SourceFailedCandidates == {candidate \in 0..1 : candidate = 0}
 SourceChoiceFailure == SourceFailedCandidates # {}
 SourceEvaluationOK == ~SourceChoiceFailure
 UngatedCandidateSuccess == result' = 1
+EmittedFailedCandidates ==
+    {candidate \in 0..1 : ~(\E selected \in {1} : selected = candidate)}
+EmittedFirstFailedCandidate ==
+    CHOOSE first \in EmittedFailedCandidates :
+        \A earlier \in EmittedFailedCandidates : first <= earlier
+
+THEOREM EmittedFailedCandidatesAgree ==
+    EmittedFailedCandidates = SourceFailedCandidates
+    BY SMT DEF EmittedFailedCandidates, SourceFailedCandidates
+
+THEOREM EmittedFirstFailureIsZero == EmittedFirstFailedCandidate = 0
+    BY SMT DEF EmittedFirstFailedCandidate, EmittedFailedCandidates
 
 THEOREM EmittedInitialMatchesSource ==
     Init <=> SourceInit
@@ -31,8 +43,11 @@ THEOREM EmittedFailureMatchesSource ==
     ASSUME SourceDomain
     PROVE /\ __SwiftTLAChoiceFailure0 <=> SourceChoiceFailure
           /\ __SwiftTLAEvaluationOK <=> SourceEvaluationOK
-    BY Isa DEF SourceDomain, SourceFailedCandidates, SourceChoiceFailure,
-        SourceEvaluationOK, __SwiftTLAChoiceFailure0, __SwiftTLAEvaluationOK
+    BY EmittedFailedCandidatesAgree, EmittedFirstFailureIsZero, SMT
+        DEF SourceDomain, SourceFailedCandidates, SourceChoiceFailure,
+            SourceEvaluationOK, EmittedFailedCandidates,
+            EmittedFirstFailedCandidate, __SwiftTLAChoiceFailure0,
+            __SwiftTLAEvaluationOK
 
 THEOREM CompleteEmittedOutcomeMatchesSource ==
     ASSUME SourceDomain, result' \in Int

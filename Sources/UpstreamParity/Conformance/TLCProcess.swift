@@ -240,10 +240,47 @@ package struct TLCProcessRequest: Equatable, Sendable {
     let inputs = bundle.files.map { ("\($0.name).tla", $0.tla) }
       + (bundle.root.cfg.map { [("\(bundle.root.name).cfg", $0)] } ?? [])
     for (file, source) in inputs {
-      let bytes = source.utf8
-      guard let offset = bytes.firstIndex(where: { $0 >= 128 }) else { continue }
-      let line = bytes[..<offset].filter { $0 == 10 }.count + 1
-      throw TLCProcessError.unsupportedNonASCIIInput(file: file, line: line)
+      let bytes = Array(source.utf8)
+      var index = 0
+      var line = 1
+      var blockDepth = 0
+      var inLineComment = false
+      var inString = false
+      while index < bytes.count {
+        let byte = bytes[index]
+        let next = index + 1 < bytes.count ? bytes[index + 1] : 0
+        if byte == 10 { line += 1 }
+        if inLineComment {
+          if byte == 10 { inLineComment = false }
+        } else if blockDepth > 0 {
+          if byte == 40 && next == 42 {
+            blockDepth += 1
+            index += 1
+          } else if byte == 42 && next == 41 {
+            blockDepth -= 1
+            index += 1
+          }
+        } else if inString {
+          if byte >= 128 { throw TLCProcessError.unsupportedNonASCIIInput(file: file, line: line) }
+          if byte == 92 && index + 1 < bytes.count {
+            index += 1
+            if bytes[index] >= 128 { throw TLCProcessError.unsupportedNonASCIIInput(file: file, line: line) }
+          } else if byte == 34 {
+            inString = false
+          }
+        } else if byte == 92 && next == 42 {
+          inLineComment = true
+          index += 1
+        } else if byte == 40 && next == 42 {
+          blockDepth = 1
+          index += 1
+        } else if byte == 34 {
+          inString = true
+        } else if byte >= 128 {
+          throw TLCProcessError.unsupportedNonASCIIInput(file: file, line: line)
+        }
+        index += 1
+      }
     }
   }
 

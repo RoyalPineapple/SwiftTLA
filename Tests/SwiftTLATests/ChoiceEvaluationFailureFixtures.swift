@@ -111,6 +111,25 @@ struct CandidateChoiceFailureModel: Sendable {
 }
 
 @TLAModel
+struct OrderedCandidateFailuresModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("OrderedCandidateFailuresModel") { scope in
+            let modulus = scope.sharedVar(initial: -1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                Choose(0...1) { candidate in
+                    Assign(result, to: If(candidate == 0,
+                        then: 1 / candidate,
+                        else: 1 % modulus))
+                }
+            }
+        }
+    }
+}
+
+@TLAModel
 struct BoundBodyChoiceFailureModel: Sendable {
     enum Step: String, CaseIterable { case pick }
 

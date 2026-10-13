@@ -118,8 +118,8 @@ extension TLCProcessError {
       return .init(
         whatFailed: "This TLC input cannot provide trustworthy string-state evidence.",
         whereItFailed: "\(file) line \(line)",
-        expected: "ASCII-only TLC input until reversible formal string encoding is available.",
-        actual: "The declared input contains non-ASCII text.",
+        expected: "ASCII-only TLC code and string literals until reversible formal encoding is available.",
+        actual: "The declared input contains non-ASCII text outside a comment.",
         nextSafeAction: "Use native Swift checking for now; add and verify reversible ASCII formal encoding before using TLC parity for this model.",
         evidence: evidence
       )
