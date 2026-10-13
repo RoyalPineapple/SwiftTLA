@@ -1369,6 +1369,23 @@ remain trusted; conditions without a compositional definedness rule still
 lack coverage. This is an output-linked instance, not arbitrary `ifElse`
 preservation.
 
+The earlier conditional Swift witness was also refreshed to pin the emitted
+`visitAlternatives` call after native alternative traversal changed. Its
+exact-output test passes again. `AlternativeTraversalRule.tla` proves the
+abstract update-union and first-failure behavior; the concrete Swift helper's
+implementation and its call-site link are still trusted boundaries.
+
+Expression-level `If`, `&&`, and `||` now select fallible sites only when their
+branch is evaluated. The shared TLA+ renderer emits branch-guarded failure
+conditions, and a `Let` with a defined fallible value carries later arithmetic
+failures from its body. Focused generated-machine and renderer regressions
+cover missing `CHOOSE`, modulo by zero, successful successors, and skipped
+branches. `LazyExpressionFailureRule.tla` proves the selected-site first-failure
+algebra (10 local TLAPS obligations), including an eager-branch negative
+control. These are a generic rule and focused output tests, not an exact-output
+proof of every emitted expression: effectful expression forms without a
+compositional definedness rule and the Swift-emitter link remain open.
+
 This table is a proof inventory, not a claim that these seven groups exhaust
 `#spec`: initialization, source lowering, properties, temporal behavior,
 refinement, and PlusCal export also require their own output links.

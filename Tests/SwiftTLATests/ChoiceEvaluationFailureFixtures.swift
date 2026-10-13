@@ -148,3 +148,62 @@ struct ConditionalChoiceThenModuloFailureModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct ExpressionConditionalFailureModel: Sendable {
+    enum Step: String, CaseIterable { case compute }
+
+    static var spec: TLASpec {
+        #spec("ExpressionConditionalFailureModel") { scope in
+            let mode = scope.sharedVar(in: 0...1)
+            let divisor = scope.sharedVar(in: 0...1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.compute) {
+                Assign(result, to: If(mode == 1,
+                    then: Select(from: Set<Int>([1])) { _ in false },
+                    else: 1 % divisor))
+            }
+        }
+    }
+}
+
+@TLAModel
+struct ShortCircuitFailureModel: Sendable {
+    enum Step: String, CaseIterable { case conjunction, disjunction }
+
+    static var spec: TLASpec {
+        #spec("ShortCircuitFailureModel") { scope in
+            let enabled = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
+            let divisor = scope.sharedVar(in: 0...1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.conjunction) {
+                When(enabled && (1 % divisor == 0))
+                Assign(result, to: 1)
+            }
+            Do(Step.disjunction) {
+                When(enabled || (1 % divisor == 0))
+                Assign(result, to: 2)
+            }
+        }
+    }
+}
+
+@TLAModel
+struct BoundConditionalBodyFailureModel: Sendable {
+    enum Step: String, CaseIterable { case compute }
+
+    static var spec: TLASpec {
+        #spec("BoundConditionalBodyFailureModel") { scope in
+            let mode = scope.sharedVar(in: 0...1)
+            let divisor = scope.sharedVar(in: 0...1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.compute) {
+                Let(If(mode == 1,
+                    then: Select(from: Set<Int>([1])) { _ in false },
+                    else: 1)) { bound in
+                    Assign(result, to: bound.expr % divisor)
+                }
+            }
+        }
+    }
+}

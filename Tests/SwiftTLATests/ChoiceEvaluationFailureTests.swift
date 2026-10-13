@@ -381,6 +381,94 @@ struct ChoiceEvaluationFailureTests {
         #expect(division.contains("IF"))
     }
 
+    @Test("Expression-level If reports only its selected branch's failure")
+    func expressionConditionalFailures() throws {
+        let machines = try ExpressionConditionalFailureModel.initialMachines()
+        #expect(machines.count == 4)
+        for machine in machines {
+            if machine.state.mode == 1 {
+                #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+                    try machine.successors(for: .compute)
+                }
+            } else if machine.state.divisor == 0 {
+                #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+                    try machine.successors(for: .compute)
+                }
+            } else {
+                let successor = try #require(machine.successors(for: .compute).first)
+                #expect(successor.state.mode == 0)
+                #expect(successor.state.divisor == 1)
+                #expect(successor.state.result == 0)
+            }
+        }
+
+        let rendered = try ExpressionConditionalFailureModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(definitions.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })
+        #expect(definitions.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==") })
+    }
+
+    @Test("Boolean expressions report right failures only when the right side is evaluated")
+    func shortCircuitFailures() throws {
+        let machines = try ShortCircuitFailureModel.initialMachines()
+        #expect(machines.count == 4)
+        for machine in machines {
+            let conjunction = {
+                try machine.successors(for: .conjunction)
+            }
+            let disjunction = {
+                try machine.successors(for: .disjunction)
+            }
+            if machine.state.divisor == 0 {
+                if machine.state.enabled {
+                    #expect(throws: NativeMachineEvaluationError.divisionByZero) { try conjunction() }
+                    #expect(try disjunction().first?.state.result == 2)
+                } else {
+                    #expect(try conjunction().isEmpty)
+                    #expect(throws: NativeMachineEvaluationError.divisionByZero) { try disjunction() }
+                }
+            } else {
+                #expect(try conjunction().count == (machine.state.enabled ? 1 : 0))
+                #expect(try disjunction().first?.state.result == 2)
+            }
+        }
+
+        let rendered = try ShortCircuitFailureModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(definitions.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==") })
+        #expect(definitions.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure1 ==") })
+    }
+
+    @Test("A fallible Let value preserves an arithmetic failure in its body")
+    func boundConditionalBodyFailure() throws {
+        let machines = try BoundConditionalBodyFailureModel.initialMachines()
+        #expect(machines.count == 4)
+        for machine in machines {
+            if machine.state.mode == 1 {
+                #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+                    try machine.successors(for: .compute)
+                }
+            } else if machine.state.divisor == 0 {
+                #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+                    try machine.successors(for: .compute)
+                }
+            } else {
+                let successor = try #require(machine.successors(for: .compute).first)
+                #expect(successor.state.mode == 0)
+                #expect(successor.state.divisor == 1)
+                #expect(successor.state.result == 0)
+            }
+        }
+
+        let rendered = try BoundConditionalBodyFailureModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(definitions.contains { $0.hasPrefix("__SwiftTLAChoiceFailure0 ==") })
+        #expect(definitions.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==") })
+    }
+
     @Test("The emitted Swift visitor preserves both Either branches")
     func eitherBranchEmittedSwift() throws {
         let fixture = URL(fileURLWithPath: #filePath)

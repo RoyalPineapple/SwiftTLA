@@ -27,6 +27,21 @@ private enum OrderedEvaluationSite {
              .divisionByZero(let guard_, _), .negativeModuloDivisor(let guard_, _): guard_
         }
     }
+
+    func selected(by predicate: String, whenTrue: Bool) -> Self {
+        let guarded = whenTrue
+            ? "(IF \(predicate) THEN \(guard_) ELSE TRUE)"
+            : "(IF \(predicate) THEN TRUE ELSE \(guard_))"
+        switch self {
+        case .choice: return .choice(guard_: guarded)
+        case .arithmetic(let operation, _, let operands):
+            return .arithmetic(operation: operation, guard_: guarded, operands: operands)
+        case .divisionByZero(_, let divisor):
+            return .divisionByZero(guard_: guarded, divisor: divisor)
+        case .negativeModuloDivisor(_, let divisor):
+            return .negativeModuloDivisor(guard_: guarded, divisor: divisor)
+        }
+    }
 }
 
 enum RenderedArithmeticFailureKind {
@@ -279,8 +294,8 @@ struct CompiledTLARenderer {
         case .define(let binder, let value, let body):
             let defined = try evaluationDefined(value)
             var failures = try expressionArithmeticFailures(value)
-            // shortcut: nonrepeatable values stop later-failure enumeration; replace with ordered outcomes before universal fidelity.
-            guard failures.isEmpty == false || repeatable(value) else { return failures }
+            // shortcut: values without a complete definedness rule still stop later-failure enumeration.
+            guard repeatable(value) || defined != nil else { return failures }
             let name = try binderName(binder)
             let renderedValue = try state(value)
             for failure in try arithmeticFailures(body) {
@@ -409,12 +424,28 @@ struct CompiledTLARenderer {
     }
 
     private func orderedFallibleSites(_ expression: CompiledExpression) throws -> [OrderedEvaluationSite]? {
-        // shortcut: branching and effectful expressions still need path-sensitive outcome rules.
+        // shortcut: effectful expressions still need path-sensitive outcome rules.
         func collect(_ value: CompiledExpression) throws -> [OrderedEvaluationSite]? {
             switch value.operation {
             case .convert:
                 guard value.children.count == 1 else { return nil }
                 return try collect(value.children[0])
+            case .ifThenElse:
+                guard value.children.count == 3,
+                      let condition = try collect(value.children[0]),
+                      let selected = try collect(value.children[1]),
+                      let unselected = try collect(value.children[2]) else { return nil }
+                let predicate = try state(value.children[0])
+                return condition + selected.map { $0.selected(by: predicate, whenTrue: true) }
+                    + unselected.map { $0.selected(by: predicate, whenTrue: false) }
+            case .and, .or:
+                guard value.children.count == 2,
+                      let left = try collect(value.children[0]),
+                      let right = try collect(value.children[1]) else { return nil }
+                let predicate = try state(value.children[0])
+                return left + right.map {
+                    $0.selected(by: predicate, whenTrue: value.operation == .and)
+                }
             case .choose:
                 guard let defined = try choiceDefined(value) else { return nil }
                 return [.choice(guard_: defined)]
@@ -477,7 +508,13 @@ struct CompiledTLARenderer {
         } else {
             hasNestedChoice = false
         }
-        guard hasDivisionFailure || hasNestedChoice else { return nil }
+        func hasLazyBranch(_ value: CompiledExpression) -> Bool {
+            switch value.operation {
+            case .ifThenElse, .and, .or: return true
+            default: return value.children.contains(where: hasLazyBranch)
+            }
+        }
+        guard !sites.isEmpty, hasDivisionFailure || hasNestedChoice || hasLazyBranch(expression) else { return nil }
         return sites
     }
 
