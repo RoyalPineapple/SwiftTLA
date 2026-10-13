@@ -1386,6 +1386,23 @@ control. These are a generic rule and focused output tests, not an exact-output
 proof of every emitted expression: effectful expression forms without a
 compositional definedness rule and the Swift-emitter link remain open.
 
+`ExpressionConditionalFailureModel` is one output-linked instance of that
+rule. Its test checks the lowered conditional expression, the emitted Swift
+transition visitor and closed-choice helper by syntax tokens, and the complete
+generated TLA+ module by exact text after normalizing only a source-location
+binder name. A reversed Swift branch and an eager TLA+ choice-failure guard
+must both fail those output checks. `ExpressionConditionalFailureProof.tla`
+proves the pinned module's initial states, complete labeled transition,
+three failure predicates, selected evaluation invariant, and branch-selection
+rule against an independent source relation. It also proves that this action
+is enabled exactly when the evaluation check holds on the declared initial
+domain; an eager-failure negative control is included (21 local TLAPS
+obligations). The finite Swift-machine test covers the exact four initial
+states and their successors. These facts do not prove the Swift compiler,
+the concrete `_NativeMachineOperations` implementations, arbitrary source
+lowering, or every expression form. Hosted proof and parity evidence for this
+new instance are still pending.
+
 This table is a proof inventory, not a claim that these seven groups exhaust
 `#spec`: initialization, source lowering, properties, temporal behavior,
 refinement, and PlusCal export also require their own output links.

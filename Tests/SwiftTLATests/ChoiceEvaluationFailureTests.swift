@@ -385,6 +385,9 @@ struct ChoiceEvaluationFailureTests {
     func expressionConditionalFailures() throws {
         let machines = try ExpressionConditionalFailureModel.initialMachines()
         #expect(machines.count == 4)
+        #expect(Set(machines.map { [$0.state.mode, $0.state.divisor] })
+            == Set([[0, 0], [0, 1], [1, 0], [1, 1]]))
+        #expect(machines.allSatisfy { $0.state.result == 0 })
         for machine in machines {
             if machine.state.mode == 1 {
                 #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
@@ -395,7 +398,9 @@ struct ChoiceEvaluationFailureTests {
                     try machine.successors(for: .compute)
                 }
             } else {
-                let successor = try #require(machine.successors(for: .compute).first)
+                let successors = try machine.successors(for: .compute)
+                #expect(successors.count == 1)
+                let successor = try #require(successors.first)
                 #expect(successor.state.mode == 0)
                 #expect(successor.state.divisor == 1)
                 #expect(successor.state.result == 0)
