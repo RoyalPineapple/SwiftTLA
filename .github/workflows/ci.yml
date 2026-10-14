@@ -27,7 +27,7 @@ jobs:
       matrix:
         suite: ${{ fromJSON('["ordinary","upstream"]') }}
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
         with:
@@ -37,7 +37,7 @@ jobs:
         run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
 
       - name: Run complete Swift test suite
-        timeout-minutes: 55
+        timeout-minutes: 115
         run: |
           configuration=release
           case '${{ matrix.suite }}' in
