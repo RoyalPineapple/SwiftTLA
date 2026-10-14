@@ -1,5 +1,5 @@
 import Foundation
-import SwiftTLA
+@testable import SwiftTLA
 import Testing
 
 @Suite("Dependent initialization output proof input")
@@ -16,5 +16,21 @@ struct DependentInitializationOutputProofTests {
             .standardizedFileURL
         let checkedModule = try String(contentsOf: proofInput, encoding: .utf8)
         #expect(rendered == checkedModule)
+
+        let predicates = [
+            "pc = \"finish\"",
+            "seed \\in 0..1",
+            "choice \\in (IF (seed = 0) THEN {0} ELSE {0, 1})",
+        ]
+        let missingDependentClause = rendered.replacingOccurrences(
+            of: "  /\\ choice \\in (IF (seed = 0) THEN {0} ELSE {0, 1})\n", with: "")
+        #expect(missingDependentClause != rendered)
+        do {
+            try verifyRenderedInitialConjunction(missingDependentClause, predicates: predicates)
+            Issue.record("A missing dependent initializer was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.Init")
+            #expect(diagnostic.actual == "Init ==\n  /\\ pc = \"finish\"\n  /\\ seed \\in 0..1")
+        }
     }
 }

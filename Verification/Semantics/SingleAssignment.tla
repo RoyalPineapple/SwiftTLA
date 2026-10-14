@@ -1068,6 +1068,92 @@ THEOREM OrderedInitialHistoriesExist ==
     <1>. QED
         BY <1>3 DEF P
 
+ConjunctiveInitialPrefix(plans, index) ==
+    {state \in States :
+        \A step \in 1..index :
+            state[plans[step].key] \in plans[step].domains[state]}
+UnchangedExceptInitialKey(prior, target, key) ==
+    \A variable \in Vars \ {key} : prior[variable] = target[variable]
+StableInitializationPlan(plans) ==
+    \A index \in 1..Len(plans) :
+        \A prior, target \in States :
+            UnchangedExceptInitialKey(prior, target, plans[index].key)
+            => /\ (prior \in ConjunctiveInitialPrefix(plans, index - 1)
+                   <=> target \in ConjunctiveInitialPrefix(plans, index - 1))
+               /\ plans[index].domains[prior] = plans[index].domains[target]
+PriorInitialKeys(plans, index) ==
+    {plans[step].key : step \in 1..index}
+UniqueInitialKeys(plans) ==
+    \A first, second \in 1..Len(plans) :
+        first # second => plans[first].key # plans[second].key
+PriorOnlyInitialDomains(plans) ==
+    \A index \in 1..Len(plans) :
+        \A prior, target \in States :
+            (\A key \in PriorInitialKeys(plans, index - 1) :
+                prior[key] = target[key])
+            => plans[index].domains[prior] = plans[index].domains[target]
+
+THEOREM DependencyOrderedInitializationIsStable ==
+    ASSUME NEW plans \in Seq(InitializationPlans),
+           UniqueInitialKeys(plans),
+           PriorOnlyInitialDomains(plans)
+    PROVE StableInitializationPlan(plans)
+    BY SMT DEF StableInitializationPlan, ConjunctiveInitialPrefix,
+        UnchangedExceptInitialKey, PriorInitialKeys, UniqueInitialKeys,
+        PriorOnlyInitialDomains, InitializationPlans, States
+
+THEOREM StableInitializationStepMatchesConjunction ==
+    ASSUME NEW plans \in Seq(InitializationPlans),
+           NEW index \in 1..Len(plans),
+           StableInitializationPlan(plans)
+    PROVE ExtendMembershipInitialStates(
+        ConjunctiveInitialPrefix(plans, index - 1),
+        plans[index].key, plans[index].domains)
+        = ConjunctiveInitialPrefix(plans, index)
+    BY SMT DEF ExtendMembershipInitialStates, MembershipInitialStates,
+        ConjunctiveInitialPrefix, UnchangedExceptInitialKey,
+        StableInitializationPlan, InitializationPlans, States
+
+THEOREM StableInitialHistoryMatchesConjunction ==
+    ASSUME NEW plans \in Seq(InitializationPlans),
+           NEW history \in [0..Len(plans) -> SUBSET States],
+           StableInitializationPlan(plans),
+           MembershipInitialHistory(States, plans, history)
+    PROVE \A index \in 0..Len(plans) :
+        history[index] = ConjunctiveInitialPrefix(plans, index)
+    PROOF
+    <1>. DEFINE P(index) == index \in 0..Len(plans)
+        => history[index] = ConjunctiveInitialPrefix(plans, index)
+    <1>1. P(0)
+        BY SMT DEF P, MembershipInitialHistory, ConjunctiveInitialPrefix
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(plans)
+                     PROVE history[index + 1]
+                         = ConjunctiveInitialPrefix(plans, index + 1)
+            BY SMT DEF P
+        <2>1. index \in 0..Len(plans)
+            BY SMT
+        <2>2. index + 1 \in 1..Len(plans)
+            BY SMT
+        <2>3. history[index] = ConjunctiveInitialPrefix(plans, index)
+            BY <2>1, P(index), SMT DEF P
+        <2>4. history[index + 1] = ExtendMembershipInitialStates(
+                history[index], plans[index + 1].key,
+                plans[index + 1].domains)
+            BY <2>2, SMT DEF MembershipInitialHistory
+        <2>5. ExtendMembershipInitialStates(
+                ConjunctiveInitialPrefix(plans, index),
+                plans[index + 1].key, plans[index + 1].domains)
+                = ConjunctiveInitialPrefix(plans, index + 1)
+            BY <2>2, StableInitializationStepMatchesConjunction
+        <2>. QED
+            BY <2>3, <2>4, <2>5, SMT
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED
+        BY <1>3, SMT DEF P
+
 DependentSourceInit ==
     /\ dependentPC = "finish"
     /\ ((dependentSeed = 0 /\ dependentChoice = 0)

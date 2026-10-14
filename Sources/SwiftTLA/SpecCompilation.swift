@@ -2560,6 +2560,9 @@ private extension CompiledModuleMetadata {
         lines.append("====")
         let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
+        if !initialPredicates.isEmpty {
+            try verifyRenderedInitialConjunction(source, predicates: initialPredicates)
+        }
         return (source, evaluationFailureDeclarations, evaluationInvariant)
     }
 
@@ -2612,5 +2615,26 @@ func verifyRenderedVariableDeclaration(_ source: String, names: [String]) throws
             path: "tla.variables", expected: expected.first ?? "no variable declaration",
             actual: declarations.isEmpty ? "no variable declaration" : declarations.joined(separator: "; "),
             nextSafeAction: "Regenerate the TLA+ module from the compiled state layout.")
+    }
+}
+
+func verifyRenderedInitialConjunction(_ source: String, predicates: [String]) throws {
+    let lines = source.components(separatedBy: "\n")
+    let starts = lines.indices.filter { lines[$0] == "Init ==" || lines[$0].hasPrefix("Init == ") }
+    let expected = predicates.count == 1
+        ? "Init == \(predicates[0])"
+        : (["Init =="] + predicates.map { "  /\\ \($0)" }).joined(separator: "\n")
+    let actual: String
+    if starts.count == 1 {
+        let start = starts[0]
+        let end = lines[(start + 1)...].firstIndex(of: "") ?? lines.count
+        actual = lines[start..<end].joined(separator: "\n")
+    } else {
+        actual = "\(starts.count) Init declarations"
+    }
+    guard actual == expected else {
+        throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+            path: "tla.Init", expected: expected, actual: actual,
+            nextSafeAction: "Regenerate the TLA+ module from the compiled initializations.")
     }
 }

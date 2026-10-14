@@ -891,9 +891,15 @@ to every prior state, so the value may depend on earlier initialization choices.
 `OrderedInitialHistoriesAgree` extends the equality to every position in any
 finite ordered initialization plan. `OrderedInitialHistoriesExist` constructs a
 shared history for every such plan, so the equality is not vacuous. These are
-generic initialization rules; they do not yet prove that the actual initializer
-expressions, generated Swift loops, and rendered `Init` satisfy the candidate
-equality premise for every accepted `#spec`.
+generic initialization rules. `DependencyOrderedInitializationIsStable`
+additionally proves that unique initialization targets and domains determined
+only by earlier targets make each step stable under replacing its own target.
+`StableInitialHistoryMatchesConjunction` then proves that every prefix of the
+ordered membership history equals the corresponding TLA+ conjunction, including
+empty domains. The compiler orders initializers by detected dependencies, but
+these theorems do not yet prove that dependency detection is complete or that
+the actual initializer expressions, generated Swift loops, and rendered `Init`
+satisfy their premises for every accepted `#spec`.
 
 `DependentInitializationOutputProofModel.tla` is an exact generated module for
 a `#spec` whose second variable's candidate set depends on the first variable's
@@ -904,7 +910,12 @@ equivalent to an independently stated source relation, and
 `EmittedDependentInitializationHasExactlyThreeStates` proves that complete
 initial-state set. This connects one actual output pair to the generic rule's
 intended behavior; it does not establish the candidate-set premise or generated
-Swift output semantics for arbitrary accepted models.
+Swift output semantics for arbitrary accepted models. For stateful direct-TLA
+modules, the renderer now checks the final `Init` block against the compiled
+initializer clauses and selected initial invariant; removing the dependent
+clause is rejected. This is a syntactic output link, not a proof that each
+rendered expression has the source meaning. Variable-free action modules and
+initialization failures still need separate semantics and output links.
 
 The TLA renderer prints action conjunction as `/\`. TLC must solve primed
 assignments as an action relation; making one such assignment the condition of
