@@ -285,6 +285,11 @@ struct CompiledTLARenderer {
             let predicate = "((\(selection.predicate)) = TRUE /\\ \(failure))"
             let bodyFailure = selection.defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
             return conditionFailure.map { "(\($0) \\/ \(bodyFailure))" } ?? bodyFailure
+        case .and(let lhs, let rhs):
+            let leftFailure = try choiceFailure(lhs)
+            guard let rightFailure = try choiceFailure(rhs) else { return leftFailure }
+            let reachedRight = "((ENABLED (\(try self.action(lhs)))) /\\ \(rightFailure))"
+            return disjunction(leftFailure, reachedRight)
         case .or(let lhs, let rhs):
             let earlier = try anyFailurePredicate(lhs)
             let later = try choiceFailure(rhs).map { failure in
@@ -405,11 +410,10 @@ struct CompiledTLARenderer {
         case .and(let lhs, let rhs):
             let leftFailures = try evaluationFailures(lhs)
             let rightFailures = try evaluationFailures(rhs)
-            // shortcut: right-side failures after non-guard actions need ordered outcome semantics.
-            guard !rightFailures.isEmpty, repeatableGuards(lhs) else { return leftFailures }
-            let guardPredicate = try self.action(lhs)
+            guard !rightFailures.isEmpty else { return leftFailures }
+            let reachedRight = "(ENABLED (\(try self.action(lhs))))"
             return leftFailures + rightFailures.map {
-                .init(predicate: "(\(guardPredicate) /\\ \($0.predicate))", operands: $0.operands, kind: $0.kind)
+                .init(predicate: "(\(reachedRight) /\\ \($0.predicate))", operands: $0.operands, kind: $0.kind)
             }
         case .or(let lhs, let rhs):
             let left = try evaluationFailures(lhs)
@@ -550,14 +554,6 @@ struct CompiledTLARenderer {
         return "(LET \(failed) == {\(bound) \\in \(try state(domain)): \(failure)} IN "
             + "(IF \(failed) = {} THEN \(otherwise) ELSE "
             + "(LET \(bound) == \(least) IN \(selected))))"
-    }
-
-    private func repeatableGuards(_ action: CompiledActionExpr) -> Bool {
-        switch action {
-        case .guard_(let condition): arithmeticTreeIsRepeatable(condition)
-        case .and(let lhs, let rhs): repeatableGuards(lhs) && repeatableGuards(rhs)
-        default: false
-        }
     }
 
     private func selectedCondition(_ condition: CompiledExpression) throws -> (predicate: String, defined: String?)? {

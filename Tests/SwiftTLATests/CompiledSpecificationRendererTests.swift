@@ -312,6 +312,37 @@ struct CompiledSpecificationRendererTests {
         })
     }
 
+    @Test("A successful left action exposes a right-hand evaluation failure")
+    func reportsFailureAfterConjunctiveAssignment() throws {
+        let compilation = try TLASpec(name: "ConjunctiveFailure", variables: [
+            .init(name: "result", initial: .int(0))
+        ], actions: [], invariants: []).compile()
+        let variable = try #require(compilation.layout.variables.first?.id)
+        let renderer = CompiledTLARenderer(moduleName: "ConjunctiveFailure", reservedNames: [],
+            layout: compilation.layout, bindings: .init(binders: [BinderID(ordinal: 0): "candidate"]),
+            operators: compilation.semantics.operators,
+            actions: [], functions: [])
+        let one = CompiledExpression.value(.integer(1))
+        let zero = CompiledExpression.value(.integer(0))
+        let quotient = CompiledExpression(operation: .divide, resultType: .int, children: [one, zero])
+        let action = CompiledActionExpr.and(.assign(variable, one), .assign(variable, quotient))
+
+        let failures = try renderer.evaluationFailures(action)
+        #expect(failures.contains {
+            if case .divisionByZero = $0.kind {
+                return $0.predicate.contains("ENABLED (result' = 1)")
+            }
+            return false
+        })
+
+        let empty = CompiledExpression.value(.set([]))
+        let yes = CompiledExpression.value(.boolean(true))
+        let choice = CompiledExpression(operation: .choose(BinderID(ordinal: 0)), resultType: .int,
+            children: [empty, yes])
+        let chosen = CompiledActionExpr.and(.assign(variable, one), .assign(variable, choice))
+        #expect(try renderer.choiceFailure(chosen)?.contains("ENABLED (result' = 1)") == true)
+    }
+
     @Test("Sibling lexical scopes stay separate in rendered state and action expressions")
     func delimitsSiblingLexicalScopes() throws {
         let compiled = try TLASpec(name: "LexicalScopes", variables: [], actions: [], invariants: []).compile()

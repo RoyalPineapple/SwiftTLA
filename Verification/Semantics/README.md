@@ -1530,7 +1530,7 @@ verify the emitted code itself.
 | --- | --- | --- |
 | `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; every generated `unchanged` part now has a structural read-and-merge check; direct fallible assignments now emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
 | `guard_` | Pure total guards agree at abstract positions; the checked-addition `When` instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof | Generalize emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
-| `and` | Compatible delta conjunction and conflicting relational writes | Prove both emitters' evaluation order, conflict/error semantics, and frame completion. |
+| `and` | Compatible delta conjunction and conflicting relational writes; TLA+ now exposes a right-hand arithmetic or `CHOOSE` failure when the left action is enabled | Prove both emitters' evaluation order, first-failure selection across nondeterministic left branches, conflict/error semantics, and frame completion. |
 | `or` | Guarded-choice preservation conditional on equal branch edges; output-linked success-plus-failure and two distinct-failure fixtures; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, all failure kinds and TLA+ ordering, multiplicity policy, and both outputs. |
 | `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order; one output-linked case retains a successful candidate and reports another candidate's expression-level choice failure | Prove arbitrary emitted domain and branch expressions agree, including all failure kinds, first-failure order, and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
@@ -1550,6 +1550,17 @@ update theorem with matching expression definedness and values. Its three
 focused TLAPS obligations passed locally with fingerprint reuse disabled.
 Those expression-agreement premises, actual output interpretation, and other
 failure kinds remain open.
+
+A focused regression was red because a non-guard left conjunct could succeed
+while the TLA+ failure renderer discarded a right-hand division failure. The
+renderer now predicates right-hand arithmetic and `CHOOSE` failures on
+`ENABLED` of the left action; the focused regression, renderer suite, and
+choice-failure suite pass locally. This checks the compiled renderer rule, not
+the source-to-compiled mapping or the actual generated Swift/TLA+ pair for an
+arbitrary accepted program. In particular, `ENABLED` establishes that the
+right side is visited at least once; it does not establish which failure wins
+when the left action has multiple ordered branches. That output and proof
+boundary remains open.
 
 `ParameterizedStringCandidateFailuresModel` exercises `existsAction` over a
 typed `Set<String>` parameter whose declared finite domain contains two
