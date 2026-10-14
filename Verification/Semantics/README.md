@@ -763,14 +763,18 @@ the rendered unchanged relation have the same complete successors.
 `#spec` `Skip` fixture. `GeneratedSkipFrameTests` pins that module, the complete
 macro-emitted Swift update function, the lowered action shape, and the native
 labeled self-transition; an altered Swift state read fails its token witness.
+Macro expansion now checks every emitted `unchanged` action part against an
+independently constructed complete-state read-and-merge shape. The same altered
+read is rejected by that production check, not merely by the fixture witness.
 `EmittedSkipFrameMatchesSource` and `EmittedSkipInitialAndInvariant` connect the
 emitted module's action, initial state, and declared invariant to this instance.
 The focused Swift test passes locally, and pinned TLAPS 1.6.0-pre with arm64
 Z3 4.15.4 proved all 1,430 obligations in an earlier `SingleAssignment.tla`
 revision locally.
-Hosted evidence remains pending. The one-variable output witness does not
-prove that every emitted state type or action composition instantiates the
-generic rule; Swift compiler/runtime interpretation remains trusted.
+Hosted evidence remains pending. The generic structural output check does not
+prove each generated field name maps to the correct source identity, that every
+action composition instantiates the frame theorem, or Swift compiler/runtime
+interpretation.
 
 The same module also proves that two distinct compiled assignments can update
 one complete state simultaneously, with every other variable unchanged. This
@@ -1522,7 +1526,7 @@ verify the emitted code itself.
 
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
-| `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; direct fallible assignments now emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
+| `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; every generated `unchanged` part now has a structural read-and-merge check; direct fallible assignments now emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
 | `guard_` | Pure total guards agree at abstract positions; the checked-addition `When` instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof | Generalize emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
 | `and` | Compatible delta conjunction and conflicting relational writes | Prove both emitters' evaluation order, conflict/error semantics, and frame completion. |
 | `or` | Guarded-choice preservation conditional on equal branch edges; output-linked success-plus-failure and two distinct-failure fixtures; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, all failure kinds and TLA+ ordering, multiplicity policy, and both outputs. |

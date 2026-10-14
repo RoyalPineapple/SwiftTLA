@@ -47,8 +47,13 @@ struct GeneratedSkipFrameTests {
         #expect(Array(Parser.parse(source: swift).tokens(viewMode: .sourceAccurate)).map(\.text)
             == expectedTokens)
         let wrongRead = swift.replacingOccurrences(of: "state.state.value", with: "1")
-        #expect(Array(Parser.parse(source: wrongRead).tokens(viewMode: .sourceAccurate)).map(\.text)
-            != expectedTokens)
+        let wrongReadVisitor = try #require(Parser.parse(source: wrongRead)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedUnchangedActionOutput(wrongReadVisitor, parts: [
+                (id: 1, slot: emitter.variable(variable.id), stateRead: "state.state.value"),
+            ])
+        }
 
         let tla = try GeneratedSkipFrameModel.render().tlaBundle.root.tla
         let module = URL(fileURLWithPath: #filePath)

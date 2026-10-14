@@ -405,10 +405,13 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    mutating func actionFunctions(_ root: CompiledActionExpr) throws -> String {
+    mutating func actionFunctions(_ root: CompiledActionExpr) throws -> (
+        source: String, unchangedParts: [(id: Int, slot: String, stateRead: String)]
+    ) {
         var pending: [(node: CompiledActionExpr, id: Int, bindings: [BinderID])] = [(root, 0, [])]
         var nextID = 1
         var declarations: [String] = []
+        var unchangedParts: [(id: Int, slot: String, stateRead: String)] = []
         while let (node, id, bindings) = pending.popLast() {
             func childCall(_ child: CompiledActionExpr, binding: BinderID? = nil,
                            updates: String = "updates", emit: String = "emit") -> String {
@@ -425,6 +428,9 @@ extension NativeSwiftEmitter {
                 body = "if let merged = updates.merging(_Updates(\(variable(variableID)): \(try expression(value)))) { try emit(merged) }"
             case .unchanged(let variableID):
                 body = "if let merged = updates.merging(_Updates(\(variable(variableID)): \(stateValue(variableID)))) { try emit(merged) }"
+                let slot = variable(variableID)
+                let stateRead = stateMemberNames[variableID].map { "state.state.\($0)" } ?? "state.\(slot)"
+                unchangedParts.append((id: id, slot: slot, stateRead: stateRead))
             case .guard_(let predicate):
                 if let constant = predicate.booleanConstant {
                     body = constant ? "try emit(updates)" : "return"
@@ -463,7 +469,7 @@ extension NativeSwiftEmitter {
             }
             """)
         }
-        return declarations.joined(separator: "\n") + "\ntry _actionPart0(_Updates(), emit)"
+        return (declarations.joined(separator: "\n") + "\ntry _actionPart0(_Updates(), emit)", unchangedParts)
     }
 
     mutating func updateFunction(_ action: CompiledAction, configurationParameters: String) throws -> DeclSyntax {
@@ -473,12 +479,15 @@ extension NativeSwiftEmitter {
         let parameters = try action.bindings.map {
             "\(binder($0.binder)): \(try swiftType(program.bindingTypes[$0.binder]!))"
         }.joined(separator: ", ")
-        return DeclSyntax(stringLiteral: """
+        let parts = try actionFunctions(action.body)
+        let declaration = DeclSyntax(stringLiteral: """
         private static func _visitUpdates\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
                                                    _ emit: (_Updates) throws -> Void) throws {
-            \(try actionFunctions(action.body))
+            \(parts.source)
         }
         """)
+        try verifyGeneratedUnchangedActionOutput(declaration, parts: parts.unchangedParts)
+        return declaration
     }
 
     mutating func actionDomain(_ binding: CompiledActionBinding, state: String) throws -> String {
@@ -1173,6 +1182,65 @@ func verifyGeneratedUpdateApplyOutput(
             actual: "the generated apply method differs from the checked rule",
             nextSafeAction: "Report this native code generation failure."
         )
+    }
+}
+
+func verifyGeneratedUnchangedActionOutput(
+    _ declaration: DeclSyntax?, parts: [(id: Int, slot: String, stateRead: String)]
+) throws {
+    guard let visitor = declaration?.as(FunctionDeclSyntax.self) else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.action.unchanged", expected: "a generated update visitor",
+            actual: "missing update visitor", nextSafeAction: "Report this native code generation failure."
+        )
+    }
+    let tokens = Array(visitor.tokens(viewMode: .sourceAccurate)).map(\.text)
+    var functionPositions: [String: [Int]] = [:]
+    if tokens.count >= 2 {
+        for index in 0..<(tokens.count - 1) where tokens[index] == "func" {
+            functionPositions[tokens[index + 1], default: []].append(index)
+        }
+    }
+    for part in parts {
+        let name = "_actionPart\(part.id)"
+        let positions = functionPositions[name] ?? []
+        let expected = Parser.parse(source: """
+        func proof() {
+            if let merged = updates.merging(_Updates(\(part.slot): \(part.stateRead))) { try emit(merged) }
+        }
+        """).statements.first?.item.as(FunctionDeclSyntax.self)
+        var opening: Int?
+        if let position = positions.first {
+            for index in (position + 2)..<tokens.count where tokens[index] == "{" {
+                opening = index
+                break
+            }
+        }
+        var closing: Int?
+        if let opening {
+            var depth = 0
+            for index in opening..<tokens.count {
+                if tokens[index] == "{" { depth += 1 }
+                if tokens[index] == "}" { depth -= 1 }
+                if depth == 0 { closing = index; break }
+            }
+        }
+        let actualBody: [String] = if let opening, let closing {
+            Array(tokens[(opening + 1)..<closing])
+        } else { [String]() }
+        let expectedBody: [String] = if let statements = expected?.body?.statements {
+            Array(statements.tokens(viewMode: .sourceAccurate)).map(\.text)
+        } else { [] }
+        guard positions.count == 1, expected != nil, actualBody == expectedBody else {
+            throw CompilationDiagnostic(
+                code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native.action.unchanged.\(part.id)",
+                expected: "merge the complete-state value of \(part.slot) without changing it",
+                actual: "\(name): \(actualBody.prefix(40))",
+                nextSafeAction: "Report this native code generation failure."
+            )
+        }
     }
 }
 
