@@ -1,4 +1,10 @@
 enum ActionNormalization {
+    private enum FrameCheckTask {
+        case visit(ActionExpr)
+        case conjunction
+        case alternative
+    }
+
     private enum CompletionTask {
         case visit([ActionExpr], Set<ActionTarget>)
         case prepend([ActionExpr])
@@ -82,6 +88,64 @@ enum ActionNormalization {
             }
         }
         return results[0]
+    }
+
+    static func verifyComplete(_ action: ActionExpr, variables: [NamedVar], at path: String) throws {
+        var tasks = [FrameCheckTask.visit(action)]
+        var guaranteed: [Set<ActionTarget>?] = []
+        while let task = tasks.popLast() {
+            switch task {
+            case .visit(let expression):
+                switch expression {
+                case .assign(let target, _), .unchanged(let target):
+                    guaranteed.append([target])
+                case .guard_(.value(.bool(false))):
+                    guaranteed.append(nil)
+                case .guard_:
+                    guaranteed.append([])
+                case .existsAction(_, _, let body), .define(_, _, let body):
+                    tasks.append(.visit(body))
+                case .and(let lhs, let rhs):
+                    tasks.append(.conjunction)
+                    tasks.append(.visit(rhs))
+                    tasks.append(.visit(lhs))
+                case .or(let lhs, let rhs), .ifElse(_, let lhs, let rhs):
+                    tasks.append(.alternative)
+                    tasks.append(.visit(rhs))
+                    tasks.append(.visit(lhs))
+                }
+            case .conjunction:
+                let right = guaranteed.removeLast()
+                let left = guaranteed.removeLast()
+                guaranteed.append(left.flatMap { lhs in right.map { lhs.union($0) } })
+            case .alternative:
+                let right = guaranteed.removeLast()
+                let left = guaranteed.removeLast()
+                switch (left, right) {
+                case (let lhs?, let rhs?): guaranteed.append(lhs.intersection(rhs))
+                case (let only?, nil), (nil, let only?): guaranteed.append(only)
+                case (nil, nil): guaranteed.append(nil)
+                }
+            }
+        }
+        guard guaranteed.count == 1 else {
+            throw CompilationDiagnostic(
+                code: .invalidFormalDeclaration, stage: .validation, path: path,
+                expected: "one complete normalized action",
+                actual: "action frame analysis did not produce one result",
+                nextSafeAction: "Report this action-lowering defect; no generated output is safe to use."
+            )
+        }
+        let expected = Set(variables.map(actionTarget(for:)))
+        let missing = expected.subtracting(guaranteed[0] ?? expected)
+        guard missing.isEmpty else {
+            throw CompilationDiagnostic(
+                code: .invalidFormalDeclaration, stage: .validation, path: path,
+                expected: "every enabled action branch assigns or preserves each model variable",
+                actual: "an enabled branch omits \(missing.count) model variable(s)",
+                nextSafeAction: "Report this action-lowering defect; no generated output is safe to use."
+            )
+        }
     }
 
     private static func actionTarget(for variable: NamedVar) -> ActionTarget {

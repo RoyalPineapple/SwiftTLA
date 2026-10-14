@@ -1526,6 +1526,13 @@ That identity neither validates the emitted Swift transition bodies nor proves
 that they agree with the embedded TLA+ text. The output link must inspect or
 verify the emitted code itself.
 
+Before compilation, every normalized action now passes a structural frame
+check: each potentially successful branch must assign or explicitly preserve
+every declared model variable. A focused negative control rejects a branch
+that omits one variable; the same branch passes after frame completion. This
+checks a source-level invariant only. It does not prove that lowering retains
+the frame, or that either emitted output implements it.
+
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
 | `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; every generated `unchanged` part now has a structural read-and-merge check; direct fallible assignments now emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |

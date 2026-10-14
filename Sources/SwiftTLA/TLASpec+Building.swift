@@ -169,6 +169,11 @@ extension TLASpec {
       )
     }
 
+    for action in actions {
+      try ActionNormalization.verifyComplete(action.body, variables: variables,
+        at: "actions.\(action.name).body")
+    }
+
     var lowered = TLASpec(
       name: name,
       variables: variables,
