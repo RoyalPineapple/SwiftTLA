@@ -67,6 +67,24 @@ struct GeneratedAtomicUpdateProofTests {
         }
         let firstField = try #require(bindings["__PROOF_FIRST_FIELD__"])
         let secondField = try #require(bindings["__PROOF_SECOND_FIELD__"])
+        let projectionTokens = try #require(member(named: "__swifttlaFormalProjectionTokens", in: members))
+        let projection = try #require(member(named: "formalProjection", in: members))
+        let wrongProjectionSource = projection.description.replacingOccurrences(
+            of: "snapshot.state.\(secondField)", with: "snapshot.state.\(firstField)")
+        #expect(wrongProjectionSource != projection.description)
+        let wrongProjection = try #require(Parser.parse(source: wrongProjectionSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedFormalProjectionOutput([projectionTokens, wrongProjection], fields: [
+                (formalName: firstField, route: "snapshot.state.\(firstField)",
+                    value: "TLAValue.int(snapshot.state.\(firstField))"),
+                (formalName: secondField, route: "snapshot.state.\(secondField)",
+                    value: "TLAValue.int(snapshot.state.\(firstField))"),
+            ])
+            Issue.record("A projection routed through the wrong state field was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.actual == "the projected value for \(secondField) reads a different snapshot field")
+        }
         let emittedState = try #require(member(named: "State", in: members))
         let wrongStateSource = emittedState.description.replacingOccurrences(
             of: "self.\(secondField) = _value1", with: "self.\(secondField) = _value0")

@@ -1100,6 +1100,14 @@ successor-call-chain output checks still cover only the two-slot fixture.
 Swift's synthesized memberwise initializer and `Hashable` behavior, plus
 generic `Optional`, `Equatable`, `inout`, and `??`, remain stated trust
 boundaries.
+The macro also checks every emitted `formalProjection` declaration against the
+compiled variable order. Its formal tokens must name each complete-state
+variable exactly once, and each value expression must read only that variable's
+public or hidden snapshot field. The function must contain the matching ordered
+projection call without extra statements. A swapped-field mutation is rejected.
+This closes the emitted routing shape, not the semantics of each type-specific
+`formalValue` conversion or the correspondence to the actual rendered TLA+
+variable declaration; those output links remain open.
 `GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
 update merge and apply path for any two distinct state fields, including
 successful accumulation and complete-state replacement.
