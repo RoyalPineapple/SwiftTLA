@@ -47,9 +47,11 @@ arithmetic](https://github.com/tlaplus/tlapm/blob/d8b9747/src/smt/rewrite_arith.
 which needs an independent overflow-safety argument. The ordered-write proof
 now imports a symbolic version of its generated TLA module, tied to the real
 output by a narrowly normalized exact-output test. Its bounds are assumptions
-about the target Swift `Int`, not TLAPS-proved numeric facts. All 1,423
-obligations in the revised `SingleAssignment.tla` passed locally with
-fingerprint reuse disabled; hosted evidence for these inputs is still pending.
+about the target Swift `Int`, not TLAPS-proved numeric facts. The prior
+`SingleAssignment.tla` revision's 1,423 obligations passed locally with
+fingerprint reuse disabled. The later selected-initialization theorem steps
+pass focused TLAPS checks; a complete proof run of this revision and hosted
+evidence remain pending.
 Rendered TLA+ now guards pure addition, subtraction, multiplication, and
 negation trees in an action binding
 and emits ordered overflow-failure predicates with operand tuples. Other
@@ -764,7 +766,8 @@ labeled self-transition; an altered Swift state read fails its token witness.
 `EmittedSkipFrameMatchesSource` and `EmittedSkipInitialAndInvariant` connect the
 emitted module's action, initial state, and declared invariant to this instance.
 The focused Swift test passes locally, and pinned TLAPS 1.6.0-pre with arm64
-Z3 4.15.4 proved all 1,430 obligations in `SingleAssignment.tla` locally.
+Z3 4.15.4 proved all 1,430 obligations in an earlier `SingleAssignment.tla`
+revision locally.
 Hosted evidence remains pending. The one-variable output witness does not
 prove that every emitted state type or action composition instantiates the
 generic rule; Swift compiler/runtime interpretation remains trusted.
@@ -896,10 +899,14 @@ additionally proves that unique initialization targets and domains determined
 only by earlier targets make each step stable under replacing its own target.
 `StableInitialHistoryMatchesConjunction` then proves that every prefix of the
 ordered membership history equals the corresponding TLA+ conjunction, including
-empty domains. The compiler orders initializers by detected dependencies, but
+empty domains. `OrderedEnumerationMatchesSelectedConjunction` composes those
+results with an arbitrary total Boolean selected-initial-state predicate;
+`ValidOrderedInitializationsHaveSelectedOutcome` proves that a corresponding
+history exists. The compiler orders initializers by detected dependencies, but
 these theorems do not yet prove that dependency detection is complete or that
 the actual initializer expressions, generated Swift loops, and rendered `Init`
-satisfy their premises for every accepted `#spec`.
+satisfy their premises for every accepted `#spec`. Evaluation failures are not
+modeled by these set-equality theorems.
 
 `DependentInitializationOutputProofModel.tla` is an exact generated module for
 a `#spec` whose second variable's candidate set depends on the first variable's
@@ -1163,11 +1170,11 @@ invariants, temporal behavior, and a complete-state relation. The indexed
 guarded-history theorem also links the second action to the scheduled source
 history. A direct theorem about TLA+'s `ENABLED` remains unavailable in the
 [pinned TLAPS proof system](https://proofs.tlapl.us/doc/web/content/Documentation/Unsupported_features.html).
-The current local `--nofp` run proved all 1,423 obligations in
-`SingleAssignment.tla`. `SmallAdditionFitsSwiftInt` supplies the ordered
+The earlier local `--nofp` run proved all 1,423 obligations in that
+`SingleAssignment.tla` revision. `SmallAdditionFitsSwiftInt` supplies the ordered
 bound fact; an explicit nonempty-candidate witness closes singleton integer
 selection; exposing the existing `OrderedAddDefined` definition closes
-guarded-history function typing. This proves this module's stated obligations
+guarded-history function typing. That run proved that revision's obligations
 under its declared assumptions, not universal preservation of the compiler's
 actual Swift and TLA+/PlusCal outputs. Hosted proof evidence is still pending.
 Trying `BY Isa` for the two bound steps made this pinned TLAPS build stack

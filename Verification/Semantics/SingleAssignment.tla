@@ -1154,6 +1154,58 @@ THEOREM StableInitialHistoryMatchesConjunction ==
     <1>. QED
         BY <1>3, SMT DEF P
 
+SelectedInitialStates(states, predicate) ==
+    {state \in states : predicate[state]}
+SelectedConjunctiveInit(plans, predicate) ==
+    {state \in ConjunctiveInitialPrefix(plans, Len(plans)) : predicate[state]}
+
+THEOREM OrderedEnumerationMatchesSelectedConjunction ==
+    ASSUME NEW plans \in Seq(InitializationPlans),
+           NEW enumerated \in [0..Len(plans) -> SUBSET States],
+           NEW membership \in [0..Len(plans) -> SUBSET States],
+           NEW predicate \in [States -> BOOLEAN],
+           ValidInitializationPlans(plans),
+           UniqueInitialKeys(plans),
+           PriorOnlyInitialDomains(plans),
+           EnumeratedInitialHistory(States, plans, enumerated),
+           MembershipInitialHistory(States, plans, membership)
+    PROVE SelectedInitialStates(enumerated[Len(plans)], predicate)
+        = SelectedConjunctiveInit(plans, predicate)
+    PROOF
+    <1>1. \A index \in 0..Len(plans) :
+            enumerated[index] = membership[index]
+        BY OrderedInitialHistoriesAgree DEF ValidInitializationPlans
+    <1>2. enumerated[Len(plans)] = membership[Len(plans)]
+        BY <1>1, SMT
+    <1>3. StableInitializationPlan(plans)
+        BY DependencyOrderedInitializationIsStable
+    <1>4. membership[Len(plans)] = ConjunctiveInitialPrefix(plans, Len(plans))
+        BY <1>3, StableInitialHistoryMatchesConjunction, SMT
+    <1>. QED
+        BY <1>2, <1>4, SMT DEF SelectedInitialStates,
+            SelectedConjunctiveInit
+
+THEOREM ValidOrderedInitializationsHaveSelectedOutcome ==
+    ASSUME NEW plans \in Seq(InitializationPlans),
+           NEW predicate \in [States -> BOOLEAN],
+           ValidInitializationPlans(plans),
+           UniqueInitialKeys(plans),
+           PriorOnlyInitialDomains(plans)
+    PROVE \E history \in [0..Len(plans) -> SUBSET States] :
+        /\ EnumeratedInitialHistory(States, plans, history)
+        /\ SelectedInitialStates(history[Len(plans)], predicate)
+           = SelectedConjunctiveInit(plans, predicate)
+    PROOF
+    <1>1. PICK history \in [0..Len(plans) -> SUBSET States] :
+                EnumeratedInitialHistory(States, plans, history)
+                /\ MembershipInitialHistory(States, plans, history)
+        BY OrderedInitialHistoriesExist, SMT DEF InitialHistoriesExist
+    <1>2. SelectedInitialStates(history[Len(plans)], predicate)
+            = SelectedConjunctiveInit(plans, predicate)
+        BY <1>1, OrderedEnumerationMatchesSelectedConjunction
+    <1>. QED
+        BY <1>1, <1>2
+
 DependentSourceInit ==
     /\ dependentPC = "finish"
     /\ ((dependentSeed = 0 /\ dependentChoice = 0)
