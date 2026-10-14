@@ -938,12 +938,19 @@ iterates the candidate sequence named by the compiled plan; an altered
 iterable failed the focused regression before this check and is now rejected.
 For visible member-of initializers, it also verifies that the parsed
 `_initialStates` body retains the exact candidate-producing assignment planned
-by the emitter. The dependent-choice fixture rejects a changed candidate set
-as a negative control. These are syntactic output links: the candidate source
-is derived from the same expression emitter, so this does not independently
-prove that candidate production, each emitted expression, the selected-state
-guard, or failures have the source meaning. Variable-free action modules and
-initialization failures still need separate semantics and output links.
+by the emitter. The dependent-choice fixture independently states the expected
+Swift conditional set and integer ordering, checks that assignment in the
+actual output, and rejects a changed candidate set as a negative control. This
+closes the candidate-expression output check for this fixture, not the general
+rule: the production check still derives its expected source from the same
+expression emitter. The same fixture checks that the actual generated machine
+accepts its three valid selected initial states and rejects adjacent invalid
+ones. That finite test is not a proof of the selected-state guard for every
+value. These remain syntactic and finite output links; they do not prove the
+Swift standard-library operations, every emitted expression, the general
+selected-state guard, or initialization failures have the source meaning.
+Variable-free action modules and initialization failures still need separate
+semantics and output links.
 
 The TLA renderer prints action conjunction as `/\`. TLC must solve primed
 assignments as an action relation; making one such assignment the condition of

@@ -11,6 +11,18 @@ struct DependentInitializationOutputProofTests {
     func emittedInitialStates() throws {
         let machines = try DependentInitializationOutputProofModel.initialMachines()
         #expect(Set(machines.map { [$0.state.seed, $0.state.choice] }) == [[0, 0], [1, 0], [1, 1]])
+        for seed in [-1, 0, 1, 2] {
+            for choice in [-1, 0, 1, 2] {
+                let selected = DependentInitializationOutputProofModel.State(seed: seed, choice: choice)
+                if (seed == 0 && choice == 0) || (seed == 1 && (choice == 0 || choice == 1)) {
+                    #expect(try DependentInitializationOutputProofModel.makeMachine(selected).state == selected)
+                } else {
+                    #expect(throws: GeneratedMachineError.invalidInitialState) {
+                        try DependentInitializationOutputProofModel.makeMachine(selected)
+                    }
+                }
+            }
+        }
 
         let rendered = try DependentInitializationOutputProofModel.render().tlaBundle.root.tla
         let proofInput = URL(fileURLWithPath: #filePath)
@@ -72,15 +84,11 @@ struct DependentInitializationOutputProofTests {
             $0.declaration.name == "choice"
         })
         let choiceName = emitter.variable(choice.id)
-        let choiceInitialization = try #require(model.program.behavior.initializations.first {
-            $0.variable == choice.id
+        let expectedChoiceSource = """
+        ((\(name) == 0) ? Set<Int>([0]) : Set<Int>([0, 1])).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
+        return lhs < rhs
         })
-        guard case .memberOf(let choiceDomain) = choiceInitialization.initialization else {
-            Issue.record("choice must have a dependent candidate domain")
-            return
-        }
-        let choiceType = try #require(model.program.variableTypes[choice.id])
-        let expectedChoiceSource = "\(try emitter.expression(choiceDomain, state: "")).sorted(by: \(try emitter.ordering(choiceType)))"
+        """
         func verify(_ declaration: DeclSyntax) throws {
             try verifyGeneratedInitialBindings(declaration, expected: expected,
                 expectedLoops: expectedLoops,
