@@ -339,6 +339,15 @@ extension NativeSwiftEmitter {
             return Self(execution: execution\(appendedArguments))
         }
         """)
+        try verifyGeneratedInitialBindings(
+            declarations.first { $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates" },
+            expected: program.behavior.initializations.map { initialization in
+                let name = variable(initialization.variable)
+                switch initialization.initialization {
+                case .value: return "let \(name)"
+                case .memberOf: return "for \(name)"
+                }
+            })
         if program.behavior.initializations.contains(where: { initialization in
             guard case .memberOf(let expression) = initialization.initialization else { return false }
             if case .randomSubset = expression.computation.operation { return true }
@@ -965,6 +974,30 @@ extension NativeSwiftEmitter {
         return declarations
     }
 
+}
+
+func verifyGeneratedInitialBindings(_ declaration: DeclSyntax?, expected: [String]) throws {
+    guard let initialStates = declaration?.as(FunctionDeclSyntax.self) else {
+        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native._initialStates.bindings", expected: expected.joined(separator: ", "),
+            actual: "missing _initialStates function",
+            nextSafeAction: "Report this native code generation failure.")
+    }
+    let expectedBindings = Set(expected)
+    let tokens = Array(initialStates.tokens(viewMode: .sourceAccurate)).map(\.text)
+    var actual: [String] = []
+    for index in 0..<max(0, tokens.count - 1) where tokens[index] == "let" || tokens[index] == "for" {
+        let binding = "\(tokens[index]) \(tokens[index + 1])"
+        if expectedBindings.contains(binding) {
+            actual.append(binding)
+        }
+    }
+    guard actual == expected else {
+        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native._initialStates.bindings", expected: expected.joined(separator: ", "),
+            actual: "\(actual.joined(separator: ", ")) (source tokens: \(tokens.prefix(80).joined(separator: " ")))",
+            nextSafeAction: "Report this native code generation failure.")
+    }
 }
 
 func verifyGeneratedSnapshotOutput(
