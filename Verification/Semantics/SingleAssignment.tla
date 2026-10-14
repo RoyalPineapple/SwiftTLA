@@ -1,6 +1,8 @@
 ----------------------- MODULE SingleAssignment -----------------------
 EXTENDS TLAPS, NaturalsInduction, SequenceTheorems, GeneratedAtomicCopyProofModel,
         Integers
+VARIABLE skipFrameValue
+GeneratedSkipFrame == INSTANCE GeneratedSkipFrameModel WITH value <- skipFrameValue
 VARIABLE choiceSelected
 Choice == INSTANCE GeneratedGuardedChoiceProofModel WITH selected <- choiceSelected
 IntegerChoice == INSTANCE IncreasingSelection WITH position <- choiceSelected
@@ -822,6 +824,27 @@ THEOREM CompleteDeltaUpdate ==
             \A delta \in [keys -> Values] :
                 (t = ApplyDelta(s, keys, delta)) <=> RenderedDelta(s, t, keys, delta)
     BY SMT DEF ApplyDelta, RenderedDelta, States
+
+SourceSkip(source, target) == target = source
+CompiledSkip(source, target) == target = ApplyDelta(source, Vars, source)
+RenderedSkip(source, target) == RenderedDelta(source, target, Vars, source)
+
+THEOREM SkipPreservesCompleteState ==
+    \A source, target \in States :
+        /\ (SourceSkip(source, target) <=> CompiledSkip(source, target))
+        /\ (CompiledSkip(source, target) <=> RenderedSkip(source, target))
+    BY CompleteDeltaUpdate, SMT
+        DEF SourceSkip, CompiledSkip, RenderedSkip, ApplyDelta, RenderedDelta,
+            States
+
+THEOREM EmittedSkipFrameMatchesSource ==
+    GeneratedSkipFrame!stay <=> UNCHANGED skipFrameValue
+    BY SMT DEF GeneratedSkipFrame!stay
+
+THEOREM EmittedSkipInitialAndInvariant ==
+    /\ (GeneratedSkipFrame!Init <=> skipFrameValue = 0)
+    /\ (GeneratedSkipFrame!Preserved <=> skipFrameValue = 0)
+    BY SMT DEF GeneratedSkipFrame!Init, GeneratedSkipFrame!Preserved
 
 EnumeratedInitialStates(prior, key, candidates) ==
     {[prior EXCEPT ![key] = candidates[index]] : index \in 1..Len(candidates)}
