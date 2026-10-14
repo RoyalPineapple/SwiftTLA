@@ -899,7 +899,12 @@ additionally proves that unique initialization targets and domains determined
 only by earlier targets make each step stable under replacing its own target.
 `SoundOrderedDependenciesArePriorOnly` derives the earlier-target condition
 from sound dependency sets placed before each use. It does not establish that
-the compiler's dependency scan is sound or link its chosen order to the proof.
+the compiler's dependency scan is sound. After resolution, the compiler now
+independently collects state reads through resolved function calls to a fixed
+point and rejects an initializer plan that reads a variable not yet bound.
+A reordered-plan negative control exercises this check through a formal call.
+This checks the actual compiled order against the resolved read analysis; the
+analysis itself still needs a soundness proof against expression evaluation.
 `SoundOrderedInitializationIsStable` composes that condition with the
 unique-target stability rule.
 `StableInitialHistoryMatchesConjunction` then proves that every prefix of the
