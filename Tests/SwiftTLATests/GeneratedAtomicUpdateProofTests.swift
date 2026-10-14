@@ -70,6 +70,30 @@ struct GeneratedAtomicUpdateProofTests {
         ]
         try verifyGeneratedActionWriteOutput(emittedUpdate, action: compiledAction.body,
             parts: expectedWrites)
+        let wrongChildSource = emittedUpdate.description.replacingOccurrences(
+            of: "try _actionPart3(", with: "try _actionPart5(")
+        #expect(wrongChildSource != emittedUpdate.description)
+        let wrongChild = try #require(Parser.parse(source: wrongChildSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongChild, action: compiledAction.body,
+                parts: expectedWrites)
+            Issue.record("A generated action called the wrong child part")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.part.2")
+        }
+        let missingEntrySource = emittedUpdate.description.replacingOccurrences(
+            of: "try _actionPart0(_Updates(), emit)", with: "try emit(_Updates())")
+        #expect(missingEntrySource != emittedUpdate.description)
+        let missingEntry = try #require(Parser.parse(source: missingEntrySource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(missingEntry, action: compiledAction.body,
+                parts: expectedWrites)
+            Issue.record("A generated action never entered its root part")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.entry")
+        }
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedActionWriteOutput(wrongWrite, action: compiledAction.body,
                 parts: expectedWrites)

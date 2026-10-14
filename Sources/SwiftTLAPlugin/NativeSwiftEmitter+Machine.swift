@@ -1208,27 +1208,110 @@ func verifyGeneratedActionWriteOutput(
     _ declaration: DeclSyntax?, action: CompiledActionExpr,
     parts: [(id: Int, slot: String, value: String)]
 ) throws {
-    guard let visitor = declaration?.as(FunctionDeclSyntax.self) else {
+    guard let visitor = declaration?.as(FunctionDeclSyntax.self),
+          visitor.body != nil else {
         throw CompilationDiagnostic(
             code: .unsupportedGeneratedValueShape, stage: .validation,
             path: "native.action.write", expected: "a generated update visitor",
             actual: "missing update visitor", nextSafeAction: "Report this native code generation failure."
         )
     }
-    let tokens = Array(visitor.tokens(viewMode: .sourceAccurate)).map(\.text)
-    var pending = [action]
+    func invalid(_ path: String, _ expected: String, _ actual: String) -> CompilationDiagnostic {
+        CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation, path: path,
+            expected: expected, actual: actual,
+            nextSafeAction: "Report this native code generation failure."
+        )
+    }
+    let visitorTokens = Array(visitor.tokens(viewMode: .sourceAccurate)).map(\.text)
+    var tokenDepths: [Int] = []
+    tokenDepths.reserveCapacity(visitorTokens.count)
+    var depth = 0
+    for token in visitorTokens {
+        tokenDepths.append(depth)
+        if token == "{" { depth += 1 }
+        if token == "}" { depth -= 1 }
+    }
+    var bodies: [Int: [String]] = [:]
+    for index in visitorTokens.indices where visitorTokens[index] == "func" && tokenDepths[index] == 1 {
+        let nameIndex = index + 1
+        guard nameIndex < visitorTokens.count else { continue }
+        let name = visitorTokens[nameIndex]
+        guard name.hasPrefix("_actionPart") else { continue }
+        guard nameIndex + 1 < visitorTokens.count,
+              let id = Int(name.dropFirst("_actionPart".count)), bodies[id] == nil,
+              let open = visitorTokens[(nameIndex + 1)...].firstIndex(of: "{") else {
+            throw invalid("native.action.parts", "one unique local function per action node", name)
+        }
+        var depth = 1
+        var close = open + 1
+        while close < visitorTokens.count && depth > 0 {
+            if visitorTokens[close] == "{" { depth += 1 }
+            if visitorTokens[close] == "}" { depth -= 1 }
+            close += 1
+        }
+        guard depth == 0 else {
+            throw invalid("native.action.parts", "a closed body for \(name)", "missing closing brace")
+        }
+        bodies[id] = Array(visitorTokens[(open + 1)..<(close - 1)])
+    }
+    let expectedEntry = ["try", "_actionPart0", "(", "_Updates", "(", ")", ",", "emit", ")"]
+    let rootCalls = visitorTokens.indices.filter { index in
+        tokenDepths[index] == 1 && index + expectedEntry.count <= visitorTokens.count &&
+            Array(visitorTokens[index..<(index + expectedEntry.count)]) == expectedEntry
+    }
+    guard rootCalls.count == 1 else {
+        throw invalid("native.action.entry", "one call to the root action part",
+            "found \(rootCalls.count) root calls")
+    }
+
+    var pending: [(id: Int, node: CompiledActionExpr)] = [(0, action)]
+    var expectedChildren: [Int: [Int]] = [:]
+    var nextID = 1
     var expectedWriteCount = 0
-    while let node = pending.popLast() {
+    while let (id, node) = pending.popLast() {
         switch node {
         case .assign, .unchanged:
             expectedWriteCount += 1
+            expectedChildren[id] = []
         case .guard_:
-            break
+            expectedChildren[id] = []
         case .existsAction(_, _, let body), .define(_, _, let body):
-            pending.append(body)
-        case .ifElse(_, let yes, let no), .and(let yes, let no), .or(let yes, let no):
-            pending.append(yes)
-            pending.append(no)
+            expectedChildren[id] = [nextID]
+            pending.append((nextID, body))
+            nextID += 1
+        case .ifElse(_, let yes, let no):
+            expectedChildren[id] = [nextID, nextID + 1]
+            pending.append((nextID, yes))
+            pending.append((nextID + 1, no))
+            nextID += 2
+        case .and(let lhs, let rhs):
+            expectedChildren[id] = [nextID + 1, nextID]
+            pending.append((nextID, rhs))
+            pending.append((nextID + 1, lhs))
+            nextID += 2
+        case .or(let lhs, let rhs):
+            expectedChildren[id] = [nextID, nextID + 1]
+            pending.append((nextID, rhs))
+            pending.append((nextID + 1, lhs))
+            nextID += 2
+        }
+    }
+    guard bodies.count == expectedChildren.count else {
+        throw invalid("native.action.parts", "one generated function per compiled action node",
+            "found \(bodies.count) functions for \(expectedChildren.count) nodes")
+    }
+    for (id, children) in expectedChildren {
+        guard let tokens = bodies[id] else {
+            throw invalid("native.action.part.\(id)", "a generated function for the compiled node", "missing")
+        }
+        let calls = tokens.enumerated().compactMap { index, token -> Int? in
+            guard index + 1 < tokens.count, tokens[index + 1] == "(",
+                  token.hasPrefix("_actionPart") else { return nil }
+            return Int(token.dropFirst("_actionPart".count))
+        }
+        guard calls == children else {
+            throw invalid("native.action.part.\(id)", "ordered child calls \(children)", "child calls \(calls)")
         }
     }
     guard parts.count == expectedWriteCount, Set(parts.map { $0.id }).count == parts.count else {
@@ -1239,43 +1322,18 @@ func verifyGeneratedActionWriteOutput(
             nextSafeAction: "Report this native code generation failure."
         )
     }
-    var functionPositions: [String: [Int]] = [:]
-    if tokens.count >= 2 {
-        for index in 0..<(tokens.count - 1) where tokens[index] == "func" {
-            functionPositions[tokens[index + 1], default: []].append(index)
-        }
-    }
     for part in parts {
         let name = "_actionPart\(part.id)"
-        let positions = functionPositions[name] ?? []
         let expected = Parser.parse(source: """
         func proof() {
             if let merged = updates.merging(_Updates(\(part.slot): \(part.value))) { try emit(merged) }
         }
         """).statements.first?.item.as(FunctionDeclSyntax.self)
-        var opening: Int?
-        if let position = positions.first {
-            for index in (position + 2)..<tokens.count where tokens[index] == "{" {
-                opening = index
-                break
-            }
-        }
-        var closing: Int?
-        if let opening {
-            var depth = 0
-            for index in opening..<tokens.count {
-                if tokens[index] == "{" { depth += 1 }
-                if tokens[index] == "}" { depth -= 1 }
-                if depth == 0 { closing = index; break }
-            }
-        }
-        let actualBody: [String] = if let opening, let closing {
-            Array(tokens[(opening + 1)..<closing])
-        } else { [String]() }
+        let actualBody = bodies[part.id] ?? []
         let expectedBody: [String] = if let statements = expected?.body?.statements {
             Array(statements.tokens(viewMode: .sourceAccurate)).map(\.text)
         } else { [] }
-        guard positions.count == 1, expected != nil, actualBody == expectedBody else {
+        guard expected != nil, actualBody == expectedBody else {
             throw CompilationDiagnostic(
                 code: .unsupportedGeneratedValueShape, stage: .validation,
                 path: "native.action.write.\(part.id)",

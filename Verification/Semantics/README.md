@@ -1543,15 +1543,19 @@ the frame, or that either emitted output implements it.
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
 | `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule. |
 
-The generated Swift write checker now counts `assign` and `unchanged` nodes
-independently in the compiled action tree, requires one uniquely identified
-write part per node, and parses each actual visitor body for the target slot,
-compatible-update merge, and emission. For `unchanged`, the expected state
-read comes from the compiled field mapping rather than the emitter's read
-helper. A wrong-target mutation and missing-write inventory are rejected; the
-unmodified generated visitor passes. Assignment expression rendering, parent
-call wiring and order, TLA+ output, and Swift execution of the checked syntax
-remain separate obligations. This is not a general action-output theorem.
+The generated Swift action checker now walks every compiled action node and
+checks the actual emitted visitor tokens for exactly one corresponding local
+function, the root invocation, and the ordered child calls. It also counts
+`assign` and `unchanged` nodes independently, and checks each complete write
+body for its target slot, compatible-update merge, and emission. For
+`unchanged`, the expected state read comes from the compiled field mapping
+rather than the emitter's read helper. Wrong-target, missing-write, and
+wrong-child mutations are rejected; the unmodified generated visitor passes.
+This closes the structural call-graph and write-body output link for accepted
+action trees. It does not establish that the checked Swift syntax executes
+with the abstract rule's branch, binding, or failure semantics, nor that
+assignment expressions or the independent TLA+ output agree. Those remain
+separate obligations; this is not yet a general action-output theorem.
 
 The direct compiled `assign` renderer previously omitted both the value's
 definedness guard and its choice/arithmetic failure predicates. A focused
