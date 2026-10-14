@@ -269,6 +269,49 @@ struct CompiledSpecificationRendererTests {
         }
     }
 
+    @Test("Direct assignments guard fallible values and report their failures")
+    func guardsFallibleDirectAssignment() throws {
+        let compilation = try TLASpec(name: "DirectAssignment", variables: [
+            .init(name: "result", initial: .int(0))
+        ], actions: [], invariants: []).compile()
+        let variable = try #require(compilation.layout.variables.first?.id)
+        let binder = BinderID(ordinal: 0)
+        let renderer = CompiledTLARenderer(moduleName: "DirectAssignment", reservedNames: [],
+            layout: compilation.layout, bindings: .init(binders: [binder: "candidate"]),
+            operators: compilation.semantics.operators, actions: [], functions: [])
+        let empty = CompiledExpression(operation: .value(.set([])), resultType: .set(.int), children: [])
+        let yes = CompiledExpression(operation: .value(.boolean(true)), resultType: .bool, children: [])
+        let choice = CompiledExpression(operation: .choose(binder), resultType: .int, children: [empty, yes])
+        let selected = CompiledActionExpr.assign(variable, choice)
+        let selectedAction = try renderer.action(selected)
+        #expect(selectedAction.hasPrefix("(IF "))
+        #expect(selectedAction.contains(#"\E candidate \in {} : TRUE"#))
+        #expect(selectedAction.contains("result' = (LET __DirectAssignment_choiceCandidates"))
+        #expect(selectedAction.contains("CHOOSE candidate"))
+        #expect(selectedAction.hasSuffix("ELSE FALSE)"))
+        #expect(try renderer.choiceFailure(selected) == #"~((\E candidate \in {} : TRUE))"#)
+
+        let specification = TLASpec(name: "DirectAssignmentOutput", variables: [
+            .init(name: "result", initial: .int(0))
+        ], actions: [
+            .init(name: "pick", body: .assign(.named("result"),
+                .choose(.setLiteral([.int(1)]), "candidate", .bool(false))))
+        ], invariants: [])
+        let emitted = try specification.compile().render()
+        #expect(emitted.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        #expect(emitted.tlaBundle.tla.contains("pick == (IF "))
+        #expect(emitted.tlaBundle.tla.contains("__SwiftTLAChoiceFailure0 =="))
+
+        let zero = CompiledExpression(operation: .value(.integer(0)), resultType: .int, children: [])
+        let one = CompiledExpression(operation: .value(.integer(1)), resultType: .int, children: [])
+        let quotient = CompiledExpression(operation: .divide, resultType: .int, children: [one, zero])
+        let divided = CompiledActionExpr.assign(variable, quotient)
+        #expect(try renderer.action(divided).contains("ELSE FALSE"))
+        #expect(try renderer.evaluationFailures(divided).contains {
+            if case .divisionByZero = $0.kind { true } else { false }
+        })
+    }
+
     @Test("Sibling lexical scopes stay separate in rendered state and action expressions")
     func delimitsSiblingLexicalScopes() throws {
         let compiled = try TLASpec(name: "LexicalScopes", variables: [], actions: [], invariants: []).compile()

@@ -195,7 +195,9 @@ struct CompiledTLARenderer {
             case .expression(let action):
                 switch action {
                 case .assign(let variable, let value):
-                    parts.append("\(try variableName(variable))' = \(try state(value))")
+                    let assignment = "\(try variableName(variable))' = \(try state(value))"
+                    let defined = try evaluationDefined(value)
+                    parts.append(defined.map { "(IF \($0) THEN \(assignment) ELSE FALSE)" } ?? assignment)
                 case .unchanged(let variable):
                     parts.append("UNCHANGED \(try variableName(variable))")
                 case .guard_(let condition):
@@ -239,6 +241,8 @@ struct CompiledTLARenderer {
 
     func choiceFailure(_ action: CompiledActionExpr) throws -> String? {
         switch action {
+        case .assign(_, let value):
+            return try expressionChoiceFailure(value)
         case .existsAction(let binder, let domain, let body):
             let domainFailure = try expressionChoiceFailure(domain)
             guard let bodyFailure = try choiceFailure(body) else { return domainFailure }
@@ -323,6 +327,8 @@ struct CompiledTLARenderer {
 
     func evaluationFailures(_ action: CompiledActionExpr) throws -> [RenderedEvaluationFailure] {
         switch action {
+        case .assign(_, let value):
+            return try expressionEvaluationFailures(value)
         case .existsAction(let binder, let domain, let body):
             let domainFailures = try expressionEvaluationFailures(domain)
             let bodyFailures = try evaluationFailures(body)

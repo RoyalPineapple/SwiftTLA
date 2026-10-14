@@ -1880,6 +1880,20 @@ THEOREM CompleteStateUpdate ==
         <=> RenderedStep(s, t, guard, value)
     BY ForwardUpdate, ReverseUpdate
 
+THEOREM DefinedAssignmentPreservesStepAndFailure ==
+    ASSUME NEW sourceDefined \in [States -> BOOLEAN],
+           NEW renderedDefined \in [States -> BOOLEAN],
+           NEW sourceValue \in [States -> Values],
+           NEW renderedValue \in [States -> Values],
+           \A state \in States :
+               /\ sourceDefined[state] = renderedDefined[state]
+               /\ (sourceDefined[state] => sourceValue[state] = renderedValue[state])
+    PROVE \A source, target \in States :
+              /\ (NativeStep(source, target, sourceDefined[source], sourceValue[source])
+                  <=> RenderedStep(source, target, renderedDefined[source], renderedValue[source]))
+              /\ (~sourceDefined[source] <=> ~renderedDefined[source])
+    BY CompleteStateUpdate, SMT DEF NativeStep, RenderedStep, States
+
 THEOREM EnabledUpdate ==
     \A s \in States, value \in Values, guard \in BOOLEAN :
         (\E t \in States : NativeStep(s, t, guard, value))
