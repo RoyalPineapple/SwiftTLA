@@ -71,6 +71,20 @@ struct RenderedEvaluationFailure {
     let kind: RenderedEvaluationFailureKind
 }
 
+private enum FiniteCandidateMembers {
+    case unavailable
+    case values([CompiledValue])
+
+    var values: [CompiledValue]? {
+        if case .values(let members) = self { return members }
+        return nil
+    }
+}
+
+private final class FiniteCandidateCache {
+    var members: [CompiledExpression: FiniteCandidateMembers] = [:]
+}
+
 struct CompiledTLARenderer {
     let moduleName: String
     let reservedNames: Set<String>
@@ -82,6 +96,7 @@ struct CompiledTLARenderer {
     var enums: CompiledEnums = .init()
     var moduleNames: [String: String] = [:]
     var parameterDomains: [BinderID: CompiledExpression] = [:]
+    private let finiteCandidateCache = FiniteCandidateCache()
 
     func assumptions(_ behavior: CompiledBehavior) throws -> [String] {
         var result = try layout.parameters.map { parameter in
@@ -1219,8 +1234,44 @@ struct CompiledTLARenderer {
     }
 
     private func parameterChoiceMembers(_ domain: CompiledExpression) -> [CompiledValue]? {
-        guard case .boundValue(let binder) = domain.computation.operation,
-              let parameterDomain = parameterDomains[binder] else { return nil }
+        if let cached = finiteCandidateCache.members[domain] { return cached.values }
+        let members = computedParameterChoiceMembers(domain)
+        finiteCandidateCache.members[domain] = members.map(FiniteCandidateMembers.values) ?? .unavailable
+        return members
+    }
+
+    private func computedParameterChoiceMembers(_ domain: CompiledExpression) -> [CompiledValue]? {
+        if case .boundValue(let binder) = domain.computation.operation {
+            return directParameterChoiceMembers(binder)
+        }
+        guard case .domain = domain.computation.operation,
+              domain.computation.children.count == 1,
+              let selected = domain.computation.children.first?.computation,
+              case .tupleDynamicAccess = selected.operation,
+              selected.children.count == 2,
+              case .boundValue(let parameter) = selected.children[0].computation.operation,
+              case .value(.integer) = selected.children[1].computation.operation,
+              let parameterDomain = parameterDomains[parameter] else { return nil }
+        // shortcut: rank tuple-selected keys only for a singleton literal parameter; prove wider projections before accepting them.
+        switch parameterDomain.computation.operation {
+        case .setLiteral:
+            guard parameterDomain.computation.children.count == 1 else { return nil }
+        case .value(.set(let values)):
+            guard values.count == 1 else { return nil }
+        default: return nil
+        }
+        let parameterEvaluator = CompiledEvaluator(variableValues: [:], operators: operators)
+        guard case .set(let allowedValues) = try? parameterEvaluator.evaluate(parameterDomain),
+              let allowedValue = allowedValues.first, allowedValues.count == 1 else { return nil }
+        let evaluator = CompiledEvaluator(variableValues: [:], operators: operators,
+            bindings: CompiledBindings().binding(allowedValue, to: parameter))
+        guard case .set(let members) = try? evaluator.evaluate(domain) else { return nil }
+        guard !members.isEmpty, members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }
+        return members.sorted()
+    }
+
+    private func directParameterChoiceMembers(_ binder: BinderID) -> [CompiledValue]? {
+        guard let parameterDomain = parameterDomains[binder] else { return nil }
         let allowedValues: [CompiledValue]
         switch parameterDomain.computation.operation {
         case .value(.set(let values)):
@@ -1228,8 +1279,7 @@ struct CompiledTLARenderer {
         case .setLiteral:
             allowedValues = parameterDomain.computation.children.compactMap(closedChoiceMember)
             guard allowedValues.count == parameterDomain.computation.children.count else { return nil }
-        default:
-            return nil
+        default: return nil
         }
         var members: Set<CompiledValue> = []
         for allowedValue in allowedValues {

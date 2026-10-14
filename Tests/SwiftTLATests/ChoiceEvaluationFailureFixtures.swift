@@ -221,6 +221,32 @@ struct ParameterizedModelValueCandidateFailuresModel: Sendable {
 }
 
 @TLAModel
+struct ParameterDerivedDictionaryKeyFailuresModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("ParameterDerivedDictionaryKeyFailuresModel") { scope in
+            let tables = scope.parameter(as: [[String: Int]].self,
+                in: Set<[[String: Int]]>([[["zed": 1, "alpha": 2]]]))
+            let divisor = scope.sharedVar(initial: 0)
+            let modulus = scope.sharedVar(initial: -1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                With(tables[1].keys) { candidate in
+                    Assign(result, to: If(candidate == "alpha",
+                        then: 1 / divisor,
+                        else: 1 % modulus))
+                }
+            }
+            let configured = Validation {
+                Bind(tables, to: [["zed": 1, "alpha": 2]])
+            }
+            configured
+        }
+    }
+}
+
+@TLAModel
 struct StateDependentStringCandidateFailuresModel: Sendable {
     enum Step: String, CaseIterable { case pick }
 

@@ -1444,6 +1444,14 @@ their finite subsets, but the Swift emitter, parameter-domain extraction, and
 actual TLC behavior remain trusted or independently tested links. Arbitrary
 state-held sets without a renderable order still fail closed.
 
+A `With` over dictionary keys selected from a singleton literal tuple parameter
+also has a finite rank. The generated Swift machine sorts the keys, and a
+focused output test checks its first failure against the ranks in the actual
+generated TLA+. The registered DieHardest cases render with this rule. This
+does not prove general parameter-expression evaluation or TLC parity for the
+new output. A derived domain with multiple possible parameter values or a
+state-dependent domain still fails closed when no other renderable order exists.
+
 The generated conditional arithmetic regressions check both branch selection
 and an arithmetic condition that can overflow before either branch runs.
 Native failure leaves state unchanged; generated TLA+ disables the action and

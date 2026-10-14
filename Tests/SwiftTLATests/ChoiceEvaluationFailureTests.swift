@@ -151,6 +151,27 @@ struct ChoiceEvaluationFailureTests {
         #expect(failures.allSatisfy { $0.contains("= a -> 0") && $0.contains("= z -> 1") })
     }
 
+    @Test("Finite parameter-derived dictionary keys preserve the first failure across generated outputs")
+    func parameterDerivedDictionaryKeyFailureOrder() throws {
+        let scenario = try #require(ParameterDerivedDictionaryKeyFailuresModel.validationScenarios().first)
+        let machine = try #require(scenario.initialMachines().first)
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+
+        let rendered = try scenario.render()
+        let failures = rendered.tlaBundle.root.tla.split(separator: "\n").filter {
+            $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==")
+                || $0.hasPrefix("__SwiftTLANegativeModuloDivisorFailure0 ==")
+        }
+        #expect(failures.count == 2)
+        #expect(failures.allSatisfy {
+            $0.contains("__SwiftTLAFirstFailingCandidate")
+                && $0.contains("= \"alpha\" -> 0")
+                && $0.contains("= \"zed\" -> 1")
+        })
+    }
+
     @Test("Unranked state-dependent string candidates cannot claim ordered TLA failure parity")
     func stateDependentStringCandidateFailureOrder() throws {
         let machine = try StateDependentStringCandidateFailuresModel.makeMachine()
