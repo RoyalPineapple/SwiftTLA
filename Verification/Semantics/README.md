@@ -1075,10 +1075,16 @@ method against the compiled slot list before publishing it, requiring one call
 to the reusable `mergeUpdate` operation per slot, in order, with no extra
 statements. A wrong-target mutation is rejected. This is a trusted syntactic
 output checker, not a proof of the Swift compiler or the helper implementation;
-the complete `_Updates.applying` and successor-call-chain output checks still
-cover a two-slot generated instance, not every slot count or value type.
-Swift's generic `Optional`, `Equatable`, and `inout` behavior remains a stated
-trust boundary.
+`SourceAppliedUpdateIsExactlyGenerated` separately proves that an accepted
+update yields exactly the complete state specified by the source rule, while
+a rejected update yields no state. The macro also token-checks every emitted
+`_Updates.applying` method against all compiled public and hidden fields:
+each constructor argument must use its own update slot or its own prior value.
+A wrong-fallback mutation is rejected. These checks cover arbitrary compiled
+slot lists, but the generated `State`/`Snapshot` constructors and complete
+successor-call-chain output checks still cover only the two-slot fixture.
+Swift's generic `Optional`, `Equatable`, `inout`, `??`, and constructor behavior
+remain stated trust boundaries.
 `GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
 update merge and apply path for any two distinct state fields, including
 successful accumulation and complete-state replacement.

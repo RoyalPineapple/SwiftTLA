@@ -1932,6 +1932,21 @@ THEOREM SourceAndGeneratedSlotHistoriesAreEqual ==
 GeneratedApply(state, updates) ==
     [key \in Vars |->
         IF key \in updates.written THEN updates.values[key] ELSE state[key]]
+SourceAppliedUpdate(state, updates, target) ==
+    /\ updates.accepted
+    /\ target \in States
+    /\ \A key \in Vars :
+        target[key] = IF key \in updates.written
+                      THEN updates.values[key] ELSE state[key]
+
+THEOREM SourceAppliedUpdateIsExactlyGenerated ==
+    ASSUME NEW state \in States,
+           NEW updates \in GeneratedUpdates,
+           NEW target
+    PROVE SourceAppliedUpdate(state, updates, target)
+        <=> updates.accepted /\ target = GeneratedApply(state, updates)
+    BY SMT DEF SourceAppliedUpdate, GeneratedApply, GeneratedUpdates, States
+
 GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
     LET firstUpdate ==
             GeneratedMerge(GeneratedEmptyUpdates(state), firstKey, firstValue)

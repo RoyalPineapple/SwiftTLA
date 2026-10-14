@@ -257,6 +257,14 @@ extension NativeSwiftEmitter {
         """)
         try verifyGeneratedUpdateMergeOutput(
             declarations.first, slots: program.layout.variables.map { variable($0.id) })
+        try verifyGeneratedUpdateApplyOutput(
+            declarations.first,
+            publicFields: model.api.variables.map {
+                (label: $0.argumentLabel, field: $0.swiftIdentifier, slot: variable($0.id))
+            },
+            hiddenSlots: program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map {
+                variable($0.id)
+            })
         return declarations
     }
 
@@ -979,6 +987,38 @@ func verifyGeneratedUpdateMergeOutput(_ declaration: DeclSyntax?, slots: [String
             path: "native._Updates.merging",
             expected: "one mergeUpdate call per compiled state slot in declaration order",
             actual: "the generated merge method differs from the checked rule",
+            nextSafeAction: "Report this native code generation failure."
+        )
+    }
+}
+
+func verifyGeneratedUpdateApplyOutput(
+    _ declaration: DeclSyntax?,
+    publicFields: [(label: String, field: String, slot: String)],
+    hiddenSlots: [String]
+) throws {
+    let actual = declaration?.as(StructDeclSyntax.self)?.memberBlock.members.compactMap {
+        $0.decl.as(FunctionDeclSyntax.self)
+    }.first { $0.name.text == "applying" }
+    let publicArguments = publicFields.map {
+        "\($0.label): \($0.slot) ?? state.state.\($0.field)"
+    }.joined(separator: ", ")
+    let hiddenArguments = hiddenSlots.map {
+        ", \($0): \($0) ?? state.\($0)"
+    }.joined()
+    let expected = Parser.parse(source: """
+    func applying(to state: Snapshot) -> Snapshot {
+        Snapshot(state: State(\(publicArguments))\(hiddenArguments))
+    }
+    """).statements.first?.item.as(FunctionDeclSyntax.self)
+    guard let actual, let expected,
+          Array(actual.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(expected.tokens(viewMode: .sourceAccurate)).map(\.text) else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native._Updates.applying",
+            expected: "one complete state replacement using each compiled update slot",
+            actual: "the generated apply method differs from the checked rule",
             nextSafeAction: "Report this native code generation failure."
         )
     }

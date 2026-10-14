@@ -65,6 +65,20 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedUpdateMergeOutput(wrongMergeMember, slots: [firstSlot, secondSlot])
         }
+        let firstField = try #require(bindings["__PROOF_FIRST_FIELD__"])
+        let secondField = try #require(bindings["__PROOF_SECOND_FIELD__"])
+        let wrongApplySource = emittedUpdates.description.replacingOccurrences(
+            of: "\(secondSlot) ?? state.state.\(secondField)",
+            with: "\(secondSlot) ?? state.state.\(firstField)")
+        #expect(wrongApplySource != emittedUpdates.description)
+        let wrongApply = Parser.parse(source: wrongApplySource)
+        let wrongApplyMember = try #require(wrongApply.statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedUpdateApplyOutput(wrongApplyMember, publicFields: [
+                (label: firstField, field: firstField, slot: firstSlot),
+                (label: secondField, field: secondField, slot: secondSlot),
+            ], hiddenSlots: [])
+        }
         let emittedDispatch = try #require(members.first { declaration in
             guard let function = declaration.as(FunctionDeclSyntax.self) else { return false }
             return function.name.text == "_visitSuccessors"
