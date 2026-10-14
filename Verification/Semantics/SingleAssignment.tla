@@ -1929,6 +1929,19 @@ THEOREM SourceAndGeneratedSlotHistoriesAreEqual ==
     BY SourceSlotMergeIsExactlyGenerated, LenProperties, SMT
         DEF SourceSlotHistory, GeneratedSlotHistory, SlotMergeInstructions
 
+SourceConstructedState(inputs, target) ==
+    /\ target \in States
+    /\ \A key \in Vars : target[key] = inputs[key]
+GeneratedConstructedState(inputs) ==
+    [key \in Vars |-> inputs[key]]
+
+THEOREM SourceConstructedStateIsExactlyGenerated ==
+    ASSUME NEW inputs \in States,
+           NEW target
+    PROVE SourceConstructedState(inputs, target)
+        <=> target = GeneratedConstructedState(inputs)
+    BY SMT DEF SourceConstructedState, GeneratedConstructedState, States
+
 GeneratedApply(state, updates) ==
     [key \in Vars |->
         IF key \in updates.written THEN updates.values[key] ELSE state[key]]
@@ -1946,6 +1959,27 @@ THEOREM SourceAppliedUpdateIsExactlyGenerated ==
     PROVE SourceAppliedUpdate(state, updates, target)
         <=> updates.accepted /\ target = GeneratedApply(state, updates)
     BY SMT DEF SourceAppliedUpdate, GeneratedApply, GeneratedUpdates, States
+
+THEOREM AppliedUpdateComposesWithStateConstruction ==
+    ASSUME NEW state \in States,
+           NEW updates \in GeneratedUpdates,
+           NEW target
+    PROVE SourceAppliedUpdate(state, updates, target)
+        <=> updates.accepted
+            /\ SourceConstructedState(GeneratedApply(state, updates), target)
+    PROOF
+    <1>1. GeneratedApply(state, updates) \in States
+        BY SMT DEF GeneratedApply, GeneratedUpdates, States
+    <1>2. SourceConstructedState(GeneratedApply(state, updates), target)
+            <=> target = GeneratedConstructedState(GeneratedApply(state, updates))
+        BY <1>1, SourceConstructedStateIsExactlyGenerated
+    <1>3. GeneratedConstructedState(GeneratedApply(state, updates))
+            = GeneratedApply(state, updates)
+        BY <1>1, SMT DEF GeneratedConstructedState, GeneratedApply, States
+    <1>4. SourceAppliedUpdate(state, updates, target)
+            <=> updates.accepted /\ target = GeneratedApply(state, updates)
+        BY SourceAppliedUpdateIsExactlyGenerated
+    <1>. QED BY <1>2, <1>3, <1>4, SMT
 
 GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
     LET firstUpdate ==

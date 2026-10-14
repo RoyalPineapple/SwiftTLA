@@ -19,7 +19,6 @@ self.second = _value1
 public struct Snapshot: Hashable, Sendable {
     public let state: State
 
-
 }
 @@ __swifttlaFormalProjectionTokens
 private static let __swifttlaFormalProjectionTokens: [TLAStateProjection.Token] = [TLAStateProjection.Token(validating: "first")!, TLAStateProjection.Token(validating: "second")!]

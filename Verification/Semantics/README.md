@@ -1042,7 +1042,7 @@ theorem. Mutating the selected-state guard to inspect the wrong field makes
 this check fail. This establishes the private `_initialStates` output link for
 this fixture conditional on the ordinary Swift meaning of the matched literals,
 optionals, comparisons, nested `if` statements, append, return, and the pinned
-`State`/`Snapshot` constructors. It does not certify arbitrary initializers or
+`State`/`Snapshot` declarations. It does not certify arbitrary initializers or
 public machine construction. The test also token-checks the complete emitted
 `_Updates`, `_visitUpdates0`, `_visitSuccessors0`, the action-specific and
 whole-machine `_visitSuccessors` dispatchers, and the public checking visitor
@@ -1081,10 +1081,20 @@ a rejected update yields no state. The macro also token-checks every emitted
 `_Updates.applying` method against all compiled public and hidden fields:
 each constructor argument must use its own update slot or its own prior value.
 A wrong-fallback mutation is rejected. These checks cover arbitrary compiled
-slot lists, but the generated `State`/`Snapshot` constructors and complete
+slot lists. The macro now also token-checks every emitted public `State`
+constructor against the compiled field names, types, and ordinals: there must
+be exactly one assignment from each corresponding initializer argument. A
+wrong-field assignment is rejected by a negative control. In
+`SingleAssignment.tla`, `SourceConstructedStateIsExactlyGenerated` proves the
+independent complete-state construction rule, and
+`AppliedUpdateComposesWithStateConstruction` composes it with the existing
+update-application theorem. This closes the abstract construction rule and its
+syntactic emitted-`State` link; the generated `Snapshot` constructor and complete
 successor-call-chain output checks still cover only the two-slot fixture.
-Swift's generic `Optional`, `Equatable`, `inout`, `??`, and constructor behavior
-remain stated trust boundaries.
+Generated snapshots now use Swift's synthesized `Hashable` over the public state
+and every stored hidden field, rather than a separate emitted equality/hash
+implementation. That Swift synthesis, plus generic `Optional`, `Equatable`,
+`inout`, `??`, and constructor behavior, remain stated trust boundaries.
 `GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
 update merge and apply path for any two distinct state fields, including
 successful accumulation and complete-state replacement.

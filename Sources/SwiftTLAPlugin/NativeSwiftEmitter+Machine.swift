@@ -18,16 +18,6 @@ extension NativeSwiftEmitter {
         let fields = try hiddenVariables.map { variable in
             "let \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")
-        let snapshotIdentity = hiddenVariables.isEmpty ? "" : """
-            public static func == (lhs: Self, rhs: Self) -> Bool {
-                \(hiddenVariables.map { "lhs.\(self.variable($0.id)) == rhs.\(self.variable($0.id))" }.joined(separator: " && "))
-                    && lhs.state == rhs.state
-            }
-            public func hash(into hasher: inout Hasher) {
-                \(hiddenVariables.map { "hasher.combine(\(self.variable($0.id)))" }.joined(separator: "\n"))
-                hasher.combine(state)
-            }
-            """
         let registers = program.layout.checkingRegisters
         let registerNames = GeneratedMachineAPI.generatedIdentifiers(registers.map { $0.reference.name }, fallback: "register")
         let registerFields = try zip(registers, registerNames).map { register, name in
@@ -64,7 +54,6 @@ extension NativeSwiftEmitter {
         public struct Snapshot: Hashable, Sendable {
             public let state: State
             \(fields)
-            \(snapshotIdentity)
         }
         private var _execution: Snapshot
         """)
@@ -102,7 +91,7 @@ extension NativeSwiftEmitter {
             let declaration = program.layout.variables[variable.id.ordinal]
             return "\\State.\(variable.swiftIdentifier): .init(swiftName: \(String(reflecting: variable.swiftIdentifier)), formalName: \(String(reflecting: declaration.declaration.name)))"
         }.joined(separator: ",\n")
-        declarations += try nativeDeclarations("""
+        let stateDeclarations = try nativeDeclarations("""
         public struct State: Hashable, GeneratedModelFields {
             \(stateFields)
             public static var displayNames: [PartialKeyPath<State>: String] {
@@ -123,6 +112,10 @@ extension NativeSwiftEmitter {
             public let after: State
         }
         """)
+        try verifyGeneratedStateConstructorOutput(stateDeclarations.first, fields: try api.variables.map {
+            (name: $0.swiftIdentifier, type: try swiftType(program.variableTypes[$0.id]!), ordinal: $0.id.ordinal)
+        })
+        declarations += stateDeclarations
         declarations += try formalProjectionDeclarations()
         declarations += try actionDeclarations()
         declarations += try updateDeclarations()
@@ -967,6 +960,42 @@ extension NativeSwiftEmitter {
         return declarations
     }
 
+}
+
+func verifyGeneratedStateConstructorOutput(
+    _ declaration: DeclSyntax?, fields: [(name: String, type: String, ordinal: Int)]
+) throws {
+    let state = declaration?.as(StructDeclSyntax.self)
+    let variables = state?.memberBlock.members.compactMap { $0.decl.as(VariableDeclSyntax.self) } ?? []
+    let initializers = state?.memberBlock.members.compactMap { $0.decl.as(InitializerDeclSyntax.self) } ?? []
+    let expectedFields = fields.compactMap { field in
+        Parser.parse(source: "public let \(field.name): \(field.type)")
+            .statements.first?.item.as(VariableDeclSyntax.self)
+    }
+    let parameters = fields.map { "\($0.name) _value\($0.ordinal): \($0.type)" }.joined(separator: ", ")
+    let assignments = fields.map { "self.\($0.name) = _value\($0.ordinal)" }.joined(separator: "\n")
+    let expectedInitializer = Parser.parse(source: """
+    public init(\(parameters)) {
+        \(assignments)
+    }
+    """).statements.first?.item.as(InitializerDeclSyntax.self)
+    let fieldsMatch = expectedFields.count == fields.count && variables.count == fields.count + 2
+        && zip(variables, expectedFields).allSatisfy { pair in
+            Array(pair.0.tokens(viewMode: .sourceAccurate)).map(\.text)
+                == Array(pair.1.tokens(viewMode: .sourceAccurate)).map(\.text)
+        }
+    guard state?.name.text == "State", fieldsMatch, initializers.count == 1,
+          let expectedInitializer,
+          Array(initializers[0].tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(expectedInitializer.tokens(viewMode: .sourceAccurate)).map(\.text) else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.State.init",
+            expected: "one field and one matching constructor assignment per public state variable",
+            actual: "the generated state declaration differs from the checked rule",
+            nextSafeAction: "Report this native code generation failure."
+        )
+    }
 }
 
 func verifyGeneratedUpdateMergeOutput(_ declaration: DeclSyntax?, slots: [String]) throws {

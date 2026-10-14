@@ -67,6 +67,18 @@ struct GeneratedAtomicUpdateProofTests {
         }
         let firstField = try #require(bindings["__PROOF_FIRST_FIELD__"])
         let secondField = try #require(bindings["__PROOF_SECOND_FIELD__"])
+        let emittedState = try #require(member(named: "State", in: members))
+        let wrongStateSource = emittedState.description.replacingOccurrences(
+            of: "self.\(secondField) = _value1", with: "self.\(secondField) = _value0")
+        #expect(wrongStateSource != emittedState.description)
+        let wrongState = Parser.parse(source: wrongStateSource)
+        let wrongStateMember = try #require(wrongState.statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedStateConstructorOutput(wrongStateMember, fields: [
+                (name: firstField, type: "Int", ordinal: 0),
+                (name: secondField, type: "Int", ordinal: 1),
+            ])
+        }
         let wrongApplySource = emittedUpdates.description.replacingOccurrences(
             of: "\(secondSlot) ?? state.state.\(secondField)",
             with: "\(secondSlot) ?? state.state.\(firstField)")
