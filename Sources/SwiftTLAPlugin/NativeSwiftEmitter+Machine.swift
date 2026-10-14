@@ -269,6 +269,7 @@ extension NativeSwiftEmitter {
     mutating func initialDeclarations(parameters: String, arguments: String) throws -> [DeclSyntax] {
         var code = "var result: [Snapshot] = []\n"
         var closing = ""
+        var expectedLoops: [String: String] = [:]
         for initialization in program.behavior.initializations {
             let type = program.variableTypes[initialization.variable]!
             let name = variable(initialization.variable)
@@ -300,6 +301,7 @@ extension NativeSwiftEmitter {
                     let eligible = sampleLimit == nil
                         ? "\(name)_isMember"
                         : "\(name)_sampleLimit > 0 && \(name)_isMember"
+                    expectedLoops[name] = "\(name)Candidates"
                     code += """
                     let \(name)Candidates: [\(try swiftType(type))]
                     if let selected = _selectedInitial {
@@ -314,7 +316,9 @@ extension NativeSwiftEmitter {
 
                     """
                 } else {
-                    code += "for \(name) in \(try self.expression(expression, state: "")).sorted(by: \(try ordering(type))) {\n"
+                    let sequence = "\(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))"
+                    expectedLoops[name] = sequence
+                    code += "for \(name) in \(sequence) {\n"
                 }
                 closing += "}\n"
             }
@@ -358,7 +362,7 @@ extension NativeSwiftEmitter {
                 case .value: return "let \(name)"
                 case .memberOf: return "for \(name)"
                 }
-            })
+            }, expectedLoops: expectedLoops)
         if program.behavior.initializations.contains(where: { initialization in
             guard case .memberOf(let expression) = initialization.initialization else { return false }
             if case .randomSubset = expression.computation.operation { return true }
@@ -987,7 +991,9 @@ extension NativeSwiftEmitter {
 
 }
 
-func verifyGeneratedInitialBindings(_ declaration: DeclSyntax?, expected: [String]) throws {
+func verifyGeneratedInitialBindings(
+    _ declaration: DeclSyntax?, expected: [String], expectedLoops: [String: String]
+) throws {
     guard let initialStates = declaration?.as(FunctionDeclSyntax.self) else {
         throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
             path: "native._initialStates.bindings", expected: expected.joined(separator: ", "),
@@ -1008,6 +1014,29 @@ func verifyGeneratedInitialBindings(_ declaration: DeclSyntax?, expected: [Strin
             path: "native._initialStates.bindings", expected: expected.joined(separator: ", "),
             actual: "\(actual.joined(separator: ", ")) (source tokens: \(tokens.prefix(80).joined(separator: " ")))",
             nextSafeAction: "Report this native code generation failure.")
+    }
+    func expectedTokens(_ source: String) -> [String] {
+        Array(Parser.parse(source: source).tokens(viewMode: .sourceAccurate)).map(\.text).filter { !$0.isEmpty }
+    }
+    for (name, sequence) in expectedLoops {
+        var positions: [Int] = []
+        if tokens.count >= 3 {
+            for index in 0..<(tokens.count - 2) {
+                if tokens[index] == "for", tokens[index + 1] == name, tokens[index + 2] == "in" {
+                    positions.append(index)
+                }
+            }
+        }
+        let domain = expectedTokens(sequence)
+        let start = (positions.first ?? 0) + 3
+        let end = start + domain.count
+        guard positions.count == 1, end < tokens.count,
+              Array(tokens[start..<end]) == domain, tokens[end] == "{" else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native._initialStates.domains.\(name)", expected: sequence,
+                actual: "\(tokens.dropFirst(start).prefix(domain.count + 1))",
+                nextSafeAction: "Report this native code generation failure.")
+        }
     }
 }
 

@@ -933,10 +933,13 @@ initializer clauses and selected initial invariant; removing the dependent
 clause is rejected. The native emitter checks that the actual `_initialStates`
 function contains each expected initializer-binding form exactly once, in
 dependency order: fixed-value `let` or domain `for`. Replacing a domain loop
-with a fixed value is rejected. These are syntactic output links, not proofs
-that each emitted expression, loop domain, selected-state guard, or failure has
-the source meaning. Variable-free action modules and initialization failures
-still need separate semantics and output links.
+with a fixed value is rejected. The emitter also checks that each domain loop
+iterates the candidate sequence named by the compiled plan; an altered
+iterable failed the focused regression before this check and is now rejected.
+These are syntactic output links, not proofs that candidate production, each
+emitted expression, the selected-state guard, or failures have the source
+meaning. Variable-free action modules and initialization failures still need
+separate semantics and output links.
 
 The TLA renderer prints action conjunction as `/\`. TLC must solve primed
 assignments as an action relation; making one such assignment the condition of

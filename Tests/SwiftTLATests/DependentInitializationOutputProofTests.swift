@@ -58,7 +58,17 @@ struct DependentInitializationOutputProofTests {
             case .memberOf: return "for \(name)"
             }
         }
-        try verifyGeneratedInitialBindings(initialStates, expected: expected)
+        var expectedLoops: [String: String] = [:]
+        for initialization in model.program.behavior.initializations {
+            guard case .memberOf = initialization.initialization else { continue }
+            let name = emitter.variable(initialization.variable)
+            expectedLoops[name] = "\(name)Candidates"
+        }
+        func verify(_ declaration: DeclSyntax) throws {
+            try verifyGeneratedInitialBindings(declaration, expected: expected,
+                expectedLoops: expectedLoops)
+        }
+        try verify(initialStates)
 
         let seed = try #require(model.program.layout.variables.first {
             $0.declaration.name == "seed"
@@ -70,7 +80,20 @@ struct DependentInitializationOutputProofTests {
         #expect(truncated != initialStates.description)
         let changed = try #require(Parser.parse(source: truncated).statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
-            try verifyGeneratedInitialBindings(changed, expected: expected)
+            try verify(changed)
+        }
+
+        let choice = try #require(model.program.layout.variables.first {
+            $0.declaration.name == "choice"
+        })
+        let choiceName = emitter.variable(choice.id)
+        let wrongDomain = initialStates.description.replacingOccurrences(
+            of: "for \(choiceName) in \(choiceName)Candidates",
+            with: "for \(choiceName) in []")
+        #expect(wrongDomain != initialStates.description)
+        let wrongLoop = try #require(Parser.parse(source: wrongDomain).statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verify(wrongLoop)
         }
     }
 }
