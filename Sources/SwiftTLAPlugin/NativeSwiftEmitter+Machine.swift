@@ -239,14 +239,7 @@ extension NativeSwiftEmitter {
         let fields = try program.layout.variables.map { "var \(variable($0.id)): \(try swiftType(program.variableTypes[$0.id]!))? = nil" }.joined(separator: "\n")
         let merges = program.layout.variables.map { slot in
             let name = variable(slot.id)
-            return """
-            if let value = other.\(name) {
-                if let previous = result.\(name), previous != value {
-                    return nil
-                }
-                result.\(name) = value
-            }
-            """
+            return "guard _NativeMachineOperations.mergeUpdate(&result.\(name), other.\(name)) else { return nil }"
         }.joined(separator: "\n")
         let updated = executionState { "\(variable($0)) ?? \(stateValue($0))" }
         return try nativeDeclarations("""

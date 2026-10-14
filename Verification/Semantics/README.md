@@ -1058,6 +1058,11 @@ state-construction, and
 deduplication syntax, this links the checking visitor to the relation proved
 below. It does not yet certify public machine construction, the runtime behavior
 of pinned `State`/`Snapshot` declarations, or macro installation.
+The emitter now calls one typed `mergeUpdate` operation for every generated
+slot. Its focused contract checks absent, equal, and conflicting writes,
+including preservation of the prior value on conflict; the token template
+checks that both actual copy slots call that operation. The operation's Swift
+implementation is still a trusted output link, not a TLAPS proof of Swift.
 `GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
 update merge and apply path for any two distinct state fields, including
 successful accumulation and complete-state replacement.
@@ -1458,6 +1463,18 @@ configured native graphs and selected verdicts. The generic
 their finite subsets, but the Swift emitter, parameter-domain extraction, and
 actual TLC behavior remain trusted or independently tested links. Arbitrary
 state-held sets without a renderable order still fail closed.
+
+For nested fallible `With` actions, the TLA+ emitter now renders the Boolean
+"some failure" test structurally, using existential quantification over the
+candidate domain rather than re-expanding every failure-kind predicate at each
+nesting level. `CandidateFailureAggregationPreservesVerdict` proves the
+quantifier/disjunction step; `OmittingAFailureKindChangesVerdict` is its negative
+control, and `EarlierFailureShortCircuitsLaterFailure` covers the `Either`
+Boolean guard. The local generated-output regression keeps Boulanger and
+DieHardest-parallel modules below a 1 MB total and 64 KiB per line; the prior
+hosted outputs were 2.7 MB and 13.6 MB. This proves neither TLC runtime nor
+the general lowering/emitter link. The complete hosted parity paths remain the
+admission test.
 
 A `With` over dictionary keys selected from a singleton literal tuple parameter
 also has a finite rank. The generated Swift machine sorts the keys, and a

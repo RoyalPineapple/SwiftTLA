@@ -56,8 +56,10 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(templateBindings(wrongReadMember, expectedUpdate)?["__PROOF_READ__"] == "first")
         let emittedUpdates = try #require(member(named: "_Updates", in: members))
         let expectedUpdates = try #require(member(named: "_Updates", in: templateMembers))
-        let wrongMerge = Parser.parse(source: emittedUpdates.description.replacingOccurrences(
-            of: "result._value_second_1 = value", with: "result._value_first_0 = value"))
+        let wrongMergeSource = emittedUpdates.description.replacingOccurrences(
+            of: "&result._value_second_1", with: "&result._value_first_0")
+        #expect(wrongMergeSource != emittedUpdates.description)
+        let wrongMerge = Parser.parse(source: wrongMergeSource)
         let wrongMergeMember = try #require(wrongMerge.statements.first?.item.as(DeclSyntax.self))
         #expect(templateBindings(wrongMergeMember, expectedUpdates) == nil)
         let emittedDispatch = try #require(members.first { declaration in
@@ -79,6 +81,21 @@ struct GeneratedAtomicUpdateProofTests {
             of: "found = true", with: "found = false"))
         let wrongFoundMember = try #require(wrongFound.statements.first?.item.as(DeclSyntax.self))
         #expect(templateBindings(wrongFoundMember, expectedDispatch) == nil)
+    }
+
+    @Test("A generated write is absent, compatible, or conflicting without changing a rejected value")
+    func updateMergeRule() {
+        var current: Int? = nil
+        #expect(_NativeMachineOperations.mergeUpdate(&current, nil))
+        #expect(current == nil)
+        #expect(_NativeMachineOperations.mergeUpdate(&current, 3))
+        #expect(current == 3)
+        #expect(_NativeMachineOperations.mergeUpdate(&current, 3))
+        #expect(current == 3)
+        #expect(_NativeMachineOperations.mergeUpdate(&current, nil))
+        #expect(current == 3)
+        #expect(!_NativeMachineOperations.mergeUpdate(&current, 4))
+        #expect(current == 3)
     }
 
     @Test("Ordered copy emission is independent of field names")

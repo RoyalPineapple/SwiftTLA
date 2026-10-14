@@ -80,6 +80,16 @@ public struct MachineActionEvaluationFailure<Action: Hashable & Sendable>: Error
 public enum _NativeMachineOperations: Sendable {
     public static let maximumRecursiveDepth = 4_096
 
+    @inlinable
+    public static func mergeUpdate<Value: Equatable & Sendable>(
+        _ current: inout Value?, _ incoming: Value?
+    ) -> Bool {
+        guard let incoming else { return true }
+        if let current, current != incoming { return false }
+        current = incoming
+        return true
+    }
+
     public static func checkedProjection<Source: TLAValueType, Target: TLAValueType>(
         _ source: Source
     ) throws -> Target {
