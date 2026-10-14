@@ -90,4 +90,22 @@ struct ArrayValueTests {
         #expect(graph.safetyViolations.isEmpty)
         #expect(try ArrayAppendReadMachine.render().tlaBundle.tla.contains("sequence[1]"))
     }
+
+    @Test("an array read outside its domain fails in both generated checking paths")
+    func arrayReadOutsideDomain() throws {
+        var machine = try ArrayReadOutsideDomainMachine.makeMachine()
+        let before = machine.state
+        #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 1, count: 0)) {
+            try machine.send(.read)
+        }
+        #expect(machine.state == before)
+
+        let rendered = try ArrayReadOutsideDomainMachine.render()
+        #expect(rendered.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))
+        let failure = try #require(rendered.tlaBundle.root.tla.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLASequenceIndexOutOfBoundsFailure0 ==")
+        })
+        #expect(failure.contains("1 \\in DOMAIN (sequence)"))
+        #expect(rendered.tlaBundle.root.tla.contains("__SwiftTLASequenceIndexOutOfBoundsOperands0 == <<1, Len(sequence)>>"))
+    }
 }

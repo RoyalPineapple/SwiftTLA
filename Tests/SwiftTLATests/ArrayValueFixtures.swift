@@ -51,3 +51,16 @@ struct ArrayAppendReadMachine {
         }
     }
 }
+
+@TLAModel
+struct ArrayReadOutsideDomainMachine {
+    enum Step: String, CaseIterable { case read }
+
+    static var spec: TLASpec {
+        #spec("ArrayReadOutsideDomainMachine") { scope in
+            let sequence = scope.sharedVar(initial: [Int]())
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.read) { Assign(result, to: sequence[1.expr]) }
+        }
+    }
+}
