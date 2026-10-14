@@ -364,3 +364,28 @@ struct BoundConditionalBodyFailureModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct ConjunctiveAlternativeFailureModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("ConjunctiveAlternativeFailureModel") { scope in
+            let divisor = scope.sharedVar(initial: 0)
+            let selected = scope.sharedVar(initial: -1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                Either {
+                    Assign(selected, to: 0)
+                } or: {
+                    Assign(selected, to: 1)
+                }
+                Either {
+                    Assign(result, to: 1 / divisor)
+                } or: {
+                    Assign(result, to: 1)
+                }
+            }
+        }
+    }
+}

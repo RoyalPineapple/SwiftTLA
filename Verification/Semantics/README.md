@@ -1533,6 +1533,16 @@ that omits one variable; the same branch passes after frame completion. This
 checks a source-level invariant only. It does not prove that lowering retains
 the frame, or that either emitted output implements it.
 
+`ActionDistributionRule.tla` proves that distributing conjunction over two
+alternatives preserves every compatible complete update and its labeled edge,
+for arbitrary update sets. Its negative control proves that dropping a branch
+with a distinct compatible update changes the graph. A `#spec` regression with
+two `Either` statements retains both generated Swift successors while also
+reporting a division failure. These facts do not yet prove that
+`ActionNormalization.complete` implements the general distribution rule, that
+the generated TLA+ action has the same complete relation, or that distribution
+preserves first-failure order and checking effects. Those links remain open.
+
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
 | `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; every generated write part has a structural target-and-merge check; direct fallible assignments now emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |

@@ -659,6 +659,31 @@ struct ChoiceEvaluationFailureTests {
         #expect(failures.contains { $0.0 == 0 && $0.1 == .conjunction && $0.2 == .divisionByZero })
     }
 
+    @Test("A failing right conjunct retains successors from every left alternative")
+    func conjunctiveAlternativesRetainSuccesses() throws {
+        let machine = try ConjunctiveAlternativeFailureModel.makeMachine()
+        var states: [Int: Int] = [:]
+        var edges: [(Int, Int)] = []
+        var failures: [(Int, NativeMachineEvaluationError)] = []
+        let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 3,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
+            switch event {
+            case .state(let id, let snapshot, _, _, _): states[id] = snapshot.state.selected
+            case .edge(let source, let action, let target):
+                #expect(action == .pick)
+                edges.append((source, target))
+            case .evaluationFailure(let source, let action, let reason):
+                #expect(action == .pick)
+                failures.append((source, reason))
+            default: break
+            }
+        }
+        #expect(outcome.completion == .evaluationFailure(.divisionByZero))
+        #expect(states[0] == -1)
+        #expect(Set(edges.filter { $0.0 == 0 }.compactMap { states[$0.1] }) == Set([0, 1]))
+        #expect(failures.contains { $0.0 == 0 && $0.1 == .divisionByZero })
+    }
+
     @Test("A fallible Let value preserves an arithmetic failure in its body")
     func boundConditionalBodyFailure() throws {
         let machines = try BoundConditionalBodyFailureModel.initialMachines()
