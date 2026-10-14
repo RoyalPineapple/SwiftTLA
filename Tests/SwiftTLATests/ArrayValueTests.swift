@@ -1,4 +1,6 @@
+import Foundation
 import Testing
+import SwiftParser
 import SwiftSyntax
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
@@ -93,6 +95,23 @@ struct ArrayValueTests {
 
     @Test("an array read outside its domain fails in both generated checking paths")
     func arrayReadOutsideDomain() throws {
+        let compilation = try ArrayReadOutsideDomainMachine.spec.compile()
+        let sequenceID = try #require(compilation.layout.testVariableID(named: "sequence"))
+        let action = try #require(compilation.semantics.behavior.actions.first)
+        guard case .define(_, let read, _) = action.body else {
+            Issue.record("The read must lower to one ordered binding")
+            return
+        }
+        #expect(read.operation == .tupleDynamicAccess)
+        #expect(read.children.map(\.operation) == [
+            .stateVariable(sequenceID), .value(.integer(1))
+        ])
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        #expect(throws: EvalError.indexOutOfBounds(1, 0)) {
+            try runtime.successors(for: action.id, from: initial)
+        }
+
         var machine = try ArrayReadOutsideDomainMachine.makeMachine()
         let before = machine.state
         #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 1, count: 0)) {
@@ -101,11 +120,50 @@ struct ArrayValueTests {
         #expect(machine.state == before)
 
         let rendered = try ArrayReadOutsideDomainMachine.render()
-        #expect(rendered.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))
-        let failure = try #require(rendered.tlaBundle.root.tla.split(separator: "\n").first {
-            $0.hasPrefix("__SwiftTLASequenceIndexOutOfBoundsFailure0 ==")
+        let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/ArrayReadOutsideDomainMachine.tla")
+            .standardizedFileURL
+        let expectedTLA = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(rendered.tlaBundle.root.tla == expectedTLA)
+        let unguardedTLA = rendered.tlaBundle.root.tla.replacingOccurrences(
+            of: "IF (IF (1 \\in DOMAIN (sequence)) THEN TRUE ELSE FALSE)",
+            with: "IF TRUE")
+        #expect(unguardedTLA != rendered.tlaBundle.root.tla)
+        #expect(unguardedTLA != expectedTLA)
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("ArrayValueFixtures.swift")
+        let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "ArrayReadOutsideDomainMachine" })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
+        let visitor = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        #expect(failure.contains("1 \\in DOMAIN (sequence)"))
-        #expect(rendered.tlaBundle.root.tla.contains("__SwiftTLASequenceIndexOutOfBoundsOperands0 == <<1, Len(sequence)>>"))
+        let swiftProofInput = proofInput.deletingLastPathComponent()
+            .appendingPathComponent("GeneratedSequenceIndexFailureSwiftVisitor.txt")
+        let expectedVisitor = try String(contentsOf: swiftProofInput, encoding: .utf8)
+        func tokens(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
+        }
+        #expect(tokens(visitor.description) == tokens(expectedVisitor))
+        let uncheckedSwift = visitor.description.replacingOccurrences(
+            of: "_NativeMachineOperations.sequenceElement(_sequenceValue, at: _sequenceIndex)",
+            with: "_sequenceValue[_sequenceIndex]")
+        #expect(uncheckedSwift != visitor.description)
+        #expect(tokens(uncheckedSwift) != tokens(expectedVisitor))
+        #expect(rendered.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))
+    }
+
+    @Test("sequence reads use one-based indices and report the complete failure payload")
+    func sequenceReadOperation() throws {
+        let values = [4, 5]
+        #expect(try _NativeMachineOperations.sequenceElement(values, at: 1) == 4)
+        #expect(try _NativeMachineOperations.sequenceElement(values, at: 2) == 5)
+        #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 0, count: 2)) {
+            try _NativeMachineOperations.sequenceElement(values, at: 0)
+        }
+        #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 3, count: 2)) {
+            try _NativeMachineOperations.sequenceElement(values, at: 3)
+        }
     }
 }
