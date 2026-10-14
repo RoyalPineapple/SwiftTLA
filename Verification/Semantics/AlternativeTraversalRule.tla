@@ -1,9 +1,10 @@
 -------------------- MODULE AlternativeTraversalRule --------------------
-EXTENDS TLAPS, NaturalsInduction, Sequences
+EXTENDS TLAPS, NaturalsInduction, SequenceTheorems_proofs
 
 CONSTANTS UpdateValues, FailureValues, NoFailure
 
 Outcome == [updates: SUBSET UpdateValues, failure: FailureValues \cup {NoFailure}]
+OrderedOutcome == [updates: Seq(UpdateValues), failure: FailureValues \cup {NoFailure}]
 
 SourceUpdates(results, prefix) ==
     UNION {results[index].updates : index \in 1..prefix}
@@ -25,6 +26,91 @@ VisitedHistory(results, history) ==
                 failure |-> IF history[index - 1].failure # NoFailure
                            THEN history[index - 1].failure
                            ELSE results[index].failure]
+
+VisitedOrderedHistory(results, history) ==
+    /\ history[0] = [updates |-> <<>>, failure |-> NoFailure]
+    /\ \A index \in 1..Len(results) :
+           history[index] =
+               [updates |-> history[index - 1].updates \o results[index].updates,
+                failure |-> IF history[index - 1].failure # NoFailure
+                           THEN history[index - 1].failure
+                           ELSE results[index].failure]
+
+THEOREM OrderedAlternativeRetainsEveryEarlierUpdate ==
+    ASSUME NEW results \in Seq(OrderedOutcome),
+           NEW history \in [0..Len(results) -> OrderedOutcome],
+           VisitedOrderedHistory(results, history)
+    PROVE \A index \in 1..Len(results) :
+              /\ Len(history[index].updates) =
+                     Len(history[index - 1].updates) + Len(results[index].updates)
+              /\ \A earlier \in 1..Len(history[index - 1].updates) :
+                     history[index].updates[earlier] =
+                         history[index - 1].updates[earlier]
+              /\ \A offset \in 1..Len(results[index].updates) :
+                     history[index].updates[Len(history[index - 1].updates) + offset] =
+                         results[index].updates[offset]
+    PROOF
+    <1>. SUFFICES ASSUME NEW index \in 1..Len(results)
+                 PROVE /\ Len(history[index].updates) =
+                              Len(history[index - 1].updates) + Len(results[index].updates)
+                       /\ \A earlier \in 1..Len(history[index - 1].updates) :
+                              history[index].updates[earlier] =
+                                  history[index - 1].updates[earlier]
+                       /\ \A offset \in 1..Len(results[index].updates) :
+                              history[index].updates[Len(history[index - 1].updates) + offset] =
+                                  results[index].updates[offset]
+        BY SMT
+    <1>1. history[index].updates =
+              history[index - 1].updates \o results[index].updates
+        BY SMT DEF VisitedOrderedHistory
+    <1>2. history[index - 1].updates \in Seq(UpdateValues)
+           /\ results[index].updates \in Seq(UpdateValues)
+        BY SMT DEF OrderedOutcome
+    <1>3. /\ Len(history[index - 1].updates \o results[index].updates) =
+                  Len(history[index - 1].updates) + Len(results[index].updates)
+          /\ \A offset \in 1..Len(history[index - 1].updates) +
+                              Len(results[index].updates) :
+                 (history[index - 1].updates \o results[index].updates)[offset] =
+                     IF offset <= Len(history[index - 1].updates)
+                     THEN history[index - 1].updates[offset]
+                     ELSE results[index].updates[offset - Len(history[index - 1].updates)]
+        BY ConcatProperties, <1>2, SMT
+    <1>3a. Len(history[index - 1].updates) \in Nat
+            /\ Len(results[index].updates) \in Nat
+        BY LenProperties, <1>2, SMT
+    <1>4. Len(history[index].updates) =
+              Len(history[index - 1].updates) + Len(results[index].updates)
+        BY <1>1, <1>3, SMT
+    <1>5. \A earlier \in 1..Len(history[index - 1].updates) :
+              history[index].updates[earlier] = history[index - 1].updates[earlier]
+        PROOF
+        <2>. SUFFICES ASSUME NEW earlier \in 1..Len(history[index - 1].updates)
+                     PROVE history[index].updates[earlier] =
+                               history[index - 1].updates[earlier]
+            BY SMT
+        <2>1. earlier \in 1..Len(history[index - 1].updates) +
+                           Len(results[index].updates)
+            BY <1>3a, SMT
+        <2>. QED
+            BY <1>1, <1>3, <1>3a, <2>1, SMT
+    <1>6. \A offset \in 1..Len(results[index].updates) :
+              history[index].updates[Len(history[index - 1].updates) + offset] =
+                  results[index].updates[offset]
+        PROOF
+        <2>. SUFFICES ASSUME NEW offset \in 1..Len(results[index].updates)
+                     PROVE history[index].updates[Len(history[index - 1].updates) + offset] =
+                               results[index].updates[offset]
+            BY SMT
+        <2>1. Len(history[index - 1].updates) + offset \in
+                 1..Len(history[index - 1].updates) + Len(results[index].updates)
+            BY <1>3a, SMT
+        <2>2. Len(history[index - 1].updates) + offset >
+                 Len(history[index - 1].updates)
+            BY <1>3a, SMT
+        <2>. QED
+            BY <1>1, <1>3, <1>3a, <2>1, <2>2, SMT
+    <1>. QED
+        BY <1>4, <1>5, <1>6, SMT
 
 THEOREM AlternativeTraversalPreservesSuccessfulUpdates ==
     ASSUME NEW results \in Seq(Outcome),

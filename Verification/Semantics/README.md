@@ -1319,14 +1319,18 @@ Both `Either` and action-level `Choose` now emit calls to the same
 `_NativeMachineOperations.visitAlternatives` operation. Their full Swift
 visitor witnesses pin those actual calls. `AlternativeTraversalRule.tla`
 proves by induction that ordered traversal retains the union of successful
-updates and the first failure for any finite list of branch outcomes (60 local
-TLAPS obligations). Replacing the first failure with the last is a negative
-control.
-Focused Swift tests cover a failure after an emitted update and ensure an
-output-callback error is not mistaken for a branch failure. Swift
-compiler/runtime interpretation of the helper and pinned visitors remains a
-trusted boundary; this proof does not establish that arbitrary branch bodies
-or the TLA+ emitter implement the abstract branch outcomes.
+updates and the first failure for any finite list of branch outcomes. Its
+ordered-sequence rule also proves that each buffered update chunk is appended
+without loss, reordering, or collapsing duplicates (109 local TLAPS
+obligations). Replacing the first failure with the last is a negative control.
+`AlternativeTraversalSwiftKernel.txt` pins the actual Swift helper declaration
+by parsed tokens; reversing its replay loop fails that check. Focused Swift
+tests cover duplicate ordered updates after a failure and ensure an
+output-callback error is not mistaken for a branch failure. The mapping from
+Swift arrays, loops, `do`/`catch`, and callback execution to the TLAPS history,
+and Swift compiler/runtime interpretation of the pinned code, remain trusted
+boundaries. This does not establish that arbitrary branch bodies or the TLA+
+emitter implement the abstract branch outcomes.
 Hosted evidence for this slice is pending.
 
 Two further `Either` fixtures test failure precedence across different
@@ -1571,11 +1575,11 @@ For every compiled `or` node, the output checker additionally requires the
 complete emitted body to call the shared ordered alternative visitor with
 `[false, true]`, route the second alternative to the right child and the first
 to the left child, and pass the same bindings, updates, and branch emitter to
-both. Reversing that order fails the production check. The TLAPS
-`AlternativeTraversalRule` establishes the abstract union-of-successes and
-first-failure rule; interpreting the Swift helper's loop and callback behavior
-as that rule, and matching arbitrary child expressions to their TLA+ forms,
-remain explicit unproved links.
+both. Reversing that order fails the production check. The parsed Swift helper
+witness connects those generated calls to one reviewed implementation of the
+TLAPS traversal rule. Interpreting its Swift control flow as the formal fold,
+and matching arbitrary child expressions to their TLA+ forms, remain explicit
+unproved links.
 
 The direct compiled `assign` renderer previously omitted both the value's
 definedness guard and its choice/arithmetic failure predicates. A focused
