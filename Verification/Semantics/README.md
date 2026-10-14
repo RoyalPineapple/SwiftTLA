@@ -897,6 +897,11 @@ shared history for every such plan, so the equality is not vacuous. These are
 generic initialization rules. `DependencyOrderedInitializationIsStable`
 additionally proves that unique initialization targets and domains determined
 only by earlier targets make each step stable under replacing its own target.
+`SoundOrderedDependenciesArePriorOnly` derives the earlier-target condition
+from sound dependency sets placed before each use. It does not establish that
+the compiler's dependency scan is sound or link its chosen order to the proof.
+`SoundOrderedInitializationIsStable` composes that condition with the
+unique-target stability rule.
 `StableInitialHistoryMatchesConjunction` then proves that every prefix of the
 ordered membership history equals the corresponding TLA+ conjunction, including
 empty domains. `OrderedEnumerationMatchesSelectedConjunction` composes those

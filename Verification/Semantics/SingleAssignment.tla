@@ -1092,6 +1092,24 @@ PriorOnlyInitialDomains(plans) ==
             (\A key \in PriorInitialKeys(plans, index - 1) :
                 prior[key] = target[key])
             => plans[index].domains[prior] = plans[index].domains[target]
+SoundInitializationDependencies(plans, dependencies) ==
+    \A index \in 1..Len(plans) :
+        \A prior, target \in States :
+            (\A key \in dependencies[index] : prior[key] = target[key])
+            => plans[index].domains[prior] = plans[index].domains[target]
+DependencyOrderedInitializations(plans, dependencies) ==
+    \A index \in 1..Len(plans) :
+        dependencies[index] \subseteq PriorInitialKeys(plans, index - 1)
+
+THEOREM SoundOrderedDependenciesArePriorOnly ==
+    ASSUME NEW plans \in Seq(InitializationPlans),
+           NEW dependencies \in [1..Len(plans) -> SUBSET Vars],
+           SoundInitializationDependencies(plans, dependencies),
+           DependencyOrderedInitializations(plans, dependencies)
+    PROVE PriorOnlyInitialDomains(plans)
+    BY SMT DEF SoundInitializationDependencies,
+        DependencyOrderedInitializations, PriorOnlyInitialDomains,
+        PriorInitialKeys, InitializationPlans, States
 
 THEOREM DependencyOrderedInitializationIsStable ==
     ASSUME NEW plans \in Seq(InitializationPlans),
@@ -1101,6 +1119,16 @@ THEOREM DependencyOrderedInitializationIsStable ==
     BY SMT DEF StableInitializationPlan, ConjunctiveInitialPrefix,
         UnchangedExceptInitialKey, PriorInitialKeys, UniqueInitialKeys,
         PriorOnlyInitialDomains, InitializationPlans, States
+
+THEOREM SoundOrderedInitializationIsStable ==
+    ASSUME NEW plans \in Seq(InitializationPlans),
+           NEW dependencies \in [1..Len(plans) -> SUBSET Vars],
+           UniqueInitialKeys(plans),
+           SoundInitializationDependencies(plans, dependencies),
+           DependencyOrderedInitializations(plans, dependencies)
+    PROVE StableInitializationPlan(plans)
+    BY SoundOrderedDependenciesArePriorOnly,
+        DependencyOrderedInitializationIsStable
 
 THEOREM StableInitializationStepMatchesConjunction ==
     ASSUME NEW plans \in Seq(InitializationPlans),
