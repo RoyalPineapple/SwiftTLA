@@ -1547,7 +1547,10 @@ refinement, and PlusCal export also require their own output links.
 module. It proves that a dictionary read emits the same complete labeled step
 and missing-key failure as the independent read rule, and that omitting the
 evaluation check would disagree. The generated Swift machine test observes
-the actual missing-key error without a state change. The proof is local only;
+the actual missing-key error without a state change. An exact token witness
+pins the emitted Swift action visitor, including argument-before-function
+evaluation and its call to the shared checked lookup; unchecked lookup and
+reversed-operand mutations fail that output check. The proof is local only;
 hosted evidence is pending. It does not cover every function-application form
 or prove Swift runtime behavior from source. Fallible `With` bodies over
 state-dependent candidates with no reproducible TLA+ order remain rejected
