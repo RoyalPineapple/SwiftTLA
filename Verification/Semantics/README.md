@@ -1063,6 +1063,12 @@ slot. Its focused contract checks absent, equal, and conflicting writes,
 including preservation of the prior value on conflict; the token template
 checks that both actual copy slots call that operation. The operation's Swift
 implementation is still a trusted output link, not a TLAPS proof of Swift.
+`SourceSlotMerge` separately specifies absent writes, compatible writes, and
+conflicts over arbitrary state slots. `GeneratedSlotMergePreservesEveryWriteOutcome`
+checks that the merge model satisfies those cases; an overwrite-on-conflict
+negative control is rejected. The output check still covers a two-slot
+generated instance, not every slot count or value type. Swift's generic
+`Optional`, `Equatable`, and `inout` behavior remains a stated trust boundary.
 `GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
 update merge and apply path for any two distinct state fields, including
 successful accumulation and complete-state replacement.

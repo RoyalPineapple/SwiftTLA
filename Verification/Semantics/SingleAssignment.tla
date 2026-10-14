@@ -1860,6 +1860,51 @@ GeneratedMerge(updates, key, value) ==
     ELSE [accepted |-> FALSE,
           written |-> updates.written,
           values |-> updates.values]
+GeneratedUpdates ==
+    [accepted: BOOLEAN, written: SUBSET Vars, values: States]
+GeneratedSlotMerge(updates, key, writes, value) ==
+    IF writes THEN GeneratedMerge(updates, key, value) ELSE updates
+SourceSlotMerge(previous, key, writes, value, next) ==
+    /\ next \in GeneratedUpdates
+    /\ \/ ~writes /\ next = previous
+       \/ writes /\ ~previous.accepted
+          /\ ~next.accepted
+          /\ next.written = previous.written
+          /\ next.values = previous.values
+       \/ writes /\ previous.accepted
+          /\ key \in previous.written
+          /\ previous.values[key] # value
+          /\ ~next.accepted
+          /\ next.written = previous.written
+          /\ next.values = previous.values
+       \/ writes /\ previous.accepted
+          /\ (key \notin previous.written \/ previous.values[key] = value)
+          /\ next.accepted
+          /\ next.written = previous.written \cup {key}
+          /\ next.values = [previous.values EXCEPT ![key] = value]
+
+THEOREM GeneratedSlotMergePreservesEveryWriteOutcome ==
+    ASSUME NEW previous \in GeneratedUpdates,
+           NEW key \in Vars,
+           NEW writes \in BOOLEAN,
+           NEW value \in Values
+    PROVE SourceSlotMerge(previous, key, writes, value,
+              GeneratedSlotMerge(previous, key, writes, value))
+    BY SMT DEF SourceSlotMerge, GeneratedSlotMerge, GeneratedMerge,
+        GeneratedUpdates, States
+
+THEOREM OverwritingAConflictingWriteViolatesSource ==
+    ASSUME NEW state \in States,
+           NEW key \in Vars,
+           NEW incoming \in Values,
+           state[key] # incoming
+    PROVE ~SourceSlotMerge(
+        [accepted |-> TRUE, written |-> {key}, values |-> state],
+        key, TRUE, incoming,
+        [accepted |-> TRUE, written |-> {key},
+         values |-> [state EXCEPT ![key] = incoming]])
+    BY SMT DEF SourceSlotMerge, States
+
 GeneratedApply(state, updates) ==
     [key \in Vars |->
         IF key \in updates.written THEN updates.values[key] ELSE state[key]]
