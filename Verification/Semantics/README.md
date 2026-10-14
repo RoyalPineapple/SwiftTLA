@@ -1088,13 +1088,18 @@ wrong-field assignment is rejected by a negative control. In
 `SingleAssignment.tla`, `SourceConstructedStateIsExactlyGenerated` proves the
 independent complete-state construction rule, and
 `AppliedUpdateComposesWithStateConstruction` composes it with the existing
-update-application theorem. This closes the abstract construction rule and its
-syntactic emitted-`State` link; the generated `Snapshot` constructor and complete
+update-application theorem. The macro also checks every emitted `Snapshot`
+declaration against the compiled hidden-field list: it permits exactly the
+public state and those hidden fields, with `Hashable` and `Sendable` synthesis
+and no custom identity implementation. A missing-hidden-field mutation is
+rejected. `SnapshotAssemblyPreservesEveryField` and
+`SnapshotPartsAreInjective` prove the independent complete-state packing rule
+for any partition between public and hidden variables. These close the abstract
+construction and packing rules and their syntactic emitted links; the complete
 successor-call-chain output checks still cover only the two-slot fixture.
-Generated snapshots now use Swift's synthesized `Hashable` over the public state
-and every stored hidden field, rather than a separate emitted equality/hash
-implementation. That Swift synthesis, plus generic `Optional`, `Equatable`,
-`inout`, `??`, and constructor behavior, remain stated trust boundaries.
+Swift's synthesized memberwise initializer and `Hashable` behavior, plus
+generic `Optional`, `Equatable`, `inout`, and `??`, remain stated trust
+boundaries.
 `GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
 update merge and apply path for any two distinct state fields, including
 successful accumulation and complete-state replacement.

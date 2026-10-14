@@ -505,6 +505,31 @@ struct NativeCodeGenerationTests {
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)
         print("native-code-generation model=counter declarations=\(members.count) sourceBytes=\(generated.utf8.count)")
     }
+
+    @Test("Generated snapshots retain every hidden control field")
+    func emittedSnapshotRetainsHiddenState() throws {
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("GeneratedStateMachineFixtures.swift")
+        let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "GeneratedAlgorithmCounter" })
+        let model = try TLASpecVerifier.parseAndVerify(declaration)
+        var emitter = NativeSwiftEmitter(model: model)
+        let members = try emitter.machineMembers()
+        let hiddenFields = try model.program.layout.variables.filter { emitter.stateMemberNames[$0.id] == nil }
+            .map { (name: emitter.variable($0.id), type: try emitter.swiftType(model.program.variableTypes[$0.id]!)) }
+        let hidden = try #require(hiddenFields.first)
+        #expect(hiddenFields.count == 1)
+        let snapshot = try #require(members.first { $0.as(StructDeclSyntax.self)?.name.text == "Snapshot" })
+        let wrongSource = snapshot.description.replacingOccurrences(
+            of: "let \(hidden.name): \(hidden.type)", with: "")
+        #expect(wrongSource != snapshot.description)
+        let wrong = Parser.parse(source: wrongSource).statements.first?.item.as(DeclSyntax.self)
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedSnapshotOutput(wrong, hiddenFields: hiddenFields)
+        }
+    }
     @Test("Finite union state preserves declared Swift alternatives without anonymous replacement")
     func finiteUnionPreservesDeclaredTypes() throws {
         let source = Parser.parse(source: """

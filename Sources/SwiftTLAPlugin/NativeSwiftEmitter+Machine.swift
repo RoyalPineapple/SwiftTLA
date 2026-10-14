@@ -15,9 +15,10 @@ extension NativeSwiftEmitter {
         declarations += try propertyIdentityDeclarations()
         declarations += try validationDeclarations()
         let hiddenVariables = program.layout.variables.filter { stateMemberNames[$0.id] == nil }
-        let fields = try hiddenVariables.map { variable in
-            "let \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
-        }.joined(separator: "\n")
+        let hiddenFields = try hiddenVariables.map { variable in
+            (name: self.variable(variable.id), type: try swiftType(program.variableTypes[variable.id]!))
+        }
+        let fields = hiddenFields.map { "let \($0.name): \($0.type)" }.joined(separator: "\n")
         let registers = program.layout.checkingRegisters
         let registerNames = GeneratedMachineAPI.generatedIdentifiers(registers.map { $0.reference.name }, fallback: "register")
         let registerFields = try zip(registers, registerNames).map { register, name in
@@ -26,7 +27,7 @@ extension NativeSwiftEmitter {
         let registerInitializers = try zip(registers, registerNames).map { register, name in
             "\(name): \(try expression(program.behavior.checkingRegisterInitializations[register.id]!))"
         }.joined(separator: ", ")
-        declarations += try nativeDeclarations("""
+        let machineDeclarations = try nativeDeclarations("""
         public struct CheckingRegisters: Sendable {
             \(registerFields)
         }
@@ -57,6 +58,10 @@ extension NativeSwiftEmitter {
         }
         private var _execution: Snapshot
         """)
+        try verifyGeneratedSnapshotOutput(machineDeclarations.first {
+            $0.as(StructDeclSyntax.self)?.name.text == "Snapshot"
+        }, hiddenFields: hiddenFields)
+        declarations += machineDeclarations
         declarations += try nativeDeclarations("""
         private init(execution: Snapshot\(appendedParameters)) {
             _execution = execution
@@ -960,6 +965,29 @@ extension NativeSwiftEmitter {
         return declarations
     }
 
+}
+
+func verifyGeneratedSnapshotOutput(
+    _ declaration: DeclSyntax?, hiddenFields: [(name: String, type: String)]
+) throws {
+    let fields = hiddenFields.map { "let \($0.name): \($0.type)" }.joined(separator: "\n")
+    let expected = Parser.parse(source: """
+    public struct Snapshot: Hashable, Sendable {
+        public let state: State
+        \(fields)
+    }
+    """).statements.first?.item.as(StructDeclSyntax.self)
+    let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+    let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+    guard actualTokens == expectedTokens else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.Snapshot",
+            expected: "the public state and every hidden field with compiler-synthesized identity",
+            actual: "the generated snapshot declaration differs from the checked rule",
+            nextSafeAction: "Report this native code generation failure."
+        )
+    }
 }
 
 func verifyGeneratedStateConstructorOutput(

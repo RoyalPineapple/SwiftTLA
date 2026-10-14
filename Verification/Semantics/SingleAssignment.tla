@@ -1942,6 +1942,26 @@ THEOREM SourceConstructedStateIsExactlyGenerated ==
         <=> target = GeneratedConstructedState(inputs)
     BY SMT DEF SourceConstructedState, GeneratedConstructedState, States
 
+SnapshotParts(state, visible) ==
+    <<[key \in visible |-> state[key]],
+      [key \in Vars \ visible |-> state[key]]>>
+ReassembledSnapshot(parts, visible) ==
+    [key \in Vars |-> IF key \in visible THEN parts[1][key] ELSE parts[2][key]]
+
+THEOREM SnapshotAssemblyPreservesEveryField ==
+    ASSUME NEW state \in States,
+           NEW visible \in SUBSET Vars
+    PROVE ReassembledSnapshot(SnapshotParts(state, visible), visible) = state
+    BY SMT DEF SnapshotParts, ReassembledSnapshot, States
+
+THEOREM SnapshotPartsAreInjective ==
+    ASSUME NEW first \in States,
+           NEW second \in States,
+           NEW visible \in SUBSET Vars
+    PROVE SnapshotParts(first, visible) = SnapshotParts(second, visible)
+        => first = second
+    BY SnapshotAssemblyPreservesEveryField, SMT
+
 GeneratedApply(state, updates) ==
     [key \in Vars |->
         IF key \in updates.written THEN updates.values[key] ELSE state[key]]
@@ -3025,10 +3045,16 @@ THEOREM EmittedIntegerChoiceAtOne ==
     PROOF
     <1>1. {member \in {1, 2, 3} : member > 1} = {2, 3}
         BY SMT
-    <1>2. (CHOOSE member \in {2, 3} :
+    <1>2. {2, 3} \in SUBSET Int
+        BY SMT
+    <1>3. 2 \in {2, 3}
+        BY SMT
+    <1>4. \A other \in {2, 3} : 2 <= other
+        BY SMT
+    <1>5. (CHOOSE member \in {2, 3} :
               \A other \in {2, 3} : member <= other) = 2
-        BY UniqueMinimumIntegerChoice, SMT
-    <1>. QED BY <1>1, <1>2, SMT DEF IntegerChoice!advance
+        BY <1>2, <1>3, <1>4, UniqueMinimumIntegerChoice, SMT
+    <1>. QED BY <1>1, <1>5, SMT DEF IntegerChoice!advance
 
 THEOREM EmittedIntegerChoiceAtTwo ==
     choiceSelected = 2 =>
