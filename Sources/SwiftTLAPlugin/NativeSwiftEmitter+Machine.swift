@@ -1267,6 +1267,7 @@ func verifyGeneratedActionWriteOutput(
 
     var pending: [(id: Int, node: CompiledActionExpr)] = [(0, action)]
     var expectedChildren: [Int: [Int]] = [:]
+    var alternatives: [Int] = []
     var nextID = 1
     var expectedWriteCount = 0
     while let (id, node) = pending.popLast() {
@@ -1292,6 +1293,7 @@ func verifyGeneratedActionWriteOutput(
             nextID += 2
         case .or(let lhs, let rhs):
             expectedChildren[id] = [nextID, nextID + 1]
+            alternatives.append(id)
             pending.append((nextID, rhs))
             pending.append((nextID + 1, lhs))
             nextID += 2
@@ -1312,6 +1314,38 @@ func verifyGeneratedActionWriteOutput(
         }
         guard calls == children else {
             throw invalid("native.action.part.\(id)", "ordered child calls \(children)", "child calls \(calls)")
+        }
+    }
+    for id in alternatives {
+        let tokens = bodies[id]!
+        let positions = tokens.indices.filter { index in
+            index > 0 && index + 1 < tokens.count && tokens[index].hasPrefix("_actionPart") &&
+                tokens[index - 1] == "try" && tokens[index + 1] == "("
+        }
+        func call(at position: Int) -> [String]? {
+            var depth = 0
+            for end in (position + 1)..<tokens.count {
+                if tokens[end] == "(" { depth += 1 }
+                if tokens[end] == ")" { depth -= 1 }
+                if depth == 0 { return Array(tokens[(position - 1)...end]) }
+            }
+            return nil
+        }
+        guard positions.count == 2,
+              let right = call(at: positions[0]), let left = call(at: positions[1]),
+              Array(right.dropFirst(2)) == Array(left.dropFirst(2)),
+              Array(right.suffix(4)) == ["updates", ",", "branchEmit", ")"] else {
+            throw invalid("native.action.alternative.\(id)",
+                "both branches receive the same bindings, updates, and branch emitter", "invalid child calls")
+        }
+        let expected = ["try", "_NativeMachineOperations", ".", "visitAlternatives", "(",
+                        "[", "false", ",", "true", "]", ",", "emit", ":", "emit", ")", "{",
+                        "second", ",", "branchEmit", "in", "if", "second", "{"] + right +
+            ["}", "else", "{"] + left + ["}", "}"]
+        guard tokens == expected else {
+            throw invalid("native.action.alternative.\(id)",
+                "the shared ordered alternative visitor with both compiled branches",
+                "generated alternative body differs from the checked rule")
         }
     }
     guard parts.count == expectedWriteCount, Set(parts.map { $0.id }).count == parts.count else {

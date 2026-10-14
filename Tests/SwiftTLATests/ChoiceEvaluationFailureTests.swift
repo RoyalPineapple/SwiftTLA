@@ -723,6 +723,19 @@ struct ChoiceEvaluationFailureTests {
             .statements.first?.item.as(FunctionDeclSyntax.self))
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expected.tokens(viewMode: .sourceAccurate).map(\.text))
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(update, action: action.body, parts: writes)
+        let reversedOrder = update.description.replacingOccurrences(
+            of: "visitAlternatives([false, true]", with: "visitAlternatives([true, false]")
+        #expect(reversedOrder != update.description)
+        let reversedVisitor = try #require(Parser.parse(source: reversedOrder)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(reversedVisitor, action: action.body, parts: writes)
+            Issue.record("The generated alternative order changed the first-failure rule")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.alternative.0")
+        }
 
         let droppedSuccessfulBranch = Parser.parse(source: update.description.replacingOccurrences(
             of: "try _actionPart1(updates, branchEmit)", with: "return"))

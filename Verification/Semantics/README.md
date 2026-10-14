@@ -1557,6 +1557,16 @@ with the abstract rule's branch, binding, or failure semantics, nor that
 assignment expressions or the independent TLA+ output agree. Those remain
 separate obligations; this is not yet a general action-output theorem.
 
+For every compiled `or` node, the output checker additionally requires the
+complete emitted body to call the shared ordered alternative visitor with
+`[false, true]`, route the second alternative to the right child and the first
+to the left child, and pass the same bindings, updates, and branch emitter to
+both. Reversing that order fails the production check. The TLAPS
+`AlternativeTraversalRule` establishes the abstract union-of-successes and
+first-failure rule; interpreting the Swift helper's loop and callback behavior
+as that rule, and matching arbitrary child expressions to their TLA+ forms,
+remain explicit unproved links.
+
 The direct compiled `assign` renderer previously omitted both the value's
 definedness guard and its choice/arithmetic failure predicates. A focused
 regression failed on all four missing facts before the shared constructor fix;
