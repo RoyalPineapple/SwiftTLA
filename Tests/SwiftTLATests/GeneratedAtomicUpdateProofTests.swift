@@ -57,6 +57,26 @@ struct GeneratedAtomicUpdateProofTests {
         let emittedUpdates = try #require(member(named: "_Updates", in: members))
         let firstSlot = try #require(bindings["__PROOF_FIRST_SLOT__"])
         let secondSlot = try #require(bindings["__PROOF_SECOND_SLOT__"])
+        let wrongWriteSource = emittedUpdate.description.replacingOccurrences(
+            of: "_Updates(\(firstSlot): ___atomic_0_0)",
+            with: "_Updates(\(secondSlot): ___atomic_0_0)")
+        #expect(wrongWriteSource != emittedUpdate.description)
+        let wrongWrite = try #require(Parser.parse(source: wrongWriteSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        let compiledAction = try #require(model.program.behavior.actions.first)
+        let expectedWrites: [(id: Int, slot: String, value: String)] = [
+            (id: 5, slot: firstSlot, value: "___atomic_0_0"),
+            (id: 3, slot: secondSlot, value: "___atomic_1_1")
+        ]
+        try verifyGeneratedActionWriteOutput(emittedUpdate, action: compiledAction.body,
+            parts: expectedWrites)
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionWriteOutput(wrongWrite, action: compiledAction.body,
+                parts: expectedWrites)
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionWriteOutput(emittedUpdate, action: compiledAction.body, parts: [])
+        }
         let wrongMergeSource = emittedUpdates.description.replacingOccurrences(
             of: "&result.\(secondSlot)", with: "&result.\(firstSlot)")
         #expect(wrongMergeSource != emittedUpdates.description)

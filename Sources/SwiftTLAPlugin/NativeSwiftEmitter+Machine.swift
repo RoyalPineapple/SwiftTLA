@@ -407,12 +407,12 @@ extension NativeSwiftEmitter {
     }
 
     mutating func actionFunctions(_ root: CompiledActionExpr) throws -> (
-        source: String, unchangedParts: [(id: Int, slot: String, stateRead: String)]
+        source: String, writes: [(id: Int, slot: String, value: String)]
     ) {
         var pending: [(node: CompiledActionExpr, id: Int, bindings: [BinderID])] = [(root, 0, [])]
         var nextID = 1
         var declarations: [String] = []
-        var unchangedParts: [(id: Int, slot: String, stateRead: String)] = []
+        var writes: [(id: Int, slot: String, value: String)] = []
         while let (node, id, bindings) = pending.popLast() {
             func childCall(_ child: CompiledActionExpr, binding: BinderID? = nil,
                            updates: String = "updates", emit: String = "emit") -> String {
@@ -426,12 +426,16 @@ extension NativeSwiftEmitter {
             let body: String
             switch node {
             case .assign(let variableID, let value):
-                body = "if let merged = updates.merging(_Updates(\(variable(variableID)): \(try expression(value)))) { try emit(merged) }"
-            case .unchanged(let variableID):
-                body = "if let merged = updates.merging(_Updates(\(variable(variableID)): \(stateValue(variableID)))) { try emit(merged) }"
                 let slot = variable(variableID)
-                let stateRead = stateMemberNames[variableID].map { "state.state.\($0)" } ?? "state.\(slot)"
-                unchangedParts.append((id: id, slot: slot, stateRead: stateRead))
+                let evaluated = try expression(value)
+                body = "if let merged = updates.merging(_Updates(\(slot): \(evaluated))) { try emit(merged) }"
+                writes.append((id: id, slot: slot, value: evaluated))
+            case .unchanged(let variableID):
+                let slot = variable(variableID)
+                let value = stateValue(variableID)
+                body = "if let merged = updates.merging(_Updates(\(slot): \(value))) { try emit(merged) }"
+                let expectedRead = stateMemberNames[variableID].map { "state.state.\($0)" } ?? "state.\(slot)"
+                writes.append((id: id, slot: slot, value: expectedRead))
             case .guard_(let predicate):
                 if let constant = predicate.booleanConstant {
                     body = constant ? "try emit(updates)" : "return"
@@ -470,7 +474,7 @@ extension NativeSwiftEmitter {
             }
             """)
         }
-        return (declarations.joined(separator: "\n") + "\ntry _actionPart0(_Updates(), emit)", unchangedParts)
+        return (declarations.joined(separator: "\n") + "\ntry _actionPart0(_Updates(), emit)", writes)
     }
 
     mutating func updateFunction(_ action: CompiledAction, configurationParameters: String) throws -> DeclSyntax {
@@ -487,7 +491,7 @@ extension NativeSwiftEmitter {
             \(parts.source)
         }
         """)
-        try verifyGeneratedUnchangedActionOutput(declaration, parts: parts.unchangedParts)
+        try verifyGeneratedActionWriteOutput(declaration, action: action.body, parts: parts.writes)
         return declaration
     }
 
@@ -1200,17 +1204,41 @@ func verifyGeneratedUpdateApplyOutput(
     }
 }
 
-func verifyGeneratedUnchangedActionOutput(
-    _ declaration: DeclSyntax?, parts: [(id: Int, slot: String, stateRead: String)]
+func verifyGeneratedActionWriteOutput(
+    _ declaration: DeclSyntax?, action: CompiledActionExpr,
+    parts: [(id: Int, slot: String, value: String)]
 ) throws {
     guard let visitor = declaration?.as(FunctionDeclSyntax.self) else {
         throw CompilationDiagnostic(
             code: .unsupportedGeneratedValueShape, stage: .validation,
-            path: "native.action.unchanged", expected: "a generated update visitor",
+            path: "native.action.write", expected: "a generated update visitor",
             actual: "missing update visitor", nextSafeAction: "Report this native code generation failure."
         )
     }
     let tokens = Array(visitor.tokens(viewMode: .sourceAccurate)).map(\.text)
+    var pending = [action]
+    var expectedWriteCount = 0
+    while let node = pending.popLast() {
+        switch node {
+        case .assign, .unchanged:
+            expectedWriteCount += 1
+        case .guard_:
+            break
+        case .existsAction(_, _, let body), .define(_, _, let body):
+            pending.append(body)
+        case .ifElse(_, let yes, let no), .and(let yes, let no), .or(let yes, let no):
+            pending.append(yes)
+            pending.append(no)
+        }
+    }
+    guard parts.count == expectedWriteCount, Set(parts.map { $0.id }).count == parts.count else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.action.write", expected: "one unique generated write per compiled assignment or frame",
+            actual: "found \(parts.count) write parts for \(expectedWriteCount) compiled writes",
+            nextSafeAction: "Report this native code generation failure."
+        )
+    }
     var functionPositions: [String: [Int]] = [:]
     if tokens.count >= 2 {
         for index in 0..<(tokens.count - 1) where tokens[index] == "func" {
@@ -1222,7 +1250,7 @@ func verifyGeneratedUnchangedActionOutput(
         let positions = functionPositions[name] ?? []
         let expected = Parser.parse(source: """
         func proof() {
-            if let merged = updates.merging(_Updates(\(part.slot): \(part.stateRead))) { try emit(merged) }
+            if let merged = updates.merging(_Updates(\(part.slot): \(part.value))) { try emit(merged) }
         }
         """).statements.first?.item.as(FunctionDeclSyntax.self)
         var opening: Int?
@@ -1250,8 +1278,8 @@ func verifyGeneratedUnchangedActionOutput(
         guard positions.count == 1, expected != nil, actualBody == expectedBody else {
             throw CompilationDiagnostic(
                 code: .unsupportedGeneratedValueShape, stage: .validation,
-                path: "native.action.unchanged.\(part.id)",
-                expected: "merge the complete-state value of \(part.slot) without changing it",
+                path: "native.action.write.\(part.id)",
+                expected: "merge the compiled write to \(part.slot) and emit only a compatible update",
                 actual: "\(name): \(actualBody.prefix(40))",
                 nextSafeAction: "Report this native code generation failure."
             )

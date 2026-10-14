@@ -50,8 +50,8 @@ struct GeneratedSkipFrameTests {
         let wrongReadVisitor = try #require(Parser.parse(source: wrongRead)
             .statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
-            try verifyGeneratedUnchangedActionOutput(wrongReadVisitor, parts: [
-                (id: 1, slot: emitter.variable(variable.id), stateRead: "state.state.value"),
+            try verifyGeneratedActionWriteOutput(wrongReadVisitor, action: action.body, parts: [
+                (id: 1, slot: emitter.variable(variable.id), value: "state.state.value"),
             ])
         }
 
