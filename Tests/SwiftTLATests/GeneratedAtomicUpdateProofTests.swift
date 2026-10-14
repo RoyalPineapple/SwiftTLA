@@ -2,7 +2,7 @@ import Foundation
 import Testing
 import SwiftParser
 import SwiftSyntax
-import SwiftTLA
+@testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
 @Suite("Generated atomic update proof input")
@@ -209,6 +209,18 @@ struct GeneratedAtomicUpdateProofTests {
             .standardizedFileURL
         let checkedModule = try String(contentsOf: proofInput, encoding: .utf8)
         #expect(rendered == checkedModule)
+
+        let stateNames = try compiledProofModel().program.layout.variables.map(\.declaration.name)
+        let missingVariable = rendered.replacingOccurrences(
+            of: "VARIABLES first, second\n", with: "VARIABLES first\n")
+        #expect(missingVariable != rendered)
+        do {
+            try verifyRenderedVariableDeclaration(missingVariable, names: stateNames)
+            Issue.record("A missing emitted state variable was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.variables")
+            #expect(diagnostic.actual == "VARIABLES first")
+        }
 
         let machine = try GeneratedAtomicCopyProofModel.makeMachine()
         #expect(try machine.formalCall(for: .copy).name == "copy")

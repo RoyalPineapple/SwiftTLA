@@ -2439,8 +2439,9 @@ private extension CompiledModuleMetadata {
         }
         guard !isLibraryModule else {
             lines.append("====")
-            return (FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n"),
-                evaluationFailureDeclarations, evaluationInvariant)
+            let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
+            try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
+            return (source, evaluationFailureDeclarations, evaluationInvariant)
         }
 
         let initializations = Dictionary(
@@ -2557,8 +2558,9 @@ private extension CompiledModuleMetadata {
         if !renderedTemporalProperties.isEmpty { lines.append("") }
         if instancesAfterBehavior { lines += instanceDeclarations }
         lines.append("====")
-        return (FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n"),
-            evaluationFailureDeclarations, evaluationInvariant)
+        let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
+        try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
+        return (source, evaluationFailureDeclarations, evaluationInvariant)
     }
 
     func tlcConfiguration(behavior: CompiledBehavior, replacements: [TLCModuleReplacement],
@@ -2597,4 +2599,18 @@ private extension CompiledModuleMetadata {
         )
     }
 
+}
+
+func verifyRenderedVariableDeclaration(_ source: String, names: [String]) throws {
+    let declarations = source.split(separator: "\n").map(String.init).filter {
+        $0 == "VARIABLES" || $0.hasPrefix("VARIABLES ")
+            || $0 == "VARIABLE" || $0.hasPrefix("VARIABLE ")
+    }
+    let expected = names.isEmpty ? [] : ["VARIABLES \(names.joined(separator: ", "))"]
+    guard declarations == expected else {
+        throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+            path: "tla.variables", expected: expected.first ?? "no variable declaration",
+            actual: declarations.isEmpty ? "no variable declaration" : declarations.joined(separator: "; "),
+            nextSafeAction: "Regenerate the TLA+ module from the compiled state layout.")
+    }
 }
