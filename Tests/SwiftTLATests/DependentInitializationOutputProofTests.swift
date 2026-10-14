@@ -64,16 +64,30 @@ struct DependentInitializationOutputProofTests {
             let name = emitter.variable(initialization.variable)
             expectedLoops[name] = "\(name)Candidates"
         }
-        func verify(_ declaration: DeclSyntax) throws {
-            try verifyGeneratedInitialBindings(declaration, expected: expected,
-                expectedLoops: expectedLoops)
-        }
-        try verify(initialStates)
-
         let seed = try #require(model.program.layout.variables.first {
             $0.declaration.name == "seed"
         })
         let name = emitter.variable(seed.id)
+        let choice = try #require(model.program.layout.variables.first {
+            $0.declaration.name == "choice"
+        })
+        let choiceName = emitter.variable(choice.id)
+        let choiceInitialization = try #require(model.program.behavior.initializations.first {
+            $0.variable == choice.id
+        })
+        guard case .memberOf(let choiceDomain) = choiceInitialization.initialization else {
+            Issue.record("choice must have a dependent candidate domain")
+            return
+        }
+        let choiceType = try #require(model.program.variableTypes[choice.id])
+        let expectedChoiceSource = "\(try emitter.expression(choiceDomain, state: "")).sorted(by: \(try emitter.ordering(choiceType)))"
+        func verify(_ declaration: DeclSyntax) throws {
+            try verifyGeneratedInitialBindings(declaration, expected: expected,
+                expectedLoops: expectedLoops,
+                expectedCandidateSources: ["\(choiceName)Candidates": expectedChoiceSource])
+        }
+        try verify(initialStates)
+
         let truncated = initialStates.description.replacingOccurrences(
             of: "for \(name) in ",
             with: "let \(name) = 0\nfor _discard in ")
@@ -83,10 +97,6 @@ struct DependentInitializationOutputProofTests {
             try verify(changed)
         }
 
-        let choice = try #require(model.program.layout.variables.first {
-            $0.declaration.name == "choice"
-        })
-        let choiceName = emitter.variable(choice.id)
         let wrongDomain = initialStates.description.replacingOccurrences(
             of: "for \(choiceName) in \(choiceName)Candidates",
             with: "for \(choiceName) in []")
@@ -94,6 +104,14 @@ struct DependentInitializationOutputProofTests {
         let wrongLoop = try #require(Parser.parse(source: wrongDomain).statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
             try verify(wrongLoop)
+        }
+
+        let wrongCandidateSource = initialStates.description.replacingOccurrences(
+            of: "Set<Int>([0, 1])).sorted", with: "Set<Int>([0])).sorted")
+        #expect(wrongCandidateSource != initialStates.description)
+        let wrongCandidate = try #require(Parser.parse(source: wrongCandidateSource).statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verify(wrongCandidate)
         }
     }
 }

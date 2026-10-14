@@ -936,10 +936,14 @@ dependency order: fixed-value `let` or domain `for`. Replacing a domain loop
 with a fixed value is rejected. The emitter also checks that each domain loop
 iterates the candidate sequence named by the compiled plan; an altered
 iterable failed the focused regression before this check and is now rejected.
-These are syntactic output links, not proofs that candidate production, each
-emitted expression, the selected-state guard, or failures have the source
-meaning. Variable-free action modules and initialization failures still need
-separate semantics and output links.
+For visible member-of initializers, it also verifies that the parsed
+`_initialStates` body retains the exact candidate-producing assignment planned
+by the emitter. The dependent-choice fixture rejects a changed candidate set
+as a negative control. These are syntactic output links: the candidate source
+is derived from the same expression emitter, so this does not independently
+prove that candidate production, each emitted expression, the selected-state
+guard, or failures have the source meaning. Variable-free action modules and
+initialization failures still need separate semantics and output links.
 
 The TLA renderer prints action conjunction as `/\`. TLC must solve primed
 assignments as an action relation; making one such assignment the condition of

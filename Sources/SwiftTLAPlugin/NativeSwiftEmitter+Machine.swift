@@ -270,6 +270,7 @@ extension NativeSwiftEmitter {
         var code = "var result: [Snapshot] = []\n"
         var closing = ""
         var expectedLoops: [String: String] = [:]
+        var expectedCandidateSources: [String: String] = [:]
         for initialization in program.behavior.initializations {
             let type = program.variableTypes[initialization.variable]!
             let name = variable(initialization.variable)
@@ -301,7 +302,9 @@ extension NativeSwiftEmitter {
                     let eligible = sampleLimit == nil
                         ? "\(name)_isMember"
                         : "\(name)_sampleLimit > 0 && \(name)_isMember"
+                    let candidateSource = "\(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))"
                     expectedLoops[name] = "\(name)Candidates"
+                    expectedCandidateSources["\(name)Candidates"] = candidateSource
                     code += """
                     let \(name)Candidates: [\(try swiftType(type))]
                     if let selected = _selectedInitial {
@@ -310,7 +313,7 @@ extension NativeSwiftEmitter {
                         let \(name)_isMember = \(try self.expression(membership, state: ""))
                         \(name)Candidates = \(eligible) ? [\(name)] : []
                     } else {
-                        \(name)Candidates = \(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))
+                        \(name)Candidates = \(candidateSource)
                     }
                     for \(name) in \(name)Candidates {
 
@@ -362,7 +365,7 @@ extension NativeSwiftEmitter {
                 case .value: return "let \(name)"
                 case .memberOf: return "for \(name)"
                 }
-            }, expectedLoops: expectedLoops)
+            }, expectedLoops: expectedLoops, expectedCandidateSources: expectedCandidateSources)
         if program.behavior.initializations.contains(where: { initialization in
             guard case .memberOf(let expression) = initialization.initialization else { return false }
             if case .randomSubset = expression.computation.operation { return true }
@@ -992,7 +995,8 @@ extension NativeSwiftEmitter {
 }
 
 func verifyGeneratedInitialBindings(
-    _ declaration: DeclSyntax?, expected: [String], expectedLoops: [String: String]
+    _ declaration: DeclSyntax?, expected: [String], expectedLoops: [String: String],
+    expectedCandidateSources: [String: String]
 ) throws {
     guard let initialStates = declaration?.as(FunctionDeclSyntax.self) else {
         throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -1035,6 +1039,24 @@ func verifyGeneratedInitialBindings(
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
                 path: "native._initialStates.domains.\(name)", expected: sequence,
                 actual: "\(tokens.dropFirst(start).prefix(domain.count + 1))",
+                nextSafeAction: "Report this native code generation failure.")
+        }
+    }
+    for (name, source) in expectedCandidateSources {
+        var positions: [Int] = []
+        if tokens.count >= 2 {
+            for index in 0..<(tokens.count - 1) {
+                if tokens[index] == name, tokens[index + 1] == "=" {
+                    positions.append(index)
+                }
+            }
+        }
+        let assignment = "\(name) = \(source)\n"
+        let hasExpectedAssignment = initialStates.description.contains(assignment)
+        guard positions.count == 2, hasExpectedAssignment else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native._initialStates.candidates.\(name)", expected: source,
+                actual: "assignments=\(positions.count), exact candidate assignment=\(hasExpectedAssignment)",
                 nextSafeAction: "Report this native code generation failure.")
         }
     }
