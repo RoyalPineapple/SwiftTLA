@@ -418,10 +418,66 @@ struct CompiledTLARenderer {
     }
 
     private func anyFailurePredicate(_ action: CompiledActionExpr) throws -> String? {
-        let predicates = try evaluationFailures(action).map(\.predicate)
-            + (try choiceFailure(action).map { [$0] } ?? [])
+        switch action {
+        case .existsAction(let binder, let domain, let body):
+            let domainFailure = try expressionAnyFailure(domain)
+            guard let bodyFailure = try anyFailurePredicate(body) else { return domainFailure }
+            let quantified = "(\\E \(try binderName(binder)) \\in \(try state(domain)): \(bodyFailure))"
+            let guarded = try evaluationDefined(domain).map { "(IF \($0) THEN \(quantified) ELSE FALSE)" }
+                ?? quantified
+            return disjunction(domainFailure, guarded)
+        case .define(let binder, let value, let body):
+            let valueFailure = try expressionAnyFailure(value)
+            guard let bodyFailure = try anyFailurePredicate(body) else { return valueFailure }
+            let defined = try evaluationDefined(value)
+            guard repeatable(value) || defined != nil else { return valueFailure }
+            let bound = "(LET \(try binderName(binder)) == \(try state(value)) IN \(bodyFailure))"
+            let guarded = defined.map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
+            return disjunction(valueFailure, guarded)
+        case .guard_(let condition):
+            return try expressionAnyFailure(condition)
+        case .ifElse(let condition, let yes, let no):
+            let conditionFailure = try expressionAnyFailure(condition)
+            guard let selection = try selectedCondition(condition) else { return conditionFailure }
+            let yesFailure = try anyFailurePredicate(yes)
+            let noFailure = try anyFailurePredicate(no)
+            guard yesFailure != nil || noFailure != nil else { return conditionFailure }
+            let branch = "(IF \(selection.predicate) THEN \(yesFailure ?? "FALSE") ELSE \(noFailure ?? "FALSE"))"
+            let guarded = selection.defined.map { "(IF \($0) THEN \(branch) ELSE FALSE)" } ?? branch
+            return disjunction(conditionFailure, guarded)
+        case .and(.guard_(let condition), let body):
+            let conditionFailure = try expressionAnyFailure(condition)
+            guard let selection = try selectedCondition(condition),
+                  let bodyFailure = try anyFailurePredicate(body) else { return conditionFailure }
+            let selected = "(IF \(selection.predicate) THEN \(bodyFailure) ELSE FALSE)"
+            let guarded = selection.defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
+            return disjunction(conditionFailure, guarded)
+        case .or(let lhs, let rhs):
+            let first = try anyFailurePredicate(lhs)
+            let second = try anyFailurePredicate(rhs)
+            switch (first, second) {
+            case (nil, nil): return nil
+            case (let first?, nil): return first
+            case (nil, let second?): return second
+            case (let first?, let second?): return "(IF \(first) THEN TRUE ELSE \(second))"
+            }
+        default:
+            let predicates = try evaluationFailures(action).map(\.predicate)
+                + (try choiceFailure(action).map { [$0] } ?? [])
+            guard !predicates.isEmpty else { return nil }
+            return predicates.count == 1 ? predicates[0] : "(\(predicates.joined(separator: " \\/ ")))"
+        }
+    }
+
+    private func expressionAnyFailure(_ value: CompiledExpression) throws -> String? {
+        let predicates = try expressionEvaluationFailures(value).map(\.predicate)
+            + (try expressionChoiceFailure(value).map { [$0] } ?? [])
         guard !predicates.isEmpty else { return nil }
         return predicates.count == 1 ? predicates[0] : "(\(predicates.joined(separator: " \\/ ")))"
+    }
+
+    private func disjunction(_ first: String?, _ second: String) -> String {
+        first.map { "(\($0) \\/ \(second))" } ?? second
     }
 
     private func canonicalLeastPredicate(_ type: CompiledValueType, _ member: String, _ other: String) throws -> String? {

@@ -200,4 +200,39 @@ THEOREM CompleteFiniteAlternativeOutcomeAgrees ==
     BY AllFiniteCandidateFailuresAgree, SMT
         DEF SourceEdges, FormalEdges, Members, Positions
 
+CandidateHasSomeFailure(candidates, failures, kinds) ==
+    \E candidate \in candidates :
+        \E kind \in kinds : failures[candidate][kind]
+AnyFailureKindHasCandidate(candidates, failures, kinds) ==
+    \E kind \in kinds :
+        \E candidate \in candidates : failures[candidate][kind]
+
+THEOREM CandidateFailureAggregationPreservesVerdict ==
+    ASSUME NEW candidates \in SUBSET Values,
+           NEW kinds,
+           NEW failures \in [Values -> [kinds -> BOOLEAN]]
+    PROVE CandidateHasSomeFailure(candidates, failures, kinds)
+        <=> AnyFailureKindHasCandidate(candidates, failures, kinds)
+    BY SMT DEF CandidateHasSomeFailure, AnyFailureKindHasCandidate
+
+THEOREM OmittingAFailureKindChangesVerdict ==
+    ASSUME NEW candidates \in SUBSET Values,
+           NEW kinds,
+           NEW failures \in [Values -> [kinds -> BOOLEAN]],
+           NEW candidate \in candidates,
+           NEW omitted \in kinds,
+           failures[candidate][omitted],
+           \A value \in candidates :
+               \A kind \in kinds \ {omitted} : ~failures[value][kind]
+    PROVE CandidateHasSomeFailure(candidates, failures, kinds)
+        /\ ~CandidateHasSomeFailure(candidates, failures, kinds \ {omitted})
+    BY SMT DEF CandidateHasSomeFailure
+
+THEOREM EarlierFailureShortCircuitsLaterFailure ==
+    ASSUME NEW earlier \in BOOLEAN,
+           NEW later \in BOOLEAN
+    PROVE (earlier \/ (IF earlier THEN FALSE ELSE later))
+        <=> (IF earlier THEN TRUE ELSE later)
+    BY SMT
+
 =============================================================================
