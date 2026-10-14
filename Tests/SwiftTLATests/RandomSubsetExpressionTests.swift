@@ -50,6 +50,16 @@ struct RandomSubsetExpressionTests {
         }
     }
 
+    @Test("selected random-subset initialization preserves zero and negative count outcomes")
+    func selectedCountOutcomes() throws {
+        #expect(throws: NativeMachineEvaluationError.invalidRandomSubsetCount(-1)) {
+            try RandomSubsetCountModel.makeMachine(.init(limit: -1, chosen: 1))
+        }
+        #expect(throws: GeneratedMachineError.invalidInitialState) {
+            try RandomSubsetCountModel.makeMachine(.init(limit: 0, chosen: 1))
+        }
+    }
+
     @Test("formal evaluation samples a large function space without enumerating it")
     func interpretedFunctionDomain() throws {
         let sample = RandomSubset(upTo: 100,

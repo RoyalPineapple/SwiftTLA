@@ -1703,6 +1703,15 @@ and runtime interpretation of the visitors remain trusted. This instance
 does not establish arbitrary sequence-expression lowering, initialization,
 or temporal fidelity.
 
+Selected `RandomSubset(upTo:from:)` initialization now validates the count
+before checking a proposed member against the source domain. A negative count
+reports the native evaluation failure; zero admits no selected member. The
+focused regression failed on both cases before the change and now passes;
+the existing valid unsampled-member replay also passes. This closes only that
+native selected-initial-state inconsistency. The TLA+ randomization rule,
+TLC override, and their failure/order agreement with generated Swift are not
+established by these tests.
+
 Record exactly which parser, macro-expansion, Swift compiler/runtime, TLA+
 parser/TLC, PlusCal translator, serialization, and proof-checker facts remain
 assumptions. Do not describe a result as a universal guarantee if a backend

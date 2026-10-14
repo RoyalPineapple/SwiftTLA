@@ -282,20 +282,31 @@ extension NativeSwiftEmitter {
             case .memberOf(let expression):
                 if let field = stateMemberNames[initialization.variable] {
                     let membershipDomain: CompiledExpression
+                    let sampleLimit: String?
                     if case .randomSubset = expression.computation.operation {
                         membershipDomain = expression.computation.children[1]
+                        sampleLimit = """
+                        let \(name)_sampleLimit = \(try self.expression(expression.computation.children[0], state: ""))
+                        try _NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)
+                        """
                     } else {
                         membershipDomain = expression
+                        sampleLimit = nil
                     }
                     let membership = CompiledExpression(operation: .in, resultType: .bool, children: [
                         CompiledExpression(operation: .stateVariable(initialization.variable), resultType: type, children: []),
                         membershipDomain
                     ])
+                    let eligible = sampleLimit == nil
+                        ? "\(name)_isMember"
+                        : "\(name)_sampleLimit > 0 && \(name)_isMember"
                     code += """
                     let \(name)Candidates: [\(try swiftType(type))]
                     if let selected = _selectedInitial {
                         let \(name) = selected.\(field)
-                        \(name)Candidates = \(try self.expression(membership, state: "")) ? [\(name)] : []
+                        \(sampleLimit ?? "")
+                        let \(name)_isMember = \(try self.expression(membership, state: ""))
+                        \(name)Candidates = \(eligible) ? [\(name)] : []
                     } else {
                         \(name)Candidates = \(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))
                     }

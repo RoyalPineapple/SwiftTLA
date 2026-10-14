@@ -205,8 +205,12 @@ public enum _NativeMachineOperations: Sendable {
     public static func randomSubset<Element: Hashable & Sendable>(
         upTo count: Int, from values: Set<Element>
     ) throws -> Set<Element> {
-        guard count >= 0 else { throw NativeMachineEvaluationError.invalidRandomSubsetCount(count) }
+        try validateRandomSubsetCount(count)
         return Set(values.shuffled().prefix(count))
+    }
+
+    public static func validateRandomSubsetCount(_ count: Int) throws {
+        guard count >= 0 else { throw NativeMachineEvaluationError.invalidRandomSubsetCount(count) }
     }
 
     public static func randomElement<Element: Hashable & Sendable>(
@@ -221,7 +225,7 @@ public enum _NativeMachineOperations: Sendable {
     public static func randomFunctionSubset<Key: Hashable & Sendable, Value: Hashable & Sendable>(
         upTo count: Int, from domain: Set<Key>, to range: Set<Value>
     ) throws -> Set<[Key: Value]> {
-        guard count >= 0 else { throw NativeMachineEvaluationError.invalidRandomSubsetCount(count) }
+        try validateRandomSubsetCount(count)
         guard count > 0 else { return [] }
         guard !domain.isEmpty else { return [[:]] }
         guard !range.isEmpty else { return [] }
