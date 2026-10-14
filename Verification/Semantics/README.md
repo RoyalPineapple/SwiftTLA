@@ -766,13 +766,15 @@ labeled self-transition; an altered Swift state read fails its token witness.
 Macro expansion now checks every emitted `unchanged` action part against an
 independently constructed complete-state read-and-merge shape. The same altered
 read is rejected by that production check, not merely by the fixture witness.
+Macro expansion also checks each public State field's formal identity against
+its compiled variable declaration; a misassigned identity name is rejected.
 `EmittedSkipFrameMatchesSource` and `EmittedSkipInitialAndInvariant` connect the
 emitted module's action, initial state, and declared invariant to this instance.
 The focused Swift test passes locally, and pinned TLAPS 1.6.0-pre with arm64
 Z3 4.15.4 proved all 1,430 obligations in an earlier `SingleAssignment.tla`
 revision locally.
-Hosted evidence remains pending. The generic structural output check does not
-prove each generated field name maps to the correct source identity, that every
+Hosted evidence remains pending. These structural checks do not prove source
+binding chose the correct compiled variable identity, that every
 action composition instantiates the frame theorem, or Swift compiler/runtime
 interpretation.
 

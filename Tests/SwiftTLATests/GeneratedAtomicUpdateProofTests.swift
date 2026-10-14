@@ -93,8 +93,19 @@ struct GeneratedAtomicUpdateProofTests {
         let wrongStateMember = try #require(wrongState.statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedStateConstructorOutput(wrongStateMember, fields: [
-                (name: firstField, type: "Int", ordinal: 0),
-                (name: secondField, type: "Int", ordinal: 1),
+                (name: firstField, type: "Int", ordinal: 0, formalName: firstField),
+                (name: secondField, type: "Int", ordinal: 1, formalName: secondField),
+            ])
+        }
+        let wrongIdentitySource = emittedState.description.replacingOccurrences(
+            of: "formalName: \"\(secondField)\"", with: "formalName: \"\(firstField)\"")
+        #expect(wrongIdentitySource != emittedState.description)
+        let wrongIdentity = try #require(Parser.parse(source: wrongIdentitySource)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedStateConstructorOutput(wrongIdentity, fields: [
+                (name: firstField, type: "Int", ordinal: 0, formalName: firstField),
+                (name: secondField, type: "Int", ordinal: 1, formalName: secondField),
             ])
         }
         let wrongApplySource = emittedUpdates.description.replacingOccurrences(

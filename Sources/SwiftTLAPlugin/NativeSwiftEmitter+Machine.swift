@@ -118,7 +118,8 @@ extension NativeSwiftEmitter {
         }
         """)
         try verifyGeneratedStateConstructorOutput(stateDeclarations.first, fields: try api.variables.map {
-            (name: $0.swiftIdentifier, type: try swiftType(program.variableTypes[$0.id]!), ordinal: $0.id.ordinal)
+            (name: $0.swiftIdentifier, type: try swiftType(program.variableTypes[$0.id]!),
+             ordinal: $0.id.ordinal, formalName: program.layout.variables[$0.id.ordinal].declaration.name)
         })
         declarations += stateDeclarations
         declarations += try formalProjectionDeclarations()
@@ -1095,7 +1096,7 @@ func verifyGeneratedSnapshotOutput(
 }
 
 func verifyGeneratedStateConstructorOutput(
-    _ declaration: DeclSyntax?, fields: [(name: String, type: String, ordinal: Int)]
+    _ declaration: DeclSyntax?, fields: [(name: String, type: String, ordinal: Int, formalName: String)]
 ) throws {
     let state = declaration?.as(StructDeclSyntax.self)
     let variables = state?.memberBlock.members.compactMap { $0.decl.as(VariableDeclSyntax.self) } ?? []
@@ -1111,19 +1112,33 @@ func verifyGeneratedStateConstructorOutput(
         \(assignments)
     }
     """).statements.first?.item.as(InitializerDeclSyntax.self)
+    let identityEntries = fields.map {
+        "\\State.\($0.name): .init(swiftName: \(String(reflecting: $0.name)), formalName: \(String(reflecting: $0.formalName)))"
+    }.joined(separator: ",\n")
+    let expectedIdentities = Parser.parse(source: """
+    public static var fieldIdentities: [PartialKeyPath<State>: GeneratedModelFieldIdentity] {
+        [\(identityEntries.isEmpty ? ":" : identityEntries)]
+    }
+    """).statements.first?.item.as(VariableDeclSyntax.self)
+    let identities = variables.filter {
+        $0.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "fieldIdentities"
+    }
     let fieldsMatch = expectedFields.count == fields.count && variables.count == fields.count + 2
         && zip(variables, expectedFields).allSatisfy { pair in
             Array(pair.0.tokens(viewMode: .sourceAccurate)).map(\.text)
                 == Array(pair.1.tokens(viewMode: .sourceAccurate)).map(\.text)
         }
     guard state?.name.text == "State", fieldsMatch, initializers.count == 1,
+          identities.count == 1, let expectedIdentities,
+          Array(identities[0].tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(expectedIdentities.tokens(viewMode: .sourceAccurate)).map(\.text),
           let expectedInitializer,
           Array(initializers[0].tokens(viewMode: .sourceAccurate)).map(\.text)
             == Array(expectedInitializer.tokens(viewMode: .sourceAccurate)).map(\.text) else {
         throw CompilationDiagnostic(
             code: .unsupportedGeneratedValueShape, stage: .validation,
             path: "native.State.init",
-            expected: "one field and one matching constructor assignment per public state variable",
+            expected: "one field, matching constructor assignment, and formal identity per public state variable",
             actual: "the generated state declaration differs from the checked rule",
             nextSafeAction: "Report this native code generation failure."
         )
