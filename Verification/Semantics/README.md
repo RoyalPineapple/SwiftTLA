@@ -1571,6 +1571,18 @@ and runtime interpretation of the pinned visitor remain trusted. This
 instance does not establish arbitrary sequence-expression lowering,
 initialization, or temporal fidelity.
 
+EmptySequenceReadProof.tla imports an exact-output-checked generated module
+and proves the source and compiled rules for empty-sequence head and tail
+agree with both emitted TLA+ actions and their evaluation-failure predicates.
+It checks initial states, both complete labeled steps, the selected
+evaluation invariant, and a negative control that omits the failure check.
+The focused test pins both actual generated Swift action visitors and checks
+the shared native operation on empty and nonempty sequences. All 23 proof
+obligations passed locally; hosted evidence is pending. The Swift compiler
+and runtime interpretation of the visitors remain trusted. This instance
+does not establish arbitrary sequence-expression lowering, initialization,
+or temporal fidelity.
+
 Record exactly which parser, macro-expansion, Swift compiler/runtime, TLA+
 parser/TLC, PlusCal translator, serialization, and proof-checker facts remain
 assumptions. Do not describe a result as a universal guarantee if a backend

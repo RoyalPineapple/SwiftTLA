@@ -22,13 +22,15 @@ private enum OrderedEvaluationSite {
     case negativeModuloDivisor(guard_: String, divisor: String)
     case functionArgumentOutsideDomain(guard_: String)
     case sequenceIndexOutOfBounds(guard_: String, operands: String)
+    case emptySequence(guard_: String)
 
     var guard_: String {
         switch self {
         case .choice(let guard_), .arithmetic(_, let guard_, _),
              .divisionByZero(let guard_, _), .negativeModuloDivisor(let guard_, _),
              .functionArgumentOutsideDomain(let guard_),
-             .sequenceIndexOutOfBounds(let guard_, _): guard_
+             .sequenceIndexOutOfBounds(let guard_, _),
+             .emptySequence(let guard_): guard_
         }
     }
 
@@ -48,6 +50,8 @@ private enum OrderedEvaluationSite {
             return .functionArgumentOutsideDomain(guard_: guarded)
         case .sequenceIndexOutOfBounds(_, let operands):
             return .sequenceIndexOutOfBounds(guard_: guarded, operands: operands)
+        case .emptySequence:
+            return .emptySequence(guard_: guarded)
         }
     }
 }
@@ -58,6 +62,7 @@ enum RenderedEvaluationFailureKind {
     case negativeModuloDivisor
     case functionArgumentOutsideDomain
     case sequenceIndexOutOfBounds
+    case emptySequence
 }
 
 struct RenderedEvaluationFailure {
@@ -506,6 +511,9 @@ struct CompiledTLARenderer {
                 case .sequenceIndexOutOfBounds(let guard_, let operands):
                     failures.append(.init(predicate: preceded("~(\(guard_))", by: preceding),
                         operands: operands, kind: .sequenceIndexOutOfBounds))
+                case .emptySequence(let guard_):
+                    failures.append(.init(predicate: preceded("~(\(guard_))", by: preceding),
+                        operands: nil, kind: .emptySequence))
                 }
                 preceding.append(site.guard_)
             }
@@ -592,6 +600,11 @@ struct CompiledTLARenderer {
                 return preceding + [.sequenceIndexOutOfBounds(
                     guard_: "(\(index) \\in DOMAIN (\(sequence)))",
                     operands: "<<\(index), Len(\(sequence))>>")]
+            case .tupleHead, .tupleTail:
+                guard value.children.count == 1,
+                      let preceding = try collect(value.children[0]) else { return nil }
+                let sequence = try state(value.children[0])
+                return preceding + [.emptySequence(guard_: "Len(\(sequence)) > 0")]
             case .setSum:
                 guard value.resultType == .int, value.children.count == 2,
                       case .dictionary = value.children[0].resultType else { return nil }
@@ -659,7 +672,7 @@ struct CompiledTLARenderer {
         let hasSpecialFailure = sites.contains {
             switch $0 {
             case .divisionByZero, .negativeModuloDivisor, .functionArgumentOutsideDomain,
-                 .sequenceIndexOutOfBounds: true
+                 .sequenceIndexOutOfBounds, .emptySequence: true
             case .arithmetic(operation: .summation, guard_: _, operands: _): true
             default: false
             }

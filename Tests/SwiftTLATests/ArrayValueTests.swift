@@ -166,4 +166,69 @@ struct ArrayValueTests {
             try _NativeMachineOperations.sequenceElement(values, at: 3)
         }
     }
+
+    @Test("head and tail of an empty sequence report the same failure in both outputs")
+    func emptySequenceOperations() throws {
+        #expect(try _NativeMachineOperations.sequenceHead([4, 5]) == 4)
+        #expect(try _NativeMachineOperations.sequenceTail([4, 5]) == [5])
+        let compilation = try EmptySequenceReadMachine.spec.compile()
+        let sequenceID = try #require(compilation.layout.testVariableID(named: "sequence"))
+        let actions = compilation.semantics.behavior.actions
+        #expect(actions.count == 2)
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        for (action, operation) in zip(actions, [CompiledOperation.tupleHead, .tupleTail]) {
+            guard case .define(_, let read, _) = action.body else {
+                Issue.record("The sequence read must lower to one ordered binding")
+                return
+            }
+            #expect(read.operation == operation)
+            #expect(read.children.map(\.operation) == [.stateVariable(sequenceID)])
+            #expect(throws: EvalError.emptySequence) {
+                try runtime.successors(for: action.id, from: initial)
+            }
+        }
+        var machine = try EmptySequenceReadMachine.makeMachine()
+        let before = machine.state
+        #expect(throws: NativeMachineEvaluationError.emptySequence) {
+            try machine.send(.readHead)
+        }
+        #expect(throws: NativeMachineEvaluationError.emptySequence) {
+            try machine.send(.readTail)
+        }
+        #expect(machine.state == before)
+
+        let rendered = try EmptySequenceReadMachine.render()
+        let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/EmptySequenceReadMachine.tla")
+            .standardizedFileURL
+        let expectedTLA = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(rendered.tlaBundle.root.tla == expectedTLA)
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("ArrayValueFixtures.swift")
+        let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "EmptySequenceReadMachine" })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
+        let visitors = try emitter.machineMembers().compactMap { $0.as(FunctionDeclSyntax.self) }
+            .filter { $0.name.text.hasPrefix("_visitUpdates") }
+        #expect(visitors.count == 2)
+        func tokens(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
+        }
+        for visitor in visitors {
+            let name: String
+            switch visitor.name.text {
+            case "_visitUpdates0": name = "GeneratedEmptySequenceHeadSwiftVisitor.txt"
+            case "_visitUpdates1": name = "GeneratedEmptySequenceTailSwiftVisitor.txt"
+            default:
+                Issue.record("Unexpected generated action visitor: \(visitor.name.text)")
+                return
+            }
+            let expected = try String(contentsOf: proofInput.deletingLastPathComponent()
+                .appendingPathComponent(name), encoding: .utf8)
+            #expect(tokens(visitor.description) == tokens(expected))
+        }
+        #expect(rendered.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))
+    }
 }

@@ -6,7 +6,6 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case sets
         case setOfSets = "set of sets"
         case sequence
-        case nonemptySequence = "nonempty sequence"
         case function
         case functionAndSet = "function and set"
         case integerFunctionValues = "integer function values"
@@ -44,6 +43,7 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case negativeModuloDivisor(Int)
     case integerOverflow(NativeMachineEvaluationError.IntegerOperation, operands: [Int])
     case indexOutOfBounds(Int, Int)
+    case emptySequence
     case recursionDepthExceeded(Int)
     case transitionPredicateRequiresGeneratedChecking
     case registersRequireGeneratedChecking
@@ -81,6 +81,7 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case .integerOverflow(let operation, let operands):
             return "Integer \(operation.rawValue) overflowed for \(operands.map(String.init).joined(separator: ", "))"
         case .indexOutOfBounds(let index, let count): return "Index \(index) out of bounds (1..\(count))"
+        case .emptySequence: return NativeMachineEvaluationError.emptySequence.description
         case .recursionDepthExceeded(let limit): return "Evaluation exceeded recursive depth \(limit)"
         case .transitionPredicateRequiresGeneratedChecking:
             return "Transition predicates require generated native checking with both states"
@@ -1151,7 +1152,7 @@ private func nativeOperation<Value>(_ operation: () throws -> Value) throws -> V
     } catch NativeMachineEvaluationError.tupleIndexOutsideDomain(let index) {
         throw EvalError.tupleIndexOutsideDomain(.integer(index))
     } catch NativeMachineEvaluationError.emptySequence {
-        throw EvalError.expected(.nonemptySequence, actual: [.tuple([])])
+        throw EvalError.emptySequence
     }
 }
 

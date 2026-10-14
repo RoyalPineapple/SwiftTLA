@@ -64,3 +64,18 @@ struct ArrayReadOutsideDomainMachine {
         }
     }
 }
+
+@TLAModel
+struct EmptySequenceReadMachine {
+    enum Step: String, CaseIterable { case readHead, readTail }
+
+    static var spec: TLASpec {
+        #spec("EmptySequenceReadMachine") { scope in
+            let sequence = scope.sharedVar(initial: [Int]())
+            let head = scope.sharedVar(initial: 0)
+            let tail = scope.sharedVar(initial: [Int]())
+            Do(Step.readHead) { Assign(head, to: sequence.head()) }
+            Do(Step.readTail) { Assign(tail, to: sequence.tail()) }
+        }
+    }
+}

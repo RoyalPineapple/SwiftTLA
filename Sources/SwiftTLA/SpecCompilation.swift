@@ -2335,6 +2335,7 @@ private extension CompiledModuleMetadata {
             var negativeModuloOccurrence = 0
             var functionDomainOccurrence = 0
             var sequenceIndexOccurrence = 0
+            var emptySequenceOccurrence = 0
             for failure in try renderer.evaluationFailures(behavior.actions[index].body) {
                 let occurrence: Int
                 let failurePrefix: String
@@ -2370,6 +2371,12 @@ private extension CompiledModuleMetadata {
                     sequenceIndexOccurrence += 1
                     failurePrefix = "__SwiftTLASequenceIndexOutOfBoundsFailure"
                     operandsPrefix = "__SwiftTLASequenceIndexOutOfBoundsOperands"
+                    operation = nil
+                case .emptySequence:
+                    occurrence = emptySequenceOccurrence
+                    emptySequenceOccurrence += 1
+                    failurePrefix = "__SwiftTLAEmptySequenceFailure"
+                    operandsPrefix = nil
                     operation = nil
                 }
                 let suffix = occurrence == 0 ? "\(index)" : "\(index)_\(occurrence)"
