@@ -242,7 +242,7 @@ extension NativeSwiftEmitter {
             return "guard _NativeMachineOperations.mergeUpdate(&result.\(name), other.\(name)) else { return nil }"
         }.joined(separator: "\n")
         let updated = executionState { "\(variable($0)) ?? \(stateValue($0))" }
-        return try nativeDeclarations("""
+        let declarations = try nativeDeclarations("""
         private struct _Updates: Sendable {
             \(fields)
             func merging(_ other: Self) -> Self? {
@@ -255,6 +255,9 @@ extension NativeSwiftEmitter {
             }
         }
         """)
+        try verifyGeneratedUpdateMergeOutput(
+            declarations.first, slots: program.layout.variables.map { variable($0.id) })
+        return declarations
     }
 
     mutating func initialDeclarations(parameters: String, arguments: String) throws -> [DeclSyntax] {
@@ -956,6 +959,29 @@ extension NativeSwiftEmitter {
         return declarations
     }
 
+}
+
+func verifyGeneratedUpdateMergeOutput(_ declaration: DeclSyntax?, slots: [String]) throws {
+    let merge = declaration?.as(StructDeclSyntax.self)?.memberBlock.members.compactMap {
+        $0.decl.as(FunctionDeclSyntax.self)
+    }.first { $0.name.text == "merging" }
+    var expected = ["func", "merging", "(", "_", "other", ":", "Self", ")", "->", "Self", "?", "{",
+                    "var", "result", "=", "self"]
+    for slot in slots {
+        expected += ["guard", "_NativeMachineOperations", ".", "mergeUpdate", "(", "&", "result", ".",
+                     slot, ",", "other", ".", slot, ")", "else", "{", "return", "nil", "}"]
+    }
+    expected += ["return", "result", "}"]
+    guard let merge,
+          Array(merge.tokens(viewMode: .sourceAccurate)).map(\.text) == expected else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native._Updates.merging",
+            expected: "one mergeUpdate call per compiled state slot in declaration order",
+            actual: "the generated merge method differs from the checked rule",
+            nextSafeAction: "Report this native code generation failure."
+        )
+    }
 }
 
 func nativeDeclarations(_ source: String) throws -> [DeclSyntax] {

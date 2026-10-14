@@ -55,13 +55,16 @@ struct GeneratedAtomicUpdateProofTests {
         let wrongReadMember = try #require(wrongRead.statements.first?.item.as(DeclSyntax.self))
         #expect(templateBindings(wrongReadMember, expectedUpdate)?["__PROOF_READ__"] == "first")
         let emittedUpdates = try #require(member(named: "_Updates", in: members))
-        let expectedUpdates = try #require(member(named: "_Updates", in: templateMembers))
+        let firstSlot = try #require(bindings["__PROOF_FIRST_SLOT__"])
+        let secondSlot = try #require(bindings["__PROOF_SECOND_SLOT__"])
         let wrongMergeSource = emittedUpdates.description.replacingOccurrences(
-            of: "&result._value_second_1", with: "&result._value_first_0")
+            of: "&result.\(secondSlot)", with: "&result.\(firstSlot)")
         #expect(wrongMergeSource != emittedUpdates.description)
         let wrongMerge = Parser.parse(source: wrongMergeSource)
         let wrongMergeMember = try #require(wrongMerge.statements.first?.item.as(DeclSyntax.self))
-        #expect(templateBindings(wrongMergeMember, expectedUpdates) == nil)
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedUpdateMergeOutput(wrongMergeMember, slots: [firstSlot, secondSlot])
+        }
         let emittedDispatch = try #require(members.first { declaration in
             guard let function = declaration.as(FunctionDeclSyntax.self) else { return false }
             return function.name.text == "_visitSuccessors"

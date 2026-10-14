@@ -1883,13 +1883,14 @@ SourceSlotMerge(previous, key, writes, value, next) ==
           /\ next.written = previous.written \cup {key}
           /\ next.values = [previous.values EXCEPT ![key] = value]
 
-THEOREM GeneratedSlotMergePreservesEveryWriteOutcome ==
+THEOREM SourceSlotMergeIsExactlyGenerated ==
     ASSUME NEW previous \in GeneratedUpdates,
            NEW key \in Vars,
            NEW writes \in BOOLEAN,
-           NEW value \in Values
-    PROVE SourceSlotMerge(previous, key, writes, value,
-              GeneratedSlotMerge(previous, key, writes, value))
+           NEW value \in Values,
+           NEW next
+    PROVE SourceSlotMerge(previous, key, writes, value, next)
+        <=> next = GeneratedSlotMerge(previous, key, writes, value)
     BY SMT DEF SourceSlotMerge, GeneratedSlotMerge, GeneratedMerge,
         GeneratedUpdates, States
 
@@ -1904,6 +1905,29 @@ THEOREM OverwritingAConflictingWriteViolatesSource ==
         [accepted |-> TRUE, written |-> {key},
          values |-> [state EXCEPT ![key] = incoming]])
     BY SMT DEF SourceSlotMerge, States
+
+SlotMergeInstructions == [key: Vars, writes: BOOLEAN, value: Values]
+GeneratedSlotHistory(start, instructions, history) ==
+    /\ history[0] = start
+    /\ \A index \in 1..Len(instructions) :
+        history[index] = GeneratedSlotMerge(history[index - 1],
+            instructions[index].key, instructions[index].writes,
+            instructions[index].value)
+SourceSlotHistory(start, instructions, history) ==
+    /\ history[0] = start
+    /\ \A index \in 1..Len(instructions) :
+        SourceSlotMerge(history[index - 1], instructions[index].key,
+            instructions[index].writes, instructions[index].value,
+            history[index])
+
+THEOREM SourceAndGeneratedSlotHistoriesAreEqual ==
+    ASSUME NEW start \in GeneratedUpdates,
+           NEW instructions \in Seq(SlotMergeInstructions),
+           NEW history \in [0..Len(instructions) -> GeneratedUpdates]
+    PROVE SourceSlotHistory(start, instructions, history)
+        <=> GeneratedSlotHistory(start, instructions, history)
+    BY SourceSlotMergeIsExactlyGenerated, LenProperties, SMT
+        DEF SourceSlotHistory, GeneratedSlotHistory, SlotMergeInstructions
 
 GeneratedApply(state, updates) ==
     [key \in Vars |->
