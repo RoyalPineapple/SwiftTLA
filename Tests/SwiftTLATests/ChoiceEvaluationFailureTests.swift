@@ -712,6 +712,31 @@ struct ChoiceEvaluationFailureTests {
         #expect(definitions.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==") })
     }
 
+    @Test("A fallible With domain has no successor and retains its evaluation failure")
+    func undefinedChoiceDomain() throws {
+        let machines = try UndefinedChoiceDomainModel.initialMachines()
+        #expect(machines.count == 2)
+        let machine = try #require(machines.first { $0.state.divisor == 0 })
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+        #expect(machine.state.divisor == 0 && machine.state.result == 0)
+        let defined = try #require(machines.first { $0.state.divisor == 1 })
+        let successor = try #require(defined.successors(for: .pick).first)
+        #expect(successor.state.divisor == 1 && successor.state.result == 1)
+
+        let rendered = try UndefinedChoiceDomainModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let action = try #require(declarations.first { $0.hasPrefix("pick ==") })
+        let failure = try #require(declarations.first {
+            $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==")
+        })
+        #expect(action.contains("IF divisor # 0"))
+        #expect(action.contains("ELSE FALSE"))
+        #expect(failure.contains("~(divisor # 0)"))
+    }
+
     @Test("The emitted Swift visitor preserves both Either branches")
     func eitherBranchEmittedSwift() throws {
         let fixture = URL(fileURLWithPath: #filePath)

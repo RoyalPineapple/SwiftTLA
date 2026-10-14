@@ -212,8 +212,10 @@ struct CompiledTLARenderer {
                     }
                     parts.append(defined.map { "(IF \($0) THEN \(rendered) ELSE FALSE)" } ?? rendered)
                 case .existsAction(let binder, let set, let body):
+                    let defined = try evaluationDefined(set)
+                    if let defined { parts.append("(IF \(defined) THEN ") }
                     parts.append("(\\E \(try binderName(binder)) \\in \(try state(set)): ")
-                    schedule([.expression(body), .text(")")])
+                    schedule([.expression(body), .text(defined == nil ? ")" : ") ELSE FALSE)")])
                 case .ifElse(let condition, let then, let otherwise):
                     let defined = try evaluationDefined(condition)
                     if let defined { parts.append("(IF \(defined) THEN ") }

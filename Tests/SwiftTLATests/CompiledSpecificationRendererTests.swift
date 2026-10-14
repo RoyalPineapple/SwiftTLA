@@ -343,6 +343,31 @@ struct CompiledSpecificationRendererTests {
         #expect(try renderer.choiceFailure(chosen)?.contains("ENABLED (result' = 1)") == true)
     }
 
+    @Test("An undefined existential domain disables its TLA action and reports the failure")
+    func guardsUndefinedChoiceDomain() throws {
+        let compilation = try TLASpec(name: "UndefinedChoiceDomain", variables: [
+            .init(name: "result", initial: .int(0))
+        ], actions: [], invariants: []).compile()
+        let variable = try #require(compilation.layout.variables.first?.id)
+        let binder = BinderID(ordinal: 0)
+        let renderer = CompiledTLARenderer(moduleName: "UndefinedChoiceDomain", reservedNames: [],
+            layout: compilation.layout, bindings: .init(binders: [binder: "candidate"]),
+            operators: compilation.semantics.operators, actions: [], functions: [])
+        let quotient = CompiledExpression(operation: .divide, resultType: .int,
+            children: [.value(.integer(1)), .value(.integer(0))])
+        let domain = CompiledExpression(operation: .setLiteral, resultType: .set(.int), children: [quotient])
+        let action = CompiledActionExpr.existsAction(binder, domain,
+            .assign(variable, .boundValue(binder)))
+
+        let rendered = try renderer.action(action)
+        #expect(rendered.hasPrefix("(IF "))
+        #expect(rendered.contains("THEN (\\E candidate \\in"))
+        #expect(rendered.hasSuffix("ELSE FALSE)"))
+        #expect(try renderer.evaluationFailures(action).contains {
+            if case .divisionByZero = $0.kind { true } else { false }
+        })
+    }
+
     @Test("Sibling lexical scopes stay separate in rendered state and action expressions")
     func delimitsSiblingLexicalScopes() throws {
         let compiled = try TLASpec(name: "LexicalScopes", variables: [], actions: [], invariants: []).compile()

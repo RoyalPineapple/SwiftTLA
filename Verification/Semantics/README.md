@@ -1553,9 +1553,19 @@ preserves first-failure order and checking effects. Those links remain open.
 | `guard_` | Pure total guards agree at abstract positions; the checked-addition `When` instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof | Generalize emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
 | `and` | Compatible delta conjunction and conflicting relational writes; TLA+ now exposes a right-hand arithmetic or `CHOOSE` failure when the left action is enabled | Prove both emitters' evaluation order, first-failure selection across nondeterministic left branches, conflict/error semantics, and frame completion. |
 | `or` | Guarded-choice preservation conditional on equal branch edges; output-linked success-plus-failure and two distinct-failure fixtures; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, all failure kinds and TLA+ ordering, multiplicity policy, and both outputs. |
-| `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order; one output-linked case retains a successful candidate and reports another candidate's expression-level choice failure | Prove arbitrary emitted domain and branch expressions agree, including all failure kinds, first-failure order, and checking effects. |
+| `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order; an output-linked case retains a successful candidate and reports another candidate's expression-level choice failure; fallible domains now guard the emitted TLA+ action and retain evaluation failure | Prove arbitrary emitted domain and branch expressions agree, including all failure kinds, first-failure order, and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
 | `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule. |
+
+`DefinedChoiceDomainRule.tla` proves that guarding an existential domain
+preserves the enabled step and puts a domain evaluation failure before any
+body failure; an unguarded domain has a counterexample. The renderer regression
+failed before the guard was added. `UndefinedChoiceDomainModel` exercises an
+accepted `#spec` `With` with a zero-divisor domain through the generated Swift
+machine and rendered TLA+. This links one fallible domain instance to both
+outputs. The theorem assumes the definedness predicate is correct and that a
+domain value exists when it is true; it does not prove arbitrary domain
+evaluation, TLA+ `IF` execution, or branch semantics.
 
 The generated Swift action checker now walks every compiled action node and
 checks the actual emitted visitor tokens for exactly one corresponding local

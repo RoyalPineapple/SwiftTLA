@@ -389,3 +389,20 @@ struct ConjunctiveAlternativeFailureModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct UndefinedChoiceDomainModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("UndefinedChoiceDomainModel") { scope in
+            let divisor = scope.sharedVar(in: 0...1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                With(SetExpr<Int>.literal(1 / divisor)) { candidate in
+                    Assign(result, to: candidate)
+                }
+            }
+        }
+    }
+}
