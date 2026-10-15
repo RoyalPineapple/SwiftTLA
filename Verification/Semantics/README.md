@@ -1804,6 +1804,21 @@ and runtime interpretation of the visitors remain trusted. This instance
 does not establish arbitrary sequence-expression lowering, initialization,
 or temporal fidelity.
 
+SequenceEditPreservationProof.tla imports the exact generated TLA+ module for
+a `#spec` array removal and prefix. For arbitrary integer sequences and valid
+indices, it proves the independently indexed source values equal the lowered
+`SubSeq` forms; it then connects both complete labeled actions, the two
+initial states, index/length failure payloads, and the selected evaluation
+check to the emitted module. Its invalid-initial-state negative control fails
+if the evaluation check is omitted. The focused generated-machine test pins
+both complete Swift update visitors and checks that replacing either shared
+checked sequence operation breaks its output witness; it executes both
+successful and failing transitions. All 53 TLAPS obligations passed locally;
+hosted evidence is pending. The Swift compiler/runtime and the shared array
+operations' implementation of the stated one-based sequence rules remain
+trusted. The proof covers these two operators and this emitted model, not
+arbitrary expression composition, initialization plans, or temporal claims.
+
 Selected `RandomSubset(upTo:from:)` initialization now validates the count
 before checking a proposed member against the source domain. A negative count
 reports the native evaluation failure; zero admits no selected member. The

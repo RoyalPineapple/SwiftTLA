@@ -172,15 +172,44 @@ struct ArrayValueTests {
         #expect(invalid.state.row == [4, 5])
 
         let rendered = try SequenceEditBoundsMachine.render()
+        let proofDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics").standardizedFileURL
+        let expectedTLA = try String(contentsOf: proofDirectory
+            .appendingPathComponent("SequenceEditBoundsMachine.tla"), encoding: .utf8)
+        #expect(rendered.tlaBundle.root.tla == expectedTLA)
+        let unguardedTLA = rendered.tlaBundle.root.tla.replacingOccurrences(
+            of: "IF (IF (position \\in DOMAIN (row)) THEN TRUE ELSE FALSE)", with: "IF TRUE")
+        #expect(unguardedTLA != rendered.tlaBundle.root.tla)
+        #expect(unguardedTLA != expectedTLA)
+
+        let source = Parser.parse(source: try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().appendingPathComponent("ArrayValueFixtures.swift"), encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "SequenceEditBoundsMachine" })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
+        let visitors = try emitter.machineMembers().compactMap { member -> FunctionDeclSyntax? in
+            guard let function = member.as(FunctionDeclSyntax.self),
+                function.name.text.hasPrefix("_visitUpdates") else { return nil }
+            return function
+        }
+        #expect(visitors.count == 2)
+        func tokens(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
+        }
+        for (name, file, checkedCall) in [
+            ("_visitUpdates0", "GeneratedSequenceRemovingSwiftVisitor.txt",
+                "_NativeMachineOperations.sequenceRemoving(_sequenceValue, at: _sequenceIndex)"),
+            ("_visitUpdates1", "GeneratedSequencePrefixSwiftVisitor.txt",
+                "_NativeMachineOperations.sequencePrefix(_sequenceValue, length: _prefixLength)")
+        ] {
+            let visitor = try #require(visitors.first { $0.name.text == name })
+            let expected = try String(contentsOf: proofDirectory.appendingPathComponent(file), encoding: .utf8)
+            #expect(tokens(visitor.description) == tokens(expected))
+            let unchecked = visitor.description.replacingOccurrences(of: checkedCall, with: "_sequenceValue")
+            #expect(unchecked != visitor.description)
+            #expect(tokens(unchecked) != tokens(expected))
+        }
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
-        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
-        let remove = try #require(declarations.first { $0.hasPrefix("remove ==") })
-        let sequencePrefix = try #require(declarations.first { $0.hasPrefix("prefix ==") })
-        #expect(remove.contains("position \\in DOMAIN (row)"))
-        #expect(sequencePrefix.contains("position <= Len(row)"))
-        #expect(remove.contains("ELSE FALSE"))
-        #expect(sequencePrefix.contains("ELSE FALSE"))
-        #expect(declarations.filter { $0.hasPrefix("__SwiftTLASequenceIndexOutOfBoundsFailure") }.count == 2)
     }
 
     @Test("sequence reads use one-based indices and report the complete failure payload")
