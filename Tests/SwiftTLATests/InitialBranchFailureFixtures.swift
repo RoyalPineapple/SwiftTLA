@@ -1,0 +1,18 @@
+import SwiftTLA
+import SwiftTLAMacros
+
+@TLAModel
+struct DependentDivisionInitialModel {
+    enum Step: String, CaseIterable { case stay }
+
+    static var spec: TLASpec {
+        #spec {
+            let algorithm = Algorithm(label: "DependentDivisionInitial", scoped: { scope in
+                let divisor = scope.sharedVar(in: SetExpr<Int>.literal(0, 1))
+                let quotient = scope.sharedVar(initial: 1 / divisor)
+                Do(Step.stay) { Assign(quotient, to: quotient) }
+            })
+            algorithm
+        }
+    }
+}

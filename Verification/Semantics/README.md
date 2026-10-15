@@ -1909,8 +1909,14 @@ failure. The compiled runtime's outcome-aware entry point now retains the
 same valid state and first native failure for this direct random-subset case;
 its existing strict entry point still fails closed. This is tested Swift
 behavior, not a completed source-to-both-targets proof. The compiled runtime
-does not yet classify every expression failure as a branch outcome. For a
-direct random-subset initializer whose count and preceding initializers use
+now converts expression failures with exact native-error equivalents at the
+shared initial-branch boundary. A dependent `1 / divisor` initializer retains
+its valid sibling and reports division by zero on both generated Swift and
+compiled execution; an unmapped value-shape error still propagates. This does
+not cover every compiled expression failure or a failing selected initial
+invariant.
+
+For a direct random-subset initializer whose count and preceding initializers use
 the renderer's total-expression subset, the TLA+ emitter now writes a separate
 negative-count failure relation without adding false states to `Init`. A
 focused output test requires that relation to match the proof fixture and

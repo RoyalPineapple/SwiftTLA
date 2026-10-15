@@ -100,6 +100,9 @@ public enum _NativeMachineOperations: Sendable {
             try visit()
         } catch let failure as NativeMachineEvaluationError {
             onEvaluationFailure(failure)
+        } catch let failure as EvalError {
+            guard let native = failure.nativeFailure else { throw failure }
+            onEvaluationFailure(native)
         }
     }
 

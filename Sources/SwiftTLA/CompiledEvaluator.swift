@@ -93,6 +93,30 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     }
 }
 
+extension EvalError {
+    package var nativeFailure: NativeMachineEvaluationError? {
+        switch self {
+        case .noSatisfyingChoice: .noSatisfyingChoice
+        case .noMatchingCase: .noMatchingCase
+        case .powerSetTooLarge(let count, let maximum):
+            .powerSetTooLarge(actualCount: count, maximumCount: maximum)
+        case .nonEnumerableSequenceDomain: .nonEnumerableSequenceDomain
+        case .nonEnumerableIntegerDomain: .nonEnumerableIntegerDomain
+        case .collectionCardinalityOverflow(let operation, let operands):
+            .collectionCardinalityOverflow(operation, operands: operands)
+        case .divisionByZero: .divisionByZero
+        case .negativeModuloDivisor(let divisor): .negativeModuloDivisor(divisor)
+        case .integerOverflow(let operation, let operands): .integerOverflow(operation, operands: operands)
+        case .indexOutOfBounds(let index, let count): .indexOutOfBounds(index: index, count: count)
+        case .emptySequence: .emptySequence
+        case .recursionDepthExceeded(let limit): .recursionDepthExceeded(limit)
+        case .tupleIndexOutsideDomain(.integer(let index)): .tupleIndexOutsideDomain(index)
+        case .recordFieldUnavailable(.string(let field)): .recordFieldUnavailable(field)
+        default: nil
+        }
+    }
+}
+
 private extension CompiledValue {
     var kindDescription: String {
         switch self {
