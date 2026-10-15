@@ -564,9 +564,11 @@ struct CompiledTLARenderer {
         return (try state(condition), defined)
     }
 
-    private func expressionEvaluationFailures(_ value: CompiledExpression) throws -> [RenderedEvaluationFailure] {
+    func expressionEvaluationFailures(
+        _ value: CompiledExpression, stateNames: [VariableID: String] = [:]
+    ) throws -> [RenderedEvaluationFailure] {
         var failures: [RenderedEvaluationFailure] = []
-        if let sites = try orderedFallibleSites(value) {
+        if let sites = try orderedFallibleSites(value, stateNames: stateNames) {
             var preceding: [String] = []
             for site in sites {
                 switch site {
@@ -594,7 +596,7 @@ struct CompiledTLARenderer {
             }
         } else {
             var precedingGuards: [String] = []
-            for site in try arithmeticSites(value) {
+            for site in try arithmeticSites(value, stateNames: stateNames) {
                 let failure = "~(\(site.guard_))"
                 let predicate = precedingGuards.isEmpty
                     ? failure
@@ -607,14 +609,17 @@ struct CompiledTLARenderer {
         return failures
     }
 
-    func evaluationDefined(_ value: CompiledExpression) throws -> String? {
-        if let sites = try orderedFallibleSites(value) {
+    func evaluationDefined(
+        _ value: CompiledExpression, stateNames: [VariableID: String] = [:]
+    ) throws -> String? {
+        if let sites = try orderedFallibleSites(value, stateNames: stateNames) {
             let defined: String = sites.reversed().reduce("TRUE") { result, site in
                 "(IF \(site.guard_) THEN \(result) ELSE FALSE)"
             }
             return defined
         }
-        return try choiceDefined(value) ?? arithmeticDefined(value)
+        return try choiceDefined(value, stateNames: stateNames)
+            ?? arithmeticDefined(value, stateNames: stateNames)
     }
 
     private func preceded(_ predicate: String, by guards: [String]) -> String {
@@ -623,7 +628,9 @@ struct CompiledTLARenderer {
         }
     }
 
-    private func orderedFallibleSites(_ expression: CompiledExpression) throws -> [OrderedEvaluationSite]? {
+    private func orderedFallibleSites(
+        _ expression: CompiledExpression, stateNames: [VariableID: String] = [:]
+    ) throws -> [OrderedEvaluationSite]? {
         // shortcut: effectful expressions still need path-sensitive outcome rules.
         func collect(_ value: CompiledExpression) throws -> [OrderedEvaluationSite]? {
             switch value.operation {
@@ -635,19 +642,19 @@ struct CompiledTLARenderer {
                       let condition = try collect(value.children[0]),
                       let selected = try collect(value.children[1]),
                       let unselected = try collect(value.children[2]) else { return nil }
-                let predicate = try state(value.children[0])
+                let predicate = try state(value.children[0], stateNames: stateNames)
                 return condition + selected.map { $0.selected(by: predicate, whenTrue: true) }
                     + unselected.map { $0.selected(by: predicate, whenTrue: false) }
             case .and, .or:
                 guard value.children.count == 2,
                       let left = try collect(value.children[0]),
                       let right = try collect(value.children[1]) else { return nil }
-                let predicate = try state(value.children[0])
+                let predicate = try state(value.children[0], stateNames: stateNames)
                 return left + right.map {
                     $0.selected(by: predicate, whenTrue: value.operation == .and)
                 }
             case .choose:
-                guard let defined = try choiceDefined(value) else { return nil }
+                guard let defined = try choiceDefined(value, stateNames: stateNames) else { return nil }
                 return [.choice(guard_: defined)]
             case .functionApply:
                 guard value.children.count == 2,
@@ -659,8 +666,8 @@ struct CompiledTLARenderer {
                     guard let sites = try collect(child) else { return nil }
                     preceding += sites
                 }
-                let function = try state(value.children[0])
-                let argument = try state(value.children[1])
+                let function = try state(value.children[0], stateNames: stateNames)
+                let argument = try state(value.children[1], stateNames: stateNames)
                 return preceding + [.functionArgumentOutsideDomain(
                     guard_: "(\(argument) \\in DOMAIN (\(function)))")]
             case .tupleDynamicAccess, .tupleRemoving, .tuplePrefix:
@@ -670,8 +677,8 @@ struct CompiledTLARenderer {
                     guard let sites = try collect(child) else { return nil }
                     preceding += sites
                 }
-                let sequence = try state(value.children[0])
-                let index = try state(value.children[1])
+                let sequence = try state(value.children[0], stateNames: stateNames)
+                let index = try state(value.children[1], stateNames: stateNames)
                 let defined = value.operation == .tuplePrefix
                     ? "(\(index) <= Len(\(sequence)))"
                     : "(\(index) \\in DOMAIN (\(sequence)))"
@@ -681,7 +688,7 @@ struct CompiledTLARenderer {
             case .tupleHead, .tupleTail:
                 guard value.children.count == 1,
                       let preceding = try collect(value.children[0]) else { return nil }
-                let sequence = try state(value.children[0])
+                let sequence = try state(value.children[0], stateNames: stateNames)
                 return preceding + [.emptySequence(guard_: "Len(\(sequence)) > 0")]
             case .setSum:
                 guard value.resultType == .int, value.children.count == 2,
@@ -691,16 +698,16 @@ struct CompiledTLARenderer {
                     guard let sites = try collect(child) else { return nil }
                     preceding += sites
                 }
-                let function = try state(value.children[0])
-                let domain = try state(value.children[1])
+                let function = try state(value.children[0], stateNames: stateNames)
+                let domain = try state(value.children[1], stateNames: stateNames)
                 preceding.append(.functionArgumentOutsideDomain(
                     guard_: "(\(domain) \\subseteq DOMAIN (\(function)))"))
-                let sum = try state(value)
+                let sum = try state(value, stateNames: stateNames)
                 let minimum = TLAValue.int(.min).description
                 let maximum = TLAValue.int(.max).description
                 return preceding + [.arithmetic(operation: .summation,
                     guard_: "(\(sum) >= \(minimum) /\\ \(sum) <= \(maximum))",
-                    operands: try sortedSummationOperands(value))]
+                    operands: try sortedSummationOperands(value, stateNames: stateNames))]
             case .add, .subtract, .multiply, .negate, .divide, .integerDivide, .modulo:
                 guard value.resultType == .int,
                       value.children.count == (value.operation == .negate ? 1 : 2) else { return nil }
@@ -712,8 +719,8 @@ struct CompiledTLARenderer {
                 }
                 switch value.operation {
                 case .divide, .integerDivide:
-                    let dividend = try state(value.children[0])
-                    let divisor = try state(value.children[1])
+                    let dividend = try state(value.children[0], stateNames: stateNames)
+                    let divisor = try state(value.children[1], stateNames: stateNames)
                     let minimum = TLAValue.int(.min).description
                     return preceding + [
                         .divisionByZero(guard_: "\(divisor) # 0", divisor: divisor),
@@ -722,13 +729,13 @@ struct CompiledTLARenderer {
                             operands: "<<\(dividend), \(divisor)>>")
                     ]
                 case .modulo:
-                    let divisor = try state(value.children[1])
+                    let divisor = try state(value.children[1], stateNames: stateNames)
                     return preceding + [
                         .divisionByZero(guard_: "\(divisor) # 0", divisor: divisor),
                         .negativeModuloDivisor(guard_: "\(divisor) > 0", divisor: divisor)
                     ]
                 default:
-                    let site = try arithmeticSite(value)
+                    let site = try arithmeticSite(value, stateNames: stateNames)
                     return preceding + [.arithmetic(operation: site.operation,
                         guard_: site.guard_, operands: site.operands)]
                 }
@@ -758,7 +765,7 @@ struct CompiledTLARenderer {
         let hasChoice = sites.contains { if case .choice = $0 { return true }; return false }
         let hasNestedChoice: Bool
         if hasChoice {
-            hasNestedChoice = try choiceDefined(expression) == nil
+            hasNestedChoice = try choiceDefined(expression, stateNames: stateNames) == nil
         } else {
             hasNestedChoice = false
         }
@@ -772,11 +779,14 @@ struct CompiledTLARenderer {
         return sites
     }
 
-    private func sortedSummationOperands(_ expression: CompiledExpression) throws -> String {
-        let function = try state(expression.children[0])
-        let domain = try state(expression.children[1])
+    private func sortedSummationOperands(
+        _ expression: CompiledExpression, stateNames: [VariableID: String] = [:]
+    ) throws -> String {
+        let function = try state(expression.children[0], stateNames: stateNames)
+        let domain = try state(expression.children[1], stateNames: stateNames)
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
             .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(stateNames.values)
         var names: [String] = []
         for role in ["index", "candidate", "member"] {
             var name = "__SwiftTLASum_\(role)"
@@ -792,13 +802,17 @@ struct CompiledTLARenderer {
             + "Cardinality(\(earlier)) < \(position) /\\ \(position) <= Cardinality(\(through)))]"
     }
 
-    private func arithmeticDefined(_ value: CompiledExpression) throws -> String? {
-        let sites = try arithmeticSites(value)
+    private func arithmeticDefined(
+        _ value: CompiledExpression, stateNames: [VariableID: String] = [:]
+    ) throws -> String? {
+        let sites = try arithmeticSites(value, stateNames: stateNames)
         guard !sites.isEmpty else { return nil }
         return sites.count == 1 ? sites[0].guard_ : "(\(sites.map(\.guard_).joined(separator: " /\\ ")))"
     }
 
-    private func arithmeticSites(_ value: CompiledExpression) throws -> [(
+    private func arithmeticSites(
+        _ value: CompiledExpression, stateNames: [VariableID: String] = [:]
+    ) throws -> [(
         guard_: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
     )] {
         // shortcut: only pure checked arithmetic, including total comparisons, is guarded; extend to other fallible expressions.
@@ -812,20 +826,22 @@ struct CompiledTLARenderer {
             }
         }
         collect(value)
-        return try operations.map(arithmeticSite)
+        return try operations.map { try arithmeticSite($0, stateNames: stateNames) }
     }
 
-    private func arithmeticSite(_ expression: CompiledExpression) throws -> (
+    private func arithmeticSite(
+        _ expression: CompiledExpression, stateNames: [VariableID: String] = [:]
+    ) throws -> (
         guard_: String, operands: String, operation: NativeMachineEvaluationError.IntegerOperation
     ) {
-        let lhs = try state(expression.children[0])
+        let lhs = try state(expression.children[0], stateNames: stateNames)
         let swiftIntMinimum = TLAValue.int(.min).description
         let swiftIntMaximum = TLAValue.int(.max).description
         if case .negate = expression.operation {
             let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000)"
             return ("(IF \(small) THEN TRUE ELSE \(lhs) # \(swiftIntMinimum))", "<<\(lhs)>>", .negation)
         }
-        let rhs = try state(expression.children[1])
+        let rhs = try state(expression.children[1], stateNames: stateNames)
         let smallLimit = expression.operation == .multiply ? 40000 : 1000000000
         let small = "(\(lhs) >= -\(smallLimit) /\\ \(lhs) <= \(smallLimit) /\\ \(rhs) >= -\(smallLimit) /\\ \(rhs) <= \(smallLimit))"
         let exact: String
@@ -860,9 +876,9 @@ struct CompiledTLARenderer {
         }
     }
 
-    func choiceDefined(_ value: CompiledExpression) throws -> String? {
+    func choiceDefined(_ value: CompiledExpression, stateNames: [VariableID: String] = [:]) throws -> String? {
         if case .not = value.operation, value.children.count == 1 {
-            return try choiceDefined(value.children[0])
+            return try choiceDefined(value.children[0], stateNames: stateNames)
         }
         guard case .choose(let binder) = value.operation else { return nil }
         guard value.children.count == 2 else {
@@ -870,7 +886,7 @@ struct CompiledTLARenderer {
         }
         // shortcut: only repeatable total operands may be guarded; extend with per-operation proofs.
         guard value.children.allSatisfy(repeatable) else { return nil }
-        return "(\\E \(try binderName(binder)) \\in \(try state(value.children[0])) : \(try state(value.children[1])))"
+        return "(\\E \(try binderName(binder)) \\in \(try state(value.children[0], stateNames: stateNames)) : \(try state(value.children[1], stateNames: stateNames)))"
     }
 
     private func repeatable(_ expression: CompiledExpression) -> Bool {

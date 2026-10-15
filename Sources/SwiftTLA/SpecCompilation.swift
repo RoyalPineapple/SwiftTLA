@@ -2463,7 +2463,9 @@ private extension CompiledModuleMetadata {
             }
             switch initialization {
             case .value(let expression):
-                return "\(name) = \(try renderer.state(expression))"
+                let assignment = "\(name) = \(try renderer.state(expression))"
+                return try renderer.evaluationDefined(expression)
+                    .map { "(IF \($0) THEN \(assignment) ELSE FALSE)" } ?? assignment
             case .memberOf(let set):
                 let literal = set.computation
                 if case .randomSubset = literal.operation {
@@ -2567,6 +2569,83 @@ private extension CompiledModuleMetadata {
                 }
             }
             lines.append("\(name)(\(failedCount)) == \(relation)")
+        }
+        for (index, initialization) in behavior.initializations.enumerated() {
+            guard case .value(let expression) = initialization.initialization,
+                  behavior.initializations.prefix(index).allSatisfy({ prior in
+                      switch prior.initialization {
+                      case .value(let expression), .memberOf(let expression):
+                          return isTotalInitialExpression(expression)
+                      }
+                  }) else { continue }
+            var prefixNames: [VariableID: String] = [:]
+            for prior in behavior.initializations.prefix(index) {
+                var binder = "__SwiftTLAInitialValue\(prior.variable.ordinal)"
+                while occupied.contains(binder) { binder += "_" }
+                occupied.insert(binder)
+                prefixNames[prior.variable] = binder
+            }
+            var occurrences: [String: Int] = [:]
+            for failure in try renderer.expressionEvaluationFailures(expression, stateNames: prefixNames) {
+                let stem: String
+                let operation: String?
+                switch failure.kind {
+                case .overflow(let kind):
+                    stem = "Overflow"
+                    operation = kind.rawValue
+                case .divisionByZero:
+                    stem = "DivisionByZero"
+                    operation = nil
+                case .negativeModuloDivisor:
+                    stem = "NegativeModuloDivisor"
+                    operation = nil
+                case .functionArgumentOutsideDomain:
+                    stem = "FunctionArgumentOutsideDomain"
+                    operation = nil
+                case .sequenceIndexOutOfBounds:
+                    stem = "SequenceIndexOutOfBounds"
+                    operation = nil
+                case .emptySequence:
+                    stem = "EmptySequence"
+                    operation = nil
+                }
+                let occurrence = occurrences[stem, default: 0]
+                occurrences[stem] = occurrence + 1
+                let suffix = "\(initialization.variable.ordinal)" + (occurrence == 0 ? "" : "_\(occurrence)")
+                var name = "__SwiftTLAInitial\(stem)Failure\(suffix)"
+                while occupied.contains(name) { name += "_" }
+                occupied.insert(name)
+                let operandsName: String?
+                if failure.operands != nil {
+                    var name = "__SwiftTLAInitialFailedOperands\(suffix)"
+                    while occupied.contains(name) { name += "_" }
+                    occupied.insert(name)
+                    operandsName = name
+                } else {
+                    operandsName = nil
+                }
+                var relation = failure.predicate
+                if let operandsName, let operands = failure.operands {
+                    relation = "(IF \(failure.predicate) THEN \(operandsName) = \(operands) ELSE FALSE)"
+                }
+                for prior in behavior.initializations.prefix(index).reversed() {
+                    let binder = prefixNames[prior.variable]!
+                    switch prior.initialization {
+                    case .value(let expression):
+                        relation = "(LET \(binder) == \(try renderer.state(expression, stateNames: prefixNames)) IN \(relation))"
+                    case .memberOf(let expression):
+                        relation = "(\\E \(binder) \\in \(try renderer.state(expression, stateNames: prefixNames)): \(relation))"
+                    }
+                }
+                let parameters = operandsName.map { "(\($0))" } ?? ""
+                lines.append("\(name)\(parameters) == \(relation)")
+                if let operation {
+                    var operationName = "__SwiftTLAInitialOverflowOperation\(suffix)"
+                    while occupied.contains(operationName) { operationName += "_" }
+                    occupied.insert(operationName)
+                    lines.append("\(operationName) == \"\(operation)\"")
+                }
+            }
         }
         if lines.last != "" { lines.append("") }
 

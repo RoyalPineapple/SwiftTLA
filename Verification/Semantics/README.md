@@ -1919,8 +1919,19 @@ complete candidates in the generated machine's depth-first branch order and
 evaluates a selected initial invariant on each candidate. Focused regressions
 retain a valid sibling when that invariant fails and preserve an earlier
 invariant failure ahead of a later initializer failure. This is a tested
-Swift-path agreement; the corresponding TLA+ failure relation and retained
-comparison evidence are still absent.
+Swift-path agreement; first-failure ordering across initial branches and
+retained comparison evidence remain absent on the TLA+ path.
+
+For the dependent `1 / divisor` fixture, the renderer now guards `Init` before
+division and emits separate initial division-by-zero and overflow relations.
+An exact-output test pins the complete generated TLA+ module, while
+`DependentDivisionInitialOutcomeProof.tla` proves that its complete initial
+state predicate, division failure operand, overflow relation, and operation
+identity agree with independent source rules. Its missing-failure negative
+control distinguishes a valid sibling from the failed initial branch. All 13
+TLAPS obligations pass locally. This closes one concrete TLA+ output slice;
+it does not prove arbitrary initializer expressions, first-failure order,
+automatic TLC verdict selection, or the generated Swift emitter in general.
 
 For a direct random-subset initializer whose count and preceding initializers use
 the renderer's total-expression subset, the TLA+ emitter now writes a separate

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 
@@ -15,6 +16,16 @@ struct InitialBranchFailureTests {
         #expect(compiled.firstFailure == generated.firstFailure)
         let quotient = try #require(compilation.layout.testVariableID(named: "quotient"))
         #expect(try compiled.states[0].value(for: quotient) == .integer(1))
+    }
+
+    @Test("Rendered dependent division retains its initial failure outcome")
+    func renderedDependentDivisionFailure() throws {
+        let tla = try DependentDivisionInitialModel.render().tlaBundle.tla
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/DependentDivisionInitialModel.tla")
+            .standardizedFileURL
+        let checkedModule = try String(contentsOf: fixture, encoding: .utf8)
+        #expect(tla == checkedModule)
     }
 
     @Test("A selected invariant failure retains its valid initial sibling")
