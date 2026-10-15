@@ -15,6 +15,11 @@ private enum ActionRenderingTask {
     case text(String)
 }
 
+private enum ActionVerificationTask {
+    case expression(CompiledActionExpr)
+    case text(String)
+}
+
 private enum OrderedEvaluationSite {
     case choice(guard_: String)
     case arithmetic(operation: NativeMachineEvaluationError.IntegerOperation, guard_: String, operands: String)
@@ -238,7 +243,79 @@ struct CompiledTLARenderer {
                 }
             }
         }
-        return parts.joined()
+        let rendered = parts.joined()
+        try verifyActionOutput(rendered, matches: expression)
+        return rendered
+    }
+
+    func verifyActionOutput(_ emitted: String, matches expression: CompiledActionExpr) throws {
+        var tasks = [ActionVerificationTask.expression(expression)]
+        var cursor = emitted.startIndex
+        func expect(_ fragment: String) throws {
+            guard emitted[cursor...].hasPrefix(fragment) else {
+                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
+                    path: "tla.action.output", expected: fragment,
+                    actual: String(emitted[cursor...].prefix(80)),
+                    nextSafeAction: "Report this TLA+ action generation failure.")
+            }
+            cursor = emitted.index(cursor, offsetBy: fragment.count)
+        }
+        func schedule(_ values: [ActionVerificationTask]) {
+            tasks.append(contentsOf: values.reversed())
+        }
+        while let task = tasks.popLast() {
+            switch task {
+            case .text(let fragment):
+                try expect(fragment)
+            case .expression(let action):
+                switch action {
+                case .assign(let variable, let value):
+                    let assignment = "\(try variableName(variable))' = \(try state(value))"
+                    let defined = try evaluationDefined(value)
+                    try expect(defined.map { "(IF \($0) THEN \(assignment) ELSE FALSE)" } ?? assignment)
+                case .unchanged(let variable):
+                    try expect("UNCHANGED \(try variableName(variable))")
+                case .guard_(let condition):
+                    let predicate = try state(condition)
+                    let defined = try evaluationDefined(condition)
+                    let selected: String
+                    if case .value(.boolean) = condition.operation {
+                        selected = predicate
+                    } else {
+                        selected = "(\(predicate)) = TRUE"
+                    }
+                    try expect(defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected)
+                case .existsAction(let binder, let domain, let body):
+                    let defined = try evaluationDefined(domain)
+                    if let defined { try expect("(IF \(defined) THEN ") }
+                    try expect("(\\E \(try binderName(binder)) \\in \(try state(domain)): ")
+                    schedule([.expression(body), .text(defined == nil ? ")" : ") ELSE FALSE)")])
+                case .define(let binder, let value, let body):
+                    let defined = try evaluationDefined(value)
+                    if let defined { try expect("(IF \(defined) THEN ") }
+                    try expect("(LET \(try binderName(binder)) == \(try state(value)) IN ")
+                    schedule([.expression(body), .text(defined == nil ? ")" : ") ELSE FALSE)")])
+                case .ifElse(let condition, let yes, let no):
+                    let defined = try evaluationDefined(condition)
+                    if let defined { try expect("(IF \(defined) THEN ") }
+                    try expect("(IF \(try state(condition)) THEN (")
+                    schedule([.expression(yes), .text(") ELSE ("), .expression(no),
+                        .text(defined == nil ? "))" : ")) ELSE FALSE)")])
+                case .and(let lhs, let rhs):
+                    try expect("(")
+                    schedule([.expression(lhs), .text(" /\\ "), .expression(rhs), .text(")")])
+                case .or(let lhs, let rhs):
+                    try expect("(")
+                    schedule([.expression(lhs), .text(" \\/ "), .expression(rhs), .text(")")])
+                }
+            }
+        }
+        guard cursor == emitted.endIndex else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
+                path: "tla.action.output", expected: "the end of the compiled action",
+                actual: String(emitted[cursor...].prefix(80)),
+                nextSafeAction: "Report this TLA+ action generation failure.")
+        }
     }
 
     func choiceFailure(_ action: CompiledActionExpr) throws -> String? {

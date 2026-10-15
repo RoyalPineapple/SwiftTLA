@@ -1557,6 +1557,15 @@ preserves first-failure order and checking effects. Those links remain open.
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
 | `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure; every generated Swift conditional calls one checked kernel | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule, and prove the independent TLA+ output link. |
 
+The TLA+ action renderer now checks its actual output against the compiled
+action tree with an independent iterative structural walk covering all eight
+constructors. A mutation of an emitted conditional is rejected. This checks
+action shape and leaf text, not the meaning of compiled expressions, generated
+failure predicates, module assembly, or the TLA+ evaluator. In particular,
+the verifier calls the same expression renderer as the emitter, so agreement
+here cannot establish expression fidelity. The output obligations above remain
+open until those semantics and the source-lowering link are proved.
+
 `DefinedChoiceDomainRule.tla` proves that guarding an existential domain
 preserves the enabled step and puts a domain evaluation failure before any
 body failure; an unguarded domain has a counterexample. The renderer regression
