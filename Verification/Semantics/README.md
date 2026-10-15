@@ -49,9 +49,10 @@ now imports a symbolic version of its generated TLA module, tied to the real
 output by a narrowly normalized exact-output test. Its bounds are assumptions
 about the target Swift `Int`, not TLAPS-proved numeric facts. The prior
 `SingleAssignment.tla` revision's 1,423 obligations passed locally with
-fingerprint reuse disabled. The later selected-initialization theorem steps
-pass focused TLAPS checks; a complete proof run of this revision and hosted
-evidence remain pending.
+fingerprint reuse disabled. The selected-outcome composition step now makes
+its starting-set fact explicit; all 1,552 obligations in the current
+`SingleAssignment.tla` pass locally with fingerprint reuse disabled. Hosted
+evidence for this revision remains pending.
 Rendered TLA+ now guards pure addition, subtraction, multiplication, and
 negation trees in an action binding
 and emits ordered overflow-failure predicates with operand tuples. Other

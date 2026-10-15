@@ -1268,15 +1268,19 @@ THEOREM ValidOrderedInitializationsHaveSelectedOutcome ==
         /\ SelectedInitialStates(history[Len(plans)], predicate)
            = SelectedConjunctiveInit(plans, predicate)
     PROOF
-    <1>1. PICK history \in [0..Len(plans) -> SUBSET States] :
+    <1>1. States \in SUBSET States
+        BY SMT
+    <1>2. InitialHistoriesExist(States, plans)
+        BY <1>1, OrderedInitialHistoriesExist, SMT
+    <1>3. PICK history \in [0..Len(plans) -> SUBSET States] :
                 EnumeratedInitialHistory(States, plans, history)
                 /\ MembershipInitialHistory(States, plans, history)
-        BY OrderedInitialHistoriesExist, SMT DEF InitialHistoriesExist
-    <1>2. SelectedInitialStates(history[Len(plans)], predicate)
+        BY <1>2 DEF InitialHistoriesExist
+    <1>4. SelectedInitialStates(history[Len(plans)], predicate)
             = SelectedConjunctiveInit(plans, predicate)
-        BY <1>1, OrderedEnumerationMatchesSelectedConjunction
+        BY <1>3, OrderedEnumerationMatchesSelectedConjunction
     <1>. QED
-        BY <1>1, <1>2
+        BY <1>3, <1>4
 
 DependentSourceInit ==
     /\ dependentPC = "finish"
