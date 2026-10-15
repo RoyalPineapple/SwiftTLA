@@ -148,8 +148,17 @@ struct RandomSubsetExpressionTests {
         let outcome = try MixedInitialEvaluationModel.initialOutcomes()
         #expect(outcome.states.map(\.state) == [.init(limit: 1, chosen: 7)])
         #expect(outcome.firstFailure == .invalidRandomSubsetCount(-1))
+        let compilation = try MixedInitialEvaluationModel.spec.compile()
+        let compiled = try CompiledRuntime(compilation: compilation).initialOutcomes()
+        #expect(compiled.states.count == 1)
+        #expect(try renderedValue(named: "limit", in: compiled.states[0], compilation: compilation) == .int(1))
+        #expect(try renderedValue(named: "chosen", in: compiled.states[0], compilation: compilation) == .int(7))
+        #expect(compiled.firstFailure == outcome.firstFailure)
         #expect(throws: NativeMachineEvaluationError.invalidRandomSubsetCount(-1)) {
             try MixedInitialEvaluationModel.initialMachines()
+        }
+        #expect(throws: NativeMachineEvaluationError.invalidRandomSubsetCount(-1)) {
+            try CompiledRuntime(compilation: compilation).initialStates()
         }
     }
 

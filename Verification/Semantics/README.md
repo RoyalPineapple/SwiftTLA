@@ -1905,8 +1905,11 @@ validation scenarios use this outcome-aware path. The sampled simulation
 entry point remains strict when initialization fails. Focused tests exercise mixed and
 failure-only initializers, a decisive property violation with a prior
 initialization failure, and an emitted-output mutation that would discard the
-failure. This is tested Swift behavior, not a completed source-to-both-targets
-proof. The compiled runtime still aborts on its first failing prefix, rendered
+failure. The compiled runtime's outcome-aware entry point now retains the
+same valid state and first native failure for this direct random-subset case;
+its existing strict entry point still fails closed. This is tested Swift
+behavior, not a completed source-to-both-targets proof. The compiled runtime
+does not yet classify every expression failure as a branch outcome, rendered
 `Init` has no corresponding initial-failure relation, and retained parity
 evidence cannot encode this outcome. These are open semantic boundaries, so
 the strict parity path fails rather than claiming a complete match.

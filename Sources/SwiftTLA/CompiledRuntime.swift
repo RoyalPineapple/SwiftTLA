@@ -22,62 +22,81 @@ struct CompiledRuntime {
     }
 
     func initialStates() throws -> [CompiledState] {
+        let outcomes = try initialOutcomes()
+        if let failure = outcomes.firstFailure { throw failure }
+        return outcomes.states
+    }
+
+    func initialOutcomes() throws -> InitialEvaluationOutcomes<CompiledState> {
         var assignments: [[VariableID: CompiledValue]] = [[:]]
+        var firstFailure: NativeMachineEvaluationError?
         for (variable, initialization) in behavior.initializations {
             switch initialization {
             case .value(let expression):
-                assignments = try assignments.map { values in
-                    var values = values
-                    values[variable] = try CompiledEvaluator(
-                        variableValues: values,
-                        operators: operators, functions: functions
-                    ).evaluate(expression)
-                    return values
-                }
-            case .memberOf(let set):
-                assignments = try assignments.flatMap { values in
-                    let evaluator = CompiledEvaluator(
-                        variableValues: values,
-                        operators: operators, functions: functions
-                    )
-                    let members: Set<CompiledValue>
-                    if case .randomSubset = set.computation.operation {
-                        let countValue = try evaluator.evaluate(set.computation.children[0])
-                        guard case .integer(let count) = countValue else {
-                            throw EvalError.expected(.integer, actual: [countValue])
-                        }
-                        try _NativeMachineOperations.validateRandomSubsetCount(count)
-                        let domainExpression = set.computation.children[1]
-                        if case .functionSet = domainExpression.operation {
-                            let fromValue = try evaluator.evaluate(domainExpression.children[0])
-                            let toValue = try evaluator.evaluate(domainExpression.children[1])
-                            guard case .set(let from) = fromValue, case .set(let to) = toValue else {
-                                throw EvalError.expected(.functionSetDomains, actual: [fromValue, toValue])
-                            }
-                            let functions = try _NativeMachineOperations.randomFunctionInitialSupport(
-                                upTo: count, from: from, to: to)
-                            members = Set(functions.map(CompiledValue.function))
-                        } else {
-                            let domainValue = try evaluator.evaluate(domainExpression)
-                            guard case .set(let domain) = domainValue else {
-                                throw EvalError.expected(.set, actual: [domainValue])
-                            }
-                            members = try _NativeMachineOperations.randomSubsetInitialSupport(
-                                upTo: count, from: domain)
-                        }
-                    } else {
-                        let value = try evaluator.evaluate(set)
-                        guard case .set(let domain) = value else {
-                            throw EvalError.expected(.set, actual: [value])
-                        }
-                        members = domain
-                    }
-                    return CompiledValue.sorted(members).map { member in
+                var next: [[VariableID: CompiledValue]] = []
+                for values in assignments {
+                    try _NativeMachineOperations.visitInitialBranch {
                         var values = values
-                        values[variable] = member
-                        return values
+                        values[variable] = try CompiledEvaluator(
+                            variableValues: values,
+                            operators: operators, functions: functions
+                        ).evaluate(expression)
+                        next.append(values)
+                    } onEvaluationFailure: { failure in
+                        if firstFailure == nil { firstFailure = failure }
                     }
                 }
+                assignments = next
+            case .memberOf(let set):
+                var next: [[VariableID: CompiledValue]] = []
+                for values in assignments {
+                    try _NativeMachineOperations.visitInitialBranch {
+                        let evaluator = CompiledEvaluator(
+                            variableValues: values,
+                            operators: operators, functions: functions
+                        )
+                        let members: Set<CompiledValue>
+                        if case .randomSubset = set.computation.operation {
+                            let countValue = try evaluator.evaluate(set.computation.children[0])
+                            guard case .integer(let count) = countValue else {
+                                throw EvalError.expected(.integer, actual: [countValue])
+                            }
+                            try _NativeMachineOperations.validateRandomSubsetCount(count)
+                            let domainExpression = set.computation.children[1]
+                            if case .functionSet = domainExpression.operation {
+                                let fromValue = try evaluator.evaluate(domainExpression.children[0])
+                                let toValue = try evaluator.evaluate(domainExpression.children[1])
+                                guard case .set(let from) = fromValue, case .set(let to) = toValue else {
+                                    throw EvalError.expected(.functionSetDomains, actual: [fromValue, toValue])
+                                }
+                                let functions = try _NativeMachineOperations.randomFunctionInitialSupport(
+                                    upTo: count, from: from, to: to)
+                                members = Set(functions.map(CompiledValue.function))
+                            } else {
+                                let domainValue = try evaluator.evaluate(domainExpression)
+                                guard case .set(let domain) = domainValue else {
+                                    throw EvalError.expected(.set, actual: [domainValue])
+                                }
+                                members = try _NativeMachineOperations.randomSubsetInitialSupport(
+                                    upTo: count, from: domain)
+                            }
+                        } else {
+                            let value = try evaluator.evaluate(set)
+                            guard case .set(let domain) = value else {
+                                throw EvalError.expected(.set, actual: [value])
+                            }
+                            members = domain
+                        }
+                        for member in CompiledValue.sorted(members) {
+                            var candidate = values
+                            candidate[variable] = member
+                            next.append(candidate)
+                        }
+                    } onEvaluationFailure: { failure in
+                        if firstFailure == nil { firstFailure = failure }
+                    }
+                }
+                assignments = next
             }
         }
         let candidates = try assignments.map { values in
@@ -88,11 +107,14 @@ struct CompiledRuntime {
                 return value
             }, layout: layout, identity: identity)
         }
-        guard let selected = behavior.initialInvariant else { return candidates }
+        guard let selected = behavior.initialInvariant else {
+            return .init(states: candidates, firstFailure: firstFailure)
+        }
         guard let invariant = behavior.invariants.first(where: { $0.id == selected }) else {
             preconditionFailure("Compiled initial invariant is absent from its behavior")
         }
-        return try candidates.filter { try invariantHolds(invariant, in: $0) }
+        return try .init(states: candidates.filter { try invariantHolds(invariant, in: $0) },
+            firstFailure: firstFailure)
     }
 
     func successors(from state: CompiledState) throws -> [CompiledSuccessor] {
