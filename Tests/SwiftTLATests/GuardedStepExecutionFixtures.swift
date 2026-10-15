@@ -60,3 +60,21 @@ struct GuardedProcesses {
         }
     }
 }
+
+@TLAModel
+struct CheckedGuardOverflow {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("CheckedGuardOverflow") {
+            let algorithm = Algorithm(label: "CheckedGuardOverflow", scoped: { scope in
+                let count = scope.sharedVar(_name: "count", in: Set<Int>([1, 9_223_372_036_854_775_807]))
+                Do(Step.advance) {
+                    When(count + 1 > 0)
+                    Assign(count, to: 0)
+                }
+            })
+            algorithm
+        }
+    }
+}

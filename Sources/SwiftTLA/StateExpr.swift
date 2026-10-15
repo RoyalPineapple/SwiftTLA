@@ -257,6 +257,11 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
     public var description: String { diagnostic.actual }
 }
 
+public struct _SelectionResultTypeHint: Hashable, Sendable {
+    package let shape: FormalValueShape
+    package init(_ shape: FormalValueShape) { self.shape = shape }
+}
+
 public indirect enum StateExpr: Hashable, Sendable {
     case sourceIssue(SourceModelIssue)
     case value(TLAValue)
@@ -334,7 +339,7 @@ public indirect enum StateExpr: Hashable, Sendable {
 
     case forAll(StateExpr, String, StateExpr)
     case exists(StateExpr, String, StateExpr)
-    case choose(StateExpr, String, StateExpr)
+    case choose(StateExpr, String, StateExpr, preferredType: _SelectionResultTypeHint? = nil)
     case enabledAction(String)
 
     case sequenceFromSet(StateExpr)
@@ -390,7 +395,7 @@ extension StateExpr: ExpressibleByBooleanLiteral {
 }
 
 extension StateExpr: ExpressibleByStringLiteral {
-    public init(stringLiteral value: String) { self = .value(.string(value)) }
+    public init(stringLiteral value: String) { self = .value(.canonicalSwiftString(value)) }
 }
 
 /// Evaluates and records one formal value, then yields TRUE like TLC's PrintT.

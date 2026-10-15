@@ -2,6 +2,32 @@ import Testing
 @testable import SwiftTLA
 
 struct ActionFrameConditionTests {
+    @Test("every enabled branch must account for every model variable")
+    func enabledBranchesRequireCompleteFrames() throws {
+        let variables = [
+            NamedVar(name: "left", initial: .int(0)),
+            NamedVar(name: "right", initial: .int(0))
+        ]
+        let incomplete = ActionExpr.or(
+            .assign(.named("left"), .int(1)),
+            .assign(.named("right"), .int(1))
+        )
+        #expect(throws: CompilationDiagnostic.self) {
+            try ActionNormalization.verifyComplete(incomplete, variables: variables,
+                at: "actions.step.body")
+        }
+        try ActionNormalization.verifyComplete(
+            ActionNormalization.complete(incomplete, variables: variables),
+            variables: variables, at: "actions.step.body"
+        )
+        let disabledAlternative = ActionExpr.or(
+            .guard_(.bool(false)),
+            .and(.assign(.named("left"), .int(1)), .unchanged(.named("right")))
+        )
+        try ActionNormalization.verifyComplete(disabledAlternative, variables: variables,
+            at: "actions.step.body")
+    }
+
     @Test("Frame completion preserves shared effects and short-circuited continuations")
     func completionKeepsEffectOrder() {
         let variables = [NamedVar(name: "value", initial: .int(0))]
@@ -32,8 +58,8 @@ struct ActionFrameConditionTests {
         #expect(try next.state.value(for: copied) == .integer(3))
     }
 
-    @Test("UNCHANGED constrains assignments and choices to the original state")
-    func unchangedRejectsConflictingUpdatesInEitherOrder() throws {
+    @Test("UNCHANGED disables conflicting assignments in either order")
+    func unchangedDisablesConflictingUpdatesInEitherOrder() throws {
         let unchanged = ActionExpr.unchanged(.named("value"))
         let updates: [ActionExpr] = [
             .assign(.named("value"), .int(1)),
@@ -46,11 +72,20 @@ struct ActionFrameConditionTests {
                 ).compile()
                 let runtime = CompiledRuntime(compilation: compilation)
                 let initial = try #require(try runtime.initialStates().first)
-                #expect(throws: CompiledEvaluationError.self) {
-                    try runtime.successors(from: initial)
-                }
+                #expect(try runtime.successors(from: initial).isEmpty)
             }
         }
+    }
+
+    @Test("a conflicting conjunction leaves an alternative generated transition enabled")
+    func conflictingConjunctionDoesNotAbortAlternative() throws {
+        let machine = try ConjunctiveFrameModel.makeMachine()
+        #expect(try !machine.isEnabled(.blocked))
+        #expect(try machine.successors(for: .blocked).isEmpty)
+        #expect(try machine.isEnabled(.choose))
+        let successors = try machine.successors(for: .choose)
+        #expect(successors.count == 1)
+        #expect(successors.first?.state.value == 0)
     }
 
     @Test("UNCHANGED permits matching assignments and independent updates")

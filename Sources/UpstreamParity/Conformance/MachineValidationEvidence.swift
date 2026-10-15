@@ -177,6 +177,8 @@ package enum MachineValidationEvidence {
                 try writer.reached(property: name, key: stateKeyEncoder.bytes,
                     predecessor: predecessor.map(UInt64.init), action: action,
                     representative: representative(snapshot))
+            case .evaluationFailure(let source, let action, let reason):
+                try writer.evaluationFailure(source: UInt64(source), action: actionID(action), reason: reason)
             }
             try observe?(event)
         }
@@ -184,6 +186,7 @@ package enum MachineValidationEvidence {
         case .exhausted: 0
         case .decisiveViolation: 1
         case .decisiveReachability: 2
+        case .evaluationFailure: 3
         }
         try writer.finish(completion: completion)
         func seconds(_ nanoseconds: UInt64) -> Double { Double(nanoseconds) / 1_000_000_000 }

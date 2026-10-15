@@ -236,7 +236,7 @@ private enum StateKeyBinding {
     case function
     case forall
     case exists
-    case choose
+    case choose(_SelectionResultTypeHint?)
     case letValue
 }
 
@@ -286,14 +286,20 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             let (canonical, extended) = fresh(variable, environment: environment, next: &next)
             tasks.append(.finish(2) { values in
                 switch binding {
-                case .filter: "filter(\(values[0]),\(canonical),\(values[1]))"
-                case .map: "map(\(values[1]),\(canonical),\(values[0]))"
-                case .sequenceSelect: "sequenceSelect(\(values[0]),\(canonical),\(values[1]))"
-                case .function: "function(\(values[0]),\(canonical),\(values[1]))"
-                case .forall: "forall(\(values[0]),\(canonical),\(values[1]))"
-                case .exists: "exists(\(values[0]),\(canonical),\(values[1]))"
-                case .choose: "choose(\(values[0]),\(canonical),\(values[1]))"
-                case .letValue: "letValue(\(canonical),\(values[0]),\(values[1]))"
+                case .filter: return "filter(\(values[0]),\(canonical),\(values[1]))"
+                case .map: return "map(\(values[1]),\(canonical),\(values[0]))"
+                case .sequenceSelect: return "sequenceSelect(\(values[0]),\(canonical),\(values[1]))"
+                case .function: return "function(\(values[0]),\(canonical),\(values[1]))"
+                case .forall: return "forall(\(values[0]),\(canonical),\(values[1]))"
+                case .exists: return "exists(\(values[0]),\(canonical),\(values[1]))"
+                case .choose(let preferredType):
+                    let kind = switch preferredType?.shape {
+                    case .integer: "selectInt"
+                    case .boolean: "selectBool"
+                    default: "choose"
+                    }
+                    return "\(kind)(\(values[0]),\(canonical),\(values[1]))"
+                case .letValue: return "letValue(\(canonical),\(values[0]),\(values[1]))"
                 }
             })
             tasks.append(.expression(body, environment: extended))
@@ -462,8 +468,8 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .exists(let set, let variable, let predicate):
                 tasks.append(.bind(.exists, variable: variable, body: predicate, environment: environment))
                 tasks.append(.expression(set, environment: environment))
-            case .choose(let set, let variable, let predicate):
-                tasks.append(.bind(.choose, variable: variable, body: predicate, environment: environment))
+            case .choose(let set, let variable, let predicate, let preferredType):
+                tasks.append(.bind(.choose(preferredType), variable: variable, body: predicate, environment: environment))
                 tasks.append(.expression(set, environment: environment))
             case .enabledAction(let name): parts.append("enabled(\(name))")
             case .printT(let value):

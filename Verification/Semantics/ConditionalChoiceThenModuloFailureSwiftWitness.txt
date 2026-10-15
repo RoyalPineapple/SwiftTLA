@@ -1,0 +1,66 @@
+private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                           _ emit: (_Updates) throws -> Void) throws {
+    func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _NativeMachineOperations.visitConditional({ (try _NativeMachineOperations.choose(Set<Bool>([true]).sorted(by: { (lhs: Bool, rhs: Bool) -> Bool in
+return !lhs && rhs
+})) { __PROOF_MEMBER__ in (state.state.selector == 1) }) },
+        ifTrue: { try _actionPart1(updates, emit) },
+        ifFalse: { try _actionPart2(updates, emit) })
+}
+func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_1_2 = 2
+try _actionPart3(___atomic_1_2, updates, emit)
+}
+func _actionPart3(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart5(___atomic_1_2, updates, { candidate in try _actionPart4(___atomic_1_2, candidate, emit) })
+}
+func _actionPart5(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart7(___atomic_1_2, updates, { candidate in try _actionPart6(___atomic_1_2, candidate, emit) })
+}
+func _actionPart7(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+}
+func _actionPart6(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_result_2: ___atomic_1_2)) { try emit(merged) }
+}
+func _actionPart4(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart9(___atomic_1_2, updates, { candidate in try _actionPart8(___atomic_1_2, candidate, emit) })
+}
+func _actionPart9(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_selector_0: state.state.selector)) { try emit(merged) }
+}
+func _actionPart8(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_divisor_1: state.state.divisor)) { try emit(merged) }
+}
+func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_0_1 = (try { () throws -> Int in
+    let _arithmetic0: Int = state.state.divisor
+let _arithmetic1: Int = 1
+let _arithmetic2: Int = try _NativeMachineOperations.modulo(_arithmetic1, _arithmetic0)
+    return _arithmetic2
+}())
+try _actionPart10(___atomic_0_1, updates, emit)
+}
+func _actionPart10(_ ___atomic_0_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart12(___atomic_0_1, updates, { candidate in try _actionPart11(___atomic_0_1, candidate, emit) })
+}
+func _actionPart12(_ ___atomic_0_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart14(___atomic_0_1, updates, { candidate in try _actionPart13(___atomic_0_1, candidate, emit) })
+}
+func _actionPart14(_ ___atomic_0_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+}
+func _actionPart13(_ ___atomic_0_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_result_2: ___atomic_0_1)) { try emit(merged) }
+}
+func _actionPart11(_ ___atomic_0_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart16(___atomic_0_1, updates, { candidate in try _actionPart15(___atomic_0_1, candidate, emit) })
+}
+func _actionPart16(_ ___atomic_0_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_selector_0: state.state.selector)) { try emit(merged) }
+}
+func _actionPart15(_ ___atomic_0_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_divisor_1: state.state.divisor)) { try emit(merged) }
+}
+try _actionPart0(_Updates(), emit)
+}

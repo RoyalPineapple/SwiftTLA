@@ -316,6 +316,23 @@ struct ValidationEvidenceComparisonTests {
         }
     }
 
+    @Test("a native evaluation failure cannot be admitted as a safety counterexample")
+    func unmatchedNativeEvaluationFailureFails() throws {
+        let scenario = try #require(SelectedChecksModel.validationScenarios().first { $0.name == "All" })
+        for reason in [NativeMachineEvaluationError.noSatisfyingChoice,
+                       .integerOverflow(.addition, operands: [Int.max, 1])] {
+            let root = try fixture(graphComplete: false, tlcExitStatus: 12,
+                nativeEvaluationFailure: reason)
+            defer { try? FileManager.default.removeItem(at: root) }
+            #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("unmatched native evaluation failure")) {
+                _ = try ValidationEvidenceComparison.compare(
+                    scenario: scenario, caseID: "fixture", native: root.appendingPathComponent("native"),
+                    oracle: root.appendingPathComponent("oracle"), actions: actions,
+                    to: root.appendingPathComponent("raw-comparison"))
+            }
+        }
+    }
+
     @Test("a partial result without a TLC trace cannot be exact")
     func partialWitnessIsRequired() throws {
         let root = try fixture(graphComplete: false, tlcExitStatus: 12)
@@ -536,7 +553,8 @@ struct ValidationEvidenceComparisonTests {
         edgeCount: Int = 1, reverseEdge: Bool = false, stateCount: Int = 2,
         graphComplete: Bool = true, tlcExitStatus: Int = 0,
         scenarioName: String? = nil, omitSelectedVerdicts: Bool = false,
-        skipCheckedPass: Bool = false, nativeFailureProperty: String = "InitiallyZero") throws -> URL {
+        skipCheckedPass: Bool = false, nativeFailureProperty: String = "InitiallyZero",
+        nativeEvaluationFailure: NativeMachineEvaluationError? = nil) throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let native = root.appendingPathComponent("native")
         let tlc = root.appendingPathComponent("oracle/tlc-graph")
@@ -621,9 +639,13 @@ struct ValidationEvidenceComparisonTests {
         }
         if reverseEdge { try writer.edge(source: 1, action: 0, target: 0) }
         if !graphComplete {
-            try writer.invariantFailure(property: nativeFailureProperty, key: key(1), predecessor: 0, action: 0)
+            if let nativeEvaluationFailure {
+                try writer.evaluationFailure(source: 1, action: 0, reason: nativeEvaluationFailure)
+            } else {
+                try writer.invariantFailure(property: nativeFailureProperty, key: key(1), predecessor: 0, action: 0)
+            }
         }
-        try writer.finish(completion: graphComplete ? 0 : 1)
+        try writer.finish(completion: graphComplete ? 0 : nativeEvaluationFailure == nil ? 1 : 3)
         try writeGzip(tlcGraph(edgeCount: edgeCount, actionName: tlcAction,
             reverseEdge: reverseEdge, stateCount: stateCount),
             to: tlc.appendingPathComponent("graph-events.bin.gz"))

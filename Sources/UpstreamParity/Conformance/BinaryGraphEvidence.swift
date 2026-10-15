@@ -1,8 +1,81 @@
 import CryptoKit
 import Foundation
+import SwiftTLA
 
 enum BinaryGraphEvidenceError: Error {
     case invalid(String)
+}
+
+struct BinaryEvaluationFailure {
+    let code: UInt8
+    let detail: String
+    let integers: [Int]
+
+    init(_ reason: NativeMachineEvaluationError) {
+        switch reason {
+        case .recursionDepthExceeded(let limit): self.init(1, integers: [limit])
+        case .noMatchingCase: self.init(2)
+        case .checkingContextRequired: self.init(3)
+        case .noSatisfyingChoice: self.init(4)
+        case .collectionCardinalityOverflow(let operation, let operands):
+            self.init(5, detail: operation.rawValue, integers: operands)
+        case .powerSetTooLarge(let actual, let maximum): self.init(6, integers: [actual, maximum])
+        case .nonEnumerableSequenceDomain: self.init(7)
+        case .nonEnumerableIntegerDomain: self.init(8)
+        case .integerOverflow(let operation, let operands):
+            self.init(9, detail: operation.rawValue, integers: operands)
+        case .divisionByZero: self.init(10)
+        case .negativeModuloDivisor(let divisor): self.init(11, integers: [divisor])
+        case .indexOutOfBounds(let index, let count): self.init(12, integers: [index, count])
+        case .invalidSequenceDomain(let keys): self.init(13, integers: keys)
+        case .emptySequence: self.init(14)
+        case .functionArgumentOutsideDomain: self.init(15)
+        case .tupleIndexOutsideDomain(let index): self.init(16, integers: [index])
+        case .recordFieldUnavailable(let field): self.init(17, detail: field)
+        case .invalidRandomSubsetCount(let count): self.init(18, integers: [count])
+        case .emptyRandomElementDomain: self.init(19)
+        }
+    }
+
+    private init(_ code: UInt8, detail: String = "", integers: [Int] = []) {
+        self.code = code
+        self.detail = detail
+        self.integers = integers
+    }
+
+    static func read(from reader: inout BinaryGraphEvidenceReader) throws -> Self {
+        let code = try reader.byte()
+        let detail = try reader.string()
+        guard let count = Int(exactly: try reader.uint32()) else {
+            throw BinaryGraphEvidenceError.invalid("failure operand count")
+        }
+        let valid: Bool
+        switch code {
+        case 1, 11, 16, 18: valid = detail.isEmpty && count == 1
+        case 2, 3, 4, 7, 8, 10, 14, 15, 19: valid = detail.isEmpty && count == 0
+        case 5: valid = NativeMachineEvaluationError.CollectionOperation(rawValue: detail) != nil && count == 2
+        case 6, 12: valid = detail.isEmpty && count == 2
+        case 9:
+            if let operation = NativeMachineEvaluationError.IntegerOperation(rawValue: detail) {
+                valid = operation == .negation ? count == 1
+                    : operation == .summation ? count >= 2 : count == 2
+            } else {
+                valid = false
+            }
+        case 13: valid = detail.isEmpty
+        case 17: valid = count == 0
+        default: valid = false
+        }
+        guard valid else { throw BinaryGraphEvidenceError.invalid("evaluation failure payload") }
+        var integers: [Int] = []
+        for _ in 0..<count {
+            guard let value = Int(exactly: Int64(bitPattern: try reader.uint64())) else {
+                throw BinaryGraphEvidenceError.invalid("failure operand")
+            }
+            integers.append(value)
+        }
+        return Self(code, detail: detail, integers: integers)
+    }
 }
 
 struct BinaryGraphEvidenceWriter {
@@ -127,6 +200,30 @@ struct BinaryGraphEvidenceWriter {
             try bytes(representative)
         }
         reachability += 1
+        try flushIfNeeded()
+    }
+
+    mutating func evaluationFailure(source: UInt64, action: UInt32,
+        reason: NativeMachineEvaluationError) throws {
+        let failure = BinaryEvaluationFailure(reason)
+        guard let count = UInt32(exactly: failure.integers.count) else {
+            throw BinaryGraphEvidenceError.invalid("failure operand count")
+        }
+        let integers = try failure.integers.map { value -> Int64 in
+            guard let signed = Int64(exactly: value) else {
+                throw BinaryGraphEvidenceError.invalid("failure operand")
+            }
+            return signed
+        }
+        byte(11)
+        uint64(source)
+        uint32(action)
+        byte(failure.code)
+        try string(failure.detail)
+        uint32(count)
+        for signed in integers {
+            uint64(UInt64(bitPattern: signed))
+        }
         try flushIfNeeded()
     }
 

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 @testable import UpstreamParity
@@ -19,6 +20,53 @@ import Testing
             initialMachines: OrderedCopyModel.initialMachines(), maximumStates: 4)
         #expect(graph.transitions.count == 3)
         #expect(Set(graph.transitions.keys.map { [$0.state.x, $0.state.y] }) == [[1, 0], [2, 2], [4, 2]])
+    }
+
+    @Test("The checked repeated-write module matches normalized generated TLA")
+    func renderedRepeatedWriteProofInput() throws {
+        let rendered = try OrderedCopyModel.render().tlaBundle.root.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/OrderedCopy.tla")
+            .standardizedFileURL
+        let checkedModule = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(Int.min <= -2_000_000_000 && 2_000_000_000 <= Int.max)
+        let normalized = rendered
+            .replacingOccurrences(of: "EXTENDS Integers, FiniteSets, Sequences\n\nVARIABLES",
+                with: "EXTENDS Integers, FiniteSets, Sequences\n\nCONSTANTS OrderedIntMin, OrderedIntMax\n\nVARIABLES")
+            .replacingOccurrences(of: TLAValue.int(.min).description, with: "OrderedIntMin")
+            .replacingOccurrences(of: TLAValue.int(.max).description, with: "OrderedIntMax")
+        #expect(normalized == checkedModule)
+    }
+
+    @Test("A later checked addition reports the failing operands")
+    func laterAdditionFailure() throws {
+        let machine = try OrderedOverflowModel.makeMachine()
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            try machine.successors(for: .advance)
+        }
+
+        let rendered = try OrderedOverflowModel.render()
+        let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let laterFailure = try #require(lines.first { $0.hasPrefix("__SwiftTLAOverflowFailure0_1 ==") })
+        let operands = try #require(lines.first { $0.hasPrefix("__SwiftTLAOverflowOperands0_1 ==") })
+        #expect(laterFailure.contains("LET __atomic_0 == (count + 1)"))
+        #expect(operands.contains("<<__atomic_0, 1>>"))
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+    }
+
+    @Test("Nested checked additions retain the failing operation in both outputs")
+    func nestedAdditionFailure() throws {
+        let machine = try NestedAdditionOverflowModel.makeMachine()
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            try machine.successors(for: .advance)
+        }
+
+        let rendered = try NestedAdditionOverflowModel.render()
+        let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(definitions.filter { $0.hasPrefix("__SwiftTLAOverflowFailure") }.count == 2)
+        #expect(definitions.contains { $0.hasPrefix("__SwiftTLAOverflowOperands0_1 ==") && $0.contains("count + 1") })
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
     }
 
     @Test("Choices and following statements read their current branch values")

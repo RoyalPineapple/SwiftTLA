@@ -35,3 +35,20 @@ struct IncompleteCounterScenario: ModelValidationScenario {
     func render() throws -> RenderedSpecification { try original.render() }
     var formalPropertyNames: [Property: String] { original.formalPropertyNames }
 }
+
+@TLAModel
+struct RecordedOverflowModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("RecordedOverflowModel") {
+            let algorithm = Algorithm(label: "RecordedOverflowModel", scoped: { scope in
+                let count = scope.sharedVar(initial: 9_223_372_036_854_775_807)
+                Do(Step.advance) { Assign(count, to: count + 1) }
+            })
+            algorithm
+            let validation = Validation(label: "Overflow") {}
+            validation
+        }
+    }
+}

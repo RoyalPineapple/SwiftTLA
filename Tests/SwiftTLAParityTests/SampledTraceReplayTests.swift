@@ -6,7 +6,7 @@ import SwiftTLA
 struct SampledTraceReplayTests {
     @Test("a sampled TLC initial state replays even when Swift sampled another valid state")
     func replaysIndependentRandomInitialState() throws {
-        let initial = try RandomizedInitialReplay.initialMachines()
+        let initial = try RandomizedInitialReplay.sampledInitialMachines()
         let sampled = try #require(initial.first)
         #expect(initial.count == 1)
         let selected = sampled.state.x == 0 ? 1 : 0
@@ -26,7 +26,7 @@ struct SampledTraceReplayTests {
 
     @Test("sampled replay reconstructs typed functions and records from TLC JSON")
     func replaysRandomFunctionInitialState() throws {
-        let initial = try RandomizedFunctionReplay.initialMachines()
+        let initial = try RandomizedFunctionReplay.sampledInitialMachines()
         let sampled = try #require(initial.first)
         #expect(initial.count == 1)
         let choices = (0..<4).map { bits in

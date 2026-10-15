@@ -1,3 +1,6 @@
+import Foundation
+import SwiftParser
+import SwiftSyntax
 import Testing
 @testable import SwiftTLA
 import SwiftTLAMacros
@@ -352,6 +355,46 @@ private struct MissingFunctionKey {
             try machine.send(.read)
         }
         #expect(machine.state == before)
+
+        let rendered = try MissingFunctionKey.render()
+        #expect(rendered.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let failure = try #require(declarations.first {
+            $0.hasPrefix("__SwiftTLAFunctionArgumentOutsideDomainFailure0 ==")
+        })
+        #expect(failure.contains("key \\in DOMAIN (table)"))
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/MissingFunctionKey.tla")
+            .standardizedFileURL
+        let actual = rendered.tlaBundle.root.tla.replacingOccurrences(
+            of: "__binder_SpecParser_[0-9]+_[0-9]+_", with: "__binder_",
+            options: .regularExpression)
+        #expect(actual == (try String(contentsOf: proofInput, encoding: .utf8)))
+
+        let source = Parser.parse(source: try String(contentsOfFile: #filePath, encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "MissingFunctionKey" })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
+        let visitor = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let swiftProofInput = proofInput.deletingLastPathComponent()
+            .appendingPathComponent("MissingFunctionKeySwiftVisitor.txt")
+        let expectedVisitor = try String(contentsOf: swiftProofInput, encoding: .utf8)
+        func tokens(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
+        }
+        #expect(tokens(visitor.description) == tokens(expectedVisitor))
+        let uncheckedLookup = visitor.description.replacingOccurrences(
+            of: "_NativeMachineOperations.functionValue(_functionValue, at: _functionArgument)",
+            with: "_functionValue[_functionArgument]!")
+        #expect(tokens(uncheckedLookup) != tokens(expectedVisitor))
+        let reversedOperands = visitor.description.replacingOccurrences(
+            of: "let _functionArgument = state.state.key\nlet _functionValue = state.state.table",
+            with: "let _functionValue = state.state.table\nlet _functionArgument = state.state.key")
+        #expect(tokens(reversedOperands) != tokens(expectedVisitor))
     }
 
     @Test("division evaluates the denominator argument before a failing numerator")

@@ -72,6 +72,7 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
         ) { event in
             try capture.observe(event)
         }
+        if case .evaluationFailure(let reason) = summary.completion { throw reason }
         guard case .exhausted = summary.completion else {
             throw ExplorationError.configurationMismatch
         }

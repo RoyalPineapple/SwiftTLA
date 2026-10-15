@@ -4,6 +4,32 @@ import Testing
 
 @Suite("Compiled specification rendering")
 struct CompiledSpecificationRendererTests {
+    @Test("Signed division uses a positive formal divisor")
+    func rendersSignedDivision() throws {
+        let compiled = try TLASpec(name: "SignedDivision", variables: [], actions: [], invariants: []).compile()
+        let dividend = BinderID(ordinal: 0)
+        let divisor = BinderID(ordinal: 1)
+        let renderer = CompiledTLARenderer(moduleName: "SignedDivision", reservedNames: [], layout: compiled.layout,
+            bindings: .init(binders: [dividend: "dividend", divisor: "divisor"]),
+            operators: compiled.semantics.operators, actions: [], functions: [])
+        let proofFile = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/SingleAssignment.tla")
+        let proof = try String(contentsOf: proofFile, encoding: .utf8)
+        let start = try #require(proof.range(of: "RenderedSignedDivision(dividend, divisor) =="))
+        let end = try #require(proof.range(of: "THEOREM SignedDivisionUsesPositiveDivisor =="))
+        let provedExpression = proof[start.upperBound..<end.lowerBound]
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        for operation in [CompiledOperation.divide, .integerDivide] {
+            let expression = CompiledExpression(operation: operation, resultType: .int,
+                children: [.value(.integer(5)), .value(.integer(-2))])
+            #expect(try renderer.state(expression)
+                == "(LET __SignedDivision_dividend0 == 5 IN (LET __SignedDivision_divisor1 == -2 IN (IF __SignedDivision_divisor1 < 0 THEN (-__SignedDivision_dividend0) \\div (-__SignedDivision_divisor1) ELSE __SignedDivision_dividend0 \\div __SignedDivision_divisor1)))")
+            let symbolic = CompiledExpression(operation: operation, resultType: .int,
+                children: [.boundValue(dividend), .boundValue(divisor)])
+            #expect(try renderer.state(symbolic) == provedExpression)
+        }
+    }
+
     @Test("Powerset operands retain their grouping inside function domains")
     func groupsPowersetRangeOperand() throws {
         let compiled = try TLASpec(name: "PowersetDomain", variables: [], actions: [], invariants: []).compile()
@@ -243,6 +269,117 @@ struct CompiledSpecificationRendererTests {
         }
     }
 
+    @Test("Direct assignments guard fallible values and report their failures")
+    func guardsFallibleDirectAssignment() throws {
+        let compilation = try TLASpec(name: "DirectAssignment", variables: [
+            .init(name: "result", initial: .int(0))
+        ], actions: [], invariants: []).compile()
+        let variable = try #require(compilation.layout.variables.first?.id)
+        let binder = BinderID(ordinal: 0)
+        let renderer = CompiledTLARenderer(moduleName: "DirectAssignment", reservedNames: [],
+            layout: compilation.layout, bindings: .init(binders: [binder: "candidate"]),
+            operators: compilation.semantics.operators, actions: [], functions: [])
+        let empty = CompiledExpression(operation: .value(.set([])), resultType: .set(.int), children: [])
+        let yes = CompiledExpression(operation: .value(.boolean(true)), resultType: .bool, children: [])
+        let choice = CompiledExpression(operation: .choose(binder), resultType: .int, children: [empty, yes])
+        let selected = CompiledActionExpr.assign(variable, choice)
+        let selectedAction = try renderer.action(selected)
+        #expect(selectedAction.hasPrefix("(IF "))
+        #expect(selectedAction.contains(#"\E candidate \in {} : TRUE"#))
+        #expect(selectedAction.contains("result' = (LET __DirectAssignment_choiceCandidates"))
+        #expect(selectedAction.contains("CHOOSE candidate"))
+        #expect(selectedAction.hasSuffix("ELSE FALSE)"))
+        #expect(try renderer.choiceFailure(selected) == #"~((\E candidate \in {} : TRUE))"#)
+
+        let specification = TLASpec(name: "DirectAssignmentOutput", variables: [
+            .init(name: "result", initial: .int(0))
+        ], actions: [
+            .init(name: "pick", body: .assign(.named("result"),
+                .choose(.setLiteral([.int(1)]), "candidate", .bool(false))))
+        ], invariants: [])
+        let emitted = try specification.compile().render()
+        #expect(emitted.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        #expect(emitted.tlaBundle.tla.contains("pick == (IF "))
+        #expect(emitted.tlaBundle.tla.contains("__SwiftTLAChoiceFailure0 =="))
+
+        let zero = CompiledExpression(operation: .value(.integer(0)), resultType: .int, children: [])
+        let one = CompiledExpression(operation: .value(.integer(1)), resultType: .int, children: [])
+        let quotient = CompiledExpression(operation: .divide, resultType: .int, children: [one, zero])
+        let divided = CompiledActionExpr.assign(variable, quotient)
+        #expect(try renderer.action(divided).contains("ELSE FALSE"))
+        #expect(try renderer.evaluationFailures(divided).contains {
+            if case .divisionByZero = $0.kind { true } else { false }
+        })
+    }
+
+    @Test("Infallible assignments do not emit an evaluation-failure invariant")
+    func omitsInfallibleEvaluationCheck() throws {
+        let specification = TLASpec(name: "InfallibleAssignment", variables: [
+            .init(name: "result", initial: .int(0))
+        ], actions: [
+            .init(name: "advance", body: .assign(.named("result"), .int(1)))
+        ], invariants: [])
+        let emitted = try specification.compile().render()
+        #expect(emitted.intrinsicInvariantNames.isEmpty)
+        #expect(!emitted.tlaBundle.tla.contains("__SwiftTLAAnyEvaluationFailure"))
+    }
+
+    @Test("A successful left action exposes a right-hand evaluation failure")
+    func reportsFailureAfterConjunctiveAssignment() throws {
+        let compilation = try TLASpec(name: "ConjunctiveFailure", variables: [
+            .init(name: "result", initial: .int(0))
+        ], actions: [], invariants: []).compile()
+        let variable = try #require(compilation.layout.variables.first?.id)
+        let renderer = CompiledTLARenderer(moduleName: "ConjunctiveFailure", reservedNames: [],
+            layout: compilation.layout, bindings: .init(binders: [BinderID(ordinal: 0): "candidate"]),
+            operators: compilation.semantics.operators,
+            actions: [], functions: [])
+        let one = CompiledExpression.value(.integer(1))
+        let zero = CompiledExpression.value(.integer(0))
+        let quotient = CompiledExpression(operation: .divide, resultType: .int, children: [one, zero])
+        let action = CompiledActionExpr.and(.assign(variable, one), .assign(variable, quotient))
+
+        let failures = try renderer.evaluationFailures(action)
+        #expect(failures.contains {
+            if case .divisionByZero = $0.kind {
+                return $0.predicate.contains("ENABLED (result' = 1)")
+            }
+            return false
+        })
+
+        let empty = CompiledExpression.value(.set([]))
+        let yes = CompiledExpression.value(.boolean(true))
+        let choice = CompiledExpression(operation: .choose(BinderID(ordinal: 0)), resultType: .int,
+            children: [empty, yes])
+        let chosen = CompiledActionExpr.and(.assign(variable, one), .assign(variable, choice))
+        #expect(try renderer.choiceFailure(chosen)?.contains("ENABLED (result' = 1)") == true)
+    }
+
+    @Test("An undefined existential domain disables its TLA action and reports the failure")
+    func guardsUndefinedChoiceDomain() throws {
+        let compilation = try TLASpec(name: "UndefinedChoiceDomain", variables: [
+            .init(name: "result", initial: .int(0))
+        ], actions: [], invariants: []).compile()
+        let variable = try #require(compilation.layout.variables.first?.id)
+        let binder = BinderID(ordinal: 0)
+        let renderer = CompiledTLARenderer(moduleName: "UndefinedChoiceDomain", reservedNames: [],
+            layout: compilation.layout, bindings: .init(binders: [binder: "candidate"]),
+            operators: compilation.semantics.operators, actions: [], functions: [])
+        let quotient = CompiledExpression(operation: .divide, resultType: .int,
+            children: [.value(.integer(1)), .value(.integer(0))])
+        let domain = CompiledExpression(operation: .setLiteral, resultType: .set(.int), children: [quotient])
+        let action = CompiledActionExpr.existsAction(binder, domain,
+            .assign(variable, .boundValue(binder)))
+
+        let rendered = try renderer.action(action)
+        #expect(rendered.hasPrefix("(IF "))
+        #expect(rendered.contains("THEN (\\E candidate \\in"))
+        #expect(rendered.hasSuffix("ELSE FALSE)"))
+        #expect(try renderer.evaluationFailures(action).contains {
+            if case .divisionByZero = $0.kind { true } else { false }
+        })
+    }
+
     @Test("Sibling lexical scopes stay separate in rendered state and action expressions")
     func delimitsSiblingLexicalScopes() throws {
         let compiled = try TLASpec(name: "LexicalScopes", variables: [], actions: [], invariants: []).compile()
@@ -271,7 +408,7 @@ struct CompiledSpecificationRendererTests {
             .init(name: "Check", body: .and(local, local))
         ])
         let rendered = try specification.compile().render().tlaBundle.tla
-        #expect(rendered.contains("Check == ((LET item == TRUE\nIN item) /\\ (LET item == TRUE\nIN item))"))
+        #expect(rendered.contains("Check == (IF (LET item == TRUE\nIN item) THEN (LET item == TRUE\nIN item) ELSE FALSE)"))
     }
 
     @Test("Nested checked views render their operands once without capturing source names")

@@ -52,6 +52,12 @@ public protocol StateMachine: Sendable {
         checking context: inout CheckingContext<CheckingRegisters>,
         _ visit: (Action, Self) throws -> Bool
     ) throws -> Bool
+    /// Visits successes and evaluation failures without discarding later actions.
+    func visitValidationOutcomes(
+        checking context: inout CheckingContext<CheckingRegisters>,
+        _ visit: (Action, Self) throws -> Bool,
+        onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool
+    ) throws -> Bool
 }
 
 /// A generated machine whose immutable model parameters are represented by a
@@ -101,6 +107,37 @@ extension StateMachine {
         }
         return result
     }
+
+    public func visitValidationOutcomes(
+        checking context: inout CheckingContext<CheckingRegisters>,
+        _ visit: (Action, Self) throws -> Bool,
+        onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool
+    ) throws -> Bool {
+        var found = false
+        for action in try actionCandidates() {
+            var keepGoing = true
+            var callbackFailed = false
+            do {
+                let actionFound = try visitSuccessors(for: action, checking: &context) { successor in
+                    found = true
+                    do {
+                        keepGoing = try visit(action, successor)
+                        return keepGoing
+                    } catch {
+                        callbackFailed = true
+                        throw error
+                    }
+                }
+                found = found || actionFound
+                if !keepGoing { return found }
+            } catch let failure as MachineActionEvaluationFailure<Action> where !callbackFailed {
+                if try !onEvaluationFailure(failure.action, failure.reason) { return found }
+            } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+                if try !onEvaluationFailure(action, reason) { return found }
+            }
+        }
+        return found
+    }
 }
 
 public enum ExplorationError: Error, Equatable, Sendable {
@@ -109,6 +146,7 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case invalidSimulationTraceCount(Int)
     case simulationNotConfigured
     case stateLimitExceeded(Int)
+    case initialStateLimitExceeded(actualCount: Int, maximumCount: Int)
     case levelOverflow
     case noInitialStates
     case assumptionViolated

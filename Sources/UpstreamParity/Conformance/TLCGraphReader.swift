@@ -1,6 +1,7 @@
 import CoreFoundation
 import CryptoKit
 import Foundation
+import SwiftTLA
 
 package enum TLCGraphEventError: Error, Equatable, Sendable {
     case invalidUTF8
@@ -47,9 +48,11 @@ package struct TLCGraphEventStream: Equatable, Sendable {
 package struct TLCGraphReader: Sendable {
     private let finiteGraphCase: FiniteGraphCase
     private let renderedActions: [String: String]
+    private let decodesFormalStrings: Bool
 
-    package init(finiteGraphCase: FiniteGraphCase) {
+    package init(finiteGraphCase: FiniteGraphCase, decodesFormalStrings: Bool = false) {
         self.finiteGraphCase = finiteGraphCase
+        self.decodesFormalStrings = decodesFormalStrings
         self.renderedActions = Dictionary(
             uniqueKeysWithValues: finiteGraphCase.renderedActions.map {
                 (
@@ -352,7 +355,8 @@ package struct TLCGraphReader: Sendable {
             guard bindings[binding.name] == nil else {
                 throw TLCGraphEventError.invalidRecord(line: 0, reason: "duplicate binding")
             }
-            let value = try TLCValueParser.parse(binding.tla)
+            let parsed = try TLCValueParser.parse(binding.tla)
+            let value = try decodesFormalStrings ? parsed.decodingFormalStrings() : parsed
             bindings[binding.name] = value
         }
         return CanonicalState(bindings: bindings)

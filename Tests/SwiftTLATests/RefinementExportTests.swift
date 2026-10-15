@@ -169,7 +169,10 @@ struct RefinementExportTests {
         let configuration = module.configuration
         let rendered = try RenderedSpecification(_generatedModule: name, source: module.renderedModuleSource,
             compilationIdentity: identity.value, declarations: configuration.declarations,
-            checkDeadlock: configuration.checkDeadlock, invariants: configuration.invariants,
+            checkDeadlock: configuration.checkDeadlock,
+            _generatedIntegerBitWidth: Int.bitWidth,
+            _generatedIntrinsicInvariants: configuration.intrinsicInvariants,
+            invariants: configuration.invariants,
             reachabilityProperties: configuration.reachabilityProperties, properties: configuration.properties,
             refinements: configuration.refinements, symmetry: configuration.symmetry, actions: module.renderedActions,
             _generatedPlusCal: plusCal.map { .success($0) },

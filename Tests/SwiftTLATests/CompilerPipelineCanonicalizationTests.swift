@@ -433,6 +433,15 @@ struct CompilerPipelineCanonicalizationTests {
             .procedure(algorithm: "ControlLayout", name: "second"),
             .generated(algorithm: "ControlLayout", purpose: "Done")
         ])
+        let scopedStarts = compilation.layout.controlLocations.filter { $0.sourceName == "start" }
+        #expect(Set(scopedStarts.map(\.formalName)).count == scopedStarts.count)
+        let outputs = try compilation.render()
+        let tla = outputs.tlaBundle.root.tla
+        let plusCal = try outputs.plusCalBundle().root.tla
+        for location in scopedStarts {
+            #expect(tla.contains("\"\(location.formalName)\""))
+            #expect(plusCal.contains("\(location.formalName):"))
+        }
         let processStart = try #require(compilation.layout.controlLocations.first {
             $0.owner == .process(algorithm: "ControlLayout", ordinal: 0, typeName: "CompilerPipelineNode")
                 && $0.sourceName == "start"
@@ -1508,6 +1517,52 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(Set(try states.map {
             try renderedValue(named: "derived", in: $0, compilation: compilation)
         }) == [.int(2), .int(3), .int(4)])
+    }
+
+    @Test("resolved initialization rejects a forward state read through a formal call")
+    func resolvedInitializationRejectsForwardCallRead() throws {
+        let compilation = try TLASpec(
+            name: "ResolvedInitializerOrder",
+            variables: [
+                .init(name: "dependent", initialization: .expression(.operatorApplication(
+                    .reference("ReadSeed", arity: 0), [])),
+                    generatedSwiftType: "Int", origin: .source),
+                .init(name: "seed", initial: .int(1))
+            ], actions: [], invariants: [],
+            formalOperatorDefinitions: [.init(name: "ReadSeed", parameters: [], body: .variable("seed"))]
+        ).compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let source = program.behavior
+        let reordered = CompiledBehavior(checkDeadlock: source.checkDeadlock,
+            parameterDomains: source.parameterDomains,
+            checkingRegisterInitializations: source.checkingRegisterInitializations,
+            validationScenarios: source.validationScenarios,
+            initializations: Array(source.initializations.reversed()),
+            initialInvariant: source.initialInvariant, actions: source.actions,
+            enabledActionIndices: source.enabledActionIndices,
+            enabledActionDependencies: source.enabledActionDependencies,
+            invariants: source.invariants, reachabilityProperties: source.reachabilityProperties,
+            temporalProperties: source.temporalProperties, fairness: source.fairness,
+            fairnessProfiles: source.fairnessProfiles, constraint: source.constraint,
+            actionConstraint: source.actionConstraint, assume: source.assume)
+        let altered = CompiledProgram(identity: program.identity, moduleMetadata: program.moduleMetadata,
+            moduleImports: program.moduleImports,
+            formalModuleReplacements: program.formalModuleReplacements,
+            requiredStandardModules: program.requiredStandardModules, layout: program.layout,
+            behavior: reordered, refinements: program.refinements,
+            generatedRefinements: program.generatedRefinements, enums: program.enums,
+            projections: program.projections, variableTypes: program.variableTypes,
+            checkingRegisterTypes: program.checkingRegisterTypes, bindingTypes: program.bindingTypes,
+            binderNames: program.binderNames, functions: program.functions,
+            authoredAlgorithm: program.authoredAlgorithm)
+
+        do {
+            try altered.validateInitializationDependencies()
+            Issue.record("The resolved initialization plan accepted a forward state read")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "variables.dependent.initialization")
+            #expect(diagnostic.actual == "unavailable variables seed")
+        }
     }
 
     @Test("variable initialization follows dependencies through formal definitions")

@@ -23,7 +23,8 @@ struct CheckingEffectsTests {
     @Test("Context-free execution cannot silently reset checking registers")
     func requiresRunContext() throws {
         let machine = try OrderedCheckingEffects.makeMachine()
-        #expect(throws: NativeMachineEvaluationError.checkingContextRequired) { try machine.successors() }
+        #expect(throws: MachineActionEvaluationFailure<OrderedCheckingEffects.Action>(
+            action: .advance, reason: .checkingContextRequired)) { try machine.successors() }
     }
 
     @Test("The same checked register identities render as TLC get and set operations")

@@ -169,6 +169,11 @@ extension TLASpec {
       )
     }
 
+    for action in actions {
+      try ActionNormalization.verifyComplete(action.body, variables: variables,
+        at: "actions.\(action.name).body")
+    }
+
     var lowered = TLASpec(
       name: name,
       variables: variables,
@@ -273,6 +278,7 @@ extension CompiledModuleMetadata {
       return definition
     }
     let postTranslationDeclarations = postTranslation
+      + declarations.evaluationFailureDeclarations
       + (declarations.constraint.map { [$0] } ?? [])
       + (declarations.actionConstraint.map { [$0] } ?? [])
       + renderedProperties

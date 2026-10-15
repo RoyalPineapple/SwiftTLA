@@ -76,6 +76,7 @@ private final class ProgramResolver {
             projections: projections, variableTypes: checked.variableTypes,
             checkingRegisterTypes: checked.checkingRegisterTypes, bindingTypes: checked.bindingTypes, binderNames: binderNames,
             functions: resolvedFunctions, authoredAlgorithm: authoredAlgorithm)
+        try program.validateInitializationDependencies()
         for register in checked.layout.checkingRegisters {
             try program.requireImmutableDomain(try require(behavior.checkingRegisterInitializations[register.id]),
                 path: "checkingRegisters.\(register.reference.name).initial at \(register.reference.sourceSpan)")

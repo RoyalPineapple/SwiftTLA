@@ -1,0 +1,13 @@
+private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                   _ emit: (_Updates) throws -> Void) throws {
+    func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+        try _actionPart2(updates, { candidate in try _actionPart1(candidate, emit) })
+    }
+    func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+        try emit(updates)
+    }
+    func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+        if let merged = updates.merging(_Updates(_value_value_0: state.state.value)) { try emit(merged) }
+    }
+    try _actionPart0(_Updates(), emit)
+}

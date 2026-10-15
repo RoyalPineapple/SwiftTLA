@@ -1,0 +1,53 @@
+private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                             _ emit: (_Updates) throws -> Void) throws {
+  func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
+      if second { try _actionPart1(updates, branchEmit) }
+      else { try _actionPart2(updates, branchEmit) }
+    }
+  }
+  func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_0_0 = (try { () throws -> Int in
+      let _arithmetic0: Int = state.state.divisor
+      let _arithmetic1: Int = 1
+      let _arithmetic2: Int = try _NativeMachineOperations.divide(_arithmetic1, _arithmetic0)
+      return _arithmetic2
+    }())
+    try _actionPart3(___atomic_0_0, updates, emit)
+  }
+  func _actionPart3(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart5(___atomic_0_0, updates, { candidate in try _actionPart4(___atomic_0_0, candidate, emit) })
+  }
+  func _actionPart5(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart7(___atomic_0_0, updates, { candidate in try _actionPart6(___atomic_0_0, candidate, emit) })
+  }
+  func _actionPart7(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+  }
+  func _actionPart6(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_result_1: ___atomic_0_0)) { try emit(merged) }
+  }
+  func _actionPart4(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_divisor_0: state.state.divisor)) { try emit(merged) }
+  }
+  func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_1_1 = (try Self._closedChoice0.get())
+    try _actionPart8(___atomic_1_1, updates, emit)
+  }
+  func _actionPart8(_ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart10(___atomic_1_1, updates, { candidate in try _actionPart9(___atomic_1_1, candidate, emit) })
+  }
+  func _actionPart10(_ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart12(___atomic_1_1, updates, { candidate in try _actionPart11(___atomic_1_1, candidate, emit) })
+  }
+  func _actionPart12(_ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+  }
+  func _actionPart11(_ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_result_1: ___atomic_1_1)) { try emit(merged) }
+  }
+  func _actionPart9(_ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_divisor_0: state.state.divisor)) { try emit(merged) }
+  }
+  try _actionPart0(_Updates(), emit)
+}

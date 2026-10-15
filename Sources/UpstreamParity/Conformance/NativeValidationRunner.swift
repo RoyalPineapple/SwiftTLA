@@ -35,6 +35,7 @@ package struct NativeValidationReport: Codable, Sendable {
 package enum NativeValidationRunnerError: Error, Equatable {
     case invalidCoverage(String)
     case unavailable(String)
+    case evaluationFailure(NativeMachineEvaluationError)
 }
 
 /// One generated-machine pass records either a complete graph or a decisive witness.
@@ -94,6 +95,8 @@ package enum NativeValidationRunner {
         case (.exhaustive, .exhausted),
              (.decisiveCounterexample, .decisiveViolation),
              (.decisiveCounterexample, .decisiveReachability): break
+        case (_, .evaluationFailure(let reason)):
+            throw NativeValidationRunnerError.evaluationFailure(reason)
         default: throw NativeValidationRunnerError.unavailable("declared checking outcome")
         }
         if decisive, batch.violatedInvariants.isEmpty && batch.reachedProperties.isEmpty {

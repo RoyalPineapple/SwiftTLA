@@ -1,4 +1,6 @@
+import Foundation
 import Testing
+import SwiftParser
 import SwiftSyntax
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
@@ -51,13 +53,19 @@ struct ArrayValueTests {
 
     @Test("array configuration and native operations preserve ordinary Swift state and nominal members")
     func generatedArrays() throws {
-        for scenario in try ArrayValueMachine.validationScenarios() {
+        let row = try #require(TLAStateProjection.Token(validating: "row"))
+        let scenarios = try ArrayValueMachine.validationScenarios()
+        #expect(scenarios.count == 2)
+        #expect(Set(scenarios.map(\.configuration.input)) == Set([[Int](), [2, 1, 2]]))
+        for scenario in scenarios {
             var machine = try #require(scenario.initialMachines().first)
             let choices: [ArrayValueMachine.Choice] = machine.state.choices
             #expect(choices == [.one, .two, .one])
             let expected = scenario.configuration.input + [3]
             _ = try machine.send(.adopt)
             #expect(machine.state.row == expected)
+            #expect(try machine.formalProjection(of: machine.snapshot).value(for: row)
+                == .tuple(expected.map(TLAValue.int)))
             _ = try machine.send(.remove)
             #expect(machine.state.row == Array(expected.dropFirst()))
             _ = try machine.send(.select)
@@ -83,5 +91,202 @@ struct ArrayValueTests {
         #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == 3)
         #expect(graph.safetyViolations.isEmpty)
         #expect(try ArrayAppendReadMachine.render().tlaBundle.tla.contains("sequence[1]"))
+    }
+
+    @Test("an array read outside its domain fails in both generated checking paths")
+    func arrayReadOutsideDomain() throws {
+        let compilation = try ArrayReadOutsideDomainMachine.spec.compile()
+        let sequenceID = try #require(compilation.layout.testVariableID(named: "sequence"))
+        let action = try #require(compilation.semantics.behavior.actions.first)
+        guard case .define(_, let read, _) = action.body else {
+            Issue.record("The read must lower to one ordered binding")
+            return
+        }
+        #expect(read.operation == .tupleDynamicAccess)
+        #expect(read.children.map(\.operation) == [
+            .stateVariable(sequenceID), .value(.integer(1))
+        ])
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        #expect(throws: EvalError.indexOutOfBounds(1, 0)) {
+            try runtime.successors(for: action.id, from: initial)
+        }
+
+        var machine = try ArrayReadOutsideDomainMachine.makeMachine()
+        let before = machine.state
+        #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 1, count: 0)) {
+            try machine.send(.read)
+        }
+        #expect(machine.state == before)
+
+        let rendered = try ArrayReadOutsideDomainMachine.render()
+        let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/ArrayReadOutsideDomainMachine.tla")
+            .standardizedFileURL
+        let expectedTLA = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(rendered.tlaBundle.root.tla == expectedTLA)
+        let unguardedTLA = rendered.tlaBundle.root.tla.replacingOccurrences(
+            of: "IF (IF (1 \\in DOMAIN (sequence)) THEN TRUE ELSE FALSE)",
+            with: "IF TRUE")
+        #expect(unguardedTLA != rendered.tlaBundle.root.tla)
+        #expect(unguardedTLA != expectedTLA)
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("ArrayValueFixtures.swift")
+        let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "ArrayReadOutsideDomainMachine" })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
+        let visitor = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let swiftProofInput = proofInput.deletingLastPathComponent()
+            .appendingPathComponent("GeneratedSequenceIndexFailureSwiftVisitor.txt")
+        let expectedVisitor = try String(contentsOf: swiftProofInput, encoding: .utf8)
+        func tokens(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
+        }
+        #expect(tokens(visitor.description) == tokens(expectedVisitor))
+        let uncheckedSwift = visitor.description.replacingOccurrences(
+            of: "_NativeMachineOperations.sequenceElement(_sequenceValue, at: _sequenceIndex)",
+            with: "_sequenceValue[_sequenceIndex]")
+        #expect(uncheckedSwift != visitor.description)
+        #expect(tokens(uncheckedSwift) != tokens(expectedVisitor))
+        #expect(rendered.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))
+    }
+
+    @Test("sequence edits preserve success and out-of-bounds failure on both outputs")
+    func sequenceEditBounds() throws {
+        let machines = try SequenceEditBoundsMachine.initialMachines()
+        #expect(machines.count == 2)
+        let valid = try #require(machines.first { $0.state.position == 2 })
+        let invalid = try #require(machines.first { $0.state.position == 3 })
+        let removed = try #require(valid.successors(for: .remove).first)
+        let prefix = try #require(valid.successors(for: .prefix).first)
+        #expect(removed.state.row == [4])
+        #expect(prefix.state.row == [4, 5])
+        for action in [SequenceEditBoundsMachine.Action.remove, .prefix] {
+            #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 3, count: 2)) {
+                try invalid.successors(for: action)
+            }
+        }
+        #expect(invalid.state.row == [4, 5])
+
+        let rendered = try SequenceEditBoundsMachine.render()
+        let proofDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics").standardizedFileURL
+        let expectedTLA = try String(contentsOf: proofDirectory
+            .appendingPathComponent("SequenceEditBoundsMachine.tla"), encoding: .utf8)
+        #expect(rendered.tlaBundle.root.tla == expectedTLA)
+        let unguardedTLA = rendered.tlaBundle.root.tla.replacingOccurrences(
+            of: "IF (IF (position \\in DOMAIN (row)) THEN TRUE ELSE FALSE)", with: "IF TRUE")
+        #expect(unguardedTLA != rendered.tlaBundle.root.tla)
+        #expect(unguardedTLA != expectedTLA)
+
+        let source = Parser.parse(source: try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().appendingPathComponent("ArrayValueFixtures.swift"), encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "SequenceEditBoundsMachine" })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
+        let visitors = try emitter.machineMembers().compactMap { member -> FunctionDeclSyntax? in
+            guard let function = member.as(FunctionDeclSyntax.self),
+                function.name.text.hasPrefix("_visitUpdates") else { return nil }
+            return function
+        }
+        #expect(visitors.count == 2)
+        func tokens(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
+        }
+        for (name, file, checkedCall) in [
+            ("_visitUpdates0", "GeneratedSequenceRemovingSwiftVisitor.txt",
+                "_NativeMachineOperations.sequenceRemoving(_sequenceValue, at: _sequenceIndex)"),
+            ("_visitUpdates1", "GeneratedSequencePrefixSwiftVisitor.txt",
+                "_NativeMachineOperations.sequencePrefix(_sequenceValue, length: _prefixLength)")
+        ] {
+            let visitor = try #require(visitors.first { $0.name.text == name })
+            let expected = try String(contentsOf: proofDirectory.appendingPathComponent(file), encoding: .utf8)
+            #expect(tokens(visitor.description) == tokens(expected))
+            let unchecked = visitor.description.replacingOccurrences(of: checkedCall, with: "_sequenceValue")
+            #expect(unchecked != visitor.description)
+            #expect(tokens(unchecked) != tokens(expected))
+        }
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+    }
+
+    @Test("sequence reads use one-based indices and report the complete failure payload")
+    func sequenceReadOperation() throws {
+        let values = [4, 5]
+        #expect(try _NativeMachineOperations.sequenceElement(values, at: 1) == 4)
+        #expect(try _NativeMachineOperations.sequenceElement(values, at: 2) == 5)
+        #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 0, count: 2)) {
+            try _NativeMachineOperations.sequenceElement(values, at: 0)
+        }
+        #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 3, count: 2)) {
+            try _NativeMachineOperations.sequenceElement(values, at: 3)
+        }
+    }
+
+    @Test("head and tail of an empty sequence report the same failure in both outputs")
+    func emptySequenceOperations() throws {
+        #expect(try _NativeMachineOperations.sequenceHead([4, 5]) == 4)
+        #expect(try _NativeMachineOperations.sequenceTail([4, 5]) == [5])
+        let compilation = try EmptySequenceReadMachine.spec.compile()
+        let sequenceID = try #require(compilation.layout.testVariableID(named: "sequence"))
+        let actions = compilation.semantics.behavior.actions
+        #expect(actions.count == 2)
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        for (action, operation) in zip(actions, [CompiledOperation.tupleHead, .tupleTail]) {
+            guard case .define(_, let read, _) = action.body else {
+                Issue.record("The sequence read must lower to one ordered binding")
+                return
+            }
+            #expect(read.operation == operation)
+            #expect(read.children.map(\.operation) == [.stateVariable(sequenceID)])
+            #expect(throws: EvalError.emptySequence) {
+                try runtime.successors(for: action.id, from: initial)
+            }
+        }
+        var machine = try EmptySequenceReadMachine.makeMachine()
+        let before = machine.state
+        #expect(throws: NativeMachineEvaluationError.emptySequence) {
+            try machine.send(.readHead)
+        }
+        #expect(throws: NativeMachineEvaluationError.emptySequence) {
+            try machine.send(.readTail)
+        }
+        #expect(machine.state == before)
+
+        let rendered = try EmptySequenceReadMachine.render()
+        let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/EmptySequenceReadMachine.tla")
+            .standardizedFileURL
+        let expectedTLA = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(rendered.tlaBundle.root.tla == expectedTLA)
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("ArrayValueFixtures.swift")
+        let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "EmptySequenceReadMachine" })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
+        let visitors = try emitter.machineMembers().compactMap { $0.as(FunctionDeclSyntax.self) }
+            .filter { $0.name.text.hasPrefix("_visitUpdates") }
+        #expect(visitors.count == 2)
+        func tokens(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
+        }
+        for visitor in visitors {
+            let name: String
+            switch visitor.name.text {
+            case "_visitUpdates0": name = "GeneratedEmptySequenceHeadSwiftVisitor.txt"
+            case "_visitUpdates1": name = "GeneratedEmptySequenceTailSwiftVisitor.txt"
+            default:
+                Issue.record("Unexpected generated action visitor: \(visitor.name.text)")
+                return
+            }
+            let expected = try String(contentsOf: proofInput.deletingLastPathComponent()
+                .appendingPathComponent(name), encoding: .utf8)
+            #expect(tokens(visitor.description) == tokens(expected))
+        }
+        #expect(rendered.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))
     }
 }

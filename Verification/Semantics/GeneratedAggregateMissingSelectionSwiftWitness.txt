@@ -1,0 +1,20 @@
+private static let _closedChoice0: Result<Int, any Error> = Result { (try _NativeMachineOperations.choose(Set<Int>([1]).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
+return lhs < rhs
+})) { __PROOF_MEMBER__ in false }) }
+private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                           _ emit: (_Updates) throws -> Void) throws {
+    func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_0_0 = [(try Self._closedChoice0.get()), 0]
+try _actionPart1(___atomic_0_0, updates, emit)
+}
+func _actionPart1(_ ___atomic_0_0: [Int], _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart3(___atomic_0_0, updates, { candidate in try _actionPart2(___atomic_0_0, candidate, emit) })
+}
+func _actionPart3(_ ___atomic_0_0: [Int], _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+}
+func _actionPart2(_ ___atomic_0_0: [Int], _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_selected_0: ___atomic_0_0)) { try emit(merged) }
+}
+try _actionPart0(_Updates(), emit)
+}

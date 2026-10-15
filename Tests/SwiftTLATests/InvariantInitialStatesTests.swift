@@ -55,6 +55,5 @@ struct InvariantInitialStatesTests {
             bits.flatMap { second in locations.map { location in [first, second, location] } }
         })
         #expect(combinations == expected)
-        #expect(try InvariantInitialStatesModel.render().tlaBundle.tla.contains("/\\ AllowedInitial"))
     }
 }

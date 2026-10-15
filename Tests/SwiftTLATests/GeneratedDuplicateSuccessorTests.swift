@@ -30,4 +30,22 @@ struct GeneratedDuplicateSuccessorTests {
         #expect(visited == [listed[0].machine.snapshot])
         #expect(visited[0].state == transition.after)
     }
+
+    @Test("compiled exploration retains one labeled edge for identical derivations")
+    func compiledGraphSendsOneSemanticTransition() throws {
+        let compilation = try GeneratedDuplicateSuccessor.spec.compile()
+        let configuration = try FiniteExplorationConfiguration(
+            maximumStateLimit: 4,
+            symmetryReduction: .disabled
+        )
+        let exploration = try ModelChecker(
+            compilation: compilation,
+            configuration: configuration
+        ).explore()
+        let initial = try #require(exploration.initialStateIDs.first)
+        let outgoing = try #require(exploration.graph.transitions[initial])
+
+        #expect(exploration.graph.states.count == 2)
+        #expect(outgoing.count == 1)
+    }
 }

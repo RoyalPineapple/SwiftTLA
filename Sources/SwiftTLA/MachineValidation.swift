@@ -54,6 +54,10 @@ private struct SeenIdentities<Identity: Hashable> {
     }
 }
 
+private struct ValidationVisitorFailure: Error {
+    let reason: any Error
+}
+
 /// The generated machine is the execution authority for native validation.
 /// This traversal retains only the seen-state index and the pending frontier;
 /// callers persist evidence as events arrive.
@@ -63,16 +67,20 @@ public enum MachineValidationEvent<Machine: StateMachine>: Sendable {
     case invariantFailure(property: Machine.Property, snapshot: Machine.Snapshot, predecessor: Int?, action: Machine.Action?)
     case deadlock(state: Int)
     case reachability(property: Machine.Property, snapshot: Machine.Snapshot, predecessor: Int?, action: Machine.Action?)
+    case evaluationFailure(source: Int, action: Machine.Action, reason: NativeMachineEvaluationError)
 }
 
 public struct MachineValidationSummary<Property: Hashable & Sendable>: Sendable {
-    public enum Completion: Sendable {
+    public enum Completion: Equatable, Sendable {
         case exhausted
         case decisiveViolation
         case decisiveReachability
+        case evaluationFailure(NativeMachineEvaluationError)
     }
 
     public let completion: Completion
+    /// The first model evaluation failure, even when another checking outcome stops exploration.
+    public let firstEvaluationFailure: NativeMachineEvaluationError?
     public let initialStates: Int
     public let states: Int
     public let edges: Int
@@ -104,6 +112,21 @@ public struct MachineValidationTiming: Sendable {
 /// establishes that all states and edges were visited within the limit.
 public enum MachineValidator {
     public static func run<Machine: StateMachine>(
+        initialOutcomes: InitialEvaluationOutcomes<Machine>,
+        maximumStates: Int,
+        checking: ModelChecks<Machine.Property>,
+        stopOnViolation: Bool,
+        stopOnReachability: Bool = false,
+        emit: (MachineValidationEvent<Machine>) throws -> Void
+    ) throws -> MachineValidationSummary<Machine.Property> {
+        try runWithIdentity(initialMachines: initialOutcomes.states,
+            initialFailure: initialOutcomes.firstFailure, maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, identity: { machine, _ in machine.snapshot },
+            usesView: false, emit: emit)
+    }
+
+    public static func run<Machine: StateMachine>(
         initialMachines: [Machine],
         maximumStates: Int,
         checking: ModelChecks<Machine.Property>,
@@ -119,6 +142,22 @@ public enum MachineValidator {
     /// The identity is a typed state function. Equal identities share one exploration node;
     /// the completed result is then a view graph, not a full-state reachability graph.
     /// Events still carry complete representative snapshots.
+    public static func run<Machine: StateMachine, Identity: Hashable & Sendable>(
+        initialOutcomes: InitialEvaluationOutcomes<Machine>,
+        maximumStates: Int,
+        checking: ModelChecks<Machine.Property>,
+        stopOnViolation: Bool,
+        stopOnReachability: Bool = false,
+        identity: (Machine) throws -> Identity,
+        emit: (MachineValidationEvent<Machine>) throws -> Void
+    ) throws -> MachineValidationSummary<Machine.Property> {
+        try runWithIdentity(initialMachines: initialOutcomes.states,
+            initialFailure: initialOutcomes.firstFailure, maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, identity: { machine, _ in try identity(machine) },
+            usesView: true, emit: emit)
+    }
+
     public static func run<Machine: StateMachine, Identity: Hashable & Sendable>(
         initialMachines: [Machine],
         maximumStates: Int,
@@ -137,6 +176,22 @@ public enum MachineValidator {
     /// The checking level is the BFS depth exposed by TLCGet("level"): initial
     /// states have level one, and a successor has its source level plus one.
     public static func run<Machine: StateMachine, Identity: Hashable & Sendable>(
+        initialOutcomes: InitialEvaluationOutcomes<Machine>,
+        maximumStates: Int,
+        checking: ModelChecks<Machine.Property>,
+        stopOnViolation: Bool,
+        stopOnReachability: Bool = false,
+        identity: (Machine, Int) throws -> Identity,
+        emit: (MachineValidationEvent<Machine>) throws -> Void
+    ) throws -> MachineValidationSummary<Machine.Property> {
+        try runWithIdentity(initialMachines: initialOutcomes.states,
+            initialFailure: initialOutcomes.firstFailure, maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, identity: identity,
+            usesView: true, emit: emit)
+    }
+
+    public static func run<Machine: StateMachine, Identity: Hashable & Sendable>(
         initialMachines: [Machine],
         maximumStates: Int,
         checking: ModelChecks<Machine.Property>,
@@ -152,6 +207,7 @@ public enum MachineValidator {
 
     private static func runWithIdentity<Machine: StateMachine, Identity: Hashable & Sendable>(
         initialMachines: [Machine],
+        initialFailure: NativeMachineEvaluationError? = nil,
         maximumStates: Int,
         checking: ModelChecks<Machine.Property>,
         stopOnViolation: Bool,
@@ -161,7 +217,6 @@ public enum MachineValidator {
         emit: (MachineValidationEvent<Machine>) throws -> Void
     ) throws -> MachineValidationSummary<Machine.Property> {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
-        guard let first = initialMachines.first else { throw ExplorationError.noInitialStates }
         let startedAt = DispatchTime.now().uptimeNanoseconds
         let supported = Set(Machine.invariantProperties).union(Machine.reachabilityProperties)
         if let unsupported = checking.properties.subtracting(supported)
@@ -169,7 +224,6 @@ public enum MachineValidator {
             throw ExplorationError.unsupportedValidationProperty(unsupported)
         }
 
-        var context = CheckingContext(registers: try first.initialCheckingRegisters())
         var seen = SeenIdentities<Identity>()
         var pending: [(id: Int, machine: Machine?)] = []
         var head = 0
@@ -179,6 +233,7 @@ public enum MachineValidator {
         var violated: Set<Machine.Property> = []
         var reached: Set<Machine.Property> = []
         var deadlockFound = false
+        var firstEvaluationFailure = initialFailure
         var successorNanoseconds: UInt64 = 0
         var invariantNanoseconds: UInt64 = 0
         var reachabilityNanoseconds: UInt64 = 0
@@ -193,7 +248,8 @@ public enum MachineValidator {
 
         func summary(_ completion: MachineValidationSummary<Machine.Property>.Completion)
             -> MachineValidationSummary<Machine.Property> {
-            .init(completion: completion, initialStates: initialCount, states: seen.count,
+            .init(completion: completion, firstEvaluationFailure: firstEvaluationFailure,
+                  initialStates: initialCount, states: seen.count,
                   edges: edgeCount, maximumLevel: maximumLevel, violatedInvariants: violated,
                   reachedProperties: reached, deadlockFound: deadlockFound,
                   timing: .init(
@@ -216,6 +272,12 @@ public enum MachineValidator {
             try emit(event)
             eventNanoseconds += DispatchTime.now().uptimeNanoseconds - started
         }
+
+        guard let first = initialMachines.first else {
+            if let initialFailure { return summary(.evaluationFailure(initialFailure)) }
+            throw ExplorationError.noInitialStates
+        }
+        var context = CheckingContext(registers: try first.initialCheckingRegisters())
 
         func constraintHolds(_ machine: Machine) throws -> Bool {
             let started = DispatchTime.now().uptimeNanoseconds
@@ -334,6 +396,7 @@ public enum MachineValidator {
                 let successorStartedAt = DispatchTime.now().uptimeNanoseconds
                 var processingNanoseconds: UInt64 = 0
                 var decision: MachineValidationSummary<Machine.Property>.Completion?
+                var stateEvaluationFailed = false
                 func inspect(_ action: Machine.Action, _ successor: Machine, permitted: Bool) throws -> Bool {
                     let processingStartedAt = DispatchTime.now().uptimeNanoseconds
                     defer {
@@ -390,28 +453,55 @@ public enum MachineValidator {
                     try emitEvent(.edge(source: source, action: action, target: target))
                     return true
                 }
+                func evaluationFailure(_ action: Machine.Action, _ reason: NativeMachineEvaluationError) throws -> Bool {
+                    stateEvaluationFailed = true
+                    if firstEvaluationFailure == nil { firstEvaluationFailure = reason }
+                    try emitEvent(.evaluationFailure(source: source, action: action, reason: reason))
+                    if stopOnViolation {
+                        decision = .evaluationFailure(reason)
+                        return false
+                    }
+                    return true
+                }
                 let hasSuccessor: Bool
                 if Machine.hasActionConstraint {
-                    let candidates = try machine.successors(checking: &context)
+                    var candidates: [(action: Machine.Action, machine: Machine)] = []
+                    do {
+                        _ = try machine.visitValidationOutcomes(checking: &context, { action, successor in
+                            candidates.append((action, successor))
+                            return true
+                        }, onEvaluationFailure: evaluationFailure)
+                    } catch {
+                        throw error
+                    }
                     hasSuccessor = !candidates.isEmpty
-                    for (action, successor) in candidates {
-                        guard sameConfiguration(successor) else { throw ExplorationError.configurationMismatch }
-                        let constraintStartedAt = DispatchTime.now().uptimeNanoseconds
-                        let permitted = try machine.satisfiesActionConstraint(to: successor, checking: &context)
-                        let constraintDuration = DispatchTime.now().uptimeNanoseconds - constraintStartedAt
-                        constraintNanoseconds += constraintDuration
-                        processingNanoseconds += constraintDuration
-                        if try !inspect(action, successor, permitted: permitted) { break }
+                    if decision == nil {
+                        for (action, successor) in candidates {
+                            guard sameConfiguration(successor) else { throw ExplorationError.configurationMismatch }
+                            let constraintStartedAt = DispatchTime.now().uptimeNanoseconds
+                            let permitted = try machine.satisfiesActionConstraint(to: successor, checking: &context)
+                            let constraintDuration = DispatchTime.now().uptimeNanoseconds - constraintStartedAt
+                            constraintNanoseconds += constraintDuration
+                            processingNanoseconds += constraintDuration
+                            if try !inspect(action, successor, permitted: permitted) { break }
+                        }
                     }
                 } else {
-                    hasSuccessor = try machine.visitSuccessors(checking: &context) { action, successor in
-                        try inspect(action, successor, permitted: true)
+                    do {
+                        hasSuccessor = try machine.visitValidationOutcomes(checking: &context, { action, successor in
+                            do { return try inspect(action, successor, permitted: true) }
+                            catch { throw ValidationVisitorFailure(reason: error) }
+                        }, onEvaluationFailure: evaluationFailure)
+                    } catch let failure as ValidationVisitorFailure {
+                        throw failure.reason
+                    } catch {
+                        throw error
                     }
                 }
                 successorNanoseconds += DispatchTime.now().uptimeNanoseconds - successorStartedAt - processingNanoseconds
                 successorCalls += 1
                 if let decision { return summary(decision) }
-                if !hasSuccessor {
+                if !hasSuccessor && !stateEvaluationFailed {
                     deadlockFound = true
                     try emitEvent(.deadlock(state: source))
                     if checking.checkDeadlock && stopOnViolation { return summary(.decisiveViolation) }
@@ -423,6 +513,6 @@ public enum MachineValidator {
                 head = 0
             }
         }
-        return summary(.exhausted)
+        return summary(firstEvaluationFailure.map { .evaluationFailure($0) } ?? .exhausted)
     }
 }

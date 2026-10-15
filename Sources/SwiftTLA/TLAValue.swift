@@ -1,3 +1,70 @@
+import Foundation
+
+enum FormalStringIdentity {
+    static func equal(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.utf8.elementsEqual(rhs.utf8)
+    }
+
+    static func less(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.utf8.lexicographicallyPrecedes(rhs.utf8)
+    }
+
+    static func hash(_ value: String, into hasher: inout Hasher) {
+        // Swift may hash byte-distinct canonical equivalents alike; byte equality resolves that collision.
+        hasher.combine(value)
+    }
+}
+
+package enum FormalStringEncoding {
+    package static let prefix = "__SwiftTLA_UTF8_V1__"
+    package static let declaration = "\\* SwiftTLA formal strings: utf8-v1"
+
+    package static func declare(in source: String) -> String {
+        guard source.contains(prefix), let endOfHeader = source.firstIndex(of: "\n") else { return source }
+        let remainder = source[source.index(after: endOfHeader)...]
+        guard !remainder.hasPrefix(declaration + "\n") else { return source }
+        return String(source[...endOfHeader]) + declaration + "\n" + remainder
+    }
+
+    package static func encode(_ value: String) -> String {
+        guard value.utf8.contains(where: { $0 >= 128 }) || value.hasPrefix(prefix) else {
+            return value
+        }
+        let digits = Array("0123456789ABCDEF".utf8)
+        var encoded = prefix
+        encoded.reserveCapacity(prefix.utf8.count + value.utf8.count * 2)
+        for byte in value.utf8 {
+            encoded.append(Character(UnicodeScalar(digits[Int(byte >> 4)])))
+            encoded.append(Character(UnicodeScalar(digits[Int(byte & 0x0F)])))
+        }
+        return encoded
+    }
+
+    package static func decode(_ value: String) -> String? {
+        guard value.hasPrefix(prefix) else { return value }
+        let digits = value.utf8.dropFirst(prefix.utf8.count)
+        guard digits.count.isMultiple(of: 2) else { return nil }
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(digits.count / 2)
+        var iterator = digits.makeIterator()
+        while let high = iterator.next(), let low = iterator.next() {
+            guard let high = hexDigit(high), let low = hexDigit(low) else { return nil }
+            bytes.append(high << 4 | low)
+        }
+        guard let decoded = String(bytes: bytes, encoding: .utf8),
+              encode(decoded).utf8.elementsEqual(value.utf8) else { return nil }
+        return decoded
+    }
+
+    private static func hexDigit(_ byte: UInt8) -> UInt8? {
+        switch byte {
+        case 48...57: byte - 48
+        case 65...70: byte - 55
+        default: nil
+        }
+    }
+}
+
 public struct TLARecord: Hashable, Sendable {
     public struct Field: Hashable, Sendable {
         public let name: String
@@ -7,22 +74,31 @@ public struct TLARecord: Hashable, Sendable {
             self.name = name
             self.value = value
         }
+
+        public static func == (lhs: Self, rhs: Self) -> Bool {
+            FormalStringIdentity.equal(lhs.name, rhs.name) && lhs.value == rhs.value
+        }
+
+        public func hash(into hasher: inout Hasher) {
+            FormalStringIdentity.hash(name, into: &hasher)
+            hasher.combine(value)
+        }
     }
 
     public let fields: [Field]
 
     public init(_ fields: [Field]) {
-        self.fields = fields.sorted { $0.name < $1.name }
+        self.fields = fields.sorted { FormalStringIdentity.less($0.name, $1.name) }
     }
 
     public func value(named name: String) -> TLAValue? {
-        fields.first { $0.name == name }?.value
+        fields.first { FormalStringIdentity.equal($0.name, name) }?.value
     }
 
     package func replacing(_ value: TLAValue, for name: String) -> TLARecord {
         var replaced = false
         let updated = fields.map { field -> Field in
-            guard field.name == name else { return field }
+            guard FormalStringIdentity.equal(field.name, name) else { return field }
             replaced = true
             return .init(name, value)
         }
@@ -46,6 +122,38 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
     case function([TLAValue: TLAValue])
     case constant(String)
 
+    @_documentation(visibility: internal)
+    public static func canonicalSwiftString(_ value: String) -> Self {
+        .string(value.precomposedStringWithCanonicalMapping)
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.int(let a), .int(let b)): a == b
+        case (.bool(let a), .bool(let b)): a == b
+        case (.string(let a), .string(let b)), (.constant(let a), .constant(let b)):
+            FormalStringIdentity.equal(a, b)
+        case (.set(let a), .set(let b)): a == b
+        case (.tuple(let a), .tuple(let b)): a == b
+        case (.record(let a), .record(let b)): a == b
+        case (.function(let a), .function(let b)): a == b
+        default: false
+        }
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(orderingKind)
+        switch self {
+        case .int(let value): hasher.combine(value)
+        case .bool(let value): hasher.combine(value)
+        case .string(let value), .constant(let value): FormalStringIdentity.hash(value, into: &hasher)
+        case .set(let values): hasher.combine(values)
+        case .tuple(let values): hasher.combine(values)
+        case .record(let value): hasher.combine(value)
+        case .function(let value): hasher.combine(value)
+        }
+    }
+
     public var description: String { _tlaForm() }
 
     package var isTLCConfigurationLiteral: Bool {
@@ -62,11 +170,11 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
     private func _tlaForm(_ depth: Int = 0) -> String {
         let xs = "__tla_fn_\(depth)"
         switch self {
-        case .int(let n): return "\(n)"
+        case .int(let n): return Self._integerForm(n)
         case .bool(let b): return b ? "TRUE" : "FALSE"
         case .string(let value):
             var literal = "\""
-            for scalar in value.unicodeScalars {
+            for scalar in FormalStringEncoding.encode(value).unicodeScalars {
                 switch scalar {
                 case "\"": literal += "\\\""
                 case "\\": literal += "\\\\"
@@ -100,6 +208,15 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
 
         case .constant(let name): return name
         }
+    }
+
+    private static func _integerForm(_ value: Int) -> String {
+        // TLC parses only 32-bit natural literals; split larger values into small operands.
+        let radix = 1_000_000_000
+        guard value < -radix || value > radix else { return "\(value)" }
+        let quotient = value / radix
+        let remainder = value % radix
+        return "(\(_integerForm(quotient)) * \(radix) \(remainder < 0 ? "-" : "+") \(remainder.magnitude))"
     }
 }
 
@@ -198,7 +315,8 @@ extension TLAValue: Codable {
             self = .constant(value)
         case .set:
             try Self.requireKeys([.version, .tag, .elements], from: decoder, for: tag)
-            guard let elements = try? container.decode([TLAValue].self, forKey: .elements) else {
+            guard let elements = try? container.decode([TLAValue].self, forKey: .elements),
+                  Set(elements).count == elements.count else {
                 throw TLAValueCodingError.malformedValue(tag.rawValue)
             }
             self = .set(Set(elements))
@@ -281,7 +399,7 @@ extension TLAValue: Comparable {
         switch (lhs, rhs) {
         case (.int(let a), .int(let b)): return a < b
         case (.bool(let a), .bool(let b)): return (a ? 1 : 0) < (b ? 1 : 0)
-        case (.string(let a), .string(let b)): return a < b
+        case (.string(let a), .string(let b)): return FormalStringIdentity.less(a, b)
         case (.set(let a), .set(let b)):
             return a.sorted().lexicographicallyPrecedes(b.sorted())
         case (.tuple(let a), .tuple(let b)):
@@ -290,7 +408,7 @@ extension TLAValue: Comparable {
             return recordFields(a.fields, precede: b.fields)
         case (.function(let a), .function(let b)):
             return functionEntries(a, precede: b)
-        case (.constant(let a), .constant(let b)): return a < b
+        case (.constant(let a), .constant(let b)): return FormalStringIdentity.less(a, b)
         default: return false
         }
     }
@@ -313,7 +431,9 @@ extension TLAValue: Comparable {
         precede rhs: [TLARecord.Field]
     ) -> Bool {
         for (left, right) in zip(lhs, rhs) {
-            if (left.name == right.name) == false { return left.name < right.name }
+            if FormalStringIdentity.equal(left.name, right.name) == false {
+                return FormalStringIdentity.less(left.name, right.name)
+            }
             if (left.value == right.value) == false { return left.value < right.value }
         }
         return lhs.count < rhs.count

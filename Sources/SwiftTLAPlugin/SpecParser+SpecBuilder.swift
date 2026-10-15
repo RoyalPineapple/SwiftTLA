@@ -814,7 +814,7 @@ extension ParserSession {
             return .bool(boolVal.literal.text == "true")
         }
         if let stringLit = expression.as(StringLiteralExprSyntax.self) {
-            return stringLit.representedLiteralValue.map(TLAValue.string)
+            return stringLit.representedLiteralValue.map(TLAValue.canonicalSwiftString)
         }
         if let fc = expression.as(FunctionCallExprSyntax.self),
            let memberAccess = fc.calledExpression.as(MemberAccessExprSyntax.self),

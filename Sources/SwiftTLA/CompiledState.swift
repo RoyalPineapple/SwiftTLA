@@ -110,7 +110,6 @@ package enum CompiledEvaluationError: Error, Sendable, CustomStringConvertible {
     case invalidCompilationIdentity(expected: CompilationIdentity, actual: CompilationIdentity)
     case unboundBinder(BinderID)
     case unresolvedOperator
-    case conflictingAssignment(VariableID)
 
     package var description: String {
         switch self {
@@ -124,7 +123,6 @@ package enum CompiledEvaluationError: Error, Sendable, CustomStringConvertible {
             "Compiled state identity \(actual) does not match \(expected)"
         case .unboundBinder(let id): "Binder ID \(id.ordinal) has no value in this scope"
         case .unresolvedOperator: "The compiled operator is unavailable"
-        case .conflictingAssignment(let id): "Variable ID \(id.ordinal) has conflicting assignments"
         }
     }
 }

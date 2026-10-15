@@ -6,7 +6,6 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case sets
         case setOfSets = "set of sets"
         case sequence
-        case nonemptySequence = "nonempty sequence"
         case function
         case functionAndSet = "function and set"
         case integerFunctionValues = "integer function values"
@@ -44,6 +43,7 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case negativeModuloDivisor(Int)
     case integerOverflow(NativeMachineEvaluationError.IntegerOperation, operands: [Int])
     case indexOutOfBounds(Int, Int)
+    case emptySequence
     case recursionDepthExceeded(Int)
     case transitionPredicateRequiresGeneratedChecking
     case registersRequireGeneratedChecking
@@ -81,6 +81,7 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case .integerOverflow(let operation, let operands):
             return "Integer \(operation.rawValue) overflowed for \(operands.map(String.init).joined(separator: ", "))"
         case .indexOutOfBounds(let index, let count): return "Index \(index) out of bounds (1..\(count))"
+        case .emptySequence: return NativeMachineEvaluationError.emptySequence.description
         case .recursionDepthExceeded(let limit): return "Evaluation exceeded recursive depth \(limit)"
         case .transitionPredicateRequiresGeneratedChecking:
             return "Transition predicates require generated native checking with both states"
@@ -88,6 +89,55 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
             return "Checking registers require the generated native run context"
         case .printTRequiresGeneratedEvaluation:
             return "PrintT requires a generated native evaluation with an output recorder"
+        }
+    }
+}
+
+extension EvalError {
+    package var nativeFailure: NativeMachineEvaluationError? {
+        switch self {
+        case .noSatisfyingChoice: .noSatisfyingChoice
+        case .noMatchingCase: .noMatchingCase
+        case .powerSetTooLarge(let count, let maximum):
+            .powerSetTooLarge(actualCount: count, maximumCount: maximum)
+        case .nonEnumerableSequenceDomain: .nonEnumerableSequenceDomain
+        case .nonEnumerableIntegerDomain: .nonEnumerableIntegerDomain
+        case .collectionCardinalityOverflow(let operation, let operands):
+            .collectionCardinalityOverflow(operation, operands: operands)
+        case .divisionByZero: .divisionByZero
+        case .negativeModuloDivisor(let divisor): .negativeModuloDivisor(divisor)
+        case .integerOverflow(let operation, let operands): .integerOverflow(operation, operands: operands)
+        case .indexOutOfBounds(let index, let count): .indexOutOfBounds(index: index, count: count)
+        case .emptySequence: .emptySequence
+        case .recursionDepthExceeded(let limit): .recursionDepthExceeded(limit)
+        case .tupleIndexOutsideDomain(.integer(let index)): .tupleIndexOutsideDomain(index)
+        case .recordFieldUnavailable(.string(let field)): .recordFieldUnavailable(field)
+        default: nil
+        }
+    }
+}
+
+extension NativeMachineEvaluationError {
+    var compiledFailure: EvalError? {
+        switch self {
+        case .recursionDepthExceeded(let limit): .recursionDepthExceeded(limit)
+        case .noMatchingCase: .noMatchingCase
+        case .noSatisfyingChoice: .noSatisfyingChoice
+        case .collectionCardinalityOverflow(let operation, let operands):
+            .collectionCardinalityOverflow(operation, operands: operands)
+        case .powerSetTooLarge(let count, let maximum):
+            .powerSetTooLarge(actualCount: count, maximumCount: maximum)
+        case .nonEnumerableSequenceDomain: .nonEnumerableSequenceDomain
+        case .nonEnumerableIntegerDomain: .nonEnumerableIntegerDomain
+        case .integerOverflow(let operation, let operands): .integerOverflow(operation, operands: operands)
+        case .divisionByZero: .divisionByZero
+        case .negativeModuloDivisor(let divisor): .negativeModuloDivisor(divisor)
+        case .indexOutOfBounds(let index, let count): .indexOutOfBounds(index, count)
+        case .emptySequence: .emptySequence
+        case .tupleIndexOutsideDomain(let index): .tupleIndexOutsideDomain(.integer(index))
+        case .recordFieldUnavailable(let field): .recordFieldUnavailable(.string(field))
+        case .checkingContextRequired, .functionArgumentOutsideDomain, .invalidSequenceDomain,
+             .invalidRandomSubsetCount, .emptyRandomElementDomain: nil
         }
     }
 }
@@ -1151,7 +1201,7 @@ private func nativeOperation<Value>(_ operation: () throws -> Value) throws -> V
     } catch NativeMachineEvaluationError.tupleIndexOutsideDomain(let index) {
         throw EvalError.tupleIndexOutsideDomain(.integer(index))
     } catch NativeMachineEvaluationError.emptySequence {
-        throw EvalError.expected(.nonemptySequence, actual: [.tuple([])])
+        throw EvalError.emptySequence
     }
 }
 

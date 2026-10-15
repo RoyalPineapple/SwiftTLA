@@ -18,7 +18,6 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
     case noMatchingCase
     case checkingContextRequired
     case noSatisfyingChoice
-    case conflictingAssignment(variable: String)
     case collectionCardinalityOverflow(CollectionOperation, operands: [Int])
     case powerSetTooLarge(actualCount: Int, maximumCount: Int)
     case nonEnumerableSequenceDomain
@@ -43,7 +42,6 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
         case .noMatchingCase: return "No CASE branch matched"
         case .checkingContextRequired: return "This expression requires a checking run context"
         case .noSatisfyingChoice: return "No value satisfies CHOOSE"
-        case .conflictingAssignment(let variable): return "Conflicting assignments to \(variable)"
         case .collectionCardinalityOverflow(let operation, let operands):
             return "Collection \(operation.rawValue) cardinality overflowed for \(operands.map(String.init).joined(separator: ", "))"
         case .powerSetTooLarge(let actual, let maximum):
@@ -66,10 +64,64 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
     }
 }
 
+/// A generated action failed while evaluating a successor, before committing state.
+public struct MachineActionEvaluationFailure<Action: Hashable & Sendable>: Error, Equatable, Sendable {
+    public let action: Action
+    public let reason: NativeMachineEvaluationError
+
+    public init(action: Action, reason: NativeMachineEvaluationError) {
+        self.action = action
+        self.reason = reason
+    }
+}
+
+/// Complete successful alternatives and the first model failure encountered while visiting them.
+public struct InitialEvaluationOutcomes<State: Sendable>: Sendable {
+    public let states: [State]
+    public let firstFailure: NativeMachineEvaluationError?
+
+    public init(states: [State], firstFailure: NativeMachineEvaluationError?) {
+        self.states = states
+        self.firstFailure = firstFailure
+    }
+}
+
 /// Value operations emitted by the native machine generator.
 @_documentation(visibility: internal)
 public enum _NativeMachineOperations: Sendable {
     public static let maximumRecursiveDepth = 4_096
+
+    /// Handle a model failure within one initial branch without abandoning other branches.
+    public static func visitInitialBranch(
+        _ visit: () throws -> Void,
+        onEvaluationFailure: (NativeMachineEvaluationError) -> Void
+    ) throws {
+        do {
+            try visit()
+        } catch let failure as NativeMachineEvaluationError {
+            onEvaluationFailure(failure)
+        } catch let failure as EvalError {
+            guard let native = failure.nativeFailure else { throw failure }
+            onEvaluationFailure(native)
+        }
+    }
+
+    @inlinable
+    public static func mergeUpdate<Value: Equatable & Sendable>(
+        _ current: inout Value?, _ incoming: Value?
+    ) -> Bool {
+        guard let incoming else { return true }
+        if let current, current != incoming { return false }
+        current = incoming
+        return true
+    }
+
+    public static func initialCandidates<Value: Sendable>(
+        selecting selected: Value?, enumerate: () throws -> [Value], contains: (Value) throws -> Bool
+    ) throws -> [Value] {
+        if let selected { return try contains(selected) ? [selected] : [] }
+        return try enumerate()
+    }
 
     public static func checkedProjection<Source: TLAValueType, Target: TLAValueType>(
         _ source: Source
@@ -186,8 +238,41 @@ public enum _NativeMachineOperations: Sendable {
     public static func randomSubset<Element: Hashable & Sendable>(
         upTo count: Int, from values: Set<Element>
     ) throws -> Set<Element> {
-        guard count >= 0 else { throw NativeMachineEvaluationError.invalidRandomSubsetCount(count) }
+        try validateRandomSubsetCount(count)
         return Set(values.shuffled().prefix(count))
+    }
+
+    public static func randomSubsetInitialSupport<Element: Hashable & Sendable>(
+        upTo count: Int, from values: Set<Element>
+    ) throws -> Set<Element> {
+        try validateRandomSubsetCount(count)
+        return count == 0 ? [] : values
+    }
+
+    public static func randomFunctionInitialSupport<Key: Hashable & Sendable, Value: Hashable & Sendable>(
+        upTo count: Int, from domain: Set<Key>, to range: Set<Value>
+    ) throws -> Set<[Key: Value]> {
+        try validateRandomSubsetCount(count)
+        guard count > 0 else { return [] }
+        let maximum = 1_000_000
+        var cardinality = 1
+        for _ in domain {
+            let product = cardinality.multipliedReportingOverflow(by: range.count)
+            if product.overflow {
+                throw ExplorationError.initialStateLimitExceeded(
+                    actualCount: Int.max, maximumCount: maximum)
+            }
+            cardinality = product.partialValue
+        }
+        guard cardinality <= maximum else {
+            throw ExplorationError.initialStateLimitExceeded(
+                actualCount: cardinality, maximumCount: maximum)
+        }
+        return try functionSet(domain, range)
+    }
+
+    public static func validateRandomSubsetCount(_ count: Int) throws {
+        guard count >= 0 else { throw NativeMachineEvaluationError.invalidRandomSubsetCount(count) }
     }
 
     public static func randomElement<Element: Hashable & Sendable>(
@@ -202,7 +287,7 @@ public enum _NativeMachineOperations: Sendable {
     public static func randomFunctionSubset<Key: Hashable & Sendable, Value: Hashable & Sendable>(
         upTo count: Int, from domain: Set<Key>, to range: Set<Value>
     ) throws -> Set<[Key: Value]> {
-        guard count >= 0 else { throw NativeMachineEvaluationError.invalidRandomSubsetCount(count) }
+        try validateRandomSubsetCount(count)
         guard count > 0 else { return [] }
         guard !domain.isEmpty else { return [[:]] }
         guard !range.isEmpty else { return [] }
@@ -248,6 +333,34 @@ public enum _NativeMachineOperations: Sendable {
             }
             cardinality = product.partialValue
         }
+    }
+
+    /// Visit independent alternatives, retaining successes and the first model failure.
+    public static func visitAlternatives<Alternative: Sendable, Update: Sendable>(
+        _ alternatives: [Alternative],
+        emit: (Update) throws -> Void,
+        visit: (Alternative, (Update) throws -> Void) throws -> Void
+    ) throws {
+        var firstFailure: NativeMachineEvaluationError?
+        for alternative in alternatives {
+            var updates: [Update] = []
+            do {
+                try visit(alternative) { updates.append($0) }
+            } catch let failure as NativeMachineEvaluationError {
+                if firstFailure == nil { firstFailure = failure }
+            }
+            for update in updates { try emit(update) }
+        }
+        if let firstFailure { throw firstFailure }
+    }
+
+    public static func visitConditional(
+        _ condition: () throws -> Bool,
+        ifTrue: () throws -> Void,
+        ifFalse: () throws -> Void
+    ) throws {
+        let selected = try condition()
+        if selected { try ifTrue() } else { try ifFalse() }
     }
 
     /// The generator supplies structural order so CHOOSE remains deterministic.

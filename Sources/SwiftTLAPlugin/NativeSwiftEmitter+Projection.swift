@@ -1,27 +1,34 @@
 import SwiftSyntax
+import SwiftParser
 import SwiftTLA
 
 extension NativeSwiftEmitter {
     /// Serialize resolved native values only at the independent validation boundary.
     func formalProjectionDeclarations() throws -> [DeclSyntax] {
-        let tokens = try program.layout.variables.map { variable in
+        let fields = try program.layout.variables.map { variable in
             let name = variable.declaration.name
             guard TLAStateProjection.Token(validating: name) != nil else {
                 throw unsupported("invalid formal state identifier: \(name)")
             }
-            return "TLAStateProjection.Token(validating: \(String(reflecting: name)))!"
+            let route = stateValue(variable.id, prefix: "snapshot.")
+            return (formalName: name, route: route,
+                value: try formalValue(route, type: program.variableTypes[variable.id]!))
+        }
+        let tokens = fields.map { field in
+            "TLAStateProjection.Token(validating: \(String(reflecting: field.formalName)))!"
         }.joined(separator: ", ")
-        let entries = try program.layout.variables.enumerated().map { index, variable in
-            let value = try formalValue(stateValue(variable.id, prefix: "snapshot."), type: program.variableTypes[variable.id]!)
-            return ".init(token: Self.__swifttlaFormalProjectionTokens[\(index)], value: \(value))"
+        let entries = fields.enumerated().map { index, field in
+            ".init(token: Self.__swifttlaFormalProjectionTokens[\(index)], value: \(field.value))"
         }.joined(separator: ",\n")
-        return [DeclSyntax(stringLiteral: """
+        let declarations = [DeclSyntax(stringLiteral: """
         private static let __swifttlaFormalProjectionTokens: [TLAStateProjection.Token] = [\(tokens)]
         """), DeclSyntax(stringLiteral: """
         public func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection {
             try TLAStateProjection(validating: [\(entries)])
         }
         """)]
+        try verifyGeneratedFormalProjectionOutput(declarations, fields: fields)
+        return declarations
     }
 
     func formalValue(_ value: String, type: CompiledValueType) throws -> String {
@@ -31,11 +38,11 @@ extension NativeSwiftEmitter {
         switch type {
         case .int: return "TLAValue.int(\(value))"
         case .bool: return "TLAValue.bool(\(value))"
-        case .string: return "TLAValue.string(\(value))"
+        case .string: return "TLAValue.canonicalSwiftString(\(value))"
         case .modelValue: return "TLAValue.constant(\(value).rawValue)"
         case .controlLocation:
             return switching(program.layout.controlLocations.map {
-                "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.sourceName)))"
+                "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.formalName)))"
             })
         case .named(let name):
             guard let members = program.enums.cases[name] else { throw unsupported("unresolved formal enum: \(name)") }
@@ -51,7 +58,7 @@ extension NativeSwiftEmitter {
                 "case .\(unionCase(type, index: $0.offset))(let payload): return \(try formalValue("payload", type: $0.element))"
             })
         case .set(let element):
-            return "TLAValue.set(try Set(\(value).map { (element) throws -> TLAValue in \(try formalValue("element", type: element)) }))"
+            return "try TLAStateProjection.losslessSet(\(value)) { (element) throws -> TLAValue in \(try formalValue("element", type: element)) }"
         case .array(let element):
             return "TLAValue.tuple(try \(value).map { (element) throws -> TLAValue in \(try formalValue("element", type: element)) })"
         case .tuple(let elements):
@@ -196,5 +203,55 @@ extension NativeSwiftEmitter {
             }
         }
         return emit(value)
+    }
+}
+
+func verifyGeneratedFormalProjectionOutput(
+    _ declarations: [DeclSyntax], fields: [(formalName: String, route: String, value: String)]
+) throws {
+    func tokens(_ syntax: some SyntaxProtocol) -> [String] {
+        Array(syntax.tokens(viewMode: .sourceAccurate)).map(\.text)
+    }
+    func reject(_ reason: String) -> CompilationDiagnostic {
+        CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.formalProjection",
+            expected: "one ordered formal entry from each complete snapshot field",
+            actual: reason,
+            nextSafeAction: "Report this native code generation failure."
+        )
+    }
+    let tokenValues = fields.map {
+        "TLAStateProjection.Token(validating: \(String(reflecting: $0.formalName)))!"
+    }.joined(separator: ", ")
+    let expectedTokens = Parser.parse(source: """
+    private static let __swifttlaFormalProjectionTokens: [TLAStateProjection.Token] = [\(tokenValues)]
+    """).statements.first?.item
+    guard declarations.count == 2, let expectedTokens,
+          tokens(declarations[0]) == tokens(expectedTokens) else {
+        throw reject("the formal state token list differs from the compiled variable names")
+    }
+    for field in fields {
+        let expectedRoute = Parser.parse(source: field.route).statements.first?.item
+        let value = Parser.parse(source: field.value).statements.first?.item
+        guard let expectedRoute, let value else { throw reject("the projected value cannot be parsed") }
+        let route = tokens(expectedRoute)
+        let valueTokens = tokens(value)
+        let references = valueTokens.indices.filter { valueTokens[$0] == "snapshot" }
+        guard !references.isEmpty, references.allSatisfy({ index in
+            index + route.count <= valueTokens.count
+                && Array(valueTokens[index..<(index + route.count)]) == route
+        }) else { throw reject("the projected value for \(field.formalName) reads a different snapshot field") }
+    }
+    let expectedEntries = fields.enumerated().map { index, field in
+        ".init(token: Self.__swifttlaFormalProjectionTokens[\(index)], value: \(field.value))"
+    }.joined(separator: ",\n")
+    let expectedFunction = Parser.parse(source: """
+    public func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection {
+        try TLAStateProjection(validating: [\(expectedEntries)])
+    }
+    """).statements.first?.item
+    guard let expectedFunction, tokens(declarations[1]) == tokens(expectedFunction) else {
+        throw reject("the projection call shape or formal token ordering differs from the checked rule")
     }
 }

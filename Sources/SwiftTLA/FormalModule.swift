@@ -117,6 +117,16 @@ public struct TLAModuleBundle: Sendable, Equatable {
   public var cfg: String { root.cfg ?? "" }
   public var files: [TLAModuleFile] { imports + [root] }
 
+  package var usesFormalStringEncoding: Bool {
+    let declaredInModule = files.contains { file in
+      file.tla.split(separator: "\n", maxSplits: 2).dropFirst().first
+        == Substring(FormalStringEncoding.declaration)
+    }
+    if declaredInModule { return true }
+    guard case .compiled = provenance else { return false }
+    return root.cfg?.contains("\"" + FormalStringEncoding.prefix) == true
+  }
+
   /// Preserve the module and its declared closure while selecting a different
   /// configuration for a formal-tool invocation.
   public func replacingConfiguration(_ configuration: String) -> Self {
