@@ -90,6 +90,13 @@ public enum _NativeMachineOperations: Sendable {
         return true
     }
 
+    public static func initialCandidates<Value: Sendable>(
+        selecting selected: Value?, enumerate: () throws -> [Value], contains: (Value) throws -> Bool
+    ) throws -> [Value] {
+        if let selected { return try contains(selected) ? [selected] : [] }
+        return try enumerate()
+    }
+
     public static func checkedProjection<Source: TLAValueType, Target: TLAValueType>(
         _ source: Source
     ) throws -> Target {

@@ -852,6 +852,10 @@ MembershipInitialStates(prior, key, domain) ==
     {state \in States :
         /\ state[key] \in domain
         /\ \A variable \in Vars \ {key} : state[variable] = prior[variable]}
+SelectedInitialCandidates(selecting, selected, candidates, domain) ==
+    IF selecting
+    THEN IF selected \in domain THEN <<selected>> ELSE <<>>
+    ELSE candidates
 
 THEOREM InitialMembershipMatchesEnumeration ==
     \A key \in Vars, prior \in States :
@@ -874,6 +878,22 @@ THEOREM InitialEqualityMatchesSingletonEnumeration ==
     BY InitialMembershipMatchesEnumeration,
         SMT DEF EnumeratedInitialStates, MembershipInitialStates,
             EqualityInitialStates, SequenceMembers, States
+
+THEOREM SelectedInitialCandidateKernelMatchesSource ==
+    \A key \in Vars, prior \in States :
+        \A selecting \in BOOLEAN, selected \in Values :
+            \A candidates \in Seq(Values), domain \in SUBSET Values :
+                SequenceMembers(candidates) = domain
+                => EnumeratedInitialStates(prior, key,
+                    SelectedInitialCandidates(selecting, selected, candidates, domain))
+                   = IF selecting
+                     THEN IF selected \in domain
+                          THEN EqualityInitialStates(prior, key, selected)
+                          ELSE {}
+                     ELSE MembershipInitialStates(prior, key, domain)
+    BY InitialMembershipMatchesEnumeration,
+        InitialEqualityMatchesSingletonEnumeration,
+        SMT DEF SelectedInitialCandidates, EnumeratedInitialStates
 
 ExtendEnumeratedInitialStates(priorStates, key, candidates) ==
     UNION {EnumeratedInitialStates(prior, key, candidates[prior]) : prior \in priorStates}

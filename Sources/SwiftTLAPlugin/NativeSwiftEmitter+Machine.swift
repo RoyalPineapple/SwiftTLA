@@ -272,6 +272,7 @@ extension NativeSwiftEmitter {
         var closing = ""
         var expectedLoops: [String: String] = [:]
         var expectedCandidateSources: [String: String] = [:]
+        var expectedMembershipSources: [String: String] = [:]
         for initialization in program.behavior.initializations {
             let type = program.variableTypes[initialization.variable]!
             let name = variable(initialization.variable)
@@ -304,18 +305,20 @@ extension NativeSwiftEmitter {
                         ? "\(name)_isMember"
                         : "\(name)_sampleLimit > 0 && \(name)_isMember"
                     let candidateSource = "\(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))"
+                    let membershipSource = try self.expression(membership, state: "")
                     expectedLoops[name] = "\(name)Candidates"
                     expectedCandidateSources["\(name)Candidates"] = candidateSource
+                    expectedMembershipSources[name] = membershipSource
                     code += """
-                    let \(name)Candidates: [\(try swiftType(type))]
-                    if let selected = _selectedInitial {
-                        let \(name) = selected.\(field)
+                    let \(name)Candidates: [\(try swiftType(type))] = try _NativeMachineOperations.initialCandidates(
+                        selecting: _selectedInitial.map(\\.\(field)),
+                        enumerate: { \(candidateSource) },
+                        contains: { \(name) in
                         \(sampleLimit ?? "")
-                        let \(name)_isMember = \(try self.expression(membership, state: ""))
-                        \(name)Candidates = \(eligible) ? [\(name)] : []
-                    } else {
-                        \(name)Candidates = \(candidateSource)
-                    }
+                        let \(name)_isMember = \(membershipSource)
+                        return \(eligible)
+                        }
+                    )
                     for \(name) in \(name)Candidates {
 
                     """
@@ -369,7 +372,7 @@ extension NativeSwiftEmitter {
                 case .memberOf: return "for \(name)"
                 }
             }, expectedLoops: expectedLoops, expectedCandidateSources: expectedCandidateSources)
-        try verifyInitialSelection(declarations.first)
+        try verifyInitialSelection(declarations.first, expectedMembershipSources: expectedMembershipSources)
         try verifyInitialStateAssembly(declarations.first)
         try verifyGeneratedInitialConstruction(declarations, configured: !program.layout.parameters.isEmpty)
         if program.behavior.initializations.contains(where: { initialization in
@@ -382,7 +385,9 @@ extension NativeSwiftEmitter {
         return declarations
     }
 
-    func verifyInitialSelection(_ declaration: DeclSyntax?) throws {
+    func verifyInitialSelection(
+        _ declaration: DeclSyntax?, expectedMembershipSources: [String: String]
+    ) throws {
         let tokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) } ?? []
         func occursOnce(_ source: String) -> Bool {
             let pattern = Array(Parser.parse(source: source).tokens(viewMode: .sourceAccurate))
@@ -406,19 +411,39 @@ extension NativeSwiftEmitter {
                 } else {
                     eligible = "\(name)_isMember"
                 }
+                let type = program.variableTypes[initialization.variable]!
                 required = [
-                    "if let selected = _selectedInitial { let \(name) = selected.\(field)",
-                    "\(name)Candidates = \(eligible) ? [\(name)] : []",
+                    "let \(name)Candidates: [\(try swiftType(type))] = try _NativeMachineOperations.initialCandidates(",
+                    "selecting: _selectedInitial.map(\\.\(field))",
+                    "contains: { \(name) in",
+                    "return \(eligible)",
                 ]
             }
-            guard required.allSatisfy(occursOnce) else {
+            if let missing = required.first(where: { !occursOnce($0) }) {
                 throw CompilationDiagnostic(
                     code: .unsupportedGeneratedValueShape, stage: .validation,
                     path: "native._initialStates.selection.\(name)",
                     expected: "one selected-initial guard and candidate filter for \(field)",
-                    actual: "the generated selected-initial branch differs from the compiled field and initialization kind",
+                    actual: "missing or repeated generated fragment: \(missing.prefix(160))",
                     nextSafeAction: "Report this native code generation failure."
                 )
+            }
+            if case .memberOf = initialization.initialization {
+                guard let membershipSource = expectedMembershipSources[name] else {
+                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                        path: "native._initialStates.selection.\(name)",
+                        expected: "a compiled membership expression for \(field)", actual: "missing membership source",
+                        nextSafeAction: "Report this native code generation failure.")
+                }
+                let fragment = "let \(name)_isMember = \(membershipSource)"
+                let matches = declaration?.description.contains(fragment) == true
+                guard matches else {
+                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                        path: "native._initialStates.selection.\(name)",
+                        expected: "one exact compiled membership expression for \(field)",
+                        actual: "generated membership expression differs from the compiled source",
+                        nextSafeAction: "Report this native code generation failure.")
+                }
             }
         }
     }
@@ -1195,20 +1220,14 @@ func verifyGeneratedInitialBindings(
         }
     }
     for (name, source) in expectedCandidateSources {
-        var positions: [Int] = []
-        if tokens.count >= 2 {
-            for index in 0..<(tokens.count - 1) {
-                if tokens[index] == name, tokens[index + 1] == "=" {
-                    positions.append(index)
-                }
-            }
-        }
-        let assignment = "\(name) = \(source)\n"
-        let hasExpectedAssignment = initialStates.description.contains(assignment)
-        guard positions.count == 2, hasExpectedAssignment else {
+        let expectedCall = "\(name): ["
+        let expectedEnumeration = "enumerate: { \(source) }"
+        let hasCandidateBinding = initialStates.description.contains(expectedCall)
+        let hasExpectedEnumeration = initialStates.description.contains(expectedEnumeration)
+        guard hasCandidateBinding, hasExpectedEnumeration else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
                 path: "native._initialStates.candidates.\(name)", expected: source,
-                actual: "assignments=\(positions.count), exact candidate assignment=\(hasExpectedAssignment)",
+                actual: "candidate binding=\(hasCandidateBinding), exact enumeration=\(hasExpectedEnumeration)",
                 nextSafeAction: "Report this native code generation failure.")
         }
     }

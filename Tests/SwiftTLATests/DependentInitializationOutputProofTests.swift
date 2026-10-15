@@ -122,18 +122,52 @@ struct DependentInitializationOutputProofTests {
             try verify(wrongCandidate)
         }
 
-        try emitter.verifyInitialSelection(initialStates)
+        let lines = initialStates.description.split(separator: "\n")
+            .map { String($0).trimmingCharacters(in: .whitespaces) }
+        var expectedMembershipSources: [String: String] = [:]
+        for initialization in model.program.behavior.initializations {
+            guard case .memberOf = initialization.initialization else { continue }
+            let variableName = emitter.variable(initialization.variable)
+            let prefix = "let \(variableName)_isMember = "
+            let line = try #require(lines.first { $0.hasPrefix(prefix) })
+            expectedMembershipSources[variableName] = String(line.dropFirst(prefix.count))
+        }
+        func verifySelection(_ declaration: DeclSyntax) throws {
+            try emitter.verifyInitialSelection(declaration,
+                expectedMembershipSources: expectedMembershipSources)
+        }
+        try verifySelection(initialStates)
         let wrongSelectionSource = initialStates.description.replacingOccurrences(
-            of: "\(choiceName)Candidates = \(choiceName)_isMember ? [\(choiceName)] : []",
-            with: "\(choiceName)Candidates = \(choiceName)_isMember ? [] : [\(choiceName)]")
+            of: "return \(choiceName)_isMember",
+            with: "return !\(choiceName)_isMember")
         #expect(wrongSelectionSource != initialStates.description)
         let wrongSelection = try #require(Parser.parse(source: wrongSelectionSource)
             .statements.first?.item.as(DeclSyntax.self))
         do {
-            try emitter.verifyInitialSelection(wrongSelection)
+            try verifySelection(wrongSelection)
             Issue.record("An initializer that reverses the selected membership filter was accepted")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native._initialStates.selection.\(choiceName)")
+        }
+
+        let wrongOperationSource = initialStates.description.replacingOccurrences(
+            of: "_NativeMachineOperations.initialCandidates(",
+            with: "_NativeMachineOperations.uncheckedCandidates(")
+        #expect(wrongOperationSource != initialStates.description)
+        let wrongOperation = try #require(Parser.parse(source: wrongOperationSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifySelection(wrongOperation)
+        }
+
+        let wrongMembershipSource = initialStates.description.replacingOccurrences(
+            of: "let \(choiceName)_isMember = ",
+            with: "let \(choiceName)_isMember = !")
+        #expect(wrongMembershipSource != initialStates.description)
+        let wrongMembership = try #require(Parser.parse(source: wrongMembershipSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifySelection(wrongMembership)
         }
 
         let wrongStateSource = initialStates.description.replacingOccurrences(

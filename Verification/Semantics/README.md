@@ -943,18 +943,26 @@ with a fixed value is rejected. The emitter also checks that each domain loop
 iterates the candidate sequence named by the compiled plan; an altered
 iterable failed the focused regression before this check and is now rejected.
 For visible member-of initializers, it also verifies that the parsed
-`_initialStates` body retains the exact candidate-producing assignment planned
-by the emitter. The dependent-choice fixture independently states the expected
-Swift conditional set and integer ordering, checks that assignment in the
-actual output, and rejects a changed candidate set as a negative control. This
-closes the candidate-expression output check for this fixture, not the general
-rule: the production check still derives its expected source from the same
-expression emitter. The same fixture checks that the actual generated machine
-accepts its three valid selected initial states and rejects adjacent invalid
-ones. That finite test is not a proof of the selected-state guard for every
-value. These remain syntactic and finite output links; they do not prove the
-Swift standard-library operations, every emitted expression, the general
-selected-state guard, or initialization failures have the source meaning.
+`_initialStates` body calls the shared `initialCandidates` operation with the
+compiled selected field, candidate enumeration, membership expression, and
+filter result. `SelectedInitialCandidateKernelMatchesSource` proves that this
+operation's successful-result rule admits exactly the source initial states
+for both selected and unselected runs, provided enumeration covers the declared
+domain. Its two obligations passed a focused TLAPS run without fingerprints.
+`InitialCandidateSelectionTests` exercises the real Swift operation's lazy
+branching, valid and invalid selected members, and a membership failure.
+The dependent-choice fixture independently states the expected Swift
+conditional set and integer ordering, checks the candidate expression in the
+actual output, and rejects a changed candidate set, helper call, membership
+expression, or filter as negative controls. It also checks that the generated
+machine accepts its three valid selected initial states and rejects adjacent
+invalid ones. The production output check still derives expected expressions
+from the same emitter; it is a trusted syntactic link, not an independent
+proof of expression emission or Swift compiler/runtime behavior. Randomly
+sampled candidate sequences do not satisfy the theorem's complete-domain
+premise. General initializer expression evaluation, failure ordering,
+dependency-analysis soundness, and composition over every accepted `#spec`
+remain open.
 Variable-free action modules and initialization failures still need separate
 semantics and output links.
 
