@@ -342,6 +342,8 @@ extension NativeSwiftEmitter {
         private static func _initialStates(_selectedInitial: State? = nil\(appendedParameters)) throws -> [Snapshot] {
             \(code)
         }
+        """)
+        declarations += try nativeDeclarations("""
         public static func initialMachines(\(parameters)) throws -> [Self] {
             try _initialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }
         }
@@ -367,6 +369,7 @@ extension NativeSwiftEmitter {
                 case .memberOf: return "for \(name)"
                 }
             }, expectedLoops: expectedLoops, expectedCandidateSources: expectedCandidateSources)
+        try verifyGeneratedInitialConstruction(declarations, configured: !program.layout.parameters.isEmpty)
         if program.behavior.initializations.contains(where: { initialization in
             guard case .memberOf(let expression) = initialization.initialization else { return false }
             if case .randomSubset = expression.computation.operation { return true }
@@ -1016,6 +1019,49 @@ extension NativeSwiftEmitter {
         return declarations
     }
 
+}
+
+func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured: Bool) throws {
+    let parameters = configured ? "configuration: Configuration" : ""
+    let arguments = configured ? "configuration: configuration" : ""
+    let appendedParameters = configured ? ", configuration: Configuration" : ""
+    let appendedArguments = configured ? ", configuration: configuration" : ""
+    let expected = Parser.parse(source: """
+    public static func initialMachines(\(parameters)) throws -> [Self] {
+        try _initialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }
+    }
+    public static func makeMachine(\(parameters)) throws -> Self {
+        var candidates = try _initialStates(\(arguments))[...]
+        guard let execution = candidates.popFirst() else { throw GeneratedMachineError.noInitialState }
+        guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
+        return Self(execution: execution\(appendedArguments))
+    }
+    public static func makeMachine(_ initial: State\(appendedParameters)) throws -> Self {
+        var candidates = try _initialStates(_selectedInitial: initial\(appendedArguments))[...]
+        guard let execution = candidates.popFirst() else { throw GeneratedMachineError.invalidInitialState }
+        guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
+        return Self(execution: execution\(appendedArguments))
+    }
+    """).statements.compactMap { $0.item.as(DeclSyntax.self) }
+    let actual = Array(declarations.dropFirst().prefix(expected.count))
+    let actualTokens = actual.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+    let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+    let matches = declarations.first?.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        && expected.count == 3 && actual.count == expected.count
+        && actualTokens == expectedTokens
+    guard matches else {
+        let mismatch = zip(actualTokens, expectedTokens).enumerated().first { $0.element.0 != $0.element.1 }
+        let difference = mismatch.map {
+            "method \($0.offset): actual \($0.element.0.prefix(40)), expected \($0.element.1.prefix(40))"
+        } ?? "declaration counts: actual \(declarations.count), expected 4"
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.initialConstruction",
+            expected: "the checked initialMachines and both makeMachine construction rules",
+            actual: difference,
+            nextSafeAction: "Report this native code generation failure."
+        )
+    }
 }
 
 func verifyGeneratedInitialBindings(

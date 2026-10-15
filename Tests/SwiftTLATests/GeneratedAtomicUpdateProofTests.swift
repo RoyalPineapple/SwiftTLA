@@ -48,15 +48,27 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(bindings["__PROOF_SECOND_FIELD__"] == "second")
         #expect(bindings["__PROOF_READ__"] == "second")
         #expect(bindings["__PROOF_ACTION__"] == "copy")
+        let initialConstruction = try [
+            #require(member(named: "_initialStates", in: members)),
+            #require(member(named: "initialMachines", parameterCount: 0, in: members)),
+            #require(member(named: "makeMachine", parameterCount: 0, in: members)),
+            #require(member(named: "makeMachine", parameterCount: 1, in: members)),
+        ]
         let emittedConstructor = try #require(member(named: "makeMachine", parameterCount: 0, in: members))
-        let expectedConstructor = try #require(member(named: "makeMachine", parameterCount: 0, in: templateMembers))
         let wrongUniqueness = emittedConstructor.description.replacingOccurrences(
             of: "guard candidates.isEmpty else", with: "guard !candidates.isEmpty else")
         #expect(wrongUniqueness != emittedConstructor.description)
         let wrongConstructor = try #require(Parser.parse(source: wrongUniqueness)
             .statements.first?.item.as(DeclSyntax.self))
         #expect(wrongConstructor.as(FunctionDeclSyntax.self)?.name.text == "makeMachine")
-        #expect(templateBindings(wrongConstructor, expectedConstructor) == nil)
+        var wrongConstruction = initialConstruction
+        wrongConstruction[2] = wrongConstructor
+        do {
+            try verifyGeneratedInitialConstruction(wrongConstruction, configured: false)
+            Issue.record("A generated constructor with reversed uniqueness was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.initialConstruction")
+        }
         let emittedUpdate = try #require(member(named: "_visitUpdates0", in: members))
         let expectedUpdate = try #require(member(named: "_visitUpdates0", in: templateMembers))
         let wrongRead = Parser.parse(source: emittedUpdate.description.replacingOccurrences(
@@ -338,7 +350,6 @@ struct GeneratedAtomicUpdateProofTests {
     ) throws -> [String: String] {
         var all: [String: String] = [:]
         let declarations: [(String, Int?)] = [
-            ("initialMachines", 0), ("makeMachine", 0), ("makeMachine", 1),
             ("_Updates", nil), ("_visitUpdates0", 3), ("_visitSuccessors0", 3),
             ("visitSuccessors", 2), ("_visitSuccessors", 3), ("_visitSuccessors", 2),
         ]
