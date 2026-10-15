@@ -88,7 +88,7 @@ jobs:
 
   semantic-proof-diagnostic:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
         with:
@@ -124,8 +124,19 @@ jobs:
           "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/semantic-proof-evidence/tlapm-version.txt
           "$proof_tool_dir/tlapm/bin/tlapm" --config > .build/semantic-proof-evidence/tlapm-config.txt
           proof_failure=0
-          for proof in BooleanSelectionProof EnumSelectionProof CanonicalUnicodeStringSelectionProof SequenceSelectionProof DynamicSequenceSelectionProof DynamicBooleanSequenceSelectionProof RankedChoiceProof MissingStringSelectionProof MissingFunctionKeyProof SequenceIndexFailureProof EmptySequenceReadProof SequenceEditPreservationProof AggregateMissingSelectionProof AlternativeTraversalRule ActionDistributionRule OrderedCandidateFailureRule CanonicalCandidateTraversalRule OrderedEnumCandidateFailureProof CandidateChoiceFailureProof MixedCandidateDivisionFailureProof EitherBranchDivisionFailureProof EitherDistinctFailuresProof ConditionalOutcomeRules LazyExpressionFailureRule OrderedFailureSites DefinedActionFailureRule BoundBodyChoiceFailureProof ConditionalSelectionFailureProof ConditionalChoiceConditionFailureProof ConditionalChoiceThenModuloFailureProof ExpressionConditionalFailureProof ShortCircuitFailureProof CheckedExecutionOverflowProof CheckedSubtractionProof CheckedMultiplicationProof CheckedGuardFailureProof CheckedGuardOverflowProof OrderedArithmeticFailures RandomSubsetInitialOutcomeProof DependentDivisionInitialOutcomeProof SelectedInitialInvariantOutcomeProof SingleAssignment ConditionalStep; do
-            if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "Verification/Semantics/$proof.tla" \
+          proof_count=0
+          for source in Verification/Semantics/*.tla; do
+            if grep -Eq '^[[:space:]]*THEOREM([[:space:]]|$)' "$source"; then
+              :
+            else
+              discovery_status=$?
+              test "$discovery_status" -eq 1 || exit "$discovery_status"
+              continue
+            fi
+            proof_count=$((proof_count + 1))
+            proof="${source##*/}"
+            proof="${proof%.tla}"
+            if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "$source" \
                 2>&1 | tee ".build/semantic-proof-evidence/$proof.log" \
               && grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \
                 ".build/semantic-proof-evidence/$proof.log" \
@@ -136,6 +147,7 @@ jobs:
               proof_failure=1
             fi
           done
+          test "$proof_count" -gt 0
           test "$proof_failure" -eq 0
 
       - name: Retain diagnostic proof evidence
