@@ -78,6 +78,8 @@ struct MixedInitialEvaluationModel {
                 }
             })
             mixedInitialEvaluationModel
+            let mixedInitial = Validation(label: "Mixed initial") {}.checkingDeadlock(false)
+            mixedInitial
         }
     }
 }

@@ -1118,7 +1118,8 @@ initial enumeration, configuration validity, or Swift library semantics. The
 macro also checks the final `_initialStates` assembly for every compiled model:
 one complete `Snapshot` from every public and hidden initial value, the
 selected initial invariant when present, closure of each initialization block,
-and return of the collected states. Replacing one assembled field with another
+and return of the collected states with the first typed model failure.
+Replacing one assembled field with another
 is rejected. It also checks that each public initial field has exactly one
 selected-state guard or member candidate filter; reversing the member filter is
 rejected. This links the emitted completion of the ordered enumeration to the
@@ -1895,6 +1896,20 @@ exhaustive mode. The rendered `Init` checker rejects a mutated count predicate.
 The generated Swift and
 compiled-runtime regressions include complete finite states, a large-domain
 resource refusal, and count-before-domain failure order.
+
+For a dependent initializer with both a valid prefix and a failing prefix,
+generated Swift now returns the valid initial machines together with the first
+typed model failure. The native checker retains that failure separately from
+its completion verdict and explores the valid machines; generated exhaustive
+validation scenarios use this outcome-aware path. The sampled simulation
+entry point remains strict when initialization fails. Focused tests exercise mixed and
+failure-only initializers, a decisive property violation with a prior
+initialization failure, and an emitted-output mutation that would discard the
+failure. This is tested Swift behavior, not a completed source-to-both-targets
+proof. The compiled runtime still aborts on its first failing prefix, rendered
+`Init` has no corresponding initial-failure relation, and retained parity
+evidence cannot encode this outcome. These are open semantic boundaries, so
+the strict parity path fails rather than claiming a complete match.
 
 This does not yet prove the source rule's relation to every random draw, link
 the TLA+ count/domain expressions to native evaluation failures, or cover

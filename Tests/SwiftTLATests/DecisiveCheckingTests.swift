@@ -31,6 +31,20 @@ struct DecisiveCheckingTests {
         #expect(result.trace.first?.state.state.value == 3)
     }
 
+    @Test("a decisive property result retains a prior initialization failure")
+    func decisiveResultRetainsInitialFailure() throws {
+        let scenario = try #require(DecisiveCounter.validationScenarios().first { $0.name == "initialViolation" })
+        let machine = try #require(scenario.initialMachines().first)
+        let reason = NativeMachineEvaluationError.invalidRandomSubsetCount(-1)
+        let result = try MachineValidator.run(
+            initialOutcomes: .init(states: [machine], firstFailure: reason), maximumStates: 1,
+            checking: .init(properties: [.belowThree], checkDeadlock: false), stopOnViolation: true
+        ) { _ in }
+        #expect(result.completion == .decisiveViolation)
+        #expect(result.violatedInvariants == [.belowThree])
+        #expect(result.firstEvaluationFailure == reason)
+    }
+
     @Test("deadlock selection distinguishes a decisive failure from graph exhaustion")
     func preservesDeadlockSelection() throws {
         let scenarios = try DecisiveCounter.validationScenarios()

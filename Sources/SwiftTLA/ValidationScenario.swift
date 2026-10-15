@@ -107,12 +107,16 @@ public protocol ModelValidationScenario: Sendable {
     var postconditionName: String? { get }
     var postconditionExpectation: ValidationExpectation? { get }
     func initialMachines() throws -> [Machine]
+    func initialOutcomes() throws -> InitialEvaluationOutcomes<Machine>
     func fairnessConditions(on machine: Machine) throws -> [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]
     func render() throws -> RenderedSpecification
     var formalPropertyNames: [Property: String] { get }
     var usesView: Bool { get }
     func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
         stopOnViolation: Bool, stopOnReachability: Bool,
+        emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
+    func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: Int,
+        checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
     func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
         atLevel level: Int) throws -> TLAStateProjection
@@ -139,6 +143,10 @@ public protocol AssumptionValidationScenario: Sendable {
 }
 
 extension ModelValidationScenario {
+    public func initialOutcomes() throws -> InitialEvaluationOutcomes<Machine> {
+        try .init(states: initialMachines(), firstFailure: nil)
+    }
+
     public var checkingMode: ValidationCheckingMode { .exhaustive }
     public var usesView: Bool { false }
     public var postconditionName: String? { nil }
@@ -149,7 +157,21 @@ extension ModelValidationScenario {
     public func runValidation(maximumStates: Int, checking: ModelChecks<Property>,
         stopOnViolation: Bool, stopOnReachability: Bool,
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
-        try runValidation(initialMachines: initialMachines(), maximumStates: maximumStates,
+        try runValidation(initialOutcomes: initialOutcomes(), maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, emit: emit)
+    }
+
+    public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: Int,
+        checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
+        emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+        if initialOutcomes.firstFailure == nil {
+            return try runValidation(initialMachines: initialOutcomes.states, maximumStates: maximumStates,
+                checking: checking, stopOnViolation: stopOnViolation,
+                stopOnReachability: stopOnReachability, emit: emit)
+        }
+        guard !usesView else { throw ExplorationError.viewRequiresStreamingValidation }
+        return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
             stopOnReachability: stopOnReachability, emit: emit)
     }

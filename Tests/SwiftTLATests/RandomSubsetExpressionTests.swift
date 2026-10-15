@@ -153,6 +153,42 @@ struct RandomSubsetExpressionTests {
         }
     }
 
+    @Test("native checking explores valid initial branches while reporting their failed sibling")
+    func mixedInitialValidation() throws {
+        var observed: [MixedInitialEvaluationModel.State] = []
+        let outcome = try MachineValidator.run(
+            initialOutcomes: MixedInitialEvaluationModel.initialOutcomes(), maximumStates: 4,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false
+        ) { event in
+            if case .state(_, let snapshot, let initial, _, _) = event, initial {
+                observed.append(snapshot.state)
+            }
+        }
+        #expect(observed == [.init(limit: 1, chosen: 7)])
+        #expect(outcome.initialStates == 1 && outcome.states >= 1)
+        #expect(outcome.firstEvaluationFailure == .invalidRandomSubsetCount(-1))
+        #expect(outcome.completion == .evaluationFailure(.invalidRandomSubsetCount(-1)))
+
+        let scenario = try #require(MixedInitialEvaluationModel.validationScenarios().first)
+        let configured = try scenario.runValidation(maximumStates: 4, checking: scenario.checking,
+            stopOnViolation: false, stopOnReachability: false) { _ in }
+        #expect(configured.initialStates == 1)
+        #expect(configured.firstEvaluationFailure == .invalidRandomSubsetCount(-1))
+        #expect(configured.completion == .evaluationFailure(.invalidRandomSubsetCount(-1)))
+
+        let failedOnly = try RandomSubsetFailureOrderModel.initialOutcomes()
+        #expect(failedOnly.states.isEmpty)
+        let emptyOutcome = try MachineValidator.run(
+            initialOutcomes: failedOnly, maximumStates: 4,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false
+        ) { _ in
+            Issue.record("A failed-only initializer emitted a graph event")
+        }
+        #expect(emptyOutcome.initialStates == 0 && emptyOutcome.states == 0)
+        #expect(emptyOutcome.firstEvaluationFailure == .invalidRandomSubsetCount(-1))
+        #expect(emptyOutcome.completion == .evaluationFailure(.invalidRandomSubsetCount(-1)))
+    }
+
     @Test("invalid sample count fails before evaluating its domain")
     func countFailurePrecedesDomainFailure() throws {
         let expected = NativeMachineEvaluationError.invalidRandomSubsetCount(-1)
