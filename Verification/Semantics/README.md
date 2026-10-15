@@ -1111,9 +1111,11 @@ macro also checks the final `_initialStates` assembly for every compiled model:
 one complete `Snapshot` from every public and hidden initial value, the
 selected initial invariant when present, closure of each initialization block,
 and return of the collected states. Replacing one assembled field with another
-is rejected. This links the emitted completion of the ordered enumeration to
-the complete-state rule; it does not establish that every candidate or selected
-filter before that suffix is correct. The test also token-checks the complete
+is rejected. It also checks that each public initial field has exactly one
+selected-state guard or member candidate filter; reversing the member filter is
+rejected. This links the emitted completion of the ordered enumeration to the
+complete-state rule, but the candidate and membership expression semantics
+remain separate obligations. The test also token-checks the complete
 emitted `_Updates`, `_visitUpdates0`, and
 `_visitSuccessors0`, plus the action-specific and whole-machine
 `_visitSuccessors` dispatchers and the public checking visitor against

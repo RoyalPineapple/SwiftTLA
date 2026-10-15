@@ -122,6 +122,20 @@ struct DependentInitializationOutputProofTests {
             try verify(wrongCandidate)
         }
 
+        try emitter.verifyInitialSelection(initialStates)
+        let wrongSelectionSource = initialStates.description.replacingOccurrences(
+            of: "\(choiceName)Candidates = \(choiceName)_isMember ? [\(choiceName)] : []",
+            with: "\(choiceName)Candidates = \(choiceName)_isMember ? [] : [\(choiceName)]")
+        #expect(wrongSelectionSource != initialStates.description)
+        let wrongSelection = try #require(Parser.parse(source: wrongSelectionSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try emitter.verifyInitialSelection(wrongSelection)
+            Issue.record("An initializer that reverses the selected membership filter was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.selection.\(choiceName)")
+        }
+
         let wrongStateSource = initialStates.description.replacingOccurrences(
             of: "choice: \(choiceName)", with: "choice: \(name)")
         #expect(wrongStateSource != initialStates.description)

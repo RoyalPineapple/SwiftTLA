@@ -369,6 +369,7 @@ extension NativeSwiftEmitter {
                 case .memberOf: return "for \(name)"
                 }
             }, expectedLoops: expectedLoops, expectedCandidateSources: expectedCandidateSources)
+        try verifyInitialSelection(declarations.first)
         try verifyInitialStateAssembly(declarations.first)
         try verifyGeneratedInitialConstruction(declarations, configured: !program.layout.parameters.isEmpty)
         if program.behavior.initializations.contains(where: { initialization in
@@ -379,6 +380,47 @@ extension NativeSwiftEmitter {
             declarations += try selectedInitialDeclarations(arguments: arguments)
         }
         return declarations
+    }
+
+    func verifyInitialSelection(_ declaration: DeclSyntax?) throws {
+        let tokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) } ?? []
+        func occursOnce(_ source: String) -> Bool {
+            let pattern = Array(Parser.parse(source: source).tokens(viewMode: .sourceAccurate))
+                .map(\.text).filter { !$0.isEmpty }
+            guard !pattern.isEmpty, tokens.count >= pattern.count else { return false }
+            return (0...(tokens.count - pattern.count)).filter {
+                tokens[$0..<($0 + pattern.count)].elementsEqual(pattern)
+            }.count == 1
+        }
+        for initialization in program.behavior.initializations {
+            guard let field = stateMemberNames[initialization.variable] else { continue }
+            let name = variable(initialization.variable)
+            let required: [String]
+            switch initialization.initialization {
+            case .value:
+                required = ["if _selectedInitial == nil || _selectedInitial!.\(field) == \(name) {"]
+            case .memberOf(let expression):
+                let eligible: String
+                if case .randomSubset = expression.computation.operation {
+                    eligible = "\(name)_sampleLimit > 0 && \(name)_isMember"
+                } else {
+                    eligible = "\(name)_isMember"
+                }
+                required = [
+                    "if let selected = _selectedInitial { let \(name) = selected.\(field)",
+                    "\(name)Candidates = \(eligible) ? [\(name)] : []",
+                ]
+            }
+            guard required.allSatisfy(occursOnce) else {
+                throw CompilationDiagnostic(
+                    code: .unsupportedGeneratedValueShape, stage: .validation,
+                    path: "native._initialStates.selection.\(name)",
+                    expected: "one selected-initial guard and candidate filter for \(field)",
+                    actual: "the generated selected-initial branch differs from the compiled field and initialization kind",
+                    nextSafeAction: "Report this native code generation failure."
+                )
+            }
+        }
     }
 
     func verifyInitialStateAssembly(_ declaration: DeclSyntax?) throws {
