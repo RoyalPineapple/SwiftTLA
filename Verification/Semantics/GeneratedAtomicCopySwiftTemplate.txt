@@ -1,3 +1,21 @@
+public static func initialMachines() throws -> [Self] {
+    try _initialStates().map { Self(execution: $0) }
+}
+
+public static func makeMachine() throws -> Self {
+    var candidates = try _initialStates()[...]
+    guard let execution = candidates.popFirst() else { throw GeneratedMachineError.noInitialState }
+    guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
+    return Self(execution: execution)
+}
+
+public static func makeMachine(_ initial: State) throws -> Self {
+    var candidates = try _initialStates(_selectedInitial: initial)[...]
+    guard let execution = candidates.popFirst() else { throw GeneratedMachineError.invalidInitialState }
+    guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
+    return Self(execution: execution)
+}
+
 private struct _Updates: Sendable {
     var __PROOF_FIRST_SLOT__: Int? = nil
     var __PROOF_SECOND_SLOT__: Int? = nil

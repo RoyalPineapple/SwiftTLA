@@ -1095,21 +1095,32 @@ this check fail. This establishes the private `_initialStates` output link for
 this fixture conditional on the ordinary Swift meaning of the matched literals,
 optionals, comparisons, nested `if` statements, append, return, and the pinned
 `State`/`Snapshot` declarations. It does not certify arbitrary initializers or
-public machine construction. The test also token-checks the complete emitted
-`_Updates`, `_visitUpdates0`, `_visitSuccessors0`, the action-specific and
-whole-machine `_visitSuccessors` dispatchers, and the public checking visitor
-against `GeneratedAtomicCopySwiftTemplate.txt`, extracting the source field read by
-the ordered copy. Its field and update-slot bindings are checked consistently
+public machine construction for arbitrary models. For this fixture, the test
+also token-checks the actual emitted `initialMachines()` and both `makeMachine`
+overloads against an independently maintained Swift template. Their calls to
+`_initialStates`, first-candidate selection, empty/ambiguous result checks,
+and `Self(execution:)` construction are fixed by that template. A mutation
+that reverses the uniqueness guard is rejected. Together with the linked
+`_initialStates` literals and the initial-set theorem, this connects the
+fixture's public construction path to its stated source initial state,
+conditional on the ordinary Swift meaning of the matched collection and
+initializer operations. It is not a proof of arbitrary initialization,
+configuration handling, or Swift library semantics. The test also token-checks
+the complete emitted `_Updates`, `_visitUpdates0`, `_visitSuccessors0`, the
+action-specific and whole-machine `_visitSuccessors` dispatchers, and the
+public checking visitor against `GeneratedAtomicCopySwiftTemplate.txt`,
+extracting the source field read by the ordered copy. Its field and update-slot
+bindings are checked consistently
 across those declarations; a second `#spec` fixture with renamed fields
 passes the same template. Changing the read changes the extracted obligation;
 a wrong target merge or a false `found` result makes the template check fail.
 The global visitor forwards the single `copy` action to the proved private
 successor path, and an executable check confirms that dispatch from the initial
-state. Under the ordinary Swift meaning of the matched callback, optional-merge,
-state-construction, and
-deduplication syntax, this links the checking visitor to the relation proved
-below. It does not yet certify public machine construction, the runtime behavior
-of pinned `State`/`Snapshot` declarations, or macro installation.
+state. Under the ordinary Swift meaning of the matched callback,
+optional-merge, state-construction, and deduplication syntax, this links the
+checking visitor to the relation proved
+below. It does not certify public construction for other models, the runtime
+behavior of pinned `State`/`Snapshot` declarations, or macro installation.
 The emitter now calls one typed `mergeUpdate` operation for every generated
 slot. Its focused contract checks absent, equal, and conflicting writes,
 including preservation of the prior value on conflict; the token template
