@@ -28,6 +28,16 @@ struct InitialBranchFailureTests {
         #expect(tla == checkedModule)
     }
 
+    @Test("Rendered selected initial invariant retains its failed branch")
+    func renderedSelectedInvariantFailure() throws {
+        let tla = try SelectedInitialInvariantFailureModel.render().tlaBundle.tla
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/SelectedInitialInvariantFailureModel.tla")
+            .standardizedFileURL
+        let checkedModule = try String(contentsOf: fixture, encoding: .utf8)
+        #expect(tla == checkedModule)
+    }
+
     @Test("A selected invariant failure retains its valid initial sibling")
     func preservesValidSiblingWhenSelectedInvariantFails() throws {
         let generated = try SelectedInitialInvariantFailureModel.initialOutcomes()

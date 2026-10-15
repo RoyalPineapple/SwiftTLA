@@ -1933,6 +1933,20 @@ TLAPS obligations pass locally. This closes one concrete TLA+ output slice;
 it does not prove arbitrary initializer expressions, first-failure order,
 automatic TLC verdict selection, or the generated Swift emitter in general.
 
+For a selected initial invariant that divides by a state value, the renderer
+now guards its `Init` use and emits a failure relation over complete initial
+candidates. The generated Swift and compiled paths each retain the valid
+sibling and report division by zero for the invalid candidate. An exact-output
+test pins `SelectedInitialInvariantFailureModel.tla`;
+`SelectedInitialInvariantOutcomeProof.tla` proves that its initial-state set,
+division failure operand, overflow relation, and operation identity match
+independent source rules. Its negative controls show that dropping the selected
+filter admits the failed candidate and dropping the failure relation loses an
+outcome. All 15 TLAPS obligations pass locally. This proof
+does not cover selected invariants after a fallible initialization prefix,
+first-failure ordering between candidates, or automatic TLC selection of the
+failure relation as a verdict.
+
 For a direct random-subset initializer whose count and preceding initializers use
 the renderer's total-expression subset, the TLA+ emitter now writes a separate
 negative-count failure relation without adding false states to `Init`. A

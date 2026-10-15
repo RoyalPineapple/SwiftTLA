@@ -2503,13 +2503,19 @@ private extension CompiledModuleMetadata {
                 return "\(name) \\in \(try renderer.state(set))"
             }
         }
+        var selectedInitialInvariant: CompiledStatePredicate?
         if let selected = behavior.initialInvariant {
             guard let invariant = behavior.invariants.first(where: { $0.id == selected }) else {
                 throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                     path: "initialStates", expected: "the selected compiled invariant",
                     actual: "missing invariant", nextSafeAction: "Compile the model again from its current source.")
             }
-            initialPredicates.append(invariant.name)
+            selectedInitialInvariant = invariant
+            if let guard_ = try renderer.evaluationDefined(invariant.predicate.expression) {
+                initialPredicates.append("(IF \(guard_) THEN \(invariant.name) ELSE FALSE)")
+            } else {
+                initialPredicates.append(invariant.name)
+            }
         }
         if initialPredicates.isEmpty {
             lines.append("Init == TRUE")
@@ -2570,16 +2576,20 @@ private extension CompiledModuleMetadata {
             }
             lines.append("\(name)(\(failedCount)) == \(relation)")
         }
-        for (index, initialization) in behavior.initializations.enumerated() {
-            guard case .value(let expression) = initialization.initialization,
-                  behavior.initializations.prefix(index).allSatisfy({ prior in
-                      switch prior.initialization {
-                      case .value(let expression), .memberOf(let expression):
-                          return isTotalInitialExpression(expression)
-                      }
-                  }) else { continue }
+        func appendInitialEvaluationFailures(
+            _ expression: CompiledExpression,
+            after prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>,
+            namePrefix: String,
+            indexSuffix: String
+        ) throws {
+            guard prefix.allSatisfy({ prior in
+                switch prior.initialization {
+                case .value(let expression), .memberOf(let expression):
+                    return isTotalInitialExpression(expression)
+                }
+            }) else { return }
             var prefixNames: [VariableID: String] = [:]
-            for prior in behavior.initializations.prefix(index) {
+            for prior in prefix {
                 var binder = "__SwiftTLAInitialValue\(prior.variable.ordinal)"
                 while occupied.contains(binder) { binder += "_" }
                 occupied.insert(binder)
@@ -2611,13 +2621,13 @@ private extension CompiledModuleMetadata {
                 }
                 let occurrence = occurrences[stem, default: 0]
                 occurrences[stem] = occurrence + 1
-                let suffix = "\(initialization.variable.ordinal)" + (occurrence == 0 ? "" : "_\(occurrence)")
-                var name = "__SwiftTLAInitial\(stem)Failure\(suffix)"
+                let suffix = indexSuffix + (occurrence == 0 ? "" : "_\(occurrence)")
+                var name = "__SwiftTLA\(namePrefix)\(stem)Failure\(suffix)"
                 while occupied.contains(name) { name += "_" }
                 occupied.insert(name)
                 let operandsName: String?
                 if failure.operands != nil {
-                    var name = "__SwiftTLAInitialFailedOperands\(suffix)"
+                    var name = "__SwiftTLA\(namePrefix)FailedOperands\(suffix)"
                     while occupied.contains(name) { name += "_" }
                     occupied.insert(name)
                     operandsName = name
@@ -2628,7 +2638,7 @@ private extension CompiledModuleMetadata {
                 if let operandsName, let operands = failure.operands {
                     relation = "(IF \(failure.predicate) THEN \(operandsName) = \(operands) ELSE FALSE)"
                 }
-                for prior in behavior.initializations.prefix(index).reversed() {
+                for prior in prefix.reversed() {
                     let binder = prefixNames[prior.variable]!
                     switch prior.initialization {
                     case .value(let expression):
@@ -2640,12 +2650,22 @@ private extension CompiledModuleMetadata {
                 let parameters = operandsName.map { "(\($0))" } ?? ""
                 lines.append("\(name)\(parameters) == \(relation)")
                 if let operation {
-                    var operationName = "__SwiftTLAInitialOverflowOperation\(suffix)"
+                    var operationName = "__SwiftTLA\(namePrefix)OverflowOperation\(suffix)"
                     while occupied.contains(operationName) { operationName += "_" }
                     occupied.insert(operationName)
                     lines.append("\(operationName) == \"\(operation)\"")
                 }
             }
+        }
+        for (index, initialization) in behavior.initializations.enumerated() {
+            guard case .value(let expression) = initialization.initialization else { continue }
+            try appendInitialEvaluationFailures(expression,
+                after: behavior.initializations.prefix(index), namePrefix: "Initial",
+                indexSuffix: "\(initialization.variable.ordinal)")
+        }
+        if let selectedInitialInvariant {
+            try appendInitialEvaluationFailures(selectedInitialInvariant.predicate.expression,
+                after: behavior.initializations[...], namePrefix: "SelectedInitial", indexSuffix: "")
         }
         if lines.last != "" { lines.append("") }
 
