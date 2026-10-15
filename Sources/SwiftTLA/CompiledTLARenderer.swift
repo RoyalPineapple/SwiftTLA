@@ -429,8 +429,10 @@ struct CompiledTLARenderer {
         }
     }
 
-    private func anyFailurePredicate(_ action: CompiledActionExpr) throws -> String? {
+    func anyFailurePredicate(_ action: CompiledActionExpr) throws -> String? {
         switch action {
+        case .assign(_, let value):
+            return try expressionAnyFailure(value)
         case .existsAction(let binder, let domain, let body):
             let domainFailure = try expressionAnyFailure(domain)
             guard let bodyFailure = try anyFailurePredicate(body) else { return domainFailure }
@@ -464,6 +466,11 @@ struct CompiledTLARenderer {
             let selected = "(IF \(selection.predicate) THEN \(bodyFailure) ELSE FALSE)"
             let guarded = selection.defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
             return disjunction(conditionFailure, guarded)
+        case .and(let lhs, let rhs):
+            let leftFailure = try anyFailurePredicate(lhs)
+            guard let rightFailure = try anyFailurePredicate(rhs) else { return leftFailure }
+            let reachedRight = "(ENABLED (\(try self.action(lhs))))"
+            return disjunction(leftFailure, "(\(reachedRight) /\\ \(rightFailure))")
         case .or(let lhs, let rhs):
             let first = try anyFailurePredicate(lhs)
             let second = try anyFailurePredicate(rhs)
@@ -482,6 +489,7 @@ struct CompiledTLARenderer {
     }
 
     private func expressionAnyFailure(_ value: CompiledExpression) throws -> String? {
+        if let defined = try evaluationDefined(value), defined != "TRUE" { return "~(\(defined))" }
         let predicates = try expressionEvaluationFailures(value).map(\.predicate)
             + (try expressionChoiceFailure(value).map { [$0] } ?? [])
         guard !predicates.isEmpty else { return nil }

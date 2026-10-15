@@ -37,7 +37,8 @@ THEOREM EmittedFirstFailureMatchesSource ==
     BY SMT DEF SourceDomain, SourceDivisionFailure, SourceChoiceFailure,
         SourceEvaluationOK, __SwiftTLADivisionByZeroFailure0,
         __SwiftTLADivisionByZeroDivisor0, __SwiftTLAOverflowFailure0,
-        __SwiftTLAChoiceFailure0, __SwiftTLAEvaluationOK
+        __SwiftTLAChoiceFailure0, __SwiftTLAAnyEvaluationFailure0,
+        __SwiftTLAEvaluationOK
 
 THEOREM CompleteEmittedOutcomeMatchesSource ==
     ASSUME SourceDomain, divisor' \in Int, result' \in Int

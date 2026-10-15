@@ -47,7 +47,7 @@ THEOREM EmittedFailureMatchesSource ==
         DEF SourceDomain, SourceFailedCandidates, SourceChoiceFailure,
             SourceEvaluationOK, EmittedFailedCandidates,
             EmittedFirstFailedCandidate, __SwiftTLAChoiceFailure0,
-            __SwiftTLAEvaluationOK
+            __SwiftTLAAnyEvaluationFailure0, __SwiftTLAEvaluationOK
 
 THEOREM CompleteEmittedOutcomeMatchesSource ==
     ASSUME SourceDomain, result' \in Int

@@ -11,11 +11,12 @@ __SwiftTLADivisionByZeroDivisor0 == divisor
 __SwiftTLAOverflowFailure0 == (IF divisor # 0 THEN ~((IF divisor # -1 THEN TRUE ELSE 1 # ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808))) ELSE FALSE)
 __SwiftTLAOverflowOperands0 == <<1, divisor>>
 __SwiftTLAOverflowOperation0 == "division"
-__SwiftTLADivisionByZeroFailure0_1 == (IF (~(divisor # 0) \/ (IF divisor # 0 THEN ~((IF divisor # -1 THEN TRUE ELSE 1 # ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808))) ELSE FALSE)) THEN FALSE ELSE ~(modulus # 0))
+__SwiftTLADivisionByZeroFailure0_1 == (IF ~((IF divisor # 0 THEN (IF (IF divisor # -1 THEN TRUE ELSE 1 # ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)) THEN TRUE ELSE FALSE) ELSE FALSE)) THEN FALSE ELSE ~(modulus # 0))
 __SwiftTLADivisionByZeroDivisor0_1 == modulus
-__SwiftTLANegativeModuloDivisorFailure0 == (IF (~(divisor # 0) \/ (IF divisor # 0 THEN ~((IF divisor # -1 THEN TRUE ELSE 1 # ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808))) ELSE FALSE)) THEN FALSE ELSE (IF modulus # 0 THEN ~(modulus > 0) ELSE FALSE))
+__SwiftTLANegativeModuloDivisorFailure0 == (IF ~((IF divisor # 0 THEN (IF (IF divisor # -1 THEN TRUE ELSE 1 # ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)) THEN TRUE ELSE FALSE) ELSE FALSE)) THEN FALSE ELSE (IF modulus # 0 THEN ~(modulus > 0) ELSE FALSE))
 __SwiftTLANegativeModuloDivisorValue0 == modulus
-__SwiftTLAEvaluationOK == ~(__SwiftTLADivisionByZeroFailure0) /\ ~(__SwiftTLAOverflowFailure0) /\ ~(__SwiftTLADivisionByZeroFailure0_1) /\ ~(__SwiftTLANegativeModuloDivisorFailure0)
+__SwiftTLAAnyEvaluationFailure0 == (IF ~((IF divisor # 0 THEN (IF (IF divisor # -1 THEN TRUE ELSE 1 # ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)) THEN TRUE ELSE FALSE) ELSE FALSE)) THEN TRUE ELSE ~((IF modulus # 0 THEN (IF modulus > 0 THEN TRUE ELSE FALSE) ELSE FALSE)))
+__SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)
 
 Init ==
   /\ divisor = 0

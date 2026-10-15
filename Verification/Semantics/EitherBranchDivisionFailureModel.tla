@@ -11,7 +11,8 @@ __SwiftTLADivisionByZeroDivisor0 == divisor
 __SwiftTLAOverflowFailure0 == (IF divisor # 0 THEN ~((IF divisor # -1 THEN TRUE ELSE 1 # ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808))) ELSE FALSE)
 __SwiftTLAOverflowOperands0 == <<1, divisor>>
 __SwiftTLAOverflowOperation0 == "division"
-__SwiftTLAEvaluationOK == ~(__SwiftTLADivisionByZeroFailure0) /\ ~(__SwiftTLAOverflowFailure0)
+__SwiftTLAAnyEvaluationFailure0 == ~((IF divisor # 0 THEN (IF (IF divisor # -1 THEN TRUE ELSE 1 # ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)) THEN TRUE ELSE FALSE) ELSE FALSE))
+__SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)
 
 Init ==
   /\ divisor = 0

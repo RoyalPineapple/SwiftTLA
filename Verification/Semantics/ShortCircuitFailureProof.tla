@@ -85,6 +85,8 @@ THEOREM EmittedFailuresAndCheckAgree ==
         __SwiftTLANegativeModuloDivisorFailure0,
         __SwiftTLADivisionByZeroFailure1,
         __SwiftTLANegativeModuloDivisorFailure1,
+        __SwiftTLAAnyEvaluationFailure0,
+        __SwiftTLAAnyEvaluationFailure1,
         __SwiftTLAEvaluationOK,
         __SwiftTLADivisionByZeroDivisor0,
         __SwiftTLADivisionByZeroDivisor1,
@@ -93,6 +95,40 @@ THEOREM EmittedFailuresAndCheckAgree ==
         SourceConjunctionZeroFailure, SourceConjunctionNegativeFailure,
         SourceDisjunctionZeroFailure, SourceDisjunctionNegativeFailure,
         SourceEvaluationOK
+
+THEOREM AggregateDetectsExactlyTheDetailedFailures ==
+    ASSUME enabled \in BOOLEAN
+    PROVE /\ (__SwiftTLAAnyEvaluationFailure0 <=>
+                 (__SwiftTLADivisionByZeroFailure0 \/
+                  __SwiftTLANegativeModuloDivisorFailure0))
+          /\ (__SwiftTLAAnyEvaluationFailure1 <=>
+                 (__SwiftTLADivisionByZeroFailure1 \/
+                  __SwiftTLANegativeModuloDivisorFailure1))
+    BY SMT DEF __SwiftTLAAnyEvaluationFailure0,
+        __SwiftTLAAnyEvaluationFailure1,
+        __SwiftTLADivisionByZeroFailure0,
+        __SwiftTLANegativeModuloDivisorFailure0,
+        __SwiftTLADivisionByZeroFailure1,
+        __SwiftTLANegativeModuloDivisorFailure1
+
+THEOREM AggregateInstantiatesOrderedFailureRule ==
+    ASSUME enabled \in BOOLEAN
+    PROVE /\ (__SwiftTLAAnyEvaluationFailure0 <=>
+                 SourceAnyFailure(AndGuards))
+          /\ (__SwiftTLAAnyEvaluationFailure1 <=>
+                 SourceAnyFailure(OrGuards))
+    BY AnyOrderedFailureIsExactlyUndefinedness, SMT
+        DEF __SwiftTLAAnyEvaluationFailure0,
+            __SwiftTLAAnyEvaluationFailure1,
+            AndGuards, OrGuards, SourcePrefixDefined,
+            SelectedTrueGuard, SelectedFalseGuard
+
+WrongDroppedAggregate == FALSE
+
+THEOREM DroppingTheAggregateLosesAnObservedFailure ==
+    ASSUME enabled = TRUE, divisor = 0
+    PROVE __SwiftTLAAnyEvaluationFailure0 /\ ~WrongDroppedAggregate
+    BY SMT DEF __SwiftTLAAnyEvaluationFailure0, WrongDroppedAggregate
 
 THEOREM BothBooleanActionsInstantiateOrderedSites ==
     ASSUME enabled \in BOOLEAN, divisor \in 0..1

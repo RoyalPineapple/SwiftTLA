@@ -312,6 +312,18 @@ struct CompiledSpecificationRendererTests {
         })
     }
 
+    @Test("Infallible assignments do not emit an evaluation-failure invariant")
+    func omitsInfallibleEvaluationCheck() throws {
+        let specification = TLASpec(name: "InfallibleAssignment", variables: [
+            .init(name: "result", initial: .int(0))
+        ], actions: [
+            .init(name: "advance", body: .assign(.named("result"), .int(1)))
+        ], invariants: [])
+        let emitted = try specification.compile().render()
+        #expect(emitted.intrinsicInvariantNames.isEmpty)
+        #expect(!emitted.tlaBundle.tla.contains("__SwiftTLAAnyEvaluationFailure"))
+    }
+
     @Test("A successful left action exposes a right-hand evaluation failure")
     func reportsFailureAfterConjunctiveAssignment() throws {
         let compilation = try TLASpec(name: "ConjunctiveFailure", variables: [

@@ -37,7 +37,8 @@ THEOREM EmittedStepMatchesSource ==
 THEOREM EmittedFailureAndCheckMatchSource ==
     /\ __SwiftTLAChoiceFailure0 <=> SourceFailure
     /\ __SwiftTLAEvaluationOK <=> SourceEvaluationOK
-    BY SMT DEF __SwiftTLAChoiceFailure0, __SwiftTLAEvaluationOK,
+    BY SMT DEF __SwiftTLAChoiceFailure0,
+        __SwiftTLAAnyEvaluationFailure0, __SwiftTLAEvaluationOK,
         SourceFailure, SourceEvaluationOK, SourceHasChoice
 
 THEOREM BoundBodyInstantiatesCompositionalRule ==
@@ -108,7 +109,8 @@ THEOREM OmittedBodyFailureIsDetectedAtInitialState ==
           /\ ~__SwiftTLAEvaluationOK
           /\ ~OmittedBodyFailure
     BY Isa DEF SourceInit, SourceFailure, SourceHasChoice,
-        __SwiftTLAChoiceFailure0, __SwiftTLAEvaluationOK,
+        __SwiftTLAChoiceFailure0, __SwiftTLAAnyEvaluationFailure0,
+        __SwiftTLAEvaluationOK,
         OmittedBodyFailure
 
 ===================================================================

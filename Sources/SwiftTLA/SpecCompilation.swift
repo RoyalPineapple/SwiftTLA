@@ -2312,10 +2312,11 @@ private extension CompiledModuleMetadata {
             .union(layout.actions.map(\.renderedName))
             .union(renderedActions.flatMap(\.calls).map(\.renderedName))
         var evaluationFailureDeclarations: [String] = []
-        var failureReferences: [String] = []
+        var actionFailureReferences: [String] = []
         for index in behavior.enabledActionIndices {
             let renderedAction = renderedActions[index]
             guard !renderedAction.sourceName.isEmpty else { continue }
+            let detailedFailureStart = evaluationFailureDeclarations.count
             let parameters = renderedAction.renderedParameters.joined(separator: ", ")
             let emittedName = renderedAction.renderedName
             let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
@@ -2327,7 +2328,6 @@ private extension CompiledModuleMetadata {
                 let declaration = "\(failureHeader) == \(failure)"
                 lines.append(declaration)
                 evaluationFailureDeclarations.append(declaration)
-                failureReferences.append(try renderer.actionReference(behavior.actions[index].id, named: failureName))
                 occupied.insert(failureName)
             }
             var overflowOccurrence = 0
@@ -2386,7 +2386,6 @@ private extension CompiledModuleMetadata {
                 let failureDeclaration = "\(failureHeader) == \(failure.predicate)"
                 lines.append(failureDeclaration)
                 evaluationFailureDeclarations.append(failureDeclaration)
-                failureReferences.append(try renderer.actionReference(behavior.actions[index].id, named: failureName))
                 occupied.insert(failureName)
                 if let operandsPrefix {
                     guard let operands = failure.operands else {
@@ -2413,14 +2412,29 @@ private extension CompiledModuleMetadata {
             for call in renderedAction.calls where call.arguments.isEmpty == false {
                 lines.append("\(call.renderedName) == \(formalActionCall(named: emittedName, arguments: call.arguments))")
             }
+            let aggregate = try renderer.anyFailurePredicate(behavior.actions[index].body)
+            guard aggregate != nil || evaluationFailureDeclarations.count == detailedFailureStart else {
+                throw CompiledValueType.diagnostic("rendering.anyEvaluationFailure",
+                    "an action failure has no aggregate predicate")
+            }
+            if let aggregate {
+                var name = "__SwiftTLAAnyEvaluationFailure\(index)"
+                while occupied.contains(name) { name += "_" }
+                let header = parameters.isEmpty ? name : "\(name)(\(parameters))"
+                let declaration = "\(header) == \(aggregate)"
+                lines.append(declaration)
+                evaluationFailureDeclarations.append(declaration)
+                actionFailureReferences.append(try renderer.actionReference(behavior.actions[index].id, named: name))
+                occupied.insert(name)
+            }
         }
         let evaluationInvariant: String?
-        if failureReferences.isEmpty {
+        if actionFailureReferences.isEmpty {
             evaluationInvariant = nil
         } else {
             var name = "__SwiftTLAEvaluationOK"
             while occupied.contains(name) { name += "_" }
-            let declaration = "\(name) == " + failureReferences.map { "~(\($0))" }.joined(separator: " /\\ ")
+            let declaration = "\(name) == " + actionFailureReferences.map { "~(\($0))" }.joined(separator: " /\\ ")
             lines.append(declaration)
             evaluationFailureDeclarations.append(declaration)
             evaluationInvariant = name

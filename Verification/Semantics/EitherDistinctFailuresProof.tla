@@ -51,7 +51,8 @@ THEOREM EmittedFirstFailureMatchesSource ==
         __SwiftTLADivisionByZeroFailure0, __SwiftTLADivisionByZeroDivisor0,
         __SwiftTLAOverflowFailure0, __SwiftTLADivisionByZeroFailure0_1,
         __SwiftTLANegativeModuloDivisorFailure0,
-        __SwiftTLANegativeModuloDivisorValue0, __SwiftTLAEvaluationOK
+        __SwiftTLANegativeModuloDivisorValue0,
+        __SwiftTLAAnyEvaluationFailure0, __SwiftTLAEvaluationOK
 
 THEOREM CompleteEmittedOutcomeMatchesSource ==
     ASSUME SourceDomain, divisor' \in Int, modulus' \in Int, result' \in Int

@@ -13,7 +13,16 @@ SourceFirstFailure ==
 SourceDivisionByZero == SourceFirstFailure = "alpha" /\ divisor = 0
 SourceNegativeModulo == SourceFirstFailure = "zed" /\ modulus < 0
 SourceEvaluationOK == ~(SourceDivisionByZero \/ SourceNegativeModulo)
-EmittedFailedCandidates == {__atomic_0 \in {"alpha", "zed"}: (~((IF (__atomic_0 = "alpha") THEN divisor # 0 ELSE TRUE)) \/ (IF (IF (__atomic_0 = "alpha") THEN divisor # 0 ELSE TRUE) THEN ~((IF (__atomic_0 = "alpha") THEN divisor > 0 ELSE TRUE)) ELSE FALSE) \/ (IF (IF (__atomic_0 = "alpha") THEN divisor # 0 ELSE TRUE) THEN (IF (IF (__atomic_0 = "alpha") THEN divisor > 0 ELSE TRUE) THEN ~((IF (__atomic_0 = "alpha") THEN TRUE ELSE modulus # 0)) ELSE FALSE) ELSE FALSE) \/ (IF (IF (__atomic_0 = "alpha") THEN divisor # 0 ELSE TRUE) THEN (IF (IF (__atomic_0 = "alpha") THEN divisor > 0 ELSE TRUE) THEN (IF (IF (__atomic_0 = "alpha") THEN TRUE ELSE modulus # 0) THEN ~((IF (__atomic_0 = "alpha") THEN TRUE ELSE modulus > 0)) ELSE FALSE) ELSE FALSE) ELSE FALSE))}
+EmittedFailedCandidates ==
+    {__atomic_0 \in {"alpha", "zed"}:
+        ~(IF (IF (__atomic_0 = "alpha") THEN divisor # 0 ELSE TRUE)
+             THEN (IF (IF (__atomic_0 = "alpha") THEN divisor > 0 ELSE TRUE)
+                 THEN (IF (IF (__atomic_0 = "alpha") THEN TRUE ELSE modulus # 0)
+                     THEN (IF (IF (__atomic_0 = "alpha") THEN TRUE ELSE modulus > 0)
+                         THEN TRUE ELSE FALSE)
+                     ELSE FALSE)
+                 ELSE FALSE)
+             ELSE FALSE)}
 EmittedFirstFailure ==
     CHOOSE candidate \in EmittedFailedCandidates :
         \A other \in EmittedFailedCandidates : Rank(candidate) <= Rank(other)
@@ -36,6 +45,13 @@ THEOREM EmittedFirstFailureAtInitialState ==
     BY EmittedFailureSetAtInitialState, SMT
         DEF EmittedFirstFailure, EmittedFailedCandidates, Members, Rank
 
+THEOREM EmittedAggregateFailureAtInitialState ==
+    ASSUME SourceInit
+    PROVE __SwiftTLAAnyEvaluationFailure0
+    BY EmittedFailureSetAtInitialState, SMT
+        DEF __SwiftTLAAnyEvaluationFailure0, EmittedFailedCandidates,
+            SourceInit, Members
+
 ReversedRank(member) ==
     CASE member = "zed" -> 0 [] member = "alpha" -> 1
 ReversedFirstFailure ==
@@ -56,24 +72,18 @@ THEOREM EmittedInitialMatchesSource == Init <=> SourceInit
 THEOREM EmittedDivisionByZeroAtInitialState ==
     ASSUME SourceInit
     PROVE __SwiftTLADivisionByZeroFailure0
-    BY EmittedFailureSetAtInitialState, EmittedFirstFailureAtInitialState, SMT
-        DEF SourceInit, EmittedFailedCandidates, EmittedFirstFailure,
-            Members, Rank, __SwiftTLADivisionByZeroFailure0
+    BY SMT DEF SourceInit, __SwiftTLADivisionByZeroFailure0
 
 THEOREM EmittedNegativeModuloAtInitialState ==
     ASSUME SourceInit
     PROVE ~__SwiftTLANegativeModuloDivisorFailure0
-    BY EmittedFailureSetAtInitialState, EmittedFirstFailureAtInitialState, SMT
-        DEF SourceInit, EmittedFailedCandidates, EmittedFirstFailure,
-            Members, Rank, __SwiftTLANegativeModuloDivisorFailure0
+    BY SMT DEF SourceInit, __SwiftTLANegativeModuloDivisorFailure0
 
 THEOREM EmittedSecondSiteFailuresAtInitialState ==
     ASSUME SourceInit
     PROVE /\ ~__SwiftTLADivisionByZeroFailure0_1
           /\ ~__SwiftTLANegativeModuloDivisorFailure0_1
-    BY EmittedFailureSetAtInitialState, EmittedFirstFailureAtInitialState, Isa
-        DEF SourceInit, EmittedFailedCandidates, EmittedFirstFailure,
-            Members, Rank, __SwiftTLADivisionByZeroFailure0_1,
+    BY SMT DEF SourceInit, __SwiftTLADivisionByZeroFailure0_1,
             __SwiftTLANegativeModuloDivisorFailure0_1
 
 THEOREM SourceFailureAtInitialState ==
@@ -96,7 +106,8 @@ THEOREM EmittedInitialFailureMatchesSource ==
     BY SourceFailureAtInitialState,
         EmittedDivisionByZeroAtInitialState,
         EmittedNegativeModuloAtInitialState,
-        EmittedSecondSiteFailuresAtInitialState, SMT
+        EmittedSecondSiteFailuresAtInitialState,
+        EmittedAggregateFailureAtInitialState, SMT
         DEF __SwiftTLAEvaluationOK
 
 THEOREM CompleteInitialOutcomeMatchesSource ==

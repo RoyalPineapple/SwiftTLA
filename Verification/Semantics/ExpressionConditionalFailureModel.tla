@@ -11,7 +11,8 @@ __SwiftTLADivisionByZeroFailure0 == (IF (IF (mode = 1) THEN (\E __PROOF_MEMBER__
 __SwiftTLADivisionByZeroDivisor0 == divisor
 __SwiftTLANegativeModuloDivisorFailure0 == (IF (IF (mode = 1) THEN (\E __PROOF_MEMBER__ \in {1} : FALSE) ELSE TRUE) THEN (IF (IF (mode = 1) THEN TRUE ELSE divisor # 0) THEN ~((IF (mode = 1) THEN TRUE ELSE divisor > 0)) ELSE FALSE) ELSE FALSE)
 __SwiftTLANegativeModuloDivisorValue0 == divisor
-__SwiftTLAEvaluationOK == ~(__SwiftTLAChoiceFailure0) /\ ~(__SwiftTLADivisionByZeroFailure0) /\ ~(__SwiftTLANegativeModuloDivisorFailure0)
+__SwiftTLAAnyEvaluationFailure0 == ~((IF (IF (mode = 1) THEN (\E __PROOF_MEMBER__ \in {1} : FALSE) ELSE TRUE) THEN (IF (IF (mode = 1) THEN TRUE ELSE divisor # 0) THEN (IF (IF (mode = 1) THEN TRUE ELSE divisor > 0) THEN TRUE ELSE FALSE) ELSE FALSE) ELSE FALSE))
+__SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)
 
 Init ==
   /\ mode \in 0..1

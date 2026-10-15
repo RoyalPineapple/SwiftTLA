@@ -11,7 +11,8 @@ __SwiftTLADivisionByZeroFailure0 == (IF (\E __CONDITION_MEMBER__ \in {TRUE} : (s
 __SwiftTLADivisionByZeroDivisor0 == divisor
 __SwiftTLANegativeModuloDivisorFailure0 == (IF (\E __CONDITION_MEMBER__ \in {TRUE} : (selector = 1)) THEN (IF (LET __ConditionalChoiceThenModuloFailureModel_choiceCandidates0 == {__CONDITION_MEMBER__ \in {TRUE} : (selector = 1)} IN (CHOOSE __CONDITION_MEMBER__ \in __ConditionalChoiceThenModuloFailureModel_choiceCandidates0 : (\A __ConditionalChoiceThenModuloFailureModel_choiceOther1 \in __ConditionalChoiceThenModuloFailureModel_choiceCandidates0 : (__CONDITION_MEMBER__ = FALSE \/ __ConditionalChoiceThenModuloFailureModel_choiceOther1 = TRUE)))) THEN (IF divisor # 0 THEN ~(divisor > 0) ELSE FALSE) ELSE FALSE) ELSE FALSE)
 __SwiftTLANegativeModuloDivisorValue0 == divisor
-__SwiftTLAEvaluationOK == ~(__SwiftTLAChoiceFailure0) /\ ~(__SwiftTLADivisionByZeroFailure0) /\ ~(__SwiftTLANegativeModuloDivisorFailure0)
+__SwiftTLAAnyEvaluationFailure0 == (~((\E __CONDITION_MEMBER__ \in {TRUE} : (selector = 1))) \/ (IF (\E __CONDITION_MEMBER__ \in {TRUE} : (selector = 1)) THEN (IF (LET __ConditionalChoiceThenModuloFailureModel_choiceCandidates0 == {__CONDITION_MEMBER__ \in {TRUE} : (selector = 1)} IN (CHOOSE __CONDITION_MEMBER__ \in __ConditionalChoiceThenModuloFailureModel_choiceCandidates0 : (\A __ConditionalChoiceThenModuloFailureModel_choiceOther1 \in __ConditionalChoiceThenModuloFailureModel_choiceCandidates0 : (__CONDITION_MEMBER__ = FALSE \/ __ConditionalChoiceThenModuloFailureModel_choiceOther1 = TRUE)))) THEN ~((IF divisor # 0 THEN (IF divisor > 0 THEN TRUE ELSE FALSE) ELSE FALSE)) ELSE FALSE) ELSE FALSE))
+__SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)
 
 Init ==
   /\ selector \in 0..1

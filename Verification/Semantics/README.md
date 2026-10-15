@@ -1769,7 +1769,10 @@ control. `OrderedFailureSites.tla` then proves, by induction for every finite
 ordered list of Boolean site guards, that the renderer's guarded prefix has
 the source definedness, each emitted failure marks exactly the first failing
 site, and a later bound-body failure runs only after the value is defined.
-Its eager-body negative control and all 32 obligations passed locally. The
+It also proves that one aggregate failure check is exactly the complement of
+the final definedness guard, so the checking invariant need not invoke every
+detailed failure predicate on every state. Its eager-body negative control and
+all 58 obligations passed locally. The
 rule is reusable for other expressions and `Let` bodies, but it does not by
 itself prove that every emitted expression supplies the right guard list.
 Effectful forms without a compositional definedness rule remain open.
@@ -1781,12 +1784,13 @@ generated TLA+ module by exact text after normalizing only a source-location
 binder name. A reversed Swift branch and an eager TLA+ choice-failure guard
 must both fail those output checks. `ExpressionConditionalFailureProof.tla`
 proves the pinned module's initial states, complete labeled transition,
-three failure predicates, selected evaluation invariant, and branch-selection
+three failure predicates, their aggregate, selected evaluation invariant, and branch-selection
 rule against an independent source relation. It also proves that this action
 is enabled exactly when the evaluation check holds on the declared initial
 domain. The three actual emitted failure predicates are connected to the
-generic ordered-site theorem, not merely proved separately; an eager-failure
-negative control is included (31 local TLAPS obligations). The finite
+generic ordered-site theorem, not merely proved separately; the aggregate is
+proved equivalent to their disjunction, and an eager-failure negative control
+is included (36 local TLAPS obligations). The finite
 Swift-machine test covers the exact four initial
 states and their successors. These facts do not prove the Swift compiler,
 the concrete `_NativeMachineOperations` implementations, arbitrary source
@@ -1798,8 +1802,9 @@ expression-level Boolean operators. Its output check pins the complete
 generated TLA+ module and both emitted Swift transition visitors; reversing
 either Swift short-circuit branch or making the TLA+ conjunction failure eager
 breaks the check. `ShortCircuitFailureProof.tla` proves the two complete
-labeled relations, all four emitted failure predicates and selected invariant,
-reachable-state closure, and the instantiated ordered-site rule (22 local
+labeled relations, all four emitted failure predicates, the two aggregates,
+and selected invariant, reachable-state closure, and the instantiated
+ordered-site rule (29 local
 TLAPS obligations). In particular, `enabled = TRUE, divisor = 0` retains a
 valid disjunction step while the conjunction reports division by zero. The
 native test checks all four initial states, successor counts and failures.

@@ -72,6 +72,13 @@ THEOREM EmittedOverflowIsImpossible ==
         DEF __SwiftTLAOverflowFailure0, __SwiftTLAOverflowOperands0,
             EmittedAllFailures, EmittedFirstFailedCandidate
 
+THEOREM EmittedAggregateMatchesSource ==
+    ASSUME result \in Int
+    PROVE __SwiftTLAAnyEvaluationFailure0 <=> SourceDivisionFailure
+    BY AllFailuresAreDivisionByZero, SMT
+        DEF __SwiftTLAAnyEvaluationFailure0, EmittedAllFailures,
+            SourceDivisionFailure, SourceFailedCandidates
+
 THEOREM EmittedFailureMatchesSource ==
     ASSUME result \in Int
     PROVE /\ __SwiftTLADivisionByZeroFailure0 <=> SourceDivisionFailure
@@ -80,7 +87,8 @@ THEOREM EmittedFailureMatchesSource ==
           /\ __SwiftTLAOverflowOperands0 = {}
           /\ (__SwiftTLAEvaluationOK <=> SourceEvaluationOK)
     BY EmittedDivisionFailureMatchesSource, EmittedOverflowIsImpossible,
-        SMT DEF __SwiftTLAEvaluationOK, SourceEvaluationOK
+        EmittedAggregateMatchesSource, SMT DEF
+            __SwiftTLAEvaluationOK, SourceEvaluationOK
 
 THEOREM CompleteEmittedOutcomeMatchesSource ==
     ASSUME result \in Int

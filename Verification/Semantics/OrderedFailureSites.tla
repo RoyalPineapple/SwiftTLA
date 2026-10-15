@@ -15,6 +15,46 @@ SourceFailureAt(guards, index) ==
 RenderedFailureAt(guards, history, index) ==
     /\ index \in 1..Len(guards)
     /\ (IF history[index - 1] THEN ~guards[index] ELSE FALSE)
+SourceAnyFailure(guards) ==
+    \E index \in 1..Len(guards) : SourceFailureAt(guards, index)
+
+THEOREM AnyOrderedFailureIsExactlyUndefinedness ==
+    ASSUME NEW guards \in Seq(BOOLEAN)
+    PROVE SourceAnyFailure(guards) <=>
+          ~SourcePrefixDefined(guards, Len(guards))
+    PROOF
+    <1>. DEFINE P(prefix) ==
+        prefix \in 0..Len(guards) =>
+            ((\E index \in 1..prefix : SourceFailureAt(guards, index))
+             <=> ~SourcePrefixDefined(guards, prefix))
+    <1>1. P(0)
+        BY SMT DEF P, SourcePrefixDefined
+    <1>2. ASSUME NEW prefix \in Nat, P(prefix)
+          PROVE P(prefix + 1)
+        <2>. SUFFICES ASSUME prefix + 1 \in 0..Len(guards)
+                     PROVE (\E index \in 1..prefix + 1 :
+                                SourceFailureAt(guards, index))
+                           <=> ~SourcePrefixDefined(guards, prefix + 1)
+            BY SMT DEF P
+        <2>1. prefix \in 0..Len(guards)
+            BY SMT
+        <2>2. SourcePrefixDefined(guards, prefix + 1) =
+                 (SourcePrefixDefined(guards, prefix) /\ guards[prefix + 1])
+            BY SMT DEF SourcePrefixDefined
+        <2>3. SourceFailureAt(guards, prefix + 1) =
+                 (SourcePrefixDefined(guards, prefix) /\ ~guards[prefix + 1])
+            BY SMT DEF SourceFailureAt
+        <2>4. (\E index \in 1..prefix + 1 :
+                  SourceFailureAt(guards, index)) =
+                 ((\E index \in 1..prefix : SourceFailureAt(guards, index))
+                  \/ SourceFailureAt(guards, prefix + 1))
+            BY SMT
+        <2>. QED
+            BY <2>1, <2>2, <2>3, <2>4, P(prefix), SMT DEF P
+    <1>3. \A prefix \in Nat : P(prefix)
+        BY <1>1, <1>2, NatInduction
+    <1>4. QED
+        BY <1>3, SMT DEF P, SourceAnyFailure
 
 THEOREM OrderedGuardHistoryPreservesDefinedness ==
     ASSUME NEW guards \in Seq(BOOLEAN),

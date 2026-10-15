@@ -35,6 +35,13 @@ THEOREM EmittedOverflowIsImpossible ==
     PROVE ~__SwiftTLAOverflowFailure0
     BY SMT DEF __SwiftTLAOverflowFailure0
 
+THEOREM EmittedAggregateMatchesDetailedFailures ==
+    ASSUME divisor \in Int, result \in Int
+    PROVE __SwiftTLAAnyEvaluationFailure0 <=>
+        (__SwiftTLADivisionByZeroFailure0 \/ __SwiftTLAOverflowFailure0)
+    BY SMT DEF __SwiftTLAAnyEvaluationFailure0,
+        __SwiftTLADivisionByZeroFailure0, __SwiftTLAOverflowFailure0
+
 THEOREM CompleteEmittedOutcomeMatchesSource ==
     ASSUME divisor \in Int, result \in Int
     PROVE /\ Init <=> SourceInit
@@ -45,7 +52,9 @@ THEOREM CompleteEmittedOutcomeMatchesSource ==
           /\ __SwiftTLAEvaluationOK <=> SourceEvaluationOK
     BY EmittedInitialMatchesSource, EmittedStepMatchesSource,
         EmittedDivisionFailureMatchesSource, EmittedOverflowIsImpossible,
-        SMT DEF Next, __SwiftTLAEvaluationOK, SourceEvaluationOK
+        EmittedAggregateMatchesDetailedFailures,
+        SMT DEF Next,
+            __SwiftTLAEvaluationOK, SourceEvaluationOK
 
 THEOREM DroppingSuccessfulBranchChangesOutcome ==
     ASSUME divisor = 0, divisor' = 0, result' = 1

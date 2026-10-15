@@ -51,11 +51,31 @@ THEOREM EmittedFailuresAndCheckAgree ==
           /\ __SwiftTLADivisionByZeroDivisor0 = divisor
           /\ __SwiftTLANegativeModuloDivisorValue0 = divisor
     BY SMT DEF __SwiftTLAChoiceFailure0, __SwiftTLADivisionByZeroFailure0,
-        __SwiftTLANegativeModuloDivisorFailure0, __SwiftTLAEvaluationOK,
+        __SwiftTLANegativeModuloDivisorFailure0,
+        __SwiftTLAAnyEvaluationFailure0, __SwiftTLAEvaluationOK,
         __SwiftTLADivisionByZeroDivisor0,
         __SwiftTLANegativeModuloDivisorValue0,
         SourceChoiceFailure, SourceZeroFailure, SourceNegativeFailure,
         SourceEvaluationOK
+
+THEOREM AggregateDetectsExactlyTheDetailedFailures ==
+    ASSUME mode \in 0..1, divisor \in 0..1
+    PROVE __SwiftTLAAnyEvaluationFailure0 <=>
+          (__SwiftTLAChoiceFailure0 \/
+           __SwiftTLADivisionByZeroFailure0 \/
+           __SwiftTLANegativeModuloDivisorFailure0)
+    BY SMT DEF __SwiftTLAAnyEvaluationFailure0,
+        __SwiftTLAChoiceFailure0,
+        __SwiftTLADivisionByZeroFailure0,
+        __SwiftTLANegativeModuloDivisorFailure0
+
+THEOREM AggregateInstantiatesOrderedFailureRule ==
+    ASSUME mode \in 0..1, divisor \in 0..1
+    PROVE __SwiftTLAAnyEvaluationFailure0 <=> SourceAnyFailure(SiteGuards)
+    BY AnyOrderedFailureIsExactlyUndefinedness, SMT
+        DEF __SwiftTLAAnyEvaluationFailure0,
+            SiteGuards, SourcePrefixDefined,
+            SelectedTrueGuard, SelectedFalseGuard
 
 THEOREM LazyExpressionRuleInstance ==
     ASSUME mode \in 0..1, divisor \in 0..1
@@ -89,7 +109,8 @@ THEOREM EmittedFailuresUseOrderedSites ==
                   RenderedFailureAt(SiteGuards, SiteHistory, 3))
           /\ (__SwiftTLAEvaluationOK = SiteHistory[3])
     BY SMT DEF __SwiftTLAChoiceFailure0, __SwiftTLADivisionByZeroFailure0,
-        __SwiftTLANegativeModuloDivisorFailure0, __SwiftTLAEvaluationOK,
+        __SwiftTLANegativeModuloDivisorFailure0,
+        __SwiftTLAAnyEvaluationFailure0, __SwiftTLAEvaluationOK,
         RenderedFailureAt, SiteGuards, SiteHistory,
         SelectedTrueGuard, SelectedFalseGuard
 

@@ -41,7 +41,8 @@ THEOREM OrderedFailureAndCheckAgree ==
           /\ __SwiftTLADivisionByZeroDivisor0 = divisor
           /\ __SwiftTLANegativeModuloDivisorValue0 = divisor
     BY SMT DEF __SwiftTLAChoiceFailure0, __SwiftTLADivisionByZeroFailure0,
-        __SwiftTLANegativeModuloDivisorFailure0, __SwiftTLAEvaluationOK,
+        __SwiftTLANegativeModuloDivisorFailure0,
+        __SwiftTLAAnyEvaluationFailure0, __SwiftTLAEvaluationOK,
         __SwiftTLADivisionByZeroDivisor0,
         __SwiftTLANegativeModuloDivisorValue0,
         SourceChoiceFailure, SourceZeroFailure, SourceNegativeFailure,
