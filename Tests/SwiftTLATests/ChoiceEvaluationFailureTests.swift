@@ -547,6 +547,23 @@ struct ChoiceEvaluationFailureTests {
             .tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expectedTokens)
 
+        let parts = try emitter.actionFunctions(action.body)
+        try verifyGeneratedActionWriteOutput(update, action: action.body, parts: parts.writes,
+            conditions: parts.conditions)
+        let predicate = try #require(parts.conditions.first?.value)
+        let wrongConditionSource = update.description.replacingOccurrences(
+            of: "if \(predicate) {", with: "if false {")
+        #expect(wrongConditionSource != update.description)
+        let wrongCondition = try #require(Parser.parse(source: wrongConditionSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongCondition, action: action.body,
+                parts: parts.writes, conditions: parts.conditions)
+            Issue.record("A generated conditional ignored its compiled predicate")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.conditional.0")
+        }
+
         let tlaBinder = try Regex(#"__binder_SpecParser_[0-9]+_0"#)
         let normalizedTLA = rendered.tlaBundle.root.tla.replacing(tlaBinder, with: "__CONDITION_MEMBER__")
         let proofInput = URL(fileURLWithPath: #filePath)

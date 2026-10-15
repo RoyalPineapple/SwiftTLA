@@ -407,12 +407,14 @@ extension NativeSwiftEmitter {
     }
 
     mutating func actionFunctions(_ root: CompiledActionExpr) throws -> (
-        source: String, writes: [(id: Int, slot: String, value: String)]
+        source: String, writes: [(id: Int, slot: String, value: String)],
+        conditions: [(id: Int, value: String)]
     ) {
         var pending: [(node: CompiledActionExpr, id: Int, bindings: [BinderID])] = [(root, 0, [])]
         var nextID = 1
         var declarations: [String] = []
         var writes: [(id: Int, slot: String, value: String)] = []
+        var conditions: [(id: Int, value: String)] = []
         while let (node, id, bindings) = pending.popLast() {
             func childCall(_ child: CompiledActionExpr, binding: BinderID? = nil,
                            updates: String = "updates", emit: String = "emit") -> String {
@@ -453,7 +455,9 @@ extension NativeSwiftEmitter {
             case .define(let binding, let value, let child):
                 body = "let \(binder(binding)) = \(try expression(value))\n\(childCall(child, binding: binding))"
             case .ifElse(let condition, let yes, let no):
-                body = "if \(try expression(condition)) { \(childCall(yes)) } else { \(childCall(no)) }"
+                let value = try expression(condition)
+                body = "if \(value) { \(childCall(yes)) } else { \(childCall(no)) }"
+                conditions.append((id: id, value: value))
             case .and(let lhs, let rhs):
                 let right = childCall(rhs, updates: "candidate")
                 body = childCall(lhs, emit: "{ candidate in \(right) }")
@@ -474,7 +478,8 @@ extension NativeSwiftEmitter {
             }
             """)
         }
-        return (declarations.joined(separator: "\n") + "\ntry _actionPart0(_Updates(), emit)", writes)
+        return (declarations.joined(separator: "\n") + "\ntry _actionPart0(_Updates(), emit)",
+            writes, conditions)
     }
 
     mutating func updateFunction(_ action: CompiledAction, configurationParameters: String) throws -> DeclSyntax {
@@ -491,7 +496,8 @@ extension NativeSwiftEmitter {
             \(parts.source)
         }
         """)
-        try verifyGeneratedActionWriteOutput(declaration, action: action.body, parts: parts.writes)
+        try verifyGeneratedActionWriteOutput(declaration, action: action.body, parts: parts.writes,
+            conditions: parts.conditions)
         return declaration
     }
 
@@ -1206,7 +1212,8 @@ func verifyGeneratedUpdateApplyOutput(
 
 func verifyGeneratedActionWriteOutput(
     _ declaration: DeclSyntax?, action: CompiledActionExpr,
-    parts: [(id: Int, slot: String, value: String)]
+    parts: [(id: Int, slot: String, value: String)],
+    conditions: [(id: Int, value: String)] = []
 ) throws {
     guard let visitor = declaration?.as(FunctionDeclSyntax.self),
           visitor.body != nil else {
@@ -1268,6 +1275,7 @@ func verifyGeneratedActionWriteOutput(
     var pending: [(id: Int, node: CompiledActionExpr)] = [(0, action)]
     var expectedChildren: [Int: [Int]] = [:]
     var alternatives: [Int] = []
+    var conditionals: [Int] = []
     var nextID = 1
     var expectedWriteCount = 0
     while let (id, node) = pending.popLast() {
@@ -1283,6 +1291,7 @@ func verifyGeneratedActionWriteOutput(
             nextID += 1
         case .ifElse(_, let yes, let no):
             expectedChildren[id] = [nextID, nextID + 1]
+            conditionals.append(id)
             pending.append((nextID, yes))
             pending.append((nextID + 1, no))
             nextID += 2
@@ -1346,6 +1355,52 @@ func verifyGeneratedActionWriteOutput(
             throw invalid("native.action.alternative.\(id)",
                 "the shared ordered alternative visitor with both compiled branches",
                 "generated alternative body differs from the checked rule")
+        }
+    }
+    guard conditions.count == conditionals.count,
+          Set(conditions.map(\.id)).count == conditions.count,
+          Set(conditions.map(\.id)) == Set(conditionals) else {
+        throw invalid("native.action.condition", "one condition per compiled conditional",
+            "found \(conditions.count) conditions for \(conditionals.count) conditional nodes")
+    }
+    for condition in conditions {
+        let id = condition.id
+        let tokens = bodies[id]!
+        let children = expectedChildren[id]!
+        let positions = tokens.indices.filter { index in
+            index > 0 && index + 1 < tokens.count && tokens[index].hasPrefix("_actionPart") &&
+                tokens[index - 1] == "try" && tokens[index + 1] == "("
+        }
+        func call(at position: Int) -> [String]? {
+            var depth = 0
+            for end in (position + 1)..<tokens.count {
+                if tokens[end] == "(" { depth += 1 }
+                if tokens[end] == ")" { depth -= 1 }
+                if depth == 0 { return Array(tokens[(position - 1)...end]) }
+            }
+            return nil
+        }
+        guard positions.count == 2, let yes = call(at: positions[0]),
+              let no = call(at: positions[1]),
+              yes.count > 4, no.count > 4,
+              yes[1] == "_actionPart\(children[0])", no[1] == "_actionPart\(children[1])",
+              Array(yes.dropFirst(2)) == Array(no.dropFirst(2)),
+              Array(yes.suffix(4)) == ["updates", ",", "emit", ")"] else {
+            throw invalid("native.action.conditional.\(id)",
+                "both selected branches receive the same bindings, updates, and emitter",
+                "invalid conditional child calls")
+        }
+        let expected = Parser.parse(source: """
+        func proof() {
+            if \(condition.value) { \(yes.joined(separator: " ")) }
+            else { \(no.joined(separator: " ")) }
+        }
+        """).statements.first?.item.as(FunctionDeclSyntax.self)
+        let expectedBody = expected?.body?.statements.tokens(viewMode: .sourceAccurate).map(\.text) ?? []
+        guard tokens == expectedBody else {
+            throw invalid("native.action.conditional.\(id)",
+                "the compiled condition selects exactly its corresponding child",
+                "generated conditional body differs from the checked rule")
         }
     }
     guard parts.count == expectedWriteCount, Set(parts.map { $0.id }).count == parts.count else {
