@@ -1913,8 +1913,13 @@ now converts expression failures with exact native-error equivalents at the
 shared initial-branch boundary. A dependent `1 / divisor` initializer retains
 its valid sibling and reports division by zero on both generated Swift and
 compiled execution; an unmapped value-shape error still propagates. This does
-not cover every compiled expression failure or a failing selected initial
-invariant.
+not cover every compiled expression failure. The compiled runtime now visits
+complete candidates in the generated machine's depth-first branch order and
+evaluates a selected initial invariant on each candidate. Focused regressions
+retain a valid sibling when that invariant fails and preserve an earlier
+invariant failure ahead of a later initializer failure. This is a tested
+Swift-path agreement; the corresponding TLA+ failure relation and retained
+comparison evidence are still absent.
 
 For a direct random-subset initializer whose count and preceding initializers use
 the renderer's total-expression subset, the TLA+ emitter now writes a separate
