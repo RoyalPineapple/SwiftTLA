@@ -36,12 +36,41 @@ struct CompiledRuntime {
                 }
             case .memberOf(let set):
                 assignments = try assignments.flatMap { values in
-                    let value = try CompiledEvaluator(
+                    let evaluator = CompiledEvaluator(
                         variableValues: values,
                         operators: operators, functions: functions
-                    ).evaluate(set)
-                    guard case .set(let members) = value else {
-                        throw EvalError.expected(.set, actual: [value])
+                    )
+                    let members: Set<CompiledValue>
+                    if case .randomSubset = set.computation.operation {
+                        let countValue = try evaluator.evaluate(set.computation.children[0])
+                        guard case .integer(let count) = countValue else {
+                            throw EvalError.expected(.integer, actual: [countValue])
+                        }
+                        try _NativeMachineOperations.validateRandomSubsetCount(count)
+                        let domainExpression = set.computation.children[1]
+                        if case .functionSet = domainExpression.operation {
+                            let fromValue = try evaluator.evaluate(domainExpression.children[0])
+                            let toValue = try evaluator.evaluate(domainExpression.children[1])
+                            guard case .set(let from) = fromValue, case .set(let to) = toValue else {
+                                throw EvalError.expected(.functionSetDomains, actual: [fromValue, toValue])
+                            }
+                            let functions = try _NativeMachineOperations.randomFunctionInitialSupport(
+                                upTo: count, from: from, to: to)
+                            members = Set(functions.map(CompiledValue.function))
+                        } else {
+                            let domainValue = try evaluator.evaluate(domainExpression)
+                            guard case .set(let domain) = domainValue else {
+                                throw EvalError.expected(.set, actual: [domainValue])
+                            }
+                            members = try _NativeMachineOperations.randomSubsetInitialSupport(
+                                upTo: count, from: domain)
+                        }
+                    } else {
+                        let value = try evaluator.evaluate(set)
+                        guard case .set(let domain) = value else {
+                            throw EvalError.expected(.set, actual: [value])
+                        }
+                        members = domain
                     }
                     return CompiledValue.sorted(members).map { member in
                         var values = values

@@ -1870,14 +1870,37 @@ operations' implementation of the stated one-based sequence rules remain
 trusted. The proof covers these two operators and this emitted model, not
 arbitrary expression composition, initialization plans, or temporal claims.
 
-Selected `RandomSubset(upTo:from:)` initialization now validates the count
-before checking a proposed member against the source domain. A negative count
-reports the native evaluation failure; zero admits no selected member. The
-focused regression failed on both cases before the change and now passes;
-the existing valid unsampled-member replay also passes. This closes only that
-native selected-initial-state inconsistency. The TLA+ randomization rule,
-TLC override, and their failure/order agreement with generated Swift are not
-established by these tests.
+For a direct `memberOf(RandomSubset(upTo: k, from: S))` initializer, the
+exhaustive source rule admits every member of `S` when `k > 0`, and none when
+`k == 0`. A negative `k` is an evaluation failure before the domain is
+evaluated. This is the support of the possible draws, not one particular
+random sample. Generated Swift, compiled initialization, and generated TLA+
+now use that state-set rule; `sampledInitialMachines()` is an explicit
+simulation-only path. Exhaustive enumeration of a function domain above the
+declared resource limit reports an incomplete exploration instead of returning
+a sample. A focused three-member regression failed before this change and
+checks the three output paths. Selected-state replay still accepts any valid
+member, including one outside a recent sample.
+
+`RandomSubsetInitialSupportMatchesPredicate` proves the nonnegative-count
+support set has exactly the generated TLA+ membership predicate.
+`RandomSubsetInitialSupportComposes` instantiates the ordered-initialization
+rule when the enumerated candidate sequence contains exactly that support;
+both focused TLAPS proofs passed locally. The generated Swift output checker
+requires the count validation, sampled operation, and exhaustive-support
+operation for each compiled direct random-subset initializer. A mutation that
+replaces the exhaustive call with sampling is rejected. The construction
+checker also rejects a mutation that routes `sampledInitialMachines()` through
+exhaustive mode. The rendered `Init` checker rejects a mutated count predicate.
+The generated Swift and
+compiled-runtime regressions include complete finite states, a large-domain
+resource refusal, and count-before-domain failure order.
+
+This does not yet prove the source rule's relation to every random draw, link
+the TLA+ count/domain expressions to native evaluation failures, or cover
+`RandomSubset` in nested expressions and actions. TLC's randomization override
+and generated-TLA simulation require separate mode-specific evidence. No
+exhaustive graph or universal-fidelity claim follows from a sampled run.
 
 Record exactly which parser, macro-expansion, Swift compiler/runtime, TLA+
 parser/TLC, PlusCal translator, serialization, and proof-checker facts remain

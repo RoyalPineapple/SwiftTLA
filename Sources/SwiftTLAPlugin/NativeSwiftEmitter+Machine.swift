@@ -4,6 +4,14 @@ import SwiftParser
 import SwiftTLA
 
 extension NativeSwiftEmitter {
+    var hasRandomSubsetInitializer: Bool {
+        program.behavior.initializations.contains { initialization in
+            guard case .memberOf(let expression) = initialization.initialization else { return false }
+            if case .randomSubset = expression.computation.operation { return true }
+            return false
+        }
+    }
+
     mutating func machineMembers(nested: Bool = false) throws -> [DeclSyntax] {
         let api = model.api
         let configurationParameters = machineParameters
@@ -268,6 +276,7 @@ extension NativeSwiftEmitter {
     }
 
     mutating func initialDeclarations(parameters: String, arguments: String) throws -> [DeclSyntax] {
+        let hasRandomSubset = hasRandomSubsetInitializer
         var code = "var result: [Snapshot] = []\n"
         var closing = ""
         var expectedLoops: [String: String] = [:]
@@ -284,27 +293,44 @@ extension NativeSwiftEmitter {
                     closing += "}\n"
                 }
             case .memberOf(let expression):
-                if let field = stateMemberNames[initialization.variable] {
-                    let membershipDomain: CompiledExpression
-                    let sampleLimit: String?
-                    if case .randomSubset = expression.computation.operation {
-                        membershipDomain = expression.computation.children[1]
-                        sampleLimit = """
-                        let \(name)_sampleLimit = \(try self.expression(expression.computation.children[0], state: ""))
-                        try _NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)
-                        """
+                let randomSubsetOperands: (count: CompiledExpression, domain: CompiledExpression)?
+                if case .randomSubset = expression.computation.operation {
+                    randomSubsetOperands = (expression.computation.children[0], expression.computation.children[1])
+                } else {
+                    randomSubsetOperands = nil
+                }
+                if let operands = randomSubsetOperands {
+                    code += "let \(name)_sampleLimit = \(try self.expression(operands.count, state: ""))\n"
+                    code += "try _NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)\n"
+                }
+                let candidateSource: String
+                if let operands = randomSubsetOperands {
+                    let domain = try self.expression(operands.domain, state: "")
+                    let sample: String
+                    let exhaustive: String
+                    if case .functionSet = operands.domain.operation,
+                       case .set(.dictionary) = expression.computation.resultType {
+                        let from = try self.expression(operands.domain.children[0], state: "")
+                        let to = try self.expression(operands.domain.children[1], state: "")
+                        sample = "try _NativeMachineOperations.randomFunctionSubset(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
+                        exhaustive = "try _NativeMachineOperations.randomFunctionInitialSupport(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
                     } else {
-                        membershipDomain = expression
-                        sampleLimit = nil
+                        sample = "try _NativeMachineOperations.randomSubset(upTo: \(name)_sampleLimit, from: \(domain))"
+                        exhaustive = "try _NativeMachineOperations.randomSubsetInitialSupport(upTo: \(name)_sampleLimit, from: \(domain))"
                     }
+                    candidateSource = "(_sampleRandomSubset ? (\(sample)) : (\(exhaustive))).sorted(by: \(try ordering(type)))"
+                } else {
+                    candidateSource = "\(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))"
+                }
+                if let field = stateMemberNames[initialization.variable] {
+                    let membershipDomain = randomSubsetOperands?.domain ?? expression
                     let membership = CompiledExpression(operation: .in, resultType: .bool, children: [
                         CompiledExpression(operation: .stateVariable(initialization.variable), resultType: type, children: []),
                         membershipDomain
                     ])
-                    let eligible = sampleLimit == nil
+                    let eligible = randomSubsetOperands == nil
                         ? "\(name)_isMember"
                         : "\(name)_sampleLimit > 0 && \(name)_isMember"
-                    let candidateSource = "\(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))"
                     let membershipSource = try self.expression(membership, state: "")
                     expectedLoops[name] = "\(name)Candidates"
                     expectedCandidateSources["\(name)Candidates"] = candidateSource
@@ -314,7 +340,6 @@ extension NativeSwiftEmitter {
                         selecting: _selectedInitial.map(\\.\(field)),
                         enumerate: { \(candidateSource) },
                         contains: { \(name) in
-                        \(sampleLimit ?? "")
                         let \(name)_isMember = \(membershipSource)
                         return \(eligible)
                         }
@@ -323,9 +348,8 @@ extension NativeSwiftEmitter {
 
                     """
                 } else {
-                    let sequence = "\(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))"
-                    expectedLoops[name] = sequence
-                    code += "for \(name) in \(sequence) {\n"
+                    expectedLoops[name] = candidateSource
+                    code += "for \(name) in \(candidateSource) {\n"
                 }
                 closing += "}\n"
             }
@@ -341,8 +365,9 @@ extension NativeSwiftEmitter {
         code += "return result"
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
         let appendedArguments = arguments.isEmpty ? "" : ", " + arguments
+        let samplingParameter = hasRandomSubset ? ", _sampleRandomSubset: Bool = false" : ""
         var declarations = try nativeDeclarations("""
-        private static func _initialStates(_selectedInitial: State? = nil\(appendedParameters)) throws -> [Snapshot] {
+        private static func _initialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
             \(code)
         }
         """)
@@ -363,6 +388,13 @@ extension NativeSwiftEmitter {
             return Self(execution: execution\(appendedArguments))
         }
         """)
+        if hasRandomSubset {
+            declarations += try nativeDeclarations("""
+            public static func sampledInitialMachines(\(parameters)) throws -> [Self] {
+                try _initialStates(_sampleRandomSubset: true\(appendedArguments)).map { Self(execution: $0\(appendedArguments)) }
+            }
+            """)
+        }
         try verifyGeneratedInitialBindings(
             declarations.first { $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates" },
             expected: program.behavior.initializations.map { initialization in
@@ -372,14 +404,19 @@ extension NativeSwiftEmitter {
                 case .memberOf: return "for \(name)"
                 }
             }, expectedLoops: expectedLoops, expectedCandidateSources: expectedCandidateSources)
+        try verifyRandomSubsetInitialSupport(declarations.first,
+            expected: program.behavior.initializations.compactMap { initialization -> (String, Bool)? in
+                guard case .memberOf(let expression) = initialization.initialization,
+                      case .randomSubset = expression.computation.operation else { return nil }
+                let domain = expression.computation.children[1]
+                if case .functionSet = domain.operation { return (variable(initialization.variable), true) }
+                return (variable(initialization.variable), false)
+            })
         try verifyInitialSelection(declarations.first, expectedMembershipSources: expectedMembershipSources)
         try verifyInitialStateAssembly(declarations.first)
-        try verifyGeneratedInitialConstruction(declarations, configured: !program.layout.parameters.isEmpty)
-        if program.behavior.initializations.contains(where: { initialization in
-            guard case .memberOf(let expression) = initialization.initialization else { return false }
-            if case .randomSubset = expression.computation.operation { return true }
-            return false
-        }) {
+        try verifyGeneratedInitialConstruction(declarations, configured: !program.layout.parameters.isEmpty,
+            sampled: hasRandomSubset)
+        if hasRandomSubset {
             declarations += try selectedInitialDeclarations(arguments: arguments)
         }
         return declarations
@@ -1128,7 +1165,37 @@ extension NativeSwiftEmitter {
 
 }
 
-func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured: Bool) throws {
+func verifyRandomSubsetInitialSupport(_ declaration: DeclSyntax?, expected: [(String, Bool)]) throws {
+    let tokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) } ?? []
+    func occurrences(_ source: String) -> Int {
+        let pattern = Array(Parser.parse(source: source).tokens(viewMode: .sourceAccurate))
+            .map(\.text).filter { !$0.isEmpty }
+        guard !pattern.isEmpty, tokens.count >= pattern.count else { return 0 }
+        return (0...(tokens.count - pattern.count)).filter {
+            tokens[$0..<($0 + pattern.count)].elementsEqual(pattern)
+        }.count
+    }
+    for (name, functionDomain) in expected {
+        let sample = functionDomain ? "randomFunctionSubset" : "randomSubset"
+        let exhaustive = functionDomain ? "randomFunctionInitialSupport" : "randomSubsetInitialSupport"
+        let required = [
+            "try _NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)",
+            "try _NativeMachineOperations.\(sample)(upTo: \(name)_sampleLimit",
+            "try _NativeMachineOperations.\(exhaustive)(upTo: \(name)_sampleLimit",
+        ]
+        guard required.allSatisfy({ occurrences($0) == 1 }) else {
+            throw CompilationDiagnostic(
+                code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native._initialStates.randomSubset.\(name)",
+                expected: "one count validation, sampled draw, and exhaustive support call",
+                actual: "the emitted initialization does not contain the required operations exactly once",
+                nextSafeAction: "Report this native code generation failure.")
+        }
+    }
+}
+
+func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured: Bool,
+                                        sampled: Bool = false) throws {
     let parameters = configured ? "configuration: Configuration" : ""
     let arguments = configured ? "configuration: configuration" : ""
     let appendedParameters = configured ? ", configuration: Configuration" : ""
@@ -1149,12 +1216,17 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
         guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
         return Self(execution: execution\(appendedArguments))
     }
+    \(sampled ? """
+    public static func sampledInitialMachines(\(parameters)) throws -> [Self] {
+        try _initialStates(_sampleRandomSubset: true\(appendedArguments)).map { Self(execution: $0\(appendedArguments)) }
+    }
+    """ : "")
     """).statements.compactMap { $0.item.as(DeclSyntax.self) }
     let actual = Array(declarations.dropFirst().prefix(expected.count))
     let actualTokens = actual.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
     let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
     let matches = declarations.first?.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
-        && expected.count == 3 && actual.count == expected.count
+        && expected.count == (sampled ? 4 : 3) && actual.count == expected.count
         && actualTokens == expectedTokens
     guard matches else {
         let mismatch = zip(actualTokens, expectedTokens).enumerated().first { $0.element.0 != $0.element.1 }

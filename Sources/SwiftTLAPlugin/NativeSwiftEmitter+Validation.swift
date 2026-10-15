@@ -117,6 +117,7 @@ extension NativeSwiftEmitter {
             """)
         }
         let arguments = hasConfiguration ? "configuration: configuration" : ""
+        let hasRandomSubset = hasRandomSubsetInitializer
         return try nativeDeclarations("""
         public struct ValidationScenario: ModelValidationScenario {
             public typealias Machine = \(model.typeName)
@@ -148,6 +149,7 @@ extension NativeSwiftEmitter {
             }
 
             public func initialMachines() throws -> [\(model.typeName)] {
+                \(hasRandomSubset ? "if case .simulation = checkingMode { return try \(model.typeName).sampledInitialMachines(\(arguments)) }" : "")
                 try \(model.typeName).initialMachines(\(arguments))
             }
             public var formalPropertyNames: [Property: String] {

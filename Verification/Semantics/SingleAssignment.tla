@@ -866,6 +866,30 @@ THEOREM InitialMembershipMatchesEnumeration ==
     BY SMT DEF EnumeratedInitialStates,
         MembershipInitialStates, SequenceMembers, States
 
+RandomSubsetInitialDomain(count, domain) ==
+    IF count > 0 THEN domain ELSE {}
+
+THEOREM RandomSubsetInitialSupportMatchesPredicate ==
+    \A count \in Nat, domain \in SUBSET Values, value \in Values :
+        (value \in RandomSubsetInitialDomain(count, domain))
+        <=> (count > 0 /\ value \in domain)
+    BY SMT DEF RandomSubsetInitialDomain
+
+THEOREM RandomSubsetInitialSupportComposes ==
+    \A key \in Vars, prior \in States :
+        \A count \in Nat, domain \in SUBSET Values :
+            \A candidates \in Seq(Values) :
+                SequenceMembers(candidates) = RandomSubsetInitialDomain(count, domain)
+                => EnumeratedInitialStates(prior, key, candidates)
+                   = {state \in States :
+                        /\ count > 0
+                        /\ state[key] \in domain
+                        /\ \A variable \in Vars \ {key} :
+                            state[variable] = prior[variable]}
+    BY InitialMembershipMatchesEnumeration,
+        RandomSubsetInitialSupportMatchesPredicate,
+        SMT DEF RandomSubsetInitialDomain, MembershipInitialStates
+
 EqualityInitialStates(prior, key, value) ==
     {state \in States :
         /\ state[key] = value

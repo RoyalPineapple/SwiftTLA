@@ -146,6 +146,7 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case invalidSimulationTraceCount(Int)
     case simulationNotConfigured
     case stateLimitExceeded(Int)
+    case initialStateLimitExceeded(actualCount: Int, maximumCount: Int)
     case levelOverflow
     case noInitialStates
     case assumptionViolated

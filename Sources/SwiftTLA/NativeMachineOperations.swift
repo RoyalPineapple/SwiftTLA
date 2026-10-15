@@ -216,6 +216,35 @@ public enum _NativeMachineOperations: Sendable {
         return Set(values.shuffled().prefix(count))
     }
 
+    public static func randomSubsetInitialSupport<Element: Hashable & Sendable>(
+        upTo count: Int, from values: Set<Element>
+    ) throws -> Set<Element> {
+        try validateRandomSubsetCount(count)
+        return count == 0 ? [] : values
+    }
+
+    public static func randomFunctionInitialSupport<Key: Hashable & Sendable, Value: Hashable & Sendable>(
+        upTo count: Int, from domain: Set<Key>, to range: Set<Value>
+    ) throws -> Set<[Key: Value]> {
+        try validateRandomSubsetCount(count)
+        guard count > 0 else { return [] }
+        let maximum = 1_000_000
+        var cardinality = 1
+        for _ in domain {
+            let product = cardinality.multipliedReportingOverflow(by: range.count)
+            if product.overflow {
+                throw ExplorationError.initialStateLimitExceeded(
+                    actualCount: Int.max, maximumCount: maximum)
+            }
+            cardinality = product.partialValue
+        }
+        guard cardinality <= maximum else {
+            throw ExplorationError.initialStateLimitExceeded(
+                actualCount: cardinality, maximumCount: maximum)
+        }
+        return try functionSet(domain, range)
+    }
+
     public static func validateRandomSubsetCount(_ count: Int) throws {
         guard count >= 0 else { throw NativeMachineEvaluationError.invalidRandomSubsetCount(count) }
     }

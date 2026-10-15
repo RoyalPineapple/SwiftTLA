@@ -2,6 +2,24 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
+struct FiniteRandomSubsetInitialModel {
+    enum Step: String, CaseIterable { case stay }
+
+    static var spec: TLASpec {
+        #spec {
+            Extends(.randomization)
+            let finiteRandomSubsetInitialModel = Algorithm(label: "FiniteRandomSubsetInitialModel", scoped: { scope in
+                let chosen = scope.sharedVar(in: RandomSubset(
+                    upTo: 2, from: SetExpr<Int>.literal(1, 2, 3)
+                ))
+                Do(Step.stay) { Assign(chosen, to: chosen) }
+            })
+            finiteRandomSubsetInitialModel
+        }
+    }
+}
+
+@TLAModel
 struct RandomSubsetFunctionModel {
     enum Step: String, CaseIterable { case stay }
 
@@ -38,6 +56,30 @@ struct RandomSubsetCountModel {
                 }
             })
             randomSubsetCountModel
+        }
+    }
+}
+
+@TLAModel
+struct RandomSubsetFailureOrderModel {
+    enum Step: String, CaseIterable { case stay }
+
+    static var spec: TLASpec {
+        #spec {
+            Extends(.randomization)
+            let randomSubsetFailureOrderModel = Algorithm(label: "RandomSubsetFailureOrderModel", scoped: { scope in
+                let limit = scope.sharedVar(initial: -1)
+                let zero = scope.sharedVar(initial: 0)
+                let chosen = scope.sharedVar(in: RandomSubset(
+                    upTo: limit, from: SetExpr<Int>.literal(1 / zero)
+                ))
+                Do(Step.stay) {
+                    Assign(limit, to: limit)
+                    Assign(zero, to: zero)
+                    Assign(chosen, to: chosen)
+                }
+            })
+            randomSubsetFailureOrderModel
         }
     }
 }

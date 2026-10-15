@@ -2466,6 +2466,11 @@ private extension CompiledModuleMetadata {
                 return "\(name) = \(try renderer.state(expression))"
             case .memberOf(let set):
                 let literal = set.computation
+                if case .randomSubset = literal.operation {
+                    let count = try renderer.state(literal.children[0])
+                    let domain = try renderer.state(literal.children[1])
+                    return "(\(count) > 0 /\\ \(name) \\in \(domain))"
+                }
                 func isRecord(_ expression: CompiledExpression) -> Bool {
                     var value = expression
                     while case .convert = value.operation { value = value.children[0] }
