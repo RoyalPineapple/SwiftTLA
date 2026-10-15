@@ -23,7 +23,10 @@ struct CompiledRuntime {
 
     func initialStates() throws -> [CompiledState] {
         let outcomes = try initialOutcomes()
-        if let failure = outcomes.firstFailure { throw failure }
+        if let failure = outcomes.firstFailure {
+            if let compiledFailure = failure.compiledFailure { throw compiledFailure }
+            throw failure
+        }
         return outcomes.states
     }
 

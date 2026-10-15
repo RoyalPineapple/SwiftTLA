@@ -117,6 +117,31 @@ extension EvalError {
     }
 }
 
+extension NativeMachineEvaluationError {
+    var compiledFailure: EvalError? {
+        switch self {
+        case .recursionDepthExceeded(let limit): .recursionDepthExceeded(limit)
+        case .noMatchingCase: .noMatchingCase
+        case .noSatisfyingChoice: .noSatisfyingChoice
+        case .collectionCardinalityOverflow(let operation, let operands):
+            .collectionCardinalityOverflow(operation, operands: operands)
+        case .powerSetTooLarge(let count, let maximum):
+            .powerSetTooLarge(actualCount: count, maximumCount: maximum)
+        case .nonEnumerableSequenceDomain: .nonEnumerableSequenceDomain
+        case .nonEnumerableIntegerDomain: .nonEnumerableIntegerDomain
+        case .integerOverflow(let operation, let operands): .integerOverflow(operation, operands: operands)
+        case .divisionByZero: .divisionByZero
+        case .negativeModuloDivisor(let divisor): .negativeModuloDivisor(divisor)
+        case .indexOutOfBounds(let index, let count): .indexOutOfBounds(index, count)
+        case .emptySequence: .emptySequence
+        case .tupleIndexOutsideDomain(let index): .tupleIndexOutsideDomain(.integer(index))
+        case .recordFieldUnavailable(let field): .recordFieldUnavailable(.string(field))
+        case .checkingContextRequired, .functionArgumentOutsideDomain, .invalidSequenceDomain,
+             .invalidRandomSubsetCount, .emptyRandomElementDomain: nil
+        }
+    }
+}
+
 private extension CompiledValue {
     var kindDescription: String {
         switch self {
