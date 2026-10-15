@@ -61,6 +61,28 @@ struct RandomSubsetCountModel {
 }
 
 @TLAModel
+struct MixedInitialEvaluationModel {
+    enum Step: String, CaseIterable { case stay }
+
+    static var spec: TLASpec {
+        #spec {
+            Extends(.randomization)
+            let mixedInitialEvaluationModel = Algorithm(label: "MixedInitialEvaluationModel", scoped: { scope in
+                let limit = scope.sharedVar(in: SetExpr<Int>.literal(-1, 1))
+                let chosen = scope.sharedVar(in: RandomSubset(
+                    upTo: limit, from: SetExpr<Int>.literal(7)
+                ))
+                Do(Step.stay) {
+                    Assign(limit, to: limit)
+                    Assign(chosen, to: chosen)
+                }
+            })
+            mixedInitialEvaluationModel
+        }
+    }
+}
+
+@TLAModel
 struct RandomSubsetFailureOrderModel {
     enum Step: String, CaseIterable { case stay }
 

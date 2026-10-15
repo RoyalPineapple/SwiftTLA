@@ -75,10 +75,33 @@ public struct MachineActionEvaluationFailure<Action: Hashable & Sendable>: Error
     }
 }
 
+/// Complete successful alternatives and the first model failure encountered while visiting them.
+public struct InitialEvaluationOutcomes<State: Sendable>: Sendable {
+    public let states: [State]
+    public let firstFailure: NativeMachineEvaluationError?
+
+    public init(states: [State], firstFailure: NativeMachineEvaluationError?) {
+        self.states = states
+        self.firstFailure = firstFailure
+    }
+}
+
 /// Value operations emitted by the native machine generator.
 @_documentation(visibility: internal)
 public enum _NativeMachineOperations: Sendable {
     public static let maximumRecursiveDepth = 4_096
+
+    /// Handle a model failure within one initial branch without abandoning other branches.
+    public static func visitInitialBranch(
+        _ visit: () throws -> Void,
+        onEvaluationFailure: (NativeMachineEvaluationError) -> Void
+    ) throws {
+        do {
+            try visit()
+        } catch let failure as NativeMachineEvaluationError {
+            onEvaluationFailure(failure)
+        }
+    }
 
     @inlinable
     public static func mergeUpdate<Value: Equatable & Sendable>(

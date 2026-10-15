@@ -50,13 +50,21 @@ struct RandomSubsetExpressionTests {
         #expect(throws: CompilationDiagnostic.self) {
             try verifyRandomSubsetInitialSupport(altered, expected: [(name, false)])
         }
+        let lostFailure = initial.description.replacingOccurrences(
+            of: "if firstFailure == nil", with: "if firstFailure != nil")
+        #expect(lostFailure != initial.description)
+        let lostFailureDeclaration = try #require(Parser.parse(source: lostFailure)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try emitter.verifyInitialStateAssembly(lostFailureDeclaration)
+        }
 
-        var construction = Array(members[initialIndex...(initialIndex + 4)])
-        let sampled = construction[4].description
+        var construction = Array(members[initialIndex...(initialIndex + 6)])
+        let sampled = construction[6].description
         let wrongMode = sampled.replacingOccurrences(
             of: "_sampleRandomSubset: true", with: "_sampleRandomSubset: false")
         #expect(wrongMode != sampled)
-        construction[4] = try #require(Parser.parse(source: wrongMode).statements.first?.item.as(DeclSyntax.self))
+        construction[6] = try #require(Parser.parse(source: wrongMode).statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedInitialConstruction(construction, configured: false, sampled: true)
         }
@@ -132,6 +140,16 @@ struct RandomSubsetExpressionTests {
         }
         #expect(throws: GeneratedMachineError.invalidInitialState) {
             try RandomSubsetCountModel.makeMachine(.init(limit: 0, chosen: 1))
+        }
+    }
+
+    @Test("independent initial branches retain a valid state and the first evaluation failure")
+    func mixedInitialOutcomes() throws {
+        let outcome = try MixedInitialEvaluationModel.initialOutcomes()
+        #expect(outcome.states.map(\.state) == [.init(limit: 1, chosen: 7)])
+        #expect(outcome.firstFailure == .invalidRandomSubsetCount(-1))
+        #expect(throws: NativeMachineEvaluationError.invalidRandomSubsetCount(-1)) {
+            try MixedInitialEvaluationModel.initialMachines()
         }
     }
 

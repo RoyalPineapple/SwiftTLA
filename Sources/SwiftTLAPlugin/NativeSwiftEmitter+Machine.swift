@@ -277,7 +277,7 @@ extension NativeSwiftEmitter {
 
     mutating func initialDeclarations(parameters: String, arguments: String) throws -> [DeclSyntax] {
         let hasRandomSubset = hasRandomSubsetInitializer
-        var code = "var result: [Snapshot] = []\n"
+        var code = "var result: [Snapshot] = []\nvar firstFailure: NativeMachineEvaluationError?\ntry _NativeMachineOperations.visitInitialBranch({\n"
         var closing = ""
         var expectedLoops: [String: String] = [:]
         var expectedCandidateSources: [String: String] = [:]
@@ -290,7 +290,7 @@ extension NativeSwiftEmitter {
                 code += "let \(name): \(try swiftType(type)) = \(try self.expression(expression, state: ""))\n"
                 if let field = stateMemberNames[initialization.variable] {
                     code += "if _selectedInitial == nil || _selectedInitial!.\(field) == \(name) {\n"
-                    closing += "}\n"
+                    closing = "}\n" + closing
                 }
             case .memberOf(let expression):
                 let randomSubsetOperands: (count: CompiledExpression, domain: CompiledExpression)?
@@ -345,13 +345,19 @@ extension NativeSwiftEmitter {
                         }
                     )
                     for \(name) in \(name)Candidates {
+                    try _NativeMachineOperations.visitInitialBranch({
 
                     """
                 } else {
                     expectedLoops[name] = candidateSource
-                    code += "for \(name) in \(candidateSource) {\n"
+                    code += "for \(name) in \(candidateSource) {\ntry _NativeMachineOperations.visitInitialBranch({\n"
                 }
-                closing += "}\n"
+                closing = """
+                }, onEvaluationFailure: { failure in
+                    if firstFailure == nil { firstFailure = failure }
+                })
+                }
+                """ + closing
             }
         }
         if let selected = program.behavior.initialInvariant {
@@ -362,27 +368,41 @@ extension NativeSwiftEmitter {
             code += "result.append(\(executionState(values: variable)))\n"
         }
         code += closing
-        code += "return result"
+        code += """
+        }, onEvaluationFailure: { failure in
+            if firstFailure == nil { firstFailure = failure }
+        })
+        return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure)
+        """
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
         let appendedArguments = arguments.isEmpty ? "" : ", " + arguments
         let samplingParameter = hasRandomSubset ? ", _sampleRandomSubset: Bool = false" : ""
         var declarations = try nativeDeclarations("""
-        private static func _initialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
+        private static func _initialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> InitialEvaluationOutcomes<Snapshot> {
             \(code)
         }
         """)
         declarations += try nativeDeclarations("""
+        private static func _completedInitialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
+            let outcome = try _initialStates(_selectedInitial: _selectedInitial\(hasRandomSubset ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
+            if let failure = outcome.firstFailure { throw failure }
+            return outcome.states
+        }
+        public static func initialOutcomes(\(parameters)) throws -> InitialEvaluationOutcomes<Self> {
+            let outcome = try _initialStates(\(arguments))
+            return InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) }, firstFailure: outcome.firstFailure)
+        }
         public static func initialMachines(\(parameters)) throws -> [Self] {
-            try _initialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }
+            try _completedInitialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }
         }
         public static func makeMachine(\(parameters)) throws -> Self {
-            var candidates = try _initialStates(\(arguments))[...]
+            var candidates = try _completedInitialStates(\(arguments))[...]
             guard let execution = candidates.popFirst() else { throw GeneratedMachineError.noInitialState }
             guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
             return Self(execution: execution\(appendedArguments))
         }
         public static func makeMachine(_ initial: State\(appendedParameters)) throws -> Self {
-            var candidates = try _initialStates(_selectedInitial: initial\(appendedArguments))[...]
+            var candidates = try _completedInitialStates(_selectedInitial: initial\(appendedArguments))[...]
             guard let execution = candidates.popFirst() else { throw GeneratedMachineError.invalidInitialState }
             guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
             return Self(execution: execution\(appendedArguments))
@@ -391,7 +411,7 @@ extension NativeSwiftEmitter {
         if hasRandomSubset {
             declarations += try nativeDeclarations("""
             public static func sampledInitialMachines(\(parameters)) throws -> [Self] {
-                try _initialStates(_sampleRandomSubset: true\(appendedArguments)).map { Self(execution: $0\(appendedArguments)) }
+                try _completedInitialStates(_sampleRandomSubset: true\(appendedArguments)).map { Self(execution: $0\(appendedArguments)) }
             }
             """)
         }
@@ -503,13 +523,27 @@ extension NativeSwiftEmitter {
         } else {
             append = "result.append(\(state))"
         }
-        let enclosingBlocks = program.behavior.initializations.reduce(into: 0) { count, initialization in
+        let closing = program.behavior.initializations.reversed().map { initialization -> String in
             switch initialization.initialization {
-            case .memberOf: count += 1
-            case .value: if stateMemberNames[initialization.variable] != nil { count += 1 }
+            case .memberOf:
+                return """
+                }, onEvaluationFailure: { failure in
+                    if firstFailure == nil { firstFailure = failure }
+                })
+                }
+
+                """
+            case .value:
+                return stateMemberNames[initialization.variable] == nil ? "" : "}\n"
             }
+        }.joined()
+        let suffix = append + "\n" + closing + """
+        }, onEvaluationFailure: { failure in
+            if firstFailure == nil { firstFailure = failure }
+        })
+        return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure)
         }
-        let suffix = append + "\n" + String(repeating: "}\n", count: enclosingBlocks) + "return result\n}"
+        """
         let expected = Array(Parser.parse(source: suffix).tokens(viewMode: .sourceAccurate))
             .map(\.text).filter { !$0.isEmpty }
         let actual = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) } ?? []
@@ -1200,25 +1234,35 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
     let arguments = configured ? "configuration: configuration" : ""
     let appendedParameters = configured ? ", configuration: Configuration" : ""
     let appendedArguments = configured ? ", configuration: configuration" : ""
+    let samplingParameter = sampled ? ", _sampleRandomSubset: Bool = false" : ""
     let expected = Parser.parse(source: """
+    private static func _completedInitialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
+        let outcome = try _initialStates(_selectedInitial: _selectedInitial\(sampled ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
+        if let failure = outcome.firstFailure { throw failure }
+        return outcome.states
+    }
+    public static func initialOutcomes(\(parameters)) throws -> InitialEvaluationOutcomes<Self> {
+        let outcome = try _initialStates(\(arguments))
+        return InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) }, firstFailure: outcome.firstFailure)
+    }
     public static func initialMachines(\(parameters)) throws -> [Self] {
-        try _initialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }
+        try _completedInitialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }
     }
     public static func makeMachine(\(parameters)) throws -> Self {
-        var candidates = try _initialStates(\(arguments))[...]
+        var candidates = try _completedInitialStates(\(arguments))[...]
         guard let execution = candidates.popFirst() else { throw GeneratedMachineError.noInitialState }
         guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
         return Self(execution: execution\(appendedArguments))
     }
     public static func makeMachine(_ initial: State\(appendedParameters)) throws -> Self {
-        var candidates = try _initialStates(_selectedInitial: initial\(appendedArguments))[...]
+        var candidates = try _completedInitialStates(_selectedInitial: initial\(appendedArguments))[...]
         guard let execution = candidates.popFirst() else { throw GeneratedMachineError.invalidInitialState }
         guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
         return Self(execution: execution\(appendedArguments))
     }
     \(sampled ? """
     public static func sampledInitialMachines(\(parameters)) throws -> [Self] {
-        try _initialStates(_sampleRandomSubset: true\(appendedArguments)).map { Self(execution: $0\(appendedArguments)) }
+        try _completedInitialStates(_sampleRandomSubset: true\(appendedArguments)).map { Self(execution: $0\(appendedArguments)) }
     }
     """ : "")
     """).statements.compactMap { $0.item.as(DeclSyntax.self) }
@@ -1226,7 +1270,7 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
     let actualTokens = actual.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
     let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
     let matches = declarations.first?.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
-        && expected.count == (sampled ? 4 : 3) && actual.count == expected.count
+        && expected.count == (sampled ? 6 : 5) && actual.count == expected.count
         && actualTokens == expectedTokens
     guard matches else {
         let mismatch = zip(actualTokens, expectedTokens).enumerated().first { $0.element.0 != $0.element.1 }

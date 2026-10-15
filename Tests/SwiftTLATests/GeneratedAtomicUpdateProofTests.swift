@@ -50,6 +50,8 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(bindings["__PROOF_ACTION__"] == "copy")
         let initialConstruction = try [
             #require(member(named: "_initialStates", in: members)),
+            #require(member(named: "_completedInitialStates", in: members)),
+            #require(member(named: "initialOutcomes", parameterCount: 0, in: members)),
             #require(member(named: "initialMachines", parameterCount: 0, in: members)),
             #require(member(named: "makeMachine", parameterCount: 0, in: members)),
             #require(member(named: "makeMachine", parameterCount: 1, in: members)),
@@ -62,7 +64,7 @@ struct GeneratedAtomicUpdateProofTests {
             .statements.first?.item.as(DeclSyntax.self))
         #expect(wrongConstructor.as(FunctionDeclSyntax.self)?.name.text == "makeMachine")
         var wrongConstruction = initialConstruction
-        wrongConstruction[2] = wrongConstructor
+        wrongConstruction[4] = wrongConstructor
         do {
             try verifyGeneratedInitialConstruction(wrongConstruction, configured: false)
             Issue.record("A generated constructor with reversed uniqueness was accepted")
@@ -316,14 +318,21 @@ struct GeneratedAtomicUpdateProofTests {
         let pattern = #"""
         \A private \s+ static \s+ func \s+ _initialStates
         \( _selectedInitial: \s* State\? \s* = \s* nil \)
-        \s* throws \s* -> \s* \[Snapshot\] \s* \{
+        \s* throws \s* -> \s* InitialEvaluationOutcomes \s* < \s* Snapshot \s* > \s* \{
         \s* var \s+ result: \s* \[Snapshot\] \s* = \s* \[\]
+        \s* var \s+ firstFailure: \s* NativeMachineEvaluationError\?
+        \s* try \s+ _NativeMachineOperations\.visitInitialBranch \s* \( \s* \{
         \s* let \s+ _value_first_0: \s* Int \s* = \s* (-?[0-9]+)
         \s* if \s+ _selectedInitial \s* == \s* nil \s* \|\| \s* _selectedInitial!\.first \s* == \s* _value_first_0 \s* \{
         \s* let \s+ _value_second_1: \s* Int \s* = \s* (-?[0-9]+)
         \s* if \s+ _selectedInitial \s* == \s* nil \s* \|\| \s* _selectedInitial!\.second \s* == \s* _value_second_1 \s* \{
         \s* result\.append \( Snapshot \( state: \s* State \( first: \s* _value_first_0, \s* second: \s* _value_second_1 \) \) \)
-        \s* \} \s* \} \s* return \s+ result \s* \} \s* \z
+        \s* \} \s* \}
+        \s* \}, \s* onEvaluationFailure: \s* \{ \s* failure \s+ in
+        \s* if \s+ firstFailure \s* == \s* nil \s* \{ \s* firstFailure \s* = \s* failure \s* \}
+        \s* \} \s* \)
+        \s* return \s+ InitialEvaluationOutcomes \s* \( \s* states: \s* result, \s* firstFailure: \s* firstFailure \s* \)
+        \s* \} \s* \z
         """#
         let regex = try NSRegularExpression(pattern: pattern, options: .allowCommentsAndWhitespace)
         let text = source as NSString
