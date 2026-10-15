@@ -121,5 +121,17 @@ struct DependentInitializationOutputProofTests {
         #expect(throws: CompilationDiagnostic.self) {
             try verify(wrongCandidate)
         }
+
+        let wrongStateSource = initialStates.description.replacingOccurrences(
+            of: "choice: \(choiceName)", with: "choice: \(name)")
+        #expect(wrongStateSource != initialStates.description)
+        let wrongState = try #require(Parser.parse(source: wrongStateSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try emitter.verifyInitialStateAssembly(wrongState)
+            Issue.record("An initializer that appends the wrong complete state was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.assembly")
+        }
     }
 }

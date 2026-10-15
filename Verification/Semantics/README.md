@@ -1107,7 +1107,14 @@ construction path to its stated source initial state, conditional on the
 ordinary Swift meaning of the matched collection and initializer operations.
 This trusted syntactic check establishes emitted routing shape, not arbitrary
 initial enumeration, configuration validity, or Swift library semantics. The
-test also token-checks the complete emitted `_Updates`, `_visitUpdates0`, and
+macro also checks the final `_initialStates` assembly for every compiled model:
+one complete `Snapshot` from every public and hidden initial value, the
+selected initial invariant when present, closure of each initialization block,
+and return of the collected states. Replacing one assembled field with another
+is rejected. This links the emitted completion of the ordered enumeration to
+the complete-state rule; it does not establish that every candidate or selected
+filter before that suffix is correct. The test also token-checks the complete
+emitted `_Updates`, `_visitUpdates0`, and
 `_visitSuccessors0`, plus the action-specific and whole-machine
 `_visitSuccessors` dispatchers and the public checking visitor against
 `GeneratedAtomicCopySwiftTemplate.txt`,

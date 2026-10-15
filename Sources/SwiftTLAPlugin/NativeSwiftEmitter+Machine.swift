@@ -369,6 +369,7 @@ extension NativeSwiftEmitter {
                 case .memberOf: return "for \(name)"
                 }
             }, expectedLoops: expectedLoops, expectedCandidateSources: expectedCandidateSources)
+        try verifyInitialStateAssembly(declarations.first)
         try verifyGeneratedInitialConstruction(declarations, configured: !program.layout.parameters.isEmpty)
         if program.behavior.initializations.contains(where: { initialization in
             guard case .memberOf(let expression) = initialization.initialization else { return false }
@@ -378,6 +379,45 @@ extension NativeSwiftEmitter {
             declarations += try selectedInitialDeclarations(arguments: arguments)
         }
         return declarations
+    }
+
+    func verifyInitialStateAssembly(_ declaration: DeclSyntax?) throws {
+        let publicFields = model.api.variables.map {
+            "\($0.argumentLabel): \(variable($0.id))"
+        }.joined(separator: ", ")
+        let hiddenFields = program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map {
+            ", \(variable($0.id)): \(variable($0.id))"
+        }.joined()
+        let state = "Snapshot(state: State(\(publicFields))\(hiddenFields))"
+        let append: String
+        if let invariant = program.behavior.initialInvariant {
+            let configuration = program.layout.parameters.isEmpty ? "" : ", configuration: configuration"
+            append = """
+            let candidate = \(state)
+            if try Self._invariant\(invariant.ordinal)(in: candidate, atLevel: 0\(configuration)) { result.append(candidate) }
+            """
+        } else {
+            append = "result.append(\(state))"
+        }
+        let enclosingBlocks = program.behavior.initializations.reduce(into: 0) { count, initialization in
+            switch initialization.initialization {
+            case .memberOf: count += 1
+            case .value: if stateMemberNames[initialization.variable] != nil { count += 1 }
+            }
+        }
+        let suffix = append + "\n" + String(repeating: "}\n", count: enclosingBlocks) + "return result\n}"
+        let expected = Array(Parser.parse(source: suffix).tokens(viewMode: .sourceAccurate))
+            .map(\.text).filter { !$0.isEmpty }
+        let actual = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) } ?? []
+        guard expected.count <= actual.count, actual.suffix(expected.count).elementsEqual(expected) else {
+            throw CompilationDiagnostic(
+                code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native._initialStates.assembly",
+                expected: "one complete compiled-state append, optional selected invariant, and return",
+                actual: "the generated initial-state suffix differs from the checked assembly rule",
+                nextSafeAction: "Report this native code generation failure."
+            )
+        }
     }
 
     private func selectedInitialDeclarations(arguments: String) throws -> [DeclSyntax] {
