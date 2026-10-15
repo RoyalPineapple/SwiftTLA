@@ -368,6 +368,30 @@ struct CompiledSpecificationRendererTests {
         })
     }
 
+    @Test("Out-of-range sequence edits disable their TLA actions and report index failures")
+    func guardsSequenceEditBounds() throws {
+        let compilation = try TLASpec(name: "SequenceEditBounds", variables: [
+            .init(name: "sequence", initial: .tuple([.int(4), .int(5)]))
+        ], actions: [], invariants: []).compile()
+        let variable = try #require(compilation.layout.variables.first?.id)
+        let renderer = CompiledTLARenderer(moduleName: "SequenceEditBounds", reservedNames: [],
+            layout: compilation.layout, bindings: .init(),
+            operators: compilation.semantics.operators, actions: [], functions: [])
+        let sequence = CompiledExpression.value(.tuple([.integer(4), .integer(5)]))
+        let index = CompiledExpression.value(.integer(3))
+        for operation in [CompiledOperation.tupleRemoving, .tuplePrefix] {
+            let edit = CompiledExpression(operation: operation, resultType: .array(.int),
+                children: [sequence, index])
+            let action = CompiledActionExpr.assign(variable, edit)
+            let rendered = try renderer.action(action)
+            #expect(rendered.hasPrefix("(IF "))
+            #expect(rendered.hasSuffix("ELSE FALSE)"))
+            #expect(try renderer.evaluationFailures(action).contains {
+                if case .sequenceIndexOutOfBounds = $0.kind { true } else { false }
+            })
+        }
+    }
+
     @Test("Sibling lexical scopes stay separate in rendered state and action expressions")
     func delimitsSiblingLexicalScopes() throws {
         let compiled = try TLASpec(name: "LexicalScopes", variables: [], actions: [], invariants: []).compile()

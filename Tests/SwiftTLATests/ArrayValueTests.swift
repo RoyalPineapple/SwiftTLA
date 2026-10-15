@@ -154,6 +154,35 @@ struct ArrayValueTests {
         #expect(rendered.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))
     }
 
+    @Test("sequence edits preserve success and out-of-bounds failure on both outputs")
+    func sequenceEditBounds() throws {
+        let machines = try SequenceEditBoundsMachine.initialMachines()
+        #expect(machines.count == 2)
+        let valid = try #require(machines.first { $0.state.position == 2 })
+        let invalid = try #require(machines.first { $0.state.position == 3 })
+        let removed = try #require(valid.successors(for: .remove).first)
+        let prefix = try #require(valid.successors(for: .prefix).first)
+        #expect(removed.state.row == [4])
+        #expect(prefix.state.row == [4, 5])
+        for action in [SequenceEditBoundsMachine.Action.remove, .prefix] {
+            #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 3, count: 2)) {
+                try invalid.successors(for: action)
+            }
+        }
+        #expect(invalid.state.row == [4, 5])
+
+        let rendered = try SequenceEditBoundsMachine.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
+        let remove = try #require(declarations.first { $0.hasPrefix("remove ==") })
+        let sequencePrefix = try #require(declarations.first { $0.hasPrefix("prefix ==") })
+        #expect(remove.contains("position \\in DOMAIN (row)"))
+        #expect(sequencePrefix.contains("position <= Len(row)"))
+        #expect(remove.contains("ELSE FALSE"))
+        #expect(sequencePrefix.contains("ELSE FALSE"))
+        #expect(declarations.filter { $0.hasPrefix("__SwiftTLASequenceIndexOutOfBoundsFailure") }.count == 2)
+    }
+
     @Test("sequence reads use one-based indices and report the complete failure payload")
     func sequenceReadOperation() throws {
         let values = [4, 5]

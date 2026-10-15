@@ -663,7 +663,7 @@ struct CompiledTLARenderer {
                 let argument = try state(value.children[1])
                 return preceding + [.functionArgumentOutsideDomain(
                     guard_: "(\(argument) \\in DOMAIN (\(function)))")]
-            case .tupleDynamicAccess:
+            case .tupleDynamicAccess, .tupleRemoving, .tuplePrefix:
                 guard value.children.count == 2 else { return nil }
                 var preceding: [OrderedEvaluationSite] = []
                 for child in value.children {
@@ -672,8 +672,11 @@ struct CompiledTLARenderer {
                 }
                 let sequence = try state(value.children[0])
                 let index = try state(value.children[1])
+                let defined = value.operation == .tuplePrefix
+                    ? "(\(index) <= Len(\(sequence)))"
+                    : "(\(index) \\in DOMAIN (\(sequence)))"
                 return preceding + [.sequenceIndexOutOfBounds(
-                    guard_: "(\(index) \\in DOMAIN (\(sequence)))",
+                    guard_: defined,
                     operands: "<<\(index), Len(\(sequence))>>")]
             case .tupleHead, .tupleTail:
                 guard value.children.count == 1,

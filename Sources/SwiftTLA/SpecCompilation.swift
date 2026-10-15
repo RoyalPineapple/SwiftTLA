@@ -2280,7 +2280,7 @@ private extension CompiledModuleMetadata {
         }
         if !symmetrySets.isEmpty { lines.append("") }
 
-        if !isLibraryModule || !formalVariableSymbols.isEmpty {
+        if !varNames.isEmpty || !formalVariableSymbols.isEmpty {
             lines.append("VARIABLES \((varNames + formalVariableSymbols).joined(separator: ", "))")
             lines.append("")
         }
@@ -2504,7 +2504,9 @@ private extension CompiledModuleMetadata {
             }
             initialPredicates.append(invariant.name)
         }
-        if initialPredicates.count == 1 {
+        if initialPredicates.isEmpty {
+            lines.append("Init == TRUE")
+        } else if initialPredicates.count == 1 {
             lines.append("Init == \(initialPredicates[0])")
         } else {
             lines.append("Init ==")
@@ -2560,9 +2562,7 @@ private extension CompiledModuleMetadata {
         lines.append("====")
         let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
-        if !initialPredicates.isEmpty {
-            try verifyRenderedInitialConjunction(source, predicates: initialPredicates)
-        }
+        try verifyRenderedInitialConjunction(source, predicates: initialPredicates)
         return (source, evaluationFailureDeclarations, evaluationInvariant)
     }
 
@@ -2621,9 +2621,11 @@ func verifyRenderedVariableDeclaration(_ source: String, names: [String]) throws
 func verifyRenderedInitialConjunction(_ source: String, predicates: [String]) throws {
     let lines = source.components(separatedBy: "\n")
     let starts = lines.indices.filter { lines[$0] == "Init ==" || lines[$0].hasPrefix("Init == ") }
-    let expected = predicates.count == 1
-        ? "Init == \(predicates[0])"
-        : (["Init =="] + predicates.map { "  /\\ \($0)" }).joined(separator: "\n")
+    let expected = predicates.isEmpty
+        ? "Init == TRUE"
+        : predicates.count == 1
+            ? "Init == \(predicates[0])"
+            : (["Init =="] + predicates.map { "  /\\ \($0)" }).joined(separator: "\n")
     let actual: String
     if starts.count == 1 {
         let start = starts[0]

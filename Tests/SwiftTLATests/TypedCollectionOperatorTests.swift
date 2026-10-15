@@ -587,6 +587,8 @@ private struct FoldGeneratedModel {
             variables: [], actions: [("prefix", .guard_(.equal(built, .tupleLiteral([.int(2), .int(1)]))), [])],
             invariants: []
         ).compile().render().tlaBundle.tla
+        #expect(rendered.contains("Init == TRUE"))
+        #expect(!rendered.contains("VARIABLES "))
         #expect(rendered.contains("SubSeq(<<2, 1, 2>>, 1, 2)"))
     }
 

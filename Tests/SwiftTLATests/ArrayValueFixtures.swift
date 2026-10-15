@@ -66,6 +66,20 @@ struct ArrayReadOutsideDomainMachine {
 }
 
 @TLAModel
+struct SequenceEditBoundsMachine {
+    enum Step: String, CaseIterable { case remove, prefix }
+
+    static var spec: TLASpec {
+        #spec("SequenceEditBoundsMachine") { scope in
+            let row = scope.sharedVar(initial: Array<Int>([4, 5]))
+            let position = scope.sharedVar(in: 2...3)
+            Do(Step.remove) { Assign(row, to: row.removing(at: position)) }
+            Do(Step.prefix) { Assign(row, to: row.prefix(length: position)) }
+        }
+    }
+}
+
+@TLAModel
 struct EmptySequenceReadMachine {
     enum Step: String, CaseIterable { case readHead, readTail }
 
