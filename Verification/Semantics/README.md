@@ -1909,10 +1909,20 @@ failure. The compiled runtime's outcome-aware entry point now retains the
 same valid state and first native failure for this direct random-subset case;
 its existing strict entry point still fails closed. This is tested Swift
 behavior, not a completed source-to-both-targets proof. The compiled runtime
-does not yet classify every expression failure as a branch outcome, rendered
-`Init` has no corresponding initial-failure relation, and retained parity
-evidence cannot encode this outcome. These are open semantic boundaries, so
-the strict parity path fails rather than claiming a complete match.
+does not yet classify every expression failure as a branch outcome. For a
+direct random-subset initializer whose count and preceding initializers use
+the renderer's total-expression subset, the TLA+ emitter now writes a separate
+negative-count failure relation without adding false states to `Init`. A
+focused output test requires that relation to match the proof fixture and
+rejects an inverted failure condition. `RandomSubsetInitialOutcomeProof.tla`
+proves that this fixture's complete valid-state predicate and negative-count
+failure relation match independent source rules (2 local TLAPS obligations).
+The proof does not cover all initializer expressions, Swift's implementation
+of those rules, or first-failure ordering across multiple failing branches.
+TLC does not yet select this relation
+as a checking verdict, and retained parity evidence cannot encode the mixed
+state-and-failure outcome. These are open semantic boundaries, so the strict
+parity path fails rather than claiming a complete match.
 
 This does not yet prove the source rule's relation to every random draw, link
 the TLA+ count/domain expressions to native evaluation failures, or cover

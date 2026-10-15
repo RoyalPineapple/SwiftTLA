@@ -162,6 +162,32 @@ struct RandomSubsetExpressionTests {
         }
     }
 
+    @Test("rendered initial states and negative-count failures match their proved source rules")
+    func renderedMixedInitialOutcomes() throws {
+        let tla = try MixedInitialEvaluationModel.render().tlaBundle.tla
+        let predicates = ["pc = \"stay\"", "limit \\in {-1, 1}",
+            "(limit > 0 /\\ chosen \\in {7})"]
+        try verifyRenderedInitialConjunction(tla, predicates: predicates)
+        let proof = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/RandomSubsetInitialOutcomeProof.tla")
+            .standardizedFileURL
+        let proofLines = try String(contentsOf: proof, encoding: .utf8).components(separatedBy: "\n")
+        let name = "__SwiftTLAInitialRandomSubsetCountFailure2("
+        let proved = try #require(proofLines.first { $0.hasPrefix(name) })
+        func emittedFailure(in module: String) -> String? {
+            module.components(separatedBy: "\n").first { $0.hasPrefix(name) }
+        }
+        #expect(emittedFailure(in: tla) == proved)
+        let altered = tla.replacingOccurrences(of: "__SwiftTLAInitialFailedCount2 < 0",
+            with: "__SwiftTLAInitialFailedCount2 > 0")
+        #expect(altered != tla)
+        #expect(emittedFailure(in: altered) != proved)
+        let weakened = tla.replacingOccurrences(of: "limit > 0", with: "limit < 0")
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyRenderedInitialConjunction(weakened, predicates: predicates)
+        }
+    }
+
     @Test("native checking explores valid initial branches while reporting their failed sibling")
     func mixedInitialValidation() throws {
         var observed: [MixedInitialEvaluationModel.State] = []

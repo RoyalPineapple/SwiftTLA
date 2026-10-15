@@ -2519,6 +2519,57 @@ private extension CompiledModuleMetadata {
         }
         lines.append("")
 
+        // shortcut: only total prefixes receive this relation; other initial failures still need outcome lowering.
+        func isTotalInitialExpression(_ expression: CompiledExpression) -> Bool {
+            switch expression.operation {
+            case .value, .stateVariable, .controlLocation:
+                return true
+            case .convert, .setLiteral:
+                return expression.children.allSatisfy(isTotalInitialExpression)
+            default:
+                return false
+            }
+        }
+        for (index, variable) in layout.variables.enumerated() {
+            guard case .memberOf(let set) = initializations[variable.id],
+                  case .randomSubset = set.computation.operation,
+                  set.computation.children.count == 2,
+                  isTotalInitialExpression(set.computation.children[0]),
+                  layout.variables.prefix(index).allSatisfy({ prior in
+                      guard let initialization = initializations[prior.id] else { return false }
+                      switch initialization {
+                      case .value(let expression), .memberOf(let expression):
+                          return isTotalInitialExpression(expression)
+                      }
+                  }) else { continue }
+            var name = "__SwiftTLAInitialRandomSubsetCountFailure\(index)"
+            while occupied.contains(name) { name += "_" }
+            occupied.insert(name)
+            var failedCount = "__SwiftTLAInitialFailedCount\(index)"
+            while occupied.contains(failedCount) { failedCount += "_" }
+            occupied.insert(failedCount)
+            var prefixNames: [VariableID: String] = [:]
+            for prior in layout.variables.prefix(index) {
+                var binder = "__SwiftTLAInitialValue\(prior.id.ordinal)"
+                while occupied.contains(binder) { binder += "_" }
+                occupied.insert(binder)
+                prefixNames[prior.id] = binder
+            }
+            let count = try renderer.state(set.computation.children[0], stateNames: prefixNames)
+            var relation = "(\(failedCount) < 0 /\\ \(failedCount) = \(count))"
+            for prior in layout.variables.prefix(index).reversed() {
+                let binder = prefixNames[prior.id]!
+                switch initializations[prior.id]! {
+                case .value(let expression):
+                    relation = "(LET \(binder) == \(try renderer.state(expression, stateNames: prefixNames)) IN \(relation))"
+                case .memberOf(let expression):
+                    relation = "(\\E \(binder) \\in \(try renderer.state(expression, stateNames: prefixNames)): \(relation))"
+                }
+            }
+            lines.append("\(name)(\(failedCount)) == \(relation)")
+        }
+        if lines.last != "" { lines.append("") }
+
         let invocations = renderedActions
             .filter { $0.sourceName.isEmpty == false }
             .flatMap { $0.symbolicInvocation.map { [$0] } ?? $0.calls.map(\.renderedName) }
