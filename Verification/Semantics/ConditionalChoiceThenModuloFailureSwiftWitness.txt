@@ -1,9 +1,11 @@
 private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
                                            _ emit: (_Updates) throws -> Void) throws {
     func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-    if (try _NativeMachineOperations.choose(Set<Bool>([true]).sorted(by: { (lhs: Bool, rhs: Bool) -> Bool in
+    try _NativeMachineOperations.visitConditional({ (try _NativeMachineOperations.choose(Set<Bool>([true]).sorted(by: { (lhs: Bool, rhs: Bool) -> Bool in
 return !lhs && rhs
-})) { __PROOF_MEMBER__ in (state.state.selector == 1) }) { try _actionPart1(updates, emit) } else { try _actionPart2(updates, emit) }
+})) { __PROOF_MEMBER__ in (state.state.selector == 1) }) },
+        ifTrue: { try _actionPart1(updates, emit) },
+        ifFalse: { try _actionPart2(updates, emit) })
 }
 func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
     let ___atomic_1_2 = 2

@@ -456,7 +456,11 @@ extension NativeSwiftEmitter {
                 body = "let \(binder(binding)) = \(try expression(value))\n\(childCall(child, binding: binding))"
             case .ifElse(let condition, let yes, let no):
                 let value = try expression(condition)
-                body = "if \(value) { \(childCall(yes)) } else { \(childCall(no)) }"
+                body = """
+                try _NativeMachineOperations.visitConditional({ \(value) },
+                    ifTrue: { \(childCall(yes)) },
+                    ifFalse: { \(childCall(no)) })
+                """
                 conditions.append((id: id, value: value))
             case .and(let lhs, let rhs):
                 let right = childCall(rhs, updates: "candidate")
@@ -1392,8 +1396,9 @@ func verifyGeneratedActionWriteOutput(
         }
         let expected = Parser.parse(source: """
         func proof() {
-            if \(condition.value) { \(yes.joined(separator: " ")) }
-            else { \(no.joined(separator: " ")) }
+            try _NativeMachineOperations.visitConditional({ \(condition.value) },
+                ifTrue: { \(yes.joined(separator: " ")) },
+                ifFalse: { \(no.joined(separator: " ")) })
         }
         """).statements.first?.item.as(FunctionDeclSyntax.self)
         let expectedBody = expected?.body?.statements.tokens(viewMode: .sourceAccurate).map(\.text) ?? []

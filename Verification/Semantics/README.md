@@ -1555,7 +1555,7 @@ preserves first-failure order and checking effects. Those links remain open.
 | `or` | Guarded-choice preservation conditional on equal branch edges; output-linked success-plus-failure and two distinct-failure fixtures; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, all failure kinds and TLA+ ordering, multiplicity policy, and both outputs. |
 | `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order; an output-linked case retains a successful candidate and reports another candidate's expression-level choice failure; fallible domains now guard the emitted TLA+ action and retain evaluation failure | Prove arbitrary emitted domain and branch expressions agree, including all failure kinds, first-failure order, and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
-| `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure; the generated Swift output has a checked conditional control shape | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule, and prove the independent TLA+ output link. |
+| `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure; every generated Swift conditional calls one checked kernel | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule, and prove the independent TLA+ output link. |
 
 `DefinedChoiceDomainRule.tla` proves that guarding an existential domain
 preserves the enabled step and puts a domain evaluation failure before any
@@ -1582,15 +1582,17 @@ assignment expressions or the independent TLA+ output agree. Those remain
 separate obligations; this is not yet a general action-output theorem.
 
 For each compiled `ifElse`, the checker now also requires the actual emitted
-body to evaluate the emitter's rendered condition once and select the
-corresponding child with the same binder arguments, pending updates, and
-emitter. A mutated output
-that replaces the condition with `false` is rejected. This closes the Swift
-conditional *control-shape* link for every compiled action tree; it assumes
-that expression emission denotes the compiled condition and that Swift's
-`if` and `try` execute with their ordinary semantics. Source lowering, failure
-effects, and the independent TLA+ conditional output still need their own
-general links.
+body to call `_NativeMachineOperations.visitConditional` with the emitter's
+rendered condition and the corresponding children, passing the same binder
+arguments, pending updates, and emitter. A mutated output that replaces the
+condition with `false` is rejected. `ConditionalSwiftKernel.txt` pins the
+actual reusable Swift operation: it evaluates the condition once, invokes only
+the selected branch, and propagates a condition failure before either branch.
+Focused execution tests exercise those three facts. This closes the Swift
+conditional *control-shape* link for every compiled action tree, conditional
+on ordinary Swift semantics for the pinned kernel and on expression emission
+denoting the compiled condition. Source lowering, arbitrary branch failures,
+and the independent TLA+ conditional output still need their general links.
 
 For every compiled `or` node, the output checker additionally requires the
 complete emitted body to call the shared ordered alternative visitor with

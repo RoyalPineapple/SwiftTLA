@@ -292,6 +292,15 @@ public enum _NativeMachineOperations: Sendable {
         if let firstFailure { throw firstFailure }
     }
 
+    public static func visitConditional(
+        _ condition: () throws -> Bool,
+        ifTrue: () throws -> Void,
+        ifFalse: () throws -> Void
+    ) throws {
+        let selected = try condition()
+        if selected { try ifTrue() } else { try ifFalse() }
+    }
+
     /// The generator supplies structural order so CHOOSE remains deterministic.
     public static func choose<Element: Sendable>(
         _ orderedValues: [Element], satisfying predicate: (Element) throws -> Bool

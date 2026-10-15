@@ -552,7 +552,7 @@ struct ChoiceEvaluationFailureTests {
             conditions: parts.conditions)
         let predicate = try #require(parts.conditions.first?.value)
         let wrongConditionSource = update.description.replacingOccurrences(
-            of: "if \(predicate) {", with: "if false {")
+            of: "visitConditional({ \(predicate) }", with: "visitConditional({ false }")
         #expect(wrongConditionSource != update.description)
         let wrongCondition = try #require(Parser.parse(source: wrongConditionSource)
             .statements.first?.item.as(DeclSyntax.self))
