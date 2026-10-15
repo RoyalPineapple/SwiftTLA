@@ -106,3 +106,23 @@ struct GeneratedFallibleConditionModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct GeneratedMembershipConditionalFailureModel: Sendable {
+    enum Step: String, CaseIterable { case compute }
+
+    static var spec: TLASpec {
+        #spec("GeneratedMembershipConditionalFailureModel") { scope in
+            let member = scope.sharedVar(in: SetExpr<Int>.literal(1, 2))
+            let divisor = scope.sharedVar(initial: 0)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.compute) {
+                If(SetExpr<Int>.literal(1).contains(member)) {
+                    Assign(result, to: 1 / divisor)
+                } else: {
+                    Assign(result, to: 1)
+                }
+            }
+        }
+    }
+}

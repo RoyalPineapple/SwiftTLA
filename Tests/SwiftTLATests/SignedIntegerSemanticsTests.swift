@@ -124,6 +124,36 @@ import Testing
         #expect(lines.contains { $0.hasPrefix("__SwiftTLADivisionByZeroFailure0_1 ==") && $0.contains("IF attempt THEN FALSE ELSE") })
     }
 
+    @Test("A membership condition reports failure only in its selected branch")
+    func generatedMembershipConditionalFailure() throws {
+        let machines = try GeneratedMembershipConditionalFailureModel.initialMachines()
+        #expect(machines.count == 2)
+        for var machine in machines {
+            let before = machine.snapshot
+            if machine.state.member == 1 {
+                #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+                    try machine.send(.compute)
+                }
+                #expect(machine.snapshot == before)
+            } else {
+                _ = try machine.send(.compute)
+                #expect(machine.state.result == 1)
+            }
+        }
+
+        let rendered = try GeneratedMembershipConditionalFailureModel.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
+        #expect(lines.contains { $0.hasPrefix("compute ==") && $0.contains("member \\in {1}") })
+        #expect(lines.contains {
+            $0.hasPrefix("__SwiftTLADivisionByZeroFailure0 ==")
+                && $0.contains("IF (member \\in {1}) THEN") && $0.contains("divisor # 0")
+        })
+        #expect(lines.contains {
+            $0.hasPrefix("__SwiftTLAEvaluationOK ==") && $0.contains("__SwiftTLADivisionByZeroFailure0")
+        })
+    }
+
     @Test("A conditional reports condition failure before either branch")
     func generatedFallibleConditionFailureOrder() throws {
         let machines = try GeneratedFallibleConditionModel.initialMachines()
