@@ -1733,10 +1733,10 @@ its actual Swift and TLA+ expressions are not linked to that theorem or to a
 checked TLA module. Nonrepeatable conditions and other `ifElse` trees remain
 open. `EmittedConditionFailureInstantiatesDefinedRule` does link the existing
 empty-choice-in-condition TLA+ fixture to this rule, but it does not establish
-the arithmetic instance or all accepted conditions. A separate accepted `Choose(0...1)`
-case still throws on its first native branch while generated TLA+ has no
-intrinsic failure predicate; ordered first-failure and whole-action semantics
-for `existsAction` remain open.
+the arithmetic instance or all accepted conditions. The output-linked
+`CandidateChoiceFailureModel` above closes one finite `Choose(0...1)` instance;
+ordered first-failure and whole-action semantics for arbitrary `existsAction`
+remain open.
 
 `ConditionalChoiceThenModuloFailureModel` adds a mixed-failure instance. For
 its four initial states, generated Swift reports a missing `CHOOSE` result
