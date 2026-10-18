@@ -1448,7 +1448,10 @@ generated-Swift output links remain mandatory.
 
 Ordinary CI now defines a separate `semantic-proof-diagnostic` job. It verifies
 the official Linux TLAPS archive against SHA-256
-`13eff4e3dd0a4570c1c33c46f052fd4eb3afad465eb201ebade607961f09d43c`,
+`b3c2554d3dd2198772ea8c814639a024fe9c390eac0ec25f4f444ad446a7dd28`
+and requires its reported source revision to be `901ae51`. The official
+`1.6.0-pre` release is rolling, so replacing its asset will fail this pin
+closed until the new archive and revision are reviewed. The job
 replaces only its bundled Z3 with official Linux Z3 4.15.4 pinned to SHA-256
 `a41b690e89c343931471506cdc6d957b6044a200fd2d240cc017432afdff7d3e`,
 checks the declared proof modules,
