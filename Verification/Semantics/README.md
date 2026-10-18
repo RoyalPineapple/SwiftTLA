@@ -1840,7 +1840,8 @@ SequenceIndexFailureProof.tla imports an exact-output-checked generated
 module and proves the source's one-based array bound agrees with the compiled
 rule and TLA+ DOMAIN guard. For the pinned #spec read it checks initial states, the
 complete labeled step, the out-of-bounds failure and its index/length payload,
-and the selected evaluation invariant. Its negative control shows that
+the emitted aggregate failure predicate, and the selected evaluation
+invariant. Its negative control shows that
 omitting the failure check disagrees on the empty initial sequence. The
 generated Swift test checks the actual compiled sequence-access constructor,
 pins the complete update visitor, and executes the shared one-based read
@@ -1853,8 +1854,9 @@ initialization, or temporal fidelity.
 EmptySequenceReadProof.tla imports an exact-output-checked generated module
 and proves the source and compiled rules for empty-sequence head and tail
 agree with both emitted TLA+ actions and their evaluation-failure predicates.
-It checks initial states, both complete labeled steps, the selected
-evaluation invariant, and a negative control that omits the failure check.
+It checks initial states, both complete labeled steps, both aggregate failure
+predicates, the selected evaluation invariant, and a negative control that
+omits the failure check.
 The focused test pins both actual generated Swift action visitors and checks
 the shared native operation on empty and nonempty sequences. All 23 proof
 obligations passed locally; hosted evidence is pending. The Swift compiler
@@ -1867,7 +1869,8 @@ a `#spec` array removal and prefix. For arbitrary integer sequences and valid
 indices, it proves the independently indexed source values equal the lowered
 `SubSeq` forms; it then connects both complete labeled actions, the two
 initial states, index/length failure payloads, and the selected evaluation
-check to the emitted module. Its invalid-initial-state negative control fails
+check to the emitted module, including both aggregate failure predicates. Its
+invalid-initial-state negative control fails
 if the evaluation check is omitted. The focused generated-machine test pins
 both complete Swift update visitors and checks that replacing either shared
 checked sequence operation breaks its output witness; it executes both

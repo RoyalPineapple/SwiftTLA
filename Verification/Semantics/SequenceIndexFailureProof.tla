@@ -78,6 +78,7 @@ THEOREM FailureAndSelectedCheckPreserved ==
     ASSUME sequence \in Seq(Int)
     PROVE /\ (SourceFailure
                 <=> __SwiftTLASequenceIndexOutOfBoundsFailure0)
+          /\ (SourceFailure <=> __SwiftTLAAnyEvaluationFailure0)
           /\ SourceFailureOperands
                 = __SwiftTLASequenceIndexOutOfBoundsOperands0
           /\ (SourceEvaluationOK <=> __SwiftTLAEvaluationOK)
@@ -88,6 +89,7 @@ THEOREM FailureAndSelectedCheckPreserved ==
             RenderedIndexDefined,
             __SwiftTLASequenceIndexOutOfBoundsFailure0,
             __SwiftTLASequenceIndexOutOfBoundsOperands0,
+            __SwiftTLAAnyEvaluationFailure0,
             __SwiftTLAEvaluationOK
 
 THEOREM CompleteSequenceReadSlice ==
@@ -96,6 +98,7 @@ THEOREM CompleteSequenceReadSlice ==
           /\ (SourceLabeledRead(label) <=> EmittedLabeledRead(label))
           /\ (SourceFailure
                 <=> __SwiftTLASequenceIndexOutOfBoundsFailure0)
+          /\ (SourceFailure <=> __SwiftTLAAnyEvaluationFailure0)
           /\ SourceFailureOperands
                 = __SwiftTLASequenceIndexOutOfBoundsOperands0
           /\ (SourceEvaluationOK <=> __SwiftTLAEvaluationOK)

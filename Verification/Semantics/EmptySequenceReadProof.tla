@@ -74,10 +74,14 @@ THEOREM EmittedActionsPreserveLowering ==
                 <=> __SwiftTLAEmptySequenceFailure0)
           /\ (CompiledTailFailure
                 <=> __SwiftTLAEmptySequenceFailure1)
+          /\ (CompiledHeadFailure <=> __SwiftTLAAnyEvaluationFailure0)
+          /\ (CompiledTailFailure <=> __SwiftTLAAnyEvaluationFailure1)
     BY SMT DEF CompiledHead, CompiledTail, readHead, readTail,
         CompiledHeadFailure, CompiledTailFailure, CompiledNonempty,
         __SwiftTLAEmptySequenceFailure0,
-        __SwiftTLAEmptySequenceFailure1
+        __SwiftTLAEmptySequenceFailure1,
+        __SwiftTLAAnyEvaluationFailure0,
+        __SwiftTLAAnyEvaluationFailure1
 
 THEOREM CompleteHeadTailSlice ==
     ASSUME sequence \in Seq(Int), NEW label
@@ -89,12 +93,16 @@ THEOREM CompleteHeadTailSlice ==
                 <=> __SwiftTLAEmptySequenceFailure0)
           /\ (SourceTailFailure
                 <=> __SwiftTLAEmptySequenceFailure1)
+          /\ (SourceHeadFailure <=> __SwiftTLAAnyEvaluationFailure0)
+          /\ (SourceTailFailure <=> __SwiftTLAAnyEvaluationFailure1)
           /\ (SourceEvaluationOK <=> __SwiftTLAEvaluationOK)
     BY InitialStatesPreserved, LoweredActionsPreserveSource,
         EmittedActionsPreserveLowering, SMT
         DEF SourceLabeledHead, EmittedLabeledHead,
             SourceLabeledTail, EmittedLabeledTail,
             SourceNext, Next, SourceEvaluationOK,
+            __SwiftTLAAnyEvaluationFailure0,
+            __SwiftTLAAnyEvaluationFailure1,
             __SwiftTLAEvaluationOK
 
 THEOREM EmptyInitialSequenceHasFailuresAndNoSteps ==
@@ -107,6 +115,8 @@ THEOREM EmptyInitialSequenceHasFailuresAndNoSteps ==
     BY SMT DEF readHead, readTail,
         __SwiftTLAEmptySequenceFailure0,
         __SwiftTLAEmptySequenceFailure1,
+        __SwiftTLAAnyEvaluationFailure0,
+        __SwiftTLAAnyEvaluationFailure1,
         __SwiftTLAEvaluationOK
 
 THEOREM OmittingFailureCheckWouldDisagree ==

@@ -94,6 +94,8 @@ THEOREM FailuresAndSelectedCheckPreserved ==
                 <=> __SwiftTLASequenceIndexOutOfBoundsFailure0)
           /\ (SourcePrefixFailure
                 <=> __SwiftTLASequenceIndexOutOfBoundsFailure1)
+          /\ (SourceRemoveFailure <=> __SwiftTLAAnyEvaluationFailure0)
+          /\ (SourcePrefixFailure <=> __SwiftTLAAnyEvaluationFailure1)
           /\ __SwiftTLASequenceIndexOutOfBoundsOperands0
                 = <<position, Len(row)>>
           /\ __SwiftTLASequenceIndexOutOfBoundsOperands1
@@ -105,6 +107,8 @@ THEOREM FailuresAndSelectedCheckPreserved ==
             SourceEvaluationOK,
             __SwiftTLASequenceIndexOutOfBoundsFailure0,
             __SwiftTLASequenceIndexOutOfBoundsFailure1,
+            __SwiftTLAAnyEvaluationFailure0,
+            __SwiftTLAAnyEvaluationFailure1,
             __SwiftTLASequenceIndexOutOfBoundsOperands0,
             __SwiftTLASequenceIndexOutOfBoundsOperands1,
             __SwiftTLAEvaluationOK
@@ -119,6 +123,8 @@ THEOREM CompleteSequenceEditSlice ==
                 <=> __SwiftTLASequenceIndexOutOfBoundsFailure0)
           /\ (SourcePrefixFailure
                 <=> __SwiftTLASequenceIndexOutOfBoundsFailure1)
+          /\ (SourceRemoveFailure <=> __SwiftTLAAnyEvaluationFailure0)
+          /\ (SourcePrefixFailure <=> __SwiftTLAAnyEvaluationFailure1)
           /\ (SourceEvaluationOK <=> __SwiftTLAEvaluationOK)
     BY InitialStatesPreserved, RemoveActionPreserved,
         PrefixActionPreserved, FailuresAndSelectedCheckPreserved,
@@ -136,6 +142,8 @@ THEOREM InvalidInitialPositionReportsBothFailures ==
     BY SMT DEF remove, prefix,
         __SwiftTLASequenceIndexOutOfBoundsFailure0,
         __SwiftTLASequenceIndexOutOfBoundsFailure1,
+        __SwiftTLAAnyEvaluationFailure0,
+        __SwiftTLAAnyEvaluationFailure1,
         __SwiftTLAEvaluationOK
 
 THEOREM OmittingFailureCheckWouldDisagree ==
