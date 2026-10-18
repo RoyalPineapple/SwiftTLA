@@ -440,14 +440,29 @@ struct CompiledTLARenderer {
             let guarded = try evaluationDefined(domain).map { "(IF \($0) THEN \(quantified) ELSE FALSE)" }
                 ?? quantified
             return disjunction(domainFailure, guarded)
-        case .define(let binder, let value, let body):
-            let valueFailure = try expressionAnyFailure(value)
-            guard let bodyFailure = try anyFailurePredicate(body) else { return valueFailure }
-            let defined = try evaluationDefined(value)
-            guard repeatable(value) || defined != nil else { return valueFailure }
-            let bound = "(LET \(try binderName(binder)) == \(try state(value)) IN \(bodyFailure))"
-            let guarded = defined.map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
-            return disjunction(valueFailure, guarded)
+        case .define:
+            var definitions: [(binder: BinderID, value: CompiledExpression, failure: String?)] = []
+            var remaining = action
+            while case .define(let binder, let value, let body) = remaining {
+                definitions.append((binder, value, try expressionAnyFailure(value)))
+                remaining = body
+            }
+            var failure = try anyFailurePredicate(remaining)
+            for (binder, value, valueFailure) in definitions.reversed() {
+                guard let bodyFailure = failure else {
+                    failure = valueFailure
+                    continue
+                }
+                let defined = try evaluationDefined(value)
+                guard repeatable(value) || defined != nil else {
+                    failure = valueFailure
+                    continue
+                }
+                let bound = "(LET \(try binderName(binder)) == \(try state(value)) IN \(bodyFailure))"
+                let guarded = defined.map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
+                failure = disjunction(valueFailure, guarded)
+            }
+            return failure
         case .guard_(let condition):
             return try expressionAnyFailure(condition)
         case .ifElse(let condition, let yes, let no):
