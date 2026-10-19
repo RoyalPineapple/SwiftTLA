@@ -122,6 +122,38 @@ RenderedOrChildOutcome(leftDefined, left, leftFailure,
                         ELSE IF ~left /\ ~rightDefined THEN rightFailure
                         ELSE "none"]
 
+SourceConditionalTrueBranchOutcome(conditionDefined, condition,
+                                   conditionFailure, noDefined, noValue,
+                                   noFailure) ==
+    IF ~conditionDefined THEN [defined |-> FALSE, value |-> FALSE,
+                               firstFailure |-> conditionFailure]
+    ELSE IF condition THEN [defined |-> TRUE, value |-> TRUE,
+                            firstFailure |-> "none"]
+    ELSE IF ~noDefined THEN [defined |-> FALSE, value |-> FALSE,
+                             firstFailure |-> noFailure]
+    ELSE [defined |-> TRUE, value |-> noValue,
+          firstFailure |-> "none"]
+
+THEOREM ConditionalTrueBranchIsShortCircuitOr ==
+    ASSUME NEW conditionDefined \in BOOLEAN, NEW condition \in BOOLEAN,
+           NEW conditionFailure, NEW noDefined \in BOOLEAN,
+           NEW noValue \in BOOLEAN, NEW noFailure
+    PROVE SourceConditionalTrueBranchOutcome(conditionDefined, condition,
+              conditionFailure, noDefined, noValue, noFailure)
+        = SourceOrChildOutcome(conditionDefined, condition,
+              conditionFailure, noDefined, noValue, noFailure)
+    BY SMT DEF SourceConditionalTrueBranchOutcome, SourceOrChildOutcome
+
+WrongEagerConditionalElseFailure(noDefined) ==
+    IF ~noDefined THEN "else" ELSE "none"
+
+THEOREM EagerConditionalElseWouldInventFailure ==
+    SourceConditionalTrueBranchOutcome(TRUE, TRUE, "none", FALSE,
+        FALSE, "else").firstFailure
+        # WrongEagerConditionalElseFailure(FALSE)
+    BY SMT DEF SourceConditionalTrueBranchOutcome,
+        WrongEagerConditionalElseFailure
+
 THEOREM ShortCircuitAndPropagatesChildOutcome ==
     ASSUME NEW leftDefined \in BOOLEAN, NEW left \in BOOLEAN,
            NEW leftFailure, NEW rightDefined \in BOOLEAN,

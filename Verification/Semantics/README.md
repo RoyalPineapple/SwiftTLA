@@ -1079,6 +1079,18 @@ not proof that arbitrary leaves agree or that either emitter realizes the
 tree. The generated Swift verifier still falls back for unrecognized leaves,
 and Swift execution and TLAPS remain trusted boundaries.
 
+A Boolean `If(condition, then: true, else: value)` is another leaf of that
+tree. `ConditionalTrueBranchIsShortCircuitOr` proves its complete source
+outcome equals `condition || value`, including the first failure and a skipped
+else branch; an eager-else negative control differs. The generated-Swift
+output verifier now recognizes a typed Boolean conditional made of checked
+scalar operands inside a short-circuit predicate. The
+`ConditionalShortCircuitFailureModel` test checks the actual compiled
+conditional, all eight generated initial machines, a wrong-branch mutation,
+and the complete generated TLA+ module against the already-proved nested
+module after changing only its module name. This closes that selected form,
+not arbitrary conditionals or unrecognized expression leaves.
+
 The ordered-`Do` lemma uses finite, indexed source and scheduled histories.
 TLAPS proves that both histories exist for every finite sequence of typed
 abstract **assignment** instructions and that their complete states agree at

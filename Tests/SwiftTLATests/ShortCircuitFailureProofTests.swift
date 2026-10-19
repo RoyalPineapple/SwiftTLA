@@ -7,6 +7,72 @@ import Testing
 
 @Suite("Short-circuit failure preservation")
 struct ShortCircuitFailureProofTests {
+    @Test("Conditional Boolean leaves preserve selected failures and generated output")
+    func conditionalBooleanLeaf() throws {
+        let machines = try ConditionalShortCircuitFailureModel.initialMachines()
+        #expect(machines.count == 8)
+        for machine in machines {
+            let state = machine.state
+            if state.enabled && !state.ready && state.divisor == 0 {
+                #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+                    try machine.successors(for: .advance)
+                }
+            } else {
+                let successors = try machine.successors(for: .advance)
+                let enabled = state.enabled && (state.ready || state.divisor == 1)
+                #expect(successors.count == (enabled ? 1 : 0))
+                #expect(successors.allSatisfy {
+                    $0.state.result == 1 && $0.state.enabled == state.enabled &&
+                        $0.state.ready == state.ready && $0.state.divisor == state.divisor
+                })
+            }
+        }
+
+        let compiled = try ConditionalShortCircuitFailureModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        guard case .and(let guarded, _) = action.body,
+              case .guard_(let predicate) = guarded,
+              case .and = predicate.operation,
+              predicate.children.count == 2,
+              case .ifThenElse = predicate.children[1].operation else {
+            Issue.record("The source conditional no longer lowers to the checked Boolean leaf")
+            return
+        }
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "ConditionalShortCircuitFailureModel", program: program))
+        let visitor = try #require(emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let parts = try emitter.actionFunctions(action.body)
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames,
+            parts: parts.writes, conditions: parts.conditions)
+        let changed = visitor.description.replacingOccurrences(of: "? true :", with: "? false :")
+        #expect(changed != visitor.description)
+        let wrongVisitor = try #require(Parser.parse(source: changed)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongVisitor, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames,
+                parts: parts.writes, conditions: parts.conditions)
+            Issue.record("A conditional Boolean leaf changed its selected branch")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+
+        let rendered = try ConditionalShortCircuitFailureModel.render().tlaBundle.root.tla
+        let normalized = rendered.replacingOccurrences(
+            of: "MODULE ConditionalShortCircuitFailureModel",
+            with: "MODULE NestedShortCircuitFailureModel")
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/NestedShortCircuitFailureModel.tla")
+            .standardizedFileURL
+        let formal = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(normalized == formal, "Actual generated TLA+: \(rendered)")
+    }
+
     @Test("Nested Boolean steps retain skipped failures and complete output links")
     func nestedBooleanOutcome() throws {
         let machines = try NestedShortCircuitFailureModel.initialMachines()

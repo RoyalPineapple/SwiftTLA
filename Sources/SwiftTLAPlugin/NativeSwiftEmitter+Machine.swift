@@ -1716,6 +1716,7 @@ func verifyGeneratedActionWriteOutput(
             case .greaterThan: symbol = ">"; arity = 2
             case .greaterOrEqual: symbol = ">="; arity = 2
             case .not: symbol = "!"; arity = 1
+            case .ifThenElse: symbol = "?"; arity = 3
             default: return nil
             }
             guard node.resultType == .bool, node.children.count == arity else { return nil }
@@ -1724,7 +1725,7 @@ func verifyGeneratedActionWriteOutput(
                 guard operandType == node.children[1].resultType,
                       operandType == .int || ((symbol == "==" || symbol == "!=") && operandType == .bool)
                 else { return nil }
-            } else if node.children[0].resultType != .bool {
+            } else if node.children.contains(where: { $0.resultType != .bool }) {
                 return nil
             }
             if !expanded {
@@ -1735,9 +1736,20 @@ func verifyGeneratedActionWriteOutput(
             guard values.count >= arity else { return nil }
             let operands = Array(values.suffix(arity))
             values.removeLast(arity)
-            values.append(arity == 1
-                ? ["(", "!"] + operands[0] + [")"]
-                : ["("] + operands[0] + [symbol] + operands[1] + [")"])
+            switch arity {
+            case 1: values.append(["(", "!"] + operands[0] + [")"])
+            case 2: values.append(["("] + operands[0] + [symbol] + operands[1] + [")"])
+            case 3:
+                var tokens = ["("]
+                tokens += operands[0]
+                tokens += ["?"]
+                tokens += operands[1]
+                tokens += [":"]
+                tokens += operands[2]
+                tokens += [")"]
+                values.append(tokens)
+            default: return nil
+            }
         }
         return values.count == 1 ? values[0] : nil
     }
