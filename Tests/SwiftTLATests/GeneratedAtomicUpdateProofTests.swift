@@ -396,6 +396,57 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(overflowing.snapshot == before)
     }
 
+    @Test("A captured scalar predicate keeps its compiled comparison and negation")
+    func capturedPredicateKeepsCompiledOperators() throws {
+        let compiled = try GeneratedPredicateCaptureProofModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        guard case .define(_, let predicate, _) = action.body,
+              case .not = predicate.operation, predicate.children.count == 1,
+              case .lessThan = predicate.children[0].operation,
+              predicate.children[0].children.count == 2,
+              case .stateVariable(let lhs) = predicate.children[0].children[0].operation,
+              case .stateVariable(let rhs) = predicate.children[0].children[1].operation else {
+            Issue.record("The source predicate did not lower to negated integer comparison")
+            return
+        }
+        #expect(lhs == program.layout.variables.first(where: { $0.declaration.name == "left" })?.id)
+        #expect(rhs == program.layout.variables.first(where: { $0.declaration.name == "right" })?.id)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "GeneratedPredicateCaptureProofModel", program: program))
+        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
+            stateFields: emitter.stateMemberNames, parts: writes)
+
+        for (original, replacement) in [(" < ", " > "), ("(!", "(")] {
+            var source = visitor.description
+            let range = try #require(source.range(of: original))
+            source.replaceSubrange(range, with: replacement)
+            let changed = try #require(Parser.parse(source: source)
+                .statements.first?.item.as(DeclSyntax.self))
+            do {
+                try verifyGeneratedActionWriteOutput(changed, action: action.body, program: program,
+                    stateFields: emitter.stateMemberNames, parts: writes)
+                Issue.record("A captured predicate accepted a changed operator: \(original)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.hasPrefix("native.action.binding."))
+            }
+        }
+
+        let rendered = try GeneratedPredicateCaptureProofModel.render().tlaBundle.root.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/GeneratedPredicateCaptureProofModel.tla")
+            .standardizedFileURL
+        #expect(rendered == (try String(contentsOf: proofInput, encoding: .utf8)))
+
+        var machine = try GeneratedPredicateCaptureProofModel.makeMachine()
+        #expect(machine.state.left == 2 && machine.state.right == 3)
+        _ = try machine.send(.compare)
+        #expect(machine.state.matched == false)
+    }
+
     @Test("Ordered copy emission is independent of field names")
     func generatedCopyRuleUsesResolvedFieldNames() throws {
         let model = try compiledProofModel(named: "RenamedAtomicCopyProofModel")

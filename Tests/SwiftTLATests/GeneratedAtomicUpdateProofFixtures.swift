@@ -86,3 +86,21 @@ struct GeneratedCheckedEqualityProofModel {
         }
     }
 }
+
+@TLAModel
+struct GeneratedPredicateCaptureProofModel {
+    enum Step: String, CaseIterable { case compare }
+
+    static var spec: TLASpec {
+        #spec("GeneratedPredicateCaptureProofModel") { scope in
+            let left = scope.sharedVar(initial: 2)
+            let right = scope.sharedVar(initial: 3)
+            let matched = scope.sharedVar(initial: false)
+            Do(Step.compare) {
+                Let(!(left < right)) { result in
+                    Assign(matched, to: result)
+                }
+            }
+        }
+    }
+}

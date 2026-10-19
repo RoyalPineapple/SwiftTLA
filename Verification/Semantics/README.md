@@ -1681,6 +1681,21 @@ of the syntax checks remain trusted boundaries. This slice has no fallible
 expression; it does not cover derived operands, other value types, arbitrary
 `define` trees, or other checking outcomes.
 
+`GeneratedPredicateCaptureProof.tla` imports the complete TLA+ module emitted
+for a `#spec` capture of `!(left < right)`. Its independent source rule uses
+`left >= right`; TLAPS proves the same initial states, complete `compare`-
+labeled relation, and resulting state type. The fixture checks the lowered
+operand identities, the actual generated Swift visitor, byte-for-byte TLA+
+output, and the generated machine's result. Before the verifier change, both
+`<` to `>` and removal of `!` were accepted; both are now rejected. The
+nonrecursive output rule also reconstructs direct Int/Bool equality and
+inequality, four integer ordering operators, and Boolean negation from the
+compiled tree, composing these with checked integer operands. This closes the
+emitted-Swift syntax link for that expression family, but only the named
+capture has an end-to-end TLA+ theorem. Swift operator semantics, TLAPS, and
+the syntax checker remain trusted; arbitrary nested expressions and other
+accepted value families remain uncovered.
+
 `FallibleEqualityCompositionRule.tla` proves that equality preserves complete
 labeled edges and failure records when its checked operand has the same
 value-or-failure outcome on each path; a failed operand produces no equality

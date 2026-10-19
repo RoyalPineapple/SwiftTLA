@@ -1685,14 +1685,50 @@ func verifyGeneratedActionWriteOutput(
         return ["(", "try", "{", "(", ")", "throws", "->", "Int", "in"] + statements +
             ["return", result, "}", "(", ")", ")"]
     }
-    func directEqualityTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
-        guard case .equal = expression.operation, expression.resultType == .bool,
-              expression.children.count == 2,
-              let lhs = arithmeticIntTokens(expression.children[0], parameters: parameters)
-                ?? directScalarTokens(expression.children[0], parameters: parameters),
-              let rhs = arithmeticIntTokens(expression.children[1], parameters: parameters)
-                ?? directScalarTokens(expression.children[1], parameters: parameters) else { return nil }
-        return ["("] + lhs + ["=="] + rhs + [")"]
+    func scalarPredicateTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+        guard expression.resultType == .bool else { return nil }
+        var pending: [(expression: CompiledExpression, expanded: Bool)] = [(expression, false)]
+        var values: [[String]] = []
+        while let (node, expanded) = pending.popLast() {
+            if let direct = directScalarTokens(node, parameters: parameters)
+                ?? arithmeticIntTokens(node, parameters: parameters) {
+                values.append(direct)
+                continue
+            }
+            let symbol: String
+            let arity: Int
+            switch node.operation {
+            case .equal: symbol = "=="; arity = 2
+            case .notEqual: symbol = "!="; arity = 2
+            case .lessThan: symbol = "<"; arity = 2
+            case .lessOrEqual: symbol = "<="; arity = 2
+            case .greaterThan: symbol = ">"; arity = 2
+            case .greaterOrEqual: symbol = ">="; arity = 2
+            case .not: symbol = "!"; arity = 1
+            default: return nil
+            }
+            guard node.resultType == .bool, node.children.count == arity else { return nil }
+            if arity == 2 {
+                let operandType = node.children[0].resultType
+                guard operandType == node.children[1].resultType,
+                      operandType == .int || ((symbol == "==" || symbol == "!=") && operandType == .bool)
+                else { return nil }
+            } else if node.children[0].resultType != .bool {
+                return nil
+            }
+            if !expanded {
+                pending.append((node, true))
+                pending.append(contentsOf: node.children.reversed().map { ($0, false) })
+                continue
+            }
+            guard values.count >= arity else { return nil }
+            let operands = Array(values.suffix(arity))
+            values.removeLast(arity)
+            values.append(arity == 1
+                ? ["(", "!"] + operands[0] + [")"]
+                : ["("] + operands[0] + [symbol] + operands[1] + [")"])
+        }
+        return values.count == 1 ? values[0] : nil
     }
     for (id, child, value) in definitions {
         guard let tokens = bodies[id], tokens.count >= 3,
@@ -1722,7 +1758,7 @@ func verifyGeneratedActionWriteOutput(
                 "the child receives inherited and captured values unchanged", "generated child arguments differ")
         }
         let initializer = Array(tokens[3..<(tokens.count - expectedCall.count)])
-        let expectedInitializer = directEqualityTokens(value, parameters: parent)
+        let expectedInitializer = scalarPredicateTokens(value, parameters: parent)
             ?? arithmeticIntTokens(value, parameters: parent)
             ?? directScalarTokens(value, parameters: parent)
         if let expectedInitializer, initializer != expectedInitializer {
