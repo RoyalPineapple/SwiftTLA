@@ -43,7 +43,7 @@ THEOREM EmittedFailurePreservesLowering ==
 THEOREM EmittedEvaluationCheckPreservesSource ==
     __SwiftTLAEvaluationOK <=> SourceEvaluationOK
     BY EmittedFailurePreservesLowering, SMT
-        DEF __SwiftTLAEvaluationOK, CompiledFailure,
+        DEF __SwiftTLAEvaluationOK, __SwiftTLAAnyEvaluationFailure0, CompiledFailure,
             SourceEvaluationOK, SourceFailure
 
 THEOREM CompleteReadSlice ==
@@ -51,12 +51,13 @@ THEOREM CompleteReadSlice ==
     PROVE /\ (Init <=> SourceInit)
           /\ (SourceLabeledRead(label) <=> EmittedLabeledRead(label))
           /\ (SourceFailure <=> __SwiftTLAFunctionArgumentOutsideDomainFailure0)
+          /\ (SourceFailure <=> __SwiftTLAAnyEvaluationFailure0)
           /\ (SourceEvaluationOK <=> __SwiftTLAEvaluationOK)
     BY EmittedInitialPreservesSource,
         LoweredReadPreservesSource, EmittedReadPreservesLowering,
         EmittedFailurePreservesLowering, EmittedEvaluationCheckPreservesSource,
         SMT DEF SourceLabeledRead, EmittedLabeledRead,
-            SourceFailure, CompiledFailure
+            SourceFailure, CompiledFailure, __SwiftTLAAnyEvaluationFailure0
 
 THEOREM MissingKeyHasNoSuccessorButReportsFailure ==
     ASSUME key \notin DOMAIN table
@@ -73,7 +74,8 @@ THEOREM MissingKeyHasNoSuccessorButReportsFailure ==
     <1>3. __SwiftTLAFunctionArgumentOutsideDomainFailure0
         BY SMT DEF __SwiftTLAFunctionArgumentOutsideDomainFailure0
     <1>4. ~__SwiftTLAEvaluationOK
-        BY <1>3, SMT DEF __SwiftTLAEvaluationOK
+        BY <1>3, SMT DEF __SwiftTLAEvaluationOK, __SwiftTLAAnyEvaluationFailure0,
+            __SwiftTLAFunctionArgumentOutsideDomainFailure0
     <1>5. QED BY <1>1, <1>2, <1>3, <1>4
 
 THEOREM OmittedFailureCheckWouldDisagree ==

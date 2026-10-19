@@ -88,11 +88,13 @@ THEOREM EmittedLabeledMachineStepMatchesSource ==
 THEOREM EmittedFailureMatchesSource ==
     ASSUME count \in Int, WithinSwiftInt(count)
     PROVE /\ (__SwiftTLAOverflowFailure0 <=> SourceFailure)
+          /\ (__SwiftTLAAnyEvaluationFailure0 <=> SourceFailure)
           /\ __SwiftTLAOverflowOperands0 = <<count, 1>>
           /\ __SwiftTLAOverflowOperation0 = "addition"
     PROOF
     <1>0. USE SwiftIntBounds DEF SwiftIntBounds
     <1>. QED BY SMT DEF __SwiftTLAOverflowFailure0,
+        __SwiftTLAAnyEvaluationFailure0,
         __SwiftTLAOverflowOperands0, __SwiftTLAOverflowOperation0,
         SourceFailure, WithinSwiftInt
 
@@ -106,7 +108,8 @@ THEOREM EmittedEvaluationCheckMatchesSource ==
     ASSUME count \in Int, WithinSwiftInt(count)
     PROVE __SwiftTLAEvaluationOK <=> SourceEvaluationOK
     BY EmittedFailureMatchesSource, SMT
-        DEF __SwiftTLAEvaluationOK, SourceEvaluationOK
+        DEF __SwiftTLAEvaluationOK, __SwiftTLAAnyEvaluationFailure0,
+            SourceEvaluationOK
 
 THEOREM CompleteCheckedAdditionBoundary ==
     ASSUME count \in Int, WithinSwiftInt(count), NEW label
@@ -118,10 +121,12 @@ THEOREM CompleteCheckedAdditionBoundary ==
                 <=> EmittedLabeledMachineStep(label))
           /\ SourceFailures = CompiledFailures
           /\ CompiledFailures = EmittedFailures
+          /\ (__SwiftTLAAnyEvaluationFailure0 <=> SourceFailure)
           /\ (__SwiftTLAEvaluationOK <=> SourceEvaluationOK)
     BY EmittedInitMatchesSource, EmittedNextMatchesSource,
         CompiledStepAndFailureMatchSource, EmittedStepMatchesCompiled,
-        EmittedFailureRecordMatchesSource, EmittedEvaluationCheckMatchesSource,
+        EmittedFailureMatchesSource, EmittedFailureRecordMatchesSource,
+        EmittedEvaluationCheckMatchesSource,
         SMT DEF SourceLabeledMachineStep, CompiledLabeledMachineStep,
             EmittedLabeledMachineStep
 

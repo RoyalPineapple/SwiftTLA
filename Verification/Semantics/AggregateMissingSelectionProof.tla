@@ -40,6 +40,7 @@ THEOREM CompleteAggregateMissingChoiceSlice ==
           /\ (SourceFailure <=> CompiledFailure)
           /\ (CompiledFailure <=> ModeledSwiftFailure)
           /\ (CompiledFailure <=> __SwiftTLAChoiceFailure0)
+          /\ (SourceFailure <=> __SwiftTLAAnyEvaluationFailure0)
           /\ (SourceEvaluationOK <=> __SwiftTLAEvaluationOK)
     BY SourceAndCompiledStepsAreDisabled, EmittedStepIsDisabled,
        SMT DEF Init, SourceInit, CompiledInit,
@@ -48,13 +49,15 @@ THEOREM CompleteAggregateMissingChoiceSlice ==
            EmittedLabeledStep,
            SourceFailure, CompiledFailure, CompiledMatchExists,
            ModeledSwiftFailure,
-           __SwiftTLAChoiceFailure0, SourceEvaluationOK,
+           __SwiftTLAChoiceFailure0, __SwiftTLAAnyEvaluationFailure0,
+           SourceEvaluationOK,
            __SwiftTLAEvaluationOK
 
 THEOREM OmittingFailureCheckChangesOutcome ==
     Init => (TRUE # __SwiftTLAEvaluationOK)
     BY ChoiceHasNoMatch, SMT
-       DEF Init, __SwiftTLAEvaluationOK, __SwiftTLAChoiceFailure0,
+       DEF Init, __SwiftTLAEvaluationOK, __SwiftTLAAnyEvaluationFailure0,
+           __SwiftTLAChoiceFailure0,
            CompiledMatchExists
 
 =====================================================================

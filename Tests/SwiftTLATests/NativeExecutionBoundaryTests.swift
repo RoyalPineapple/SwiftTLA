@@ -388,7 +388,8 @@ private struct ReachableInvariantFailure {
         let evaluation = try #require(direct.first { $0.hasPrefix("__SwiftTLAEvaluationOK ==") })
         #expect(operands == "__SwiftTLAOverflowOperands0 == <<count, 1>>")
         #expect(operation == "__SwiftTLAOverflowOperation0 == \"addition\"")
-        #expect(evaluation == "__SwiftTLAEvaluationOK == ~(__SwiftTLAOverflowFailure0)")
+        #expect(direct.contains { $0.hasPrefix("__SwiftTLAAnyEvaluationFailure0 ==") })
+        #expect(evaluation == "__SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)")
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
         for checkDeadlock in [false, true] {
             let selected = try rendered.tlaBundle(checking: [], checkDeadlock: checkDeadlock)
@@ -578,7 +579,8 @@ private struct ReachableInvariantFailure {
         #expect(output.contains("__SwiftTLAOverflowOperation0_1 == \"negation\""))
         #expect(output.contains("__SwiftTLAOverflowOperands0_1 == <<(count - 1)>>"))
         #expect(output.contains("IF ((count - 1) >= -1000000000 /\\ (count - 1) <= 1000000000) THEN TRUE ELSE (count - 1) # \(TLAValue.int(.min).description)"))
-        #expect(output.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLAOverflowFailure0) /\\ ~(__SwiftTLAOverflowFailure0_1)"))
+        #expect(output.contains("__SwiftTLAAnyEvaluationFailure0 =="))
+        #expect(output.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)"))
     }
 
     @Test("generated TLA export rejects a different target Int width")

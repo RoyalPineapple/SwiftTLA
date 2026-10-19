@@ -59,9 +59,13 @@ THEOREM CompiledStringFailureMatchesSource ==
     BY CompiledStringChoiceHasNoMatch, SMT
         DEF CompiledFailure, SourceFailure
 
+THEOREM EmittedStringAggregateFailure ==
+    __SwiftTLAAnyEvaluationFailure0 <=> SourceFailure
+    BY SMT DEF __SwiftTLAAnyEvaluationFailure0, SourceFailure
+
 THEOREM EmittedStringEvaluationCheck ==
     __SwiftTLAEvaluationOK <=> SourceEvaluationOK
-    BY EmittedStringSelectionFailure, CompiledStringFailureMatchesSource,
+    BY EmittedStringAggregateFailure,
         SMT DEF __SwiftTLAEvaluationOK, SourceEvaluationOK
 
 THEOREM EmittedStringTerminatingMatchesSource ==
@@ -96,12 +100,14 @@ THEOREM CompleteMissingStringSelectionSlice ==
                   <=> EmittedLabeledTerminating(label))
           /\ (SourceFailure <=> CompiledFailure)
           /\ (CompiledFailure <=> __SwiftTLAChoiceFailure0)
+          /\ (SourceFailure <=> __SwiftTLAAnyEvaluationFailure0)
           /\ (SourceEvaluationOK <=> __SwiftTLAEvaluationOK)
     BY EmittedStringSelectionInitialState, CompiledStringCompleteNext,
         EmittedStringCompleteNext,
         SourceStringSelectionIsDisabled, CompiledStringSelectionIsDisabled,
         EmittedStringSelectionIsDisabled,
         CompiledStringFailureMatchesSource, EmittedStringSelectionFailure,
+        EmittedStringAggregateFailure,
         EmittedStringEvaluationCheck, EmittedStringTerminatingMatchesSource,
         SMT DEF SourceLabeledSelect, CompiledLabeledSelect,
             EmittedLabeledSelect, SourceLabeledTerminating,

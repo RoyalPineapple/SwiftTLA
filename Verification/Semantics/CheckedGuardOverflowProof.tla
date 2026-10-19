@@ -55,6 +55,7 @@ THEOREM CompleteEmittedGuardMatchesSource ==
           /\ (Next <=> SourceNext)
           /\ (EmittedLabeled(label) <=> SourceLabeled(label))
           /\ (__SwiftTLAOverflowFailure0 <=> SourceFailure)
+          /\ (__SwiftTLAAnyEvaluationFailure0 <=> SourceFailure)
           /\ (__SwiftTLAEvaluationOK <=> SourceEvaluationOK)
           /\ __SwiftTLAOverflowOperation0 = "addition"
           /\ __SwiftTLAOverflowOperands0 = <<count, 1>>
@@ -62,6 +63,7 @@ THEOREM CompleteEmittedGuardMatchesSource ==
         DEF Init, SourceInit, Next, SourceNext,
             advance, SourceAdvance, Terminating, SourceTerminating,
             EmittedLabeled, SourceLabeled, __SwiftTLAOverflowFailure0,
+            __SwiftTLAAnyEvaluationFailure0,
             SourceFailure, __SwiftTLAEvaluationOK, SourceEvaluationOK,
             __SwiftTLAOverflowOperation0, __SwiftTLAOverflowOperands0,
             WithinSwiftInt, EmittedDefined, SwiftIntMin, SwiftIntMax

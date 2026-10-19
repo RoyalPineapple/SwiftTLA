@@ -60,9 +60,11 @@ THEOREM CompleteLabeledRelationAgrees ==
 THEOREM SelectedFailureAndCheckingInvariantAgree ==
     ASSUME attempt \in BOOLEAN
     PROVE /\ (__SwiftTLAChoiceFailure0 <=> SourceFailure)
+          /\ (__SwiftTLAAnyEvaluationFailure0 <=> SourceFailure)
           /\ (__SwiftTLAEvaluationOK <=> ~SourceFailure)
     BY ConditionalChoiceLoweringPreservesStepAndFailure, SMT
-        DEF __SwiftTLAChoiceFailure0, __SwiftTLAEvaluationOK,
+        DEF __SwiftTLAChoiceFailure0, __SwiftTLAAnyEvaluationFailure0,
+            __SwiftTLAEvaluationOK,
             CompiledFailure, MatchingChoice, DefinedGuardedBranches
 
 THEOREM EmittedSelectedBranchInstantiatesDefinedRule ==

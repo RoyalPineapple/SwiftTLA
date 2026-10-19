@@ -37,9 +37,11 @@ THEOREM CompleteLabeledRelationAgrees ==
 
 THEOREM SelectedFailureAndCheckingInvariantAgree ==
     /\ (__SwiftTLAChoiceFailure0 <=> SourceFailure)
+    /\ (__SwiftTLAAnyEvaluationFailure0 <=> SourceFailure)
     /\ (__SwiftTLAEvaluationOK <=> ~SourceFailure)
     BY EmptyChoiceHasNoMatch, SMT
-        DEF __SwiftTLAChoiceFailure0, __SwiftTLAEvaluationOK,
+        DEF __SwiftTLAChoiceFailure0, __SwiftTLAAnyEvaluationFailure0,
+            __SwiftTLAEvaluationOK,
             SourceFailure
 
 THEOREM EmittedConditionFailureInstantiatesDefinedRule ==

@@ -118,11 +118,13 @@ THEOREM CompleteEmittedSequenceSelection ==
           /\ (SourceLabeledTerminating(label)
                 <=> EmittedLabeledTerminating(label))
           /\ ~__SwiftTLAChoiceFailure0
+          /\ ~__SwiftTLAAnyEvaluationFailure0
           /\ __SwiftTLAEvaluationOK
     BY EmittedSequenceChoiceMatchesSource, SMT
         DEF Init, SourceInit, Next, SourceNext, Terminating,
             SourceTerminating, SourceLabeledSelect, EmittedLabeledSelect,
             SourceLabeledTerminating, EmittedLabeledTerminating,
-            __SwiftTLAChoiceFailure0, __SwiftTLAEvaluationOK
+            __SwiftTLAChoiceFailure0, __SwiftTLAAnyEvaluationFailure0,
+            __SwiftTLAEvaluationOK
 
 =====================================================================

@@ -1232,8 +1232,11 @@ invariants, temporal behavior, and a complete-state relation. The indexed
 guarded-history theorem also links the second action to the scheduled source
 history. A direct theorem about TLA+'s `ENABLED` remains unavailable in the
 [pinned TLAPS proof system](https://proofs.tlapl.us/doc/web/content/Documentation/Unsupported_features.html).
-The earlier local `--nofp` run proved all 1,423 obligations in that
-`SingleAssignment.tla` revision. `SmallAdditionFitsSwiftInt` supplies the ordered
+The local `--nofp` run proved all 1,552 obligations in the current
+`SingleAssignment.tla` revision. The generated `OrderedCopy.tla` now includes
+aggregate evaluation-failure predicates, but this module does not yet prove
+those predicates or its selected evaluation invariant against source failures.
+`SmallAdditionFitsSwiftInt` supplies the ordered
 bound fact; an explicit nonempty-candidate witness closes singleton integer
 selection; exposing the existing `OrderedAddDefined` definition closes
 guarded-history function typing. That run proved that revision's obligations

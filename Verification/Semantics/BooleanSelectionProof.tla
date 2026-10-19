@@ -130,7 +130,7 @@ THEOREM EmittedBooleanChoiceHasNoFailure ==
 THEOREM EmittedBooleanEvaluationCheckPasses ==
     __SwiftTLAEvaluationOK
     BY EmittedBooleanChoiceHasNoFailure
-        DEF __SwiftTLAEvaluationOK
+        DEF __SwiftTLAAnyEvaluationFailure0, __SwiftTLAEvaluationOK
 
 THEOREM EmittedBooleanTerminatingMatchesSource ==
     Terminating <=> SourceBooleanTerminating
@@ -155,6 +155,7 @@ THEOREM CompleteBooleanSelectionSlice ==
           /\ (CompiledLabeledTerminating(label)
                   <=> EmittedLabeledTerminating(label))
           /\ ~__SwiftTLAChoiceFailure0
+          /\ ~__SwiftTLAAnyEvaluationFailure0
           /\ __SwiftTLAEvaluationOK
     BY EmittedBooleanChoiceInitialState, EmittedBooleanCompleteNext,
         CompiledBooleanChoiceMatchesSource, EmittedBooleanChoiceMatchesSource,
@@ -162,7 +163,8 @@ THEOREM CompleteBooleanSelectionSlice ==
         EmittedBooleanEvaluationCheckPasses, SMT
         DEF SourceLabeledChoice, CompiledLabeledChoice,
             EmittedLabeledChoice, SourceLabeledTerminating,
-            CompiledLabeledTerminating, EmittedLabeledTerminating
+            CompiledLabeledTerminating, EmittedLabeledTerminating,
+            __SwiftTLAAnyEvaluationFailure0, __SwiftTLAEvaluationOK
 
 ReversedBooleanFirst(predicate) ==
     CHOOSE member \in BooleanMatches(predicate) :

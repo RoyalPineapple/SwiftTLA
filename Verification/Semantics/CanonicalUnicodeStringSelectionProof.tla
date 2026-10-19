@@ -96,11 +96,12 @@ THEOREM CompleteEmittedCanonicalUnicodeStringSelection ==
           /\ (SourceLabeledTerminating(label)
                 <=> EmittedLabeledTerminating(label))
           /\ ~__SwiftTLAChoiceFailure0
+          /\ ~__SwiftTLAAnyEvaluationFailure0
           /\ __SwiftTLAEvaluationOK
     BY EmittedUnicodeStringChoiceMatchesSource, EmittedUnicodeStringChoiceHasNoFailure, SMT
         DEF Init, SourceInit, Next, SourceNext, Terminating,
             SourceTerminating, SourceLabeledSelect, EmittedLabeledSelect,
             SourceLabeledTerminating, EmittedLabeledTerminating,
-            __SwiftTLAEvaluationOK
+            __SwiftTLAAnyEvaluationFailure0, __SwiftTLAEvaluationOK
 
 =====================================================================

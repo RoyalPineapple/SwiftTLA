@@ -75,7 +75,8 @@ import Testing
         }
         #expect(laterFailures.count == 4)
         #expect(laterFailures.allSatisfy { $0.contains("== (IF divisor # 0 THEN") })
-        #expect(lines.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLADivisionByZeroFailure0) /\\ ~(__SwiftTLAOverflowFailure0) /\\ ~(__SwiftTLAOverflowFailure0_1) /\\ ~(__SwiftTLADivisionByZeroFailure0_1) /\\ ~(__SwiftTLAOverflowFailure0_2)"))
+        #expect(lines.contains { $0.hasPrefix("__SwiftTLAAnyEvaluationFailure0 ==") && $0.contains("divisor # 0") })
+        #expect(lines.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)"))
         #expect(lines.contains { $0.hasPrefix("compute == (IF (IF divisor # 0 THEN") })
 
     }
@@ -94,7 +95,8 @@ import Testing
         let lines = rendered.tlaBundle.root.tla.split(separator: "\n")
         #expect(lines.contains("__SwiftTLADivisionByZeroFailure0 == ~(divisor # 0)"))
         #expect(lines.contains("__SwiftTLANegativeModuloDivisorFailure0 == (IF divisor # 0 THEN ~(divisor > 0) ELSE FALSE)"))
-        #expect(lines.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLADivisionByZeroFailure0) /\\ ~(__SwiftTLANegativeModuloDivisorFailure0)"))
+        #expect(lines.contains { $0.hasPrefix("__SwiftTLAAnyEvaluationFailure0 ==") && $0.contains("divisor > 0") })
+        #expect(lines.contains("__SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)"))
         #expect(lines.contains { $0.hasPrefix("compute == (IF (IF divisor # 0 THEN (IF divisor > 0 THEN") })
     }
 
@@ -150,8 +152,9 @@ import Testing
                 && $0.contains("IF (member \\in {1}) THEN") && $0.contains("divisor # 0")
         })
         #expect(lines.contains {
-            $0.hasPrefix("__SwiftTLAEvaluationOK ==") && $0.contains("__SwiftTLADivisionByZeroFailure0")
+            $0 == "__SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)"
         })
+        #expect(lines.contains { $0.hasPrefix("__SwiftTLAAnyEvaluationFailure0 ==") && $0.contains("member \\in {1}") })
     }
 
     @Test("A conditional reports condition failure before either branch")
