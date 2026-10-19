@@ -1256,12 +1256,12 @@ The TLAPS module proves the TLA+ rule for arbitrary states; the Swift output
 link remains an exact checked instance, not a proof for every accepted source
 program.
 The generated-action verifier now applies one reusable `define`-forwarding
-check to every emitted action: the child call's argument for the newly
-captured value must name that binding, not re-evaluate a state field. A mutation
-that substitutes a state-field read for that captured value failed the focused
-test before this check and is now rejected. This rule does not yet verify
-the initializer's expression against the compiled expression or every inherited binder argument;
-those output links remain open.
+check to every emitted action. It reads the local function signatures and
+requires the child call to pass every inherited binding, then the newly
+captured binding, in order. Mutations replacing either kind of binding with a
+state-field read failed the focused test before this check and are now
+rejected. This rule does not verify that the initializer's emitted expression
+has the meaning of its compiled expression; that output link remains open.
 `SmallAdditionFitsSwiftInt` supplies the ordered
 bound fact; an explicit nonempty-candidate witness closes singleton integer
 selection; exposing the existing `OrderedAddDefined` definition closes

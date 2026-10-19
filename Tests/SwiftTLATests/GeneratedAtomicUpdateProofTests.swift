@@ -106,6 +106,19 @@ struct GeneratedAtomicUpdateProofTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.binding.0")
         }
+        let wrongInheritedSource = emittedUpdate.description.replacingOccurrences(
+            of: "try _actionPart2(___atomic_0_0, ___atomic_1_1, updates, emit)",
+            with: "try _actionPart2(state.state.first, ___atomic_1_1, updates, emit)")
+        #expect(wrongInheritedSource != emittedUpdate.description)
+        let wrongInherited = try #require(Parser.parse(source: wrongInheritedSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongInherited, action: compiledAction.body,
+                parts: expectedWrites)
+            Issue.record("A generated action replaced an earlier captured value before its child")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.binding.1")
+        }
         let wrongChildSource = emittedUpdate.description.replacingOccurrences(
             of: "try _actionPart3(", with: "try _actionPart5(")
         #expect(wrongChildSource != emittedUpdate.description)

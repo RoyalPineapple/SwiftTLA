@@ -1507,6 +1507,7 @@ func verifyGeneratedActionWriteOutput(
         if token == "}" { depth -= 1 }
     }
     var bodies: [Int: [String]] = [:]
+    var parameters: [Int: [String]] = [:]
     for index in visitorTokens.indices where visitorTokens[index] == "func" && tokenDepths[index] == 1 {
         let nameIndex = index + 1
         guard nameIndex < visitorTokens.count else { continue }
@@ -1527,6 +1528,24 @@ func verifyGeneratedActionWriteOutput(
         guard depth == 0 else {
             throw invalid("native.action.parts", "a closed body for \(name)", "missing closing brace")
         }
+        guard visitorTokens[nameIndex + 1] == "(" else {
+            throw invalid("native.action.parts", "parameters for \(name)", "missing parameter list")
+        }
+        var parameterDepth = 0
+        var names: [String] = []
+        for position in (nameIndex + 1)..<open {
+            let token = visitorTokens[position]
+            if token == "(" { parameterDepth += 1 }
+            if token == ")" { parameterDepth -= 1 }
+            if parameterDepth == 1 && token == "_" && position + 2 < open &&
+                visitorTokens[position + 2] == ":" {
+                names.append(visitorTokens[position + 1])
+            }
+        }
+        guard parameterDepth == 0 else {
+            throw invalid("native.action.parts", "closed parameters for \(name)", "malformed parameter list")
+        }
+        parameters[id] = names
         bodies[id] = Array(visitorTokens[(open + 1)..<(close - 1)])
     }
     let expectedEntry = ["try", "_actionPart0", "(", "_Updates", "(", ")", ",", "emit", ")"]
@@ -1599,18 +1618,31 @@ func verifyGeneratedActionWriteOutput(
         }
     }
     for (id, child) in definitions {
-        guard let tokens = bodies[id], tokens.count > 10,
+        guard let tokens = bodies[id], tokens.count >= 3,
               tokens[0] == "let", tokens[2] == "=", tokens[1].hasPrefix("_") else {
             throw invalid("native.action.binding.\(id)",
                 "a captured value before its child call", "missing or malformed binding")
         }
         let name = tokens[1]
-        let expectedTail = [name, ",", "updates", ",", "emit", ")"]
-        guard tokens.suffix(expectedTail.count) == expectedTail,
-              let call = tokens.lastIndex(of: "_actionPart\(child)"),
-              call > 0, tokens[call - 1] == "try", tokens[call + 1] == "(" else {
+        guard let parent = parameters[id], let childParameters = parameters[child],
+              parent.suffix(2) == ["updates", "emit"] else {
             throw invalid("native.action.binding.\(id)",
-                "the child receives the captured value unchanged", "generated child arguments differ")
+                "current bindings, updates, and emitter parameters", "unexpected parameter list")
+        }
+        let arguments = Array(parent.dropLast(2)) + [name, "updates", "emit"]
+        guard childParameters == arguments else {
+            throw invalid("native.action.binding.\(id)",
+                "the child receives every inherited binding and the captured value", "incorrect child parameters")
+        }
+        var expectedCall = ["try", "_actionPart\(child)", "("]
+        for (index, argument) in arguments.enumerated() {
+            if index > 0 { expectedCall.append(",") }
+            expectedCall.append(argument)
+        }
+        expectedCall.append(")")
+        guard tokens.suffix(expectedCall.count) == expectedCall else {
+            throw invalid("native.action.binding.\(id)",
+                "the child receives inherited and captured values unchanged", "generated child arguments differ")
         }
     }
     for id in alternatives {
