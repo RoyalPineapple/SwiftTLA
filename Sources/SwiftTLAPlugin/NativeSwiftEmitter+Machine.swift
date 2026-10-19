@@ -1564,6 +1564,7 @@ func verifyGeneratedActionWriteOutput(
     var alternatives: [Int] = []
     var conjunctions: [Int] = []
     var conditionals: [Int] = []
+    var conditionalPredicates: [Int: CompiledExpression] = [:]
     var guards: [(id: Int, predicate: CompiledExpression)] = []
     var definitions: [(id: Int, child: Int, value: CompiledExpression)] = []
     var assignments: [Int: CompiledExpression] = [:]
@@ -1590,9 +1591,10 @@ func verifyGeneratedActionWriteOutput(
             definitions.append((id, nextID, value))
             pending.append((nextID, body))
             nextID += 1
-        case .ifElse(_, let yes, let no):
+        case .ifElse(let predicate, let yes, let no):
             expectedChildren[id] = [nextID, nextID + 1]
             conditionals.append(id)
+            conditionalPredicates[id] = predicate
             pending.append((nextID, yes))
             pending.append((nextID + 1, no))
             nextID += 2
@@ -1882,9 +1884,12 @@ func verifyGeneratedActionWriteOutput(
                 "both selected branches receive the same bindings, updates, and emitter",
                 "invalid conditional child calls")
         }
+        let checkedPredicate = conditionalPredicates[id].flatMap { predicate in
+            parameters[id].flatMap { scalarPredicateTokens(predicate, parameters: $0) }
+        }?.joined(separator: " ") ?? condition.value
         let expected = Parser.parse(source: """
         func proof() {
-            try _NativeMachineOperations.visitConditional({ \(condition.value) },
+            try _NativeMachineOperations.visitConditional({ \(checkedPredicate) },
                 ifTrue: { \(yes.joined(separator: " ")) },
                 ifFalse: { \(no.joined(separator: " ")) })
         }

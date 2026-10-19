@@ -1633,7 +1633,7 @@ preserves first-failure order and checking effects. Those links remain open.
 | `or` | Guarded-choice preservation conditional on equal branch edges; output-linked success-plus-failure and two distinct-failure fixtures; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, all failure kinds and TLA+ ordering, multiplicity policy, and both outputs. |
 | `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order; an output-linked case retains a successful candidate and reports another candidate's expression-level choice failure; fallible domains now guard the emitted TLA+ action and retain evaluation failure | Prove arbitrary emitted domain and branch expressions agree, including all failure kinds, first-failure order, and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |
-| `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure; every generated Swift conditional calls one checked kernel | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule, and prove the independent TLA+ output link. |
+| `ifElse` | Equal pure predicates and branch edges preserve labeled edges and enabledness; `ConditionalOutcomeRules` proves source, guarded compiled, and TLA+ conditional forms agree on labeled steps and first failure; every generated Swift conditional calls one checked kernel; recognized Int/Bool conditions are checked against their compiled predicates; one scalar conditional has an exact generated-output theorem | Link every emitted condition and branch expression, including nonrepeatable ones, to the rule, and generalize the independent TLA+ output link. |
 
 A typed membership condition over repeatable operands is also repeatable.
 Previously, TLA+ generation omitted the selected branch's failure predicates
@@ -1714,6 +1714,19 @@ before this rule and is now rejected. This extends the scalar output link from
 `Let` captures to `guard_` and `assign`, but does not certify collection,
 short-circuit, or other non-scalar expressions. The Swift runtime and
 syntax/TLAPS trust boundaries remain explicit.
+
+`GeneratedScalarConditionalProof.tla` imports the byte-for-byte generated TLA+
+module for `If(left < right)` with two distinct `selected` outcomes. Its
+independent source rule and eight TLAPS obligations establish equal initial
+states, the complete `choose`-labeled transition relation, and state typing.
+The generated-Swift verifier reconstructs recognized Int/Bool conditional
+predicates from the compiled action, rather than accepting the emitter's own
+condition text as evidence. A self-consistent change to that text and its
+metadata passed before this rule and is now rejected. The fixture exercises
+both generated-machine branches. This proves one total conditional instance
+and a reusable scalar output check; fallible, short-circuit, collection, and
+other accepted conditions still need their own links. Swift execution, the
+syntax check, and TLAPS remain trusted boundaries.
 
 `FallibleEqualityCompositionRule.tla` proves that equality preserves complete
 labeled edges and failure records when its checked operand has the same

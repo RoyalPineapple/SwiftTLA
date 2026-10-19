@@ -540,6 +540,55 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(try disabled.successors(for: .advance).isEmpty)
     }
 
+    @Test("A generated scalar conditional selects its compiled predicate")
+    func scalarConditionalKeepsCompiledPredicate() throws {
+        let compiled = try GeneratedScalarConditionalProofModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "GeneratedScalarConditionalProofModel", program: program))
+        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let parts = try emitter.actionFunctions(action.body)
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
+            stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
+
+        let condition = try #require(parts.conditions.first)
+        let replacement = condition.value == "false" ? "true" : "false"
+        let original = "visitConditional({ \(condition.value) }"
+        let changed = "visitConditional({ \(replacement) }"
+        #expect(visitor.description.contains(original))
+        let wrongCondition = try #require(Parser.parse(source:
+            visitor.description.replacingOccurrences(of: original, with: changed))
+            .statements.first?.item.as(DeclSyntax.self))
+        let selfConsistentWrongConditions = parts.conditions.map {
+            (id: $0.id, value: $0.id == condition.id ? replacement : $0.value)
+        }
+        do {
+            try verifyGeneratedActionWriteOutput(wrongCondition, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames,
+                parts: parts.writes, conditions: selfConsistentWrongConditions)
+            Issue.record("A generated conditional changed its compiled predicate")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.conditional.\(condition.id)")
+        }
+
+        let rendered = try GeneratedScalarConditionalProofModel.render().tlaBundle.root.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/GeneratedScalarConditionalProofModel.tla")
+            .standardizedFileURL
+        #expect(rendered == (try String(contentsOf: proofInput, encoding: .utf8)),
+            "Actual generated TLA+: \(rendered)")
+
+        let machines = try GeneratedScalarConditionalProofModel.initialMachines()
+        #expect(machines.count == 2)
+        for machine in machines {
+            var selected = machine
+            _ = try selected.send(.choose)
+            #expect(selected.state.selected == (machine.state.left < machine.state.right))
+        }
+    }
+
     @Test("Ordered copy emission is independent of field names")
     func generatedCopyRuleUsesResolvedFieldNames() throws {
         let model = try compiledProofModel(named: "RenamedAtomicCopyProofModel")
