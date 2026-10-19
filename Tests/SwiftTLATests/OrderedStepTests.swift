@@ -108,7 +108,7 @@ import SwiftSyntax
             Issue.record("A generated addition reread pre-step state instead of its inherited operand")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.binding."))
-            #expect(diagnostic.expected == "the captured value reads its compiled Int source")
+            #expect(diagnostic.expected == "the captured value reads its compiled source")
         }
         let wrongRoute = dispatch.description.replacingOccurrences(
             of: "Self._visitSuccessors1", with: "Self._visitSuccessors0")

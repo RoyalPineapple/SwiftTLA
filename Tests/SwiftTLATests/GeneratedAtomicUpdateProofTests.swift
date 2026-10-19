@@ -277,6 +277,32 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(current == 3)
     }
 
+    @Test("A captured Boolean reads its compiled state field")
+    func capturedBooleanReadsCompiledField() throws {
+        let compiled = try GeneratedBooleanCaptureProofModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "GeneratedBooleanCaptureProofModel", program: program))
+        let members = try emitter.machineMembers()
+        let visitor = try #require(member(named: "_visitUpdates0", in: members))
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
+            stateFields: emitter.stateMemberNames, parts: writes)
+        var wrongSource = visitor.description
+        let capturedRead = try #require(wrongSource.range(of: "state.state.mirror"))
+        wrongSource.replaceSubrange(capturedRead, with: "state.state.flag")
+        let wrong = try #require(Parser.parse(source: wrongSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrong, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A captured Boolean read the wrong state field")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+    }
+
     @Test("Ordered copy emission is independent of field names")
     func generatedCopyRuleUsesResolvedFieldNames() throws {
         let model = try compiledProofModel(named: "RenamedAtomicCopyProofModel")

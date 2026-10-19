@@ -1259,12 +1259,12 @@ program.
 The generated-action verifier applies one reusable `define`-forwarding check
 to every emitted action. It reads the local function signatures and requires
 the child call to pass every inherited binding, then the newly captured
-binding, in order. It also checks direct `Int` state-field and inherited-binder
-initializers against their compiled identities. Mutations replacing a captured
-read with another state field or a pre-step reread were accepted before this
-initializer check and are now rejected. Other value types and model-parameter
-reads are not covered by this output rule; their source-to-actual-Swift link
-remains open.
+binding, in order. It also checks direct `Int` and `Bool` state-field,
+inherited-binder, and literal initializers against their compiled identities.
+A Boolean-capture mutation that changed only the state field passed before this
+check and is now rejected. Other value types, derived Boolean expressions, and
+model-parameter reads are not covered by this output rule; their
+source-to-actual-Swift link remains open.
 The same verifier checks a captured `Int` arithmetic tree whose leaves are
 state fields, inherited bindings, or integer literals. It requires the emitted
 Swift closure to evaluate each leaf and checked addition, subtraction,

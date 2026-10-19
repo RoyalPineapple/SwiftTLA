@@ -34,3 +34,20 @@ struct RenamedAtomicCopyProofModel {
         }
     }
 }
+
+@TLAModel
+struct GeneratedBooleanCaptureProofModel {
+    enum Step: String, CaseIterable { case copy }
+
+    static var spec: TLASpec {
+        #spec("GeneratedBooleanCaptureProofModel") { scope in
+            let flag = scope.sharedVar(initial: false)
+            let mirror = scope.sharedVar(initial: true)
+            Do(Step.copy) {
+                Let(mirror) { captured in
+                    Assign(flag, to: captured)
+                }
+            }
+        }
+    }
+}

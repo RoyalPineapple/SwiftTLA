@@ -1618,18 +1618,20 @@ func verifyGeneratedActionWriteOutput(
             throw invalid("native.action.part.\(id)", "ordered child calls \(children)", "child calls \(calls)")
         }
     }
-    func directIntTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
-        guard expression.resultType == .int else { return nil }
+    func directScalarTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+        guard expression.resultType == .int || expression.resultType == .bool else { return nil }
         switch expression.operation {
         case .stateVariable(let variable):
             return stateFields[variable].map { ["state", ".", "state", ".", $0] }
-        case .boundValue(let binding) where program.bindingTypes[binding] == .int:
+        case .boundValue(let binding) where program.bindingTypes[binding] == expression.resultType:
             guard let name = program.binderNames[binding].map({ "_\($0)_\(binding.ordinal)" }),
                   parameters.contains(name) else { return nil }
             return [name]
-        case .value(.integer(let integer)):
+        case .value(.integer(let integer)) where expression.resultType == .int:
             if integer == Int.min { return ["Int", ".", "min"] }
             return integer < 0 ? ["-", String(integer.magnitude)] : [String(integer)]
+        case .value(.boolean(let value)) where expression.resultType == .bool:
+            return [value ? "true" : "false"]
         default:
             return nil
         }
@@ -1671,7 +1673,7 @@ func verifyGeneratedActionWriteOutput(
                         index == 0 ? [argument] : [",", argument]
                     } + [")"]
             } else {
-                guard let direct = directIntTokens(node, parameters: parameters) else { return nil }
+                guard let direct = directScalarTokens(node, parameters: parameters) else { return nil }
                 value = direct
             }
             let name = "_arithmetic\(ordinal)"
@@ -1712,10 +1714,10 @@ func verifyGeneratedActionWriteOutput(
         }
         let initializer = Array(tokens[3..<(tokens.count - expectedCall.count)])
         let expectedInitializer = arithmeticIntTokens(value, parameters: parent)
-            ?? directIntTokens(value, parameters: parent)
+            ?? directScalarTokens(value, parameters: parent)
         if let expectedInitializer, initializer != expectedInitializer {
             throw invalid("native.action.binding.\(id)",
-                "the captured value reads its compiled Int source", "initializer \(initializer)")
+                "the captured value reads its compiled source", "initializer \(initializer)")
         }
     }
     for id in alternatives {
