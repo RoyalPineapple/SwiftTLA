@@ -68,3 +68,21 @@ struct GeneratedBooleanEqualityProofModel {
         }
     }
 }
+
+@TLAModel
+struct GeneratedCheckedEqualityProofModel {
+    enum Step: String, CaseIterable { case compare }
+
+    static var spec: TLASpec {
+        #spec("GeneratedCheckedEqualityProofModel") { scope in
+            let left = scope.sharedVar(in: SetExpr<Int>.literal(2, 9_223_372_036_854_775_807))
+            let right = scope.sharedVar(initial: 3)
+            let matched = scope.sharedVar(initial: false)
+            Do(Step.compare) {
+                Let(left + 1 == right) { result in
+                    Assign(matched, to: result)
+                }
+            }
+        }
+    }
+}

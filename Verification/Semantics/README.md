@@ -1681,6 +1681,21 @@ of the syntax checks remain trusted boundaries. This slice has no fallible
 expression; it does not cover derived operands, other value types, arbitrary
 `define` trees, or other checking outcomes.
 
+`FallibleEqualityCompositionRule.tla` proves that equality preserves complete
+labeled edges and failure records when its checked operand has the same
+value-or-failure outcome on each path; a failed operand produces no equality
+edge. `GeneratedCheckedEqualityProof.tla` then imports the exact TLA+ module
+rendered by an accepted `#spec` fixture and proves its initial states,
+complete action, overflow predicate and operands, evaluation verdict, and
+reachable state type against an independent source rule. The fixture test
+requires the actual generated module to equal that proof input, checks the
+generated Swift action visitor against the compiled checked-addition and
+equality operations, and exercises both a valid successor and an overflow
+that leaves the machine unchanged. Its changed-operator control failed before
+the verifier was extended. This links one fallible composition, not arbitrary
+nested expressions or every failure kind; Swift's checked arithmetic kernel,
+the output syntax check, and the TLA+/TLAPS tool semantics remain trusted.
+
 For each compiled `ifElse`, the checker now also requires the actual emitted
 body to call `_NativeMachineOperations.visitConditional` with the emitter's
 rendered condition and the corresponding children, passing the same binder

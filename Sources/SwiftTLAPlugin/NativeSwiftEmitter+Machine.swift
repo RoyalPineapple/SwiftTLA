@@ -1688,8 +1688,10 @@ func verifyGeneratedActionWriteOutput(
     func directEqualityTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
         guard case .equal = expression.operation, expression.resultType == .bool,
               expression.children.count == 2,
-              let lhs = directScalarTokens(expression.children[0], parameters: parameters),
-              let rhs = directScalarTokens(expression.children[1], parameters: parameters) else { return nil }
+              let lhs = arithmeticIntTokens(expression.children[0], parameters: parameters)
+                ?? directScalarTokens(expression.children[0], parameters: parameters),
+              let rhs = arithmeticIntTokens(expression.children[1], parameters: parameters)
+                ?? directScalarTokens(expression.children[1], parameters: parameters) else { return nil }
         return ["("] + lhs + ["=="] + rhs + [")"]
     }
     for (id, child, value) in definitions {

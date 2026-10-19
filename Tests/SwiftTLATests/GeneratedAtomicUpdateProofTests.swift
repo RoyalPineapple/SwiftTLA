@@ -351,6 +351,51 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(successor.state.flag && successor.state.mirror == false)
     }
 
+    @Test("A fallible captured equality keeps its checked operand and operator")
+    func capturedEqualityKeepsCheckedAddition() throws {
+        let compiled = try GeneratedCheckedEqualityProofModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "GeneratedCheckedEqualityProofModel", program: program))
+        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
+            stateFields: emitter.stateMemberNames, parts: writes)
+        var changedSource = visitor.description
+        let equality = try #require(changedSource.range(of: " == "))
+        changedSource.replaceSubrange(equality, with: " != ")
+        let changed = try #require(Parser.parse(source: changedSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(changed, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A captured equality with checked addition accepted a changed operator")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+
+        let rendered = try GeneratedCheckedEqualityProofModel.render().tlaBundle.root.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/GeneratedCheckedEqualityProofModel.tla")
+            .standardizedFileURL
+        #expect(rendered == (try String(contentsOf: proofInput, encoding: .utf8)))
+
+        let machines = try GeneratedCheckedEqualityProofModel.initialMachines()
+        #expect(machines.count == 2)
+        let passing = try #require(machines.first { $0.state.left == 2 })
+        let successor = try #require(passing.successors(for: .compare).first)
+        #expect(successor.state.left == 2 && successor.state.right == 3)
+        #expect(successor.state.matched)
+        var overflowing = try #require(machines.first { $0.state.left == Int.max })
+        let before = overflowing.snapshot
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            try overflowing.send(.compare)
+        }
+        #expect(overflowing.snapshot == before)
+    }
+
     @Test("Ordered copy emission is independent of field names")
     func generatedCopyRuleUsesResolvedFieldNames() throws {
         let model = try compiledProofModel(named: "RenamedAtomicCopyProofModel")
