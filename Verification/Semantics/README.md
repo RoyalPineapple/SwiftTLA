@@ -1069,9 +1069,15 @@ failure classes over `divisor \in -1..1`. The `#spec` test pins that module
 byte-for-byte, exercises all eight initial generated Swift machines, and
 rejects a mutation that reverses the inner short-circuit decision. This
 closes that nested instance and a reusable one-node outcome rule, not an
-induction theorem for arbitrary accepted expression trees. The generated
-Swift verifier still falls back for unrecognized leaves, and Swift execution
-and TLAPS remain trusted boundaries.
+output link for arbitrary accepted expression trees. In
+`BooleanTreeOutcomeComposition.tla`, a postorder history and induction over
+every finite node position prove that equal leaf outcomes compose through any
+`and`/`or` tree with complete values and first-failure identities, assuming
+each leaf has an agreed, repeatable outcome. The postorder rule requires
+child indices to precede their parent. This is a semantic composition theorem,
+not proof that arbitrary leaves agree or that either emitter realizes the
+tree. The generated Swift verifier still falls back for unrecognized leaves,
+and Swift execution and TLAPS remain trusted boundaries.
 
 The ordered-`Do` lemma uses finite, indexed source and scheduled histories.
 TLAPS proves that both histories exist for every finite sequence of typed
