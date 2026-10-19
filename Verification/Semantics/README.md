@@ -1241,9 +1241,20 @@ match the independent source rule. Dropping the second site's failure changes
 the verdict at `x = SwiftIntMax - 1`; this is the negative control. The
 proof also rejected a temporary mutation of the actual emitted fixture that
 omitted the second aggregate check (one failed evaluation-check obligation);
-after restoration, all 71 obligations passed again. The
-generated Swift machine is exercised by the focused test, but its output link
-for arbitrary states is not proved by this module.
+after restoration, all 71 obligations passed again. The focused
+`OrderedStepTests` output check parses the authored `OrderedCopyModel`, requires
+the two compiled checked additions and their ordered bound-value reads, and
+token-matches all three actual generated Swift update visitors, action
+dispatch, and formal action labels against the hand-reviewed
+`OrderedCopySwiftVisitors.txt`. Its negative controls change the second
+addition to read pre-step state and route `repeatWrites` to `copy`; both are
+rejected by the output check. The third visitor is the generated `Terminating`
+stutter action, so this witness does not silently omit it. Macro expansion
+calls this same emitter, but the test does not prove Swift's interpretation of
+the emitted code, the checked-arithmetic helper, or a generic emitter theorem.
+The TLAPS module proves the TLA+ rule for arbitrary states; the Swift output
+link remains an exact checked instance, not a proof for every accepted source
+program.
 `SmallAdditionFitsSwiftInt` supplies the ordered
 bound fact; an explicit nonempty-candidate witness closes singleton integer
 selection; exposing the existing `OrderedAddDefined` definition closes

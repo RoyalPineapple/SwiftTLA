@@ -1,9 +1,108 @@
 import Foundation
 import Testing
+import SwiftParser
+import SwiftSyntax
 @testable import SwiftTLA
+@testable import SwiftTLAPlugin
 @testable import UpstreamParity
 
 @Suite struct OrderedStepTests {
+    @Test("Generated ordered writes retain the proved arithmetic and read order")
+    func generatedOrderedWriteProofInput() throws {
+        let fixture = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().appendingPathComponent("OrderedStepFixtures.swift")
+        let syntax = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(syntax.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "OrderedCopyModel" })
+        let compiled = try TLASpecVerifier.parseAndVerify(declaration)
+        let actions = compiled.program.behavior.actions
+        let variable = try #require(compiled.program.layout.variables.first {
+            $0.declaration.name == "x"
+        })
+        #expect(actions.count == 3)
+        func captures(in node: CompiledActionExpr) -> [(BinderID, CompiledExpression)] {
+            switch node {
+            case .define(let id, let value, let body):
+                return [(id, value)] + captures(in: body)
+            case .and(let left, let right), .or(let left, let right),
+                 .ifElse(_, let left, let right):
+                return captures(in: left) + captures(in: right)
+            case .existsAction(_, _, let body): return captures(in: body)
+            case .assign, .unchanged, .guard_: return []
+            }
+        }
+        for (index, action) in actions.prefix(2).enumerated() {
+            let ordered = captures(in: action.body)
+            guard ordered.count == 2 else {
+                Issue.record("The ordered source step no longer has two captured writes")
+                return
+            }
+            let first = ordered[0].0
+            let firstValue = ordered[0].1
+            let secondValue = ordered[1].1
+            guard case .add = firstValue.operation,
+                  firstValue.children.count == 2,
+                  case .stateVariable(let read) = firstValue.children[0].operation,
+                  case .value(.integer(1)) = firstValue.children[1].operation,
+                  read == variable.id else {
+                Issue.record("The ordered source step no longer lowers to the proved first addition")
+                return
+            }
+            if index == 0 {
+                guard case .boundValue(let copied) = secondValue.operation,
+                      copied == first else {
+                    Issue.record("The copy no longer reads the first checked result")
+                    return
+                }
+            } else {
+                guard case .add = secondValue.operation,
+                      secondValue.children.count == 2,
+                      case .boundValue(let prior) = secondValue.children[0].operation,
+                      case .value(.integer(1)) = secondValue.children[1].operation,
+                      prior == first else {
+                    Issue.record("The second addition no longer reads the first checked result")
+                    return
+                }
+            }
+        }
+        var emitter = NativeSwiftEmitter(model: compiled)
+        let members = try emitter.machineMembers()
+        let visitors = try ["_visitUpdates0", "_visitUpdates1", "_visitUpdates2"].map { name in
+            try #require(members.first {
+                $0.as(FunctionDeclSyntax.self)?.name.text == name
+            })
+        }
+        let dispatch = try #require(members.first {
+            $0.description.contains("private func _visitSuccessors(for action: Action,")
+        })
+        let formalCall = try #require(members.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "formalCall"
+        })
+        let witness = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/OrderedCopySwiftVisitors.txt")
+            .standardizedFileURL
+        let expected = try String(contentsOf: witness, encoding: .utf8)
+        func tokens(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
+        }
+        let actual = (visitors + [dispatch, formalCall]).map(\.description).joined(separator: "\n")
+        #expect(tokens(actual) == tokens(expected))
+        let wrongSecondRead = visitors[1].description.replacingOccurrences(
+            of: "let _arithmetic0: Int = ___atomic_2_2",
+            with: "let _arithmetic0: Int = state.state.x")
+        #expect(wrongSecondRead != visitors[1].description)
+        #expect(tokens(([
+            visitors[0].description, wrongSecondRead, visitors[2].description,
+            dispatch.description, formalCall.description
+        ]).joined(separator: "\n")) != tokens(expected))
+        let wrongRoute = dispatch.description.replacingOccurrences(
+            of: "Self._visitSuccessors1", with: "Self._visitSuccessors0")
+        #expect(wrongRoute != dispatch.description)
+        #expect(tokens((visitors.map(\.description) + [wrongRoute, formalCall.description])
+            .joined(separator: "\n")) != tokens(expected))
+    }
+
     @Test("Later reads observe earlier writes in one atomic transition")
     func orderedReadsAndRepeatedWrites() throws {
         var machine = try OrderedCopyModel.makeMachine()
