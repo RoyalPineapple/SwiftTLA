@@ -104,3 +104,20 @@ struct GeneratedPredicateCaptureProofModel {
         }
     }
 }
+
+@TLAModel
+struct GeneratedScalarGuardProofModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("GeneratedScalarGuardProofModel") { scope in
+            let left = scope.sharedVar(in: SetExpr<Int>.literal(2, 4))
+            let right = scope.sharedVar(initial: 3)
+            let advanced = scope.sharedVar(initial: false)
+            Do(Step.advance) {
+                When(left < right)
+                Assign(advanced, to: true)
+            }
+        }
+    }
+}

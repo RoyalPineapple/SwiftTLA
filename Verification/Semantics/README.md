@@ -1262,9 +1262,9 @@ the child call to pass every inherited binding, then the newly captured
 binding, in order. It also checks direct `Int` and `Bool` state-field,
 inherited-binder, and literal initializers against their compiled identities.
 A Boolean-capture mutation that changed only the state field passed before this
-check and is now rejected. Other value types, derived Boolean expressions, and
-model-parameter reads are not covered by this output rule; their
-source-to-actual-Swift link remains open.
+check and is now rejected. Direct scalar predicates and their guarded-action
+use are covered by the later output rules below. Other value types, model-
+parameter reads, and general expression trees still lack this link.
 The same verifier checks a captured `Int` arithmetic tree whose leaves are
 state fields, inherited bindings, or integer literals. It requires the emitted
 Swift closure to evaluate each leaf and checked addition, subtraction,
@@ -1695,6 +1695,18 @@ emitted-Swift syntax link for that expression family, but only the named
 capture has an end-to-end TLA+ theorem. Swift operator semantics, TLAPS, and
 the syntax checker remain trusted; arbitrary nested expressions and other
 accepted value families remain uncovered.
+
+`GeneratedScalarGuardProof.tla` imports a byte-for-byte checked TLA+ module
+for `When(left < right)` followed by a complete-state assignment. It proves
+the independent source rule and emitted `advance` relation have the same
+initial states, complete labeled steps, and resulting state type. The
+generated Swift verifier now checks every reconstructible scalar guard body
+against its compiled predicate and requires exactly one gated update. A
+changed `<` to `>` passed before this rule and is now rejected; the fixture
+also checks the generated machine's enabled and disabled initial states.
+This extends the scalar predicate output link from `Let` captures to
+`guard_`, but does not certify collection, short-circuit, or other non-scalar
+guards. The Swift runtime and syntax/TLAPS trust boundaries remain explicit.
 
 `FallibleEqualityCompositionRule.tla` proves that equality preserves complete
 labeled edges and failure records when its checked operand has the same

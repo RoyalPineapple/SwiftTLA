@@ -447,6 +447,49 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(machine.state.matched == false)
     }
 
+    @Test("A generated scalar guard evaluates its compiled predicate")
+    func scalarGuardKeepsCompiledPredicate() throws {
+        let compiled = try GeneratedScalarGuardProofModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "GeneratedScalarGuardProofModel", program: program))
+        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
+            stateFields: emitter.stateMemberNames, parts: writes)
+
+        var source = visitor.description
+        let comparison = try #require(source.range(of: " < "))
+        source.replaceSubrange(comparison, with: " > ")
+        let changed = try #require(Parser.parse(source: source)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(changed, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("The generated scalar guard accepted a changed predicate")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+
+        let rendered = try GeneratedScalarGuardProofModel.render().tlaBundle.root.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/GeneratedScalarGuardProofModel.tla")
+            .standardizedFileURL
+        #expect(rendered == (try String(contentsOf: proofInput, encoding: .utf8)),
+            "Actual generated TLA+: \(rendered)")
+
+        let machines = try GeneratedScalarGuardProofModel.initialMachines()
+        #expect(machines.count == 2)
+        var enabled = try #require(machines.first { $0.state.left == 2 })
+        let disabled = try #require(machines.first { $0.state.left == 4 })
+        #expect(enabled.state.right == 3 && !enabled.state.advanced)
+        _ = try enabled.send(.advance)
+        #expect(enabled.state.advanced)
+        #expect(try disabled.successors(for: .advance).isEmpty)
+    }
+
     @Test("Ordered copy emission is independent of field names")
     func generatedCopyRuleUsesResolvedFieldNames() throws {
         let model = try compiledProofModel(named: "RenamedAtomicCopyProofModel")

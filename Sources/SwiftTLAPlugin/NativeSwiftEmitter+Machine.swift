@@ -1563,6 +1563,7 @@ func verifyGeneratedActionWriteOutput(
     var expectedChildren: [Int: [Int]] = [:]
     var alternatives: [Int] = []
     var conditionals: [Int] = []
+    var guards: [(id: Int, predicate: CompiledExpression)] = []
     var definitions: [(id: Int, child: Int, value: CompiledExpression)] = []
     var nextID = 1
     var expectedWriteCount = 0
@@ -1571,8 +1572,9 @@ func verifyGeneratedActionWriteOutput(
         case .assign, .unchanged:
             expectedWriteCount += 1
             expectedChildren[id] = []
-        case .guard_:
+        case .guard_(let predicate):
             expectedChildren[id] = []
+            guards.append((id, predicate))
         case .existsAction(_, _, let body):
             expectedChildren[id] = [nextID]
             pending.append((nextID, body))
@@ -1729,6 +1731,25 @@ func verifyGeneratedActionWriteOutput(
                 : ["("] + operands[0] + [symbol] + operands[1] + [")"])
         }
         return values.count == 1 ? values[0] : nil
+    }
+    for guardNode in guards {
+        guard let tokens = bodies[guardNode.id], let bindings = parameters[guardNode.id] else {
+            throw invalid("native.action.guard.\(guardNode.id)",
+                "a generated guard with its compiled bindings", "missing guard body or bindings")
+        }
+        let expected: [String]?
+        if let constant = guardNode.predicate.booleanConstant {
+            expected = constant ? ["try", "emit", "(", "updates", ")"] : ["return"]
+        } else if let predicate = scalarPredicateTokens(guardNode.predicate, parameters: bindings) {
+            expected = ["guard"] + predicate + ["else", "{", "return", "}",
+                "try", "emit", "(", "updates", ")"]
+        } else {
+            expected = nil
+        }
+        if let expected, tokens != expected {
+            throw invalid("native.action.guard.\(guardNode.id)",
+                "the compiled predicate gates exactly one unchanged update emission", "guard body \(tokens)")
+        }
     }
     for (id, child, value) in definitions {
         guard let tokens = bodies[id], tokens.count >= 3,
