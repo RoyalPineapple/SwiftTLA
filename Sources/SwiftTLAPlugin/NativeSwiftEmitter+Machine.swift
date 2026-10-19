@@ -1685,6 +1685,13 @@ func verifyGeneratedActionWriteOutput(
         return ["(", "try", "{", "(", ")", "throws", "->", "Int", "in"] + statements +
             ["return", result, "}", "(", ")", ")"]
     }
+    func directEqualityTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+        guard case .equal = expression.operation, expression.resultType == .bool,
+              expression.children.count == 2,
+              let lhs = directScalarTokens(expression.children[0], parameters: parameters),
+              let rhs = directScalarTokens(expression.children[1], parameters: parameters) else { return nil }
+        return ["("] + lhs + ["=="] + rhs + [")"]
+    }
     for (id, child, value) in definitions {
         guard let tokens = bodies[id], tokens.count >= 3,
               tokens[0] == "let", tokens[2] == "=", tokens[1].hasPrefix("_") else {
@@ -1713,7 +1720,8 @@ func verifyGeneratedActionWriteOutput(
                 "the child receives inherited and captured values unchanged", "generated child arguments differ")
         }
         let initializer = Array(tokens[3..<(tokens.count - expectedCall.count)])
-        let expectedInitializer = arithmeticIntTokens(value, parameters: parent)
+        let expectedInitializer = directEqualityTokens(value, parameters: parent)
+            ?? arithmeticIntTokens(value, parameters: parent)
             ?? directScalarTokens(value, parameters: parent)
         if let expectedInitializer, initializer != expectedInitializer {
             throw invalid("native.action.binding.\(id)",

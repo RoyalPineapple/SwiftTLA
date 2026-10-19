@@ -1664,6 +1664,23 @@ with the abstract rule's branch, binding, or failure semantics, nor that
 assignment expressions or the independent TLA+ output agree. Those remain
 separate obligations; this is not yet a general action-output theorem.
 
+`BooleanEqualityCaptureRule.tla` gives the independent source rule for one
+`#spec` value family: Boolean equality is a case split over both Boolean
+operands. TLAPS proves that the case split, compiled equality, the native
+captured value, and the two nested emitted TLA+ `LET` bindings produce the
+same complete state and `compare`-labeled step. The rule also proves
+agreement of enabledness and therefore the deadlock verdict
+for this action on every complete Boolean state. The accepted
+`GeneratedBooleanEqualityProofModel` checks the source-to-compiled operand
+identities, the actual emitted Swift initializer against the compiled
+operands, the exact emitted TLA+ action and initial conjuncts, and the
+generated machine's resulting state and action identity. Its operator
+mutation failed before the Swift output check and is now rejected. The
+language/runtime meanings of Swift `Bool.==` and TLA+ `=` and the soundness
+of the syntax checks remain trusted boundaries. This slice has no fallible
+expression; it does not cover derived operands, other value types, arbitrary
+`define` trees, or other checking outcomes.
+
 For each compiled `ifElse`, the checker now also requires the actual emitted
 body to call `_NativeMachineOperations.visitConditional` with the emitter's
 rendered condition and the corresponding children, passing the same binder

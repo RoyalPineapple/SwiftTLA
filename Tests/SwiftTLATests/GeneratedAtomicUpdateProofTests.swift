@@ -303,6 +303,54 @@ struct GeneratedAtomicUpdateProofTests {
         }
     }
 
+    @Test("A captured Boolean equality uses its compiled operands and operator")
+    func capturedBooleanEqualityKeepsCompiledComparison() throws {
+        let compiled = try GeneratedBooleanEqualityProofModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        guard case .define(_, let comparison, _) = action.body,
+              case .equal = comparison.operation, comparison.children.count == 2,
+              case .stateVariable(let lhs) = comparison.children[0].operation,
+              case .stateVariable(let rhs) = comparison.children[1].operation else {
+            Issue.record("The Boolean source comparison was not lowered to two state reads")
+            return
+        }
+        let variables = program.layout.variables
+        #expect(lhs == variables.first(where: { $0.declaration.name == "mirror" })?.id)
+        #expect(rhs == variables.first(where: { $0.declaration.name == "flag" })?.id)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "GeneratedBooleanEqualityProofModel", program: program))
+        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
+            stateFields: emitter.stateMemberNames, parts: writes)
+        var changedSource = visitor.description
+        let equality = try #require(changedSource.range(of: " == "))
+        changedSource.replaceSubrange(equality, with: " != ")
+        let changed = try #require(Parser.parse(source: changedSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(changed, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A captured Boolean equality accepted a changed operator")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+
+        let rendered = try GeneratedBooleanEqualityProofModel.render().tlaBundle.root.tla
+        let declaration = try #require(rendered.split(separator: "\n").first {
+            $0.hasPrefix("compare == ")
+        })
+        #expect(String(declaration) == "compare == (LET __atomic_0 == (mirror = flag) IN (LET __atomic_1 == __atomic_0 IN ((TRUE /\\ flag' = __atomic_1) /\\ UNCHANGED mirror)))")
+        #expect(rendered.contains("Init ==\n  /\\ flag = FALSE\n  /\\ mirror = FALSE"))
+
+        let machine = try GeneratedBooleanEqualityProofModel.makeMachine()
+        #expect(machine.state.flag == false && machine.state.mirror == false)
+        #expect(try machine.formalCall(for: .compare).name == "compare")
+        let successor = try #require(machine.successors(for: .compare).first)
+        #expect(successor.state.flag && successor.state.mirror == false)
+    }
+
     @Test("Ordered copy emission is independent of field names")
     func generatedCopyRuleUsesResolvedFieldNames() throws {
         let model = try compiledProofModel(named: "RenamedAtomicCopyProofModel")

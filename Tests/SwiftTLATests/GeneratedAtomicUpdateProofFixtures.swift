@@ -51,3 +51,20 @@ struct GeneratedBooleanCaptureProofModel {
         }
     }
 }
+
+@TLAModel
+struct GeneratedBooleanEqualityProofModel {
+    enum Step: String, CaseIterable { case compare }
+
+    static var spec: TLASpec {
+        #spec("GeneratedBooleanEqualityProofModel") { scope in
+            let flag = scope.sharedVar(initial: false)
+            let mirror = scope.sharedVar(initial: false)
+            Do(Step.compare) {
+                Let(mirror == flag) { matches in
+                    Assign(flag, to: matches)
+                }
+            }
+        }
+    }
+}
