@@ -36,6 +36,54 @@ THEOREM ShortCircuitOrPreservesRightFailure ==
           = RenderedFirstSiteFailure(leftDefined, left, TRUE, rightDefined)
     BY LazyBranchFailureOrderPreserved, SMT
 
+SourceAndOutcome(leftDefined, left, rightDefined, right) ==
+    IF ~leftDefined THEN [defined |-> FALSE, value |-> FALSE,
+                          firstFailure |-> "condition"]
+    ELSE IF ~left THEN [defined |-> TRUE, value |-> FALSE,
+                        firstFailure |-> "none"]
+    ELSE IF ~rightDefined THEN [defined |-> FALSE, value |-> FALSE,
+                                firstFailure |-> "yes"]
+    ELSE [defined |-> TRUE, value |-> right,
+          firstFailure |-> "none"]
+RenderedAndOutcome(leftDefined, left, rightDefined, right) ==
+    LET defined == leftDefined /\ (IF left THEN rightDefined ELSE TRUE)
+    IN [defined |-> defined,
+        value |-> IF defined THEN (IF left THEN right ELSE FALSE) ELSE FALSE,
+        firstFailure |-> RenderedFirstSiteFailure(
+            leftDefined, left, rightDefined, TRUE)]
+
+SourceOrOutcome(leftDefined, left, rightDefined, right) ==
+    IF ~leftDefined THEN [defined |-> FALSE, value |-> FALSE,
+                          firstFailure |-> "condition"]
+    ELSE IF left THEN [defined |-> TRUE, value |-> TRUE,
+                       firstFailure |-> "none"]
+    ELSE IF ~rightDefined THEN [defined |-> FALSE, value |-> FALSE,
+                                firstFailure |-> "no"]
+    ELSE [defined |-> TRUE, value |-> right,
+          firstFailure |-> "none"]
+RenderedOrOutcome(leftDefined, left, rightDefined, right) ==
+    LET defined == leftDefined /\ (IF left THEN TRUE ELSE rightDefined)
+    IN [defined |-> defined,
+        value |-> IF defined THEN (IF left THEN TRUE ELSE right) ELSE FALSE,
+        firstFailure |-> RenderedFirstSiteFailure(
+            leftDefined, left, TRUE, rightDefined)]
+
+THEOREM ShortCircuitAndPreservesCompleteOutcome ==
+    ASSUME NEW leftDefined \in BOOLEAN, NEW left \in BOOLEAN,
+           NEW rightDefined \in BOOLEAN, NEW right \in BOOLEAN
+    PROVE SourceAndOutcome(leftDefined, left, rightDefined, right)
+        = RenderedAndOutcome(leftDefined, left, rightDefined, right)
+    BY SMT DEF SourceAndOutcome, RenderedAndOutcome,
+        RenderedFirstSiteFailure, SelectedTrueGuard, SelectedFalseGuard
+
+THEOREM ShortCircuitOrPreservesCompleteOutcome ==
+    ASSUME NEW leftDefined \in BOOLEAN, NEW left \in BOOLEAN,
+           NEW rightDefined \in BOOLEAN, NEW right \in BOOLEAN
+    PROVE SourceOrOutcome(leftDefined, left, rightDefined, right)
+        = RenderedOrOutcome(leftDefined, left, rightDefined, right)
+    BY SMT DEF SourceOrOutcome, RenderedOrOutcome,
+        RenderedFirstSiteFailure, SelectedTrueGuard, SelectedFalseGuard
+
 WrongEagerTrueFailure(conditionDefined, yesDefined) ==
     IF ~conditionDefined THEN "condition"
     ELSE IF ~yesDefined THEN "yes" ELSE "none"

@@ -26,6 +26,41 @@ SourceEvaluationOK ==
     /\ ~SourceDisjunctionZeroFailure
     /\ ~SourceDisjunctionNegativeFailure
 
+AndOutcome == SourceAndOutcome(TRUE, enabled, divisor > 0, TRUE)
+OrOutcome == SourceOrOutcome(TRUE, enabled, divisor > 0, TRUE)
+
+THEOREM EmittedBooleanOutcomesInstantiateCompositionalRule ==
+    ASSUME enabled \in BOOLEAN, divisor \in -1..1, result \in Int
+    PROVE /\ (AndOutcome.defined <=> ~__SwiftTLAAnyEvaluationFailure0)
+          /\ (OrOutcome.defined <=> ~__SwiftTLAAnyEvaluationFailure1)
+          /\ (AndOutcome.firstFailure = "yes"
+                  <=> __SwiftTLAAnyEvaluationFailure0)
+          /\ (OrOutcome.firstFailure = "no"
+                  <=> __SwiftTLAAnyEvaluationFailure1)
+          /\ (AndOutcome.firstFailure = "yes" /\ divisor = 0
+                  <=> __SwiftTLADivisionByZeroFailure0)
+          /\ (AndOutcome.firstFailure = "yes" /\ divisor < 0
+                  <=> __SwiftTLANegativeModuloDivisorFailure0)
+          /\ (OrOutcome.firstFailure = "no" /\ divisor = 0
+                  <=> __SwiftTLADivisionByZeroFailure1)
+          /\ (OrOutcome.firstFailure = "no" /\ divisor < 0
+                  <=> __SwiftTLANegativeModuloDivisorFailure1)
+          /\ (AndOutcome.defined /\ AndOutcome.value
+                  <=> ENABLED conjunction)
+          /\ (OrOutcome.defined /\ OrOutcome.value
+                  <=> ENABLED disjunction)
+    BY ShortCircuitAndPreservesCompleteOutcome,
+        ShortCircuitOrPreservesCompleteOutcome,
+        ExpandENABLED, SMT
+        DEF AndOutcome, OrOutcome, SourceAndOutcome, SourceOrOutcome,
+            __SwiftTLAAnyEvaluationFailure0,
+            __SwiftTLAAnyEvaluationFailure1,
+            __SwiftTLADivisionByZeroFailure0,
+            __SwiftTLADivisionByZeroFailure1,
+            __SwiftTLANegativeModuloDivisorFailure0,
+            __SwiftTLANegativeModuloDivisorFailure1,
+            conjunction, disjunction
+
 AndGuards ==
     <<SelectedTrueGuard(enabled, divisor # 0),
       SelectedTrueGuard(enabled, divisor > 0)>>

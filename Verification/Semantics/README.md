@@ -1039,14 +1039,24 @@ left-first short circuit. TLAPS proves this form has the same truth value as
 tests the actual generated TLA+ form and native skipped-right-operand behavior.
 The [TLC tools documentation](https://github.com/tlaplus/tlaplus/blob/master/general/docs/current-tools.md)
 also states that an unselected `IF` branch is not evaluated.
+`LazyExpressionFailureRule.tla` now proves the complete definedness, Boolean
+value, and first-failure outcome for one `and` or `or` composition over
+arbitrary Boolean operands. `ShortCircuitFailureProof.tla` instantiates those
+rules over `divisor \in -1..1` (wider than the fixture's initial `0..1` domain)
+and proves that the exact generated module's failure flags, their division-by-
+zero versus negative-modulo classes, and enabled actions agree with the
+outcomes.
+The right predicate is `TRUE` whenever it is demanded and defined in that
+domain (`1 % 1 = 0`); the proof does not assume a value for a failing read.
 The generated-action verifier now reconstructs recognized `and`/`or` function
 trees from the compiled expression and checks their actual Swift guard bodies,
 including scalar leaves and left-first return branches. It normalizes only
 emitter-assigned predicate function names. Reversing either short-circuit
 decision passed the old verifier and is now rejected; the exact-output
-fixture, native failure tests, and the 29 obligations in
+fixture, native failure tests, and the 34 obligations in
 `ShortCircuitFailureProof.tla` remain green. Other accepted leaves, arbitrary
-emitted predicate evaluation, and checking effects are still open. Swift
+tree composition, emitted predicate evaluation, and checking effects are
+still open. Swift
 execution and the syntax checker remain trusted boundaries.
 
 The ordered-`Do` lemma uses finite, indexed source and scheduled histories.
