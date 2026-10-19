@@ -1233,9 +1233,17 @@ guarded-history theorem also links the second action to the scheduled source
 history. A direct theorem about TLA+'s `ENABLED` remains unavailable in the
 [pinned TLAPS proof system](https://proofs.tlapl.us/doc/web/content/Documentation/Unsupported_features.html).
 The local `--nofp` run proved all 1,552 obligations in the current
-`SingleAssignment.tla` revision. The generated `OrderedCopy.tla` now includes
-aggregate evaluation-failure predicates, but this module does not yet prove
-those predicates or its selected evaluation invariant against source failures.
+`SingleAssignment.tla` revision. `OrderedCopyFailureProof.tla` separately
+imports that exact-output-checked generated module and the reusable
+`OrderedFailureSites` rule. Its 71 local TLAPS obligations prove that both
+ordered failure sites, their aggregate, and the selected evaluation invariant
+match the independent source rule. Dropping the second site's failure changes
+the verdict at `x = SwiftIntMax - 1`; this is the negative control. The
+proof also rejected a temporary mutation of the actual emitted fixture that
+omitted the second aggregate check (one failed evaluation-check obligation);
+after restoration, all 71 obligations passed again. The
+generated Swift machine is exercised by the focused test, but its output link
+for arbitrary states is not proved by this module.
 `SmallAdditionFitsSwiftInt` supplies the ordered
 bound fact; an explicit nonempty-candidate witness closes singleton integer
 selection; exposing the existing `OrderedAddDefined` definition closes
