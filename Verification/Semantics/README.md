@@ -1255,13 +1255,15 @@ the emitted code, the checked-arithmetic helper, or a generic emitter theorem.
 The TLAPS module proves the TLA+ rule for arbitrary states; the Swift output
 link remains an exact checked instance, not a proof for every accepted source
 program.
-The generated-action verifier now applies one reusable `define`-forwarding
-check to every emitted action. It reads the local function signatures and
-requires the child call to pass every inherited binding, then the newly
-captured binding, in order. Mutations replacing either kind of binding with a
-state-field read failed the focused test before this check and are now
-rejected. This rule does not verify that the initializer's emitted expression
-has the meaning of its compiled expression; that output link remains open.
+The generated-action verifier applies one reusable `define`-forwarding check
+to every emitted action. It reads the local function signatures and requires
+the child call to pass every inherited binding, then the newly captured
+binding, in order. It also checks direct `Int` state-field and inherited-binder
+initializers against their compiled identities. Mutations replacing a captured
+read with another state field or a pre-step reread were accepted before this
+initializer check and are now rejected. Initializer arithmetic, conversions,
+other value types, and model-parameter reads are not covered by this output
+rule; their source-to-actual-Swift link remains open.
 `SmallAdditionFitsSwiftInt` supplies the ordered
 bound fact; an explicit nonempty-candidate witness closes singleton integer
 selection; exposing the existing `OrderedAddDefined` definition closes

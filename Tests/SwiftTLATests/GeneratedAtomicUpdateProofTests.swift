@@ -92,7 +92,29 @@ struct GeneratedAtomicUpdateProofTests {
             (id: 3, slot: secondSlot, value: "___atomic_1_1")
         ]
         try verifyGeneratedActionWriteOutput(emittedUpdate, action: compiledAction.body,
+            program: model.program, stateFields: emitter.stateMemberNames,
             parts: expectedWrites)
+        do {
+            try verifyGeneratedActionWriteOutput(wrongReadMember, action: compiledAction.body,
+                program: model.program, stateFields: emitter.stateMemberNames,
+                parts: expectedWrites)
+            Issue.record("A captured state value read a different compiled field")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.binding.0")
+        }
+        let wrongInheritedReadSource = emittedUpdate.description.replacingOccurrences(
+            of: "let ___atomic_1_1 = ___atomic_0_0",
+            with: "let ___atomic_1_1 = state.state.first")
+        #expect(wrongInheritedReadSource != emittedUpdate.description)
+        let wrongInheritedRead = try #require(Parser.parse(source: wrongInheritedReadSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongInheritedRead, action: compiledAction.body,
+                program: model.program, stateFields: emitter.stateMemberNames, parts: expectedWrites)
+            Issue.record("A captured binding reread pre-step state")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.binding.1")
+        }
         let wrongBindingSource = emittedUpdate.description.replacingOccurrences(
             of: "try _actionPart1(___atomic_0_0, updates, emit)",
             with: "try _actionPart1(state.state.first, updates, emit)")
@@ -101,6 +123,7 @@ struct GeneratedAtomicUpdateProofTests {
             .statements.first?.item.as(DeclSyntax.self))
         do {
             try verifyGeneratedActionWriteOutput(wrongBinding, action: compiledAction.body,
+                program: model.program, stateFields: emitter.stateMemberNames,
                 parts: expectedWrites)
             Issue.record("A generated action replaced a captured value before its child")
         } catch let diagnostic as CompilationDiagnostic {
@@ -114,6 +137,7 @@ struct GeneratedAtomicUpdateProofTests {
             .statements.first?.item.as(DeclSyntax.self))
         do {
             try verifyGeneratedActionWriteOutput(wrongInherited, action: compiledAction.body,
+                program: model.program, stateFields: emitter.stateMemberNames,
                 parts: expectedWrites)
             Issue.record("A generated action replaced an earlier captured value before its child")
         } catch let diagnostic as CompilationDiagnostic {
@@ -126,6 +150,7 @@ struct GeneratedAtomicUpdateProofTests {
             .statements.first?.item.as(DeclSyntax.self))
         do {
             try verifyGeneratedActionWriteOutput(wrongChild, action: compiledAction.body,
+                program: model.program, stateFields: emitter.stateMemberNames,
                 parts: expectedWrites)
             Issue.record("A generated action called the wrong child part")
         } catch let diagnostic as CompilationDiagnostic {
@@ -138,6 +163,7 @@ struct GeneratedAtomicUpdateProofTests {
             .statements.first?.item.as(DeclSyntax.self))
         do {
             try verifyGeneratedActionWriteOutput(missingEntry, action: compiledAction.body,
+                program: model.program, stateFields: emitter.stateMemberNames,
                 parts: expectedWrites)
             Issue.record("A generated action never entered its root part")
         } catch let diagnostic as CompilationDiagnostic {
@@ -145,10 +171,12 @@ struct GeneratedAtomicUpdateProofTests {
         }
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedActionWriteOutput(wrongWrite, action: compiledAction.body,
+                program: model.program, stateFields: emitter.stateMemberNames,
                 parts: expectedWrites)
         }
         #expect(throws: CompilationDiagnostic.self) {
-            try verifyGeneratedActionWriteOutput(emittedUpdate, action: compiledAction.body, parts: [])
+            try verifyGeneratedActionWriteOutput(emittedUpdate, action: compiledAction.body,
+                program: model.program, stateFields: emitter.stateMemberNames, parts: [])
         }
         let wrongMergeSource = emittedUpdates.description.replacingOccurrences(
             of: "&result.\(secondSlot)", with: "&result.\(firstSlot)")

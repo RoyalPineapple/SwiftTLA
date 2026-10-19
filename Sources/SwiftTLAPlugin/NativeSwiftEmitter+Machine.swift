@@ -681,8 +681,8 @@ extension NativeSwiftEmitter {
             \(parts.source)
         }
         """)
-        try verifyGeneratedActionWriteOutput(declaration, action: action.body, parts: parts.writes,
-            conditions: parts.conditions)
+        try verifyGeneratedActionWriteOutput(declaration, action: action.body, program: program,
+            stateFields: stateMemberNames, parts: parts.writes, conditions: parts.conditions)
         return declaration
     }
 
@@ -1478,7 +1478,8 @@ func verifyGeneratedUpdateApplyOutput(
 }
 
 func verifyGeneratedActionWriteOutput(
-    _ declaration: DeclSyntax?, action: CompiledActionExpr,
+    _ declaration: DeclSyntax?, action: CompiledActionExpr, program: CompiledProgram,
+    stateFields: [VariableID: String],
     parts: [(id: Int, slot: String, value: String)],
     conditions: [(id: Int, value: String)] = []
 ) throws {
@@ -1562,7 +1563,7 @@ func verifyGeneratedActionWriteOutput(
     var expectedChildren: [Int: [Int]] = [:]
     var alternatives: [Int] = []
     var conditionals: [Int] = []
-    var definitions: [(id: Int, child: Int)] = []
+    var definitions: [(id: Int, child: Int, value: CompiledExpression)] = []
     var nextID = 1
     var expectedWriteCount = 0
     while let (id, node) = pending.popLast() {
@@ -1576,9 +1577,9 @@ func verifyGeneratedActionWriteOutput(
             expectedChildren[id] = [nextID]
             pending.append((nextID, body))
             nextID += 1
-        case .define(_, _, let body):
+        case .define(_, let value, let body):
             expectedChildren[id] = [nextID]
-            definitions.append((id, nextID))
+            definitions.append((id, nextID, value))
             pending.append((nextID, body))
             nextID += 1
         case .ifElse(_, let yes, let no):
@@ -1617,7 +1618,7 @@ func verifyGeneratedActionWriteOutput(
             throw invalid("native.action.part.\(id)", "ordered child calls \(children)", "child calls \(calls)")
         }
     }
-    for (id, child) in definitions {
+    for (id, child, value) in definitions {
         guard let tokens = bodies[id], tokens.count >= 3,
               tokens[0] == "let", tokens[2] == "=", tokens[1].hasPrefix("_") else {
             throw invalid("native.action.binding.\(id)",
@@ -1643,6 +1644,22 @@ func verifyGeneratedActionWriteOutput(
         guard tokens.suffix(expectedCall.count) == expectedCall else {
             throw invalid("native.action.binding.\(id)",
                 "the child receives inherited and captured values unchanged", "generated child arguments differ")
+        }
+        let initializer = Array(tokens[3..<(tokens.count - expectedCall.count)])
+        let expectedInitializer: [String]?
+        switch value.operation {
+        case .stateVariable(let variable) where value.resultType == .int:
+            expectedInitializer = stateFields[variable].map { ["state", ".", "state", ".", $0] }
+        case .boundValue(let binding) where value.resultType == .int &&
+            program.bindingTypes[binding] == .int:
+            let expectedName = program.binderNames[binding].map { "_\($0)_\(binding.ordinal)" }
+            expectedInitializer = expectedName.flatMap { parent.contains($0) ? [$0] : nil }
+        default:
+            expectedInitializer = nil
+        }
+        if let expectedInitializer, initializer != expectedInitializer {
+            throw invalid("native.action.binding.\(id)",
+                "the captured value reads its compiled Int source", "initializer \(initializer)")
         }
     }
     for id in alternatives {

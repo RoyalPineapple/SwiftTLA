@@ -548,7 +548,8 @@ struct ChoiceEvaluationFailureTests {
         #expect(actualTokens == expectedTokens)
 
         let parts = try emitter.actionFunctions(action.body)
-        try verifyGeneratedActionWriteOutput(update, action: action.body, parts: parts.writes,
+        try verifyGeneratedActionWriteOutput(update, action: action.body,
+            program: compiled.program, stateFields: emitter.stateMemberNames, parts: parts.writes,
             conditions: parts.conditions)
         let predicate = try #require(parts.conditions.first?.value)
         let wrongConditionSource = update.description.replacingOccurrences(
@@ -558,6 +559,7 @@ struct ChoiceEvaluationFailureTests {
             .statements.first?.item.as(DeclSyntax.self))
         do {
             try verifyGeneratedActionWriteOutput(wrongCondition, action: action.body,
+                program: compiled.program, stateFields: emitter.stateMemberNames,
                 parts: parts.writes, conditions: parts.conditions)
             Issue.record("A generated conditional ignored its compiled predicate")
         } catch let diagnostic as CompilationDiagnostic {
@@ -791,14 +793,16 @@ struct ChoiceEvaluationFailureTests {
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expected.tokens(viewMode: .sourceAccurate).map(\.text))
         let writes = try emitter.actionFunctions(action.body).writes
-        try verifyGeneratedActionWriteOutput(update, action: action.body, parts: writes)
+        try verifyGeneratedActionWriteOutput(update, action: action.body,
+            program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
         let reversedOrder = update.description.replacingOccurrences(
             of: "visitAlternatives([false, true]", with: "visitAlternatives([true, false]")
         #expect(reversedOrder != update.description)
         let reversedVisitor = try #require(Parser.parse(source: reversedOrder)
             .statements.first?.item.as(DeclSyntax.self))
         do {
-            try verifyGeneratedActionWriteOutput(reversedVisitor, action: action.body, parts: writes)
+            try verifyGeneratedActionWriteOutput(reversedVisitor, action: action.body,
+                program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
             Issue.record("The generated alternative order changed the first-failure rule")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.alternative.0")
