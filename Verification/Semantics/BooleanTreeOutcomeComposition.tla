@@ -2,6 +2,8 @@
 EXTENDS TLAPS, NaturalsInduction, LazyExpressionFailureRule
 
 Outcomes == [defined : BOOLEAN, value : BOOLEAN, firstFailure : STRING]
+DefaultOutcome == [defined |-> TRUE, value |-> FALSE,
+                   firstFailure |-> "none"]
 Records == [kind : {"leaf", "and", "or"}, left : Nat, right : Nat,
             outcome : Outcomes]
 
@@ -40,6 +42,182 @@ SourceHistory(nodes, source, count) ==
     \A index \in 1..count : source[index] = SourceNode(nodes, source, index)
 RenderedHistory(nodes, rendered, count) ==
     \A index \in 1..count : rendered[index] = RenderedNode(nodes, rendered, index)
+
+PrefixNodes(nodes, count) ==
+    [index \in 1..count |-> nodes[index]]
+ExtendHistory(history, count, outcome) ==
+    [index \in 1..(count + 1) |->
+        IF index = count + 1 THEN outcome ELSE history[index]]
+
+THEOREM SourceAndOutcomeIsComplete ==
+    ASSUME NEW left \in Outcomes, NEW right \in Outcomes
+    PROVE SourceAndChildOutcome(left.defined, left.value,
+        left.firstFailure, right.defined, right.value,
+        right.firstFailure) \in Outcomes
+    BY SMT DEF SourceAndChildOutcome, Outcomes
+
+THEOREM SourceOrOutcomeIsComplete ==
+    ASSUME NEW left \in Outcomes, NEW right \in Outcomes
+    PROVE SourceOrChildOutcome(left.defined, left.value,
+        left.firstFailure, right.defined, right.value,
+        right.firstFailure) \in Outcomes
+    BY SMT DEF SourceOrChildOutcome, Outcomes
+
+THEOREM SourceNodeHasCompleteOutcome ==
+    ASSUME NEW count \in Nat, NEW nodes \in [1..count -> Records],
+           ValidPostorder(nodes, count), NEW index \in 1..count,
+           NEW history \in [1..count -> Outcomes]
+    PROVE SourceNode(nodes, history, index) \in Outcomes
+    PROOF
+    <1>1. ASSUME nodes[index].kind = "leaf"
+          PROVE SourceNode(nodes, history, index) \in Outcomes
+        <2>1. nodes[index] \in Records
+            BY SMT
+        <2>2. nodes[index].outcome \in Outcomes
+            BY <2>1, SMT DEF Records
+        <2>. QED BY <1>1, <2>2, SMT DEF SourceNode
+    <1>2. ASSUME nodes[index].kind # "leaf"
+          PROVE SourceNode(nodes, history, index) \in Outcomes
+        <2>1. nodes[index].left \in 1..count
+            /\ nodes[index].right \in 1..count
+            BY <1>2, SMT DEF ValidPostorder
+        <2>2. history[nodes[index].left] \in Outcomes
+            /\ history[nodes[index].right] \in Outcomes
+            BY <2>1, SMT
+        <2>. QED BY <1>2, <2>2, SourceAndOutcomeIsComplete,
+            SourceOrOutcomeIsComplete, SMT DEF SourceNode
+    <1>. QED BY <1>1, <1>2, SMT
+
+THEOREM EveryFiniteBooleanTreeHasSourceHistory ==
+    \A count \in Nat : \A nodes \in [1..count -> Records] :
+        ValidPostorder(nodes, count) =>
+            \E history \in [1..count -> Outcomes] :
+                SourceHistory(nodes, history, count)
+    PROOF
+    <1>. DEFINE P(count) ==
+        \A nodes \in [1..count -> Records] :
+            ValidPostorder(nodes, count) =>
+                \E history \in [1..count -> Outcomes] :
+                    SourceHistory(nodes, history, count)
+    <1>1. P(0)
+        <2>. DEFINE empty == [index \in 1..0 |-> DefaultOutcome]
+        <2>1. empty \in [1..0 -> Outcomes]
+            BY SMT DEF empty, DefaultOutcome, Outcomes
+        <2>2. \A nodes \in [1..0 -> Records] :
+                  SourceHistory(nodes, empty, 0)
+            BY SMT DEF SourceHistory
+        <2>. QED BY <2>1, <2>2, SMT DEF P, ValidPostorder, SourceHistory
+    <1>2. ASSUME NEW count \in Nat, P(count)
+          PROVE P(count + 1)
+        <2>. SUFFICES ASSUME NEW nodes \in [1..(count + 1) -> Records],
+                             ValidPostorder(nodes, count + 1)
+                     PROVE \E history \in [1..(count + 1) -> Outcomes] :
+                         SourceHistory(nodes, history, count + 1)
+            BY SMT DEF P
+        <2>. DEFINE prefix == PrefixNodes(nodes, count)
+        <2>1. prefix \in [1..count -> Records]
+            BY SMT DEF prefix, PrefixNodes
+        <2>2. ValidPostorder(prefix, count)
+            BY SMT DEF prefix, PrefixNodes, ValidPostorder
+        <2>3. PICK prior \in [1..count -> Outcomes] :
+                 SourceHistory(prefix, prior, count)
+            BY P(count), <2>1, <2>2, SMT DEF P
+        <2>. DEFINE next == SourceNode(nodes, prior, count + 1)
+        <2>4. next \in Outcomes
+            <3>1. nodes[count + 1] \in Records
+                BY SMT
+            <3>2. ASSUME nodes[count + 1].kind = "leaf"
+                  PROVE next \in Outcomes
+                BY <3>1, <3>2, SMT DEF next, SourceNode, Records
+            <3>3. ASSUME nodes[count + 1].kind # "leaf"
+                  PROVE next \in Outcomes
+                <4>1. nodes[count + 1].left \in 1..count
+                    /\ nodes[count + 1].right \in 1..count
+                    BY <3>3, SMT DEF ValidPostorder
+                <4>2. prior[nodes[count + 1].left] \in Outcomes
+                    /\ prior[nodes[count + 1].right] \in Outcomes
+                    BY <4>1, SMT
+                <4>. QED BY <3>3, <4>2, SourceAndOutcomeIsComplete,
+                    SourceOrOutcomeIsComplete, SMT DEF next, SourceNode
+            <3>. QED BY <3>1, <3>2, <3>3, SMT DEF Records
+        <2>. DEFINE extended == ExtendHistory(prior, count, next)
+        <2>5. extended \in [1..(count + 1) -> Outcomes]
+            BY <2>3, <2>4, SMT DEF extended, ExtendHistory
+        <2>6. SourceHistory(nodes, extended, count + 1)
+            BY <2>3, SMT
+                DEF SourceHistory, SourceNode, ValidPostorder,
+                    prefix, PrefixNodes, extended, ExtendHistory,
+                    SourceAndChildOutcome, SourceOrChildOutcome
+        <2>. QED BY <2>5, <2>6, SMT
+    <1>3. \A count \in Nat : P(count)
+        BY <1>1, <1>2, NatInduction
+    <1>4. QED BY <1>3 DEF P
+
+THEOREM SameChildHistoryPreservesEachNode ==
+    ASSUME NEW count \in Nat, NEW nodes \in [1..count -> Records],
+           ValidPostorder(nodes, count), NEW index \in 1..count,
+           NEW history \in [1..count -> Outcomes]
+    PROVE SourceNode(nodes, history, index) =
+          RenderedNode(nodes, history, index)
+    PROOF
+    <1>1. ASSUME nodes[index].kind = "leaf"
+          PROVE SourceNode(nodes, history, index) =
+                RenderedNode(nodes, history, index)
+        BY <1>1, SMT DEF SourceNode, RenderedNode
+    <1>2. ASSUME nodes[index].kind = "and"
+          PROVE SourceNode(nodes, history, index) =
+                RenderedNode(nodes, history, index)
+        <2>1. nodes[index].left \in 1..count
+            /\ nodes[index].right \in 1..count
+            BY <1>2, SMT DEF ValidPostorder
+        <2>2. history[nodes[index].left] \in Outcomes
+            /\ history[nodes[index].right] \in Outcomes
+            BY <2>1, SMT
+        <2>3. LET left == history[nodes[index].left]
+                 right == history[nodes[index].right]
+              IN SourceAndChildOutcome(left.defined, left.value,
+                   left.firstFailure, right.defined, right.value,
+                   right.firstFailure)
+                 = RenderedAndChildOutcome(left.defined, left.value,
+                   left.firstFailure, right.defined, right.value,
+                   right.firstFailure)
+            BY <2>2, ShortCircuitAndPropagatesChildOutcome, SMT DEF Outcomes
+        <2>. QED BY <1>2, <2>3, SMT DEF SourceNode, RenderedNode
+    <1>3. ASSUME nodes[index].kind = "or"
+          PROVE SourceNode(nodes, history, index) =
+                RenderedNode(nodes, history, index)
+        <2>1. nodes[index].left \in 1..count
+            /\ nodes[index].right \in 1..count
+            BY <1>3, SMT DEF ValidPostorder
+        <2>2. history[nodes[index].left] \in Outcomes
+            /\ history[nodes[index].right] \in Outcomes
+            BY <2>1, SMT
+        <2>3. LET left == history[nodes[index].left]
+                 right == history[nodes[index].right]
+              IN SourceOrChildOutcome(left.defined, left.value,
+                   left.firstFailure, right.defined, right.value,
+                   right.firstFailure)
+                 = RenderedOrChildOutcome(left.defined, left.value,
+                   left.firstFailure, right.defined, right.value,
+                   right.firstFailure)
+            BY <2>2, ShortCircuitOrPropagatesChildOutcome, SMT DEF Outcomes
+        <2>. QED BY <1>3, <2>3, SMT DEF SourceNode, RenderedNode
+    <1>. QED BY <1>1, <1>2, <1>3, SMT DEF ValidPostorder
+
+THEOREM EveryFiniteBooleanTreeHasOneSharedHistory ==
+    ASSUME NEW count \in Nat, NEW nodes \in [1..count -> Records],
+           ValidPostorder(nodes, count)
+    PROVE \E history \in [1..count -> Outcomes] :
+        SourceHistory(nodes, history, count)
+        /\ RenderedHistory(nodes, history, count)
+    PROOF
+    <1>1. PICK history \in [1..count -> Outcomes] :
+             SourceHistory(nodes, history, count)
+        BY EveryFiniteBooleanTreeHasSourceHistory, SMT
+    <1>2. RenderedHistory(nodes, history, count)
+        BY <1>1, SameChildHistoryPreservesEachNode, SMT
+            DEF SourceHistory, RenderedHistory
+    <1>. QED BY <1>1, <1>2, SMT
 
 THEOREM FiniteBooleanTreePreservesCompleteOutcomes ==
     ASSUME NEW count \in Nat, NEW nodes \in [1..count -> Records],
@@ -98,5 +276,21 @@ THEOREM FiniteBooleanTreePreservesCompleteOutcomes ==
     <1>3. \A index \in Nat : P(index)
         BY <1>1, <1>2, NatInduction
     <1>4. QED BY <1>3, SMT DEF P
+
+THEOREM FiniteBooleanTreeHasExactlyOneCompleteHistory ==
+    ASSUME NEW count \in Nat, NEW nodes \in [1..count -> Records],
+           ValidPostorder(nodes, count),
+           NEW first \in [1..count -> Outcomes],
+           NEW second \in [1..count -> Outcomes],
+           SourceHistory(nodes, first, count),
+           SourceHistory(nodes, second, count)
+    PROVE first = second
+    PROOF
+    <1>1. RenderedHistory(nodes, second, count)
+        BY SameChildHistoryPreservesEachNode, SMT
+            DEF SourceHistory, RenderedHistory
+    <1>2. \A index \in 1..count : first[index] = second[index]
+        BY <1>1, FiniteBooleanTreePreservesCompleteOutcomes
+    <1>. QED BY <1>2, SMT
 
 =====================================================================

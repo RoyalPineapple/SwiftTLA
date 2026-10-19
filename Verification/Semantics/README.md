@@ -1070,14 +1070,15 @@ byte-for-byte, exercises all eight initial generated Swift machines, and
 rejects a mutation that reverses the inner short-circuit decision. This
 closes that nested instance and a reusable one-node outcome rule, not an
 output link for arbitrary accepted expression trees. In
-`BooleanTreeOutcomeComposition.tla`, a postorder history and induction over
-every finite node position prove that equal leaf outcomes compose through any
-`and`/`or` tree with complete values and first-failure identities, assuming
-each leaf has an agreed, repeatable outcome. The postorder rule requires
-child indices to precede their parent. This is a semantic composition theorem,
-not proof that arbitrary leaves agree or that either emitter realizes the
-tree. The generated Swift verifier still falls back for unrecognized leaves,
-and Swift execution and TLAPS remain trusted boundaries.
+`BooleanTreeOutcomeComposition.tla`, a postorder construction and induction
+prove that every well-formed finite `and`/`or` tree has exactly one complete
+outcome history and that the source and rendered node rules share it. The
+history retains values and first-failure identities. Child indices must
+precede their parent, and each leaf supplies an agreed, repeatable outcome.
+This closes existence, uniqueness, and semantic composition for that tree
+grammar, not proof that arbitrary accepted leaves agree or that either emitter
+realizes the tree. The generated Swift verifier still falls back for
+unrecognized leaves, and Swift execution and TLAPS remain trusted boundaries.
 
 A Boolean `If(condition, then: true, else: value)` is another leaf of that
 tree. `ConditionalTrueBranchIsShortCircuitOr` proves its complete source
