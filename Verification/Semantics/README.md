@@ -1190,11 +1190,12 @@ variable exactly once, and each value expression must read only that variable's
 public or hidden snapshot field. The function must contain the matching ordered
 projection call without extra statements. A swapped-field mutation is rejected.
 This closes the emitted routing shape, not the semantics of each type-specific
-`formalValue` conversion. The shared direct-TLA renderer now checks the final
-module text for exactly the compiled state-variable declaration (including
-hidden variables and formal variable symbols); a missing-variable mutation is
-rejected. This closes the TLA+ declaration's syntactic output link, not the
-meaning of `Init`, `Next`, framing, or each value conversion.
+`formalValue` conversion. The shared direct-TLA renderer checks the final module
+text for exactly the compiled state-variable declaration (including hidden
+variables and formal variable symbols) and one complete declaration for each
+emitted action. A missing-variable or changed-action mutation is rejected.
+These are syntactic output links, not proofs of `Init`, `Next`, framing,
+action-body rendering, or each value conversion.
 `GeneratedDisjointWritesPreserveCompleteState` proves a model of the emitted
 update merge and apply path for any two distinct state fields, including
 successful accumulation and complete-state replacement.

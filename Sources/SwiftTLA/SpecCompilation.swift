@@ -2313,6 +2313,7 @@ private extension CompiledModuleMetadata {
             .union(renderedActions.flatMap(\.calls).map(\.renderedName))
         var evaluationFailureDeclarations: [String] = []
         var actionFailureReferences: [String] = []
+        var actionDeclarations: [(header: String, definition: String)] = []
         for index in behavior.enabledActionIndices {
             let renderedAction = renderedActions[index]
             guard !renderedAction.sourceName.isEmpty else { continue }
@@ -2320,7 +2321,9 @@ private extension CompiledModuleMetadata {
             let parameters = renderedAction.renderedParameters.joined(separator: ", ")
             let emittedName = renderedAction.renderedName
             let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
-            lines.append("\(header) == \(renderedAction.renderedBody)")
+            let definition = "\(header) == \(renderedAction.renderedBody)"
+            lines.append(definition)
+            actionDeclarations.append((header, definition))
             if let failure = try renderer.choiceFailure(behavior.actions[index].body) {
                 var failureName = "__SwiftTLAChoiceFailure\(index)"
                 while occupied.contains(failureName) { failureName += "_" }
@@ -2732,6 +2735,7 @@ private extension CompiledModuleMetadata {
         let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
         try verifyRenderedInitialConjunction(source, predicates: initialPredicates)
+        try verifyRenderedActionDeclarations(source, declarations: actionDeclarations)
         return (source, evaluationFailureDeclarations, evaluationInvariant)
     }
 
@@ -2807,5 +2811,20 @@ func verifyRenderedInitialConjunction(_ source: String, predicates: [String]) th
         throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
             path: "tla.Init", expected: expected, actual: actual,
             nextSafeAction: "Regenerate the TLA+ module from the compiled initializations.")
+    }
+}
+
+func verifyRenderedActionDeclarations(
+    _ source: String, declarations: [(header: String, definition: String)]
+) throws {
+    let lines = source.components(separatedBy: "\n")
+    for (header, definition) in declarations {
+        let matches = lines.filter { $0.hasPrefix("\(header) == ") }
+        guard matches.count == 1, source.contains("\n\(definition)\n") else {
+            throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "tla.actions.\(header)", expected: "one complete compiled action declaration",
+                actual: matches.isEmpty ? "missing declaration" : "mismatched or duplicate declaration",
+                nextSafeAction: "Regenerate the TLA+ module from the compiled actions.")
+        }
     }
 }

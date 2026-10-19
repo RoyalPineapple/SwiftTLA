@@ -354,6 +354,18 @@ struct GeneratedAtomicUpdateProofTests {
             #expect(diagnostic.actual == "VARIABLES first")
         }
 
+        let copyDefinition = "copy == (LET __atomic_0 == second IN (LET __atomic_1 == __atomic_0 IN ((TRUE /\\ first' = __atomic_0) /\\ second' = __atomic_1)))"
+        try verifyRenderedActionDeclarations(rendered, declarations: [("copy", copyDefinition)])
+        let changedAction = rendered.replacingOccurrences(
+            of: "second' = __atomic_1", with: "second' = first")
+        #expect(changedAction != rendered)
+        do {
+            try verifyRenderedActionDeclarations(changedAction, declarations: [("copy", copyDefinition)])
+            Issue.record("A changed emitted action was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.actions.copy")
+        }
+
         let machine = try GeneratedAtomicCopyProofModel.makeMachine()
         #expect(try machine.formalCall(for: .copy).name == "copy")
         let successors = try machine.successors(for: .copy)
