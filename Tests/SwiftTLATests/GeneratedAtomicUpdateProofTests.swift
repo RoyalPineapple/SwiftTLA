@@ -94,6 +94,20 @@ struct GeneratedAtomicUpdateProofTests {
         try verifyGeneratedActionWriteOutput(emittedUpdate, action: compiledAction.body,
             program: model.program, stateFields: emitter.stateMemberNames,
             parts: expectedWrites)
+        let wrongContinuationSource = emittedUpdate.description.replacingOccurrences(
+            of: "_actionPart3(___atomic_0_0, ___atomic_1_1, candidate, emit)",
+            with: "_actionPart3(___atomic_0_0, ___atomic_1_1, updates, emit)")
+        #expect(wrongContinuationSource != emittedUpdate.description)
+        let wrongContinuation = try #require(Parser.parse(source: wrongContinuationSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongContinuation, action: compiledAction.body,
+                program: model.program, stateFields: emitter.stateMemberNames,
+                parts: expectedWrites)
+            Issue.record("A generated conjunction discarded the first child's update")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.conjunction.2")
+        }
         let wrongAssignedSource = emittedUpdate.description.replacingOccurrences(
             of: "_Updates(\(firstSlot): ___atomic_0_0)",
             with: "_Updates(\(firstSlot): ___atomic_1_1)")

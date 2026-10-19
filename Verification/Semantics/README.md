@@ -797,11 +797,14 @@ rule and the rendered conjunction have identical complete-state successors
 for both compatible and conflicting writes. `ConjunctionEnablednessAgree`
 derives matching enabledness from those complete successor relations.
 `ConjunctionLabeledEdgesAgree` lifts the rule to complete labeled graphs when
-both partial update maps are total functions of the complete source state. It
-does not prove emitted Swift or TLA+ expressions denote those maps. The general
-output links remain to be proved. Removing the merge-compatibility
-guard in a local negative control made the successor theorem fail; restoring
-it restored all obligations.
+both partial update maps are total functions of the complete source state. The
+generated-Swift verifier now requires every compiled `and` node to pass each
+first-child candidate update to its second child, with the same captured
+bindings; passing the original update instead was accepted before this check
+and is rejected now. It does not prove the children or emitted TLA+ expressions
+denote those maps. Those output links remain to be proved. Removing the
+merge-compatibility guard in a local negative control made the successor
+theorem fail; restoring it restored all obligations.
 
 `ExactStateCorrespondence` through `EveryMappedTargetRunLifts` give a generic
 observation layer for complete state-labeled/action-labeled graphs.
@@ -1626,7 +1629,7 @@ preserves first-failure order and checking effects. Those links remain open.
 | --- | --- | --- |
 | `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; every generated write part has a structural target-and-merge check; reconstructible Int/Bool assignments also have an independent compiled-value check; direct fallible assignments emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
 | `guard_` | Pure total guards agree at abstract positions; the checked-addition `When` instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof | Generalize emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
-| `and` | Compatible delta conjunction and conflicting relational writes; TLA+ now exposes a right-hand arithmetic or `CHOOSE` failure when the left action is enabled | Prove both emitters' evaluation order, first-failure selection across nondeterministic left branches, conflict/error semantics, and frame completion. |
+| `and` | Compatible delta conjunction and conflicting relational writes; generated Swift now verifies candidate-update forwarding for every compiled conjunction; TLA+ exposes a right-hand arithmetic or `CHOOSE` failure when the left action is enabled | Prove both emitters' evaluation order, first-failure selection across nondeterministic left branches, conflict/error semantics, and frame completion. |
 | `or` | Guarded-choice preservation conditional on equal branch edges; output-linked success-plus-failure and two distinct-failure fixtures; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, all failure kinds and TLA+ ordering, multiplicity policy, and both outputs. |
 | `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order; an output-linked case retains a successful candidate and reports another candidate's expression-level choice failure; fallible domains now guard the emitted TLA+ action and retain evaluation failure | Prove arbitrary emitted domain and branch expressions agree, including all failure kinds, first-failure order, and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |

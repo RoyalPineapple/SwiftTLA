@@ -1562,6 +1562,7 @@ func verifyGeneratedActionWriteOutput(
     var pending: [(id: Int, node: CompiledActionExpr)] = [(0, action)]
     var expectedChildren: [Int: [Int]] = [:]
     var alternatives: [Int] = []
+    var conjunctions: [Int] = []
     var conditionals: [Int] = []
     var guards: [(id: Int, predicate: CompiledExpression)] = []
     var definitions: [(id: Int, child: Int, value: CompiledExpression)] = []
@@ -1597,6 +1598,7 @@ func verifyGeneratedActionWriteOutput(
             nextID += 2
         case .and(let lhs, let rhs):
             expectedChildren[id] = [nextID + 1, nextID]
+            conjunctions.append(id)
             pending.append((nextID, rhs))
             pending.append((nextID + 1, lhs))
             nextID += 2
@@ -1790,6 +1792,29 @@ func verifyGeneratedActionWriteOutput(
         if let expectedInitializer, initializer != expectedInitializer {
             throw invalid("native.action.binding.\(id)",
                 "the captured value reads its compiled source", "initializer \(initializer)")
+        }
+    }
+    for id in conjunctions {
+        guard let children = expectedChildren[id], children.count == 2,
+              let parent = parameters[id], parent.suffix(2) == ["updates", "emit"],
+              parameters[children[0]] == parent, parameters[children[1]] == parent else {
+            throw invalid("native.action.conjunction.\(id)",
+                "both children inherit the same bindings and update channels", "invalid child parameters")
+        }
+        let bindings = parent.dropLast(2)
+        let prefix = bindings.isEmpty ? "" : bindings.joined(separator: ", ") + ", "
+        let expected = Parser.parse(source: """
+        func proof() {
+            try _actionPart\(children[0])(\(prefix)updates, { candidate in
+                try _actionPart\(children[1])(\(prefix)candidate, emit)
+            })
+        }
+        """).statements.first?.item.as(FunctionDeclSyntax.self)
+        let expectedBody = expected?.body?.statements.tokens(viewMode: .sourceAccurate).map(\.text) ?? []
+        guard expected != nil, bodies[id] == expectedBody else {
+            throw invalid("native.action.conjunction.\(id)",
+                "pass every first-child update to the second child before emitting it",
+                "generated conjunction differs from the checked rule")
         }
     }
     for id in alternatives {
