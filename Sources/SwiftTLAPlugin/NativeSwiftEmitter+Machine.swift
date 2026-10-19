@@ -1543,6 +1543,7 @@ func verifyGeneratedActionWriteOutput(
     var expectedChildren: [Int: [Int]] = [:]
     var alternatives: [Int] = []
     var conditionals: [Int] = []
+    var definitions: [(id: Int, child: Int)] = []
     var nextID = 1
     var expectedWriteCount = 0
     while let (id, node) = pending.popLast() {
@@ -1552,8 +1553,13 @@ func verifyGeneratedActionWriteOutput(
             expectedChildren[id] = []
         case .guard_:
             expectedChildren[id] = []
-        case .existsAction(_, _, let body), .define(_, _, let body):
+        case .existsAction(_, _, let body):
             expectedChildren[id] = [nextID]
+            pending.append((nextID, body))
+            nextID += 1
+        case .define(_, _, let body):
+            expectedChildren[id] = [nextID]
+            definitions.append((id, nextID))
             pending.append((nextID, body))
             nextID += 1
         case .ifElse(_, let yes, let no):
@@ -1590,6 +1596,21 @@ func verifyGeneratedActionWriteOutput(
         }
         guard calls == children else {
             throw invalid("native.action.part.\(id)", "ordered child calls \(children)", "child calls \(calls)")
+        }
+    }
+    for (id, child) in definitions {
+        guard let tokens = bodies[id], tokens.count > 10,
+              tokens[0] == "let", tokens[2] == "=", tokens[1].hasPrefix("_") else {
+            throw invalid("native.action.binding.\(id)",
+                "a captured value before its child call", "missing or malformed binding")
+        }
+        let name = tokens[1]
+        let expectedTail = [name, ",", "updates", ",", "emit", ")"]
+        guard tokens.suffix(expectedTail.count) == expectedTail,
+              let call = tokens.lastIndex(of: "_actionPart\(child)"),
+              call > 0, tokens[call - 1] == "try", tokens[call + 1] == "(" else {
+            throw invalid("native.action.binding.\(id)",
+                "the child receives the captured value unchanged", "generated child arguments differ")
         }
     }
     for id in alternatives {
