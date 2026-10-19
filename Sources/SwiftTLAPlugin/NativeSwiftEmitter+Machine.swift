@@ -1565,11 +1565,16 @@ func verifyGeneratedActionWriteOutput(
     var conditionals: [Int] = []
     var guards: [(id: Int, predicate: CompiledExpression)] = []
     var definitions: [(id: Int, child: Int, value: CompiledExpression)] = []
+    var assignments: [Int: CompiledExpression] = [:]
     var nextID = 1
     var expectedWriteCount = 0
     while let (id, node) = pending.popLast() {
         switch node {
-        case .assign, .unchanged:
+        case .assign(_, let value):
+            expectedWriteCount += 1
+            expectedChildren[id] = []
+            assignments[id] = value
+        case .unchanged:
             expectedWriteCount += 1
             expectedChildren[id] = []
         case .guard_(let predicate):
@@ -1893,6 +1898,22 @@ func verifyGeneratedActionWriteOutput(
                 actual: "\(name): \(actualBody.prefix(40))",
                 nextSafeAction: "Report this native code generation failure."
             )
+        }
+        if let assignment = assignments[part.id], let bindings = parameters[part.id],
+           let value = scalarPredicateTokens(assignment, parameters: bindings)
+                ?? arithmeticIntTokens(assignment, parameters: bindings)
+                ?? directScalarTokens(assignment, parameters: bindings) {
+            let compiled = Parser.parse(source: """
+            func proof() {
+                if let merged = updates.merging(_Updates(\(part.slot): \(value.joined(separator: " ")))) { try emit(merged) }
+            }
+            """).statements.first?.item.as(FunctionDeclSyntax.self)
+            let compiledBody = compiled?.body?.statements.tokens(viewMode: .sourceAccurate).map(\.text) ?? []
+            guard compiled != nil, actualBody == compiledBody else {
+                throw invalid("native.action.write.\(part.id)",
+                    "the assigned value evaluates its compiled scalar expression",
+                    "\(name): \(actualBody.prefix(40))")
+            }
         }
     }
 }

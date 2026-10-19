@@ -1624,7 +1624,7 @@ preserves first-failure order and checking effects. Those links remain open.
 
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
-| `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; every generated write part has a structural target-and-merge check; direct fallible assignments now emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
+| `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; every generated write part has a structural target-and-merge check; reconstructible Int/Bool assignments also have an independent compiled-value check; direct fallible assignments emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
 | `guard_` | Pure total guards agree at abstract positions; the checked-addition `When` instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof | Generalize emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
 | `and` | Compatible delta conjunction and conflicting relational writes; TLA+ now exposes a right-hand arithmetic or `CHOOSE` failure when the left action is enabled | Prove both emitters' evaluation order, first-failure selection across nondeterministic left branches, conflict/error semantics, and frame completion. |
 | `or` | Guarded-choice preservation conditional on equal branch edges; output-linked success-plus-failure and two distinct-failure fixtures; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, all failure kinds and TLA+ ordering, multiplicity policy, and both outputs. |
@@ -1704,9 +1704,13 @@ generated Swift verifier now checks every reconstructible scalar guard body
 against its compiled predicate and requires exactly one gated update. A
 changed `<` to `>` passed before this rule and is now rejected; the fixture
 also checks the generated machine's enabled and disabled initial states.
-This extends the scalar predicate output link from `Let` captures to
-`guard_`, but does not certify collection, short-circuit, or other non-scalar
-guards. The Swift runtime and syntax/TLAPS trust boundaries remain explicit.
+The verifier also reconstructs every currently recognized Int/Bool assignment value from
+the compiled action instead of trusting the emitter's matching value metadata.
+A self-consistent mutation of the generated write and its metadata passed
+before this rule and is now rejected. This extends the scalar output link from
+`Let` captures to `guard_` and `assign`, but does not certify collection,
+short-circuit, or other non-scalar expressions. The Swift runtime and
+syntax/TLAPS trust boundaries remain explicit.
 
 `FallibleEqualityCompositionRule.tla` proves that equality preserves complete
 labeled edges and failure records when its checked operand has the same

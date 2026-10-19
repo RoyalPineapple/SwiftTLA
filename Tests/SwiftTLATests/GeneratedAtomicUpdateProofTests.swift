@@ -94,6 +94,23 @@ struct GeneratedAtomicUpdateProofTests {
         try verifyGeneratedActionWriteOutput(emittedUpdate, action: compiledAction.body,
             program: model.program, stateFields: emitter.stateMemberNames,
             parts: expectedWrites)
+        let wrongAssignedSource = emittedUpdate.description.replacingOccurrences(
+            of: "_Updates(\(firstSlot): ___atomic_0_0)",
+            with: "_Updates(\(firstSlot): ___atomic_1_1)")
+        #expect(wrongAssignedSource != emittedUpdate.description)
+        let wrongAssigned = try #require(Parser.parse(source: wrongAssignedSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        let selfConsistentWrongWrites = expectedWrites.map {
+            (id: $0.id, slot: $0.slot, value: $0.id == 5 ? "___atomic_1_1" : $0.value)
+        }
+        do {
+            try verifyGeneratedActionWriteOutput(wrongAssigned, action: compiledAction.body,
+                program: model.program, stateFields: emitter.stateMemberNames,
+                parts: selfConsistentWrongWrites)
+            Issue.record("A generated Int assignment used another captured value")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.write.5")
+        }
         do {
             try verifyGeneratedActionWriteOutput(wrongReadMember, action: compiledAction.body,
                 program: model.program, stateFields: emitter.stateMemberNames,
@@ -470,6 +487,25 @@ struct GeneratedAtomicUpdateProofTests {
             Issue.record("The generated scalar guard accepted a changed predicate")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+
+        let write = try #require(writes.first)
+        let replacement = write.value == "false" ? "true" : "false"
+        let originalWrite = "_Updates(\(write.slot): \(write.value))"
+        let changedWrite = "_Updates(\(write.slot): \(replacement))"
+        #expect(visitor.description.contains(originalWrite))
+        let wrongAssignment = try #require(Parser.parse(source:
+            visitor.description.replacingOccurrences(of: originalWrite, with: changedWrite))
+            .statements.first?.item.as(DeclSyntax.self))
+        let selfConsistentWrongWrites = writes.map {
+            (id: $0.id, slot: $0.slot, value: $0.id == write.id ? replacement : $0.value)
+        }
+        do {
+            try verifyGeneratedActionWriteOutput(wrongAssignment, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: selfConsistentWrongWrites)
+            Issue.record("A generated assignment changed the compiled value")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.write.\(write.id)")
         }
 
         let rendered = try GeneratedScalarGuardProofModel.render().tlaBundle.root.tla
