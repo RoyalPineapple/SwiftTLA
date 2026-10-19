@@ -1261,9 +1261,17 @@ the child call to pass every inherited binding, then the newly captured
 binding, in order. It also checks direct `Int` state-field and inherited-binder
 initializers against their compiled identities. Mutations replacing a captured
 read with another state field or a pre-step reread were accepted before this
-initializer check and are now rejected. Initializer arithmetic, conversions,
-other value types, and model-parameter reads are not covered by this output
-rule; their source-to-actual-Swift link remains open.
+initializer check and are now rejected. Other value types and model-parameter
+reads are not covered by this output rule; their source-to-actual-Swift link
+remains open.
+The same verifier checks a captured `Int` arithmetic tree whose leaves are
+state fields, inherited bindings, or integer literals. It requires the emitted
+Swift closure to evaluate each leaf and checked addition, subtraction,
+multiplication, division, modulo, or negation in compiled order with the
+compiled operands. A nested-expression control rejects changing division to
+addition or reversing addition's operands. Converted and other expression
+families still require output rules; this check does not prove the Swift
+runtime helpers or the independent TLA+ expression emitter.
 `SmallAdditionFitsSwiftInt` supplies the ordered
 bound fact; an explicit nonempty-candidate witness closes singleton integer
 selection; exposing the existing `OrderedAddDefined` definition closes

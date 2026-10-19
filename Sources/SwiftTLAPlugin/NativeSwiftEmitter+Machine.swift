@@ -1618,6 +1618,71 @@ func verifyGeneratedActionWriteOutput(
             throw invalid("native.action.part.\(id)", "ordered child calls \(children)", "child calls \(calls)")
         }
     }
+    func directIntTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+        guard expression.resultType == .int else { return nil }
+        switch expression.operation {
+        case .stateVariable(let variable):
+            return stateFields[variable].map { ["state", ".", "state", ".", $0] }
+        case .boundValue(let binding) where program.bindingTypes[binding] == .int:
+            guard let name = program.binderNames[binding].map({ "_\($0)_\(binding.ordinal)" }),
+                  parameters.contains(name) else { return nil }
+            return [name]
+        case .value(.integer(let integer)):
+            if integer == Int.min { return ["Int", ".", "min"] }
+            return integer < 0 ? ["-", String(integer.magnitude)] : [String(integer)]
+        default:
+            return nil
+        }
+    }
+    func arithmeticIntTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+        func checkedOperation(_ operation: CompiledOperation) -> (name: String, rightFirst: Bool, arity: Int)? {
+            switch operation {
+            case .add: return ("add", false, 2)
+            case .subtract: return ("subtract", false, 2)
+            case .multiply: return ("multiply", false, 2)
+            case .divide, .integerDivide: return ("divide", true, 2)
+            case .modulo: return ("modulo", true, 2)
+            case .negate: return ("negate", false, 1)
+            default: return nil
+            }
+        }
+        guard expression.resultType == .int, checkedOperation(expression.operation) != nil else { return nil }
+        var pending: [(expression: CompiledExpression, expanded: Bool)] = [(expression, false)]
+        var values: [String] = []
+        var statements: [String] = []
+        var ordinal = 0
+        while let (node, expanded) = pending.popLast() {
+            guard node.resultType == .int else { return nil }
+            let value: [String]
+            if let operation = checkedOperation(node.operation) {
+                guard node.children.count == operation.arity else { return nil }
+                if !expanded {
+                    pending.append((node, true))
+                    let order = operation.rightFirst ? Array(node.children.reversed()) : node.children
+                    pending.append(contentsOf: order.reversed().map { ($0, false) })
+                    continue
+                }
+                guard values.count >= operation.arity else { return nil }
+                let operands = Array(values.suffix(operation.arity))
+                values.removeLast(operation.arity)
+                let arguments = operation.rightFirst ? Array(operands.reversed()) : operands
+                value = ["try", "_NativeMachineOperations", ".", operation.name, "("] +
+                    arguments.enumerated().flatMap { index, argument in
+                        index == 0 ? [argument] : [",", argument]
+                    } + [")"]
+            } else {
+                guard let direct = directIntTokens(node, parameters: parameters) else { return nil }
+                value = direct
+            }
+            let name = "_arithmetic\(ordinal)"
+            ordinal += 1
+            statements += ["let", name, ":", "Int", "="] + value
+            values.append(name)
+        }
+        guard values.count == 1, let result = values.first else { return nil }
+        return ["(", "try", "{", "(", ")", "throws", "->", "Int", "in"] + statements +
+            ["return", result, "}", "(", ")", ")"]
+    }
     for (id, child, value) in definitions {
         guard let tokens = bodies[id], tokens.count >= 3,
               tokens[0] == "let", tokens[2] == "=", tokens[1].hasPrefix("_") else {
@@ -1646,17 +1711,8 @@ func verifyGeneratedActionWriteOutput(
                 "the child receives inherited and captured values unchanged", "generated child arguments differ")
         }
         let initializer = Array(tokens[3..<(tokens.count - expectedCall.count)])
-        let expectedInitializer: [String]?
-        switch value.operation {
-        case .stateVariable(let variable) where value.resultType == .int:
-            expectedInitializer = stateFields[variable].map { ["state", ".", "state", ".", $0] }
-        case .boundValue(let binding) where value.resultType == .int &&
-            program.bindingTypes[binding] == .int:
-            let expectedName = program.binderNames[binding].map { "_\($0)_\(binding.ordinal)" }
-            expectedInitializer = expectedName.flatMap { parent.contains($0) ? [$0] : nil }
-        default:
-            expectedInitializer = nil
-        }
+        let expectedInitializer = arithmeticIntTokens(value, parameters: parent)
+            ?? directIntTokens(value, parameters: parent)
         if let expectedInitializer, initializer != expectedInitializer {
             throw invalid("native.action.binding.\(id)",
                 "the captured value reads its compiled Int source", "initializer \(initializer)")

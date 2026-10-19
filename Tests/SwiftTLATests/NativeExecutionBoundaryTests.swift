@@ -338,6 +338,7 @@ private struct ReachableInvariantFailure {
             .allSatisfy { $0.children.isEmpty })
 
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let generatedAction = try #require(program.behavior.actions.first)
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "CheckedExecutionOverflow", program: program))
         let members = try emitter.machineMembers()
@@ -352,6 +353,38 @@ private struct ReachableInvariantFailure {
         let emittedTokens = Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
         let witnessTokens = Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text)
         #expect(emittedTokens == witnessTokens)
+        let emittedUpdate = try #require(members.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let emittedWrites = try emitter.actionFunctions(generatedAction.body).writes
+        try verifyGeneratedActionWriteOutput(emittedUpdate, action: generatedAction.body,
+            program: program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
+        let wrongOperation = swiftAction.replacingOccurrences(
+            of: "_NativeMachineOperations.add(_arithmetic0, _arithmetic1)",
+            with: "_NativeMachineOperations.subtract(_arithmetic0, _arithmetic1)")
+        #expect(wrongOperation != swiftAction)
+        let wrongUpdate = try #require(Parser.parse(source: wrongOperation)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongUpdate, action: generatedAction.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
+            Issue.record("A generated addition called subtraction")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.binding.1")
+        }
+        let reversedOperands = swiftAction.replacingOccurrences(
+            of: "_NativeMachineOperations.add(_arithmetic0, _arithmetic1)",
+            with: "_NativeMachineOperations.add(_arithmetic1, _arithmetic0)")
+        #expect(reversedOperands != swiftAction)
+        let reversedUpdate = try #require(Parser.parse(source: reversedOperands)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(reversedUpdate, action: generatedAction.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
+            Issue.record("A generated addition reversed the compiled operands")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.binding.1")
+        }
 
         let rendered = try CheckedExecutionOverflow.render()
         let proofInput = URL(fileURLWithPath: #filePath)
@@ -414,6 +447,36 @@ private struct ReachableInvariantFailure {
         #expect(plusCal.contains(operands))
         #expect(plusCal.contains(operation))
         #expect(plusCal.contains(evaluation))
+    }
+
+    @Test("Nested arithmetic output retains its compiled operations and operand order")
+    func nestedArithmeticOutputRetainsCompiledOperations() throws {
+        let compiled = try GeneratedArithmeticFailureOrderModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "GeneratedArithmeticFailureOrderModel", program: program))
+        let members = try emitter.machineMembers()
+        let visitor = try #require(members.first {
+            $0.description.contains("private static func _visitUpdates0(")
+        }?.description)
+        let writes = try emitter.actionFunctions(action.body).writes
+        func check(_ source: String) throws {
+            let declaration = try #require(Parser.parse(source: source)
+                .statements.first?.item.as(DeclSyntax.self))
+            try verifyGeneratedActionWriteOutput(declaration, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+        }
+        try check(visitor)
+        let wrongOperation = visitor.replacingOccurrences(
+            of: "_NativeMachineOperations.divide(_arithmetic", with: "_NativeMachineOperations.add(_arithmetic")
+        #expect(wrongOperation != visitor)
+        #expect(throws: CompilationDiagnostic.self) { try check(wrongOperation) }
+        let reversedOperands = visitor.replacingOccurrences(
+            of: "_NativeMachineOperations.add(_arithmetic3, _arithmetic4)",
+            with: "_NativeMachineOperations.add(_arithmetic4, _arithmetic3)")
+        #expect(reversedOperands != visitor)
+        #expect(throws: CompilationDiagnostic.self) { try check(reversedOperands) }
     }
 
     @Test("generated subtraction preserves complete transitions and overflow failures")

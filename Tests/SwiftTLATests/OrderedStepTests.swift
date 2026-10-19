@@ -96,6 +96,20 @@ import SwiftSyntax
             visitors[0].description, wrongSecondRead, visitors[2].description,
             dispatch.description, formalCall.description
         ]).joined(separator: "\n")) != tokens(expected))
+        let secondAction = actions[1]
+        let emittedWrites = try emitter.actionFunctions(secondAction.body).writes
+        try verifyGeneratedActionWriteOutput(visitors[1], action: secondAction.body,
+            program: compiled.program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
+        let wrongSecondVisitor = try #require(Parser.parse(source: wrongSecondRead)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongSecondVisitor, action: secondAction.body,
+                program: compiled.program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
+            Issue.record("A generated addition reread pre-step state instead of its inherited operand")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+            #expect(diagnostic.expected == "the captured value reads its compiled Int source")
+        }
         let wrongRoute = dispatch.description.replacingOccurrences(
             of: "Self._visitSuccessors1", with: "Self._visitSuccessors0")
         #expect(wrongRoute != dispatch.description)
