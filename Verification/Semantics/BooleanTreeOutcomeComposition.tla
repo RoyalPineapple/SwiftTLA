@@ -4,15 +4,18 @@ EXTENDS TLAPS, NaturalsInduction, LazyExpressionFailureRule
 Outcomes == [defined : BOOLEAN, value : BOOLEAN, firstFailure : STRING]
 DefaultOutcome == [defined |-> TRUE, value |-> FALSE,
                    firstFailure |-> "none"]
-Records == [kind : {"leaf", "and", "or"}, left : Nat, right : Nat,
+Records == [kind : {"leaf", "and", "or", "if"}, left : Nat, right : Nat,
+            third : Nat,
             outcome : Outcomes]
 
 ValidPostorder(nodes, count) ==
     \A index \in 1..count :
-        /\ nodes[index].kind \in {"leaf", "and", "or"}
+        /\ nodes[index].kind \in {"leaf", "and", "or", "if"}
         /\ (nodes[index].kind # "leaf" =>
             /\ nodes[index].left \in 1..(index - 1)
             /\ nodes[index].right \in 1..(index - 1))
+        /\ (nodes[index].kind = "if" =>
+            nodes[index].third \in 1..(index - 1))
 
 SourceNode(nodes, source, index) ==
     IF nodes[index].kind = "leaf" THEN nodes[index].outcome
@@ -22,9 +25,15 @@ SourceNode(nodes, source, index) ==
             THEN SourceAndChildOutcome(left.defined, left.value,
                      left.firstFailure, right.defined, right.value,
                      right.firstFailure)
-            ELSE SourceOrChildOutcome(left.defined, left.value,
-                     left.firstFailure, right.defined, right.value,
-                     right.firstFailure)
+            ELSE IF nodes[index].kind = "or"
+                 THEN SourceOrChildOutcome(left.defined, left.value,
+                          left.firstFailure, right.defined, right.value,
+                          right.firstFailure)
+                 ELSE LET third == source[nodes[index].third]
+                      IN SourceConditionalChildOutcome(
+                           left.defined, left.value, left.firstFailure,
+                           right.defined, right.value, right.firstFailure,
+                           third.defined, third.value, third.firstFailure)
 
 RenderedNode(nodes, rendered, index) ==
     IF nodes[index].kind = "leaf" THEN nodes[index].outcome
@@ -34,9 +43,15 @@ RenderedNode(nodes, rendered, index) ==
             THEN RenderedAndChildOutcome(left.defined, left.value,
                      left.firstFailure, right.defined, right.value,
                      right.firstFailure)
-            ELSE RenderedOrChildOutcome(left.defined, left.value,
-                     left.firstFailure, right.defined, right.value,
-                     right.firstFailure)
+            ELSE IF nodes[index].kind = "or"
+                 THEN RenderedOrChildOutcome(left.defined, left.value,
+                          left.firstFailure, right.defined, right.value,
+                          right.firstFailure)
+                 ELSE LET third == rendered[nodes[index].third]
+                      IN RenderedConditionalChildOutcome(
+                           left.defined, left.value, left.firstFailure,
+                           right.defined, right.value, right.firstFailure,
+                           third.defined, third.value, third.firstFailure)
 
 SourceHistory(nodes, source, count) ==
     \A index \in 1..count : source[index] = SourceNode(nodes, source, index)
@@ -63,6 +78,14 @@ THEOREM SourceOrOutcomeIsComplete ==
         right.firstFailure) \in Outcomes
     BY SMT DEF SourceOrChildOutcome, Outcomes
 
+THEOREM SourceConditionalOutcomeIsComplete ==
+    ASSUME NEW condition \in Outcomes, NEW yes \in Outcomes,
+           NEW no \in Outcomes
+    PROVE SourceConditionalChildOutcome(condition.defined,
+        condition.value, condition.firstFailure, yes.defined, yes.value,
+        yes.firstFailure, no.defined, no.value, no.firstFailure) \in Outcomes
+    BY SMT DEF SourceConditionalChildOutcome, Outcomes
+
 THEOREM SourceNodeHasCompleteOutcome ==
     ASSUME NEW count \in Nat, NEW nodes \in [1..count -> Records],
            ValidPostorder(nodes, count), NEW index \in 1..count,
@@ -84,8 +107,23 @@ THEOREM SourceNodeHasCompleteOutcome ==
         <2>2. history[nodes[index].left] \in Outcomes
             /\ history[nodes[index].right] \in Outcomes
             BY <2>1, SMT
-        <2>. QED BY <1>2, <2>2, SourceAndOutcomeIsComplete,
-            SourceOrOutcomeIsComplete, SMT DEF SourceNode
+        <2>3. nodes[index].kind = "if" =>
+                 history[nodes[index].third] \in Outcomes
+            BY SMT DEF ValidPostorder
+        <2>4. ASSUME nodes[index].kind = "and"
+              PROVE SourceNode(nodes, history, index) \in Outcomes
+            BY <2>2, <2>4, SourceAndOutcomeIsComplete,
+                SMT DEF SourceNode
+        <2>5. ASSUME nodes[index].kind = "or"
+              PROVE SourceNode(nodes, history, index) \in Outcomes
+            BY <2>2, <2>5, SourceOrOutcomeIsComplete,
+                SMT DEF SourceNode
+        <2>6. ASSUME nodes[index].kind = "if"
+              PROVE SourceNode(nodes, history, index) \in Outcomes
+            BY <2>2, <2>3, <2>6,
+                SourceConditionalOutcomeIsComplete, SMT DEF SourceNode
+        <2>. QED BY <1>2, <2>4, <2>5, <2>6,
+            SMT DEF ValidPostorder
     <1>. QED BY <1>1, <1>2, SMT
 
 THEOREM EveryFiniteBooleanTreeHasSourceHistory ==
@@ -137,8 +175,24 @@ THEOREM EveryFiniteBooleanTreeHasSourceHistory ==
                 <4>2. prior[nodes[count + 1].left] \in Outcomes
                     /\ prior[nodes[count + 1].right] \in Outcomes
                     BY <4>1, SMT
-                <4>. QED BY <3>3, <4>2, SourceAndOutcomeIsComplete,
-                    SourceOrOutcomeIsComplete, SMT DEF next, SourceNode
+                <4>3. nodes[count + 1].kind = "if" =>
+                         prior[nodes[count + 1].third] \in Outcomes
+                    BY SMT DEF ValidPostorder
+                <4>4. ASSUME nodes[count + 1].kind = "and"
+                      PROVE next \in Outcomes
+                    BY <4>2, <4>4, SourceAndOutcomeIsComplete,
+                        SMT DEF next, SourceNode
+                <4>5. ASSUME nodes[count + 1].kind = "or"
+                      PROVE next \in Outcomes
+                    BY <4>2, <4>5, SourceOrOutcomeIsComplete,
+                        SMT DEF next, SourceNode
+                <4>6. ASSUME nodes[count + 1].kind = "if"
+                      PROVE next \in Outcomes
+                    BY <4>2, <4>3, <4>6,
+                        SourceConditionalOutcomeIsComplete,
+                        SMT DEF next, SourceNode
+                <4>. QED BY <3>3, <4>4, <4>5, <4>6,
+                    SMT DEF ValidPostorder
             <3>. QED BY <3>1, <3>2, <3>3, SMT DEF Records
         <2>. DEFINE extended == ExtendHistory(prior, count, next)
         <2>5. extended \in [1..(count + 1) -> Outcomes]
@@ -147,7 +201,8 @@ THEOREM EveryFiniteBooleanTreeHasSourceHistory ==
             BY <2>3, SMT
                 DEF SourceHistory, SourceNode, ValidPostorder,
                     prefix, PrefixNodes, extended, ExtendHistory,
-                    SourceAndChildOutcome, SourceOrChildOutcome
+                    SourceAndChildOutcome, SourceOrChildOutcome,
+                    SourceConditionalChildOutcome
         <2>. QED BY <2>5, <2>6, SMT
     <1>3. \A count \in Nat : P(count)
         BY <1>1, <1>2, NatInduction
@@ -202,7 +257,32 @@ THEOREM SameChildHistoryPreservesEachNode ==
                    right.firstFailure)
             BY <2>2, ShortCircuitOrPropagatesChildOutcome, SMT DEF Outcomes
         <2>. QED BY <1>3, <2>3, SMT DEF SourceNode, RenderedNode
-    <1>. QED BY <1>1, <1>2, <1>3, SMT DEF ValidPostorder
+    <1>4. ASSUME nodes[index].kind = "if"
+          PROVE SourceNode(nodes, history, index) =
+                RenderedNode(nodes, history, index)
+        <2>1. nodes[index].left \in 1..count
+            /\ nodes[index].right \in 1..count
+            /\ nodes[index].third \in 1..count
+            BY <1>4, SMT DEF ValidPostorder
+        <2>2. history[nodes[index].left] \in Outcomes
+            /\ history[nodes[index].right] \in Outcomes
+            /\ history[nodes[index].third] \in Outcomes
+            BY <2>1, SMT
+        <2>3. LET condition == history[nodes[index].left]
+                 yes == history[nodes[index].right]
+                 no == history[nodes[index].third]
+              IN SourceConditionalChildOutcome(condition.defined,
+                   condition.value, condition.firstFailure,
+                   yes.defined, yes.value, yes.firstFailure,
+                   no.defined, no.value, no.firstFailure)
+                 = RenderedConditionalChildOutcome(condition.defined,
+                   condition.value, condition.firstFailure,
+                   yes.defined, yes.value, yes.firstFailure,
+                   no.defined, no.value, no.firstFailure)
+            BY <2>2, ConditionalPropagatesSelectedChildOutcome,
+                SMT DEF Outcomes
+        <2>. QED BY <1>4, <2>3, SMT DEF SourceNode, RenderedNode
+    <1>. QED BY <1>1, <1>2, <1>3, <1>4, SMT DEF ValidPostorder
 
 THEOREM EveryFiniteBooleanTreeHasOneSharedHistory ==
     ASSUME NEW count \in Nat, NEW nodes \in [1..count -> Records],
@@ -237,7 +317,7 @@ THEOREM FiniteBooleanTreePreservesCompleteOutcomes ==
         <2>. SUFFICES ASSUME index + 1 \in 1..count
                      PROVE source[index + 1] = rendered[index + 1]
             BY P(index), SMT DEF P
-        <2>1. nodes[index + 1].kind \in {"leaf", "and", "or"}
+        <2>1. nodes[index + 1].kind \in {"leaf", "and", "or", "if"}
             BY SMT DEF ValidPostorder
         <2>2. ASSUME nodes[index + 1].kind = "leaf"
               PROVE source[index + 1] = rendered[index + 1]
@@ -253,7 +333,12 @@ THEOREM FiniteBooleanTreePreservesCompleteOutcomes ==
                 /\ source[nodes[index + 1].right] =
                     rendered[nodes[index + 1].right]
                 BY <3>1, P(index), SMT DEF P
-            <3>3. SourceNode(nodes, source, index + 1) =
+            <3>3. nodes[index + 1].kind = "if" =>
+                     /\ nodes[index + 1].third \in 1..index
+                     /\ source[nodes[index + 1].third] =
+                          rendered[nodes[index + 1].third]
+                BY P(index), SMT DEF P, ValidPostorder
+            <3>4. SourceNode(nodes, source, index + 1) =
                     RenderedNode(nodes, rendered, index + 1)
                 <4>1. ASSUME nodes[index + 1].kind = "and"
                       PROVE SourceNode(nodes, source, index + 1) =
@@ -267,11 +352,18 @@ THEOREM FiniteBooleanTreePreservesCompleteOutcomes ==
                     BY <2>3, <3>2, <4>2, SMT
                         DEF SourceNode, RenderedNode, Outcomes,
                             SourceOrChildOutcome, RenderedOrChildOutcome
-                <4>. QED BY <2>1, <2>3, <4>1, <4>2, SMT
-            <3>4. source[index + 1] = SourceNode(nodes, source, index + 1)
+                <4>3. ASSUME nodes[index + 1].kind = "if"
+                      PROVE SourceNode(nodes, source, index + 1) =
+                            RenderedNode(nodes, rendered, index + 1)
+                    BY <2>3, <3>2, <3>3, <4>3, SMT
+                        DEF SourceNode, RenderedNode, Outcomes,
+                            SourceConditionalChildOutcome,
+                            RenderedConditionalChildOutcome
+                <4>. QED BY <2>1, <2>3, <4>1, <4>2, <4>3, SMT
+            <3>5. source[index + 1] = SourceNode(nodes, source, index + 1)
                 /\ rendered[index + 1] = RenderedNode(nodes, rendered, index + 1)
                 BY SMT DEF SourceHistory, RenderedHistory
-            <3>. QED BY <3>3, <3>4
+            <3>. QED BY <3>4, <3>5
         <2>. QED BY <2>1, <2>2, <2>3, SMT
     <1>3. \A index \in Nat : P(index)
         BY <1>1, <1>2, NatInduction

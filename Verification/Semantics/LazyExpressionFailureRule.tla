@@ -134,6 +134,57 @@ SourceConditionalTrueBranchOutcome(conditionDefined, condition,
     ELSE [defined |-> TRUE, value |-> noValue,
           firstFailure |-> "none"]
 
+SourceConditionalChildOutcome(conditionDefined, condition,
+                              conditionFailure, yesDefined, yesValue,
+                              yesFailure, noDefined, noValue, noFailure) ==
+    IF ~conditionDefined THEN [defined |-> FALSE, value |-> FALSE,
+                               firstFailure |-> conditionFailure]
+    ELSE IF condition THEN
+        IF ~yesDefined THEN [defined |-> FALSE, value |-> FALSE,
+                             firstFailure |-> yesFailure]
+        ELSE [defined |-> TRUE, value |-> yesValue,
+              firstFailure |-> "none"]
+    ELSE IF ~noDefined THEN [defined |-> FALSE, value |-> FALSE,
+                             firstFailure |-> noFailure]
+    ELSE [defined |-> TRUE, value |-> noValue,
+          firstFailure |-> "none"]
+
+RenderedConditionalChildOutcome(conditionDefined, condition,
+                                conditionFailure, yesDefined, yesValue,
+                                yesFailure, noDefined, noValue, noFailure) ==
+    LET defined == conditionDefined /\
+                   (IF condition THEN yesDefined ELSE noDefined)
+    IN [defined |-> defined,
+        value |-> IF defined
+                 THEN (IF condition THEN yesValue ELSE noValue)
+                 ELSE FALSE,
+        firstFailure |-> IF ~conditionDefined THEN conditionFailure
+                        ELSE IF condition /\ ~yesDefined THEN yesFailure
+                        ELSE IF ~condition /\ ~noDefined THEN noFailure
+                        ELSE "none"]
+
+THEOREM ConditionalPropagatesSelectedChildOutcome ==
+    ASSUME NEW conditionDefined \in BOOLEAN, NEW condition \in BOOLEAN,
+           NEW conditionFailure, NEW yesDefined \in BOOLEAN,
+           NEW yesValue \in BOOLEAN, NEW yesFailure,
+           NEW noDefined \in BOOLEAN, NEW noValue \in BOOLEAN,
+           NEW noFailure
+    PROVE SourceConditionalChildOutcome(conditionDefined, condition,
+              conditionFailure, yesDefined, yesValue, yesFailure,
+              noDefined, noValue, noFailure)
+        = RenderedConditionalChildOutcome(conditionDefined, condition,
+              conditionFailure, yesDefined, yesValue, yesFailure,
+              noDefined, noValue, noFailure)
+    BY SMT DEF SourceConditionalChildOutcome,
+        RenderedConditionalChildOutcome
+
+THEOREM ConditionalSkipsUnselectedChildFailure ==
+    /\ SourceConditionalChildOutcome(TRUE, TRUE, "none", TRUE, TRUE,
+         "none", FALSE, FALSE, "unselected-no").firstFailure = "none"
+    /\ SourceConditionalChildOutcome(TRUE, FALSE, "none", FALSE, FALSE,
+         "unselected-yes", TRUE, FALSE, "none").firstFailure = "none"
+    BY SMT DEF SourceConditionalChildOutcome
+
 THEOREM ConditionalTrueBranchIsShortCircuitOr ==
     ASSUME NEW conditionDefined \in BOOLEAN, NEW condition \in BOOLEAN,
            NEW conditionFailure, NEW noDefined \in BOOLEAN,
