@@ -346,6 +346,24 @@ struct ShortCircuitFailureModel: Sendable {
 }
 
 @TLAModel
+struct NestedShortCircuitFailureModel: Sendable {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("NestedShortCircuitFailureModel") { scope in
+            let enabled = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
+            let ready = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
+            let divisor = scope.sharedVar(in: 0...1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.advance) {
+                When(enabled && (ready || (1 % divisor == 0)))
+                Assign(result, to: 1)
+            }
+        }
+    }
+}
+
+@TLAModel
 struct BoundConditionalBodyFailureModel: Sendable {
     enum Step: String, CaseIterable { case compute }
 

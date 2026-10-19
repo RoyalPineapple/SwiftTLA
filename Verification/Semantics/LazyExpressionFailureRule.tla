@@ -84,6 +84,73 @@ THEOREM ShortCircuitOrPreservesCompleteOutcome ==
     BY SMT DEF SourceOrOutcome, RenderedOrOutcome,
         RenderedFirstSiteFailure, SelectedTrueGuard, SelectedFalseGuard
 
+SourceAndChildOutcome(leftDefined, left, leftFailure,
+                      rightDefined, right, rightFailure) ==
+    IF ~leftDefined THEN [defined |-> FALSE, value |-> FALSE,
+                          firstFailure |-> leftFailure]
+    ELSE IF ~left THEN [defined |-> TRUE, value |-> FALSE,
+                        firstFailure |-> "none"]
+    ELSE IF ~rightDefined THEN [defined |-> FALSE, value |-> FALSE,
+                                firstFailure |-> rightFailure]
+    ELSE [defined |-> TRUE, value |-> right,
+          firstFailure |-> "none"]
+RenderedAndChildOutcome(leftDefined, left, leftFailure,
+                        rightDefined, right, rightFailure) ==
+    LET defined == leftDefined /\ (IF left THEN rightDefined ELSE TRUE)
+    IN [defined |-> defined,
+        value |-> IF defined THEN (IF left THEN right ELSE FALSE) ELSE FALSE,
+        firstFailure |-> IF ~leftDefined THEN leftFailure
+                        ELSE IF left /\ ~rightDefined THEN rightFailure
+                        ELSE "none"]
+
+SourceOrChildOutcome(leftDefined, left, leftFailure,
+                     rightDefined, right, rightFailure) ==
+    IF ~leftDefined THEN [defined |-> FALSE, value |-> FALSE,
+                          firstFailure |-> leftFailure]
+    ELSE IF left THEN [defined |-> TRUE, value |-> TRUE,
+                       firstFailure |-> "none"]
+    ELSE IF ~rightDefined THEN [defined |-> FALSE, value |-> FALSE,
+                                firstFailure |-> rightFailure]
+    ELSE [defined |-> TRUE, value |-> right,
+          firstFailure |-> "none"]
+RenderedOrChildOutcome(leftDefined, left, leftFailure,
+                       rightDefined, right, rightFailure) ==
+    LET defined == leftDefined /\ (IF left THEN TRUE ELSE rightDefined)
+    IN [defined |-> defined,
+        value |-> IF defined THEN (IF left THEN TRUE ELSE right) ELSE FALSE,
+        firstFailure |-> IF ~leftDefined THEN leftFailure
+                        ELSE IF ~left /\ ~rightDefined THEN rightFailure
+                        ELSE "none"]
+
+THEOREM ShortCircuitAndPropagatesChildOutcome ==
+    ASSUME NEW leftDefined \in BOOLEAN, NEW left \in BOOLEAN,
+           NEW leftFailure, NEW rightDefined \in BOOLEAN,
+           NEW right \in BOOLEAN, NEW rightFailure
+    PROVE SourceAndChildOutcome(leftDefined, left, leftFailure,
+              rightDefined, right, rightFailure)
+        = RenderedAndChildOutcome(leftDefined, left, leftFailure,
+              rightDefined, right, rightFailure)
+    BY SMT DEF SourceAndChildOutcome, RenderedAndChildOutcome
+
+THEOREM ShortCircuitOrPropagatesChildOutcome ==
+    ASSUME NEW leftDefined \in BOOLEAN, NEW left \in BOOLEAN,
+           NEW leftFailure, NEW rightDefined \in BOOLEAN,
+           NEW right \in BOOLEAN, NEW rightFailure
+    PROVE SourceOrChildOutcome(leftDefined, left, leftFailure,
+              rightDefined, right, rightFailure)
+        = RenderedOrChildOutcome(leftDefined, left, leftFailure,
+              rightDefined, right, rightFailure)
+    BY SMT DEF SourceOrChildOutcome, RenderedOrChildOutcome
+
+THEOREM NestedFailureIsRetainedButSkippedFailureIsNot ==
+    /\ SourceAndChildOutcome(FALSE, TRUE, "inner", FALSE, TRUE, "right").firstFailure
+           = "inner"
+    /\ SourceAndChildOutcome(TRUE, FALSE, "left", FALSE, TRUE, "right").firstFailure
+           = "none"
+    /\ SourceOrChildOutcome(TRUE, TRUE, "left", FALSE, FALSE, "right").firstFailure
+           = "none"
+    BY SMT DEF SourceAndChildOutcome, SourceOrChildOutcome
+
 WrongEagerTrueFailure(conditionDefined, yesDefined) ==
     IF ~conditionDefined THEN "condition"
     ELSE IF ~yesDefined THEN "yes" ELSE "none"

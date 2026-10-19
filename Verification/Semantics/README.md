@@ -1059,6 +1059,20 @@ tree composition, emitted predicate evaluation, and checking effects are
 still open. Swift
 execution and the syntax checker remain trusted boundaries.
 
+`LazyExpressionFailureRule.tla` also proves that one `and` or `or` node
+propagates its children's distinct failure identities and omits failures
+from skipped branches. `NestedShortCircuitFailureProof.tla` composes those
+rules for an outer `and` and inner `or` over the exact generated TLA+ module.
+Its 22 TLAPS obligations cover initial states, the complete labeled step,
+enabledness, evaluation check, and division-by-zero versus negative-modulo
+failure classes over `divisor \in -1..1`. The `#spec` test pins that module
+byte-for-byte, exercises all eight initial generated Swift machines, and
+rejects a mutation that reverses the inner short-circuit decision. This
+closes that nested instance and a reusable one-node outcome rule, not an
+induction theorem for arbitrary accepted expression trees. The generated
+Swift verifier still falls back for unrecognized leaves, and Swift execution
+and TLAPS remain trusted boundaries.
+
 The ordered-`Do` lemma uses finite, indexed source and scheduled histories.
 TLAPS proves that both histories exist for every finite sequence of typed
 abstract **assignment** instructions and that their complete states agree at
