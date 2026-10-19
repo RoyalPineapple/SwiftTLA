@@ -1039,8 +1039,15 @@ left-first short circuit. TLAPS proves this form has the same truth value as
 tests the actual generated TLA+ form and native skipped-right-operand behavior.
 The [TLC tools documentation](https://github.com/tlaplus/tlaplus/blob/master/general/docs/current-tools.md)
 also states that an unselected `IF` branch is not evaluated.
-This does not yet prove arbitrary emitted predicate evaluation or a general
-correspondence for evaluation failures and checking effects.
+The generated-action verifier now reconstructs recognized `and`/`or` function
+trees from the compiled expression and checks their actual Swift guard bodies,
+including scalar leaves and left-first return branches. It normalizes only
+emitter-assigned predicate function names. Reversing either short-circuit
+decision passed the old verifier and is now rejected; the exact-output
+fixture, native failure tests, and the 29 obligations in
+`ShortCircuitFailureProof.tla` remain green. Other accepted leaves, arbitrary
+emitted predicate evaluation, and checking effects are still open. Swift
+execution and the syntax checker remain trusted boundaries.
 
 The ordered-`Do` lemma uses finite, indexed source and scheduled histories.
 TLAPS proves that both histories exist for every finite sequence of typed

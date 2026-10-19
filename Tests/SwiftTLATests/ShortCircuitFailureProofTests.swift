@@ -61,6 +61,30 @@ struct ShortCircuitFailureProofTests {
                 with: index == 0 ? "guard !left else" : "guard left else")
             #expect(reversed != visitor.description)
             #expect(tokens(reversed) != tokens(witness))
+            let action = actions[index]
+            let parts = try emitter.actionFunctions(action.body)
+            let wrongVisitor = try #require(Parser.parse(source: reversed)
+                .statements.first?.item.as(DeclSyntax.self))
+            do {
+                try verifyGeneratedActionWriteOutput(wrongVisitor, action: action.body,
+                    program: compiled.program, stateFields: emitter.stateMemberNames,
+                    parts: parts.writes, conditions: parts.conditions)
+                Issue.record("A short-circuit guard reversed its compiled left test")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.hasPrefix("native.action.guard."))
+            }
+            let changedLeaf = visitor.description.replacingOccurrences(of: "== 0)", with: "== 1)")
+            #expect(changedLeaf != visitor.description)
+            let wrongLeaf = try #require(Parser.parse(source: changedLeaf)
+                .statements.first?.item.as(DeclSyntax.self))
+            do {
+                try verifyGeneratedActionWriteOutput(wrongLeaf, action: action.body,
+                    program: compiled.program, stateFields: emitter.stateMemberNames,
+                    parts: parts.writes, conditions: parts.conditions)
+                Issue.record("A short-circuit guard changed its compiled right operand")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.hasPrefix("native.action.guard."))
+            }
         }
         let rendered = try ShortCircuitFailureModel.render()
         let formal = try String(contentsOf:

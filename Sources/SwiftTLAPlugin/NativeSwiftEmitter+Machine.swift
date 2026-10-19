@@ -1741,6 +1741,78 @@ func verifyGeneratedActionWriteOutput(
         }
         return values.count == 1 ? values[0] : nil
     }
+    func shortCircuitPredicateSource(_ root: CompiledExpression, parameters: [String]) -> String? {
+        guard root.resultType == .bool else { return nil }
+        switch root.operation {
+        case .and, .or: break
+        default: return nil
+        }
+        var ordered: [CompiledExpression] = []
+        var identifiers: [CompiledExpression: Int] = [:]
+        var pending = [root]
+        while let node = pending.popLast() {
+            guard identifiers[node] == nil else { continue }
+            identifiers[node] = ordered.count
+            ordered.append(node)
+            switch node.operation {
+            case .and, .or:
+                guard node.resultType == .bool, node.children.count == 2,
+                      node.children.allSatisfy({ $0.resultType == .bool }) else { return nil }
+                pending.append(contentsOf: node.children.reversed())
+            default:
+                guard scalarPredicateTokens(node, parameters: parameters) != nil else { return nil }
+            }
+        }
+        let declarations = ordered.compactMap { node -> String? in
+            let id = identifiers[node]!
+            let body: String
+            switch node.operation {
+            case .and, .or:
+                let left = identifiers[node.children[0]]!
+                let right = identifiers[node.children[1]]!
+                let conjunction: Bool = if case .and = node.operation { true } else { false }
+                body = """
+                let left = try _predicate\(left)()
+                guard \(conjunction ? "left" : "!left") else { return \(conjunction ? "false" : "true") }
+                return try _predicate\(right)()
+                """
+            default:
+                guard let tokens = scalarPredicateTokens(node, parameters: parameters) else { return nil }
+                body = "return \(tokens.joined(separator: " "))"
+            }
+            return "func _predicate\(id)() throws -> Bool { \(body) }"
+        }
+        guard declarations.count == ordered.count else { return nil }
+        return "(try { () throws -> Bool in \(declarations.joined(separator: "\n")) return try _predicate0() }())"
+    }
+    func canonicalPredicateNames(_ tokens: [String]) -> [String] {
+        let declared = Set(tokens.indices.compactMap { index -> String? in
+            guard index > 0, tokens[index - 1] == "func",
+                  tokens[index].hasPrefix("_predicate"),
+                  Int(tokens[index].dropFirst("_predicate".count)) != nil else { return nil }
+            return tokens[index]
+        })
+        var names: [String: String] = [:]
+        var normalized: [String] = []
+        normalized.reserveCapacity(tokens.count)
+        for (index, token) in tokens.enumerated() {
+            let declaration = index > 0 && tokens[index - 1] == "func"
+            let call = index + 1 < tokens.count && tokens[index + 1] == "(" &&
+                (index == 0 || tokens[index - 1] != ".")
+            guard declared.contains(token), declaration || call else {
+                normalized.append(token)
+                continue
+            }
+            if let name = names[token] {
+                normalized.append(name)
+            } else {
+                let name = "_predicate\(names.count)"
+                names[token] = name
+                normalized.append(name)
+            }
+        }
+        return normalized
+    }
     for guardNode in guards {
         guard let tokens = bodies[guardNode.id], let bindings = parameters[guardNode.id] else {
             throw invalid("native.action.guard.\(guardNode.id)",
@@ -1752,10 +1824,18 @@ func verifyGeneratedActionWriteOutput(
         } else if let predicate = scalarPredicateTokens(guardNode.predicate, parameters: bindings) {
             expected = ["guard"] + predicate + ["else", "{", "return", "}",
                 "try", "emit", "(", "updates", ")"]
+        } else if let predicate = shortCircuitPredicateSource(guardNode.predicate, parameters: bindings) {
+            let declaration = Parser.parse(source: """
+            func proof() {
+                guard \(predicate) else { return }
+                try emit(updates)
+            }
+            """).statements.first?.item.as(FunctionDeclSyntax.self)
+            expected = declaration?.body?.statements.tokens(viewMode: .sourceAccurate).map(\.text)
         } else {
             expected = nil
         }
-        if let expected, tokens != expected {
+        if let expected, canonicalPredicateNames(tokens) != canonicalPredicateNames(expected) {
             throw invalid("native.action.guard.\(guardNode.id)",
                 "the compiled predicate gates exactly one unchanged update emission", "guard body \(tokens)")
         }
@@ -1885,8 +1965,11 @@ func verifyGeneratedActionWriteOutput(
                 "invalid conditional child calls")
         }
         let checkedPredicate = conditionalPredicates[id].flatMap { predicate in
-            parameters[id].flatMap { scalarPredicateTokens(predicate, parameters: $0) }
-        }?.joined(separator: " ") ?? condition.value
+            parameters[id].flatMap { bindings in
+                scalarPredicateTokens(predicate, parameters: bindings)?.joined(separator: " ")
+                    ?? shortCircuitPredicateSource(predicate, parameters: bindings)
+            }
+        } ?? condition.value
         let expected = Parser.parse(source: """
         func proof() {
             try _NativeMachineOperations.visitConditional({ \(checkedPredicate) },
@@ -1895,7 +1978,7 @@ func verifyGeneratedActionWriteOutput(
         }
         """).statements.first?.item.as(FunctionDeclSyntax.self)
         let expectedBody = expected?.body?.statements.tokens(viewMode: .sourceAccurate).map(\.text) ?? []
-        guard tokens == expectedBody else {
+        guard canonicalPredicateNames(tokens) == canonicalPredicateNames(expectedBody) else {
             throw invalid("native.action.conditional.\(id)",
                 "the compiled condition selects exactly its corresponding child",
                 "generated conditional body differs from the checked rule")
