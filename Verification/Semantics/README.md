@@ -396,25 +396,26 @@ The proof also does not establish that canonical Unicode normalization matches
 Swift `String` equality for every pair. Those are explicit output-link
 and runtime obligations, not conclusions from finite examples.
 
-`FormalStringEqualityGuardRule.tla` composes the injectivity theorem into an
-action rule: for arbitrary canonical byte sequences, a two-comparison String
-guard and its complete `advance`-labeled successor relation (unchanged String
-fields and an updated Boolean field) agree with the
-same guard over encoded formal Strings. Its inverted-comparison negative
-control disagrees on a concrete enabled step. All 23 obligations pass locally
+`FormalStringEqualityGuardRule.tla` composes the injectivity theorem into
+equality, inequality, and mixed-guard action rules. For arbitrary canonical
+byte sequences, their complete `advance`-labeled successor relations
+(unchanged String fields and an updated Boolean field) agree over encoded
+formal Strings. Its inverted-equality negative control disagrees on a concrete
+enabled step. All 44 obligations pass locally
 without fingerprint reuse. This closes the *modeled guard rule*, not the
 general source-lowering or emitter link. The generated-Swift guard witness
 checks one actual emitted action and rejects an inverted comparison; the
 corresponding arbitrary-program Swift/TLA emission rules remain unproved.
 For `GeneratedStringGuardProofModel`, the focused test also pins the complete
 actual TLA+ module byte-for-byte, checks the generated Swift initial state and
-complete `advance` successor, and rejects a changed generated Swift equality.
+complete `advance` successor, and rejects changed generated Swift equality
+and inequality operators.
 `GeneratedStringGuardProof.tla` imports that pinned module and proves its
 initial state, named action, complete `Next`, and enabledness match an
-independent source rule; its inverted-guard control disables the source's
-initial step. All 13 obligations pass locally. This is an end-to-end fixture
-slice, not a proof that arbitrary String guards are lowered and emitted this
-way. The byte encoder's concrete Swift implementation and normalization
+independent source rule; its inverted-equality and inverted-inequality controls
+each disable the source's initial step. All 16 obligations pass locally. This
+is an end-to-end fixture slice, not a proof of arbitrary String-guard lowering
+or emission. The byte encoder's concrete Swift implementation and normalization
 boundary remain trusted as stated above.
 
 These are executable boundary checks, not a TLAPS proof of Unicode

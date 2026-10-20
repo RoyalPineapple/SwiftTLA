@@ -569,6 +569,19 @@ struct GeneratedAtomicUpdateProofTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }
+        let invertedInequality = source.replacingOccurrences(
+            of: "state.state.left != \"beta\"",
+            with: "state.state.left == \"beta\"")
+        #expect(invertedInequality != source)
+        let inequalityMutant = try #require(Parser.parse(source: invertedInequality)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(inequalityMutant, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A changed String inequality was accepted inside the Boolean guard")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
 
         let rendered = try GeneratedStringGuardProofModel.render().tlaBundle.root.tla
         let proofInput = URL(fileURLWithPath: #filePath)

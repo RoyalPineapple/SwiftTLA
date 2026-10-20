@@ -132,7 +132,7 @@ struct GeneratedStringGuardProofModel {
             let right = scope.sharedVar(initial: "alpha")
             let advanced = scope.sharedVar(initial: false)
             Do(Step.advance) {
-                When((left == right) && (left == "alpha"))
+                When((left == right) && (left == "alpha") && (left != "beta"))
                 Assign(advanced, to: true)
             }
         }
