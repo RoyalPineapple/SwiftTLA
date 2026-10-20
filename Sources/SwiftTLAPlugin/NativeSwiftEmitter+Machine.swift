@@ -1959,6 +1959,10 @@ func verifyGeneratedActionWriteOutput(
     func checkedValueTokens(
         _ expression: CompiledExpression, parameters: [String], actual: [String]
     ) -> (expected: [String], actual: [String])? {
+        func tokens(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                .map(\.text).filter { !$0.isEmpty }
+        }
         func checkedSequenceSource(_ node: CompiledExpression) -> String? {
             guard case .array(let element) = node.resultType,
                   element == .int || element == .bool else { return nil }
@@ -2034,30 +2038,22 @@ func verifyGeneratedActionWriteOutput(
         if (expression.operation == .tuplePrefix || expression.operation == .tupleRemoving ||
             expression.operation == .tupleConcatenate || expression.operation == .tupleAppend),
            let source = checkedSequenceSource(expression) {
-            let tokens = Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
-                .map(\.text).filter { !$0.isEmpty }
-            return (tokens, actual)
+            return (tokens(source), actual)
         }
         if expression.operation == .tupleLength,
            expression.children.count == 1,
            let sequence = checkedSequenceSource(expression.children[0]) {
-            let tokens = Parser.parse(source: "(\(sequence).count)")
-                .tokens(viewMode: .sourceAccurate).map(\.text).filter { !$0.isEmpty }
-            return (tokens, actual)
+            return (tokens("(\(sequence).count)"), actual)
         }
         if expression.operation == .tupleHead,
            expression.children.count == 1,
            let sequence = checkedSequenceSource(expression.children[0]) {
-            let tokens = Parser.parse(source: "(try _NativeMachineOperations.sequenceHead(\(sequence)))")
-                .tokens(viewMode: .sourceAccurate).map(\.text).filter { !$0.isEmpty }
-            return (tokens, actual)
+            return (tokens("(try _NativeMachineOperations.sequenceHead(\(sequence)))"), actual)
         }
         if expression.operation == .tupleTail,
            expression.children.count == 1,
            let sequence = checkedSequenceSource(expression.children[0]) {
-            let tokens = Parser.parse(source: "(try _NativeMachineOperations.sequenceTail(\(sequence)))")
-                .tokens(viewMode: .sourceAccurate).map(\.text).filter { !$0.isEmpty }
-            return (tokens, actual)
+            return (tokens("(try _NativeMachineOperations.sequenceTail(\(sequence)))"), actual)
         }
         if expression.operation == .tupleDynamicAccess,
            expression.children.count == 2,
@@ -2074,9 +2070,7 @@ func verifyGeneratedActionWriteOutput(
                 return try _NativeMachineOperations.sequenceElement(_sequenceValue, at: _sequenceIndex)
             }())
             """
-            let tokens = Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
-                .map(\.text).filter { !$0.isEmpty }
-            return (tokens, actual)
+            return (tokens(source), actual)
         }
         if let tokens = scalarPredicateTokens(expression, parameters: parameters)
             ?? arithmeticIntTokens(expression, parameters: parameters)
@@ -2086,9 +2080,7 @@ func verifyGeneratedActionWriteOutput(
         guard let tree = checkedBooleanTree(expression, parameters: parameters, actual: actual) else {
             return nil
         }
-        let tokens = Parser.parse(source: tree.source).tokens(viewMode: .sourceAccurate)
-            .map(\.text).filter { !$0.isEmpty }
-        return (tokens, tree.actual)
+        return (tokens(tree.source), tree.actual)
     }
     func firstTokenDifference(_ actual: [String], _ expected: [String]) -> String {
         let index = zip(actual, expected).enumerated().first { $0.element.0 != $0.element.1 }?.offset
