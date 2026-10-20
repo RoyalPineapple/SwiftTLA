@@ -1834,6 +1834,12 @@ native graph checks the complete two-state, one-edge case and final deadlock.
 Swift `Array.append(contentsOf:)`, the compiler/runtime interpretation of the
 checked call, and concatenation with derived or fallible operands remain
 trusted or uncovered; this is not universal sequence fidelity.
+Append, concatenation, removal, and prefix now share a source-shape lowering
+path that checks the compiled constructor and occurrence-preserving child order.
+Focused mutations reject a changed constructor, missing child, or reversed
+compiled children. The check does not independently prove that scheduling
+arbitrary source-child expressions preserves their evaluation order; the
+individual operator and emitted-output obligations remain separate.
 For predicates it cannot independently reconstruct, the verifier still
 requires the generated guard to gate exactly one unchanged update emission.
 The opaque predicate's value remains an unproved output link, rather than

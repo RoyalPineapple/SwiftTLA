@@ -1435,10 +1435,8 @@ struct CompiledLowerer {
                 case .intersection(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .intersection, on: &tasks)
                 case .setDifference(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .setDifference, on: &tasks)
                 case .tupleDynamicAccess(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleDynamicAccess, on: &tasks)
-                case .tupleAppend(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleAppend, on: &tasks)
-                case .tupleConcatenate(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleConcatenate, on: &tasks)
-                case .tupleRemoving(let tuple, let index): scheduleBinary(tuple, index, at: path, scope: scope, operation: .tupleRemoving, on: &tasks)
-                case .tuplePrefix(let tuple, let length): scheduleBinary(tuple, length, at: path, scope: scope, operation: .tuplePrefix, on: &tasks)
+                case .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix:
+                    scheduleSequenceBinary(expression, at: path, scope: scope, on: &tasks)
                 case .sequenceSelect(let sequence, let name, let predicate):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
                     scheduleBinding(sequence, predicate, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.sequenceSelect, on: &tasks)
@@ -1899,6 +1897,41 @@ struct CompiledLowerer {
             build: { .init(operation: operation, children: $0.map(\.expression)) },
             on: &tasks
         )
+    }
+
+    private func scheduleSequenceBinary(
+        _ source: StateExpr,
+        at path: String,
+        scope: BindingScope,
+        on tasks: inout [StateLoweringTask]
+    ) {
+        let children: [(StateExpr, String)]
+        let operation: CompiledOperation
+        switch source {
+        case .tupleAppend(let sequence, let value):
+            children = [(sequence, "\(path).left"), (value, "\(path).right")]
+            operation = .tupleAppend
+        case .tupleConcatenate(let left, let right):
+            children = [(left, "\(path).left"), (right, "\(path).right")]
+            operation = .tupleConcatenate
+        case .tupleRemoving(let sequence, let index):
+            children = [(sequence, "\(path).left"), (index, "\(path).right")]
+            operation = .tupleRemoving
+        case .tuplePrefix(let sequence, let length):
+            children = [(sequence, "\(path).left"), (length, "\(path).right")]
+            operation = .tuplePrefix
+        default:
+            preconditionFailure("Only sequence edit constructors use this lowering rule")
+        }
+        schedule(children, at: path, scope: scope, build: { lowered in
+            let operands = lowered.map(\.expression)
+            let result = CompiledExpression(operation: operation, children: operands)
+            guard SequenceExpressionLoweringContract.matches(source: source,
+                loweredOperands: operands, result: result) else {
+                throw Self.invalidTraversal(at: path)
+            }
+            return result
+        }, on: &tasks)
     }
 
     private func scheduleBinding(
