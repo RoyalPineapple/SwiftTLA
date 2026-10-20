@@ -631,6 +631,8 @@ struct GeneratedAtomicUpdateProofTests {
             typeName: "SetStepMachine", program: program))
         let visitor = try #require(member(named: "_visitUpdates1", in: emitter.machineMembers()))
         let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let source = visitor.description
         let omitted = source.replacingOccurrences(
             of: #"guard [^\n]+ else \{ return \}\s*try emit\(updates\)"#,
