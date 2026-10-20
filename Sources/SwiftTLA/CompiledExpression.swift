@@ -111,6 +111,10 @@ package struct CompiledExpression: Hashable, Sendable {
         self.children = children
     }
 
+    package func hasSameOccurrence(as other: Self) -> Bool {
+        identity == other.identity
+    }
+
     /// The operation before its explicit representation conversion.
     package var computation: Self {
         if case .convert = operation { return children[0] }

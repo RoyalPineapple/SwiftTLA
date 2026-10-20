@@ -1997,7 +1997,14 @@ short-circuit theorem or hosted admission result.
 
 `BooleanTreeOutcomeComposition.tla` proves the selected value and ordered
 failure for every finite Boolean tree built from `and`, `or`, `not`, and `if` under
-its stated leaf contracts. The generated Swift machine now emits all three
+its stated leaf contracts. `BooleanBranchLoweringContract` now checks each
+accepted source constructor against its compiled operation and ordered compiled
+operands before compilation succeeds. The lowerer derives the operand list from
+the source constructor; tests mutate the operation, omit an operand, and reverse
+operand order to ensure the check rejects those changes. This connects the
+constructor structure to the theorem's shared postorder tree, while the
+implementation of source-child scheduling and the meanings of leaf expressions
+remain trusted boundaries. The generated Swift machine now emits all three
 lazy branching forms and negation through one predicate-function pattern.
 For trees whose leaves
 the output verifier can reconstruct from the compiled expressions, it checks

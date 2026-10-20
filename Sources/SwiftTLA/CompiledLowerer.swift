@@ -1394,7 +1394,8 @@ struct CompiledLowerer {
                     var successorScope = scope
                     successorScope.allowsNextState = false
                     scheduleUnary(value, at: path, scope: successorScope, operation: .nextState, on: &tasks)
-                case .not(let value): scheduleUnary(value, at: path, scope: scope, operation: .not, on: &tasks)
+                case .not, .and, .or, .ifThenElse:
+                    scheduleBooleanBranch(expression, at: path, scope: scope, on: &tasks)
                 case .printT(let value): scheduleUnary(value, at: path, scope: scope, operation: .printT, on: &tasks)
                 case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, operation: .cardinality, on: &tasks)
                 case .powerSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .powerSet, on: &tasks)
@@ -1418,8 +1419,6 @@ struct CompiledLowerer {
                 case .lessOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .lessOrEqual, on: &tasks)
                 case .greaterThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .greaterThan, on: &tasks)
                 case .greaterOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .greaterOrEqual, on: &tasks)
-                case .and(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .and, on: &tasks)
-                case .or(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .or, on: &tasks)
                 case .in(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .in, on: &tasks)
                 case .subset(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .subset, on: &tasks)
                 case .union(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .union, on: &tasks)
@@ -1456,8 +1455,6 @@ struct CompiledLowerer {
                 case .setSum(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .setSum, on: &tasks)
                 case .integerRange(let lower, let upper):
                     schedule([(lower, "\(path).lower"), (upper, "\(path).upper")], at: path, scope: scope, build: { .integerRange($0[0].expression, $0[1].expression) }, on: &tasks)
-                case .ifThenElse(let condition, let then, let otherwise):
-                    schedule([(condition, "\(path).condition"), (then, "\(path).then"), (otherwise, "\(path).else")], at: path, scope: scope, build: { .ifThenElse($0[0].expression, $0[1].expression, $0[2].expression) }, on: &tasks)
                 case .setLiteral(let values):
                     schedule(indexed(values, at: path), at: path, scope: scope, build: { .setLiteral($0.map(\.expression)) }, on: &tasks)
                 case .tupleLiteral(let values):
@@ -1840,6 +1837,41 @@ struct CompiledLowerer {
         on tasks: inout [StateLoweringTask]
     ) {
         schedule([(value, path)], at: path, scope: scope, build: { .init(operation: operation, children: $0.map(\.expression)) }, on: &tasks)
+    }
+
+    private func scheduleBooleanBranch(
+        _ source: StateExpr,
+        at path: String,
+        scope: BindingScope,
+        on tasks: inout [StateLoweringTask]
+    ) {
+        let children: [(expression: StateExpr, path: String)]
+        let operation: CompiledOperation
+        switch source {
+        case .not(let child):
+            children = [(child, path)]
+            operation = .not
+        case .and(let left, let right):
+            children = [(left, "\(path).left"), (right, "\(path).right")]
+            operation = .and
+        case .or(let left, let right):
+            children = [(left, "\(path).left"), (right, "\(path).right")]
+            operation = .or
+        case .ifThenElse(let condition, let yes, let no):
+            children = [(condition, "\(path).condition"), (yes, "\(path).then"), (no, "\(path).else")]
+            operation = .ifThenElse
+        default:
+            preconditionFailure("Only Boolean branch constructors use this lowering rule")
+        }
+        schedule(children, at: path, scope: scope, build: { lowered in
+            let operands = lowered.map(\.expression)
+            let result = CompiledExpression(operation: operation, children: operands)
+            guard BooleanBranchLoweringContract.matches(source: source,
+                loweredOperands: operands, result: result) else {
+                throw Self.invalidTraversal(at: path)
+            }
+            return result
+        }, on: &tasks)
     }
 
     private func scheduleBinary(
