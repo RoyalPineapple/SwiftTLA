@@ -1722,6 +1722,16 @@ the compiled renderer's actual expression scheduler, and the accepted
 predicate. These are a structural lowering link, a total finite-set rule, and
 selected actual-output links—not a proof of Swift `Set.contains`, fallible
 membership operands, arbitrary set representations, or every rendered module.
+The same rule now proves the complete labeled edge and first-failure outcome
+when set and candidate operands may fail: the set is evaluated first, and a
+failed set suppresses the candidate. Reversing that priority has a proved
+counterexample. All 19 obligations pass locally without fingerprint reuse.
+`GeneratedMembershipFailureOrderModel` supplies an accepted `#spec` instance:
+compiled execution and the generated Swift machine both report the set's
+division-by-zero failure before the candidate's overflow, and the rendered
+TLA+ failure guards retain that order. This is a compositional rule with one
+actual-output witness, not a proof of arbitrary fallible set expressions,
+Swift `Set.contains`, or every emitted membership site.
 
 `DefinedChoiceDomainRule.tla` proves that guarding an existential domain
 preserves the enabled step and puts a domain evaluation failure before any

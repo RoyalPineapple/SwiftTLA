@@ -195,6 +195,12 @@ import Testing
 
     @Test("Membership checks its set before an overflowing member on both outputs")
     func generatedMembershipFailureOrder() throws {
+        let compilation = try GeneratedMembershipFailureOrderModel.spec.compile()
+        let initial = try firstCompiledState(in: compilation)
+        #expect(throws: EvalError.divisionByZero) {
+            try compiledSuccessors(named: "compute", arguments: [], in: compilation, from: initial)
+        }
+
         var machine = try GeneratedMembershipFailureOrderModel.makeMachine()
         let before = machine.snapshot
         #expect(throws: NativeMachineEvaluationError.divisionByZero) {
