@@ -382,6 +382,42 @@ struct ConditionalShortCircuitFailureModel: Sendable {
 }
 
 @TLAModel
+struct BranchingBooleanFailureModel: Sendable {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("BranchingBooleanFailureModel") { scope in
+            let enabled = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
+            let ready = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
+            let divisor = scope.sharedVar(in: 0...1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.advance) {
+                When(If(enabled, then: ready && (1 % divisor == 0), else: !ready))
+                Assign(result, to: 1)
+            }
+        }
+    }
+}
+
+@TLAModel
+struct ConditionalBooleanAssignmentModel: Sendable {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("ConditionalBooleanAssignmentModel") { scope in
+            let enabled = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
+            let ready = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
+            let divisor = scope.sharedVar(in: 0...1)
+            let result = scope.sharedVar(initial: false)
+            Do(Step.advance) {
+                Assign(result,
+                    to: If(enabled, then: ready && (1 % divisor == 0), else: !ready))
+            }
+        }
+    }
+}
+
+@TLAModel
 struct BoundConditionalBodyFailureModel: Sendable {
     enum Step: String, CaseIterable { case compute }
 

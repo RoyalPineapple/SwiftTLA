@@ -26,6 +26,17 @@ extension NativeSwiftEmitter {
                 return try _predicate\(ordinal(for: right))()
                 """
                 pending.append(contentsOf: [right, left])
+            case .ifThenElse where node.resultType == .bool:
+                let condition = node.children[0]
+                let yes = node.children[1]
+                let no = node.children[2]
+                body = """
+                if try _predicate\(ordinal(for: condition))() {
+                    return try _predicate\(ordinal(for: yes))()
+                }
+                return try _predicate\(ordinal(for: no))()
+                """
+                pending.append(contentsOf: [no, yes, condition])
             default:
                 let value = try expression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
                 body = "return \(value)"

@@ -7,6 +7,131 @@ import Testing
 
 @Suite("Short-circuit failure preservation")
 struct ShortCircuitFailureProofTests {
+    @Test("Boolean assignment output rejects a reversed selected branch")
+    func nestedConditionalAssignment() throws {
+        let machines = try ConditionalBooleanAssignmentModel.initialMachines()
+        #expect(machines.count == 8)
+        for machine in machines {
+            let state = machine.state
+            if state.enabled && state.ready && state.divisor == 0 {
+                #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+                    try machine.successors(for: .advance)
+                }
+            } else {
+                let successors = try machine.successors(for: .advance)
+                #expect(successors.count == 1)
+                let successor = try #require(successors.first)
+                let expected = state.enabled
+                    ? state.ready && state.divisor == 1
+                    : !state.ready
+                #expect(successor.state.result == expected)
+            }
+        }
+
+        let compiled = try ConditionalBooleanAssignmentModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var pending = [action.body]
+        var foundMixedCapture = false
+        while let node = pending.popLast() {
+            switch node {
+            case .define(_, let value, let child):
+                if case .ifThenElse = value.operation,
+                   value.children.count == 3,
+                   case .and = value.children[1].operation {
+                    foundMixedCapture = true
+                }
+                pending.append(child)
+            case .assign: break
+            case .and(let left, let right), .or(let left, let right):
+                pending += [left, right]
+            case .ifElse(_, let yes, let no): pending += [yes, no]
+            case .existsAction(_, _, let child): pending.append(child)
+            case .guard_, .unchanged: break
+            }
+        }
+        #expect(foundMixedCapture)
+
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "ConditionalBooleanAssignmentModel", program: program))
+        let visitor = try #require(emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let parts = try emitter.actionFunctions(action.body)
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames,
+            parts: parts.writes, conditions: parts.conditions)
+        let pattern = #"if try (_predicate[0-9]+\(\)) \{"#
+        let changed = visitor.description.replacingOccurrences(
+            of: pattern, with: "if !(try $1) {", options: .regularExpression)
+        #expect(changed != visitor.description)
+        let wrongVisitor = try #require(Parser.parse(source: changed)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongVisitor, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames,
+                parts: parts.writes, conditions: parts.conditions)
+            Issue.record("A Boolean assignment selected the opposite branch")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+    }
+
+    @Test("Nested conditional guards reject a reversed emitted branch")
+    func nestedConditionalBranch() throws {
+        let machines = try BranchingBooleanFailureModel.initialMachines()
+        #expect(machines.count == 8)
+        for machine in machines {
+            let state = machine.state
+            if state.enabled && state.ready && state.divisor == 0 {
+                #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+                    try machine.successors(for: .advance)
+                }
+            } else {
+                let successors = try machine.successors(for: .advance)
+                let enabled = state.enabled
+                    ? state.ready && state.divisor == 1
+                    : !state.ready
+                #expect(successors.count == (enabled ? 1 : 0))
+            }
+        }
+
+        let compiled = try BranchingBooleanFailureModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        guard case .and(let guarded, _) = action.body,
+              case .guard_(let predicate) = guarded,
+              case .ifThenElse = predicate.operation,
+              predicate.children.count == 3,
+              case .and = predicate.children[1].operation else {
+            Issue.record("The source guard no longer lowers to the checked mixed Boolean tree")
+            return
+        }
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "BranchingBooleanFailureModel", program: program))
+        let visitor = try #require(emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let parts = try emitter.actionFunctions(action.body)
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames,
+            parts: parts.writes, conditions: parts.conditions)
+        let changed = visitor.description.replacingOccurrences(
+            of: #"if try (_predicate[0-9]+\(\)) \{"#,
+            with: "if !(try $1) {", options: .regularExpression)
+        #expect(changed != visitor.description)
+        let wrongVisitor = try #require(Parser.parse(source: changed)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongVisitor, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames,
+                parts: parts.writes, conditions: parts.conditions)
+            Issue.record("A nested conditional selected the opposite branch")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+    }
+
     @Test("Conditional Boolean leaves preserve selected failures and generated output")
     func conditionalBooleanLeaf() throws {
         let machines = try ConditionalShortCircuitFailureModel.initialMachines()
@@ -48,7 +173,9 @@ struct ShortCircuitFailureProofTests {
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames,
             parts: parts.writes, conditions: parts.conditions)
-        let changed = visitor.description.replacingOccurrences(of: "? true :", with: "? false :")
+        let changed = visitor.description.replacingOccurrences(
+            of: #"if try (_predicate[0-9]+\(\)) \{"#,
+            with: "if !(try $1) {", options: .regularExpression)
         #expect(changed != visitor.description)
         let wrongVisitor = try #require(Parser.parse(source: changed)
             .statements.first?.item.as(DeclSyntax.self))

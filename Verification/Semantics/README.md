@@ -1994,6 +1994,19 @@ Swift runtime interpretation of the pinned visitors and arbitrary Boolean
 expression lowering remain trusted; this exact instance is not a universal
 short-circuit theorem or hosted admission result.
 
+`BooleanTreeOutcomeComposition.tla` proves the selected value and ordered
+failure for every finite Boolean tree built from `and`, `or`, and `if` under
+its stated leaf contracts. The generated Swift machine now emits all three
+forms through one lazy predicate-function pattern. For trees whose leaves
+the output verifier can reconstruct from the compiled expressions, it checks
+the actual generated guard, captured value, and assignment bodies against
+that pattern. Focused generated-machine tests cover skipped modulo failures
+in both guard and captured-assignment positions; reversing an emitted `if`
+branch is rejected at the corresponding output boundary. This closes the
+Swift syntax link for that recognized tree family, not the semantics of its
+leaves or Swift runtime execution. A general actual-TLA+ output link for these
+trees, unsupported leaves, and hosted admission remain open.
+
 This table is a proof inventory, not a claim that these seven groups exhaust
 `#spec`: initialization, source lowering, properties, temporal behavior,
 refinement, and PlusCal export also require their own output links.

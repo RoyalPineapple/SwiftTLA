@@ -809,6 +809,10 @@ struct NativeSwiftEmitter {
             return try booleanExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .not: return "(!\(try emit(0)))"
         case .ifThenElse:
+            if node.resultType == .bool {
+                return try booleanExpression(id, state: state, substitutions: substitutions,
+                    activeFunctions: activeFunctions)
+            }
             return "(\(try emit(0)) ? \(try emit(1)) : \(try emit(2)))"
         default: throw unsupported("scalarExpression operation")
         }

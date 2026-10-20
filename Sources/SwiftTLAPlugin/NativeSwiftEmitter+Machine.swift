@@ -1716,7 +1716,6 @@ func verifyGeneratedActionWriteOutput(
             case .greaterThan: symbol = ">"; arity = 2
             case .greaterOrEqual: symbol = ">="; arity = 2
             case .not: symbol = "!"; arity = 1
-            case .ifThenElse: symbol = "?"; arity = 3
             default: return nil
             }
             guard node.resultType == .bool, node.children.count == arity else { return nil }
@@ -1725,8 +1724,6 @@ func verifyGeneratedActionWriteOutput(
                 guard operandType == node.children[1].resultType,
                       operandType == .int || ((symbol == "==" || symbol == "!=") && operandType == .bool)
                 else { return nil }
-            } else if node.children.contains(where: { $0.resultType != .bool }) {
-                return nil
             }
             if !expanded {
                 pending.append((node, true))
@@ -1739,15 +1736,6 @@ func verifyGeneratedActionWriteOutput(
             switch arity {
             case 1: values.append(["(", "!"] + operands[0] + [")"])
             case 2: values.append(["("] + operands[0] + [symbol] + operands[1] + [")"])
-            case 3:
-                var tokens = ["("]
-                tokens += operands[0]
-                tokens += ["?"]
-                tokens += operands[1]
-                tokens += [":"]
-                tokens += operands[2]
-                tokens += [")"]
-                values.append(tokens)
             default: return nil
             }
         }
@@ -1756,7 +1744,7 @@ func verifyGeneratedActionWriteOutput(
     func shortCircuitPredicateSource(_ root: CompiledExpression, parameters: [String]) -> String? {
         guard root.resultType == .bool else { return nil }
         switch root.operation {
-        case .and, .or: break
+        case .and, .or, .ifThenElse: break
         default: return nil
         }
         var ordered: [CompiledExpression] = []
@@ -1769,6 +1757,10 @@ func verifyGeneratedActionWriteOutput(
             switch node.operation {
             case .and, .or:
                 guard node.resultType == .bool, node.children.count == 2,
+                      node.children.allSatisfy({ $0.resultType == .bool }) else { return nil }
+                pending.append(contentsOf: node.children.reversed())
+            case .ifThenElse:
+                guard node.resultType == .bool, node.children.count == 3,
                       node.children.allSatisfy({ $0.resultType == .bool }) else { return nil }
                 pending.append(contentsOf: node.children.reversed())
             default:
@@ -1787,6 +1779,16 @@ func verifyGeneratedActionWriteOutput(
                 let left = try _predicate\(left)()
                 guard \(conjunction ? "left" : "!left") else { return \(conjunction ? "false" : "true") }
                 return try _predicate\(right)()
+                """
+            case .ifThenElse:
+                let condition = identifiers[node.children[0]]!
+                let yes = identifiers[node.children[1]]!
+                let no = identifiers[node.children[2]]!
+                body = """
+                if try _predicate\(condition)() {
+                    return try _predicate\(yes)()
+                }
+                return try _predicate\(no)()
                 """
             default:
                 guard let tokens = scalarPredicateTokens(node, parameters: parameters) else { return nil }
@@ -1824,6 +1826,26 @@ func verifyGeneratedActionWriteOutput(
             }
         }
         return normalized
+    }
+    func checkedValueTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+        if let tokens = scalarPredicateTokens(expression, parameters: parameters)
+            ?? arithmeticIntTokens(expression, parameters: parameters)
+            ?? directScalarTokens(expression, parameters: parameters) {
+            return tokens
+        }
+        guard let source = shortCircuitPredicateSource(expression, parameters: parameters) else {
+            return nil
+        }
+        return Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+            .map(\.text).filter { !$0.isEmpty }
+    }
+    func firstTokenDifference(_ actual: [String], _ expected: [String]) -> String {
+        let index = zip(actual, expected).enumerated().first { $0.element.0 != $0.element.1 }?.offset
+            ?? min(actual.count, expected.count)
+        let actualToken = index < actual.count ? actual[index] : "<end>"
+        let expectedToken = index < expected.count ? expected[index] : "<end>"
+        return "token \(index): expected \(expectedToken), actual \(actualToken) " +
+            "(expected \(expected.count) tokens, actual \(actual.count))"
     }
     for guardNode in guards {
         guard let tokens = bodies[guardNode.id], let bindings = parameters[guardNode.id] else {
@@ -1880,12 +1902,13 @@ func verifyGeneratedActionWriteOutput(
                 "the child receives inherited and captured values unchanged", "generated child arguments differ")
         }
         let initializer = Array(tokens[3..<(tokens.count - expectedCall.count)])
-        let expectedInitializer = scalarPredicateTokens(value, parameters: parent)
-            ?? arithmeticIntTokens(value, parameters: parent)
-            ?? directScalarTokens(value, parameters: parent)
-        if let expectedInitializer, initializer != expectedInitializer {
+        let expectedInitializer = checkedValueTokens(value, parameters: parent)
+        if let expectedInitializer,
+           canonicalPredicateNames(initializer) != canonicalPredicateNames(expectedInitializer) {
             throw invalid("native.action.binding.\(id)",
-                "the captured value reads its compiled source", "initializer \(initializer)")
+                "the captured value reads its compiled source",
+                firstTokenDifference(canonicalPredicateNames(initializer),
+                    canonicalPredicateNames(expectedInitializer)))
         }
     }
     for id in conjunctions {
@@ -2025,16 +2048,15 @@ func verifyGeneratedActionWriteOutput(
             )
         }
         if let assignment = assignments[part.id], let bindings = parameters[part.id],
-           let value = scalarPredicateTokens(assignment, parameters: bindings)
-                ?? arithmeticIntTokens(assignment, parameters: bindings)
-                ?? directScalarTokens(assignment, parameters: bindings) {
+           let value = checkedValueTokens(assignment, parameters: bindings) {
             let compiled = Parser.parse(source: """
             func proof() {
                 if let merged = updates.merging(_Updates(\(part.slot): \(value.joined(separator: " ")))) { try emit(merged) }
             }
             """).statements.first?.item.as(FunctionDeclSyntax.self)
             let compiledBody = compiled?.body?.statements.tokens(viewMode: .sourceAccurate).map(\.text) ?? []
-            guard compiled != nil, actualBody == compiledBody else {
+            guard compiled != nil,
+                  canonicalPredicateNames(actualBody) == canonicalPredicateNames(compiledBody) else {
                 throw invalid("native.action.write.\(part.id)",
                     "the assigned value evaluates its compiled scalar expression",
                     "\(name): \(actualBody.prefix(40))")
