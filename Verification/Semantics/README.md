@@ -1812,9 +1812,13 @@ regression checks the generated machine's complete three-state, two-edge
 graph, action identity, final deadlock, and initial state. The generated-Swift
 verifier independently reconstructs the array-append initializer for this
 typed state-variable and scalar-element form; changing the emitted append to
-discard the element is a negative control. This is an output-linked slice,
-not a proof of arbitrary array expressions or of the Swift compiler/runtime's
-interpretation of the checked syntax. Hosted evidence remains pending.
+discard the element is a negative control. The compiled evaluator and the
+generated Swift output now call the same `sequenceAppend` kernel operation
+after evaluating their operands in order. The kernel copies the input sequence
+and appends the element once; Swift `Array.append` and the compiler/runtime's
+interpretation of the checked call remain trusted. This is an output-linked
+slice, not a proof of arbitrary array expressions. Hosted evidence remains
+pending.
 For predicates it cannot independently reconstruct, the verifier still
 requires the generated guard to gate exactly one unchanged update emission.
 The opaque predicate's value remains an unproved output link, rather than

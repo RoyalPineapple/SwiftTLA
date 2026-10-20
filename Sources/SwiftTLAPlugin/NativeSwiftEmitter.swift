@@ -1182,7 +1182,7 @@ struct NativeSwiftEmitter {
             (try { () throws -> \(try swiftType(result)) in
                 let _sequenceValue: \(try swiftType(source)) = \(try emit(0))
                 let _appendedValue: \(try swiftType(childType(1))) = \(try emit(1))
-                return \(elements) + [_appendedValue]
+                return _NativeMachineOperations.sequenceAppend(\(elements), _appendedValue)
             }())
             """
         case .tupleConcatenate:

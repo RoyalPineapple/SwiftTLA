@@ -410,6 +410,12 @@ public enum _NativeMachineOperations: Sendable {
         return sequence[index - 1]
     }
 
+    public static func sequenceAppend<Element: Sendable>(_ sequence: [Element], _ element: Element) -> [Element] {
+        var result = sequence
+        result.append(element)
+        return result
+    }
+
     public static func sequenceRemoving<Element: Sendable>(_ sequence: [Element], at index: Int) throws -> [Element] {
         guard index >= 1, index <= sequence.count else {
             throw NativeMachineEvaluationError.indexOutOfBounds(index: index, count: sequence.count)

@@ -1973,7 +1973,7 @@ func verifyGeneratedActionWriteOutput(
             (try { () throws -> [\(typeName)] in
                 let _sequenceValue: [\(typeName)] = state.state.\(field)
                 let _appendedValue: \(typeName) = \(appended.joined(separator: " "))
-                return _sequenceValue + [_appendedValue]
+                return _NativeMachineOperations.sequenceAppend(_sequenceValue, _appendedValue)
             }())
             """
             let tokens = Parser.parse(source: source).tokens(viewMode: .sourceAccurate)

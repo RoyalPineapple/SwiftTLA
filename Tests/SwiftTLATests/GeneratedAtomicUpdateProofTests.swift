@@ -697,8 +697,8 @@ struct GeneratedAtomicUpdateProofTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }
-        let originalAppend = "+ [_appendedValue]"
-        let changedAppend = "+ []"
+        let originalAppend = "_NativeMachineOperations.sequenceAppend(_sequenceValue, _appendedValue)"
+        let changedAppend = "_sequenceValue"
         let wrongVisitorSource = visitor.description.replacingOccurrences(
             of: originalAppend, with: changedAppend)
         #expect(wrongVisitorSource != visitor.description)

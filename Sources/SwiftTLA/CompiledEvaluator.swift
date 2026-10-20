@@ -1022,9 +1022,8 @@ extension CompiledOperation {
             values.append(.integer(try sequenceElements(from: popValue(from: &values)).count))
         case .tupleAppend:
             let element = try popValue(from: &values)
-            var tuple = try sequenceElements(from: popValue(from: &values))
-            tuple.append(element)
-            values.append(.tuple(tuple))
+            let tuple = try sequenceElements(from: popValue(from: &values))
+            values.append(.tuple(_NativeMachineOperations.sequenceAppend(tuple, element)))
         case .tupleHead:
             let sequence = try sequenceElements(from: popValue(from: &values))
             values.append(try nativeOperation { try _NativeMachineOperations.sequenceHead(sequence) })
