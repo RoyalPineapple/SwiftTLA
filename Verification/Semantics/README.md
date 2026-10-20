@@ -1875,6 +1875,17 @@ before the repair. All 16 slice obligations and both related Swift test suites
 pass locally. The Swift syntax checker, sequence kernel, compiler, and runtime
 remain trusted; this is one expression-composition slice, not a proof of all
 accepted expressions. Hosted evidence is pending.
+`SequenceHeadRule.tla` gives `head` the independent source meaning of the
+element at index one, with presence defined by the index domain. The
+`FallibleSequenceHeadProof.tla` slice composes it with the shared prefix rule
+for arbitrary integer sequences: it proves the emitted initial states,
+complete `readHead`-labeled step, `Next`, ordered prefix/empty failures,
+failure operands, and selected evaluation check. Length zero reaches the
+empty-sequence failure; an out-of-bounds prefix suppresses that later failure.
+The emitted TLA+ module is pinned byte-for-byte and the generated Swift output
+check rejects a changed nested prefix length. This does not prove arbitrary
+head operands, all element types, or Swift compiler/runtime behavior. Hosted
+evidence is pending.
 Append, concatenation, removal, and prefix now share a source-shape lowering
 path that checks the compiled constructor and occurrence-preserving child order.
 Focused mutations reject a changed constructor, missing child, or reversed

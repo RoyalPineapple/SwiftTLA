@@ -104,6 +104,22 @@ struct FallibleSequenceLengthMachine {
 }
 
 @TLAModel
+struct FallibleSequenceHeadMachine {
+    enum Step: String, CaseIterable { case readHead }
+
+    static var spec: TLASpec {
+        #spec("FallibleSequenceHeadMachine") { scope in
+            let values = scope.sharedVar(initial: [Int]([1]))
+            let length = scope.sharedVar(in: 0...2)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.readHead) {
+                Assign(result, to: values.prefix(length: length).head())
+            }
+        }
+    }
+}
+
+@TLAModel
 struct FiniteInitialStepMachine {
     enum Step: String, CaseIterable { case prepare }
 
