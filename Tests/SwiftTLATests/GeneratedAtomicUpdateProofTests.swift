@@ -543,6 +543,34 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(try disabled.successors(for: .advance).isEmpty)
     }
 
+    @Test("A String comparison inside a Boolean guard is checked, not treated as opaque")
+    func stringGuardRejectsChangedComparison() throws {
+        let compiled = try GeneratedStringGuardProofModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "GeneratedStringGuardProofModel", program: program))
+        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
+            stateFields: emitter.stateMemberNames, parts: writes)
+
+        let source = visitor.description
+        let changed = source.replacingOccurrences(
+            of: "state.state.left == state.state.right",
+            with: "state.state.left != state.state.right")
+        #expect(changed != source)
+        let mutant = try #require(Parser.parse(source: changed)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(mutant, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A changed String comparison was accepted inside the Boolean guard")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+    }
+
     @Test("A generated scalar conditional selects its compiled predicate")
     func scalarConditionalKeepsCompiledPredicate() throws {
         let compiled = try GeneratedScalarConditionalProofModel.spec.compile()

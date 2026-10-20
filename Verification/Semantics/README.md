@@ -1343,8 +1343,12 @@ binding, in order. It also checks direct `Int` and `Bool` state-field,
 inherited-binder, and literal initializers against their compiled identities.
 A Boolean-capture mutation that changed only the state field passed before this
 check and is now rejected. Direct scalar predicates and their guarded-action
-use are covered by the later output rules below. Other value types, model-
-parameter reads, and general expression trees still lack this link.
+use are covered by the later output rules below. String equality and inequality
+now have an exact Swift output check for state-field, inherited-binder, and
+literal operands inside Boolean guards. A `==`-to-`!=` mutation in a nested
+String guard passed the previous opaque-leaf check and is now rejected. This
+does not link general String operations, model-parameter reads, or other
+previously opaque expression leaves.
 The same verifier checks a captured `Int` arithmetic tree whose leaves are
 state fields, inherited bindings, or integer literals. It requires the emitted
 Swift closure to evaluate each leaf and checked addition, subtraction,

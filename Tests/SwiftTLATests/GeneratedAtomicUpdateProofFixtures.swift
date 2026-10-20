@@ -123,6 +123,23 @@ struct GeneratedScalarGuardProofModel {
 }
 
 @TLAModel
+struct GeneratedStringGuardProofModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("GeneratedStringGuardProofModel") { scope in
+            let left = scope.sharedVar(initial: "alpha")
+            let right = scope.sharedVar(initial: "alpha")
+            let advanced = scope.sharedVar(initial: false)
+            Do(Step.advance) {
+                When((left == right) && (left == "alpha"))
+                Assign(advanced, to: true)
+            }
+        }
+    }
+}
+
+@TLAModel
 struct GeneratedScalarConditionalProofModel {
     enum Step: String, CaseIterable { case choose }
 

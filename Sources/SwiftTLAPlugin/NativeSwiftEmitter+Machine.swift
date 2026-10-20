@@ -1629,6 +1629,32 @@ func verifyGeneratedActionWriteOutput(
             throw invalid("native.action.part.\(id)", "ordered child calls \(children)", "child calls \(calls)")
         }
     }
+    func stringComparisonSource(_ expression: CompiledExpression, parameters: [String]) -> String? {
+        guard expression.resultType == .bool, expression.children.count == 2,
+              expression.children.allSatisfy({ $0.resultType == .string }) else { return nil }
+        let symbol: String
+        switch expression.operation {
+        case .equal: symbol = "=="
+        case .notEqual: symbol = "!="
+        default: return nil
+        }
+        func operand(_ node: CompiledExpression) -> String? {
+            switch node.operation {
+            case .stateVariable(let variable):
+                return stateFields[variable].map { "state.state.\($0)" }
+            case .boundValue(let binding) where program.bindingTypes[binding] == .string:
+                guard let name = program.binderNames[binding].map({ "_\($0)_\(binding.ordinal)" }),
+                      parameters.contains(name) else { return nil }
+                return name
+            case .value(.string(let value)):
+                return String(reflecting: value)
+            default: return nil
+            }
+        }
+        guard let left = operand(expression.children[0]),
+              let right = operand(expression.children[1]) else { return nil }
+        return "(\(left) \(symbol) \(right))"
+    }
     func directScalarTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
         guard expression.resultType == .int || expression.resultType == .bool else { return nil }
         switch expression.operation {
@@ -1697,6 +1723,10 @@ func verifyGeneratedActionWriteOutput(
             ["return", result, "}", "(", ")", ")"]
     }
     func scalarPredicateTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+        if let source = stringComparisonSource(expression, parameters: parameters) {
+            return Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                .map(\.text).filter { !$0.isEmpty }
+        }
         guard expression.resultType == .bool else { return nil }
         var pending: [(expression: CompiledExpression, expanded: Bool)] = [(expression, false)]
         var values: [[String]] = []
@@ -1830,7 +1860,9 @@ func verifyGeneratedActionWriteOutput(
                 let child = identifiers[node.children[0]]!
                 body = "return try _NativeMachineOperations.booleanNot { try _predicate\(child)() }"
             default:
-                if let tokens = scalarPredicateTokens(node, parameters: parameters) {
+                if let source = stringComparisonSource(node, parameters: parameters) {
+                    body = "return \(source)"
+                } else if let tokens = scalarPredicateTokens(node, parameters: parameters) {
                     body = "return \(tokens.joined(separator: " "))"
                 } else if opaqueLeaves.contains(id) {
                     body = "return __uncheckedPredicateLeaf\(id)__"
