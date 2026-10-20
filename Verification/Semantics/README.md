@@ -2004,8 +2004,17 @@ that pattern. Focused generated-machine tests cover skipped modulo failures
 in both guard and captured-assignment positions; reversing an emitted `if`
 branch is rejected at the corresponding output boundary. This closes the
 Swift syntax link for that recognized tree family, not the semantics of its
-leaves or Swift runtime execution. A general actual-TLA+ output link for these
-trees, unsupported leaves, and hosted admission remain open.
+leaves or Swift runtime execution. `BranchingBooleanFailureModel.tla` is
+byte-for-byte checked against the actual generated TLA+ for an `if` whose
+selected branch contains `and` and fallible modulo. The independent source
+rule in `BranchingBooleanFailureProof.tla` proves matching initial states,
+complete labeled steps, selected value, ordered division and negative-modulo
+failures, enabledness, and the evaluation check; an eager-failure predicate
+differs from the emitted one while a skipped-branch state remains enabled. All
+22 obligations passed locally. This closes that emitted-TLA+ instance, not a
+general TLA+ output link for every Boolean tree or unsupported leaf. Swift
+runtime execution, the output checks, TLAPS, and hosted admission remain
+explicit boundaries.
 
 This table is a proof inventory, not a claim that these seven groups exhaust
 `#spec`: initialization, source lowering, properties, temporal behavior,

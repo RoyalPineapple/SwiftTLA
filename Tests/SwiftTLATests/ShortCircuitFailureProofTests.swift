@@ -130,6 +130,13 @@ struct ShortCircuitFailureProofTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }
+        let rendered = try BranchingBooleanFailureModel.render().tlaBundle.root.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/BranchingBooleanFailureModel.tla")
+            .standardizedFileURL
+        let formal = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(rendered == formal, "Actual generated TLA+: \(rendered)")
     }
 
     @Test("Conditional Boolean leaves preserve selected failures and generated output")
