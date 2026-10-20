@@ -1860,6 +1860,7 @@ func verifyGeneratedActionWriteOutput(
                 let child = identifiers[node.children[0]]!
                 body = "return try _NativeMachineOperations.booleanNot { try _predicate\(child)() }"
             default:
+                // Preserve literal spelling; joining token text would split a String literal.
                 if let source = stringComparisonSource(node, parameters: parameters) {
                     body = "return \(source)"
                 } else if let tokens = scalarPredicateTokens(node, parameters: parameters) {
