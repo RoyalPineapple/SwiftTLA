@@ -396,6 +396,17 @@ The proof also does not establish that canonical Unicode normalization matches
 Swift `String` equality for every pair. Those are explicit output-link
 and runtime obligations, not conclusions from finite examples.
 
+`FormalStringEqualityGuardRule.tla` composes the injectivity theorem into an
+action rule: for arbitrary canonical byte sequences, a two-comparison String
+guard and its complete `advance`-labeled successor relation (unchanged String
+fields and an updated Boolean field) agree with the
+same guard over encoded formal Strings. Its inverted-comparison negative
+control disagrees on a concrete enabled step. All 23 obligations pass locally
+without fingerprint reuse. This closes the *modeled guard rule*, not the
+general source-lowering or emitter link. The generated-Swift guard witness
+checks one actual emitted action and rejects an inverted comparison; the
+corresponding arbitrary-program Swift/TLA emission rules remain unproved.
+
 These are executable boundary checks, not a TLAPS proof of Unicode
 normalization or all emitted String operations. The link assumes Swift String
 equality and Foundation's canonical normalization agree on the same Unicode
