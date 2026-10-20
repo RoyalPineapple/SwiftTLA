@@ -206,6 +206,10 @@ struct CompiledSpecificationRendererTests {
     func structuredOperationSyntax() throws {
         let binder = BinderID(ordinal: 0)
         let cases: [(CompiledOperation, [String], String)] = [
+            (.and, ["left", "right"], "(IF left THEN right ELSE FALSE)"),
+            (.or, ["left", "right"], "(IF left THEN TRUE ELSE right)"),
+            (.not, ["value"], "(~value)"),
+            (.ifThenElse, ["condition", "yes", "no"], "(IF condition THEN yes ELSE no)"),
             (.setMap(binder), ["item + 1", "Items"], "{item + 1 : item \\in Items}"),
             (.forAll(binder), ["Items", "item > 0"], "(\\A item \\in Items : item > 0)"),
             (.functionLiteral(binder), ["Items", "item + 1"], "[item \\in Items |-> item + 1]"),
@@ -225,9 +229,66 @@ struct CompiledSpecificationRendererTests {
             }.joined()
             #expect(rendered == expected)
         }
+        let compilation = try TLASpec(name: "BooleanComposition", variables: [], actions: [], invariants: []).compile()
+        let identifiers = (0..<5).map { BinderID(ordinal: $0) }
+        let names = Dictionary(uniqueKeysWithValues: zip(identifiers, ["condition", "guard", "yes", "no", "fallback"]))
+        let renderer = CompiledTLARenderer(moduleName: "BooleanComposition", reservedNames: [],
+            layout: compilation.layout, bindings: .init(binders: names),
+            operators: compilation.semantics.operators, actions: [], functions: [])
+        let leaves = identifiers.map { CompiledExpression.boundValue($0) }
+        let nested = CompiledExpression(operation: .ifThenElse, children: [
+            .init(operation: .and, children: [leaves[0], .init(operation: .not, children: [leaves[1]])]),
+            .init(operation: .or, children: [leaves[2], leaves[3]]),
+            .init(operation: .not, children: [leaves[4]])
+        ])
+        #expect(try renderer.state(nested)
+            == "(IF (IF condition THEN (~guard) ELSE FALSE) THEN (IF yes THEN TRUE ELSE no) ELSE (~fallback))")
         #expect(throws: CompilationDiagnostic.self) {
             try CompiledOperation.caseExpr(hasOtherwise: false).tlaSyntax(
                 operandCount: 3, binderName: { _ in "item" })
+        }
+    }
+
+    @Test("Selected Boolean branches retain ordered evaluation failures in TLA output")
+    func selectedBooleanFailures() throws {
+        let compilation = try TLASpec(name: "BooleanFailures", variables: [], actions: [], invariants: []).compile()
+        let enabledID = BinderID(ordinal: 0)
+        let divisorID = BinderID(ordinal: 1)
+        let renderer = CompiledTLARenderer(moduleName: "BooleanFailures", reservedNames: [],
+            layout: compilation.layout, bindings: .init(binders: [enabledID: "enabled", divisorID: "divisor"]),
+            operators: compilation.semantics.operators, actions: [], functions: [])
+        let enabled = CompiledExpression(operation: .boundValue(enabledID), resultType: .bool, children: [])
+        let divisor = CompiledExpression(operation: .boundValue(divisorID), resultType: .int, children: [])
+        let remainder = CompiledExpression(operation: .modulo, resultType: .int,
+            children: [.value(.integer(1)), divisor])
+        let fallible = CompiledExpression(operation: .equal, resultType: .bool,
+            children: [remainder, .value(.integer(0))])
+        let cases: [(CompiledExpression, String, String)] = [
+            (.init(operation: .and, children: [enabled, fallible]),
+                "(IF enabled THEN divisor # 0 ELSE TRUE)", "(IF enabled THEN divisor > 0 ELSE TRUE)"),
+            (.init(operation: .or, children: [enabled, fallible]),
+                "(IF enabled THEN TRUE ELSE divisor # 0)", "(IF enabled THEN TRUE ELSE divisor > 0)"),
+            (.init(operation: .ifThenElse, children: [enabled, .value(.boolean(true)), fallible]),
+                "(IF enabled THEN TRUE ELSE divisor # 0)", "(IF enabled THEN TRUE ELSE divisor > 0)"),
+            (.init(operation: .not, children: [fallible]), "divisor # 0", "divisor > 0")
+        ]
+        for (expression, zeroGuard, positiveGuard) in cases {
+            let failures = try renderer.expressionEvaluationFailures(expression)
+            guard failures.count == 2 else {
+                Issue.record("The branch must retain both modulo failures")
+                continue
+            }
+            guard case .divisionByZero = failures[0].kind,
+                  case .negativeModuloDivisor = failures[1].kind else {
+                Issue.record("The branch changed the ordered failure identities")
+                continue
+            }
+            #expect(failures.map(\.predicate) == [
+                "~(\(zeroGuard))",
+                "(IF \(zeroGuard) THEN ~(\(positiveGuard)) ELSE FALSE)"
+            ])
+            #expect(try renderer.evaluationDefined(expression)
+                == "(IF \(zeroGuard) THEN (IF \(positiveGuard) THEN TRUE ELSE FALSE) ELSE FALSE)")
         }
     }
 

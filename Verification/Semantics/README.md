@@ -2004,7 +2004,14 @@ the source constructor; tests mutate the operation, omit an operand, and reverse
 operand order to ensure the check rejects those changes. This connects the
 constructor structure to the theorem's shared postorder tree, while the
 implementation of source-child scheduling and the meanings of leaf expressions
-remain trusted boundaries. The generated Swift machine now emits all three
+remain trusted boundaries. The compiled TLA+ renderer's actual `and`, `or`,
+`not`, and `if` operand templates are checked against the proved forms, including
+a nested rendering through its generic expression scheduler. The same renderer
+is checked for branch-selected division-by-zero and negative-modulo predicates,
+their order, and the aggregate definedness formula for all four constructors.
+These output checks cover the fixed constructor rules, not a mechanized proof
+of the Swift renderer loop or every leaf's failure semantics. The generated
+Swift machine now emits all three
 lazy branching forms and negation through one predicate-function pattern.
 For trees whose leaves
 the output verifier can reconstruct from the compiled expressions, it checks
