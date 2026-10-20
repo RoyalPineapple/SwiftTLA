@@ -464,6 +464,28 @@ struct ConjunctiveAlternativeFailureModel: Sendable {
 }
 
 @TLAModel
+struct BranchwiseConjunctionFailureOrderModel: Sendable {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("BranchwiseConjunctionFailureOrderModel") { scope in
+            let divisor = scope.sharedVar(in: 0...1)
+            let modulus = scope.sharedVar(in: Set<Int>([-1, 0, 1, 2]))
+            let selected = scope.sharedVar(initial: -1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                Either {
+                    Assign(selected, to: 0)
+                } or: {
+                    Assign(selected, to: 1 % modulus)
+                }
+                Assign(result, to: 1 / divisor)
+            }
+        }
+    }
+}
+
+@TLAModel
 struct UndefinedChoiceDomainModel: Sendable {
     enum Step: String, CaseIterable { case pick }
 

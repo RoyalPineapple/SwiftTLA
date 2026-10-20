@@ -344,7 +344,7 @@ struct ChoiceEvaluationFailureTests {
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
-    @Test("Emitted Swift visits both kinds of later failure")
+    @Test("Emitted Swift preserves ordered alternatives and their continuations")
     func eitherFailureOrderEmittedSwift() throws {
         let fixture = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -352,7 +352,8 @@ struct ChoiceEvaluationFailureTests {
         let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
         for (name, witnessName) in [
             ("EitherDistinctFailuresModel", "EitherDistinctFailuresSwiftWitness.txt"),
-            ("EitherChoiceAfterDivisionFailureModel", "EitherChoiceAfterDivisionFailureSwiftWitness.txt")
+            ("EitherChoiceAfterDivisionFailureModel", "EitherChoiceAfterDivisionFailureSwiftWitness.txt"),
+            ("BranchwiseConjunctionFailureOrderModel", "BranchwiseConjunctionFailureOrderSwiftWitness.txt")
         ] {
             let declaration = try #require(source.statements.compactMap {
                 $0.item.as(StructDeclSyntax.self)
@@ -370,6 +371,25 @@ struct ChoiceEvaluationFailureTests {
                 .statements.first?.item.as(FunctionDeclSyntax.self))
             #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
                 == expected.tokens(viewMode: .sourceAccurate).map(\.text))
+            if name == "BranchwiseConjunctionFailureOrderModel" {
+                let action = try #require(compiled.program.behavior.actions.first)
+                let writes = try emitter.actionFunctions(action.body).writes
+                try verifyGeneratedActionWriteOutput(update, action: action.body,
+                    program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+                let wrongSource = update.description.replacingOccurrences(
+                    of: "if second { try _actionPart1(", with: "if second { try _actionPart2(")
+                #expect(wrongSource != update.description)
+                let wrong = try #require(Parser.parse(source: wrongSource)
+                    .statements.first?.item.as(DeclSyntax.self))
+                do {
+                    try verifyGeneratedActionWriteOutput(wrong, action: action.body,
+                        program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+                    Issue.record("A generated alternative silently replaced its later branch")
+                } catch let diagnostic as CompilationDiagnostic {
+                    #expect(diagnostic.path.hasPrefix("native.action.part.")
+                        || diagnostic.path.hasPrefix("native.action.alternative."))
+                }
+            }
         }
     }
 
@@ -701,6 +721,25 @@ struct ChoiceEvaluationFailureTests {
         #expect(states[0] == -1)
         #expect(Set(edges.filter { $0.0 == 0 }.compactMap { states[$0.1] }) == Set([0, 1]))
         #expect(failures.contains { $0.0 == 0 && $0.1 == .divisionByZero })
+    }
+
+    @Test("A successful alternative reaches its failing continuation before a later alternative fails")
+    func conjunctiveAlternativesKeepBranchwiseFailureOrder() throws {
+        let machines = try BranchwiseConjunctionFailureOrderModel.initialMachines()
+        #expect(machines.count == 8)
+        let machine = try #require(machines.first { $0.state.divisor == 0 && $0.state.modulus == -1 })
+        #expect(machine.state.selected == -1 && machine.state.result == 0)
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
+            try machine.successors(for: .pick)
+        }
+        let successful = try #require(machines.first { $0.state.divisor == 1 && $0.state.modulus == 2 })
+        #expect(Set(try successful.successors(for: .pick).map(\.state.selected)) == [0, 1])
+        let rendered = try BranchwiseConjunctionFailureOrderModel.render()
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/BranchwiseConjunctionFailureOrderModel.tla")
+            .standardizedFileURL
+        #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
     @Test("A fallible Let value preserves an arithmetic failure in its body")

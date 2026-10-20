@@ -1733,6 +1733,22 @@ right action's failure first. The source rule must specify branchwise outcome
 order, and both emitted paths must be linked to it; graph equality alone cannot
 close this boundary.
 
+`BranchwiseConjunctionFailureOrderProof.tla` closes that ordering for one
+accepted `#spec` instance with eight initial states. Its independent source
+rule visits the first `Either` branch and its shared continuation before the
+second branch. The exact generated TLA+ module is pinned by the focused Swift
+test; the generated Swift visitor is pinned separately and checked against its
+compiled action tree. Replacing the later child call with the first child is
+rejected by that output verifier. TLAPS proves the complete initial set and
+labeled step relation, the first division failure, gated later modulo failures,
+and the selected evaluation check over the fixture's state domain. A negative
+control proves that an ungated later failure disagrees. The generated Swift machine reports
+the same first failure and retains both distinct successful successors. This
+is an output-linked instance, not a proof that `ActionNormalization.complete`
+or either emitter preserves branchwise order for arbitrary action trees; the
+Swift compiler/runtime interpretation of the emitted visitor and the checked
+arithmetic kernels remains trusted.
+
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
 | `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; every generated write part has a structural target-and-merge check; reconstructible Int/Bool assignments also have an independent compiled-value check; direct fallible assignments emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
