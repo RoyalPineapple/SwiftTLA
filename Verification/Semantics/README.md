@@ -389,8 +389,10 @@ without fingerprint reuse.
 TLA+ literal, and marker collision with concrete inputs. Its forced-escape
 cases compare all hexadecimal digit values against Swift's independent radix
 conversion across 195 valid strings. The proof does not verify that the
-implementation's digit table and prefix test implement these operators for
-every string, nor does it prove that canonical Unicode normalization matches
+implementation's digit table implements these operators for every string.
+The encoder and decoder now test the marker on UTF-8 bytes, matching the
+proof's byte-prefix rule rather than Swift's canonical String comparison.
+The proof also does not establish that canonical Unicode normalization matches
 Swift `String` equality for every pair. Those are explicit output-link
 and runtime obligations, not conclusions from finite examples.
 

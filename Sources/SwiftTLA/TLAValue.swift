@@ -27,13 +27,14 @@ package enum FormalStringEncoding {
     }
 
     package static func encode(_ value: String) -> String {
-        guard value.utf8.contains(where: { $0 >= 128 }) || value.hasPrefix(prefix) else {
+        let bytes = value.utf8
+        guard !bytes.allSatisfy({ $0 < 128 }) || bytes.starts(with: prefix.utf8) else {
             return value
         }
         let digits = Array("0123456789ABCDEF".utf8)
         var encoded = prefix
-        encoded.reserveCapacity(prefix.utf8.count + value.utf8.count * 2)
-        for byte in value.utf8 {
+        encoded.reserveCapacity(prefix.utf8.count + bytes.count * 2)
+        for byte in bytes {
             encoded.append(Character(UnicodeScalar(digits[Int(byte >> 4)])))
             encoded.append(Character(UnicodeScalar(digits[Int(byte & 0x0F)])))
         }
@@ -41,7 +42,7 @@ package enum FormalStringEncoding {
     }
 
     package static func decode(_ value: String) -> String? {
-        guard value.hasPrefix(prefix) else { return value }
+        guard value.utf8.starts(with: prefix.utf8) else { return value }
         let digits = value.utf8.dropFirst(prefix.utf8.count)
         guard digits.count.isMultiple(of: 2) else { return nil }
         var bytes: [UInt8] = []
