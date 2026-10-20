@@ -406,6 +406,16 @@ without fingerprint reuse. This closes the *modeled guard rule*, not the
 general source-lowering or emitter link. The generated-Swift guard witness
 checks one actual emitted action and rejects an inverted comparison; the
 corresponding arbitrary-program Swift/TLA emission rules remain unproved.
+For `GeneratedStringGuardProofModel`, the focused test also pins the complete
+actual TLA+ module byte-for-byte, checks the generated Swift initial state and
+complete `advance` successor, and rejects a changed generated Swift equality.
+`GeneratedStringGuardProof.tla` imports that pinned module and proves its
+initial state, named action, complete `Next`, and enabledness match an
+independent source rule; its inverted-guard control disables the source's
+initial step. All 13 obligations pass locally. This is an end-to-end fixture
+slice, not a proof that arbitrary String guards are lowered and emitted this
+way. The byte encoder's concrete Swift implementation and normalization
+boundary remain trusted as stated above.
 
 These are executable boundary checks, not a TLAPS proof of Unicode
 normalization or all emitted String operations. The link assumes Swift String

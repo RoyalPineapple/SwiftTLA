@@ -543,8 +543,8 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(try disabled.successors(for: .advance).isEmpty)
     }
 
-    @Test("A String comparison inside a Boolean guard is checked, not treated as opaque")
-    func stringGuardRejectsChangedComparison() throws {
+    @Test("A String guard preserves its equality and complete labeled step")
+    func stringGuardPreservesEqualityAndLabeledStep() throws {
         let compiled = try GeneratedStringGuardProofModel.spec.compile()
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         let action = try #require(program.behavior.actions.first)
@@ -569,6 +569,27 @@ struct GeneratedAtomicUpdateProofTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }
+
+        let rendered = try GeneratedStringGuardProofModel.render().tlaBundle.root.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/GeneratedStringGuardProofModel.tla")
+            .standardizedFileURL
+        #expect(rendered == (try String(contentsOf: proofInput, encoding: .utf8)),
+            "Actual generated TLA+: \(rendered)")
+
+        let machines = try GeneratedStringGuardProofModel.initialMachines()
+        #expect(machines.count == 1)
+        let machine = try #require(machines.first)
+        #expect(machine.state.left == "alpha")
+        #expect(machine.state.right == "alpha")
+        #expect(!machine.state.advanced)
+        let successors = try machine.successors(for: .advance)
+        #expect(successors.count == 1)
+        let successor = try #require(successors.first)
+        #expect(successor.state.left == "alpha")
+        #expect(successor.state.right == "alpha")
+        #expect(successor.state.advanced)
     }
 
     @Test("A generated scalar conditional selects its compiled predicate")
