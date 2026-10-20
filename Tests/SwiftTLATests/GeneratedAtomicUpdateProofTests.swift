@@ -450,7 +450,10 @@ struct GeneratedAtomicUpdateProofTests {
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: writes)
 
-        for (original, replacement) in [(" < ", " > "), ("(!", "(")] {
+        for (original, replacement) in [
+            (" < ", " > "),
+            ("_NativeMachineOperations.booleanNot", "_NativeMachineOperations.booleanOr"),
+        ] {
             var source = visitor.description
             let range = try #require(source.range(of: original))
             source.replaceSubrange(range, with: replacement)

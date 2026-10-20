@@ -52,7 +52,13 @@ private static func _visitUpdates0(from state: Snapshot, checking context: inout
         try _actionPart15(updates, { candidate in try _actionPart14(candidate, emit) })
     }
     func _actionPart15(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-        guard (!state.state.attempt) else { return }
+        guard (try { () throws -> Bool in
+            func _predicate1() throws -> Bool {
+                return try _NativeMachineOperations.booleanNot { try _predicate0() }
+            }
+            func _predicate0() throws -> Bool { return state.state.attempt }
+            return try _predicate1()
+        }()) else { return }
         try emit(updates)
     }
     func _actionPart14(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {

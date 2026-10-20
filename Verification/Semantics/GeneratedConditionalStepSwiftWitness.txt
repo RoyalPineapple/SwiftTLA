@@ -14,7 +14,13 @@ else { try _actionPart4(updates, branchEmit) }
 }
 }
 func _actionPart4(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-    let ___atomic_0_0 = (!state.state.chooseFirst)
+    let ___atomic_0_0 = (try { () throws -> Bool in
+        func _predicate1() throws -> Bool {
+            return try _NativeMachineOperations.booleanNot { try _predicate0() }
+        }
+        func _predicate0() throws -> Bool { return state.state.chooseFirst }
+        return try _predicate1()
+    }())
 try _actionPart5(___atomic_0_0, updates, emit)
 }
 func _actionPart5(_ ___atomic_0_0: Bool, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
@@ -50,14 +56,26 @@ func _actionPart13(_ ___atomic_0_0: Bool, _ ___atomic_1_1: Int, _ updates: _Upda
     if let merged = updates.merging(_Updates(_value_pc_0: _ControlLocation.location1)) { try emit(merged) }
 }
 func _actionPart3(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-    let ___atomic_0_2 = (!state.state.chooseFirst)
+    let ___atomic_0_2 = (try { () throws -> Bool in
+        func _predicate3() throws -> Bool {
+            return try _NativeMachineOperations.booleanNot { try _predicate2() }
+        }
+        func _predicate2() throws -> Bool { return state.state.chooseFirst }
+        return try _predicate3()
+    }())
 try _actionPart15(___atomic_0_2, updates, emit)
 }
 func _actionPart15(_ ___atomic_0_2: Bool, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
     try _actionPart17(___atomic_0_2, updates, { candidate in try _actionPart16(___atomic_0_2, candidate, emit) })
 }
 func _actionPart17(_ ___atomic_0_2: Bool, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-    guard (!___atomic_0_2) else { return }
+    guard (try { () throws -> Bool in
+        func _predicate5() throws -> Bool {
+            return try _NativeMachineOperations.booleanNot { try _predicate4() }
+        }
+        func _predicate4() throws -> Bool { return ___atomic_0_2 }
+        return try _predicate5()
+    }()) else { return }
 try emit(updates)
 }
 func _actionPart16(_ ___atomic_0_2: Bool, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
