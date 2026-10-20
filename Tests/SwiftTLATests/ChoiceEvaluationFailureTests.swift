@@ -7,6 +7,13 @@ import Testing
 
 @Suite("Choice evaluation failures")
 struct ChoiceEvaluationFailureTests {
+    private func semanticFixture(_ name: String) -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/\(name)")
+            .standardizedFileURL
+    }
+
     @Test("The first failing Choose candidate determines the reported failure")
     func orderedCandidateFailures() throws {
         let machine = try OrderedCandidateFailuresModel.makeMachine()
@@ -57,10 +64,7 @@ struct ChoiceEvaluationFailureTests {
         #expect(outcome.completion == .evaluationFailure(.divisionByZero))
 
         let rendered = try OrderedEnumCandidateFailuresModel.render()
-        let proofInput = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/OrderedEnumCandidateFailuresModel.tla")
-            .standardizedFileURL
+        let proofInput = semanticFixture("OrderedEnumCandidateFailuresModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
         let declarations = rendered.tlaBundle.root.tla.split(separator: "\n")
         let division = try #require(declarations.first {
@@ -85,10 +89,7 @@ struct ChoiceEvaluationFailureTests {
         let update = try #require(try emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let witness = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/OrderedEnumCandidateFailureSwiftWitness.txt")
-            .standardizedFileURL
+        let witness = semanticFixture("OrderedEnumCandidateFailureSwiftWitness.txt")
         let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
@@ -237,10 +238,7 @@ struct ChoiceEvaluationFailureTests {
         })
         #expect(divisors.contains("__SwiftTLAFirstFailingCandidate"))
         #expect(divisors.contains(" <= __SwiftTLAEarlierCandidate"))
-        let proofInput = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/MixedCandidateDivisionFailureModel.tla")
-            .standardizedFileURL
+        let proofInput = semanticFixture("MixedCandidateDivisionFailureModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
@@ -271,10 +269,7 @@ struct ChoiceEvaluationFailureTests {
 
         let rendered = try EitherBranchDivisionFailureModel.render()
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
-        let proofInput = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/EitherBranchDivisionFailureModel.tla")
-            .standardizedFileURL
+        let proofInput = semanticFixture("EitherBranchDivisionFailureModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
@@ -293,10 +288,7 @@ struct ChoiceEvaluationFailureTests {
         })
         #expect(laterFailure.contains("divisor # 0"))
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
-        let proofInput = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/EitherDistinctFailuresModel.tla")
-            .standardizedFileURL
+        let proofInput = semanticFixture("EitherDistinctFailuresModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
@@ -337,10 +329,7 @@ struct ChoiceEvaluationFailureTests {
             $0.hasPrefix("__SwiftTLAChoiceFailure0 ==")
         })
         #expect(laterFailurePredicate.contains("divisor # 0"))
-        let proofInput = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/EitherChoiceAfterDivisionFailureModel.tla")
-            .standardizedFileURL
+        let proofInput = semanticFixture("EitherChoiceAfterDivisionFailureModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
@@ -363,10 +352,7 @@ struct ChoiceEvaluationFailureTests {
             let update = try #require(try emitter.machineMembers().first {
                 $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
             })
-            let witness = URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()
-                .appendingPathComponent("../../Verification/Semantics/\(witnessName)")
-                .standardizedFileURL
+            let witness = semanticFixture(witnessName)
             let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
                 .statements.first?.item.as(FunctionDeclSyntax.self))
             #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
@@ -419,10 +405,7 @@ struct ChoiceEvaluationFailureTests {
         #expect(outcome.completion == .evaluationFailure(.noSatisfyingChoice))
 
         let rendered = try CandidateChoiceFailureModel.render()
-        let proofInput = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/CandidateChoiceFailureModel.tla")
-            .standardizedFileURL
+        let proofInput = semanticFixture("CandidateChoiceFailureModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
 
         let fixture = URL(fileURLWithPath: #filePath)
@@ -437,10 +420,7 @@ struct ChoiceEvaluationFailureTests {
         let update = try #require(try emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let witness = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/CandidateChoiceFailureSwiftWitness.txt")
-            .standardizedFileURL
+        let witness = semanticFixture("CandidateChoiceFailureSwiftWitness.txt")
         let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
@@ -467,10 +447,7 @@ struct ChoiceEvaluationFailureTests {
             $0.hasPrefix("__SwiftTLAChoiceFailure0 ==")
         })
         #expect(failure.contains("LET"))
-        let proofInput = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/BoundBodyChoiceFailureModel.tla")
-            .standardizedFileURL
+        let proofInput = semanticFixture("BoundBodyChoiceFailureModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
 
         let sourceFile = URL(fileURLWithPath: #filePath)
@@ -500,10 +477,7 @@ struct ChoiceEvaluationFailureTests {
         let update = try #require(try emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let witness = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/BoundBodyChoiceFailureSwiftWitness.txt")
-            .standardizedFileURL
+        let witness = semanticFixture("BoundBodyChoiceFailureSwiftWitness.txt")
         let binderPattern = try Regex(#"___binder_SpecParser_[0-9]+_0_2"#)
         let normalized = update.description.replacing(binderPattern, with: "__PROOF_MEMBER__")
         let actualTokens = Parser.parse(source: normalized).tokens(viewMode: .sourceAccurate).map(\.text)
@@ -558,10 +532,7 @@ struct ChoiceEvaluationFailureTests {
         })
         let swiftBinder = try Regex(#"___binder_SpecParser_[0-9]+_0_0"#)
         let normalizedSwift = update.description.replacing(swiftBinder, with: "__PROOF_MEMBER__")
-        let swiftWitness = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/ConditionalChoiceThenModuloFailureSwiftWitness.txt")
-            .standardizedFileURL
+        let swiftWitness = semanticFixture("ConditionalChoiceThenModuloFailureSwiftWitness.txt")
         let actualTokens = Parser.parse(source: normalizedSwift).tokens(viewMode: .sourceAccurate).map(\.text)
         let expectedTokens = try Parser.parse(source: String(contentsOf: swiftWitness, encoding: .utf8))
             .tokens(viewMode: .sourceAccurate).map(\.text)
@@ -588,10 +559,7 @@ struct ChoiceEvaluationFailureTests {
 
         let tlaBinder = try Regex(#"__binder_SpecParser_[0-9]+_0"#)
         let normalizedTLA = rendered.tlaBundle.root.tla.replacing(tlaBinder, with: "__CONDITION_MEMBER__")
-        let proofInput = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/ConditionalChoiceThenModuloFailureModel.tla")
-            .standardizedFileURL
+        let proofInput = semanticFixture("ConditionalChoiceThenModuloFailureModel.tla")
         #expect(normalizedTLA == (try String(contentsOf: proofInput, encoding: .utf8)))
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
         let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
@@ -735,10 +703,7 @@ struct ChoiceEvaluationFailureTests {
         let successful = try #require(machines.first { $0.state.divisor == 1 && $0.state.modulus == 2 })
         #expect(Set(try successful.successors(for: .pick).map(\.state.selected)) == [0, 1])
         let rendered = try BranchwiseConjunctionFailureOrderModel.render()
-        let proofInput = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/BranchwiseConjunctionFailureOrderModel.tla")
-            .standardizedFileURL
+        let proofInput = semanticFixture("BranchwiseConjunctionFailureOrderModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
@@ -823,10 +788,7 @@ struct ChoiceEvaluationFailureTests {
         let update = try #require(try emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let witness = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/EitherBranchDivisionFailureSwiftWitness.txt")
-            .standardizedFileURL
+        let witness = semanticFixture("EitherBranchDivisionFailureSwiftWitness.txt")
         let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)

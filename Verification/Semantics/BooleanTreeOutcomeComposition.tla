@@ -239,7 +239,18 @@ THEOREM EveryFiniteBooleanTreeHasSourceHistory ==
                 BY <2>3, <3>1, <3>3, SMT DEF SourceHistory
             <3>6. extended[count + 1] = next
                 BY SMT DEF extended, ExtendHistory
-            <3>. QED BY <3>4, <3>5, <3>6, SMT DEF SourceHistory
+            <3>7. \A index \in 1..(count + 1) :
+                     extended[index] = SourceNode(nodes, extended, index)
+                <4>. SUFFICES ASSUME NEW index \in 1..(count + 1)
+                             PROVE extended[index] =
+                                   SourceNode(nodes, extended, index)
+                    BY SMT
+                <4>1. CASE index \in 1..count
+                    BY <3>5, <4>1, SMT
+                <4>2. CASE index = count + 1
+                    BY <3>4, <3>6, <4>2, SMT
+                <4>. QED BY <4>1, <4>2, SMT
+            <3>. QED BY <3>7 DEF SourceHistory
         <2>. QED BY <2>5, <2>6, SMT
     <1>3. \A count \in Nat : P(count)
         BY <1>1, <1>2, NatInduction

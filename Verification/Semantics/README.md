@@ -1499,8 +1499,8 @@ visitor witnesses pin those actual calls. `AlternativeTraversalRule.tla`
 proves by induction that ordered traversal retains the union of successful
 updates and the first failure for any finite list of branch outcomes. Its
 ordered-sequence rule also proves that each buffered update chunk is appended
-without loss, reordering, or collapsing duplicates (109 local TLAPS
-obligations). Replacing the first failure with the last is a negative control.
+without loss, reordering, or collapsing duplicates. Replacing the first failure
+with the last is a negative control.
 `AlternativeTraversalSwiftKernel.txt` pins the actual Swift helper declaration
 by parsed tokens; reversing its replay loop fails that check. Focused Swift
 tests cover duplicate ordered updates after a failure and ensure an
@@ -1733,6 +1733,29 @@ right action's failure first. The source rule must specify branchwise outcome
 order, and both emitted paths must be linked to it; graph equality alone cannot
 close this boundary.
 
+After lowering, compilation checks that no compiled `and` left subtree
+contains `or` or `existsAction`. This keeps several left candidates from
+reaching one fallible continuation in the generated Swift visitor. An
+undistributed compiled-tree negative control fails; a normalized source
+action and the existing accepted `#spec` continuation cases compile. This
+guards the actual action tree given to both emitters, but does not prove that
+lowering preserves source meaning or that all emitted TLA+ expressions match.
+
+`AlternativeTraversalRule.tla` also proves that ordered alternative outcomes
+compose associatively, with an empty identity: reparenthesizing a binary
+alternative tree preserves the complete update sequence and first failure when
+leaf order stays fixed. Reversing two distinct failures changes that result.
+A focused lowering test checks that the compiler extracts the same leaf order
+from left- and right-nested source alternatives. This closes the algebraic
+rebalancing rule, not arbitrary conjunction distribution or either emitter's
+general output link.
+For every finite list of already-computed branch outcomes, the same module
+proves a visitor history exists. Histories satisfying its recurrence compose
+across group concatenation, including every ordered update and the first
+failure. It does not establish that a continuation produces the correct
+outcome for each branch; that source-to-lowered `and` rule and the general
+TLA+ output link remain open.
+
 `BranchwiseConjunctionFailureOrderProof.tla` closes that ordering for one
 accepted `#spec` instance with eight initial states. Its independent source
 rule visits the first `Either` branch and its shared continuation before the
@@ -1753,7 +1776,7 @@ arithmetic kernels remains trusted.
 | --- | --- | --- |
 | `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; every generated write part has a structural target-and-merge check; reconstructible Int/Bool assignments also have an independent compiled-value check; direct fallible assignments emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
 | `guard_` | The reusable `When` rule preserves selected continuation steps and first failure; a disabled guard suppresses continuation failure. The checked-addition instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof. | Generalize actual emitted predicate evaluation, short-circuit failures, and source `When` substitution to every accepted predicate. |
-| `and` | Compatible delta conjunction and conflicting relational writes; generated Swift now verifies candidate-update forwarding for every compiled conjunction; TLA+ exposes a right-hand arithmetic or `CHOOSE` failure when the left action is enabled | Prove both emitters' evaluation order, first-failure selection across nondeterministic left branches, conflict/error semantics, and frame completion. |
+| `and` | Compatible delta conjunction and conflicting relational writes; compiled actions fail closed if a left subtree can branch; generated Swift verifies candidate-update forwarding for every compiled conjunction; TLA+ exposes a right-hand arithmetic or `CHOOSE` failure when the left action is enabled | Prove source-to-compiled distribution preserves branchwise meaning and both emitters' evaluation order, first-failure selection, conflict/error semantics, and frame completion. |
 | `or` | Guarded-choice preservation conditional on equal branch edges; output-linked success-plus-failure and two distinct-failure fixtures; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, all failure kinds and TLA+ ordering, multiplicity policy, and both outputs. |
 | `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order; an output-linked case retains a successful candidate and reports another candidate's expression-level choice failure; fallible domains now guard the emitted TLA+ action and retain evaluation failure | Prove arbitrary emitted domain and branch expressions agree, including all failure kinds, first-failure order, and checking effects. |
 | `define` | Equal total bound values and selected branch edges preserve complete labeled edges and enabledness across eager binding and `LET` | Prove emitted value/branch expressions, failure behavior, and checking effects. |

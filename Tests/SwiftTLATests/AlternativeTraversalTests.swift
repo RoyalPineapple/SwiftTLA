@@ -1,11 +1,46 @@
 import Foundation
 import SwiftParser
 import SwiftSyntax
-import SwiftTLA
+@testable import SwiftTLA
 import Testing
 
 @Suite("Alternative traversal")
 struct AlternativeTraversalTests {
+    @Test("Nested alternatives retain source order after normalization")
+    func nestedAlternativeOrder() {
+        let leaves = (1...4).map { ActionExpr.assign(.named("value"), .int($0)) }
+        let leftNested = ActionExpr.or(.or(.or(leaves[0], leaves[1]), leaves[2]), leaves[3])
+        let rightNested = ActionExpr.or(leaves[0], .or(leaves[1], .or(leaves[2], leaves[3])))
+        for source in [leftNested, rightNested] {
+            #expect(ActionNormalization.branches(of: source) == leaves)
+        }
+    }
+
+    @Test("Compiled actions require branchwise continuations before emission")
+    func branchwiseContinuation() throws {
+        let variable = VariableID(ordinal: 0)
+        let undistributed = CompiledActionExpr.and(
+            .or(.unchanged(variable), .unchanged(variable)),
+            .unchanged(variable)
+        )
+        do {
+            try undistributed.verifyBranchwiseContinuation(at: "actions.pick.body")
+            Issue.record("An undistributed compiled action must not reach either emitter")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidFormalDeclaration)
+            #expect(diagnostic.stage == .lowering)
+        }
+        let source = ActionExpr.and(
+            .or(.assign(.named("value"), .int(1)), .assign(.named("value"), .int(2))),
+            .guard_(.bool(true))
+        )
+        let compilation = try canonicalTestSpec(
+            variables: [("value", .value(.int(0)))], actions: [("pick", source, [])]
+        ).compile()
+        let lowered = try #require(compilation.semantics.behavior.actions.first)
+        try lowered.body.verifyBranchwiseContinuation(at: "actions.pick.body")
+    }
+
     @Test("Successful updates survive a failing alternative")
     func mixedOutcomes() {
         var emitted: [Int] = []
