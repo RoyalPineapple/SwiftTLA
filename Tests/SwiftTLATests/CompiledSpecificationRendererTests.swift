@@ -208,6 +208,7 @@ struct CompiledSpecificationRendererTests {
         let cases: [(CompiledOperation, [String], String)] = [
             (.and, ["left", "right"], "(IF left THEN right ELSE FALSE)"),
             (.or, ["left", "right"], "(IF left THEN TRUE ELSE right)"),
+            (.in, ["member", "members"], "(member \\in members)"),
             (.not, ["value"], "(~value)"),
             (.ifThenElse, ["condition", "yes", "no"], "(IF condition THEN yes ELSE no)"),
             (.setMap(binder), ["item + 1", "Items"], "{item + 1 : item \\in Items}"),
@@ -230,8 +231,8 @@ struct CompiledSpecificationRendererTests {
             #expect(rendered == expected)
         }
         let compilation = try TLASpec(name: "BooleanComposition", variables: [], actions: [], invariants: []).compile()
-        let identifiers = (0..<5).map { BinderID(ordinal: $0) }
-        let names = Dictionary(uniqueKeysWithValues: zip(identifiers, ["condition", "guard", "yes", "no", "fallback"]))
+        let identifiers = (0..<6).map { BinderID(ordinal: $0) }
+        let names = Dictionary(uniqueKeysWithValues: zip(identifiers, ["condition", "guard", "yes", "no", "fallback", "members"]))
         let renderer = CompiledTLARenderer(moduleName: "BooleanComposition", reservedNames: [],
             layout: compilation.layout, bindings: .init(binders: names),
             operators: compilation.semantics.operators, actions: [], functions: [])
@@ -243,6 +244,9 @@ struct CompiledSpecificationRendererTests {
         ])
         #expect(try renderer.state(nested)
             == "(IF (IF condition THEN (~guard) ELSE FALSE) THEN (IF yes THEN TRUE ELSE no) ELSE (~fallback))")
+        let membership = CompiledExpression(operation: .in, resultType: .bool,
+            children: [.value(.integer(1)), .boundValue(identifiers[5])])
+        #expect(try renderer.state(membership) == "(1 \\in members)")
         #expect(throws: CompilationDiagnostic.self) {
             try CompiledOperation.caseExpr(hasOtherwise: false).tlaSyntax(
                 operandCount: 3, binderName: { _ in "item" })

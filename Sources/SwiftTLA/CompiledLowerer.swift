@@ -1419,7 +1419,17 @@ struct CompiledLowerer {
                 case .lessOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .lessOrEqual, on: &tasks)
                 case .greaterThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .greaterThan, on: &tasks)
                 case .greaterOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .greaterOrEqual, on: &tasks)
-                case .in(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .in, on: &tasks)
+                case .in(let lhs, let rhs):
+                    schedule([(lhs, "\(path).left"), (rhs, "\(path).right")], at: path, scope: scope,
+                        build: { operands in
+                            let lowered = operands.map(\.expression)
+                            let result = CompiledExpression(operation: .in, children: lowered)
+                            guard MembershipLoweringContract.matches(source: expression,
+                                loweredOperands: lowered, result: result) else {
+                                throw Self.invalidTraversal(at: path)
+                            }
+                            return result
+                        }, on: &tasks)
                 case .subset(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .subset, on: &tasks)
                 case .union(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .union, on: &tasks)
                 case .intersection(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .intersection, on: &tasks)

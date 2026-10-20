@@ -1710,8 +1710,18 @@ These checks apply in generated conditions, guards, captures, assignments, and
 Boolean trees. Focused mutations change a literal set and a configured-set
 member respectively; both are rejected. Other set representations, operand
 forms, and the runtime meaning of Swift `Set.contains` remain outside this
-syntax link. The generic source-to-compiled membership rule and corresponding
-TLA+ output link are not thereby proved.
+syntax link. `MembershipLoweringContract` checks every source `.in` constructor
+against the compiled membership operation and its member-before-set operand
+identities; changed operations, reversed operands, and missing operands are
+rejected. `FiniteSetMembershipRule.tla` independently defines membership as
+existence of an equal set element and proves its value, total leaf outcome, and
+short-circuit-guard composition equal the rendered `\in` form (15 local TLAPS
+obligations without fingerprint reuse). The TLA+ syntax-template test checks
+the compiled renderer's actual expression scheduler, and the accepted
+`SymbolicConfigurationModel` checks the emitted action's `1 \in members`
+predicate. These are a structural lowering link, a total finite-set rule, and
+selected actual-output links—not a proof of Swift `Set.contains`, fallible
+membership operands, arbitrary set representations, or every rendered module.
 
 `DefinedChoiceDomainRule.tla` proves that guarding an existential domain
 preserves the enabled step and puts a domain evaluation failure before any
