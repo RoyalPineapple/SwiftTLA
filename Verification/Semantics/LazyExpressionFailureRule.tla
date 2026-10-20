@@ -225,6 +225,24 @@ THEOREM ShortCircuitOrPropagatesChildOutcome ==
               rightDefined, right, rightFailure)
     BY SMT DEF SourceOrChildOutcome, RenderedOrChildOutcome
 
+SourceNotChildOutcome(childDefined, childValue, childFailure) ==
+    IF childDefined
+    THEN [defined |-> TRUE, value |-> ~childValue,
+          firstFailure |-> "none"]
+    ELSE [defined |-> FALSE, value |-> FALSE,
+          firstFailure |-> childFailure]
+RenderedNotChildOutcome(childDefined, childValue, childFailure) ==
+    [defined |-> childDefined,
+     value |-> IF childDefined THEN ~childValue ELSE FALSE,
+     firstFailure |-> IF childDefined THEN "none" ELSE childFailure]
+
+THEOREM NegationPropagatesChildOutcome ==
+    ASSUME NEW childDefined \in BOOLEAN, NEW childValue \in BOOLEAN,
+           NEW childFailure
+    PROVE SourceNotChildOutcome(childDefined, childValue, childFailure)
+        = RenderedNotChildOutcome(childDefined, childValue, childFailure)
+    BY SMT DEF SourceNotChildOutcome, RenderedNotChildOutcome
+
 THEOREM NestedFailureIsRetainedButSkippedFailureIsNot ==
     /\ SourceAndChildOutcome(FALSE, TRUE, "inner", FALSE, TRUE, "right").firstFailure
            = "inner"

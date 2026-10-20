@@ -392,7 +392,8 @@ struct BranchingBooleanFailureModel: Sendable {
             let divisor = scope.sharedVar(in: 0...1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.advance) {
-                When(If(enabled, then: ready && (1 % divisor == 0), else: !ready))
+                When(If(enabled, then: ready && (1 % divisor == 0),
+                    else: !(ready && true)))
                 Assign(result, to: 1)
             }
         }

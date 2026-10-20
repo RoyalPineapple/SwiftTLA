@@ -103,7 +103,10 @@ struct ShortCircuitFailureProofTests {
               case .guard_(let predicate) = guarded,
               case .ifThenElse = predicate.operation,
               predicate.children.count == 3,
-              case .and = predicate.children[1].operation else {
+              case .and = predicate.children[1].operation,
+              case .not = predicate.children[2].operation,
+              predicate.children[2].children.count == 1,
+              case .and = predicate.children[2].children[0].operation else {
             Issue.record("The source guard no longer lowers to the checked mixed Boolean tree")
             return
         }
@@ -127,6 +130,20 @@ struct ShortCircuitFailureProofTests {
                 program: program, stateFields: emitter.stateMemberNames,
                 parts: parts.writes, conditions: parts.conditions)
             Issue.record("A nested conditional selected the opposite branch")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+        let missingNegation = visitor.description.replacingOccurrences(
+            of: #"return !\(try _predicate([0-9]+)\(\)\)"#,
+            with: "return (try _predicate$1())", options: .regularExpression)
+        #expect(missingNegation != visitor.description)
+        let wrongNegation = try #require(Parser.parse(source: missingNegation)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongNegation, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames,
+                parts: parts.writes, conditions: parts.conditions)
+            Issue.record("Negation no longer preserves the selected Boolean outcome")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }

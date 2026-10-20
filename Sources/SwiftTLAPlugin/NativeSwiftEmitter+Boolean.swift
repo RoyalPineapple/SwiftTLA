@@ -37,6 +37,10 @@ extension NativeSwiftEmitter {
                 return try _predicate\(ordinal(for: no))()
                 """
                 pending.append(contentsOf: [no, yes, condition])
+            case .not:
+                let child = node.children[0]
+                body = "return !(try _predicate\(ordinal(for: child))())"
+                pending.append(child)
             default:
                 let value = try expression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
                 body = "return \(value)"

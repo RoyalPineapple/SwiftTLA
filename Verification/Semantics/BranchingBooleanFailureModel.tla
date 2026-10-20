@@ -5,7 +5,7 @@ VARIABLES enabled, ready, divisor, result
 
 vars == <<enabled, ready, divisor, result>>
 
-advance == ((IF (IF (IF enabled THEN (IF ready THEN divisor # 0 ELSE TRUE) ELSE TRUE) THEN (IF (IF enabled THEN (IF ready THEN divisor > 0 ELSE TRUE) ELSE TRUE) THEN TRUE ELSE FALSE) ELSE FALSE) THEN ((IF enabled THEN (IF ready THEN ((1 % divisor) = 0) ELSE FALSE) ELSE (~ready))) = TRUE ELSE FALSE) /\ (LET __atomic_0 == 1 IN (((TRUE /\ result' = __atomic_0) /\ (UNCHANGED enabled /\ UNCHANGED ready)) /\ UNCHANGED divisor)))
+advance == ((IF (IF (IF enabled THEN (IF ready THEN divisor # 0 ELSE TRUE) ELSE TRUE) THEN (IF (IF enabled THEN (IF ready THEN divisor > 0 ELSE TRUE) ELSE TRUE) THEN TRUE ELSE FALSE) ELSE FALSE) THEN ((IF enabled THEN (IF ready THEN ((1 % divisor) = 0) ELSE FALSE) ELSE (~(IF ready THEN TRUE ELSE FALSE)))) = TRUE ELSE FALSE) /\ (LET __atomic_0 == 1 IN (((TRUE /\ result' = __atomic_0) /\ (UNCHANGED enabled /\ UNCHANGED ready)) /\ UNCHANGED divisor)))
 __SwiftTLADivisionByZeroFailure0 == ~((IF enabled THEN (IF ready THEN divisor # 0 ELSE TRUE) ELSE TRUE))
 __SwiftTLADivisionByZeroDivisor0 == divisor
 __SwiftTLANegativeModuloDivisorFailure0 == (IF (IF enabled THEN (IF ready THEN divisor # 0 ELSE TRUE) ELSE TRUE) THEN ~((IF enabled THEN (IF ready THEN divisor > 0 ELSE TRUE) ELSE TRUE)) ELSE FALSE)

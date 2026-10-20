@@ -1061,7 +1061,8 @@ execution and the syntax checker remain trusted boundaries.
 
 `LazyExpressionFailureRule.tla` also proves that one `and` or `or` node
 propagates its children's distinct failure identities and omits failures
-from skipped branches. `NestedShortCircuitFailureProof.tla` composes those
+from skipped branches; its `not` rule preserves a failing child's identity
+and negates only a defined value. `NestedShortCircuitFailureProof.tla` composes those
 rules for an outer `and` and inner `or` over the exact generated TLA+ module.
 Its 22 TLAPS obligations cover initial states, the complete labeled step,
 enabledness, evaluation check, and division-by-zero versus negative-modulo
@@ -1071,13 +1072,13 @@ rejects a mutation that reverses the inner short-circuit decision. This
 closes that nested instance and a reusable one-node outcome rule, not an
 output link for arbitrary accepted expression trees. In
 `BooleanTreeOutcomeComposition.tla`, a postorder construction and induction
-prove that every well-formed finite tree of `and`, `or`, and Boolean `if`
+prove that every well-formed finite tree of `and`, `or`, `not`, and Boolean `if`
 nodes has exactly one complete outcome history and that the source and
 rendered node rules share it. The history retains values and first-failure
 identities. All child indices must precede their parent, and each leaf
 supplies an agreed, repeatable outcome. The conditional rule selects only
 one branch; a negative control shows that a failure in the unselected branch
-does not enter the outcome. The conditional and tree modules pass 28 and 257
+does not enter the outcome. The conditional and tree modules pass 28 and 318
 local TLAPS obligations respectively with fingerprint reuse disabled. This
 closes existence, uniqueness, and semantic composition for that grammar, not
 proof that arbitrary accepted leaves agree or that either emitter realizes
@@ -1995,23 +1996,26 @@ expression lowering remain trusted; this exact instance is not a universal
 short-circuit theorem or hosted admission result.
 
 `BooleanTreeOutcomeComposition.tla` proves the selected value and ordered
-failure for every finite Boolean tree built from `and`, `or`, and `if` under
+failure for every finite Boolean tree built from `and`, `or`, `not`, and `if` under
 its stated leaf contracts. The generated Swift machine now emits all three
-forms through one lazy predicate-function pattern. For trees whose leaves
+lazy branching forms and negation through one predicate-function pattern.
+For trees whose leaves
 the output verifier can reconstruct from the compiled expressions, it checks
 the actual generated guard, captured value, and assignment bodies against
 that pattern. Focused generated-machine tests cover skipped modulo failures
 in both guard and captured-assignment positions; reversing an emitted `if`
-branch is rejected at the corresponding output boundary. This closes the
+branch or removing a compound negation is rejected at the guard boundary. This closes the
 Swift syntax link for that recognized tree family, not the semantics of its
 leaves or Swift runtime execution. `BranchingBooleanFailureModel.tla` is
 byte-for-byte checked against the actual generated TLA+ for an `if` whose
-selected branch contains `and` and fallible modulo. The independent source
+selected branch contains `and` and fallible modulo and whose other branch
+contains `not` over `and`. The independent source
 rule in `BranchingBooleanFailureProof.tla` proves matching initial states,
 complete labeled steps, selected value, ordered division and negative-modulo
 failures, enabledness, and the evaluation check; an eager-failure predicate
-differs from the emitted one while a skipped-branch state remains enabled. All
-22 obligations passed locally. This closes that emitted-TLA+ instance, not a
+differs from the emitted one while a skipped-branch state remains enabled; a
+missing-negation predicate is false in that same state. All 44 obligations
+passed locally. This closes that emitted-TLA+ instance, not a
 general TLA+ output link for every Boolean tree or unsupported leaf. Swift
 runtime execution, the output checks, TLAPS, and hosted admission remain
 explicit boundaries.

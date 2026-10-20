@@ -1701,6 +1701,12 @@ func verifyGeneratedActionWriteOutput(
         var pending: [(expression: CompiledExpression, expanded: Bool)] = [(expression, false)]
         var values: [[String]] = []
         while let (node, expanded) = pending.popLast() {
+            if case .not = node.operation {
+                guard let source = shortCircuitPredicateSource(node, parameters: parameters) else { return nil }
+                values.append(Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                    .map(\.text).filter { !$0.isEmpty })
+                continue
+            }
             if let direct = directScalarTokens(node, parameters: parameters)
                 ?? arithmeticIntTokens(node, parameters: parameters) {
                 values.append(direct)
@@ -1715,7 +1721,6 @@ func verifyGeneratedActionWriteOutput(
             case .lessOrEqual: symbol = "<="; arity = 2
             case .greaterThan: symbol = ">"; arity = 2
             case .greaterOrEqual: symbol = ">="; arity = 2
-            case .not: symbol = "!"; arity = 1
             default: return nil
             }
             guard node.resultType == .bool, node.children.count == arity else { return nil }
@@ -1744,7 +1749,7 @@ func verifyGeneratedActionWriteOutput(
     func shortCircuitPredicateSource(_ root: CompiledExpression, parameters: [String]) -> String? {
         guard root.resultType == .bool else { return nil }
         switch root.operation {
-        case .and, .or, .ifThenElse: break
+        case .and, .or, .ifThenElse, .not: break
         default: return nil
         }
         var ordered: [CompiledExpression] = []
@@ -1763,6 +1768,10 @@ func verifyGeneratedActionWriteOutput(
                 guard node.resultType == .bool, node.children.count == 3,
                       node.children.allSatisfy({ $0.resultType == .bool }) else { return nil }
                 pending.append(contentsOf: node.children.reversed())
+            case .not:
+                guard node.resultType == .bool, node.children.count == 1,
+                      node.children[0].resultType == .bool else { return nil }
+                pending.append(node.children[0])
             default:
                 guard scalarPredicateTokens(node, parameters: parameters) != nil else { return nil }
             }
@@ -1790,6 +1799,9 @@ func verifyGeneratedActionWriteOutput(
                 }
                 return try _predicate\(no)()
                 """
+            case .not:
+                let child = identifiers[node.children[0]]!
+                body = "return !(try _predicate\(child)())"
             default:
                 guard let tokens = scalarPredicateTokens(node, parameters: parameters) else { return nil }
                 body = "return \(tokens.joined(separator: " "))"

@@ -807,7 +807,9 @@ struct NativeSwiftEmitter {
         case .greaterOrEqual: return try binary(">=")
         case .and, .or:
             return try booleanExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .not: return "(!\(try emit(0)))"
+        case .not:
+            return try booleanExpression(id, state: state, substitutions: substitutions,
+                activeFunctions: activeFunctions)
         case .ifThenElse:
             if node.resultType == .bool {
                 return try booleanExpression(id, state: state, substitutions: substitutions,
