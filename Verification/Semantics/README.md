@@ -406,13 +406,14 @@ without fingerprint reuse. This closes the modeled guard rule, not arbitrary
 source lowering or Swift/TLA+ emission.
 
 For `GeneratedStringGuardProofModel`, the focused test also pins the complete
-actual TLA+ module byte-for-byte, checks the generated Swift initial state and
-complete `advance` successor, and rejects changed generated Swift equality
-and inequality operators.
+actual TLA+ module byte-for-byte, checks both generated Swift initial states,
+the enabled complete `advance` successor and disabled unequal-String state,
+and rejects changed generated Swift equality and inequality operators.
 `GeneratedStringGuardProof.tla` imports that pinned module and proves its
 initial state, named action, complete `Next`, and enabledness match an
-independent source rule; its inverted-equality and inverted-inequality controls
-each disable the source's initial step. All 16 obligations pass locally.
+independent source rule. Its inverted-equality and inverted-inequality controls
+each disable the enabled initial step; omitting the guard wrongly enables the
+unequal-String initial state. All 23 obligations pass locally.
 
 The concrete byte encoder and Unicode normalization remain trusted boundaries:
 the output link assumes Swift `String` equality and Foundation normalization

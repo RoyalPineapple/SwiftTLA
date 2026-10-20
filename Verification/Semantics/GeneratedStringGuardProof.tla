@@ -2,7 +2,7 @@
 EXTENDS TLAPS, GeneratedStringGuardProofModel
 
 SourceInit ==
-    /\ left = "alpha"
+    /\ left \in {"alpha", "beta"}
     /\ right = "alpha"
     /\ advanced = FALSE
 
@@ -40,7 +40,7 @@ WrongGuardAdvance ==
     /\ UNCHANGED <<left, right>>
 
 THEOREM InvertingEqualityRejectsInitialStep ==
-    ASSUME SourceInit
+    ASSUME SourceInit, left = "alpha"
     PROVE ~ENABLED WrongGuardAdvance /\ ENABLED SourceAdvance
     BY ExpandENABLED, SMT
         DEF SourceInit, WrongGuardAdvance, SourceAdvance
@@ -53,9 +53,25 @@ WrongInequalityAdvance ==
     /\ UNCHANGED <<left, right>>
 
 THEOREM InvertingInequalityRejectsInitialStep ==
-    ASSUME SourceInit
+    ASSUME SourceInit, left = "alpha"
     PROVE ~ENABLED WrongInequalityAdvance /\ ENABLED SourceAdvance
     BY ExpandENABLED, SMT
         DEF SourceInit, WrongInequalityAdvance, SourceAdvance
+
+THEOREM UnequalInitialStringsDisableStep ==
+    ASSUME SourceInit, left = "beta"
+    PROVE ~ENABLED SourceAdvance /\ ~ENABLED advance
+    BY EmittedCompleteLabeledStep, ExpandENABLED, SMT
+        DEF SourceInit, SourceAdvance, advance
+
+WrongMissingGuardAdvance ==
+    /\ advanced' = TRUE
+    /\ UNCHANGED <<left, right>>
+
+THEOREM OmittingGuardEnablesWrongInitialStep ==
+    ASSUME SourceInit, left = "beta"
+    PROVE ENABLED WrongMissingGuardAdvance /\ ~ENABLED SourceAdvance
+    BY ExpandENABLED, SMT
+        DEF SourceInit, WrongMissingGuardAdvance, SourceAdvance
 
 =====================================================================

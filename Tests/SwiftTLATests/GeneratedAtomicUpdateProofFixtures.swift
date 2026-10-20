@@ -128,7 +128,7 @@ struct GeneratedStringGuardProofModel {
 
     static var spec: TLASpec {
         #spec("GeneratedStringGuardProofModel") { scope in
-            let left = scope.sharedVar(initial: "alpha")
+            let left = scope.sharedVar(in: SetExpr<String>.literal("alpha", "beta"))
             let right = scope.sharedVar(initial: "alpha")
             let advanced = scope.sharedVar(initial: false)
             Do(Step.advance) {

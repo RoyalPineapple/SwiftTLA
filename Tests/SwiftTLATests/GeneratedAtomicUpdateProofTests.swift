@@ -569,6 +569,18 @@ struct GeneratedAtomicUpdateProofTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }
+        let omittedGuard = source.replacingOccurrences(
+            of: "state.state.left == state.state.right", with: "true")
+        #expect(omittedGuard != source)
+        let omittedGuardMutant = try #require(Parser.parse(source: omittedGuard)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(omittedGuardMutant, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("An omitted String comparison was accepted inside the Boolean guard")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
         let invertedInequality = source.replacingOccurrences(
             of: "state.state.left != \"beta\"",
             with: "state.state.left == \"beta\"")
@@ -592,8 +604,9 @@ struct GeneratedAtomicUpdateProofTests {
             "Actual generated TLA+: \(rendered)")
 
         let machines = try GeneratedStringGuardProofModel.initialMachines()
-        #expect(machines.count == 1)
-        let machine = try #require(machines.first)
+        #expect(machines.count == 2)
+        let machine = try #require(machines.first { $0.state.left == "alpha" })
+        let disabled = try #require(machines.first { $0.state.left == "beta" })
         #expect(machine.state.left == "alpha")
         #expect(machine.state.right == "alpha")
         #expect(!machine.state.advanced)
@@ -603,6 +616,9 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(successor.state.left == "alpha")
         #expect(successor.state.right == "alpha")
         #expect(successor.state.advanced)
+        #expect(disabled.state.right == "alpha")
+        #expect(!disabled.state.advanced)
+        #expect(try disabled.successors(for: .advance).isEmpty)
     }
 
     @Test("A generated scalar conditional selects its compiled predicate")
