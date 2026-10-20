@@ -660,8 +660,8 @@ struct GeneratedAtomicUpdateProofTests {
         }
     }
 
-    @Test("An array-length guard retains its compiled bound")
-    func arrayLengthGuardRetainsBound() throws {
+    @Test("A generated array step retains its compiled guard and appended value")
+    func arrayStepRetainsGuardAndValue() throws {
         let compiled = try ArrayStepMachine.spec.compile()
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         let action = try #require(program.behavior.actions.first)
@@ -669,6 +669,8 @@ struct GeneratedAtomicUpdateProofTests {
             typeName: "ArrayStepMachine", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
         let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let omitted = visitor.description.replacingOccurrences(
             of: #"guard [^\n]+ else \{ return \}\s*try emit\(updates\)"#,
             with: "try emit(updates)", options: .regularExpression)
@@ -692,6 +694,20 @@ struct GeneratedAtomicUpdateProofTests {
             Issue.record("A generated array step accepted a changed length bound")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+        let originalAppend = "+ [_appendedValue]"
+        let changedAppend = "+ []"
+        let wrongVisitorSource = visitor.description.replacingOccurrences(
+            of: originalAppend, with: changedAppend)
+        #expect(wrongVisitorSource != visitor.description)
+        let wrongVisitor = try #require(Parser.parse(source: wrongVisitorSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongVisitor, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A generated array step accepted an omitted appended element")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
         }
     }
 

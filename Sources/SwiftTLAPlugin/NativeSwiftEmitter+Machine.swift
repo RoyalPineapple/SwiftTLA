@@ -1959,6 +1959,27 @@ func verifyGeneratedActionWriteOutput(
     func checkedValueTokens(
         _ expression: CompiledExpression, parameters: [String], actual: [String]
     ) -> (expected: [String], actual: [String])? {
+        if case .tupleAppend = expression.operation,
+           expression.children.count == 2,
+           case .array(let element) = expression.resultType,
+           expression.children[0].resultType == expression.resultType,
+           expression.children[1].resultType == element,
+           case .stateVariable(let variable) = expression.children[0].operation,
+           let field = stateFields[variable],
+           let appended = directScalarTokens(expression.children[1], parameters: parameters),
+           element == .int || element == .bool {
+            let typeName = element == .int ? "Int" : "Bool"
+            let source = """
+            (try { () throws -> [\(typeName)] in
+                let _sequenceValue: [\(typeName)] = state.state.\(field)
+                let _appendedValue: \(typeName) = \(appended.joined(separator: " "))
+                return _sequenceValue + [_appendedValue]
+            }())
+            """
+            let tokens = Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                .map(\.text).filter { !$0.isEmpty }
+            return (tokens, actual)
+        }
         if let tokens = scalarPredicateTokens(expression, parameters: parameters)
             ?? arithmeticIntTokens(expression, parameters: parameters)
             ?? directScalarTokens(expression, parameters: parameters) {

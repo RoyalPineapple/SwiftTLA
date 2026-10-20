@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import SwiftTLA
 
@@ -37,8 +38,11 @@ struct CollectionCheckingTests {
             #expect(outgoing.contains { $0.action == .append && $0.target.state.values == target })
         }
         let tla = try ArrayStepMachine.render().tlaBundle.tla
-        #expect(tla.contains("Append(values, 1)"))
-        #expect(!tla.contains("VARIABLES pc"))
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/ArrayStepMachine.tla")
+            .standardizedFileURL
+        #expect(tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
     @Test("finite initial domain retains both states and an unfinished deadlock")

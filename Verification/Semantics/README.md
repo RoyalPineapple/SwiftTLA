@@ -1802,6 +1802,19 @@ For an array state variable's length, the verifier reconstructs the native
 `.count` read from the typed compiled node and field mapping. A focused
 regression first showed that a changed `When(values.count < 2)` bound passed
 the old structural check; the repaired verifier rejects it.
+`ArrayLengthGuardProof.tla` imports the complete generated
+`ArrayStepMachine.tla` module, which a test pins byte-for-byte to the actual
+TLA+ output. For every integer sequence, its 15 locally discharged
+obligations relate the independent append rule to the emitted initial state,
+complete `append`-labeled step, `Next`, bound, and enabledness. They also show
+that relaxing the guard adds an edge from the two-element state. The native
+regression checks the generated machine's complete three-state, two-edge
+graph, action identity, final deadlock, and initial state. The generated-Swift
+verifier independently reconstructs the array-append initializer for this
+typed state-variable and scalar-element form; changing the emitted append to
+discard the element is a negative control. This is an output-linked slice,
+not a proof of arbitrary array expressions or of the Swift compiler/runtime's
+interpretation of the checked syntax. Hosted evidence remains pending.
 For predicates it cannot independently reconstruct, the verifier still
 requires the generated guard to gate exactly one unchanged update emission.
 The opaque predicate's value remains an unproved output link, rather than
