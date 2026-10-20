@@ -1660,6 +1660,12 @@ func verifyGeneratedActionWriteOutput(
         switch expression.operation {
         case .stateVariable(let variable):
             return stateFields[variable].map { ["state", ".", "state", ".", $0] }
+        case .tupleLength where expression.resultType == .int && expression.children.count == 1:
+            let sequence = expression.children[0]
+            guard case .array = sequence.resultType,
+                  case .stateVariable(let variable) = sequence.operation,
+                  let field = stateFields[variable] else { return nil }
+            return ["(", "state", ".", "state", ".", field, ".", "count", ")"]
         case .boundValue(let binding) where program.bindingTypes[binding] == expression.resultType:
             guard let name = program.binderNames[binding].map({ "_\($0)_\(binding.ordinal)" }),
                   parameters.contains(name) else { return nil }

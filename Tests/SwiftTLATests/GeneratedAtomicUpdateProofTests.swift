@@ -660,8 +660,8 @@ struct GeneratedAtomicUpdateProofTests {
         }
     }
 
-    @Test("An array-length guard cannot be omitted")
-    func arrayLengthGuardRetainsGate() throws {
+    @Test("An array-length guard retains its compiled bound")
+    func arrayLengthGuardRetainsBound() throws {
         let compiled = try ArrayStepMachine.spec.compile()
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         let action = try #require(program.behavior.actions.first)
@@ -679,6 +679,17 @@ struct GeneratedAtomicUpdateProofTests {
             try verifyGeneratedActionWriteOutput(mutant, action: action.body,
                 program: program, stateFields: emitter.stateMemberNames, parts: writes)
             Issue.record("A generated array step accepted an omitted guard")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+        let changedBound = visitor.description.replacingOccurrences(of: "< 2", with: "< 3")
+        #expect(changedBound != visitor.description)
+        let changedBoundMutant = try #require(Parser.parse(source: changedBound)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(changedBoundMutant, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A generated array step accepted a changed length bound")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }

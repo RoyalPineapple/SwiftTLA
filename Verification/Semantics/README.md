@@ -1798,6 +1798,10 @@ body for its target slot, compatible-update merge, and emission. For
 `unchanged`, the expected state read comes from the compiled field mapping
 rather than the emitter's read helper. Wrong-target, missing-write, and
 wrong-child mutations are rejected; the unmodified generated visitor passes.
+For an array state variable's length, the verifier reconstructs the native
+`.count` read from the typed compiled node and field mapping. A focused
+regression first showed that a changed `When(values.count < 2)` bound passed
+the old structural check; the repaired verifier rejects it.
 For predicates it cannot independently reconstruct, the verifier still
 requires the generated guard to gate exactly one unchanged update emission.
 The opaque predicate's value remains an unproved output link, rather than
