@@ -132,6 +132,37 @@ struct CollectionCheckingTests {
         #expect(tla == expected, "Generated TLA:\n\(tla)")
     }
 
+    @Test("sequence length preserves failure from its sequence operand")
+    func checksFallibleSequenceLength() throws {
+        let machines = try FallibleSequenceLengthMachine.initialMachines()
+        #expect(machines.count == 2)
+        for machine in machines {
+            #expect(machine.state.values == [1])
+            #expect(machine.state.result == 0)
+            switch machine.state.length {
+            case 1:
+                let successors = try machine.successors(for: .measure)
+                #expect(successors.count == 1)
+                let successor = try #require(successors.first)
+                #expect(successor.state.result == 1)
+                #expect(successor.state.values == [1] && successor.state.length == 1)
+            case 2:
+                #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 2, count: 1)) {
+                    try machine.successors(for: .measure)
+                }
+            default:
+                Issue.record("Unexpected initial prefix length")
+            }
+        }
+        let tla = try FallibleSequenceLengthMachine.render().tlaBundle.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/FallibleSequenceLengthMachine.tla")
+            .standardizedFileURL
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(tla == expected, "Generated TLA:\n\(tla)")
+    }
+
     @Test("finite initial domain retains both states and an unfinished deadlock")
     func checksFiniteInitialStates() throws {
         let graph = try ReachabilityGraph(initialMachines: FiniteInitialStepMachine.initialMachines(), maximumStates: 10)

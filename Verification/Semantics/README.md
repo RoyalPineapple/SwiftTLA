@@ -1835,10 +1835,10 @@ Swift `Array.append(contentsOf:)`, the compiler/runtime interpretation of the
 checked call, and concatenation with other derived operands remain trusted or
 uncovered; this is not universal sequence fidelity.
 `FallibleSequenceConcatenationProof.tla` imports the exact generated
-`FallibleSequenceConcatenationMachine.tla` module and proves the source
-index-by-index prefix and concatenation rule has the same complete labeled
-step, initial states, and selected evaluation result. Its 70 locally
-discharged obligations also prove the first invalid prefix suppresses the
+`FallibleSequenceConcatenationMachine.tla` module and reuses the independent
+indexed prefix rule in `SequencePrefixRule.tla`. The proof connects source
+concatenation to the same complete labeled step, initial states, and selected
+evaluation result. It also proves the first invalid prefix suppresses the
 second failure, while a valid first prefix allows the second failure. A
 focused native test checks all four initial length pairs, the successful
 complete state, and both error outcomes. This exposed a real TLA+ emitter
@@ -1850,8 +1850,8 @@ byte-for-byte, while Swift execution still relies on the checked output
 syntax, sequence kernel, and Swift compiler/runtime. Other derived operands
 and sequence element types remain uncovered; hosted evidence is pending.
 `FallibleSequenceAppendProof.tla` applies the same output-linked boundary to
-`prefix(...).appending(...)`. The independent source rule constructs the
-prefix and appended value by index. All 43 local obligations establish the
+`prefix(...).appending(...)`. The shared prefix rule and independent append
+rule construct both values by index. The proved slice establishes the
 same initial states, complete `append`-labeled step, selected failure and
 evaluation result as the byte-for-byte pinned emitted TLA+ module. An invalid
 prefix disproves an always-successful failure report. Before repair, the
@@ -1862,6 +1862,19 @@ typed sequence-output rule checks direct and nested append/concatenation forms.
 The end-to-end theorem is for Int sequences; the Swift output rule also
 recognizes typed Bool sequences. Other accepted derived expressions and the
 Swift compiler/runtime's execution semantics remain unproved.
+`FallibleSequenceLengthProof.tla` extends that shared prefix rule through
+`.count`. `SequenceLengthRule.tla` independently defines sequence length as
+the cardinality of its index domain and proves the emitted `Len` value agrees.
+The slice proves the initial states, complete `measure`-labeled action, `Next`,
+out-of-bounds failure and operands, and selected evaluation check against the
+byte-for-byte pinned generated TLA+ module. An invalid prefix is a negative
+control for an always-successful failure report. The focused native test
+checks both initial lengths and the exact failure, and the generated-Swift
+output check rejects a changed nested prefix length; both controls failed
+before the repair. All 16 slice obligations and both related Swift test suites
+pass locally. The Swift syntax checker, sequence kernel, compiler, and runtime
+remain trusted; this is one expression-composition slice, not a proof of all
+accepted expressions. Hosted evidence is pending.
 Append, concatenation, removal, and prefix now share a source-shape lowering
 path that checks the compiled constructor and occurrence-preserving child order.
 Focused mutations reject a changed constructor, missing child, or reversed
@@ -2243,18 +2256,18 @@ or temporal fidelity.
 
 SequenceEditPreservationProof.tla imports the exact generated TLA+ module for
 a `#spec` array removal and prefix. For arbitrary integer sequences and valid
-indices, it proves the independently indexed source values equal the lowered
-`SubSeq` forms; it then connects both complete labeled actions, the two
-initial states, index/length failure payloads, and the selected evaluation
-check to the emitted module, including both aggregate failure predicates. Its
-invalid-initial-state negative control fails
+indices, it uses the shared indexed prefix rule and proves the independent
+removal value equals its lowered `SubSeq` form; it then connects both complete
+labeled actions, the two initial states, index/length failure payloads, and
+the selected evaluation check to the emitted module, including both aggregate
+failure predicates. Its invalid-initial-state negative control fails
 if the evaluation check is omitted. The focused generated-machine test pins
 both complete Swift update visitors and checks that replacing either shared
 checked sequence operation breaks its output witness; it executes both
-successful and failing transitions. All 53 TLAPS obligations passed locally;
-hosted evidence is pending. The Swift compiler/runtime and the shared array
-operations' implementation of the stated one-based sequence rules remain
-trusted. The proof covers these two operators and this emitted model, not
+successful and failing transitions. Its obligations and the shared prefix
+rule passed locally; hosted evidence is pending. The Swift compiler/runtime
+and the shared array operations' implementation of the stated one-based
+sequence rules remain trusted. The proof covers these two operators and this emitted model, not
 arbitrary expression composition, initialization plans, or temporal claims.
 
 For a direct `memberOf(RandomSubset(upTo: k, from: S))` initializer, the

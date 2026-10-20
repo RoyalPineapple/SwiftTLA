@@ -1,8 +1,6 @@
 ---------------- MODULE FallibleSequenceAppendProof ----------------
-EXTENDS TLAPS, SequenceTheorems, FallibleSequenceAppendMachine
+EXTENDS TLAPS, SequencePrefixRule, FallibleSequenceAppendMachine
 
-SourcePrefix(value, count) ==
-    IF count < 1 THEN <<>> ELSE [index \in 1..count |-> value[index]]
 SourceAppend(value, element) ==
     [index \in 1..(Len(value) + 1) |->
         IF index <= Len(value) THEN value[index] ELSE element]
@@ -11,7 +9,7 @@ SourceInit == values = <<1>> /\ length \in 1..2
 SourceDefined == length <= Len(values)
 SourceStep ==
     IF SourceDefined
-    THEN values' = SourceAppend(SourcePrefix(values, length), 3)
+    THEN values' = SourceAppend(SourceSequencePrefix(values, length), 3)
          /\ UNCHANGED length
     ELSE FALSE
 SourceNext == SourceStep
@@ -20,26 +18,6 @@ EmittedLabeled(label) == label = "append" /\ append
 SourceFailure == ~SourceDefined
 SourceEvaluationOK == ~SourceFailure
 
-THEOREM PrefixValuePreserved ==
-    ASSUME NEW value \in Seq(Int), NEW count \in Int,
-           count <= Len(value)
-    PROVE SourcePrefix(value, count) = SubSeq(value, 1, count)
-    PROOF
-    <1>1. CASE count < 1
-        <2>1. SourcePrefix(value, count) = <<>>
-            BY <1>1 DEF SourcePrefix
-        <2>2. SubSeq(value, 1, count) = <<>>
-            BY <1>1, SubSeqEmpty, SMT
-        <2>3. QED BY <2>1, <2>2
-    <1>2. CASE count >= 1
-        <2>1. count \in 0..Len(value) BY <1>2, SMT
-        <2>2. SubSeq(value, 1, count) = Restrict(value, 1..count)
-            BY <2>1, SubSeqRestrict
-        <2>3. SourcePrefix(value, count) = Restrict(value, 1..count)
-            BY <1>2, SMT DEF SourcePrefix, Restrict
-        <2>4. QED BY <2>2, <2>3
-    <1>3. QED BY <1>1, <1>2, SMT
-
 THEOREM AppendValuePreserved ==
     ASSUME NEW value \in Seq(Int), NEW element \in Int
     PROVE SourceAppend(value, element) = Append(value, element)
@@ -47,9 +25,9 @@ THEOREM AppendValuePreserved ==
 
 THEOREM DefinedValuePreserved ==
     ASSUME values \in Seq(Int), length \in Int, SourceDefined
-    PROVE SourceAppend(SourcePrefix(values, length), 3)
+    PROVE SourceAppend(SourceSequencePrefix(values, length), 3)
         = Append(SubSeq(values, 1, length), 3)
-    BY PrefixValuePreserved, AppendValuePreserved, IsASeq,
+    BY SequencePrefixValuePreserved, AppendValuePreserved, IsASeq,
         SubSeqProperties, SMT DEF SourceDefined
 
 THEOREM CompleteLabeledStepPreserved ==

@@ -1,9 +1,6 @@
 ---------------- MODULE FallibleSequenceConcatenationProof ----------------
-EXTENDS TLAPS, SequenceTheorems, FallibleSequenceConcatenationMachine
+EXTENDS TLAPS, SequencePrefixRule, FallibleSequenceConcatenationMachine
 
-SourcePrefixValue(value, length) ==
-    IF length < 1 THEN <<>> ELSE [index \in 1..length |-> value[index]]
-CompiledPrefixValue(value, length) == SubSeq(value, 1, length)
 SourceConcatenation(left, right) ==
     [index \in 1..(Len(left) + Len(right)) |->
         IF index <= Len(left) THEN left[index] ELSE right[index - Len(left)]]
@@ -19,8 +16,8 @@ SourceDefined == SourceLeftDefined /\ SourceRightDefined
 SourceCombine ==
     IF SourceDefined
     THEN /\ front' = SourceConcatenation(
-                    SourcePrefixValue(front, frontLength),
-                    SourcePrefixValue(back, backLength))
+                    SourceSequencePrefix(front, frontLength),
+                    SourceSequencePrefix(back, backLength))
          /\ UNCHANGED <<back, frontLength, backLength>>
     ELSE FALSE
 SourceNext == SourceCombine
@@ -29,26 +26,6 @@ EmittedLabeled(label) == label = "combine" /\ combine
 SourceLeftFailure == ~SourceLeftDefined
 SourceRightFailure == SourceLeftDefined /\ ~SourceRightDefined
 SourceEvaluationOK == ~(SourceLeftFailure \/ SourceRightFailure)
-
-THEOREM PrefixPreservesSourceIndices ==
-    ASSUME NEW value \in Seq(Int), NEW length \in Int,
-           length <= Len(value)
-    PROVE SourcePrefixValue(value, length) = CompiledPrefixValue(value, length)
-    PROOF
-    <1>1. CASE length < 1
-        <2>1. SourcePrefixValue(value, length) = <<>>
-            BY <1>1, SMT DEF SourcePrefixValue
-        <2>2. CompiledPrefixValue(value, length) = <<>>
-            BY <1>1, SubSeqEmpty, SMT DEF CompiledPrefixValue
-        <2>3. QED BY <2>1, <2>2
-    <1>2. CASE length >= 1
-        <2>1. length \in 0..Len(value) BY <1>2, SMT
-        <2>2. CompiledPrefixValue(value, length) = Restrict(value, 1..length)
-            BY SubSeqRestrict, <2>1 DEF CompiledPrefixValue
-        <2>3. SourcePrefixValue(value, length) = Restrict(value, 1..length)
-            BY <1>2, SMT DEF SourcePrefixValue, Restrict
-        <2>4. QED BY <2>2, <2>3
-    <1>3. QED BY <1>1, <1>2, SMT
 
 THEOREM ConcatenationPreservesSourceIndices ==
     ASSUME NEW left \in Seq(Int), NEW right \in Seq(Int)
@@ -59,21 +36,21 @@ THEOREM DefinedConcatenationValuePreserved ==
     ASSUME front \in Seq(Int), back \in Seq(Int),
            frontLength \in Int, backLength \in Int, SourceDefined
     PROVE SourceConcatenation(
-                SourcePrefixValue(front, frontLength),
-                SourcePrefixValue(back, backLength))
+                SourceSequencePrefix(front, frontLength),
+                SourceSequencePrefix(back, backLength))
             = SubSeq(front, 1, frontLength) \o SubSeq(back, 1, backLength)
     PROOF
     <1>1. frontLength <= Len(front)
             BY SMT DEF SourceDefined, SourceLeftDefined, SourceRightDefined
     <1>2. backLength <= Len(back)
             BY SMT DEF SourceDefined, SourceLeftDefined, SourceRightDefined
-    <1>3. SourcePrefixValue(front, frontLength) = SubSeq(front, 1, frontLength)
-            BY PrefixPreservesSourceIndices, <1>1 DEF CompiledPrefixValue
-    <1>4. SourcePrefixValue(back, backLength) = SubSeq(back, 1, backLength)
-            BY PrefixPreservesSourceIndices, <1>2 DEF CompiledPrefixValue
-    <1>5. SourcePrefixValue(front, frontLength) \in Seq(Int)
+    <1>3. SourceSequencePrefix(front, frontLength) = SubSeq(front, 1, frontLength)
+            BY SequencePrefixValuePreserved, <1>1
+    <1>4. SourceSequencePrefix(back, backLength) = SubSeq(back, 1, backLength)
+            BY SequencePrefixValuePreserved, <1>2
+    <1>5. SourceSequencePrefix(front, frontLength) \in Seq(Int)
             BY IsASeq, <1>1, <1>3, SubSeqProperties
-    <1>6. SourcePrefixValue(back, backLength) \in Seq(Int)
+    <1>6. SourceSequencePrefix(back, backLength) \in Seq(Int)
             BY IsASeq, <1>2, <1>4, SubSeqProperties
     <1>7. QED BY <1>3, <1>4, <1>5, <1>6,
             ConcatenationPreservesSourceIndices, SMT

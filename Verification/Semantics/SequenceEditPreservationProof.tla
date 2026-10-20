@@ -1,5 +1,5 @@
 ---------------- MODULE SequenceEditPreservationProof ----------------
-EXTENDS TLAPS, SequenceTheorems, SequenceEditBoundsMachine
+EXTENDS TLAPS, SequencePrefixRule, SequenceEditBoundsMachine
 
 SourceRemoveDefined(value, index) == index \in 1..Len(value)
 CompiledRemoveDefined(value, index) == index \in DOMAIN value
@@ -10,38 +10,11 @@ SourceRemoveValue(value, index) ==
         IF position < index THEN value[position] ELSE value[position + 1]]
 CompiledRemoveValue(value, index) ==
     SubSeq(value, 1, index - 1) \o SubSeq(value, index + 1, Len(value))
-SourcePrefixValue(value, length) ==
-    [position \in 1..length |-> value[position]]
-CompiledPrefixValue(value, length) == SubSeq(value, 1, length)
-
 THEOREM RemoveDomainPreserved ==
     ASSUME NEW value \in Seq(Int), NEW index \in Int
     PROVE SourceRemoveDefined(value, index)
         <=> CompiledRemoveDefined(value, index)
     BY SMT DEF SourceRemoveDefined, CompiledRemoveDefined
-
-THEOREM PrefixValuePreserved ==
-    ASSUME NEW value \in Seq(Int), NEW length \in Int,
-           SourcePrefixDefined(value, length)
-    PROVE SourcePrefixValue(value, length) = CompiledPrefixValue(value, length)
-    PROOF
-    <1>1. CASE length < 1
-        <2>1. SourcePrefixValue(value, length) = <<>>
-            BY <1>1, SMT DEF SourcePrefixValue
-        <2>2. CompiledPrefixValue(value, length) = <<>>
-            BY <1>1, SubSeqEmpty, SMT DEF CompiledPrefixValue
-        <2>3. QED BY <2>1, <2>2
-    <1>2. CASE length >= 1
-        <2>1. length \in 0..Len(value)
-            BY <1>2, SMT DEF SourcePrefixDefined
-        <2>2. CompiledPrefixValue(value, length)
-                = Restrict(value, 1..length)
-            BY SubSeqRestrict, <2>1 DEF CompiledPrefixValue
-        <2>3. SourcePrefixValue(value, length)
-                = Restrict(value, 1..length)
-            BY SMT DEF SourcePrefixValue, Restrict
-        <2>4. QED BY <2>2, <2>3
-    <1>3. QED BY <1>1, <1>2, SMT
 
 THEOREM RemoveValuePreserved ==
     ASSUME NEW value \in Seq(Int), NEW index \in Int,
@@ -58,7 +31,7 @@ SourceRemove ==
     ELSE FALSE
 SourcePrefix ==
     IF SourcePrefixDefined(row, position)
-    THEN row' = SourcePrefixValue(row, position) /\ UNCHANGED position
+    THEN row' = SourceSequencePrefix(row, position) /\ UNCHANGED position
     ELSE FALSE
 SourceNext == SourceRemove \/ SourcePrefix
 SourceRemoveFailure == ~SourceRemoveDefined(row, position)
@@ -84,9 +57,8 @@ THEOREM RemoveActionPreserved ==
 THEOREM PrefixActionPreserved ==
     ASSUME row \in Seq(Int), position \in Int
     PROVE SourcePrefix <=> prefix
-    BY PrefixValuePreserved, SMT
-        DEF SourcePrefix, prefix, SourcePrefixDefined,
-            SourcePrefixValue, CompiledPrefixValue
+    BY SequencePrefixValuePreserved, SMT
+        DEF SourcePrefix, prefix, SourcePrefixDefined
 
 THEOREM FailuresAndSelectedCheckPreserved ==
     ASSUME row \in Seq(Int), position \in Int

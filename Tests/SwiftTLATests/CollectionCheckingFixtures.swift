@@ -88,6 +88,22 @@ struct FallibleSequenceAppendMachine {
 }
 
 @TLAModel
+struct FallibleSequenceLengthMachine {
+    enum Step: String, CaseIterable { case measure }
+
+    static var spec: TLASpec {
+        #spec("FallibleSequenceLengthMachine") { scope in
+            let values = scope.sharedVar(initial: [Int]([1]))
+            let length = scope.sharedVar(in: 1...2)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.measure) {
+                Assign(result, to: values.prefix(length: length).count)
+            }
+        }
+    }
+}
+
+@TLAModel
 struct FiniteInitialStepMachine {
     enum Step: String, CaseIterable { case prepare }
 

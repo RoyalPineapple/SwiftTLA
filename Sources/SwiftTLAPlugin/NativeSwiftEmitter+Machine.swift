@@ -2023,6 +2023,13 @@ func verifyGeneratedActionWriteOutput(
                 .map(\.text).filter { !$0.isEmpty }
             return (tokens, actual)
         }
+        if expression.operation == .tupleLength,
+           expression.children.count == 1,
+           let sequence = checkedSequenceSource(expression.children[0]) {
+            let tokens = Parser.parse(source: "(\(sequence).count)")
+                .tokens(viewMode: .sourceAccurate).map(\.text).filter { !$0.isEmpty }
+            return (tokens, actual)
+        }
         if let tokens = scalarPredicateTokens(expression, parameters: parameters)
             ?? arithmeticIntTokens(expression, parameters: parameters)
             ?? directScalarTokens(expression, parameters: parameters) {
