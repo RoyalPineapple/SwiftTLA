@@ -221,12 +221,25 @@ THEOREM EveryFiniteBooleanTreeHasSourceHistory ==
         <2>5. extended \in [1..(count + 1) -> Outcomes]
             BY <2>3, <2>4, SMT DEF extended, ExtendHistory
         <2>6. SourceHistory(nodes, extended, count + 1)
-            BY <2>3, SMT
-                DEF SourceHistory, SourceNode, ValidPostorder,
-                    prefix, PrefixNodes, extended, ExtendHistory,
-                    SourceNotChildOutcome, SourceAndChildOutcome,
-                    SourceOrChildOutcome,
-                    SourceConditionalChildOutcome
+            <3>1. \A index \in 1..count :
+                     extended[index] = prior[index]
+                BY SMT DEF extended, ExtendHistory
+            <3>2. \A index \in 1..count :
+                     prefix[index] = nodes[index]
+                BY SMT DEF prefix, PrefixNodes
+            <3>3. \A index \in 1..count :
+                     SourceNode(nodes, extended, index) =
+                     SourceNode(prefix, prior, index)
+                BY <3>1, <3>2, <2>2, SMT
+                    DEF SourceNode, ValidPostorder
+            <3>4. SourceNode(nodes, extended, count + 1) = next
+                BY <3>1, SMT DEF next, SourceNode, ValidPostorder
+            <3>5. \A index \in 1..count :
+                     extended[index] = SourceNode(nodes, extended, index)
+                BY <2>3, <3>1, <3>3, SMT DEF SourceHistory
+            <3>6. extended[count + 1] = next
+                BY SMT DEF extended, ExtendHistory
+            <3>. QED BY <3>4, <3>5, <3>6, SMT DEF SourceHistory
         <2>. QED BY <2>5, <2>6, SMT
     <1>3. \A count \in Nat : P(count)
         BY <1>1, <1>2, NatInduction

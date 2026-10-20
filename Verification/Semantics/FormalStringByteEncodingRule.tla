@@ -38,29 +38,32 @@ THEOREM EncodedByteSequencesAreInjective ==
         BY <1>2, <1>3, BytePairIsInjective, SMT DEF Byte
     <1> QED BY <1>1, <1>4, SMT
 
+THEOREM FlatPairsLength ==
+    ASSUME NEW bytes \in Seq(Byte)
+    PROVE Len(FlatPairs(bytes)) = 2 * Len(bytes)
+    BY SMT DEF FlatPairs
+
 THEOREM FlattenedBytePairsAreInjective ==
     ASSUME NEW first \in Seq(Byte), NEW second \in Seq(Byte),
            FlatPairs(first) = FlatPairs(second)
     PROVE first = second
     PROOF
-    <1>1. DOMAIN FlatPairs(first) = 1..(2 * Len(first))
-        BY SMT DEF FlatPairs
-    <1>2. DOMAIN FlatPairs(second) = 1..(2 * Len(second))
-        BY SMT DEF FlatPairs
-    <1>3. Len(first) = Len(second)
-        BY <1>1, <1>2, SMT
-    <1>4. \A index \in 1..Len(first) :
+    <1>1. Len(FlatPairs(first)) = Len(FlatPairs(second))
+        BY SMT
+    <1>2. Len(first) = Len(second)
+        BY <1>1, FlatPairsLength, SMT
+    <1>3. \A index \in 1..Len(first) :
               FlatPairs(first)[2 * index - 1] = first[index] \div 16
               /\ FlatPairs(first)[2 * index] = first[index] % 16
               /\ FlatPairs(second)[2 * index - 1] = second[index] \div 16
               /\ FlatPairs(second)[2 * index] = second[index] % 16
-        BY <1>3, SMT DEF FlatPairs
-    <1>5. \A index \in 1..Len(first) :
+        BY <1>2, SMT DEF FlatPairs
+    <1>4. \A index \in 1..Len(first) :
               BytePair(first[index]) = BytePair(second[index])
-        BY <1>4, SMT DEF BytePair
-    <1>6. EncodedPairs(first) = EncodedPairs(second)
-        BY <1>3, <1>5, SMT DEF EncodedPairs
-    <1> QED BY <1>6, EncodedByteSequencesAreInjective, SMT
+        BY <1>3, SMT DEF BytePair
+    <1>5. EncodedPairs(first) = EncodedPairs(second)
+        BY <1>2, <1>4, SMT DEF EncodedPairs
+    <1> QED BY <1>5, EncodedByteSequencesAreInjective, SMT
 
 THEOREM HexCharacterIsInjective ==
     ASSUME NEW first \in 0..15, NEW second \in 0..15,
