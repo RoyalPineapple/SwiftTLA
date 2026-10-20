@@ -102,6 +102,36 @@ struct CollectionCheckingTests {
         #expect(tla == expected, "Generated TLA:\n\(tla)")
     }
 
+    @Test("sequence append preserves the failure of its prefix operand")
+    func checksFallibleSequenceAppend() throws {
+        let machines = try FallibleSequenceAppendMachine.initialMachines()
+        #expect(machines.count == 2)
+        for machine in machines {
+            #expect(machine.state.values == [1])
+            switch machine.state.length {
+            case 1:
+                let successors = try machine.successors(for: .append)
+                #expect(successors.count == 1)
+                let successor = try #require(successors.first)
+                #expect(successor.state.values == [1, 3])
+                #expect(successor.state.length == 1)
+            case 2:
+                #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 2, count: 1)) {
+                    try machine.successors(for: .append)
+                }
+            default:
+                Issue.record("Unexpected initial prefix length")
+            }
+        }
+        let tla = try FallibleSequenceAppendMachine.render().tlaBundle.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/FallibleSequenceAppendMachine.tla")
+            .standardizedFileURL
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(tla == expected, "Generated TLA:\n\(tla)")
+    }
+
     @Test("finite initial domain retains both states and an unfinished deadlock")
     func checksFiniteInitialStates() throws {
         let graph = try ReachabilityGraph(initialMachines: FiniteInitialStepMachine.initialMachines(), maximumStates: 10)

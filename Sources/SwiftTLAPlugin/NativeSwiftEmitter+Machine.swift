@@ -1998,33 +1998,27 @@ func verifyGeneratedActionWriteOutput(
                     return _NativeMachineOperations.sequenceConcatenate(_leftElements, _rightElements)
                 }())
                 """
+            case .tupleAppend:
+                guard node.children.count == 2,
+                      node.children[0].resultType == node.resultType,
+                      node.children[1].resultType == element,
+                      let sequence = checkedSequenceSource(node.children[0]),
+                      let appended = directScalarTokens(node.children[1], parameters: parameters)
+                        ?? arithmeticIntTokens(node.children[1], parameters: parameters)
+                        ?? scalarPredicateTokens(node.children[1], parameters: parameters) else { return nil }
+                return """
+                (try { () throws -> [\(typeName)] in
+                    let _sequenceValue: [\(typeName)] = \(sequence)
+                    let _appendedValue: \(typeName) = \(appended.joined(separator: " "))
+                    return _NativeMachineOperations.sequenceAppend(_sequenceValue, _appendedValue)
+                }())
+                """
             default:
                 return nil
             }
         }
-        if case .tupleConcatenate = expression.operation,
+        if (expression.operation == .tupleConcatenate || expression.operation == .tupleAppend),
            let source = checkedSequenceSource(expression) {
-            let tokens = Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
-                .map(\.text).filter { !$0.isEmpty }
-            return (tokens, actual)
-        }
-        if case .tupleAppend = expression.operation,
-           expression.children.count == 2,
-           case .array(let element) = expression.resultType,
-           expression.children[0].resultType == expression.resultType,
-           expression.children[1].resultType == element,
-           case .stateVariable(let variable) = expression.children[0].operation,
-           let field = stateFields[variable],
-           let appended = directScalarTokens(expression.children[1], parameters: parameters),
-           element == .int || element == .bool {
-            let typeName = element == .int ? "Int" : "Bool"
-            let source = """
-            (try { () throws -> [\(typeName)] in
-                let _sequenceValue: [\(typeName)] = state.state.\(field)
-                let _appendedValue: \(typeName) = \(appended.joined(separator: " "))
-                return _NativeMachineOperations.sequenceAppend(_sequenceValue, _appendedValue)
-            }())
-            """
             let tokens = Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
                 .map(\.text).filter { !$0.isEmpty }
             return (tokens, actual)

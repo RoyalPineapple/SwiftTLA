@@ -778,6 +778,32 @@ struct GeneratedAtomicUpdateProofTests {
         }
     }
 
+    @Test("Nested append retains its prefix length and element")
+    func nestedSequenceAppendRetainsOperands() throws {
+        let compiled = try FallibleSequenceAppendMachine.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "FallibleSequenceAppendMachine", program: program))
+        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames, parts: writes)
+        let wrongLength = visitor.description.replacingOccurrences(
+            of: "let _prefixLength = state.state.length",
+            with: "let _prefixLength = state.state.values.count")
+        #expect(wrongLength != visitor.description)
+        let mutant = try #require(Parser.parse(source: wrongLength)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(mutant, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A nested append accepted the wrong prefix length")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+    }
+
     @Test("A generated scalar conditional selects its compiled predicate")
     func scalarConditionalKeepsCompiledPredicate() throws {
         let compiled = try GeneratedScalarConditionalProofModel.spec.compile()

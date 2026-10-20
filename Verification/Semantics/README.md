@@ -1849,6 +1849,19 @@ read the wrong prefix length are rejected. The actual TLA+ output is pinned
 byte-for-byte, while Swift execution still relies on the checked output
 syntax, sequence kernel, and Swift compiler/runtime. Other derived operands
 and sequence element types remain uncovered; hosted evidence is pending.
+`FallibleSequenceAppendProof.tla` applies the same output-linked boundary to
+`prefix(...).appending(...)`. The independent source rule constructs the
+prefix and appended value by index. All 43 local obligations establish the
+same initial states, complete `append`-labeled step, selected failure and
+evaluation result as the byte-for-byte pinned emitted TLA+ module. An invalid
+prefix disproves an always-successful failure report. Before repair, the
+renderer omitted the nested prefix failure and the generated-Swift checker
+accepted a changed prefix length; both regressions failed for those reasons.
+The renderer now visits append operands in evaluation order, and one recursive
+typed sequence-output rule checks direct and nested append/concatenation forms.
+The end-to-end theorem is for Int sequences; the Swift output rule also
+recognizes typed Bool sequences. Other accepted derived expressions and the
+Swift compiler/runtime's execution semantics remain unproved.
 Append, concatenation, removal, and prefix now share a source-shape lowering
 path that checks the compiled constructor and occurrence-preserving child order.
 Focused mutations reject a changed constructor, missing child, or reversed
