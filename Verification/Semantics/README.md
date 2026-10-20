@@ -402,10 +402,9 @@ byte sequences, their complete `advance`-labeled successor relations
 (unchanged String fields and an updated Boolean field) agree over encoded
 formal Strings. Its inverted-equality negative control disagrees on a concrete
 enabled step. All 44 obligations pass locally
-without fingerprint reuse. This closes the *modeled guard rule*, not the
-general source-lowering or emitter link. The generated-Swift guard witness
-checks one actual emitted action and rejects an inverted comparison; the
-corresponding arbitrary-program Swift/TLA emission rules remain unproved.
+without fingerprint reuse. This closes the modeled guard rule, not arbitrary
+source lowering or Swift/TLA+ emission.
+
 For `GeneratedStringGuardProofModel`, the focused test also pins the complete
 actual TLA+ module byte-for-byte, checks the generated Swift initial state and
 complete `advance` successor, and rejects changed generated Swift equality
@@ -413,18 +412,13 @@ and inequality operators.
 `GeneratedStringGuardProof.tla` imports that pinned module and proves its
 initial state, named action, complete `Next`, and enabledness match an
 independent source rule; its inverted-equality and inverted-inequality controls
-each disable the source's initial step. All 16 obligations pass locally. This
-is an end-to-end fixture slice, not a proof of arbitrary String-guard lowering
-or emission. The byte encoder's concrete Swift implementation and normalization
-boundary remain trusted as stated above.
+each disable the source's initial step. All 16 obligations pass locally.
 
-These are executable boundary checks, not a TLAPS proof of Unicode
-normalization or all emitted String operations. The link assumes Swift String
-equality and Foundation's canonical normalization agree on the same Unicode
-version. Raw imported TLA+ values remain byte-exact, so an accepted imported
-String operation that reaches generated Swift still needs a separate output
-link. The closed canonical-Unicode choice below is an output-linked candidate
-with local TLAPS proof but no hosted admission;
+The concrete byte encoder and Unicode normalization remain trusted boundaries:
+the output link assumes Swift `String` equality and Foundation normalization
+agree on the same Unicode version. Raw imported TLA+ values remain byte-exact,
+so an imported String operation reaching generated Swift needs a separate link.
+The canonical-Unicode choice below has local TLAPS proof but no hosted admission;
 dynamic String-valued `CHOOSE` and arbitrary Unicode String programs remain
 outside the fidelity theorem until those links and TLC's Unicode handling are
 established.
