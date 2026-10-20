@@ -180,9 +180,11 @@ update function's tokens, including its call to the shared checked-addition
 operation and the guard before update emission. TLAPS proves that module's
 initial states, complete labeled transitions, overflow failure and operands,
 and selected evaluation check match the independent source rule for every
-state in the signed-`Int` domain. The proof also establishes that this domain
+state in the signed-`Int` domain. The emitted guard and failure predicate also
+instantiate the reusable `When` step-and-first-failure rule below. The proof
+establishes that this domain
 contains every initial state and is preserved by every `Next` step; an unguarded
-action is a negative control. All 14 obligations pass locally. This does not
+action is a negative control. All 19 obligations pass locally. This does not
 prove every accepted `When` or independently verify macro expansion and the
 Swift compiler/runtime interpretation of the pinned source.
 `SingleAssignment.tla`
@@ -723,8 +725,11 @@ this revision is pending.
 source steps, guarded compiled branches, and the TLA+ `IF` form. It proves the
 complete labeled step predicate and first-failure result agree for any Boolean
 condition-definedness and branch-failure flags. Its negative control reports
-failure from an unselected branch and is rejected. All four obligations pass
-locally. This is an abstract rule; the output links below instantiate it.
+failure from an unselected branch and is rejected. The specialized `When` rule
+proves that a disabled guard suppresses its continuation and any continuation
+failure; eagerly reporting that failure is a second negative control. All ten
+obligations pass locally. These are abstract rules; the output links below and
+the checked-overflow instance above connect particular emitted artifacts.
 
 `ConditionalSelectionFailure` closes one branch-scoped choice failure. Its
 generated Swift machine fails transactionally when `attempt` is true and the
@@ -1726,7 +1731,7 @@ preserves first-failure order and checking effects. Those links remain open.
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
 | `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; every generated write part has a structural target-and-merge check; reconstructible Int/Bool assignments also have an independent compiled-value check; direct fallible assignments emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
-| `guard_` | Pure total guards agree at abstract positions; the checked-addition `When` instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof | Generalize emitted predicate evaluation, disabledness, short-circuit failures, and source `When` substitution. |
+| `guard_` | The reusable `When` rule preserves selected continuation steps and first failure; a disabled guard suppresses continuation failure. The checked-addition instance has exact Swift/TLA+ output links, complete labeled edges, failure and evaluation-check proof. | Generalize actual emitted predicate evaluation, short-circuit failures, and source `When` substitution to every accepted predicate. |
 | `and` | Compatible delta conjunction and conflicting relational writes; generated Swift now verifies candidate-update forwarding for every compiled conjunction; TLA+ exposes a right-hand arithmetic or `CHOOSE` failure when the left action is enabled | Prove both emitters' evaluation order, first-failure selection across nondeterministic left branches, conflict/error semantics, and frame completion. |
 | `or` | Guarded-choice preservation conditional on equal branch edges; output-linked success-plus-failure and two distinct-failure fixtures; generic successful-update union and first-failure order for the shared native traversal | Prove arbitrary branch construction, all failure kinds and TLA+ ordering, multiplicity policy, and both outputs. |
 | `existsAction` | Enumeration versus existential quantification preserves complete labeled edges and enabledness for the same state-dependent candidate values and pure branch edges; shared native traversal preserves successful updates and first-failure order; an output-linked case retains a successful candidate and reports another candidate's expression-level choice failure; fallible domains now guard the emitted TLA+ action and retain evaluation failure | Prove arbitrary emitted domain and branch expressions agree, including all failure kinds, first-failure order, and checking effects. |

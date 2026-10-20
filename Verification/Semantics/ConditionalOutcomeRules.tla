@@ -52,4 +52,46 @@ THEOREM UnselectedBranchFailureWouldBeWrong ==
         RenderedConditionFailure, RenderedYesFailure, RenderedNoFailure,
         WrongUnselectedFailure
 
+SourceWhenStep(defined, condition, continuation) ==
+    defined /\ condition /\ continuation
+CompiledWhenStep(defined, condition, continuation) ==
+    (IF defined THEN condition ELSE FALSE) /\ continuation
+RenderedWhenStep(defined, condition, continuation) ==
+    DefinedConditional(defined, condition, continuation, FALSE)
+SourceWhenFirstFailure(defined, condition, continuationFails) ==
+    IF ~defined THEN "condition"
+    ELSE IF condition /\ continuationFails THEN "continuation" ELSE "none"
+RenderedWhenFirstFailure(defined, condition, continuationFails) ==
+    LET failure == RenderedFirstFailure(defined, condition, continuationFails, FALSE)
+    IN IF failure = "yes" THEN "continuation" ELSE failure
+
+THEOREM WhenPreservesStepAndFirstFailure ==
+    ASSUME NEW defined \in BOOLEAN, NEW condition \in BOOLEAN,
+           NEW continuation \in BOOLEAN, NEW continuationFails \in BOOLEAN,
+           NEW label, NEW actionLabel
+    PROVE /\ (label = actionLabel /\ SourceWhenStep(defined, condition, continuation)
+                <=> label = actionLabel /\ CompiledWhenStep(defined, condition, continuation))
+          /\ (CompiledWhenStep(defined, condition, continuation)
+                <=> RenderedWhenStep(defined, condition, continuation))
+          /\ SourceWhenFirstFailure(defined, condition, continuationFails)
+                = RenderedWhenFirstFailure(defined, condition, continuationFails)
+    BY DefinedConditionalPreservesStepAndFirstFailure, SMT
+        DEF SourceWhenStep, CompiledWhenStep, RenderedWhenStep,
+        SourceWhenFirstFailure, RenderedWhenFirstFailure,
+        DefinedGuardedBranches, DefinedConditional,
+        RenderedFirstFailure, RenderedConditionFailure,
+        RenderedYesFailure, RenderedNoFailure
+
+WrongEagerContinuationFailure(defined, continuationFails) ==
+    IF ~defined THEN "condition"
+    ELSE IF continuationFails THEN "continuation" ELSE "none"
+
+THEOREM DisabledWhenSuppressesContinuationFailure ==
+    SourceWhenFirstFailure(TRUE, FALSE, TRUE)
+        = RenderedWhenFirstFailure(TRUE, FALSE, TRUE)
+        /\ SourceWhenFirstFailure(TRUE, FALSE, TRUE)
+            # WrongEagerContinuationFailure(TRUE, TRUE)
+    BY WhenPreservesStepAndFirstFailure, SMT
+        DEF SourceWhenFirstFailure, WrongEagerContinuationFailure
+
 =====================================================================

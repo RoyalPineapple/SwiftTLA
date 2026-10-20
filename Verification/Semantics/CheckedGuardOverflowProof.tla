@@ -1,5 +1,5 @@
 -------------------- MODULE CheckedGuardOverflowProof --------------------
-EXTENDS TLAPS, CheckedGuardOverflow
+EXTENDS TLAPS, CheckedGuardOverflow, ConditionalOutcomeRules
 
 SwiftIntMin == ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)
 SwiftIntMax == ((9 * 1000000000 + 223372036) * 1000000000 + 854775807)
@@ -49,6 +49,26 @@ THEOREM CompleteNextPreservesDomain ==
         DEF StateDomain, Next, advance, Terminating,
             EmittedDefined, WithinSwiftInt, SwiftIntMin, SwiftIntMax
 
+THEOREM EmittedGuardInstantiatesWhenRule ==
+    ASSUME count \in Int, WithinSwiftInt(count)
+    PROVE /\ (SourceAdvance <=> pc = "advance"
+                /\ SourceWhenStep(WithinSwiftInt(count + 1), count + 1 > 0,
+                    count' = 0 /\ pc' = "Done"))
+          /\ (advance <=> pc = "advance"
+                /\ RenderedWhenStep(EmittedDefined, count + 1 > 0,
+                    count' = 0 /\ pc' = "Done"))
+          /\ (__SwiftTLAOverflowFailure0 <=> pc = "advance"
+                /\ RenderedWhenFirstFailure(EmittedDefined, count + 1 > 0,
+                    FALSE) = "condition")
+    BY EmittedGuardDefinednessMatchesSource, SMT
+        DEF SourceAdvance, SourceWhenStep, RenderedWhenStep,
+            RenderedWhenFirstFailure, RenderedFirstFailure,
+            RenderedConditionFailure, RenderedYesFailure,
+            RenderedNoFailure, DefinedConditional,
+            advance, __SwiftTLAOverflowFailure0,
+            EmittedDefined, WithinSwiftInt,
+            SwiftIntMin, SwiftIntMax
+
 THEOREM CompleteEmittedGuardMatchesSource ==
     ASSUME count \in Int, WithinSwiftInt(count), NEW label
     PROVE /\ (Init <=> SourceInit)
@@ -59,14 +79,20 @@ THEOREM CompleteEmittedGuardMatchesSource ==
           /\ (__SwiftTLAEvaluationOK <=> SourceEvaluationOK)
           /\ __SwiftTLAOverflowOperation0 = "addition"
           /\ __SwiftTLAOverflowOperands0 = <<count, 1>>
-    BY EmittedGuardDefinednessMatchesSource, SMT
+    BY EmittedGuardInstantiatesWhenRule,
+        WhenPreservesStepAndFirstFailure,
+        EmittedGuardDefinednessMatchesSource, SMT
         DEF Init, SourceInit, Next, SourceNext,
-            advance, SourceAdvance, Terminating, SourceTerminating,
+            SourceAdvance, SourceWhenStep, RenderedWhenStep,
+            RenderedWhenFirstFailure, RenderedFirstFailure,
+            RenderedConditionFailure, RenderedYesFailure,
+            RenderedNoFailure, DefinedConditional,
+            advance, Terminating, SourceTerminating,
             EmittedLabeled, SourceLabeled, __SwiftTLAOverflowFailure0,
             __SwiftTLAAnyEvaluationFailure0,
             SourceFailure, __SwiftTLAEvaluationOK, SourceEvaluationOK,
             __SwiftTLAOverflowOperation0, __SwiftTLAOverflowOperands0,
-            WithinSwiftInt, EmittedDefined, SwiftIntMin, SwiftIntMax
+            SwiftIntMin, SwiftIntMax
 
 WrongUnguardedAdvance ==
     pc = "advance" /\ count + 1 > 0 /\ count' = 0 /\ pc' = "Done"
