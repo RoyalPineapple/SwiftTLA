@@ -916,6 +916,35 @@ struct GeneratedAtomicUpdateProofTests {
         }
     }
 
+    @Test("Indexed sequence reads retain their compiled operands")
+    func indexedSequenceReadRetainsOperands() throws {
+        let compiled = try ArrayReadOutsideDomainMachine.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "ArrayReadOutsideDomainMachine", program: program))
+        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames, parts: writes)
+        for (original, replacement) in [
+            ("let _sequenceValue = state.state.sequence", "let _sequenceValue = [Int]()"),
+            ("let _sequenceIndex = 1", "let _sequenceIndex = 2")
+        ] {
+            let wrongOperand = visitor.description.replacingOccurrences(of: original, with: replacement)
+            #expect(wrongOperand != visitor.description)
+            let mutant = try #require(Parser.parse(source: wrongOperand)
+                .statements.first?.item.as(DeclSyntax.self))
+            do {
+                try verifyGeneratedActionWriteOutput(mutant, action: action.body,
+                    program: program, stateFields: emitter.stateMemberNames, parts: writes)
+                Issue.record("An indexed sequence read accepted a changed operand: \(original)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.hasPrefix("native.action.binding."))
+            }
+        }
+    }
+
     @Test("A generated scalar conditional selects its compiled predicate")
     func scalarConditionalKeepsCompiledPredicate() throws {
         let compiled = try GeneratedScalarConditionalProofModel.spec.compile()

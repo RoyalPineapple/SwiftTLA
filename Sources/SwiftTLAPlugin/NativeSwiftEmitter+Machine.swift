@@ -2059,6 +2059,25 @@ func verifyGeneratedActionWriteOutput(
                 .tokens(viewMode: .sourceAccurate).map(\.text).filter { !$0.isEmpty }
             return (tokens, actual)
         }
+        if expression.operation == .tupleDynamicAccess,
+           expression.children.count == 2,
+           (expression.resultType == .int || expression.resultType == .bool),
+           expression.children[1].resultType == .int,
+           let sequence = checkedSequenceSource(expression.children[0]),
+           let index = directScalarTokens(expression.children[1], parameters: parameters)
+                ?? arithmeticIntTokens(expression.children[1], parameters: parameters) {
+            let typeName = expression.resultType == .int ? "Int" : "Bool"
+            let source = """
+            (try { () throws -> \(typeName) in
+                let _sequenceValue = \(sequence)
+                let _sequenceIndex = \(index.joined(separator: " "))
+                return try _NativeMachineOperations.sequenceElement(_sequenceValue, at: _sequenceIndex)
+            }())
+            """
+            let tokens = Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                .map(\.text).filter { !$0.isEmpty }
+            return (tokens, actual)
+        }
         if let tokens = scalarPredicateTokens(expression, parameters: parameters)
             ?? arithmeticIntTokens(expression, parameters: parameters)
             ?? directScalarTokens(expression, parameters: parameters) {

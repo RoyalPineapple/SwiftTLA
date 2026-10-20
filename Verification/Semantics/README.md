@@ -2239,18 +2239,20 @@ parity.
 
 SequenceIndexFailureProof.tla imports an exact-output-checked generated
 module and proves the source's one-based array bound agrees with the compiled
-rule and TLA+ DOMAIN guard. For the pinned #spec read it checks initial states, the
-complete labeled step, the out-of-bounds failure and its index/length payload,
-the emitted aggregate failure predicate, and the selected evaluation
-invariant. Its negative control shows that
-omitting the failure check disagrees on the empty initial sequence. The
-generated Swift test checks the actual compiled sequence-access constructor,
+rule and TLA+ DOMAIN guard. For the pinned #spec read it checks initial states,
+the complete labeled step, the out-of-bounds failure and its index/length
+payload, the emitted aggregate failure predicate, and the selected evaluation
+invariant. Its negative control shows that omitting the failure check
+disagrees on the empty initial sequence. The generated Swift test checks the
+actual compiled sequence-access constructor,
 pins the complete update visitor, and executes the shared one-based read
-operation at valid and invalid indices. All 34 proof
-obligations passed locally; hosted evidence is pending. The Swift compiler
-and runtime interpretation of the pinned visitor remain trusted. This
-instance does not establish arbitrary sequence-expression lowering,
-initialization, or temporal fidelity.
+operation at valid and invalid indices. The generation-time verifier now
+reconstructs typed Int/Bool sequence and index operands for dynamic reads;
+type-correct changes to either operand were accepted before this rule and
+are now rejected. All 34 proof obligations passed locally; hosted evidence
+is pending. The Swift compiler and runtime interpretation of the pinned
+visitor remain trusted. This instance does not establish arbitrary
+sequence-expression lowering, initialization, or temporal fidelity.
 
 EmptySequenceReadProof.tla imports an exact-output-checked generated module
 and proves independent source rules for head (index one) and tail (the
