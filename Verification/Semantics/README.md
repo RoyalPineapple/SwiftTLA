@@ -2020,16 +2020,20 @@ is checked for branch-selected division-by-zero and negative-modulo predicates,
 their order, and the aggregate definedness formula for all four constructors.
 These output checks cover the fixed constructor rules, not a mechanized proof
 of the Swift renderer loop or every leaf's failure semantics. The generated
-Swift machine now emits all three
-lazy branching forms and negation through one predicate-function pattern.
-For trees whose leaves
-the output verifier can reconstruct from the compiled expressions, it checks
+Swift machine now emits lazy branching and negation through local predicate
+functions that call four fixed Boolean value operations in
+`_NativeMachineOperations`. Focused tests exercise the actual operations'
+skipped branches, selected values, and propagated failures. For trees whose
+leaves the output verifier can reconstruct from compiled expressions, it checks
 the actual generated guard, captured value, and assignment bodies against
-that pattern. Focused generated-machine tests cover skipped modulo failures
-in both guard and captured-assignment positions; reversing an emitted `if`
-branch or removing a compound negation is rejected at the guard boundary. This closes the
-Swift syntax link for that recognized tree family, not the semantics of its
-leaves or Swift runtime execution. `BranchingBooleanFailureModel.tla` is
+those operation calls and child order. Focused generated-machine tests cover
+skipped modulo failures in both guard and captured-assignment positions;
+reversing an emitted `if` branch or removing a compound negation is rejected
+at the guard boundary. This closes the Swift call-syntax link for that
+recognized tree family. The mapping from the actual Swift operation bodies to
+the TLAPS outcome rules is reviewed and tested, not mechanically proved; leaf
+semantics and Swift runtime behavior remain trusted boundaries.
+`BranchingBooleanFailureModel.tla` is
 byte-for-byte checked against the actual generated TLA+ for an `if` whose
 selected branch contains `and` and fallible modulo and whose other branch
 contains `not` over `and`. The independent source

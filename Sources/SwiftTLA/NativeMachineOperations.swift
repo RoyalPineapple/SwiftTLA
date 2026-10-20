@@ -363,6 +363,29 @@ public enum _NativeMachineOperations: Sendable {
         if selected { try ifTrue() } else { try ifFalse() }
     }
 
+    public static func booleanAnd(_ left: () throws -> Bool, _ right: () throws -> Bool) throws -> Bool {
+        guard try left() else { return false }
+        return try right()
+    }
+
+    public static func booleanOr(_ left: () throws -> Bool, _ right: () throws -> Bool) throws -> Bool {
+        if try left() { return true }
+        return try right()
+    }
+
+    public static func booleanNot(_ value: () throws -> Bool) throws -> Bool {
+        !(try value())
+    }
+
+    public static func booleanIf(
+        _ condition: () throws -> Bool,
+        ifTrue: () throws -> Bool,
+        ifFalse: () throws -> Bool
+    ) throws -> Bool {
+        if try condition() { return try ifTrue() }
+        return try ifFalse()
+    }
+
     /// The generator supplies structural order so CHOOSE remains deterministic.
     public static func choose<Element: Sendable>(
         _ orderedValues: [Element], satisfying predicate: (Element) throws -> Bool

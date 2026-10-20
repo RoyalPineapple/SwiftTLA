@@ -6,9 +6,7 @@ private static func _visitUpdates1(from state: Snapshot, checking context: inout
 func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
     guard (try { () throws -> Bool in
     func _predicate5() throws -> Bool {
-    let left = try _predicate3()
-guard !left else { return true }
-return try _predicate4()
+    return try _NativeMachineOperations.booleanOr({ try _predicate3() }, { try _predicate4() })
 }
 func _predicate3() throws -> Bool {
     return state.state.enabled

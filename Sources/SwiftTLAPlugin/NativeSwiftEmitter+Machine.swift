@@ -1804,25 +1804,16 @@ func verifyGeneratedActionWriteOutput(
             case .and, .or:
                 let left = identifiers[node.children[0]]!
                 let right = identifiers[node.children[1]]!
-                let conjunction: Bool = if case .and = node.operation { true } else { false }
-                body = """
-                let left = try _predicate\(left)()
-                guard \(conjunction ? "left" : "!left") else { return \(conjunction ? "false" : "true") }
-                return try _predicate\(right)()
-                """
+                let operation: String = if case .and = node.operation { "booleanAnd" } else { "booleanOr" }
+                body = "return try _NativeMachineOperations.\(operation)({ try _predicate\(left)() }, { try _predicate\(right)() })"
             case .ifThenElse:
                 let condition = identifiers[node.children[0]]!
                 let yes = identifiers[node.children[1]]!
                 let no = identifiers[node.children[2]]!
-                body = """
-                if try _predicate\(condition)() {
-                    return try _predicate\(yes)()
-                }
-                return try _predicate\(no)()
-                """
+                body = "return try _NativeMachineOperations.booleanIf({ try _predicate\(condition)() }, ifTrue: { try _predicate\(yes)() }, ifFalse: { try _predicate\(no)() })"
             case .not:
                 let child = identifiers[node.children[0]]!
-                body = "return !(try _predicate\(child)())"
+                body = "return try _NativeMachineOperations.booleanNot { try _predicate\(child)() }"
             default:
                 guard let tokens = scalarPredicateTokens(node, parameters: parameters) else { return nil }
                 body = "return \(tokens.joined(separator: " "))"

@@ -61,9 +61,11 @@ struct ShortCircuitFailureProofTests {
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames,
             parts: parts.writes, conditions: parts.conditions)
-        let pattern = #"if try (_predicate[0-9]+\(\)) \{"#
+        let pattern = #"booleanIf\(\{ try (_predicate[0-9]+\(\)) \},"#
         let changed = visitor.description.replacingOccurrences(
-            of: pattern, with: "if !(try $1) {", options: .regularExpression)
+            of: pattern,
+            with: "booleanIf({ try _NativeMachineOperations.booleanNot { try $1 } },",
+            options: .regularExpression)
         #expect(changed != visitor.description)
         let wrongVisitor = try #require(Parser.parse(source: changed)
             .statements.first?.item.as(DeclSyntax.self))
@@ -120,8 +122,9 @@ struct ShortCircuitFailureProofTests {
             program: program, stateFields: emitter.stateMemberNames,
             parts: parts.writes, conditions: parts.conditions)
         let changed = visitor.description.replacingOccurrences(
-            of: #"if try (_predicate[0-9]+\(\)) \{"#,
-            with: "if !(try $1) {", options: .regularExpression)
+            of: #"booleanIf\(\{ try (_predicate[0-9]+\(\)) \},"#,
+            with: "booleanIf({ try _NativeMachineOperations.booleanNot { try $1 } },",
+            options: .regularExpression)
         #expect(changed != visitor.description)
         let wrongVisitor = try #require(Parser.parse(source: changed)
             .statements.first?.item.as(DeclSyntax.self))
@@ -134,8 +137,8 @@ struct ShortCircuitFailureProofTests {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }
         let missingNegation = visitor.description.replacingOccurrences(
-            of: #"return !\(try _predicate([0-9]+)\(\)\)"#,
-            with: "return (try _predicate$1())", options: .regularExpression)
+            of: #"return try _NativeMachineOperations\.booleanNot \{ try (_predicate[0-9]+\(\)) \}"#,
+            with: "return try $1", options: .regularExpression)
         #expect(missingNegation != visitor.description)
         let wrongNegation = try #require(Parser.parse(source: missingNegation)
             .statements.first?.item.as(DeclSyntax.self))
@@ -198,8 +201,9 @@ struct ShortCircuitFailureProofTests {
             program: program, stateFields: emitter.stateMemberNames,
             parts: parts.writes, conditions: parts.conditions)
         let changed = visitor.description.replacingOccurrences(
-            of: #"if try (_predicate[0-9]+\(\)) \{"#,
-            with: "if !(try $1) {", options: .regularExpression)
+            of: #"booleanIf\(\{ try (_predicate[0-9]+\(\)) \},"#,
+            with: "booleanIf({ try _NativeMachineOperations.booleanNot { try $1 } },",
+            options: .regularExpression)
         #expect(changed != visitor.description)
         let wrongVisitor = try #require(Parser.parse(source: changed)
             .statements.first?.item.as(DeclSyntax.self))
@@ -288,8 +292,8 @@ struct ShortCircuitFailureProofTests {
             program: program, stateFields: emitter.stateMemberNames,
             parts: parts.writes, conditions: parts.conditions)
         let changed = visitor.description.replacingOccurrences(
-            of: "guard !left else { return true }",
-            with: "guard left else { return true }")
+            of: "_NativeMachineOperations.booleanOr(",
+            with: "_NativeMachineOperations.booleanAnd(")
         #expect(changed != visitor.description)
         let wrongVisitor = try #require(Parser.parse(source: changed)
             .statements.first?.item.as(DeclSyntax.self))
@@ -361,8 +365,8 @@ struct ShortCircuitFailureProofTests {
                 encoding: .utf8)
             #expect(tokens(visitor.description) == tokens(witness))
             let reversed = visitor.description.replacingOccurrences(
-                of: index == 0 ? "guard left else" : "guard !left else",
-                with: index == 0 ? "guard !left else" : "guard left else")
+                of: index == 0 ? "_NativeMachineOperations.booleanAnd(" : "_NativeMachineOperations.booleanOr(",
+                with: index == 0 ? "_NativeMachineOperations.booleanOr(" : "_NativeMachineOperations.booleanAnd(")
             #expect(reversed != visitor.description)
             #expect(tokens(reversed) != tokens(witness))
             let action = actions[index]

@@ -15,31 +15,20 @@ extension NativeSwiftEmitter {
             let body: String
             switch node.operation {
             case .and, .or:
-                let conjunction: Bool = if case .and = node.operation { true } else { false }
                 let left = node.children[0]
                 let right = node.children[1]
-                let condition = conjunction ? "left" : "!left"
-                let earlyResult = conjunction ? "false" : "true"
-                body = """
-                let left = try _predicate\(ordinal(for: left))()
-                guard \(condition) else { return \(earlyResult) }
-                return try _predicate\(ordinal(for: right))()
-                """
+                let operation: String = if case .and = node.operation { "booleanAnd" } else { "booleanOr" }
+                body = "return try _NativeMachineOperations.\(operation)({ try _predicate\(ordinal(for: left))() }, { try _predicate\(ordinal(for: right))() })"
                 pending.append(contentsOf: [right, left])
             case .ifThenElse where node.resultType == .bool:
                 let condition = node.children[0]
                 let yes = node.children[1]
                 let no = node.children[2]
-                body = """
-                if try _predicate\(ordinal(for: condition))() {
-                    return try _predicate\(ordinal(for: yes))()
-                }
-                return try _predicate\(ordinal(for: no))()
-                """
+                body = "return try _NativeMachineOperations.booleanIf({ try _predicate\(ordinal(for: condition))() }, ifTrue: { try _predicate\(ordinal(for: yes))() }, ifFalse: { try _predicate\(ordinal(for: no))() })"
                 pending.append(contentsOf: [no, yes, condition])
             case .not:
                 let child = node.children[0]
-                body = "return !(try _predicate\(ordinal(for: child))())"
+                body = "return try _NativeMachineOperations.booleanNot { try _predicate\(ordinal(for: child))() }"
                 pending.append(child)
             default:
                 let value = try expression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)

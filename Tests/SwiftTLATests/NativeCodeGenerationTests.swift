@@ -396,8 +396,8 @@ struct NativeCodeGenerationTests {
         var emitter = NativeSwiftEmitter(model: model)
         let source = try emitter.booleanExpression(root, state: "state.", substitutions: [:], activeFunctions: [])
         #expect(source.components(separatedBy: "func _predicate0()").count == 2)
-        #expect(source.contains("let left = try _predicate0()"))
-        #expect(source.contains("return try _predicate0()"))
+        #expect(source.components(separatedBy: "func _predicate1()").count == 2)
+        #expect(source.contains("booleanAnd({ try _predicate0() }, { try _predicate0() })"))
         #expect(!Parser.parse(source: source).hasError)
     }
 
