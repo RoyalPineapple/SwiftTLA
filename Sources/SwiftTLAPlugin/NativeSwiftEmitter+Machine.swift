@@ -1777,36 +1777,29 @@ func verifyGeneratedActionWriteOutput(
                 continue
             }
             let symbol: String
-            let arity: Int
             switch node.operation {
-            case .equal: symbol = "=="; arity = 2
-            case .notEqual: symbol = "!="; arity = 2
-            case .lessThan: symbol = "<"; arity = 2
-            case .lessOrEqual: symbol = "<="; arity = 2
-            case .greaterThan: symbol = ">"; arity = 2
-            case .greaterOrEqual: symbol = ">="; arity = 2
+            case .equal: symbol = "=="
+            case .notEqual: symbol = "!="
+            case .lessThan: symbol = "<"
+            case .lessOrEqual: symbol = "<="
+            case .greaterThan: symbol = ">"
+            case .greaterOrEqual: symbol = ">="
             default: return nil
             }
-            guard node.resultType == .bool, node.children.count == arity else { return nil }
-            if arity == 2 {
-                let operandType = node.children[0].resultType
-                guard operandType == node.children[1].resultType,
-                      operandType == .int || ((symbol == "==" || symbol == "!=") && operandType == .bool)
-                else { return nil }
-            }
+            guard node.resultType == .bool, node.children.count == 2 else { return nil }
+            let operandType = node.children[0].resultType
+            guard operandType == node.children[1].resultType,
+                  operandType == .int || ((symbol == "==" || symbol == "!=") && operandType == .bool)
+            else { return nil }
             if !expanded {
                 pending.append((node, true))
                 pending.append(contentsOf: node.children.reversed().map { ($0, false) })
                 continue
             }
-            guard values.count >= arity else { return nil }
-            let operands = Array(values.suffix(arity))
-            values.removeLast(arity)
-            switch arity {
-            case 1: values.append(["(", "!"] + operands[0] + [")"])
-            case 2: values.append(["("] + operands[0] + [symbol] + operands[1] + [")"])
-            default: return nil
-            }
+            guard values.count >= 2 else { return nil }
+            let operands = Array(values.suffix(2))
+            values.removeLast(2)
+            values.append(["("] + operands[0] + [symbol] + operands[1] + [")"])
         }
         return values.count == 1 ? values[0] : nil
     }
