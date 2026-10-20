@@ -27,7 +27,7 @@ struct FormalStringRenderingTests {
     }
 
     @Test("formal string encoding preserves exact bytes and cannot alias an ASCII marker")
-    func encodedStringRoundTrips() {
+    func encodedStringRoundTrips() throws {
         let samples = ["plain", "é", "e\u{301}", "🐈", FormalStringEncoding.prefix,
             FormalStringEncoding.prefix + "C3A9"]
         for sample in samples {
@@ -39,6 +39,17 @@ struct FormalStringRenderingTests {
         #expect(FormalStringEncoding.decode(FormalStringEncoding.prefix + "C3A") == nil)
         #expect(FormalStringEncoding.decode(FormalStringEncoding.prefix + "C3A9ff") == nil)
         #expect(FormalStringEncoding.decode(FormalStringEncoding.prefix + "c3a9") == nil)
+
+        func standardHex(_ value: String) -> String {
+            FormalStringEncoding.prefix + value.utf8.map { byte in
+                let digits = String(byte, radix: 16, uppercase: true)
+                return digits.count == 1 ? "0" + digits : digits
+            }.joined()
+        }
+        for scalar in Array(0...127) + Array(0x80...0xBF) + [0x7FF, 0x800, 0x10FFFF] {
+            let value = FormalStringEncoding.prefix + String(try #require(UnicodeScalar(scalar)))
+            #expect(FormalStringEncoding.encode(value) == standardHex(value))
+        }
     }
 
     @Test("typed Swift strings have one formal value for canonical equivalents")

@@ -379,6 +379,21 @@ its complete projected String value, and the emitted TLA+ literal. The local
 Decoding an explicitly raw formal string back to Swift retains its original
 scalars; the conversion does not rewrite data on that reverse path.
 
+`FormalStringByteEncodingRule.tla` proves that the flattened uppercase-hex
+encoding uniquely determines every finite byte sequence, and that an
+unescaped raw value cannot collide with a prefixed escape if raw values
+beginning with the prefix are excluded. A negative control constructs the
+collision caused by omitting that exclusion. All 71 obligations pass locally
+without fingerprint reuse.
+`FormalStringRenderingTests` exercises the actual encoder, decoder, rendered
+TLA+ literal, and marker collision with concrete inputs. Its forced-escape
+cases compare all hexadecimal digit values against Swift's independent radix
+conversion across 195 valid strings. The proof does not verify that the
+implementation's digit table and prefix test implement these operators for
+every string, nor does it prove that canonical Unicode normalization matches
+Swift `String` equality for every pair. Those are explicit output-link
+and runtime obligations, not conclusions from finite examples.
+
 These are executable boundary checks, not a TLAPS proof of Unicode
 normalization or all emitted String operations. The link assumes Swift String
 equality and Foundation's canonical normalization agree on the same Unicode
