@@ -621,6 +621,69 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(try disabled.successors(for: .advance).isEmpty)
     }
 
+    @Test("A generated collection guard retains its predicate")
+    func collectionGuardRetainsPredicate() throws {
+        let compiled = try SetStepMachine.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        #expect(program.behavior.actions.count == 2)
+        let action = try #require(program.behavior.actions.last)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "SetStepMachine", program: program))
+        let visitor = try #require(member(named: "_visitUpdates1", in: emitter.machineMembers()))
+        let writes = try emitter.actionFunctions(action.body).writes
+        let source = visitor.description
+        let omitted = source.replacingOccurrences(
+            of: #"guard [^\n]+ else \{ return \}\s*try emit\(updates\)"#,
+            with: "try emit(updates)", options: .regularExpression)
+        #expect(omitted != source)
+        let mutant = try #require(Parser.parse(source: omitted)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(mutant, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A generated collection step accepted an omitted guard")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+        let unconditional = source.replacingOccurrences(
+            of: #"guard [^\n]+ else \{ return \}"#,
+            with: "guard true else { return }", options: .regularExpression)
+        #expect(unconditional != source)
+        let unconditionalMutant = try #require(Parser.parse(source: unconditional)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(unconditionalMutant, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A generated collection step accepted an unconditional guard")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+    }
+
+    @Test("An array-length guard cannot be omitted")
+    func arrayLengthGuardRetainsGate() throws {
+        let compiled = try ArrayStepMachine.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "ArrayStepMachine", program: program))
+        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let writes = try emitter.actionFunctions(action.body).writes
+        let omitted = visitor.description.replacingOccurrences(
+            of: #"guard [^\n]+ else \{ return \}\s*try emit\(updates\)"#,
+            with: "try emit(updates)", options: .regularExpression)
+        #expect(omitted != visitor.description)
+        let mutant = try #require(Parser.parse(source: omitted)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(mutant, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A generated array step accepted an omitted guard")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+    }
+
     @Test("A generated scalar conditional selects its compiled predicate")
     func scalarConditionalKeepsCompiledPredicate() throws {
         let compiled = try GeneratedScalarConditionalProofModel.spec.compile()

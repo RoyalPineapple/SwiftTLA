@@ -1744,6 +1744,10 @@ The Swift-output verifier now independently reconstructs finite `Int`/`Bool`
 set-literal membership predicates whose elements and candidate have checked
 scalar forms. It also reconstructs membership in a typed `Set<Int>` or
 `Set<Bool>` configuration parameter when the member has a checked scalar form.
+It also reconstructs membership in a typed `Set<Int>` or `Set<Bool>` state
+field. The `SetStepMachine` output check rejected both removal of its guard
+and replacement of the membership predicate with `true`; each mutation passed
+before its respective verifier repair.
 These checks apply in generated conditions, guards, captures, assignments, and
 Boolean trees. Focused mutations change a literal set and a configured-set
 member respectively; both are rejected. Other set representations, operand
@@ -1789,6 +1793,10 @@ body for its target slot, compatible-update merge, and emission. For
 `unchanged`, the expected state read comes from the compiled field mapping
 rather than the emitter's read helper. Wrong-target, missing-write, and
 wrong-child mutations are rejected; the unmodified generated visitor passes.
+For predicates it cannot independently reconstruct, the verifier still
+requires the generated guard to gate exactly one unchanged update emission.
+The opaque predicate's value remains an unproved output link, rather than
+silently counting that structural check as semantic fidelity.
 This closes the structural call-graph and write-body output link for accepted
 action trees. It does not establish that the checked Swift syntax executes
 with the abstract rule's branch, binding, or failure semantics, nor that

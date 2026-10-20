@@ -1766,6 +1766,9 @@ func verifyGeneratedActionWriteOutput(
                           let parameter = program.layout.parameters.first(where: { $0.binder == binding })
                     else { return nil }
                     membersSource = "configuration.`\(parameter.reference.name)`"
+                case .stateVariable(let variable):
+                    guard let field = stateFields[variable] else { return nil }
+                    membersSource = "state.state.\(field)"
                 default: return nil
                 }
                 let source = "(\(membersSource).contains(\(candidate.joined(separator: " "))))"
@@ -2003,6 +2006,13 @@ func verifyGeneratedActionWriteOutput(
             throw invalid("native.action.guard.\(guardNode.id)",
                 "a complete generated Boolean branch tree", "unreadable predicate functions")
         } else {
+            // shortcut: opaque predicate values need an independent output link; retain the guard gate meanwhile.
+            let suffix = ["else", "{", "return", "}", "try", "emit", "(", "updates", ")"]
+            guard tokens.first == "guard", tokens.count > suffix.count + 1,
+                  Array(tokens.suffix(suffix.count)) == suffix else {
+                throw invalid("native.action.guard.\(guardNode.id)",
+                    "one predicate gating exactly one unchanged update emission", "guard body \(tokens)")
+            }
             expected = nil
         }
         if let expected, canonicalPredicateNames(actualGuard) != canonicalPredicateNames(expected) {
