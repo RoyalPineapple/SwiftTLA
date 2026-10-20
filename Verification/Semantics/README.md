@@ -2253,15 +2253,20 @@ instance does not establish arbitrary sequence-expression lowering,
 initialization, or temporal fidelity.
 
 EmptySequenceReadProof.tla imports an exact-output-checked generated module
-and proves the source and compiled rules for empty-sequence head and tail
-agree with both emitted TLA+ actions and their evaluation-failure predicates.
-It checks initial states, both complete labeled steps, both aggregate failure
-predicates, the selected evaluation invariant, and a negative control that
-omits the failure check.
+and proves independent source rules for head (index one) and tail (the
+remaining index-by-index sequence) agree with both emitted TLA+ actions and
+their evaluation-failure predicates. `SequenceTailRule.tla` proves the tail
+value law for every nonempty sequence, rather than defining the source value
+with TLA+ `Tail` itself. The slice checks initial states, both complete labeled
+steps, both aggregate failure predicates, the selected evaluation invariant,
+and a negative control that omits the failure check.
 The focused test pins both actual generated Swift action visitors and checks
-the shared native operation on empty and nonempty sequences. All 23 proof
-obligations passed locally; hosted evidence is pending. The Swift compiler
-and runtime interpretation of the visitors remain trusted. This instance
+the shared native operation on empty and nonempty sequences. The generated
+output verifier also independently checks typed array-tail assignments and
+rejects a changed array operand; the mutation passed before that verifier
+rule was added. All 35 slice obligations and the shared tail rule passed
+locally; hosted evidence is pending. The Swift compiler and runtime
+interpretation of the visitors remain trusted. This instance
 does not establish arbitrary sequence-expression lowering, initialization,
 or temporal fidelity.
 

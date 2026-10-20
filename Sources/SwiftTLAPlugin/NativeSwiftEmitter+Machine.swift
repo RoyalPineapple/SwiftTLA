@@ -2037,6 +2037,13 @@ func verifyGeneratedActionWriteOutput(
                 .tokens(viewMode: .sourceAccurate).map(\.text).filter { !$0.isEmpty }
             return (tokens, actual)
         }
+        if expression.operation == .tupleTail,
+           expression.children.count == 1,
+           let sequence = checkedSequenceSource(expression.children[0]) {
+            let tokens = Parser.parse(source: "(try _NativeMachineOperations.sequenceTail(\(sequence)))")
+                .tokens(viewMode: .sourceAccurate).map(\.text).filter { !$0.isEmpty }
+            return (tokens, actual)
+        }
         if let tokens = scalarPredicateTokens(expression, parameters: parameters)
             ?? arithmeticIntTokens(expression, parameters: parameters)
             ?? directScalarTokens(expression, parameters: parameters) {

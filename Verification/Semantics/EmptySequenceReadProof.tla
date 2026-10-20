@@ -1,14 +1,17 @@
 ---------------- MODULE EmptySequenceReadProof ----------------
-EXTENDS TLAPS, EmptySequenceReadMachine
+EXTENDS TLAPS, SequenceHeadRule, SequenceTailRule,
+        EmptySequenceReadMachine
 
-SourceNonempty(value) == Len(value) > 0
+SourceNonempty(value) == SourceSequenceHasHead(value)
 CompiledNonempty(value) == Len(value) > 0
 NativeNonempty(value) == value # <<>>
 
 THEOREM NonemptySequenceRule ==
     ASSUME NEW value \in Seq(Int)
-    PROVE SourceNonempty(value) <=> NativeNonempty(value)
-    BY SMT DEF SourceNonempty, NativeNonempty
+    PROVE /\ (SourceNonempty(value) <=> CompiledNonempty(value))
+          /\ (SourceNonempty(value) <=> NativeNonempty(value))
+    BY HeadDefinedByLength, IsASeq, SMT
+        DEF SourceNonempty, CompiledNonempty, NativeNonempty
 
 SourceInit ==
     /\ sequence = <<>>
@@ -16,11 +19,11 @@ SourceInit ==
     /\ tail = <<>>
 SourceHead ==
     IF SourceNonempty(sequence)
-    THEN head' = Head(sequence) /\ UNCHANGED <<sequence, tail>>
+    THEN head' = SourceSequenceHead(sequence) /\ UNCHANGED <<sequence, tail>>
     ELSE FALSE
 SourceTail ==
     IF SourceNonempty(sequence)
-    THEN tail' = Tail(sequence) /\ UNCHANGED <<sequence, head>>
+    THEN tail' = SourceSequenceTail(sequence) /\ UNCHANGED <<sequence, head>>
     ELSE FALSE
 SourceNext == SourceHead \/ SourceTail
 SourceHeadFailure == ~SourceNonempty(sequence)
@@ -55,14 +58,20 @@ THEOREM LoweredActionsPreserveSource ==
           /\ (SourceTailFailure <=> CompiledTailFailure)
     PROOF
     <1>1. SourceHead <=> CompiledHead
-        BY DEF SourceHead, CompiledHead, SourceNonempty, CompiledNonempty
+        BY NonemptySequenceRule, HeadValuePreserved, SMT
+            DEF SourceHead, CompiledHead, SourceNonempty,
+                CompiledNonempty
     <1>2. SourceTail <=> CompiledTail
-        BY DEF SourceTail, CompiledTail, SourceNonempty, CompiledNonempty
+        BY NonemptySequenceRule, TailValuePreserved, SMT
+            DEF SourceTail, CompiledTail, SourceNonempty,
+                CompiledNonempty
     <1>3. SourceHeadFailure <=> CompiledHeadFailure
-        BY DEF SourceHeadFailure, CompiledHeadFailure,
+        BY NonemptySequenceRule, SMT
+            DEF SourceHeadFailure, CompiledHeadFailure,
             SourceNonempty, CompiledNonempty
     <1>4. SourceTailFailure <=> CompiledTailFailure
-        BY DEF SourceTailFailure, CompiledTailFailure,
+        BY NonemptySequenceRule, SMT
+            DEF SourceTailFailure, CompiledTailFailure,
             SourceNonempty, CompiledNonempty
     <1>5. QED BY <1>1, <1>2, <1>3, <1>4
 
