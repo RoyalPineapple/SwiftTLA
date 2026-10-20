@@ -1712,6 +1712,27 @@ func verifyGeneratedActionWriteOutput(
                 values.append(direct)
                 continue
             }
+            if case .in = node.operation {
+                guard node.children.count == 2,
+                      case .setLiteral = node.children[1].operation,
+                      case .set(let elementType) = node.children[1].resultType,
+                      elementType == node.children[0].resultType,
+                      elementType == .int || elementType == .bool,
+                      let candidate = directScalarTokens(node.children[0], parameters: parameters)
+                        ?? arithmeticIntTokens(node.children[0], parameters: parameters) else { return nil }
+                var members: [String] = []
+                for member in node.children[1].children {
+                    guard member.resultType == elementType,
+                          let tokens = directScalarTokens(member, parameters: parameters)
+                            ?? arithmeticIntTokens(member, parameters: parameters) else { return nil }
+                    members.append(tokens.joined(separator: " "))
+                }
+                let typeName = elementType == .int ? "Int" : "Bool"
+                let source = "(Set<\(typeName)>([\(members.joined(separator: ", "))]).contains(\(candidate.joined(separator: " "))))"
+                values.append(Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                    .map(\.text).filter { !$0.isEmpty })
+                continue
+            }
             let symbol: String
             let arity: Int
             switch node.operation {

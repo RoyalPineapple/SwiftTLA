@@ -224,6 +224,36 @@ struct ShortCircuitFailureProofTests {
         #expect(normalized == formal, "Actual generated TLA+: \(rendered)")
     }
 
+    @Test("A generated membership condition rejects a changed finite set")
+    func membershipConditionalOutput() throws {
+        let compiled = try GeneratedMembershipConditionalFailureModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "GeneratedMembershipConditionalFailureModel", program: program))
+        let visitor = try #require(emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let parts = try emitter.actionFunctions(action.body)
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames,
+            parts: parts.writes, conditions: parts.conditions)
+
+        let changed = visitor.description.replacingOccurrences(
+            of: "Set<Int>([1])", with: "Set<Int>([2])")
+        #expect(changed != visitor.description)
+        let wrongVisitor = try #require(Parser.parse(source: changed)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongVisitor, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames,
+                parts: parts.writes, conditions: parts.conditions)
+            Issue.record("The emitted condition changed its compiled membership set")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.conditional."))
+        }
+    }
+
     @Test("Nested Boolean steps retain skipped failures and complete output links")
     func nestedBooleanOutcome() throws {
         let machines = try NestedShortCircuitFailureModel.initialMachines()

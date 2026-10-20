@@ -1697,6 +1697,15 @@ division failure there. A focused accepted `#spec` model now checks both
 membership outcomes in the native machine and the membership-guarded generated
 TLA+ failure declaration. This closes that concrete disagreement; it does not
 prove membership or conditional selection for every accepted operand type.
+The Swift-output verifier now independently reconstructs finite `Int`/`Bool`
+set-literal membership predicates whose elements and candidate have checked
+scalar forms. It can check those predicates in generated conditions, guards,
+captures, assignments, and Boolean trees. A focused conditional regression
+changes the emitted set from `{1}` to `{2}` and requires rejection; the
+matching generated-machine and TLA+ behavior test still passes. Other set
+representations, operand forms, and the runtime meaning of Swift `Set.contains`
+remain outside this syntax link. The generic source-to-compiled membership
+rule and corresponding TLA+ output link are not thereby proved.
 
 `DefinedChoiceDomainRule.tla` proves that guarding an existential domain
 preserves the enabled step and puts a domain evaluation failure before any
