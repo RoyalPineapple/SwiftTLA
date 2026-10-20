@@ -882,6 +882,40 @@ struct GeneratedAtomicUpdateProofTests {
         }
     }
 
+    @Test("Sequence edits retain their compiled sequence and index operands")
+    func sequenceEditsRetainOperands() throws {
+        let compiled = try SequenceEditBoundsMachine.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        #expect(program.behavior.actions.count == 2)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "SequenceEditBoundsMachine", program: program))
+        let members = try emitter.machineMembers()
+        for (actionIndex, original, replacement) in [
+            (0, "let _sequenceValue = state.state.row", "let _sequenceValue = [Int]()"),
+            (0, "let _sequenceIndex = state.state.position", "let _sequenceIndex = 1"),
+            (1, "let _sequenceValue = state.state.row", "let _sequenceValue = [Int]()"),
+            (1, "let _prefixLength = state.state.position", "let _prefixLength = 1")
+        ] {
+            let action = program.behavior.actions[actionIndex]
+            let visitor = try #require(member(named: "_visitUpdates\(actionIndex)", in: members))
+            let writes = try emitter.actionFunctions(action.body).writes
+            try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            let wrongOperand = visitor.description.replacingOccurrences(
+                of: original, with: replacement)
+            #expect(wrongOperand != visitor.description)
+            let mutant = try #require(Parser.parse(source: wrongOperand)
+                .statements.first?.item.as(DeclSyntax.self))
+            do {
+                try verifyGeneratedActionWriteOutput(mutant, action: action.body,
+                    program: program, stateFields: emitter.stateMemberNames, parts: writes)
+                Issue.record("A sequence edit accepted a changed compiled operand: \(original)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.hasPrefix("native.action.binding."))
+            }
+        }
+    }
+
     @Test("A generated scalar conditional selects its compiled predicate")
     func scalarConditionalKeepsCompiledPredicate() throws {
         let compiled = try GeneratedScalarConditionalProofModel.spec.compile()

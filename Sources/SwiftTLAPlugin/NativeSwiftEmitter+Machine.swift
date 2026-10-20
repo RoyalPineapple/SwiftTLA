@@ -1984,6 +1984,20 @@ func verifyGeneratedActionWriteOutput(
                     return try _NativeMachineOperations.sequencePrefix(_sequenceValue, length: _prefixLength)
                 }())
                 """
+            case .tupleRemoving:
+                guard node.children.count == 2,
+                      node.children[0].resultType == node.resultType,
+                      node.children[1].resultType == .int,
+                      let sequence = checkedSequenceSource(node.children[0]),
+                      let index = directScalarTokens(node.children[1], parameters: parameters)
+                        ?? arithmeticIntTokens(node.children[1], parameters: parameters) else { return nil }
+                return """
+                (try { () throws -> [\(typeName)] in
+                    let _sequenceValue = \(sequence)
+                    let _sequenceIndex = \(index.joined(separator: " "))
+                    return try _NativeMachineOperations.sequenceRemoving(_sequenceValue, at: _sequenceIndex)
+                }())
+                """
             case .tupleConcatenate:
                 guard node.children.count == 2,
                       node.children.allSatisfy({ $0.resultType == node.resultType }),
@@ -2017,7 +2031,8 @@ func verifyGeneratedActionWriteOutput(
                 return nil
             }
         }
-        if (expression.operation == .tupleConcatenate || expression.operation == .tupleAppend),
+        if (expression.operation == .tuplePrefix || expression.operation == .tupleRemoving ||
+            expression.operation == .tupleConcatenate || expression.operation == .tupleAppend),
            let source = checkedSequenceSource(expression) {
             let tokens = Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
                 .map(\.text).filter { !$0.isEmpty }

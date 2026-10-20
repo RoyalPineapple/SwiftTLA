@@ -2280,9 +2280,13 @@ failure predicates. Its invalid-initial-state negative control fails
 if the evaluation check is omitted. The focused generated-machine test pins
 both complete Swift update visitors and checks that replacing either shared
 checked sequence operation breaks its output witness; it executes both
-successful and failing transitions. Its obligations and the shared prefix
-rule passed locally; hosted evidence is pending. The Swift compiler/runtime
-and the shared array operations' implementation of the stated one-based
+successful and failing transitions. The generation-time verifier also
+reconstructs typed Int/Bool removal and prefix operands from their compiled
+expressions; type-correct mutations of the sequence source, removal index,
+and prefix length passed before this check and are now rejected. Its
+obligations and the shared prefix rule passed locally; hosted evidence is
+pending. The Swift compiler/runtime and the shared array operations'
+implementation of the stated one-based
 sequence rules remain trusted. The proof covers these two operators and this emitted model, not
 arbitrary expression composition, initialization plans, or temporal claims.
 
