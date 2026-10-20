@@ -379,11 +379,11 @@ its complete projected String value, and the emitted TLA+ literal. The local
 Decoding an explicitly raw formal string back to Swift retains its original
 scalars; the conversion does not rewrite data on that reverse path.
 
-`FormalStringByteEncodingRule.tla` proves that the flattened uppercase-hex
-encoding uniquely determines every finite byte sequence, and that an
-unescaped raw value cannot collide with a prefixed escape if raw values
-beginning with the prefix are excluded. A negative control constructs the
-collision caused by omitting that exclusion. All 71 obligations pass locally
+`FormalStringByteEncodingRule.tla` proves that the complete modeled encoder
+is injective on every finite byte sequence: plain ASCII is left raw only when
+it does not start with the marker; every other input receives the marker and a
+flattened uppercase-hex payload. A negative control constructs the collision
+caused by omitting the prefix exclusion. All 120 obligations pass locally
 without fingerprint reuse.
 `FormalStringRenderingTests` exercises the actual encoder, decoder, rendered
 TLA+ literal, and marker collision with concrete inputs. Its forced-escape

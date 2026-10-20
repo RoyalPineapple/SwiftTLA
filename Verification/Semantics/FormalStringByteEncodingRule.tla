@@ -100,6 +100,18 @@ HasPrefix(value, prefix) ==
     \E tail \in Seq(Byte) : value = prefix \o tail
 EncodedIdentity(rawEligible, raw, escaped, prefix) ==
     IF rawEligible THEN raw ELSE prefix \o escaped
+AllASCII(bytes) ==
+    \A index \in 1..Len(bytes) : bytes[index] < 128
+RawEligible(bytes, prefix) ==
+    AllASCII(bytes) /\ ~HasPrefix(bytes, prefix)
+FormalEncode(bytes, prefix) ==
+    EncodedIdentity(RawEligible(bytes, prefix), bytes, HexBytes(bytes), prefix)
+
+THEOREM HexBytesStayASCII ==
+    ASSUME NEW bytes \in Seq(Byte)
+    PROVE HexBytes(bytes) \in Seq(Byte)
+    BY ByteNibblesAreInRange, SMT
+        DEF HexBytes, FlatPairs, HexCharacter, Byte
 
 THEOREM RawAndEscapedBranchesCannotCollide ==
     ASSUME NEW raw \in Seq(Byte), NEW escaped \in Seq(Byte),
@@ -107,6 +119,53 @@ THEOREM RawAndEscapedBranchesCannotCollide ==
     PROVE EncodedIdentity(TRUE, raw, escaped, prefix)
         # EncodedIdentity(FALSE, raw, escaped, prefix)
     BY SMT DEF EncodedIdentity, HasPrefix
+
+THEOREM SamePrefixPreservesPayloadIdentity ==
+    ASSUME NEW prefix \in Seq(Byte), NEW first \in Seq(Byte),
+           NEW second \in Seq(Byte), prefix \o first = prefix \o second
+    PROVE first = second
+    PROOF
+    <1>1. Len(prefix \o first) = Len(prefix) + Len(first)
+        BY SMT
+    <1>2. Len(prefix \o second) = Len(prefix) + Len(second)
+        BY SMT
+    <1>3. Len(first) = Len(second)
+        BY <1>1, <1>2, SMT
+    <1>4. \A index \in 1..Len(first) :
+              (prefix \o first)[Len(prefix) + index] = first[index]
+              /\ (prefix \o second)[Len(prefix) + index] = second[index]
+        BY <1>3, SMT
+    <1>5. \A index \in 1..Len(first) : first[index] = second[index]
+        BY <1>4, SMT
+    <1> QED BY <1>3, <1>5, SMT
+
+THEOREM CompleteFormalByteEncodingIsInjective ==
+    ASSUME NEW first \in Seq(Byte), NEW second \in Seq(Byte),
+           NEW prefix \in Seq(Byte),
+           FormalEncode(first, prefix) = FormalEncode(second, prefix)
+    PROVE first = second
+    PROOF
+    <1>1. HexBytes(first) \in Seq(Byte) /\ HexBytes(second) \in Seq(Byte)
+        BY HexBytesStayASCII, SMT
+    <1>2. RawEligible(first, prefix) /\ RawEligible(second, prefix)
+              => first = second
+        BY SMT DEF FormalEncode, EncodedIdentity
+    <1>3. ~(RawEligible(first, prefix) /\ ~RawEligible(second, prefix))
+        BY <1>1, SMT
+            DEF FormalEncode, EncodedIdentity, RawEligible, HasPrefix
+    <1>4. ~(~RawEligible(first, prefix) /\ RawEligible(second, prefix))
+        BY <1>1, SMT
+            DEF FormalEncode, EncodedIdentity, RawEligible, HasPrefix
+    <1>5. ~RawEligible(first, prefix) /\ ~RawEligible(second, prefix)
+              => prefix \o HexBytes(first) = prefix \o HexBytes(second)
+        BY SMT DEF FormalEncode, EncodedIdentity
+    <1>6. ~RawEligible(first, prefix) /\ ~RawEligible(second, prefix)
+              => HexBytes(first) = HexBytes(second)
+        BY <1>1, <1>5, SamePrefixPreservesPayloadIdentity, SMT
+    <1>7. ~RawEligible(first, prefix) /\ ~RawEligible(second, prefix)
+              => first = second
+        BY <1>6, UppercaseHexByteEncodingIsInjective, SMT
+    <1> QED BY <1>2, <1>3, <1>4, <1>7, SMT
 
 THEOREM OmittingPrefixEscapeCausesCollision ==
     EncodedIdentity(TRUE, <<1, 2>>, <<2>>, <<1>>)
