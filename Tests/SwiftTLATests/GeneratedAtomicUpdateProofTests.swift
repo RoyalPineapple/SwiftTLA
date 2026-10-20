@@ -739,6 +739,45 @@ struct GeneratedAtomicUpdateProofTests {
         }
     }
 
+    @Test("Nested sequence operands retain their evaluation and concatenation order")
+    func nestedSequenceConcatenationRetainsOrder() throws {
+        let compiled = try FallibleSequenceConcatenationMachine.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "FallibleSequenceConcatenationMachine", program: program))
+        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames, parts: writes)
+        let swapped = visitor.description.replacingOccurrences(
+            of: "sequenceConcatenate(_leftElements, _rightElements)",
+            with: "sequenceConcatenate(_rightElements, _leftElements)")
+        #expect(swapped != visitor.description)
+        let mutant = try #require(Parser.parse(source: swapped)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(mutant, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A nested concatenation accepted reversed operands")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+        let wrongLength = visitor.description.replacingOccurrences(
+            of: "let _prefixLength = state.state.frontLength",
+            with: "let _prefixLength = state.state.backLength")
+        #expect(wrongLength != visitor.description)
+        let wrongLengthVisitor = try #require(Parser.parse(source: wrongLength)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongLengthVisitor, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A nested concatenation accepted the wrong first prefix length")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+    }
+
     @Test("A generated scalar conditional selects its compiled predicate")
     func scalarConditionalKeepsCompiledPredicate() throws {
         let compiled = try GeneratedScalarConditionalProofModel.spec.compile()

@@ -55,6 +55,24 @@ struct SequenceConcatenationMachine {
 }
 
 @TLAModel
+struct FallibleSequenceConcatenationMachine {
+    enum Step: String, CaseIterable { case combine }
+
+    static var spec: TLASpec {
+        #spec("FallibleSequenceConcatenationMachine") { scope in
+            let front = scope.sharedVar(initial: [Int]([1]))
+            let back = scope.sharedVar(initial: [Int]([2, 2]))
+            let frontLength = scope.sharedVar(in: 1...2)
+            let backLength = scope.sharedVar(in: 2...3)
+            Do(Step.combine) {
+                Assign(front, to: front.prefix(length: frontLength)
+                    .concatenating(back.prefix(length: backLength)))
+            }
+        }
+    }
+}
+
+@TLAModel
 struct FiniteInitialStepMachine {
     enum Step: String, CaseIterable { case prepare }
 

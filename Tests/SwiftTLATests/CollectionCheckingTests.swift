@@ -70,6 +70,38 @@ struct CollectionCheckingTests {
         #expect(tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
+    @Test("sequence concatenation retains successes and first operand failures")
+    func checksFallibleSequenceConcatenation() throws {
+        let machines = try FallibleSequenceConcatenationMachine.initialMachines()
+        #expect(machines.count == 4)
+        for machine in machines {
+            switch (machine.state.frontLength, machine.state.backLength) {
+            case (1, 2):
+                let successor = try #require(machine.successors(for: .combine).first)
+                #expect(successor.state.front == [1, 2, 2])
+                #expect(successor.state.back == [2, 2])
+                #expect(successor.state.frontLength == 1 && successor.state.backLength == 2)
+            case (1, 3):
+                #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 3, count: 2)) {
+                    try machine.successors(for: .combine)
+                }
+            case (2, 2), (2, 3):
+                #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 2, count: 1)) {
+                    try machine.successors(for: .combine)
+                }
+            default:
+                Issue.record("Unexpected initial sequence-length pair")
+            }
+        }
+        let tla = try FallibleSequenceConcatenationMachine.render().tlaBundle.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/FallibleSequenceConcatenationMachine.tla")
+            .standardizedFileURL
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(tla == expected, "Generated TLA:\n\(tla)")
+    }
+
     @Test("finite initial domain retains both states and an unfinished deadlock")
     func checksFiniteInitialStates() throws {
         let graph = try ReachabilityGraph(initialMachines: FiniteInitialStepMachine.initialMachines(), maximumStates: 10)

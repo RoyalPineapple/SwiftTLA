@@ -1832,8 +1832,23 @@ generated-output mutation test first demonstrated that reversing those
 operands passed the old verifier; the new typed verifier rejects it. The
 native graph checks the complete two-state, one-edge case and final deadlock.
 Swift `Array.append(contentsOf:)`, the compiler/runtime interpretation of the
-checked call, and concatenation with derived or fallible operands remain
-trusted or uncovered; this is not universal sequence fidelity.
+checked call, and concatenation with other derived operands remain trusted or
+uncovered; this is not universal sequence fidelity.
+`FallibleSequenceConcatenationProof.tla` imports the exact generated
+`FallibleSequenceConcatenationMachine.tla` module and proves the source
+index-by-index prefix and concatenation rule has the same complete labeled
+step, initial states, and selected evaluation result. Its 70 locally
+discharged obligations also prove the first invalid prefix suppresses the
+second failure, while a valid first prefix allows the second failure. A
+focused native test checks all four initial length pairs, the successful
+complete state, and both error outcomes. This exposed a real TLA+ emitter
+gap: it previously omitted fallible sites nested under concatenation. The
+generated Swift verifier now reconstructs typed Int/Bool sequence reads,
+prefixes, and nested concatenations; mutations that reverse the operands or
+read the wrong prefix length are rejected. The actual TLA+ output is pinned
+byte-for-byte, while Swift execution still relies on the checked output
+syntax, sequence kernel, and Swift compiler/runtime. Other derived operands
+and sequence element types remain uncovered; hosted evidence is pending.
 Append, concatenation, removal, and prefix now share a source-shape lowering
 path that checks the compiled constructor and occurrence-preserving child order.
 Focused mutations reject a changed constructor, missing child, or reversed

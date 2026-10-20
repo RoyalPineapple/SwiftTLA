@@ -1959,24 +1959,51 @@ func verifyGeneratedActionWriteOutput(
     func checkedValueTokens(
         _ expression: CompiledExpression, parameters: [String], actual: [String]
     ) -> (expected: [String], actual: [String])? {
-        if case .tupleConcatenate = expression.operation,
-           expression.children.count == 2,
-           case .array(let element) = expression.resultType,
-           expression.children.allSatisfy({ $0.resultType == expression.resultType }),
-           case .stateVariable(let leftVariable) = expression.children[0].operation,
-           case .stateVariable(let rightVariable) = expression.children[1].operation,
-           let leftField = stateFields[leftVariable], let rightField = stateFields[rightVariable],
-           element == .int || element == .bool {
+        func checkedSequenceSource(_ node: CompiledExpression) -> String? {
+            guard case .array(let element) = node.resultType,
+                  element == .int || element == .bool else { return nil }
             let typeName = element == .int ? "Int" : "Bool"
-            let source = """
-            (try { () throws -> [\(typeName)] in
-                let _leftValue: [\(typeName)] = state.state.\(leftField)
-                let _rightValue: [\(typeName)] = state.state.\(rightField)
-                let _rightElements = _rightValue
-                let _leftElements = _leftValue
-                return _NativeMachineOperations.sequenceConcatenate(_leftElements, _rightElements)
-            }())
-            """
+            switch node.operation {
+            case .stateVariable(let variable):
+                return stateFields[variable].map { "state.state.\($0)" }
+            case .boundValue(let binding) where program.bindingTypes[binding] == node.resultType:
+                guard let name = program.binderNames[binding].map({ "_\($0)_\(binding.ordinal)" }),
+                      parameters.contains(name) else { return nil }
+                return name
+            case .tuplePrefix:
+                guard node.children.count == 2,
+                      node.children[0].resultType == node.resultType,
+                      node.children[1].resultType == .int,
+                      let sequence = checkedSequenceSource(node.children[0]),
+                      let length = directScalarTokens(node.children[1], parameters: parameters)
+                        ?? arithmeticIntTokens(node.children[1], parameters: parameters) else { return nil }
+                return """
+                (try { () throws -> [\(typeName)] in
+                    let _sequenceValue = \(sequence)
+                    let _prefixLength = \(length.joined(separator: " "))
+                    return try _NativeMachineOperations.sequencePrefix(_sequenceValue, length: _prefixLength)
+                }())
+                """
+            case .tupleConcatenate:
+                guard node.children.count == 2,
+                      node.children.allSatisfy({ $0.resultType == node.resultType }),
+                      let left = checkedSequenceSource(node.children[0]),
+                      let right = checkedSequenceSource(node.children[1]) else { return nil }
+                return """
+                (try { () throws -> [\(typeName)] in
+                    let _leftValue: [\(typeName)] = \(left)
+                    let _rightValue: [\(typeName)] = \(right)
+                    let _rightElements = _rightValue
+                    let _leftElements = _leftValue
+                    return _NativeMachineOperations.sequenceConcatenate(_leftElements, _rightElements)
+                }())
+                """
+            default:
+                return nil
+            }
+        }
+        if case .tupleConcatenate = expression.operation,
+           let source = checkedSequenceSource(expression) {
             let tokens = Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
                 .map(\.text).filter { !$0.isEmpty }
             return (tokens, actual)
