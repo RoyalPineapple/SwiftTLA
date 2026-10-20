@@ -1086,7 +1086,9 @@ the tree. The generated Swift verifier checks the enclosing Boolean operation
 tree even when a leaf is not reconstructible. It masks only those leaves during
 the tree comparison; their emitted values and failures are still unproved. A
 symbolic-membership negative control rejects a reversed `and` operation that
-the old fallback accepted. Swift execution and TLAPS remain trusted boundaries.
+the old fallback accepted. A second mutation changes the member tested against
+a typed configuration set; the verifier now reconstructs that leaf and rejects
+the change too. Swift execution and TLAPS remain trusted boundaries.
 
 A Boolean `If(condition, then: true, else: value)` is another leaf of that
 tree. `ConditionalTrueBranchIsShortCircuitOr` proves its complete source
@@ -1702,13 +1704,14 @@ TLA+ failure declaration. This closes that concrete disagreement; it does not
 prove membership or conditional selection for every accepted operand type.
 The Swift-output verifier now independently reconstructs finite `Int`/`Bool`
 set-literal membership predicates whose elements and candidate have checked
-scalar forms. It can check those predicates in generated conditions, guards,
-captures, assignments, and Boolean trees. A focused conditional regression
-changes the emitted set from `{1}` to `{2}` and requires rejection; the
-matching generated-machine and TLA+ behavior test still passes. Other set
-representations, operand forms, and the runtime meaning of Swift `Set.contains`
-remain outside this syntax link. The generic source-to-compiled membership
-rule and corresponding TLA+ output link are not thereby proved.
+scalar forms. It also reconstructs membership in a typed `Set<Int>` or
+`Set<Bool>` configuration parameter when the member has a checked scalar form.
+These checks apply in generated conditions, guards, captures, assignments, and
+Boolean trees. Focused mutations change a literal set and a configured-set
+member respectively; both are rejected. Other set representations, operand
+forms, and the runtime meaning of Swift `Set.contains` remain outside this
+syntax link. The generic source-to-compiled membership rule and corresponding
+TLA+ output link are not thereby proved.
 
 `DefinedChoiceDomainRule.tla` proves that guarding an existential domain
 preserves the enabled step and puts a domain evaluation failure before any

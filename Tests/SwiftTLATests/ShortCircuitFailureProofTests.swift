@@ -258,7 +258,7 @@ struct ShortCircuitFailureProofTests {
         }
     }
 
-    @Test("A symbolic membership leaf cannot bypass Boolean branch checking")
+    @Test("A configured membership leaf and its Boolean branch retain their compiled operands")
     func symbolicMembershipBranchOutput() throws {
         let compiled = try SymbolicConfigurationModel.spec.compile()
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
@@ -284,6 +284,20 @@ struct ShortCircuitFailureProofTests {
                 program: program, stateFields: emitter.stateMemberNames,
                 parts: parts.writes, conditions: parts.conditions)
             Issue.record("The symbolic leaf hid a reversed Boolean operation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+
+        let changedMember = visitor.description.replacingOccurrences(
+            of: ".contains(1)", with: ".contains(2)")
+        #expect(changedMember != visitor.description)
+        let wrongMemberVisitor = try #require(Parser.parse(source: changedMember)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongMemberVisitor, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames,
+                parts: parts.writes, conditions: parts.conditions)
+            Issue.record("The configured membership leaf changed its compiled member")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }
