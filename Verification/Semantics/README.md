@@ -1082,8 +1082,11 @@ does not enter the outcome. The conditional and tree modules pass 28 and 318
 local TLAPS obligations respectively with fingerprint reuse disabled. This
 closes existence, uniqueness, and semantic composition for that grammar, not
 proof that arbitrary accepted leaves agree or that either emitter realizes
-the tree. The generated Swift verifier still falls back for unrecognized
-leaves, and Swift execution and TLAPS remain trusted boundaries.
+the tree. The generated Swift verifier checks the enclosing Boolean operation
+tree even when a leaf is not reconstructible. It masks only those leaves during
+the tree comparison; their emitted values and failures are still unproved. A
+symbolic-membership negative control rejects a reversed `and` operation that
+the old fallback accepted. Swift execution and TLAPS remain trusted boundaries.
 
 A Boolean `If(condition, then: true, else: value)` is another leaf of that
 tree. `ConditionalTrueBranchIsShortCircuitOr` proves its complete source
@@ -2023,10 +2026,11 @@ of the Swift renderer loop or every leaf's failure semantics. The generated
 Swift machine now emits lazy branching and negation through local predicate
 functions that call four fixed Boolean value operations in
 `_NativeMachineOperations`. Focused tests exercise the actual operations'
-skipped branches, selected values, and propagated failures. For trees whose
-leaves the output verifier can reconstruct from compiled expressions, it checks
-the actual generated guard, captured value, and assignment bodies against
-those operation calls and child order. Focused generated-machine tests cover
+skipped branches, selected values, and propagated failures. The output verifier
+checks the actual generated guard, captured value, and assignment bodies against
+those operation calls and child order. It compares reconstructible leaves
+exactly and treats other leaves as opaque only for this structural check; it
+does not certify their value or failure behavior. Focused generated-machine tests cover
 skipped modulo failures in both guard and captured-assignment positions;
 reversing an emitted `if` branch or removing a compound negation is rejected
 at the guard boundary. This closes the Swift call-syntax link for that

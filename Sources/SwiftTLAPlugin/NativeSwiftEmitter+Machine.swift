@@ -1767,18 +1767,17 @@ func verifyGeneratedActionWriteOutput(
         }
         return values.count == 1 ? values[0] : nil
     }
-    func shortCircuitPredicateSource(_ root: CompiledExpression, parameters: [String]) -> String? {
+    func booleanPredicateNodes(_ root: CompiledExpression) -> [CompiledExpression]? {
         guard root.resultType == .bool else { return nil }
         switch root.operation {
         case .and, .or, .ifThenElse, .not: break
         default: return nil
         }
         var ordered: [CompiledExpression] = []
-        var identifiers: [CompiledExpression: Int] = [:]
+        var seen: Set<CompiledExpression> = []
         var pending = [root]
         while let node = pending.popLast() {
-            guard identifiers[node] == nil else { continue }
-            identifiers[node] = ordered.count
+            guard seen.insert(node).inserted else { continue }
             ordered.append(node)
             switch node.operation {
             case .and, .or:
@@ -1793,10 +1792,16 @@ func verifyGeneratedActionWriteOutput(
                 guard node.resultType == .bool, node.children.count == 1,
                       node.children[0].resultType == .bool else { return nil }
                 pending.append(node.children[0])
-            default:
-                guard scalarPredicateTokens(node, parameters: parameters) != nil else { return nil }
+            default: break
             }
         }
+        return ordered
+    }
+    func shortCircuitPredicateSource(
+        _ root: CompiledExpression, parameters: [String], opaqueLeaves: Set<Int> = []
+    ) -> String? {
+        guard let ordered = booleanPredicateNodes(root) else { return nil }
+        let identifiers = Dictionary(uniqueKeysWithValues: ordered.enumerated().map { ($0.element, $0.offset) })
         let declarations = ordered.compactMap { node -> String? in
             let id = identifiers[node]!
             let body: String
@@ -1815,13 +1820,68 @@ func verifyGeneratedActionWriteOutput(
                 let child = identifiers[node.children[0]]!
                 body = "return try _NativeMachineOperations.booleanNot { try _predicate\(child)() }"
             default:
-                guard let tokens = scalarPredicateTokens(node, parameters: parameters) else { return nil }
-                body = "return \(tokens.joined(separator: " "))"
+                if let tokens = scalarPredicateTokens(node, parameters: parameters) {
+                    body = "return \(tokens.joined(separator: " "))"
+                } else if opaqueLeaves.contains(id) {
+                    body = "return __uncheckedPredicateLeaf\(id)__"
+                } else {
+                    return nil
+                }
             }
             return "func _predicate\(id)() throws -> Bool { \(body) }"
         }
         guard declarations.count == ordered.count else { return nil }
         return "(try { () throws -> Bool in \(declarations.joined(separator: "\n")) return try _predicate0() }())"
+    }
+    func checkedBooleanTree(
+        _ root: CompiledExpression, parameters: [String], actual: [String]
+    ) -> (source: String, actual: [String])? {
+        guard let ordered = booleanPredicateNodes(root) else { return nil }
+        let opaque = Set(ordered.indices.filter { index in
+            let node = ordered[index]
+            switch node.operation {
+            case .and, .or, .ifThenElse, .not: return false
+            default: return scalarPredicateTokens(node, parameters: parameters) == nil
+            }
+        })
+        guard !opaque.isEmpty else {
+            return shortCircuitPredicateSource(root, parameters: parameters).map { ($0, actual) }
+        }
+
+        // shortcut: check the Boolean skeleton while treating unsupported leaves as opaque.
+        // Their values still need independent output links before a full fidelity claim.
+        var braceStack: [Int] = []
+        var closeByOpen: [Int: Int] = [:]
+        var declarations: [(depth: Int, open: Int)] = []
+        for index in actual.indices {
+            if actual[index] == "func", index + 7 < actual.count,
+               actual[index + 1].hasPrefix("_predicate"),
+               Int(actual[index + 1].dropFirst("_predicate".count)) != nil,
+               Array(actual[(index + 2)...(index + 7)]) == ["(", ")", "throws", "->", "Bool", "{"] {
+                declarations.append((braceStack.count, index + 7))
+            }
+            if actual[index] == "{" { braceStack.append(index) }
+            if actual[index] == "}" {
+                guard let open = braceStack.popLast() else { return nil }
+                closeByOpen[open] = index
+            }
+        }
+        guard braceStack.isEmpty,
+              let outerDepth = declarations.map(\.depth).min() else { return nil }
+        let outer = declarations.filter { $0.depth == outerDepth }
+        guard outer.count == ordered.count,
+              let source = shortCircuitPredicateSource(root, parameters: parameters, opaqueLeaves: opaque)
+        else { return nil }
+        var redacted = actual
+        for index in opaque.sorted(by: >) {
+            let function = outer[index]
+            guard let close = closeByOpen[function.open],
+                  function.open + 2 < close,
+                  actual[function.open + 1] == "return" else { return nil }
+            redacted.replaceSubrange((function.open + 2)..<close,
+                with: ["__uncheckedPredicateLeaf\(index)__"])
+        }
+        return (source, redacted)
     }
     func canonicalPredicateNames(_ tokens: [String]) -> [String] {
         let declared = Set(tokens.indices.compactMap { index -> String? in
@@ -1851,17 +1911,20 @@ func verifyGeneratedActionWriteOutput(
         }
         return normalized
     }
-    func checkedValueTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+    func checkedValueTokens(
+        _ expression: CompiledExpression, parameters: [String], actual: [String]
+    ) -> (expected: [String], actual: [String])? {
         if let tokens = scalarPredicateTokens(expression, parameters: parameters)
             ?? arithmeticIntTokens(expression, parameters: parameters)
             ?? directScalarTokens(expression, parameters: parameters) {
-            return tokens
+            return (tokens, actual)
         }
-        guard let source = shortCircuitPredicateSource(expression, parameters: parameters) else {
+        guard let tree = checkedBooleanTree(expression, parameters: parameters, actual: actual) else {
             return nil
         }
-        return Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+        let tokens = Parser.parse(source: tree.source).tokens(viewMode: .sourceAccurate)
             .map(\.text).filter { !$0.isEmpty }
+        return (tokens, tree.actual)
     }
     func firstTokenDifference(_ actual: [String], _ expected: [String]) -> String {
         let index = zip(actual, expected).enumerated().first { $0.element.0 != $0.element.1 }?.offset
@@ -1877,23 +1940,29 @@ func verifyGeneratedActionWriteOutput(
                 "a generated guard with its compiled bindings", "missing guard body or bindings")
         }
         let expected: [String]?
+        var actualGuard = tokens
         if let constant = guardNode.predicate.booleanConstant {
             expected = constant ? ["try", "emit", "(", "updates", ")"] : ["return"]
         } else if let predicate = scalarPredicateTokens(guardNode.predicate, parameters: bindings) {
             expected = ["guard"] + predicate + ["else", "{", "return", "}",
                 "try", "emit", "(", "updates", ")"]
-        } else if let predicate = shortCircuitPredicateSource(guardNode.predicate, parameters: bindings) {
+        } else if let tree = checkedBooleanTree(guardNode.predicate,
+            parameters: bindings, actual: tokens) {
             let declaration = Parser.parse(source: """
             func proof() {
-                guard \(predicate) else { return }
+                guard \(tree.source) else { return }
                 try emit(updates)
             }
             """).statements.first?.item.as(FunctionDeclSyntax.self)
             expected = declaration?.body?.statements.tokens(viewMode: .sourceAccurate).map(\.text)
+            actualGuard = tree.actual
+        } else if booleanPredicateNodes(guardNode.predicate) != nil {
+            throw invalid("native.action.guard.\(guardNode.id)",
+                "a complete generated Boolean branch tree", "unreadable predicate functions")
         } else {
             expected = nil
         }
-        if let expected, canonicalPredicateNames(tokens) != canonicalPredicateNames(expected) {
+        if let expected, canonicalPredicateNames(actualGuard) != canonicalPredicateNames(expected) {
             throw invalid("native.action.guard.\(guardNode.id)",
                 "the compiled predicate gates exactly one unchanged update emission", "guard body \(tokens)")
         }
@@ -1926,13 +1995,18 @@ func verifyGeneratedActionWriteOutput(
                 "the child receives inherited and captured values unchanged", "generated child arguments differ")
         }
         let initializer = Array(tokens[3..<(tokens.count - expectedCall.count)])
-        let expectedInitializer = checkedValueTokens(value, parameters: parent)
-        if let expectedInitializer,
-           canonicalPredicateNames(initializer) != canonicalPredicateNames(expectedInitializer) {
+        let checkedInitializer = checkedValueTokens(value, parameters: parent, actual: initializer)
+        if checkedInitializer == nil, booleanPredicateNodes(value) != nil {
+            throw invalid("native.action.binding.\(id)",
+                "a complete generated Boolean branch tree", "unreadable predicate functions")
+        }
+        if let checkedInitializer,
+           canonicalPredicateNames(checkedInitializer.actual) !=
+                canonicalPredicateNames(checkedInitializer.expected) {
             throw invalid("native.action.binding.\(id)",
                 "the captured value reads its compiled source",
-                firstTokenDifference(canonicalPredicateNames(initializer),
-                    canonicalPredicateNames(expectedInitializer)))
+                firstTokenDifference(canonicalPredicateNames(checkedInitializer.actual),
+                    canonicalPredicateNames(checkedInitializer.expected)))
         }
     }
     for id in conjunctions {
@@ -2023,12 +2097,21 @@ func verifyGeneratedActionWriteOutput(
                 "both selected branches receive the same bindings, updates, and emitter",
                 "invalid conditional child calls")
         }
-        let checkedPredicate = conditionalPredicates[id].flatMap { predicate in
-            parameters[id].flatMap { bindings in
-                scalarPredicateTokens(predicate, parameters: bindings)?.joined(separator: " ")
-                    ?? shortCircuitPredicateSource(predicate, parameters: bindings)
-            }
-        } ?? condition.value
+        let predicate = conditionalPredicates[id]!
+        let bindings = parameters[id]!
+        let checkedPredicate: String
+        var actualConditional = tokens
+        if let scalar = scalarPredicateTokens(predicate, parameters: bindings) {
+            checkedPredicate = scalar.joined(separator: " ")
+        } else if let tree = checkedBooleanTree(predicate, parameters: bindings, actual: tokens) {
+            checkedPredicate = tree.source
+            actualConditional = tree.actual
+        } else if booleanPredicateNodes(predicate) != nil {
+            throw invalid("native.action.conditional.\(id)",
+                "a complete generated Boolean branch tree", "unreadable predicate functions")
+        } else {
+            checkedPredicate = condition.value
+        }
         let expected = Parser.parse(source: """
         func proof() {
             try _NativeMachineOperations.visitConditional({ \(checkedPredicate) },
@@ -2037,7 +2120,7 @@ func verifyGeneratedActionWriteOutput(
         }
         """).statements.first?.item.as(FunctionDeclSyntax.self)
         let expectedBody = expected?.body?.statements.tokens(viewMode: .sourceAccurate).map(\.text) ?? []
-        guard canonicalPredicateNames(tokens) == canonicalPredicateNames(expectedBody) else {
+        guard canonicalPredicateNames(actualConditional) == canonicalPredicateNames(expectedBody) else {
             throw invalid("native.action.conditional.\(id)",
                 "the compiled condition selects exactly its corresponding child",
                 "generated conditional body differs from the checked rule")
@@ -2071,16 +2154,21 @@ func verifyGeneratedActionWriteOutput(
                 nextSafeAction: "Report this native code generation failure."
             )
         }
-        if let assignment = assignments[part.id], let bindings = parameters[part.id],
-           let value = checkedValueTokens(assignment, parameters: bindings) {
+        if let assignment = assignments[part.id], let bindings = parameters[part.id] {
+            let checkedValue = checkedValueTokens(assignment, parameters: bindings, actual: actualBody)
+            if checkedValue == nil, booleanPredicateNodes(assignment) != nil {
+                throw invalid("native.action.write.\(part.id)",
+                    "a complete generated Boolean branch tree", "unreadable predicate functions")
+            }
+            guard let checkedValue else { continue }
             let compiled = Parser.parse(source: """
             func proof() {
-                if let merged = updates.merging(_Updates(\(part.slot): \(value.joined(separator: " ")))) { try emit(merged) }
+                if let merged = updates.merging(_Updates(\(part.slot): \(checkedValue.expected.joined(separator: " ")))) { try emit(merged) }
             }
             """).statements.first?.item.as(FunctionDeclSyntax.self)
             let compiledBody = compiled?.body?.statements.tokens(viewMode: .sourceAccurate).map(\.text) ?? []
             guard compiled != nil,
-                  canonicalPredicateNames(actualBody) == canonicalPredicateNames(compiledBody) else {
+                  canonicalPredicateNames(checkedValue.actual) == canonicalPredicateNames(compiledBody) else {
                 throw invalid("native.action.write.\(part.id)",
                     "the assigned value evaluates its compiled scalar expression",
                     "\(name): \(actualBody.prefix(40))")

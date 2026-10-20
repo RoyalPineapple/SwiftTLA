@@ -258,6 +258,37 @@ struct ShortCircuitFailureProofTests {
         }
     }
 
+    @Test("A symbolic membership leaf cannot bypass Boolean branch checking")
+    func symbolicMembershipBranchOutput() throws {
+        let compiled = try SymbolicConfigurationModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "SymbolicConfigurationModel", program: program))
+        let visitor = try #require(emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let parts = try emitter.actionFunctions(action.body)
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames,
+            parts: parts.writes, conditions: parts.conditions)
+
+        let changed = visitor.description.replacingOccurrences(
+            of: "_NativeMachineOperations.booleanAnd(",
+            with: "_NativeMachineOperations.booleanOr(")
+        #expect(changed != visitor.description)
+        let wrongVisitor = try #require(Parser.parse(source: changed)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongVisitor, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames,
+                parts: parts.writes, conditions: parts.conditions)
+            Issue.record("The symbolic leaf hid a reversed Boolean operation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
+    }
+
     @Test("Nested Boolean steps retain skipped failures and complete output links")
     func nestedBooleanOutcome() throws {
         let machines = try NestedShortCircuitFailureModel.initialMachines()
