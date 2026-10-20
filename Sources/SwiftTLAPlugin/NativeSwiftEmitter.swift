@@ -1196,7 +1196,7 @@ struct NativeSwiftEmitter {
                 let _rightValue: \(try swiftType(right)) = \(try emit(1))
                 let _rightElements = \(try nativeSequenceElements("_rightValue", source: right))
                 let _leftElements = \(try nativeSequenceElements("_leftValue", source: left))
-                return _leftElements + _rightElements
+                return _NativeMachineOperations.sequenceConcatenate(_leftElements, _rightElements)
             }())
             """
         default: throw unsupported("sequenceExpression operation")

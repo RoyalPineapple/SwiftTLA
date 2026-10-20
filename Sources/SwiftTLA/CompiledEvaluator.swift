@@ -1033,7 +1033,7 @@ extension CompiledOperation {
         case .tupleConcatenate:
             let rhs = try sequenceElements(from: popValue(from: &values))
             let lhs = try sequenceElements(from: popValue(from: &values))
-            values.append(.tuple(lhs + rhs))
+            values.append(.tuple(_NativeMachineOperations.sequenceConcatenate(lhs, rhs)))
         case .tupleRemoving:
             let index = try integer(popValue(from: &values))
             let tuple = try sequenceElements(from: popValue(from: &values))

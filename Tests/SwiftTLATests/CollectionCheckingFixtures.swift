@@ -37,6 +37,24 @@ struct ArrayStepMachine {
 }
 
 @TLAModel
+struct SequenceConcatenationMachine {
+    enum Step: String, CaseIterable { case combine }
+
+    static var spec: TLASpec {
+        #spec("SequenceConcatenationMachine") { scope in
+            let front = scope.sharedVar(initial: [Int]([1]))
+            let back = scope.sharedVar(initial: [Int]([2, 2]))
+            Do(Step.combine) {
+                When(front.count == 1)
+                Assign(front, to: front.concatenating(back))
+            }
+            let bounded = Invariant()
+            bounded { front.count <= 3 && back.count == 2 }
+        }
+    }
+}
+
+@TLAModel
 struct FiniteInitialStepMachine {
     enum Step: String, CaseIterable { case prepare }
 

@@ -1959,6 +1959,28 @@ func verifyGeneratedActionWriteOutput(
     func checkedValueTokens(
         _ expression: CompiledExpression, parameters: [String], actual: [String]
     ) -> (expected: [String], actual: [String])? {
+        if case .tupleConcatenate = expression.operation,
+           expression.children.count == 2,
+           case .array(let element) = expression.resultType,
+           expression.children.allSatisfy({ $0.resultType == expression.resultType }),
+           case .stateVariable(let leftVariable) = expression.children[0].operation,
+           case .stateVariable(let rightVariable) = expression.children[1].operation,
+           let leftField = stateFields[leftVariable], let rightField = stateFields[rightVariable],
+           element == .int || element == .bool {
+            let typeName = element == .int ? "Int" : "Bool"
+            let source = """
+            (try { () throws -> [\(typeName)] in
+                let _leftValue: [\(typeName)] = state.state.\(leftField)
+                let _rightValue: [\(typeName)] = state.state.\(rightField)
+                let _rightElements = _rightValue
+                let _leftElements = _leftValue
+                return _NativeMachineOperations.sequenceConcatenate(_leftElements, _rightElements)
+            }())
+            """
+            let tokens = Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                .map(\.text).filter { !$0.isEmpty }
+            return (tokens, actual)
+        }
         if case .tupleAppend = expression.operation,
            expression.children.count == 2,
            case .array(let element) = expression.resultType,

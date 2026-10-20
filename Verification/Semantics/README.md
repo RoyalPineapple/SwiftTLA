@@ -1819,6 +1819,21 @@ and appends the element once; Swift `Array.append` and the compiler/runtime's
 interpretation of the checked call remain trusted. This is an output-linked
 slice, not a proof of arbitrary array expressions. Hosted evidence remains
 pending.
+`SequenceConcatenationProof.tla` gives the source value an independent
+index-by-index definition and proves it equals TLA+ `\o` for arbitrary
+integer sequences. It imports the complete generated
+`SequenceConcatenationMachine.tla`, pinned byte-for-byte by the generated
+graph test. Its 28 locally discharged obligations connect the source rule to
+the emitted initial state, complete `combine`-labeled transition and unchanged
+`back` frame, selected invariant, and enabledness. Reversing the operands is
+a proved counterexample. Both compiled evaluation and generated Swift now
+call one `sequenceConcatenate` kernel after ordered operand evaluation. The
+generated-output mutation test first demonstrated that reversing those
+operands passed the old verifier; the new typed verifier rejects it. The
+native graph checks the complete two-state, one-edge case and final deadlock.
+Swift `Array.append(contentsOf:)`, the compiler/runtime interpretation of the
+checked call, and concatenation with derived or fallible operands remain
+trusted or uncovered; this is not universal sequence fidelity.
 For predicates it cannot independently reconstruct, the verifier still
 requires the generated guard to gate exactly one unchanged update emission.
 The opaque predicate's value remains an unproved output link, rather than

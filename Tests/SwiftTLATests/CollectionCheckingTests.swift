@@ -45,6 +45,31 @@ struct CollectionCheckingTests {
         #expect(tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
+    @Test("sequence concatenation preserves order, repeated values, and complete states")
+    func checksSequenceConcatenation() throws {
+        let graph = try ReachabilityGraph(
+            initialMachines: SequenceConcatenationMachine.initialMachines(), maximumStates: 10)
+        #expect(graph.initialStates.count == 1)
+        #expect(Set(graph.transitions.keys.map(\.state.front)) == [[1], [1, 2, 2]])
+        #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == 1)
+        #expect(Set(graph.deadlockedStates.map(\.state.front)) == [[1, 2, 2]])
+        #expect(graph.safetyViolations.count == 1)
+        #expect(graph.safetyViolations.first?.value == [.deadlock])
+        for state in graph.transitions.keys { #expect(state.state.back == [2, 2]) }
+        let outgoing = try #require(graph.transitions.first { $0.key.state.front == [1] }?.value)
+        #expect(outgoing.count == 1)
+        #expect(outgoing.contains {
+            $0.action == .combine && $0.target.state.front == [1, 2, 2]
+                && $0.target.state.back == [2, 2]
+        })
+        let tla = try SequenceConcatenationMachine.render().tlaBundle.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/SequenceConcatenationMachine.tla")
+            .standardizedFileURL
+        #expect(tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+    }
+
     @Test("finite initial domain retains both states and an unfinished deadlock")
     func checksFiniteInitialStates() throws {
         let graph = try ReachabilityGraph(initialMachines: FiniteInitialStepMachine.initialMachines(), maximumStates: 10)
