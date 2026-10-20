@@ -1726,7 +1726,12 @@ two `Either` statements retains both generated Swift successors while also
 reporting a division failure. These facts do not yet prove that
 `ActionNormalization.complete` implements the general distribution rule, that
 the generated TLA+ action has the same complete relation, or that distribution
-preserves first-failure order and checking effects. Those links remain open.
+preserves first-failure order and checking effects. A second negative control
+proves that eager evaluation of both alternatives before the right action can
+report a later alternative's failure where branchwise evaluation reports the
+right action's failure first. The source rule must specify branchwise outcome
+order, and both emitted paths must be linked to it; graph equality alone cannot
+close this boundary.
 
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |

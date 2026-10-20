@@ -41,4 +41,23 @@ THEOREM DroppingAUniqueAlternativeChangesTheGraph ==
     PROVE Conjoin(first \cup second, right) # Conjoin(first, right)
     BY AlternativeDistributionPreservesCompleteUpdates, SMT
 
+\* A successful first alternative can reach the right action before a later
+\* alternative fails only when conjunction consumes alternatives one at a time.
+NoFailure == 0
+EarlierAlternativeFailure == 1
+RightActionFailure == 2
+FirstFailure(first, second) ==
+    IF first = NoFailure THEN second ELSE first
+
+THEOREM EagerFailureOrderDoesNotDistribute ==
+    FirstFailure(
+        FirstFailure(NoFailure, EarlierAlternativeFailure),
+        RightActionFailure)
+    #
+    FirstFailure(
+        FirstFailure(NoFailure, RightActionFailure),
+        FirstFailure(EarlierAlternativeFailure, RightActionFailure))
+    BY SMT DEF FirstFailure, NoFailure,
+        EarlierAlternativeFailure, RightActionFailure
+
 =============================================================================
