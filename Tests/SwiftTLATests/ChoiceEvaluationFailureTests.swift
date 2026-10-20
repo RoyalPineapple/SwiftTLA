@@ -695,13 +695,54 @@ struct ChoiceEvaluationFailureTests {
     func conjunctiveAlternativesKeepBranchwiseFailureOrder() throws {
         let machines = try BranchwiseConjunctionFailureOrderModel.initialMachines()
         #expect(machines.count == 8)
-        let machine = try #require(machines.first { $0.state.divisor == 0 && $0.state.modulus == -1 })
-        #expect(machine.state.selected == -1 && machine.state.result == 0)
-        #expect(throws: NativeMachineEvaluationError.divisionByZero) {
-            try machine.successors(for: .pick)
+        for divisor in 0...1 {
+            for modulus in [-1, 0, 1, 2] {
+                let machine = try #require(machines.first {
+                    $0.state.divisor == divisor && $0.state.modulus == modulus
+                })
+                #expect(machine.state.selected == -1 && machine.state.result == 0)
+                var states: [Int: BranchwiseConjunctionFailureOrderModel.State] = [:]
+                var initialIDs: [Int] = []
+                var edges: [(Int, Int)] = []
+                var recordedFailures: [(Int, NativeMachineEvaluationError)] = []
+                let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 3,
+                    checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
+                    switch event {
+                    case .state(let id, let snapshot, let initial, _, _):
+                        states[id] = snapshot.state
+                        if initial { initialIDs.append(id) }
+                    case .edge(let source, let action, let target):
+                        #expect(action == .pick)
+                        edges.append((source, target))
+                    case .evaluationFailure(let source, let action, let reason):
+                        #expect(action == .pick)
+                        recordedFailures.append((source, reason))
+                    default: break
+                    }
+                }
+                #expect(outcome.initialStates == 1)
+                #expect(initialIDs.count == 1)
+                let initialID = try #require(initialIDs.first)
+                let targets = edges.filter { $0.0 == initialID }.map(\.1)
+                let failures = recordedFailures.filter { $0.0 == initialID }.map(\.1)
+                let successors = try targets.map { try #require(states[$0]) }
+                #expect(successors.allSatisfy {
+                    $0.divisor == divisor && $0.modulus == modulus && $0.result == 1
+                })
+                let expectedSelections: Set<Int> = divisor == 0 ? []
+                    : modulus > 0 ? [0, 1 % modulus] : [0]
+                #expect(targets.count == expectedSelections.count)
+                #expect(Set(successors.map(\.selected)) == expectedSelections)
+                let expectedFailure: NativeMachineEvaluationError? = divisor == 0 || modulus == 0
+                    ? .divisionByZero : modulus < 0 ? .negativeModuloDivisor(modulus) : nil
+                #expect(failures == (expectedFailure.map { [$0] } ?? []))
+                if let expectedFailure {
+                    #expect(outcome.completion == .evaluationFailure(expectedFailure))
+                } else {
+                    #expect(outcome.completion == .exhausted)
+                }
+            }
         }
-        let successful = try #require(machines.first { $0.state.divisor == 1 && $0.state.modulus == 2 })
-        #expect(Set(try successful.successors(for: .pick).map(\.state.selected)) == [0, 1])
         let rendered = try BranchwiseConjunctionFailureOrderModel.render()
         let proofInput = semanticFixture("BranchwiseConjunctionFailureOrderModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))

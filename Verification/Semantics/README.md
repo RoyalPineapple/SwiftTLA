@@ -3,6 +3,12 @@
 Status: **unproved**. This document defines the claim to prove. Finite graph
 comparisons do not discharge it.
 
+Evidence-status statements in the slice histories below describe the state
+when each slice was written. They do not qualify the current PR head. For PR
+#395, use retained CI and validation artifacts for one exact source SHA. A
+green proof job qualifies only the modules that it checks, not this universal
+claim.
+
 ## Scope
 
 The source language is the subset of `#spec` accepted after parsing, binding,
@@ -1547,8 +1553,8 @@ the emitted TLA+ action. `ConditionalStepProofTests.compiledConditionalBranches`
 checks the actual compiled runtime's two initial states, labeled successor,
 prior-write branch selection, and disabledness after the step. A reversed
 compiled branch is a TLAPS negative control. The local proof passed all 203
-obligations, and the focused suite passed all three tests; this revision has
-not yet been hosted.
+obligations, and the focused suite passed all three tests. Hosted evidence is
+recorded separately for each source SHA.
 The module also proves the generated temporal `Spec` equivalent to the source
 temporal spec conjoined with weak fairness on the source step, under a
 reachable-state type invariant. It proves that the complete state relation has
@@ -1606,11 +1612,10 @@ source SHA, TLA and Swift-witness input digests, tool versions/configuration, an
 proof logs. A changed archive fails its checksum. The revised
 `CheckedExecutionOverflowProof.tla`, `CheckedSubtractionProof.tla`,
 `CheckedMultiplicationProof.tla`, `CheckedGuardFailureProof.tla`,
-`MissingStringSelectionProof.tla`, and `SingleAssignment.tla` have passed
-locally on the current side-worktree inputs. None has qualifying hosted
-evidence. This job
-does not yet have qualifying hosted evidence and is not the universal
-semantic-preservation admission check.
+`MissingStringSelectionProof.tla`, and `SingleAssignment.tla` passed the
+stated local check. Those local results do not qualify a PR revision. The
+hosted proof artifact must name the same source SHA and input digests. This
+job is not the universal semantic-preservation admission check.
 The ordered two-addition regression passes focused Swift tests and its symbolic
 TLA fixture is required to match normalized renderer output. Its revised
 `SingleAssignment.tla` proof passed locally, but has not been hosted. On SHA
