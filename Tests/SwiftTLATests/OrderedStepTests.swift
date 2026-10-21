@@ -120,19 +120,37 @@ import SwiftSyntax
     @Test("Later reads observe earlier writes in one atomic transition")
     func orderedReadsAndRepeatedWrites() throws {
         var machine = try OrderedCopyModel.makeMachine()
+        let initial = machine.snapshot
         let transition = try machine.send(.copy)
         #expect(transition.before.x == 1)
         #expect(transition.before.y == 0)
         #expect(transition.after.x == 2)
         #expect(transition.after.y == 2)
+        let afterCopy = machine.snapshot
         let repeated = try machine.send(.repeatWrites)
         #expect(repeated.before == transition.after)
         #expect(repeated.after.x == 4)
         #expect(repeated.after.y == 2)
+        let afterRepeat = machine.snapshot
+        let initialMachines = try OrderedCopyModel.initialMachines()
+        #expect(initialMachines.count == 1)
+        #expect(initialMachines.first?.snapshot == initial)
         let graph = try ReachabilityGraph(
-            initialMachines: OrderedCopyModel.initialMachines(), maximumStates: 4)
+            initialMachines: initialMachines, maximumStates: 4)
         #expect(graph.transitions.count == 3)
-        #expect(Set(graph.transitions.keys.map { [$0.state.x, $0.state.y] }) == [[1, 0], [2, 2], [4, 2]])
+        #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == 3)
+        let copyEdges = try #require(graph.transitions[initial])
+        #expect(copyEdges.count == 1)
+        #expect(copyEdges.first?.action == .copy)
+        #expect(copyEdges.first?.target == afterCopy)
+        let repeatedEdges = try #require(graph.transitions[afterCopy])
+        #expect(repeatedEdges.count == 1)
+        #expect(repeatedEdges.first?.action == .repeatWrites)
+        #expect(repeatedEdges.first?.target == afterRepeat)
+        let terminatingEdges = try #require(graph.transitions[afterRepeat])
+        #expect(terminatingEdges.count == 1)
+        #expect(terminatingEdges.first?.action == .Terminating)
+        #expect(terminatingEdges.first?.target == afterRepeat)
     }
 
     @Test("The checked repeated-write module matches normalized generated TLA")

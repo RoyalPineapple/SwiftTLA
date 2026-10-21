@@ -1,5 +1,5 @@
-/// Checks the source-to-compiled constructor and ordered operand link used by
-/// the finite Boolean-tree semantic proof. Leaf expressions have separate rules.
+/// Checks the compiled constructor and child identities against the lowerer's
+/// scheduled operands. Source scheduling and leaf meanings remain separate obligations.
 package enum BooleanBranchLoweringContract {
     package static func matches(
         source: StateExpr,

@@ -1,4 +1,4 @@
-/// Connects source membership to the compiled operation and its ordered operands.
+/// Checks the membership operation and child identities against scheduled operands.
 package enum MembershipLoweringContract {
     package static func matches(
         source: StateExpr,

@@ -1,4 +1,4 @@
-/// Checks the source-to-compiled constructor and ordered operand link for sequence edits.
+/// Checks the sequence constructor and child identities against scheduled operands.
 package enum SequenceExpressionLoweringContract {
     package static func matches(
         source: StateExpr,

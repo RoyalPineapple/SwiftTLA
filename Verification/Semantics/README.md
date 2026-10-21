@@ -1335,7 +1335,10 @@ establishes the universal Swift output link.
 The `OrderedCopyModel` test requires the complete generated TLA+ module,
 after replacing only its Swift `Int` bounds with symbolic constants, to match
 `OrderedCopy.tla` byte-for-byte. The generated-machine test exercises the same
-two action steps. `SingleAssignment.tla` states source-to-emitted claims for
+two action steps and requires the sole initial snapshot and all three labeled
+edges, including the terminal self-loop. This is one finite Swift output
+instance, not a general emitter theorem. `SingleAssignment.tla` states
+source-to-emitted claims for
 `Init`, both ordered actions, termination, complete `Next`, reachable-state
 invariants, temporal behavior, and a complete-state relation. The indexed
 guarded-history theorem also links the second action to the scheduled source
@@ -1356,8 +1359,9 @@ the two compiled checked additions and their ordered bound-value reads, and
 token-matches all three actual generated Swift update visitors, action
 dispatch, and formal action labels against the hand-reviewed
 `OrderedCopySwiftVisitors.txt`. Its negative controls change the second
-addition to read pre-step state and route `repeatWrites` to `copy`; both are
-rejected by the output check. The third visitor is the generated `Terminating`
+addition to read pre-step state and route `repeatWrites` to `copy`. The
+production output verifier rejects the wrong read; the pinned token witness
+rejects the wrong route. The third visitor is the generated `Terminating`
 stutter action, so this witness does not silently omit it. Macro expansion
 calls this same emitter, but the test does not prove Swift's interpretation of
 the emitted code, the checked-arithmetic helper, or a generic emitter theorem.
@@ -1811,11 +1815,14 @@ These checks apply in generated conditions, guards, captures, assignments, and
 Boolean trees. Focused mutations change a literal set and a configured-set
 member respectively; both are rejected. Other set representations, operand
 forms, and the runtime meaning of Swift `Set.contains` remain outside this
-syntax link. `MembershipLoweringContract` checks every source `.in` constructor
-against the compiled membership operation and its member-before-set operand
-identities; changed operations, reversed operands, and missing operands are
-rejected. `FiniteSetMembershipRule.tla` independently defines membership as
-existence of an equal set element and proves its value, total leaf outcome, and
+syntax link. `MembershipLoweringContract` checks that a compiled `.in` retains
+the operation and operand identities supplied by the scheduler; it does not
+independently establish source-child scheduling order. The direct `TLASpec`
+compilation in `SourceOperandOrderTests` checks member-before-set order for
+distinct state variables; it does not test the `#spec` macro path. Synthetic
+contract mutations reject a changed operation, reversed result children, and
+missing children. `FiniteSetMembershipRule.tla` independently defines membership
+as existence of an equal set element and proves its value, total leaf outcome, and
 short-circuit-guard composition equal the rendered `\in` form (15 local TLAPS
 obligations without fingerprint reuse). The TLA+ syntax-template test checks
 the compiled renderer's actual expression scheduler, and the accepted
@@ -1889,6 +1896,9 @@ call one `sequenceConcatenate` kernel after ordered operand evaluation. The
 generated-output mutation test first demonstrated that reversing those
 operands passed the old verifier; the new typed verifier rejects it. The
 native graph checks the complete two-state, one-edge case and final deadlock.
+`SourceOperandOrderTests` also checks distinct concatenation operands after
+direct `TLASpec` compilation; the generic sequence-edit scheduler is not proved
+by the synthetic contract-helper test alone.
 Swift `Array.append(contentsOf:)`, the compiler/runtime interpretation of the
 checked call, and concatenation with other derived operands remain trusted or
 uncovered; this is not universal sequence fidelity.
@@ -2237,16 +2247,18 @@ short-circuit theorem or hosted admission result.
 
 `BooleanTreeOutcomeComposition.tla` proves the selected value and ordered
 failure for every finite Boolean tree built from `and`, `or`, `not`, and `if` under
-its stated leaf contracts. `BooleanBranchLoweringContract` now checks each
-accepted source constructor against its compiled operation and ordered compiled
-operands before compilation succeeds. The lowerer derives the operand list from
-the source constructor; tests mutate the operation, omit an operand, and reverse
-operand order to ensure the check rejects those changes. This connects the
-constructor structure to the theorem's shared postorder tree, while the
-implementation of source-child scheduling and the meanings of leaf expressions
-remain trusted boundaries. The compiled TLA+ renderer's actual `and`, `or`,
-`not`, and `if` operand templates are checked against the proved forms, including
-a nested rendering through its generic expression scheduler. The same renderer
+its stated leaf contracts. `BooleanBranchLoweringContract` checks each
+constructor's compiled operation and the result's child identities against the
+list supplied by the lowerer. Its synthetic tests mutate the operation, omit a
+result child, and reverse result children relative to that list. Separately,
+`SourceOperandOrderTests` compiles distinct state operands through `TLASpec`
+and checks the lowering order for `and`, `or`, and `ifThenElse`. It does not test
+the `#spec` macro path. The helper alone cannot detect a lowerer that schedules
+source children in the wrong order; the general source-child scheduling rule and
+leaf meanings remain trusted boundaries. The
+compiled TLA+ renderer's actual `and`, `or`, `not`, and `if` operand templates are
+checked against the proved forms, including a nested rendering through its
+generic expression scheduler. The same renderer
 is checked for branch-selected division-by-zero and negative-modulo predicates,
 their order, and the aggregate definedness formula for all four constructors.
 These output checks cover the fixed constructor rules, not a mechanized proof
