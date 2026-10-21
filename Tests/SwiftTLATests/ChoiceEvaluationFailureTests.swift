@@ -242,6 +242,68 @@ struct ChoiceEvaluationFailureTests {
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
     }
 
+    @Test("A failing choice candidate retains its emitted Swift traversal")
+    func mixedCandidateEmittedSwift() throws {
+        let fixture = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("ChoiceEvaluationFailureFixtures.swift")
+        let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(source.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "MixedCandidateDivisionFailureModel" })
+        let compiled = try TLASpecVerifier.parseAndVerify(declaration)
+        let action = try #require(compiled.program.behavior.actions.first)
+        guard compiled.program.behavior.actions.count == 1,
+              case .existsAction(let candidate, let domain, let body) = action.body,
+              case .integerRange = domain.operation,
+              domain.children.count == 2,
+              case .value(.integer(0)) = domain.children[0].operation,
+              case .value(.integer(1)) = domain.children[1].operation,
+              case .define(_, let quotient, _) = body,
+              case .divide = quotient.operation,
+              quotient.children.count == 2,
+              case .value(.integer(1)) = quotient.children[0].operation,
+              case .boundValue(let divisor) = quotient.children[1].operation,
+              divisor == candidate else {
+            Issue.record("The authored choice no longer lowers to the proved candidate division")
+            return
+        }
+        var emitter = NativeSwiftEmitter(model: compiled)
+        let update = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let witness = semanticFixture("MixedCandidateDivisionFailureSwiftWitness.txt")
+        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+            .statements.first?.item.as(FunctionDeclSyntax.self))
+        let expectedTokens = expected.tokens(viewMode: .sourceAccurate).map(\.text)
+        let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
+        #expect(actualTokens == expectedTokens)
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(update, action: action.body,
+            program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+
+        let missingSuccessfulCandidate = update.description.replacingOccurrences(
+            of: "integerRange(0, 1)", with: "integerRange(0, 0)")
+        #expect(missingSuccessfulCandidate != update.description)
+        let altered = try #require(Parser.parse(source: missingSuccessfulCandidate)
+            .statements.first?.item.as(FunctionDeclSyntax.self))
+        #expect(altered.tokens(viewMode: .sourceAccurate).map(\.text) != expectedTokens)
+
+        let reversedDivision = update.description.replacingOccurrences(
+            of: "divide(_arithmetic1, _arithmetic0)",
+            with: "divide(_arithmetic0, _arithmetic1)")
+        #expect(reversedDivision != update.description)
+        let reversed = try #require(Parser.parse(source: reversedDivision)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(reversed, action: action.body,
+                program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("The generated division reversed the candidate and dividend")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.binding.1")
+        }
+    }
+
     @Test("A failing Either branch does not hide a successful branch")
     func eitherBranchOutcome() throws {
         let machine = try EitherBranchDivisionFailureModel.makeMachine()

@@ -134,8 +134,7 @@ fixture-level output links, not a general lowering or Swift-emitter proof.
 `CheckedExecutionOverflowProof.tla` states exact-output obligations for
 initial state, the labeled `advance` machine action, the separate emitted
 `Terminating` stutter action and full exported `Next`, and the complete failure
-record; all 45 obligations passed locally, while hosted evidence remains
-pending. `Terminating` is not
+record; the proof diagnostic checks all 45 obligations. `Terminating` is not
 presented as an application action or as a native graph edge.
 The initial overflow disables `Next` while making the failure predicate true,
 so selected failure reporting must take precedence over ordinary deadlock.
@@ -695,8 +694,8 @@ matches the three-value Swift rank for every pair, that the ranked and
 lexicographic choices agree for every nonempty subset, and that the actual
 emitted action preserves complete labeled steps on all reachable states. It
 also proves the initial candidate set remains unchanged, the no-match failure
-invariant, and a reversed-order negative control. All 32 obligations passed
-locally; hosted evidence is pending. The exact output theorem covers this
+invariant, and a reversed-order negative control. The proof diagnostic checks
+all 32 obligations. The exact output theorem covers this
 fixture's fixed reachable candidate set, not arbitrary mutable sets or all
 integer sequences. Swift's `lexicographicallyPrecedes`, the generated update
 merge, and the Swift compiler/runtime remain trusted boundaries.
@@ -792,7 +791,7 @@ and native machine test link this fixture to the modeled Swift rule, but
 interpreting `Result.get`, `choose`, eager sequence construction, the update
 merge, and Swift compiler/runtime behavior remains trusted. This does not
 prove arbitrary nested choices, effectful predicates, all aggregate shapes,
-or authored PlusCal; hosted evidence is pending.
+or authored PlusCal. Check the retained proof diagnostic for a qualifying SHA.
 
 ## Checked kernel lemma
 
@@ -1422,12 +1421,17 @@ requires that successor state and edge before the typed failure event.
 `MixedCandidateDivisionFailureProof.tla` independently defines those source
 outcomes and proves the emitted initial state, step, division-failure
 predicate, selected first failing divisor, absent overflow, and evaluation
-verdict (36 local TLAPS obligations). The Swift visitor witness above pins
-the shared choice-emission rule that defers a candidate failure until the
-remaining candidates have been visited. This is a closed finite Int-division
-case, not a proof of failure preservation for every accepted choice body or
-value type. The native checker reports the first failure when several paths
-fail differently. For an integer-valued candidate domain, the TLA+ renderer
+verdict (36 TLAPS obligations). `ChoiceEvaluationFailureTests.mixedCandidateEmittedSwift`
+checks the lowered `0..1` choice and division, pins this fixture's complete
+emitted Swift visitor to `MixedCandidateDivisionFailureSwiftWitness.txt`, and
+rejects a narrowed candidate range or reversed division operands. The native
+checker test observes both the successful edge and typed failure. This closes
+the fixture-level output links under the trusted Swift runtime, token check,
+and TLAPS boundaries, not failure preservation for every accepted choice body
+or value type. The binary graph comparator does not compare typed native
+evaluation failures to TLC verdicts. The native checker reports the first
+failure when several paths fail differently. For an integer-valued candidate
+domain, the TLA+ renderer
 now selects the least failing candidate before classifying its failure and
 emits operands only for that candidate. `OrderedCandidateFailureRule.tla`
 proves the least-candidate selection under an explicit minimum-existence
@@ -1897,7 +1901,7 @@ prefixes, and nested concatenations; mutations that reverse the operands or
 read the wrong prefix length are rejected. The actual TLA+ output is pinned
 byte-for-byte, while Swift execution still relies on the checked output
 syntax, sequence kernel, and Swift compiler/runtime. Other derived operands
-and sequence element types remain uncovered; hosted evidence is pending.
+and sequence element types remain uncovered.
 `FallibleSequenceAppendProof.tla` applies the same output-linked boundary to
 `prefix(...).appending(...)`. The shared prefix rule and independent append
 rule construct both values by index. The proved slice establishes the
@@ -2279,8 +2283,8 @@ evaluation check would disagree. The generated Swift machine test observes
 the actual missing-key error without a state change. An exact token witness
 pins the emitted Swift action visitor, including argument-before-function
 evaluation and its call to the shared checked lookup; unchecked lookup and
-reversed-operand mutations fail that output check. The proof is local only;
-hosted evidence is pending. It does not cover every function-application form
+reversed-operand mutations fail that output check. The proof diagnostic runs
+this module. It does not cover every function-application form
 or prove Swift runtime behavior from source. Fallible `With` bodies over
 state-dependent candidates with no reproducible TLA+ order remain rejected
 with `unsupportedCanonicalCandidateOrder`, rather than claiming first-failure
@@ -2315,8 +2319,8 @@ The focused test pins both actual generated Swift action visitors and checks
 the shared native operation on empty and nonempty sequences. The generated
 output verifier also independently checks typed array-tail assignments and
 rejects a changed array operand; the mutation passed before that verifier
-rule was added. All 35 slice obligations and the shared tail rule passed
-locally; hosted evidence is pending. The Swift compiler and runtime
+rule was added. The proof diagnostic checks all 35 slice obligations and the
+shared tail rule. The Swift compiler and runtime
 interpretation of the visitors remain trusted. This instance
 does not establish arbitrary sequence-expression lowering, initialization,
 or temporal fidelity.
