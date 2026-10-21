@@ -1509,6 +1509,7 @@ func verifyGeneratedActionWriteOutput(
     }
     var bodies: [Int: [String]] = [:]
     var parameters: [Int: [String]] = [:]
+    var coveredPartTokens = 0
     for index in visitorTokens.indices where visitorTokens[index] == "func" && tokenDepths[index] == 1 {
         let nameIndex = index + 1
         guard nameIndex < visitorTokens.count else { continue }
@@ -1548,15 +1549,20 @@ func verifyGeneratedActionWriteOutput(
         }
         parameters[id] = names
         bodies[id] = Array(visitorTokens[(open + 1)..<(close - 1)])
+        coveredPartTokens += close - index
     }
     let expectedEntry = ["try", "_actionPart0", "(", "_Updates", "(", ")", ",", "emit", ")"]
     let rootCalls = visitorTokens.indices.filter { index in
         tokenDepths[index] == 1 && index + expectedEntry.count <= visitorTokens.count &&
             Array(visitorTokens[index..<(index + expectedEntry.count)]) == expectedEntry
     }
-    guard rootCalls.count == 1 else {
-        throw invalid("native.action.entry", "one call to the root action part",
-            "found \(rootCalls.count) root calls")
+    guard let bodyOpen = visitorTokens.firstIndex(of: "{"),
+          visitorTokens.last == "}",
+          rootCalls.count == 1,
+          rootCalls[0] + expectedEntry.count == visitorTokens.count - 1,
+          coveredPartTokens + expectedEntry.count == visitorTokens.count - bodyOpen - 2 else {
+        throw invalid("native.action.entry", "action parts followed by one root call",
+            "unrecognized tokens in the generated visitor")
     }
 
     var pending: [(id: Int, node: CompiledActionExpr)] = [(0, action)]

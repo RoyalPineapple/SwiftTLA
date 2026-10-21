@@ -150,6 +150,19 @@ struct ShortCircuitFailureProofTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }
+        let changedModulo = visitor.description.replacingOccurrences(
+            of: "_NativeMachineOperations.modulo(", with: "_NativeMachineOperations.divide(")
+        #expect(changedModulo != visitor.description)
+        let wrongModulo = try #require(Parser.parse(source: changedModulo)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongModulo, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames,
+                parts: parts.writes, conditions: parts.conditions)
+            Issue.record("A nested Boolean guard accepted a changed modulo operation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.guard."))
+        }
         let rendered = try BranchingBooleanFailureModel.render().tlaBundle.root.tla
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

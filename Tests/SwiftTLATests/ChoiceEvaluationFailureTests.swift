@@ -912,6 +912,20 @@ struct ChoiceEvaluationFailureTests {
             #expect(diagnostic.path == "native.action.alternative.0")
         }
 
+        let extraBranch = update.description.replacingOccurrences(
+            of: "try _actionPart0(_Updates(), emit)",
+            with: "try _actionPart0(_Updates(), emit)\ntry _actionPart1(_Updates(), emit)")
+        #expect(extraBranch != update.description)
+        let extraVisitor = try #require(Parser.parse(source: extraBranch)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(extraVisitor, action: action.body,
+                program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("The generated visitor accepted an extra successful branch")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.entry")
+        }
+
         let droppedSuccessfulBranch = Parser.parse(source: update.description.replacingOccurrences(
             of: "try _actionPart1(updates, branchEmit)", with: "return"))
         let mutant = try #require(droppedSuccessfulBranch.statements.first?.item.as(FunctionDeclSyntax.self))

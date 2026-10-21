@@ -332,16 +332,17 @@ every later failure. The adjacent negative-modulo test pins the matching
 verdict on both outputs. These are concrete output regressions, not a proof
 of failure order for every accepted expression.
 
-`SignedIntegerSemanticsTests.generatedMembershipFailureOrder` closes the same
-right-first failure boundary when the outer operation is membership and its
+`SignedIntegerSemanticsTests.generatedMembershipFailureOrder` checks one
+failure-order case when the outer operation is membership and its
 set is a computed literal: a division failure in the set precedes an overflow
 in the member. It failed before the renderer traversed membership and set
 literal children, then passed with the emitted first-failure, later-overflow,
 and action guards pinned. `OrderedArithmeticFailures.tla` proves the two-site
 failure outcome for every integer divisor and Boolean later-overflow outcome.
 The proof assumes the generated Swift machine evaluates the set first, as the
-fixture test observes; it does not prove every collection expression or the
-authored PlusCal output link.
+fixture test observes. The test pins selected TLA+ fragments, not the complete
+emitted module or Swift visitor, so this remains a conditional output link.
+It does not prove every collection expression or the authored PlusCal output.
 
 `SignedIntegerSemanticsTests.generatedTupleFailureOrder` checks the same
 two-site outcome for an ordered sequence literal. The first element divides
@@ -1836,12 +1837,16 @@ Swift `Set.contains`, or every emitted membership site.
 `DefinedChoiceDomainRule.tla` proves that guarding an existential domain
 preserves the enabled step and puts a domain evaluation failure before any
 body failure; an unguarded domain has a counterexample. The renderer regression
-failed before the guard was added. `UndefinedChoiceDomainModel` exercises an
-accepted `#spec` `With` with a zero-divisor domain through the generated Swift
-machine and rendered TLA+. This links one fallible domain instance to both
-outputs. The theorem assumes the definedness predicate is correct and that a
-domain value exists when it is true; it does not prove arbitrary domain
-evaluation, TLA+ `IF` execution, or branch semantics.
+failed before the guard was added.
+
+`UndefinedChoiceDomainModel` exercises an accepted `#spec` `With` with a
+zero-divisor domain. Its focused test observes the generated Swift machine and
+checks selected TLA+ guard and failure lines. It does not pin the complete
+emitted TLA+ module or generated Swift visitor. This is a conditional output
+witness, not a closed source-to-both-outputs link. The theorem assumes that the
+definedness predicate is correct and a domain value exists when it is true.
+It does not prove arbitrary domain evaluation, TLA+ `IF` execution, or branch
+semantics.
 
 The generated Swift action checker now walks every compiled action node and
 checks the actual emitted visitor tokens for exactly one corresponding local
@@ -1958,18 +1963,20 @@ separate obligations; this is not yet a general action-output theorem.
 `BooleanEqualityCaptureRule.tla` gives the independent source rule for one
 `#spec` value family: Boolean equality is a case split over both Boolean
 operands. TLAPS proves that the case split, compiled equality, the native
-captured value, and the two nested emitted TLA+ `LET` bindings produce the
-same complete state and `compare`-labeled step. The rule also proves
-agreement of enabledness and therefore the deadlock verdict
+captured value, and two representative TLA+ `LET` bindings produce the
+same complete state and `compare`-labeled step. These bindings are stated
+in the proof module, not imported from the complete emitted TLA+ module.
+The rule also proves agreement of enabledness and therefore the deadlock verdict
 for this action on every complete Boolean state. The accepted
 `GeneratedBooleanEqualityProofModel` checks the source-to-compiled operand
 identities, the actual emitted Swift initializer against the compiled
-operands, the exact emitted TLA+ action and initial conjuncts, and the
+operands, selected emitted TLA+ action and initial conjuncts, and the
 generated machine's resulting state and action identity. Its operator
 mutation failed before the Swift output check and is now rejected. The
 language/runtime meanings of Swift `Bool.==` and TLA+ `=` and the soundness
-of the syntax checks remain trusted boundaries. This slice has no fallible
-expression; it does not cover derived operands, other value types, arbitrary
+of the syntax checks remain trusted boundaries. The full actual TLA+ output
+link is still open. This slice has no fallible expression; it does not cover
+derived operands, other value types, arbitrary
 `define` trees, or other checking outcomes.
 
 `GeneratedPredicateCaptureProof.tla` imports the complete TLA+ module emitted
@@ -2317,9 +2324,10 @@ steps, both aggregate failure predicates, the selected evaluation invariant,
 and a negative control that omits the failure check.
 The focused test pins both actual generated Swift action visitors and checks
 the shared native operation on empty and nonempty sequences. The generated
-output verifier also independently checks typed array-tail assignments and
-rejects a changed array operand; the mutation passed before that verifier
-rule was added. The proof diagnostic checks all 35 slice obligations and the
+output verifier independently checks typed array-head and array-tail
+operands and rejects a changed operand in either visitor. The tail mutation
+passed before that verifier rule was added. The proof diagnostic checks all
+35 slice obligations and the
 shared tail rule. The Swift compiler and runtime
 interpretation of the visitors remain trusted. This instance
 does not establish arbitrary sequence-expression lowering, initialization,

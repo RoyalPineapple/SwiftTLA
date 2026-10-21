@@ -86,6 +86,26 @@ struct ActionConstraintCheckingTests {
         #expect(result.violatedInvariants == [.BelowTwo])
     }
 
+    @Test("A later evaluation failure does not hide an earlier permitted transition")
+    func retainsSuccessBeforeFailure() throws {
+        let initial = try ActionConstrainedMixedOutcomeModel.makeMachine()
+        var events: [MachineValidationEvent<ActionConstrainedMixedOutcomeModel>] = []
+        let result = try MachineValidator.run(initialMachines: [initial], maximumStates: 2,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: true) {
+            events.append($0)
+        }
+        #expect(result.completion == .evaluationFailure(.divisionByZero))
+        #expect(result.states == 2 && result.edges == 1)
+        #expect(events.count == 4)
+        guard events.count == 4 else { return }
+        if case .edge(source: 0, action: .pick, target: 1) = events[2] {} else {
+            Issue.record("The successful branch must be retained before its later failure")
+        }
+        if case .evaluationFailure(source: 0, action: .pick, reason: .divisionByZero) = events[3] {} else {
+            Issue.record("The later branch must still report its evaluation failure")
+        }
+    }
+
     @Test("The obsolete formal explorer refuses to omit action constraints")
     func legacyExplorerRejectsActionConstraint() throws {
         let compilation = try ActionConstrainedCounter.spec.compile()

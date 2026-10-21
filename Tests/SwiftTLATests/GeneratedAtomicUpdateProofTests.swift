@@ -856,6 +856,32 @@ struct GeneratedAtomicUpdateProofTests {
         }
     }
 
+    @Test("Sequence head retains its compiled array operand")
+    func sequenceHeadRetainsOperand() throws {
+        let compiled = try EmptySequenceReadMachine.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        #expect(program.behavior.actions.count == 2)
+        let action = try #require(program.behavior.actions.first)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "EmptySequenceReadMachine", program: program))
+        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames, parts: writes)
+        let wrongSource = visitor.description.replacingOccurrences(
+            of: "sequenceHead(state.state.sequence)", with: "sequenceHead([Int]())")
+        #expect(wrongSource != visitor.description)
+        let mutant = try #require(Parser.parse(source: wrongSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(mutant, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("Sequence head accepted a changed array operand")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+    }
+
     @Test("Sequence tail retains its compiled array operand")
     func sequenceTailRetainsOperand() throws {
         let compiled = try EmptySequenceReadMachine.spec.compile()

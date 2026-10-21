@@ -465,25 +465,29 @@ public enum MachineValidator {
                 }
                 let hasSuccessor: Bool
                 if Machine.hasActionConstraint {
-                    var candidates: [(action: Machine.Action, machine: Machine)] = []
-                    do {
-                        _ = try machine.visitValidationOutcomes(checking: &context, { action, successor in
-                            candidates.append((action, successor))
-                            return true
-                        }, onEvaluationFailure: evaluationFailure)
-                    } catch {
-                        throw error
-                    }
-                    hasSuccessor = !candidates.isEmpty
-                    if decision == nil {
-                        for (action, successor) in candidates {
+                    var outcomes: [(action: Machine.Action, result: Result<Machine, NativeMachineEvaluationError>)] = []
+                    var foundSuccessor = false
+                    _ = try machine.visitValidationOutcomes(checking: &context, { action, successor in
+                        foundSuccessor = true
+                        outcomes.append((action, .success(successor)))
+                        return true
+                    }, onEvaluationFailure: { action, reason in
+                        outcomes.append((action, .failure(reason)))
+                        return !stopOnViolation
+                    })
+                    hasSuccessor = foundSuccessor
+                    outcomeLoop: for (action, outcome) in outcomes {
+                        switch outcome {
+                        case .success(let successor):
                             guard sameConfiguration(successor) else { throw ExplorationError.configurationMismatch }
                             let constraintStartedAt = DispatchTime.now().uptimeNanoseconds
                             let permitted = try machine.satisfiesActionConstraint(to: successor, checking: &context)
                             let constraintDuration = DispatchTime.now().uptimeNanoseconds - constraintStartedAt
                             constraintNanoseconds += constraintDuration
                             processingNanoseconds += constraintDuration
-                            if try !inspect(action, successor, permitted: permitted) { break }
+                            if try !inspect(action, successor, permitted: permitted) { break outcomeLoop }
+                        case .failure(let reason):
+                            if try !evaluationFailure(action, reason) { break outcomeLoop }
                         }
                     }
                 } else {
