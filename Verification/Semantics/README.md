@@ -1163,11 +1163,18 @@ the compiler and output obligations.
 
 `OrderedAssignmentLoweringTests` independently interprets straight-line root
 copies and literal assignments over symbolic complete states, then checks the
-real lowered action for every prefix of a repeated-write sequence and for the
-accepted `GeneratedAtomicCopyProofModel` source. A stale pre-step read changes
-the symbolic result and is rejected. This checks that source-to-lowered subset;
-it is not a theorem about the Swift checker, arbitrary expressions or failures,
-or either general emitted-output link.
+real frame-completed lowered action for every prefix of a repeated-write
+sequence and for the accepted `GeneratedAtomicCopyProofModel` source. A stale
+pre-step read changes the symbolic result and is rejected. The same checker
+reads the actual emitted TLA+ `copy` declaration with a fully consumed,
+restricted grammar and compares its symbolic complete-state result. A stale
+rendered read also differs. It
+requires an assignment or `UNCHANGED` for every state variable, so a bare
+`TRUE` cannot masquerade as an unchanged transition. This checks the named
+source-to-lowered and source-to-rendered instances, not every
+accepted expression or emitted action. The reader and Swift compiler/runtime
+remain trusted; arbitrary expression failures and the general Swift and TLA+
+output links are open.
 
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is
