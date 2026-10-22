@@ -2493,6 +2493,22 @@ pin, and TLAPS backend assumptions. Other nested shape mismatches, mixed source
 unions, and general checked-view emission remain unproved; there is no hosted
 TLC/native failure-verdict parity claim for this fixture yet.
 
+The accepted `FiniteCheckedRecordView` model makes the same checked request
+from a finite enum whose sole value is represented by the integer `1`.
+The source rule reports `noMatchingCase` and no successor. The generated Swift
+machine throws without changing state; the test pins the complete emitted
+TLA+ module and selected evaluation check. The renderer now resolves the
+named finite domain before constructing its shape predicate, so this
+disjoint domain produces `FALSE` rather than the undefined `DOMAIN level`.
+`FiniteCheckedRecordViewProof.tla` imports that exact module and proves the
+initial state, complete labeled steps, failure verdict, and an omitted-guard
+control that adds an edge (nine local TLAPS obligations). This closes this
+finite-enum instance under the macro parser, Swift compiler/runtime, output
+pin, finite-domain encoding, and TLAPS backend assumptions. The generated
+Swift visitor is exercised but not independently pinned; arbitrary finite
+domains, general checked-view emission, and hosted failure-verdict parity
+remain unproved.
+
 The accepted `NestedCheckedRecordView` model checks an `Int` field through a
 record view that expects a sequence. Generated Swift reports `noMatchingCase`
 without changing state. The output test pins the entire emitted TLA+ module and

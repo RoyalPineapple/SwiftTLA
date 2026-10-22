@@ -590,6 +590,13 @@ struct CompiledTLARenderer {
         return (try state(condition), defined)
     }
 
+    private func checkedShapePredicate(_ shape: FormalValueShape, value: String,
+                                       sourceType: CompiledValueType) throws -> String {
+        try shape.predicate(for: value, sourceType: sourceType,
+            namedMembers: { enums.domains[$0]?.sorted() },
+            renderFinite: { try $0.rendered(using: layout).description })
+    }
+
     func expressionEvaluationFailures(
         _ value: CompiledExpression, stateNames: [VariableID: String] = [:]
     ) throws -> [RenderedEvaluationFailure] {
@@ -673,8 +680,8 @@ struct CompiledTLARenderer {
                 guard value.children.count == 1,
                       let preceding = try collect(value.children[0]) else { return nil }
                 let operand = try state(value.children[0], stateNames: stateNames)
-                return preceding + [.noMatchingCase(guard_: shape.predicate(for: operand,
-                    sourceType: value.children[0].resultType))]
+                return preceding + [.noMatchingCase(guard_: try checkedShapePredicate(shape,
+                    value: operand, sourceType: value.children[0].resultType))]
             case .ifThenElse:
                 guard value.children.count == 3,
                       let condition = try collect(value.children[0]),
@@ -1140,7 +1147,8 @@ struct CompiledTLARenderer {
                 var name = "_checkedValue"
                 let shapeNames = String(describing: shape)
                 while operand.contains(name) || shapeNames.contains(name) { name += "_" }
-                parts.append("(LET \(name) == \(operand) IN CASE \(shape.predicate(for: name, sourceType: sourceType)) -> \(name))")
+                let predicate = try checkedShapePredicate(shape, value: name, sourceType: sourceType)
+                parts.append("(LET \(name) == \(operand) IN CASE \(predicate) -> \(name))")
             case .expression(let expression):
                 switch expression.operation {
                 case .setMap, .unionAll:

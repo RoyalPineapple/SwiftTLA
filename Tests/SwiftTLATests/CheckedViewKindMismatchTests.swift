@@ -8,25 +8,29 @@ import SwiftSyntax
 @Suite("Checked view kind mismatch")
 struct CheckedViewKindMismatchTests {
     @Test("Nested collection views reject disjoint member kinds without partial predicates")
-    func nestedCollectionViewsRemainTotal() {
-        let set = FormalValueShape.set(.sequence(.integer))
+    func nestedCollectionViewsRemainTotal() throws {
+        let set = try FormalValueShape.set(.sequence(.integer))
             .predicate(for: "members", sourceType: .set(.int))
         #expect(set.contains(": FALSE"))
         #expect(!set.contains("DOMAIN _shapeMember0"))
 
-        let function = FormalValueShape.function(key: .integer, value: .sequence(.integer))
+        let function = try FormalValueShape.function(key: .integer, value: .sequence(.integer))
             .predicate(for: "mapping", sourceType: .dictionary(.int, .int))
         #expect(function.contains("/\\ (FALSE)"))
         #expect(!function.contains("DOMAIN mapping[_shapeMember0]"))
 
-        let tuple = FormalValueShape.tuple([.sequence(.integer)])
+        let tuple = try FormalValueShape.tuple([.sequence(.integer)])
             .predicate(for: "pair", sourceType: .tuple([.int]))
         #expect(tuple.contains("/\\ (FALSE)"))
         #expect(!tuple.contains("DOMAIN pair[1]"))
 
-        let wrongLength = FormalValueShape.tuple([.integer, .integer])
+        let wrongLength = try FormalValueShape.tuple([.integer, .integer])
             .predicate(for: "pair", sourceType: .tuple([.int]))
         #expect(wrongLength == "FALSE")
+
+        #expect(throws: CompilationDiagnostic.self) {
+            try FormalValueShape.record([]).predicate(for: "unknown", sourceType: .named("Missing"))
+        }
     }
 
     @Test("A scalar-to-record checked view reports a matched failure without a successor")
@@ -45,6 +49,27 @@ struct CheckedViewKindMismatchTests {
         #expect(source.contains("__SwiftTLANoMatchingCaseFailure0"))
         let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/IncompatibleCheckedRecordView.tla")
+            .standardizedFileURL
+        #expect(source == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let cfg = try #require(rendered.tlaBundle(checking: [], checkDeadlock: false).root.cfg)
+        #expect(cfg.contains("INVARIANT __SwiftTLAEvaluationOK\n"))
+    }
+
+    @Test("A finite scalar-to-record view reports a total formal failure")
+    func finiteScalarToRecordFailure() throws {
+        var machine = try FiniteCheckedRecordView.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.noMatchingCase) {
+            try machine.send(.inspect)
+        }
+        #expect(machine.snapshot == before)
+
+        let rendered = try FiniteCheckedRecordView.render()
+        #expect(rendered.intrinsicInvariantNames == ["__SwiftTLAEvaluationOK"])
+        let source = rendered.tlaBundle.root.tla
+        #expect(!source.contains("DOMAIN level"))
+        let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/FiniteCheckedRecordView.tla")
             .standardizedFileURL
         #expect(source == (try String(contentsOf: proofInput, encoding: .utf8)))
         let cfg = try #require(rendered.tlaBundle(checking: [], checkDeadlock: false).root.cfg)

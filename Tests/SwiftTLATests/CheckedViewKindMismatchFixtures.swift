@@ -18,6 +18,28 @@ struct IncompatibleCheckedRecordView {
 }
 
 @TLAModel
+struct FiniteCheckedRecordView {
+    enum Step: String, CaseIterable { case inspect }
+    enum Level: Int, CaseIterable, FiniteTLAValueDomain {
+        case one = 1
+        static var defaultValue: Self { .one }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .int(rawValue) }
+    }
+    struct Record: Hashable, Sendable { let count: Int }
+
+    static var spec: TLASpec {
+        #spec("FiniteCheckedRecordView") {
+            let model = Algorithm(label: "FiniteCheckedRecordView", scoped: { scope in
+                let level = scope.sharedVar(_name: "level", initial: Level.one)
+                Do(Step.inspect, when: level.expr.assuming(Record.self).count == 0) {}
+            })
+            model
+        }
+    }
+}
+
+@TLAModel
 struct NestedCheckedRecordView {
     enum Step: String, CaseIterable { case inspect }
     struct Source: Hashable, Sendable { let nested: Int }
