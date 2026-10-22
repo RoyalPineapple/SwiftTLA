@@ -1178,6 +1178,16 @@ every accepted expression or emitted action. The reader and Swift
 compiler/runtime remain trusted; arbitrary expression failures and the
 general Swift and TLA+ output links are open.
 
+Compilation now independently checks the source-to-lowered complete-state rule
+for independent, unparameterized `Do` steps containing only root copies and
+literal assignments. It folds source reads over symbolic prior-state terms,
+interprets the lowered action separately, and rejects a different result;
+omitted and explicit unchanged writes have the same meaning. A stale-read
+mutation is rejected by this compiler gate. The gate does not certify the
+typed compiled transformation, emitter implementations, arbitrary expressions,
+or other action forms. Its Swift implementation is part of the trusted base
+until the checker itself is verified.
+
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is
 placed at history index `Len(prefix)`. TLAPS proves that restricting a full

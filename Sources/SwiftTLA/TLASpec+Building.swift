@@ -117,6 +117,8 @@ extension TLASpec {
 
     for step in sourceAtomicSteps {
       let lowered = try AlgorithmLowerer.lowerAtomicStep(step)
+      try StraightLineAssignmentCheck.verify(step, lowered: lowered.action,
+        stateRoots: Set(variables.map(\.name)))
       actions.append(.init(name: step.model.label.name, body: lowered.action, bindings: step.bindings))
       invariants += lowered.assertions.enumerated().map {
         NamedStatePredicate(name: "__step_assert_\(step.model.label.name)_\($0.offset)",
