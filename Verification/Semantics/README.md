@@ -1200,7 +1200,11 @@ checks connect the `OrderedDoTransitionEquivalence` and `OrderedDoLabeledEdges`
 rules to actual compiler outputs for this restricted action class, subject to
 the checkers' correctness and the Swift compiler/runtime. Conversions, other
 expressions, initialization, and selected temporal outcomes remain separate
-obligations; none of these checker implementations is formally verified.
+obligations; none of these checker implementations is formally verified. The
+native emitter additionally checks that each unparameterized action's emitted
+dispatch reaches its compiled visitor and that its formal call has the compiled
+label. Wrong-route and wrong-label mutations are rejected. Candidate
+enumeration and parameterized argument routing remain open output obligations.
 
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is
