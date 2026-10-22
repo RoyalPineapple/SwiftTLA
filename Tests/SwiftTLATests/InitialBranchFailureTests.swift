@@ -63,6 +63,24 @@ struct InitialBranchFailureTests {
         #expect(compiled.firstFailure == generated.firstFailure)
     }
 
+    @Test("An out-of-domain function read retains the valid initial branch")
+    func preservesValidFunctionReadSibling() throws {
+        let generated = try DependentFunctionReadInitialModel.initialOutcomes()
+        #expect(generated.states.count == 1)
+        #expect(generated.states[0].state.key == 0)
+        #expect(generated.states[0].state.result == 42)
+        #expect(generated.firstFailure == .functionArgumentOutsideDomain)
+
+        let compilation = try DependentFunctionReadInitialModel.spec.compile()
+        let compiled = try CompiledRuntime(compilation: compilation).initialOutcomes()
+        #expect(compiled.states.count == 1)
+        #expect(compiled.firstFailure == generated.firstFailure)
+        let key = try #require(compilation.layout.testVariableID(named: "key"))
+        let result = try #require(compilation.layout.testVariableID(named: "result"))
+        #expect(try compiled.states[0].value(for: key) == .integer(0))
+        #expect(try compiled.states[0].value(for: result) == .integer(42))
+    }
+
     @Test("An invalid compiled value shape is not relabeled as a model failure")
     func rejectsUnmappedFailure() {
         #expect(throws: EvalError.expected(.integer, actual: [])) {

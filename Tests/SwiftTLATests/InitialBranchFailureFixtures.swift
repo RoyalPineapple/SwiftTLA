@@ -54,3 +54,20 @@ struct InitialFailureOrderModel {
         }
     }
 }
+
+@TLAModel
+struct DependentFunctionReadInitialModel {
+    enum Step: String, CaseIterable { case stay }
+
+    static var spec: TLASpec {
+        #spec {
+            let algorithm = Algorithm(label: "DependentFunctionReadInitial", scoped: { scope in
+                let table = scope.sharedVar(initial: [0: 42])
+                let key = scope.sharedVar(in: SetExpr<Int>.literal(0, 1))
+                let result = scope.sharedVar(initial: table[key])
+                Do(Step.stay) { Assign(result, to: result) }
+            })
+            algorithm
+        }
+    }
+}
