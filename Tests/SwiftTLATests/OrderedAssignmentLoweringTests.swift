@@ -220,7 +220,26 @@ struct OrderedAssignmentLoweringTests {
         ]
         for prefix in 0...statements.count {
             let source = Array(statements.prefix(prefix))
-            #expect(try loweredResult(lower(source, roots: roots), roots: roots) == sourceResult(source, roots: roots))
+            let expected = try sourceResult(source, roots: roots)
+            #expect(try loweredResult(lower(source, roots: roots), roots: roots) == expected)
+
+            var specification = TLASpec(name: "OrderedAssignmentPrefix", variables: roots.map {
+                NamedVar(name: $0, initial: .int(0))
+            }, actions: [], invariants: [])
+            specification.sourceAtomicSteps = [AtomicStep(model: .init(
+                label: .init(name: "advance"), statements: source))]
+            let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+            let compiled = try #require(program.behavior.actions.first)
+            #expect(try compiledResult(compiled.body, program: program) == expected)
+            var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+                typeName: "OrderedAssignmentPrefix", program: program))
+            _ = try emitter.machineMembers()
+
+            let module = try program.renderModule().renderedModuleSource
+            let header = "advance == "
+            let declarations = module.split(separator: "\n").filter { $0.hasPrefix(header) }
+            let declaration = try #require(declarations.count == 1 ? declarations[0].dropFirst(header.count) : nil)
+            #expect(try renderedResult(String(declaration), roots: roots) == expected)
         }
     }
 

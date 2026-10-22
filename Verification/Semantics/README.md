@@ -1163,8 +1163,9 @@ the compiler and output obligations.
 
 `OrderedAssignmentLoweringTests` independently interprets straight-line root
 copies and literal assignments over symbolic complete states, then checks the
-real frame-completed lowered action for every prefix of a repeated-write
-sequence and for the accepted `GeneratedAtomicCopyProofModel` source. A stale
+real frame-completed lowered action, typed compiled action, and rendered TLA+
+action for every prefix of a repeated-write sequence. Each prefix also passes
+through the real Swift emitter's output checks. A stale
 pre-step read changes the symbolic result and is rejected. It also interprets
 that model's actual typed compiled action and rejects the same stale read at
 the compiled boundary. The same checker reads the actual emitted TLA+ `copy`
