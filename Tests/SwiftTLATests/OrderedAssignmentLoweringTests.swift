@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import SwiftTLA
+@testable import SwiftTLAPlugin
 
 @Suite("Ordered assignment lowering")
 struct OrderedAssignmentLoweringTests {
@@ -76,6 +77,56 @@ struct OrderedAssignmentLoweringTests {
         let step = AtomicStep(model: .init(label: .init(name: "advance"), statements: statements))
         let action = try AlgorithmLowerer.lowerAtomicStep(step).action
         return ActionNormalization.complete(action, variables: roots.map { NamedVar(name: $0, initial: .int(0)) })
+    }
+
+    private func compiledResult(
+        _ action: CompiledActionExpr, program: CompiledProgram
+    ) throws -> [String: Symbol] {
+        let names = Dictionary(uniqueKeysWithValues: program.layout.variables.map { ($0.id, $0.declaration.name) })
+        let original = initial(program.layout.variables.map(\.declaration.name))
+        var writes: [String: Symbol] = [:]
+        func value(_ expression: CompiledExpression, bindings: [BinderID: Symbol]) throws -> Symbol {
+            guard expression.children.isEmpty else { throw InvalidShape.lowered }
+            switch expression.operation {
+            case .stateVariable(let id):
+                guard let name = names[id], let current = original[name] else { throw InvalidShape.lowered }
+                return current
+            case .boundValue(let id):
+                guard let bound = bindings[id] else { throw InvalidShape.lowered }
+                return bound
+            case .value(.integer(let number)): return .literal(.int(number))
+            case .value(.boolean(let boolean)): return .literal(.bool(boolean))
+            default: throw InvalidShape.lowered
+            }
+        }
+        func visit(_ action: CompiledActionExpr, bindings: [BinderID: Symbol]) throws {
+            switch action {
+            case .define(let id, let expression, let body):
+                guard bindings[id] == nil else { throw InvalidShape.lowered }
+                var nested = bindings
+                nested[id] = try value(expression, bindings: bindings)
+                try visit(body, bindings: nested)
+            case .and(let left, let right):
+                try visit(left, bindings: bindings)
+                try visit(right, bindings: bindings)
+            case .guard_(let predicate):
+                guard try value(predicate, bindings: bindings) == .literal(.bool(true)) else {
+                    throw InvalidShape.lowered
+                }
+            case .assign(let id, let expression):
+                guard let name = names[id], writes[name] == nil else { throw InvalidShape.lowered }
+                writes[name] = try value(expression, bindings: bindings)
+            case .unchanged(let id):
+                guard let name = names[id], let previous = original[name], writes[name] == nil else {
+                    throw InvalidShape.lowered
+                }
+                writes[name] = previous
+            default: throw InvalidShape.lowered
+            }
+        }
+        try visit(action, bindings: [:])
+        guard writes.count == original.count else { throw InvalidShape.lowered }
+        return writes
     }
 
     private func renderedResult(_ declaration: String, roots: [String]) throws -> [String: Symbol] {
@@ -185,8 +236,22 @@ struct OrderedAssignmentLoweringTests {
             throw InvalidShape.lowered
         }
         let stale = ActionExpr.define(first, read, .define(second, .variable("first"), writes))
-        #expect(try loweredResult(action, roots: roots) == sourceResult(source, roots: roots))
-        #expect(try loweredResult(stale, roots: roots) != sourceResult(source, roots: roots))
+        let expected = try sourceResult(source, roots: roots)
+        #expect(try loweredResult(action, roots: roots) == expected)
+        #expect(try loweredResult(stale, roots: roots) != expected)
+
+        let compiled = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let compiledAction = try #require(compiled.behavior.actions.first)
+        #expect(try compiledResult(compiledAction.body, program: compiled) == expected)
+        guard case .define(let firstID, let firstRead, .define(let secondID, let secondRead, let compiledWrites))
+                = compiledAction.body,
+              let firstVariable = compiled.layout.variables.first(where: { $0.declaration.name == "first" })
+        else { throw InvalidShape.lowered }
+        let oldStateRead = CompiledExpression(operation: .stateVariable(firstVariable.id),
+            resultType: secondRead.resultType, children: [])
+        let staleCompiled = CompiledActionExpr.define(firstID, firstRead,
+            .define(secondID, oldStateRead, compiledWrites))
+        #expect(try compiledResult(staleCompiled, program: compiled) != expected)
     }
 
     @Test("The emitted TLA assignment action has the source's complete symbolic result")
