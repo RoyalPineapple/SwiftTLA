@@ -16,3 +16,20 @@ struct IncompatibleCheckedRecordView {
         }
     }
 }
+
+@TLAModel
+struct NestedCheckedRecordView {
+    enum Step: String, CaseIterable { case inspect }
+    struct Source: Hashable, Sendable { let nested: Int }
+    struct Expected: Hashable, Sendable { let nested: [Int] }
+
+    static var spec: TLASpec {
+        #spec("NestedCheckedRecordView") {
+            let model = Algorithm(label: "NestedCheckedRecordView", scoped: { scope in
+                let record = scope.sharedVar(_name: "record", initial: Source(nested: 1))
+                Do(Step.inspect, when: record.expr.assuming(Expected.self).nested.count == 0) {}
+            })
+            model
+        }
+    }
+}

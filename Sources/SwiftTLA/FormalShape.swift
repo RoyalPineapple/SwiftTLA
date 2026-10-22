@@ -79,8 +79,8 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         if let sourceType, !sourceType.canHaveOuterShape(self) { return "FALSE" }
         var bound = "_shapeMember\(depth)"
         while value.contains(bound) || String(describing: self).contains(bound) { bound += "_" }
-        func nested(_ shape: Self, _ value: String) -> String {
-            shape.predicate(for: value, depth: depth + 1)
+        func nested(_ shape: Self, _ value: String, sourceType: CompiledValueType? = nil) -> String {
+            shape.predicate(for: value, sourceType: sourceType, depth: depth + 1)
         }
         switch self {
         case .integer: return "\(value) \\in Int"
@@ -96,8 +96,13 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         case .function(let key, let item):
             return "(\\A \(bound) \\in DOMAIN \(value) : (\(nested(key, bound))) /\\ (\(nested(item, "\(value)[\(bound)]"))))"
         case .record(let fields):
+            let sourceFields = sourceType?.recordFields
+            if let sourceFields, Set(sourceFields.map(\.name)) != Set(fields.map(\.name)) { return "FALSE" }
             let keys = fields.map { TLAValue.string($0.name).description }.joined(separator: ", ")
-            let checks = fields.map { nested($0.shape, "\(value)[\(TLAValue.string($0.name).description)]") }
+            let checks = fields.map { field in
+                nested(field.shape, "\(value)[\(TLAValue.string(field.name).description)]",
+                    sourceType: sourceFields?.first { $0.name == field.name }?.type)
+            }
             return "(DOMAIN \(value) = {\(keys)}" + checks.map { " /\\ (\($0))" }.joined() + ")"
         case .union:
             let ordered = possibleShapes.filter(\.isScalar) + possibleShapes.filter { !$0.isScalar }

@@ -2489,9 +2489,21 @@ total `FALSE` shape guard instead of applying `DOMAIN` to the integer.
 the initial state, complete labeled steps, failure verdict, and an omitted-guard
 control that adds an edge. All nine TLAPS obligations pass locally. This closes
 the named scalar-to-record mismatch under the Swift compiler/runtime, output
-pin, and TLAPS backend assumptions. Nested shape mismatches, mixed source
+pin, and TLAPS backend assumptions. Other nested shape mismatches, mixed source
 unions, and general checked-view emission remain unproved; there is no hosted
 TLC/native failure-verdict parity claim for this fixture yet.
+
+The accepted `NestedCheckedRecordView` model checks an `Int` field through a
+record view that expects a sequence. Generated Swift reports `noMatchingCase`
+without changing state. The output test pins the entire emitted TLA+ module and
+its selected evaluation check; the field's compiled source type makes the
+nested guard `FALSE`, avoiding `DOMAIN` on the integer. The independent source
+rule and exact module agree on initial state, complete labeled steps, and
+failure verdict in `NestedCheckedRecordViewProof.tla` (nine local obligations).
+Removing the guard adds an edge. This closes only this named nested-field case
+under the same Swift compiler/runtime, output-pin, and TLAPS assumptions.
+Other nested shapes, mixed source unions, and the general checked-view rule
+remain open; no hosted TLC/native failure-verdict parity is claimed here.
 
 ## Independent evidence
 
