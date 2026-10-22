@@ -1184,9 +1184,14 @@ literal assignments. It folds source reads over symbolic prior-state terms,
 interprets the lowered action separately, and rejects a different result;
 omitted and explicit unchanged writes have the same meaning. A stale-read
 mutation is rejected by this compiler gate. The gate does not certify the
-typed compiled transformation, emitter implementations, arbitrary expressions,
-or other action forms. Its Swift implementation is part of the trusted base
-until the checker itself is verified.
+emitter implementations, arbitrary expressions, or other action forms. A
+second independent gate checks unparameterized actions with distinct binding
+names in the same total Int/Boolean copy-and-literal grammar as
+`CompiledLowerer` converts source names into variable and binder IDs; a wrong
+compiled read is rejected. It runs before type checking,
+so inserted conversions and the final resolved typed program remain separate
+obligations. Both gate implementations are part of the trusted base until
+verified.
 
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is
