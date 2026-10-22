@@ -113,8 +113,42 @@ import SwiftSyntax
         let wrongRoute = dispatch.description.replacingOccurrences(
             of: "Self._visitSuccessors1", with: "Self._visitSuccessors0")
         #expect(wrongRoute != dispatch.description)
-        #expect(tokens((visitors.map(\.description) + [wrongRoute, formalCall.description])
-            .joined(separator: "\n")) != tokens(expected))
+        let routes = compiled.api.actions.map { api in
+            (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
+             formalName: compiled.program.layout.actions[api.compiledAction.ordinal].renderedName)
+        }
+        try verifyGeneratedActionRoutingOutput(members, routes: routes, configurationArguments: "")
+        let wrongDispatch = try #require(Parser.parse(source: wrongRoute)
+            .statements.first?.item.as(DeclSyntax.self))
+        var wrongMembers = members
+        let dispatchIndex = try #require(wrongMembers.firstIndex {
+            $0.description.contains("private func _visitSuccessors(for action: Action,")
+        })
+        wrongMembers[dispatchIndex] = wrongDispatch
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
+                configurationArguments: "")
+            Issue.record("A generated action routed to the wrong compiled visitor")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.route."))
+        }
+        let wrongLabel = formalCall.description.replacingOccurrences(
+            of: "name: \"copy\"", with: "name: \"wrong\"")
+        #expect(wrongLabel != formalCall.description)
+        let wrongFormalCall = try #require(Parser.parse(source: wrongLabel)
+            .statements.first?.item.as(DeclSyntax.self))
+        let formalIndex = try #require(wrongMembers.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "formalCall"
+        })
+        wrongMembers = members
+        wrongMembers[formalIndex] = wrongFormalCall
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
+                configurationArguments: "")
+            Issue.record("A generated action used the wrong formal label")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.label.copy")
+        }
     }
 
     @Test("Later reads observe earlier writes in one atomic transition")

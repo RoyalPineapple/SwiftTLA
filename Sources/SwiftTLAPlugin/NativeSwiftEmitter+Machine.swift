@@ -815,7 +815,7 @@ extension NativeSwiftEmitter {
             enumeration.append("do {\n" + loops + "result.append(\(actionValue))\n" + closing + "}\n")
             visitorEnumeration.append("do {\n" + loops + "try _visitAction(\(actionValue))\n" + closing + "}\n")
         }
-        return try nativeDeclarations("""
+        let declarations = try nativeDeclarations("""
         public func visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>,
                                     _ visit: (Self) throws -> Bool) throws -> Bool {
             var run: CheckingContext<CheckingRegisters>? = context
@@ -929,6 +929,15 @@ extension NativeSwiftEmitter {
             return Transition(action: action, before: before, after: state)
         }
         """)
+        let directRoutes = model.api.actions.compactMap { api -> (name: String, id: Int, formalName: String)? in
+            let action = program[api.compiledAction]
+            guard api.bindings.isEmpty, action.bindings.isEmpty else { return nil }
+            return (api.swiftIdentifier, action.id.ordinal,
+                program.layout.actions[action.id.ordinal].renderedName)
+        }
+        try verifyGeneratedActionRoutingOutput(declarations, routes: directRoutes,
+            configurationArguments: configurationArguments)
+        return declarations
     }
 
     mutating func propertyDeclarations(configurationParameters: String) throws -> [DeclSyntax] {
@@ -1475,6 +1484,75 @@ func verifyGeneratedUpdateApplyOutput(
             actual: "the generated apply method differs from the checked rule",
             nextSafeAction: "Report this native code generation failure."
         )
+    }
+}
+
+func verifyGeneratedActionRoutingOutput(
+    _ declarations: [DeclSyntax], routes: [(name: String, id: Int, formalName: String)],
+    configurationArguments: String
+) throws {
+    guard !routes.isEmpty else { return }
+    func invalid(_ path: String, _ expected: String) -> CompilationDiagnostic {
+        CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation, path: path,
+            expected: expected, actual: "the emitted action route or label differs",
+            nextSafeAction: "Report this native action routing failure."
+        )
+    }
+    func cases(of name: String) throws -> [String: [String]] {
+        let methods = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }.filter {
+            $0.name.text == name && $0.signature.parameterClause.parameters.first?.firstName.text == "for"
+        }
+        guard methods.count == 1, let method = methods.first else {
+            throw invalid("native.action.routing.method", "one generated \(name)(for action:) method")
+        }
+        guard method.body?.statements.count == 1,
+              let statement = method.body?.statements.first else {
+            throw invalid("native.action.routing.switch", "one direct switch over the selected action")
+        }
+        let expression: ExprSyntax?
+        if case .expr(let value) = statement.item {
+            expression = value
+        } else {
+            expression = statement.item.as(ExpressionStmtSyntax.self)?.expression
+        }
+        guard let choice = expression?.as(SwitchExprSyntax.self),
+              choice.subject.as(DeclReferenceExprSyntax.self)?.baseName.text == "action" else {
+            throw invalid("native.action.routing.switch", "one direct switch over the selected action")
+        }
+        var result: [String: [String]] = [:]
+        for element in choice.cases {
+            guard let branch = element.as(SwitchCaseSyntax.self),
+                  let label = branch.label.as(SwitchCaseLabelSyntax.self),
+                  label.caseItems.count == 1, let item = label.caseItems.first,
+                  item.whereClause == nil,
+                  let pattern = item.pattern.as(ExpressionPatternSyntax.self),
+                  let member = pattern.expression.as(MemberAccessExprSyntax.self),
+                  member.base == nil else { continue }
+            let identifier = member.declName.baseName.sourceIdentifierName
+            guard result[identifier] == nil else {
+                throw invalid("native.action.routing", "one case per action identity")
+            }
+            result[identifier] = Array(branch.statements.tokens(viewMode: .sourceAccurate)).map(\.text)
+        }
+        return result
+    }
+    func tokens(_ source: String) -> [String] {
+        Array(Parser.parse(source: source).tokens(viewMode: .sourceAccurate))
+            .filter { $0.tokenKind != .endOfFile }.map(\.text)
+    }
+    let dispatched = try cases(of: "_visitSuccessors")
+    let labeled = try cases(of: "formalCall")
+    for route in routes {
+        let name = route.name.filter { $0 != "`" }
+        let expectedDispatch = tokens("try Self._visitSuccessors\(route.id)(from: _execution\(configurationArguments), checking: &context, visit)")
+        guard dispatched[name] == expectedDispatch else {
+            throw invalid("native.action.route.\(name)", "the complete successor route for compiled action \(route.id)")
+        }
+        let expectedLabel = tokens("return FormalActionCall(name: \(String(reflecting: route.formalName)), arguments: [])")
+        guard labeled[name] == expectedLabel else {
+            throw invalid("native.action.label.\(name)", "the compiled formal action label \(route.formalName)")
+        }
     }
 }
 
