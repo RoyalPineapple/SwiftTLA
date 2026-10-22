@@ -33,3 +33,18 @@ struct NestedCheckedRecordView {
         }
     }
 }
+
+@TLAModel
+struct NestedCheckedSequenceView {
+    enum Step: String, CaseIterable { case inspect }
+
+    static var spec: TLASpec {
+        #spec("NestedCheckedSequenceView") {
+            let model = Algorithm(label: "NestedCheckedSequenceView", scoped: { scope in
+                let numbers = scope.sharedVar(_name: "numbers", initial: [1])
+                Do(Step.inspect, when: numbers.expr.assuming(Array<Array<Int>>.self) == [[1]]) {}
+            })
+            model
+        }
+    }
+}

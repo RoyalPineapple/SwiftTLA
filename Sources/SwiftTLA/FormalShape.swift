@@ -89,7 +89,10 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         case .finite(_, let values): return "\(value) \\in {\(values.map(\.description).joined(separator: ", "))}"
         case .set(let item): return "(\\A \(bound) \\in \(value) : \(nested(item, bound)))"
         case .sequence(let item):
-            return "(DOMAIN \(value) = 1..Len(\(value)) /\\ (\\A \(bound) \\in DOMAIN \(value) : \(nested(item, "\(value)[\(bound)]"))))"
+            let elementType: CompiledValueType?
+            if case .array(let element)? = sourceType { elementType = element }
+            else { elementType = nil }
+            return "(DOMAIN \(value) = 1..Len(\(value)) /\\ (\\A \(bound) \\in DOMAIN \(value) : \(nested(item, "\(value)[\(bound)]", sourceType: elementType))))"
         case .tuple(let items):
             let checks = items.enumerated().map { nested($0.element, "\(value)[\($0.offset + 1)]") }
             return "(DOMAIN \(value) = 1..\(items.count)" + checks.map { " /\\ (\($0))" }.joined() + ")"

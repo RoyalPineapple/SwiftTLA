@@ -2505,6 +2505,23 @@ under the same Swift compiler/runtime, output-pin, and TLAPS assumptions.
 Other nested shapes, mixed source unions, and the general checked-view rule
 remain open; no hosted TLC/native failure-verdict parity is claimed here.
 
+The accepted `NestedCheckedSequenceView` model starts with `numbers = <<1>>`
+and checks it as a sequence of sequences. Generated Swift reports
+`noMatchingCase` without changing state. The output test pins the generated
+Swift update visitor and the entire generated TLA+ module with its selected
+evaluation check; changing the Swift failure branch breaks that pin. The
+source array element type makes the nested predicate `FALSE` for each `Int`,
+avoiding a partial `DOMAIN` on an element. The empty-sequence case is not in
+this fixture's reachable-state proof.
+`NestedCheckedSequenceViewProof.tla` imports the exact module and proves the
+independent initial state, labeled steps, and failure verdict on the reachable
+source state, plus an omitted-guard control that adds an edge. All nine TLAPS
+obligations pass locally. This closes only that named sequence-element case
+under the macro parser, Swift compiler/runtime, tokenized output-pin, and
+TLAPS backend assumptions.
+Set, tuple, function, union-typed source elements, general sequence-view
+emission, and hosted TLC/native failure-verdict parity remain open.
+
 ## Independent evidence
 
 Keep purpose-built finite conformance models with hand-specified expected
