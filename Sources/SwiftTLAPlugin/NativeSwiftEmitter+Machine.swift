@@ -936,6 +936,7 @@ extension NativeSwiftEmitter {
                 program.layout.actions[action.id.ordinal].renderedName)
         }
         try verifyGeneratedActionRoutingOutput(declarations, routes: directRoutes,
+            actionCount: model.api.actions.count,
             configurationArguments: configurationArguments)
         return declarations
     }
@@ -1489,7 +1490,7 @@ func verifyGeneratedUpdateApplyOutput(
 
 func verifyGeneratedActionRoutingOutput(
     _ declarations: [DeclSyntax], routes: [(name: String, id: Int, formalName: String)],
-    configurationArguments: String
+    actionCount: Int, configurationArguments: String
 ) throws {
     guard !routes.isEmpty else { return }
     func invalid(_ path: String, _ expected: String) -> CompilationDiagnostic {
@@ -1553,6 +1554,36 @@ func verifyGeneratedActionRoutingOutput(
         guard labeled[name] == expectedLabel else {
             throw invalid("native.action.label.\(name)", "the compiled formal action label \(route.formalName)")
         }
+    }
+    guard routes.count == actionCount else { return }
+    let methods = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }
+    let candidates = methods.filter { $0.name.text == "_actions" }
+    let expectedCandidates = "var result: [Action] = []\n"
+        + routes.map { "do { result.append(.\($0.name)) }" }.joined(separator: "\n")
+        + "\nreturn result"
+    guard candidates.count == 1, let candidateBody = candidates.first?.body?.statements,
+          Array(candidateBody.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == tokens(expectedCandidates) else {
+        throw invalid("native.action.candidates", "every compiled action candidate once, in order")
+    }
+    let visitors = methods.filter {
+        $0.name.text == "_visitSuccessors"
+            && $0.signature.parameterClause.parameters.last?.firstName.text == "onEvaluationFailure"
+    }
+    guard visitors.count == 1, let statements = visitors.first?.body?.statements,
+          statements.count == 3,
+          let outer = Array(statements)[1].item.as(DoStmtSyntax.self),
+          let first = outer.body.statements.first,
+          first.item.as(FunctionDeclSyntax.self)?.name.text == "_visitAction" else {
+        throw invalid("native.action.enumeration", "one checking visitor for every compiled action")
+    }
+    let calls = Array(outer.body.statements.dropFirst())
+    guard calls.count == routes.count,
+          zip(calls, routes).allSatisfy({ item, route in
+              Array(item.tokens(viewMode: .sourceAccurate)).map(\.text)
+                == tokens("do { try _visitAction(.\(route.name)) }")
+          }) else {
+        throw invalid("native.action.enumeration", "every compiled action visited once, in order")
     }
 }
 
