@@ -1209,9 +1209,12 @@ list and native checking. Both delegations are checked. The visitor body is
 checked against the complete compiled action list, including the number and
 nesting of binding loops and the values passed to each public action argument. A
 duplicate-action mutation and a parameter-substitution mutation are rejected.
-The meaning of each parameterized domain expression and the parameterized
-dispatch and formal-call routes remain open output obligations; these checker
-implementations remain trusted.
+Every emitted action case is checked against its compiled identity: a selected
+parameterized action reaches the correct successor function and carries the
+correct formal action name. Wrong-target and wrong-label mutations are rejected.
+The meaning of each parameterized domain expression, the guard and argument
+values within those routes, and their formal value encodings remain open output
+obligations; these checker implementations remain trusted.
 
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is

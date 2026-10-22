@@ -20,7 +20,12 @@ struct TypedActionParameterTests {
         let candidates = compiled.api.actions.map { api in
             (name: api.swiftIdentifier, labels: api.bindings.filter(\.isPublic).map(\.swiftIdentifier))
         }
-        try verifyGeneratedActionRoutingOutput(members, routes: [],
+        let allActions = compiled.api.actions.map { api in
+            (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
+             formalName: compiled.program.layout.actions[api.compiledAction.ordinal].renderedName,
+             publicBindings: api.bindings.filter(\.isPublic).count)
+        }
+        try verifyGeneratedActionRoutingOutput(members, routes: [], allActions: allActions,
             candidates: candidates, configurationArguments: "")
 
         let sourceIndex = try #require(members.firstIndex {
@@ -35,11 +40,47 @@ struct TypedActionParameterTests {
         wrongMembers[sourceIndex] = try #require(Parser.parse(source: wrongSource)
             .statements.first?.item.as(DeclSyntax.self))
         do {
-            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: [],
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: [], allActions: allActions,
                 candidates: candidates, configurationArguments: "")
             Issue.record("A generated candidate replaced its bound argument with a constant")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.candidateSource")
+        }
+
+        let dispatchIndex = try #require(members.firstIndex {
+            $0.description.contains("private func _visitSuccessors(for action: Action,")
+        })
+        let ordinal = try #require(allActions.first?.id)
+        let wrongRoute = members[dispatchIndex].description.replacingOccurrences(
+            of: "Self._visitSuccessors\(ordinal)", with: "Self._visitSuccessors999")
+        #expect(wrongRoute != members[dispatchIndex].description)
+        wrongMembers = members
+        wrongMembers[dispatchIndex] = try #require(Parser.parse(source: wrongRoute)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: [], allActions: allActions,
+                candidates: candidates, configurationArguments: "")
+            Issue.record("A selected action reached the wrong compiled successor")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.route.choose")
+        }
+
+        let formalIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "formalCall"
+        })
+        let formalName = try #require(allActions.first?.formalName)
+        let wrongLabel = members[formalIndex].description.replacingOccurrences(
+            of: "name: \(String(reflecting: formalName))", with: "name: \"wrong\"")
+        #expect(wrongLabel != members[formalIndex].description)
+        wrongMembers = members
+        wrongMembers[formalIndex] = try #require(Parser.parse(source: wrongLabel)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: [], allActions: allActions,
+                candidates: candidates, configurationArguments: "")
+            Issue.record("A selected action used the wrong formal label")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.label.choose")
         }
     }
 

@@ -937,6 +937,11 @@ extension NativeSwiftEmitter {
                 program.layout.actions[action.id.ordinal].renderedName)
         }
         try verifyGeneratedActionRoutingOutput(declarations, routes: directRoutes,
+            allActions: model.api.actions.map { api in
+                (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
+                    formalName: program.layout.actions[api.compiledAction.ordinal].renderedName,
+                    publicBindings: api.bindings.filter(\.isPublic).count)
+            },
             candidates: model.api.actions.map { api in
                 (name: api.swiftIdentifier,
                     labels: api.bindings.filter(\.isPublic).map(\.swiftIdentifier))
@@ -1494,6 +1499,7 @@ func verifyGeneratedUpdateApplyOutput(
 
 func verifyGeneratedActionRoutingOutput(
     _ declarations: [DeclSyntax], routes: [(name: String, id: Int, formalName: String)],
+    allActions: [(name: String, id: Int, formalName: String, publicBindings: Int)],
     candidates candidatePlans: [(name: String, labels: [String])], configurationArguments: String
 ) throws {
     func invalid(_ path: String, _ expected: String) -> CompilationDiagnostic {
@@ -1503,7 +1509,7 @@ func verifyGeneratedActionRoutingOutput(
             nextSafeAction: "Report this native action routing failure."
         )
     }
-    func cases(of name: String) throws -> [String: [String]] {
+    func cases(of name: String) throws -> [String: CodeBlockItemListSyntax] {
         let methods = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }.filter {
             $0.name.text == name && $0.signature.parameterClause.parameters.first?.firstName.text == "for"
         }
@@ -1524,20 +1530,23 @@ func verifyGeneratedActionRoutingOutput(
               choice.subject.as(DeclReferenceExprSyntax.self)?.baseName.text == "action" else {
             throw invalid("native.action.routing.switch", "one direct switch over the selected action")
         }
-        var result: [String: [String]] = [:]
+        var result: [String: CodeBlockItemListSyntax] = [:]
         for element in choice.cases {
             guard let branch = element.as(SwitchCaseSyntax.self),
                   let label = branch.label.as(SwitchCaseLabelSyntax.self),
                   label.caseItems.count == 1, let item = label.caseItems.first,
-                  item.whereClause == nil,
-                  let pattern = item.pattern.as(ExpressionPatternSyntax.self),
-                  let member = pattern.expression.as(MemberAccessExprSyntax.self),
-                  member.base == nil else { continue }
-            let identifier = member.declName.baseName.sourceIdentifierName
+                  item.whereClause == nil else {
+                throw invalid("native.action.routing.switch", "one unconditional case per action")
+            }
+            let pattern = Array(item.pattern.tokens(viewMode: .sourceAccurate))
+            guard pattern.count >= 2, pattern[0].text == "." else {
+                throw invalid("native.action.routing.switch", "one named case per action")
+            }
+            let identifier = pattern[1].sourceIdentifierName
             guard result[identifier] == nil else {
                 throw invalid("native.action.routing", "one case per action identity")
             }
-            result[identifier] = Array(branch.statements.tokens(viewMode: .sourceAccurate)).map(\.text)
+            result[identifier] = branch.statements
         }
         return result
     }
@@ -1547,14 +1556,34 @@ func verifyGeneratedActionRoutingOutput(
     }
     let dispatched = try cases(of: "_visitSuccessors")
     let labeled = try cases(of: "formalCall")
+    let expectedNames = Set(allActions.map { $0.name.filter { $0 != "`" } })
+    guard Set(dispatched.keys) == expectedNames, Set(labeled.keys) == expectedNames else {
+        throw invalid("native.action.routing", "exactly the compiled action cases")
+    }
     for route in routes {
         let name = route.name.filter { $0 != "`" }
         let expectedDispatch = tokens("try Self._visitSuccessors\(route.id)(from: _execution\(configurationArguments), checking: &context, visit)")
-        guard dispatched[name] == expectedDispatch else {
+        guard dispatched[name].map({ Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }) == expectedDispatch else {
             throw invalid("native.action.route.\(name)", "the complete successor route for compiled action \(route.id)")
         }
         let expectedLabel = tokens("return FormalActionCall(name: \(String(reflecting: route.formalName)), arguments: [])")
-        guard labeled[name] == expectedLabel else {
+        guard labeled[name].map({ Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }) == expectedLabel else {
+            throw invalid("native.action.label.\(name)", "the compiled formal action label \(route.formalName)")
+        }
+    }
+    let directNames = Set(routes.map { $0.name })
+    for route in allActions where !directNames.contains(route.name) {
+        let name = route.name.filter { $0 != "`" }
+        guard let branch = dispatched[name], branch.count == route.publicBindings + 1,
+              Array(branch.dropLast()).allSatisfy({ $0.item.as(GuardStmtSyntax.self) != nil }),
+              let call = branch.last,
+              Array(call.tokens(viewMode: .sourceAccurate)).map(\.text).starts(with:
+                tokens("try Self._visitSuccessors\(route.id)(from: _execution")) else {
+            throw invalid("native.action.route.\(name)", "the selected action reaches compiled successor \(route.id)")
+        }
+        guard let label = labeled[name], label.count == 1, let statement = label.first,
+              Array(statement.tokens(viewMode: .sourceAccurate)).map(\.text).starts(with:
+                tokens("return FormalActionCall(name: \(String(reflecting: route.formalName)), arguments:")) else {
             throw invalid("native.action.label.\(name)", "the compiled formal action label \(route.formalName)")
         }
     }
