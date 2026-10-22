@@ -25,6 +25,41 @@ struct OrderedCopyModel {
 }
 
 @TLAModel
+struct OrderedOverflowModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("OrderedOverflow") {
+            let algorithm = Algorithm(label: "OrderedOverflow", scoped: { scope in
+                let count = scope.sharedVar(initial: 9_223_372_036_854_775_806)
+                Do(Step.advance) {
+                    Assign(count, to: count + 1)
+                    Assign(count, to: count + 1)
+                }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
+struct NestedAdditionOverflowModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("NestedAdditionOverflow") {
+            let algorithm = Algorithm(label: "NestedAdditionOverflow", scoped: { scope in
+                let count = scope.sharedVar(initial: 9_223_372_036_854_775_806)
+                Do(Step.advance) {
+                    Assign(count, to: (count + 1) + 1)
+                }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
 struct OrderedGuardModel {
     enum Step: String, CaseIterable { case choose }
 

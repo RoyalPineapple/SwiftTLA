@@ -287,7 +287,8 @@ struct NativeSwiftEmitter {
         let name = try swiftType(type)
         let body: String
         switch type {
-        case .int, .string: body = "return lhs < rhs"
+        case .int: body = "return lhs < rhs"
+        case .string: body = "return TLAValue.canonicalSwiftString(lhs) < TLAValue.canonicalSwiftString(rhs)"
         case .bool: body = "return !lhs && rhs"
         case .controlLocation, .modelValue: body = "return lhs.rawValue < rhs.rawValue"
         case .finite(let members):
@@ -806,8 +807,14 @@ struct NativeSwiftEmitter {
         case .greaterOrEqual: return try binary(">=")
         case .and, .or:
             return try booleanExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .not: return "(!\(try emit(0)))"
+        case .not:
+            return try booleanExpression(id, state: state, substitutions: substitutions,
+                activeFunctions: activeFunctions)
         case .ifThenElse:
+            if node.resultType == .bool {
+                return try booleanExpression(id, state: state, substitutions: substitutions,
+                    activeFunctions: activeFunctions)
+            }
             return "(\(try emit(0)) ? \(try emit(1)) : \(try emit(2)))"
         default: throw unsupported("scalarExpression operation")
         }
@@ -1175,7 +1182,7 @@ struct NativeSwiftEmitter {
             (try { () throws -> \(try swiftType(result)) in
                 let _sequenceValue: \(try swiftType(source)) = \(try emit(0))
                 let _appendedValue: \(try swiftType(childType(1))) = \(try emit(1))
-                return \(elements) + [_appendedValue]
+                return _NativeMachineOperations.sequenceAppend(\(elements), _appendedValue)
             }())
             """
         case .tupleConcatenate:
@@ -1189,7 +1196,7 @@ struct NativeSwiftEmitter {
                 let _rightValue: \(try swiftType(right)) = \(try emit(1))
                 let _rightElements = \(try nativeSequenceElements("_rightValue", source: right))
                 let _leftElements = \(try nativeSequenceElements("_leftValue", source: left))
-                return _leftElements + _rightElements
+                return _NativeMachineOperations.sequenceConcatenate(_leftElements, _rightElements)
             }())
             """
         default: throw unsupported("sequenceExpression operation")

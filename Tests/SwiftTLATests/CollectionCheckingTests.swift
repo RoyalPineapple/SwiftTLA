@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import SwiftTLA
 
@@ -25,6 +26,7 @@ struct CollectionCheckingTests {
     func checksArraySteps() throws {
         let graph = try ReachabilityGraph(initialMachines: ArrayStepMachine.initialMachines(), maximumStates: 10)
         #expect(graph.initialStates.count == 1)
+        #expect(Set(graph.initialStates.map(\.state.values)) == [[]])
         #expect(Set(graph.transitions.keys.map(\.state.values)) == [[], [1], [1, 1]])
         #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == 2)
         #expect(Set(graph.deadlockedStates.map(\.state.values)) == [[1, 1]])
@@ -37,8 +39,161 @@ struct CollectionCheckingTests {
             #expect(outgoing.contains { $0.action == .append && $0.target.state.values == target })
         }
         let tla = try ArrayStepMachine.render().tlaBundle.tla
-        #expect(tla.contains("Append(values, 1)"))
-        #expect(!tla.contains("VARIABLES pc"))
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/ArrayStepMachine.tla")
+            .standardizedFileURL
+        #expect(tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+    }
+
+    @Test("sequence concatenation preserves order, repeated values, and complete states")
+    func checksSequenceConcatenation() throws {
+        let graph = try ReachabilityGraph(
+            initialMachines: SequenceConcatenationMachine.initialMachines(), maximumStates: 10)
+        #expect(graph.initialStates.count == 1)
+        #expect(Set(graph.transitions.keys.map(\.state.front)) == [[1], [1, 2, 2]])
+        #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == 1)
+        #expect(Set(graph.deadlockedStates.map(\.state.front)) == [[1, 2, 2]])
+        #expect(graph.safetyViolations.count == 1)
+        #expect(graph.safetyViolations.first?.value == [.deadlock])
+        for state in graph.transitions.keys { #expect(state.state.back == [2, 2]) }
+        let outgoing = try #require(graph.transitions.first { $0.key.state.front == [1] }?.value)
+        #expect(outgoing.count == 1)
+        #expect(outgoing.contains {
+            $0.action == .combine && $0.target.state.front == [1, 2, 2]
+                && $0.target.state.back == [2, 2]
+        })
+        let tla = try SequenceConcatenationMachine.render().tlaBundle.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/SequenceConcatenationMachine.tla")
+            .standardizedFileURL
+        #expect(tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+    }
+
+    @Test("sequence concatenation retains successes and first operand failures")
+    func checksFallibleSequenceConcatenation() throws {
+        let machines = try FallibleSequenceConcatenationMachine.initialMachines()
+        #expect(machines.count == 4)
+        for machine in machines {
+            switch (machine.state.frontLength, machine.state.backLength) {
+            case (1, 2):
+                let successor = try #require(machine.successors(for: .combine).first)
+                #expect(successor.state.front == [1, 2, 2])
+                #expect(successor.state.back == [2, 2])
+                #expect(successor.state.frontLength == 1 && successor.state.backLength == 2)
+            case (1, 3):
+                #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 3, count: 2)) {
+                    try machine.successors(for: .combine)
+                }
+            case (2, 2), (2, 3):
+                #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 2, count: 1)) {
+                    try machine.successors(for: .combine)
+                }
+            default:
+                Issue.record("Unexpected initial sequence-length pair")
+            }
+        }
+        let tla = try FallibleSequenceConcatenationMachine.render().tlaBundle.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/FallibleSequenceConcatenationMachine.tla")
+            .standardizedFileURL
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(tla == expected, "Generated TLA:\n\(tla)")
+    }
+
+    @Test("sequence append preserves the failure of its prefix operand")
+    func checksFallibleSequenceAppend() throws {
+        let machines = try FallibleSequenceAppendMachine.initialMachines()
+        #expect(machines.count == 2)
+        for machine in machines {
+            #expect(machine.state.values == [1])
+            switch machine.state.length {
+            case 1:
+                let successors = try machine.successors(for: .append)
+                #expect(successors.count == 1)
+                let successor = try #require(successors.first)
+                #expect(successor.state.values == [1, 3])
+                #expect(successor.state.length == 1)
+            case 2:
+                #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 2, count: 1)) {
+                    try machine.successors(for: .append)
+                }
+            default:
+                Issue.record("Unexpected initial prefix length")
+            }
+        }
+        let tla = try FallibleSequenceAppendMachine.render().tlaBundle.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/FallibleSequenceAppendMachine.tla")
+            .standardizedFileURL
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(tla == expected, "Generated TLA:\n\(tla)")
+    }
+
+    @Test("sequence length preserves failure from its sequence operand")
+    func checksFallibleSequenceLength() throws {
+        let machines = try FallibleSequenceLengthMachine.initialMachines()
+        #expect(machines.count == 2)
+        for machine in machines {
+            #expect(machine.state.values == [1])
+            #expect(machine.state.result == 0)
+            switch machine.state.length {
+            case 1:
+                let successors = try machine.successors(for: .measure)
+                #expect(successors.count == 1)
+                let successor = try #require(successors.first)
+                #expect(successor.state.result == 1)
+                #expect(successor.state.values == [1] && successor.state.length == 1)
+            case 2:
+                #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 2, count: 1)) {
+                    try machine.successors(for: .measure)
+                }
+            default:
+                Issue.record("Unexpected initial prefix length")
+            }
+        }
+        let tla = try FallibleSequenceLengthMachine.render().tlaBundle.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/FallibleSequenceLengthMachine.tla")
+            .standardizedFileURL
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(tla == expected, "Generated TLA:\n\(tla)")
+    }
+
+    @Test("head preserves ordered failures from its prefix operand")
+    func checksFallibleSequenceHead() throws {
+        let machines = try FallibleSequenceHeadMachine.initialMachines()
+        #expect(machines.count == 3)
+        for machine in machines {
+            #expect(machine.state.values == [1] && machine.state.result == 0)
+            switch machine.state.length {
+            case 0:
+                #expect(throws: NativeMachineEvaluationError.emptySequence) {
+                    try machine.successors(for: .readHead)
+                }
+            case 1:
+                let successor = try #require(try machine.successors(for: .readHead).first)
+                #expect(successor.state.result == 1)
+                #expect(successor.state.values == [1] && successor.state.length == 1)
+            case 2:
+                #expect(throws: NativeMachineEvaluationError.indexOutOfBounds(index: 2, count: 1)) {
+                    try machine.successors(for: .readHead)
+                }
+            default:
+                Issue.record("Unexpected initial prefix length")
+            }
+        }
+        let tla = try FallibleSequenceHeadMachine.render().tlaBundle.tla
+        let proofInput = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/FallibleSequenceHeadMachine.tla")
+            .standardizedFileURL
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(tla == expected, "Generated TLA:\n\(tla)")
     }
 
     @Test("finite initial domain retains both states and an unfinished deadlock")

@@ -88,6 +88,7 @@ package enum TLCProcessError: Error, Equatable, Sendable {
   case timedOut(partialStdout: String, partialStderr: String)
   case failedToStart(String)
   case invalidModuleBundle(TLCModuleBundleError)
+  case unsupportedNonASCIIInput(file: String, line: Int)
 }
 
 package struct PinnedTLCModuleJar: Equatable, Sendable {
@@ -188,6 +189,8 @@ package struct TLCProcessRequest: Equatable, Sendable {
     module: URL,
     configuration: URL
   ) -> [String] {
+    let stringEncodingOptions = bundle.usesFormalStringEncoding
+      ? ["-Dswifttla.tlc.string-encoding=utf8-v1"] : []
     let graphOptions = invocation == .finiteGraph ? [
       "-Dswifttla.tlc.graph.path=\(graphEvents.path)",
       "-Dswifttla.tlc.graph.run-id=\(runID.uuidString.lowercased())",
@@ -201,6 +204,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     let mainClass = evaluationOutput == nil
       ? "tlc2.TLC" : "org.swifttla.conformance.TLCEvaluationOutput"
     let argumentGroups: [[String]] = [
+      stringEncodingOptions,
       graphOptions,
       evaluationOptions,
       ["-cp", classpath, mainClass],
@@ -227,6 +231,56 @@ package struct TLCProcessRequest: Equatable, Sendable {
       throw TLCProcessError.invalidModuleBundle(.unreadableModule(
         path: bundle.root.name + ".tla", reason: redactingSecrets(in: error.localizedDescription)
       ))
+    }
+    try Self.validateASCIIInput(bundle)
+  }
+
+  package static func validateASCIIInput(_ bundle: TLAModuleBundle) throws {
+    // TLC fingerprints can merge distinct non-ASCII strings before any graph writer sees them.
+    let inputs = bundle.files.map { ("\($0.name).tla", $0.tla) }
+      + (bundle.root.cfg.map { [("\(bundle.root.name).cfg", $0)] } ?? [])
+    for (file, source) in inputs {
+      let bytes = Array(source.utf8)
+      var index = 0
+      var line = 1
+      var blockDepth = 0
+      var inLineComment = false
+      var inString = false
+      while index < bytes.count {
+        let byte = bytes[index]
+        let next = index + 1 < bytes.count ? bytes[index + 1] : 0
+        if byte == 10 { line += 1 }
+        if inLineComment {
+          if byte == 10 { inLineComment = false }
+        } else if blockDepth > 0 {
+          if byte == 40 && next == 42 {
+            blockDepth += 1
+            index += 1
+          } else if byte == 42 && next == 41 {
+            blockDepth -= 1
+            index += 1
+          }
+        } else if inString {
+          if byte >= 128 { throw TLCProcessError.unsupportedNonASCIIInput(file: file, line: line) }
+          if byte == 92 && index + 1 < bytes.count {
+            index += 1
+            if bytes[index] >= 128 { throw TLCProcessError.unsupportedNonASCIIInput(file: file, line: line) }
+          } else if byte == 34 {
+            inString = false
+          }
+        } else if byte == 92 && next == 42 {
+          inLineComment = true
+          index += 1
+        } else if byte == 40 && next == 42 {
+          blockDepth = 1
+          index += 1
+        } else if byte == 34 {
+          inString = true
+        } else if byte >= 128 {
+          throw TLCProcessError.unsupportedNonASCIIInput(file: file, line: line)
+        }
+        index += 1
+      }
     }
   }
 
@@ -378,7 +432,8 @@ package struct TLCProcessCapture: Sendable {
   package var unavailableCheckBundle: TLAModuleBundle?
 
   package init(reading request: TLCProcessRequest, outcome: TLCExecutionOutcome, retainedIn directory: URL) throws {
-    let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase)
+    let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase,
+      decodesFormalStrings: request.bundle.usesFormalStringEncoding)
     let stream = try reader.parse(contentsOf: directory.appendingPathComponent("graph-events.jsonl"))
     guard stream.runID == request.runID else {
       throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")

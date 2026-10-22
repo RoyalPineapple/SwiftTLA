@@ -166,7 +166,8 @@ run_guarded() {
     if [[ "$mode" == "static" ]]; then
         git diff --check
         ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }' \
-            .github/workflows/validation-pipeline.yml .github/workflows/validation-case.yml
+            .github/workflows/ci.yml .github/workflows/validation-pipeline.yml \
+            .github/workflows/validation-case.yml
         "$(dirname "$0")/setup-finite-graph-tools.sh" --verify-bridge-sources
         bash "$(dirname "$0")/verify-finite-graph-input-pins.sh"
         return
@@ -265,7 +266,7 @@ run_guarded() {
     set -m
     case "$mode" in
         swiftpm-test)
-            swift test -Xswiftc -warnings-as-errors --filter "$selector" -j 1 --scratch-path "$build_dir" &
+            swift test -Xswiftc -warnings-as-errors --disable-automatic-resolution --filter "$selector" -j 1 --scratch-path "$build_dir" &
             ;;
         xcode-test)
             package_dir="$PWD"

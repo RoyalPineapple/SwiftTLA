@@ -124,6 +124,8 @@ extension NativeSwiftEmitter {
                 compilationIdentity: \(String(reflecting: program.identity.value)),
                 declarations: [\(declarations.joined(separator: ", "))],
                 checkDeadlock: \(module.configuration.checkDeadlock),
+                _generatedIntegerBitWidth: \(Int.bitWidth),
+                _generatedIntrinsicInvariants: \(String(reflecting: module.configuration.intrinsicInvariants)),
                 invariants: \(String(reflecting: module.configuration.invariants)),
                 reachabilityProperties: \(String(reflecting: module.configuration.reachabilityProperties)),
                 properties: \(String(reflecting: module.configuration.properties)),

@@ -1,5 +1,6 @@
 @testable import SwiftTLA
 import Testing
+import SwiftTLAMacros
 
 @Suite("Procedure Lowering")
 struct ProcedureLoweringTests {
@@ -137,7 +138,9 @@ struct ProcedureLoweringTests {
         let (compilation, initial) = try initialState(of: spec)
         let inOuter = try apply("start", in: compilation, to: initial)
         let inInner = try apply("procedure.outer.enter", in: compilation, to: inOuter)
-        #expect(try value(named: "pc", in: inInner, compilation: compilation) == .string("enter"))
+        let outerPC = try value(named: "pc", in: inOuter, compilation: compilation)
+        let innerPC = try value(named: "pc", in: inInner, compilation: compilation)
+        #expect(outerPC != innerPC)
         let outerStack = try value(named: "stack", in: inOuter, compilation: compilation)
         let innerStack = try value(named: "stack", in: inInner, compilation: compilation)
         #expect(innerStack == outerStack)
@@ -149,6 +152,28 @@ struct ProcedureLoweringTests {
         #expect(try value(named: "innerValue", in: afterReturn, compilation: compilation) == .int(0))
         #expect(try value(named: "stack", in: afterReturn, compilation: compilation) == .tuple([]))
         #expect(try value(named: "pc", in: afterReturn, compilation: compilation) == .string("finished"))
+    }
+
+    @Test("generated projection distinguishes the same label in different procedures")
+    func generatedProjectionPreservesScopedControlLocations() throws {
+        let compilation = try ScopedControlProjectionMachine.spec.compile()
+        func formalName(ofProcedure name: String) throws -> String {
+            let location = try #require(compilation.layout.controlLocations.first {
+                guard case .procedure(_, let ownerName) = $0.owner else { return false }
+                return ownerName == name && $0.sourceName == "enter"
+            })
+            return location.formalName
+        }
+        var machine = try ScopedControlProjectionMachine.makeMachine()
+        let pc = try #require(TLAStateProjection.Token(validating: "pc"))
+
+        _ = try machine.send(.start)
+        let outer = try #require(machine.formalProjection(of: machine.snapshot).value(for: pc))
+        _ = try machine.send(.procedure_outer_enter)
+        let inner = try #require(machine.formalProjection(of: machine.snapshot).value(for: pc))
+
+        #expect(outer == .string(try formalName(ofProcedure: "outer")))
+        #expect(inner == .string(try formalName(ofProcedure: "inner")))
     }
 
     @Test("Each processes keep recursive procedure frames and parameter slots independent")
@@ -217,7 +242,8 @@ struct ProcedureLoweringTests {
 
         let oneFinished = try apply("procedure.outer.resume", process: .int(1), in: compilation, to: oneReturned)
         #expect(try functionValue("pc", key: .int(1), in: oneFinished, compilation: compilation) == .string("finished"))
-        #expect(try functionValue("pc", key: .int(2), in: oneFinished, compilation: compilation) == .string("enter"))
+        #expect(try functionValue("pc", key: .int(2), in: oneFinished, compilation: compilation)
+            == functionValue("pc", key: .int(2), in: bothInOuter, compilation: compilation))
     }
 
     private func initialState(of spec: TLASpec) throws -> (CompiledSpecification, CompiledState) {

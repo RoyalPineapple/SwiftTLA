@@ -1216,6 +1216,7 @@ struct CompiledLowerer {
         var scope = rootScope
         let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
         let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope)
+        try body.verifyBranchwiseContinuation(at: "actions.\(action.name).body")
         return CompiledAction(
             id: id,
             bindings: bindings,
@@ -1394,7 +1395,8 @@ struct CompiledLowerer {
                     var successorScope = scope
                     successorScope.allowsNextState = false
                     scheduleUnary(value, at: path, scope: successorScope, operation: .nextState, on: &tasks)
-                case .not(let value): scheduleUnary(value, at: path, scope: scope, operation: .not, on: &tasks)
+                case .not, .and, .or, .ifThenElse:
+                    scheduleBooleanBranch(expression, at: path, scope: scope, on: &tasks)
                 case .printT(let value): scheduleUnary(value, at: path, scope: scope, operation: .printT, on: &tasks)
                 case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, operation: .cardinality, on: &tasks)
                 case .powerSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .powerSet, on: &tasks)
@@ -1418,18 +1420,24 @@ struct CompiledLowerer {
                 case .lessOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .lessOrEqual, on: &tasks)
                 case .greaterThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .greaterThan, on: &tasks)
                 case .greaterOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .greaterOrEqual, on: &tasks)
-                case .and(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .and, on: &tasks)
-                case .or(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .or, on: &tasks)
-                case .in(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .in, on: &tasks)
+                case .in(let lhs, let rhs):
+                    schedule([(lhs, "\(path).left"), (rhs, "\(path).right")], at: path, scope: scope,
+                        build: { operands in
+                            let lowered = operands.map(\.expression)
+                            let result = CompiledExpression(operation: .in, children: lowered)
+                            guard MembershipLoweringContract.matches(source: expression,
+                                loweredOperands: lowered, result: result) else {
+                                throw Self.invalidTraversal(at: path)
+                            }
+                            return result
+                        }, on: &tasks)
                 case .subset(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .subset, on: &tasks)
                 case .union(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .union, on: &tasks)
                 case .intersection(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .intersection, on: &tasks)
                 case .setDifference(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .setDifference, on: &tasks)
                 case .tupleDynamicAccess(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleDynamicAccess, on: &tasks)
-                case .tupleAppend(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleAppend, on: &tasks)
-                case .tupleConcatenate(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleConcatenate, on: &tasks)
-                case .tupleRemoving(let tuple, let index): scheduleBinary(tuple, index, at: path, scope: scope, operation: .tupleRemoving, on: &tasks)
-                case .tuplePrefix(let tuple, let length): scheduleBinary(tuple, length, at: path, scope: scope, operation: .tuplePrefix, on: &tasks)
+                case .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix:
+                    scheduleSequenceBinary(expression, at: path, scope: scope, on: &tasks)
                 case .sequenceSelect(let sequence, let name, let predicate):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
                     scheduleBinding(sequence, predicate, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.sequenceSelect, on: &tasks)
@@ -1456,8 +1464,6 @@ struct CompiledLowerer {
                 case .setSum(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .setSum, on: &tasks)
                 case .integerRange(let lower, let upper):
                     schedule([(lower, "\(path).lower"), (upper, "\(path).upper")], at: path, scope: scope, build: { .integerRange($0[0].expression, $0[1].expression) }, on: &tasks)
-                case .ifThenElse(let condition, let then, let otherwise):
-                    schedule([(condition, "\(path).condition"), (then, "\(path).then"), (otherwise, "\(path).else")], at: path, scope: scope, build: { .ifThenElse($0[0].expression, $0[1].expression, $0[2].expression) }, on: &tasks)
                 case .setLiteral(let values):
                     schedule(indexed(values, at: path), at: path, scope: scope, build: { .setLiteral($0.map(\.expression)) }, on: &tasks)
                 case .tupleLiteral(let values):
@@ -1551,9 +1557,16 @@ struct CompiledLowerer {
                 case .exists(let domain, let name, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
                     scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.exists, on: &tasks)
-                case .choose(let domain, let name, let body):
+                case .choose(let domain, let name, let body, let preferredType):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.choose, on: &tasks)
+                    let resultType: CompiledValueType = switch preferredType?.shape {
+                    case .integer: .int
+                    case .boolean: .bool
+                    case .finite(_, let values): .finite(Set(values.map(CompiledValue.init(formal:))).sorted())
+                    default: .unknown
+                    }
+                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested,
+                        build: { .choose($0, $1, $2, preferredType: resultType) }, on: &tasks)
                 case .foldFunction(let lambda, let initial, let sequence):
                     if let issue = lambda.sourceIssue {
                         throw issue.compilationDiagnostic(stage: .binding, path: "\(path).operator")
@@ -1835,6 +1848,41 @@ struct CompiledLowerer {
         schedule([(value, path)], at: path, scope: scope, build: { .init(operation: operation, children: $0.map(\.expression)) }, on: &tasks)
     }
 
+    private func scheduleBooleanBranch(
+        _ source: StateExpr,
+        at path: String,
+        scope: BindingScope,
+        on tasks: inout [StateLoweringTask]
+    ) {
+        let children: [(expression: StateExpr, path: String)]
+        let operation: CompiledOperation
+        switch source {
+        case .not(let child):
+            children = [(child, path)]
+            operation = .not
+        case .and(let left, let right):
+            children = [(left, "\(path).left"), (right, "\(path).right")]
+            operation = .and
+        case .or(let left, let right):
+            children = [(left, "\(path).left"), (right, "\(path).right")]
+            operation = .or
+        case .ifThenElse(let condition, let yes, let no):
+            children = [(condition, "\(path).condition"), (yes, "\(path).then"), (no, "\(path).else")]
+            operation = .ifThenElse
+        default:
+            preconditionFailure("Only Boolean branch constructors use this lowering rule")
+        }
+        schedule(children, at: path, scope: scope, build: { lowered in
+            let operands = lowered.map(\.expression)
+            let result = CompiledExpression(operation: operation, children: operands)
+            guard BooleanBranchLoweringContract.matches(source: source,
+                loweredOperands: operands, result: result) else {
+                throw Self.invalidTraversal(at: path)
+            }
+            return result
+        }, on: &tasks)
+    }
+
     private func scheduleBinary(
         _ lhs: StateExpr,
         _ rhs: StateExpr,
@@ -1850,6 +1898,41 @@ struct CompiledLowerer {
             build: { .init(operation: operation, children: $0.map(\.expression)) },
             on: &tasks
         )
+    }
+
+    private func scheduleSequenceBinary(
+        _ source: StateExpr,
+        at path: String,
+        scope: BindingScope,
+        on tasks: inout [StateLoweringTask]
+    ) {
+        let children: [(StateExpr, String)]
+        let operation: CompiledOperation
+        switch source {
+        case .tupleAppend(let sequence, let value):
+            children = [(sequence, "\(path).left"), (value, "\(path).right")]
+            operation = .tupleAppend
+        case .tupleConcatenate(let left, let right):
+            children = [(left, "\(path).left"), (right, "\(path).right")]
+            operation = .tupleConcatenate
+        case .tupleRemoving(let sequence, let index):
+            children = [(sequence, "\(path).left"), (index, "\(path).right")]
+            operation = .tupleRemoving
+        case .tuplePrefix(let sequence, let length):
+            children = [(sequence, "\(path).left"), (length, "\(path).right")]
+            operation = .tuplePrefix
+        default:
+            preconditionFailure("Only sequence edit constructors use this lowering rule")
+        }
+        schedule(children, at: path, scope: scope, build: { lowered in
+            let operands = lowered.map(\.expression)
+            let result = CompiledExpression(operation: operation, children: operands)
+            guard SequenceExpressionLoweringContract.matches(source: source,
+                loweredOperands: operands, result: result) else {
+                throw Self.invalidTraversal(at: path)
+            }
+            return result
+        }, on: &tasks)
     }
 
     private func scheduleBinding(

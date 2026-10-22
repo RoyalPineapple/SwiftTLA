@@ -27,6 +27,29 @@ struct ChoiceScopeTests {
         #expect(try successors(of: .ifElse(.bool(false), invalid, choice)) == [[.int(1), .int(0)], [.int(2), .int(0)]])
     }
 
+    @Test("A direct conditional action reports choice failure only in its selected branch")
+    func directConditionalChoiceFailureIsBranchScoped() throws {
+        let choice = StateExpr.choose(.setLiteral([.int(1)]), "member", .bool(false))
+        let action = ActionExpr.ifElse(.variable("attempt"),
+            .define("value", choice, .assign(.named("selected"), .variable("value"))),
+            .assign(.named("selected"), .int(2)))
+        let compilation = try canonicalTestSpec(
+            variables: [("attempt", .value(.bool(true))), ("selected", .value(.int(0)))],
+            actions: [("select", action, [])]
+        ).compile()
+        guard case .ifElse = compilation.semantics.behavior.actions[0].body else {
+            Issue.record("The direct conditional no longer reaches the conditional action constructor")
+            return
+        }
+        let rendered = try compilation.render()
+        #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+        let failure = try #require(rendered.tlaBundle.root.tla.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAChoiceFailure0 ==")
+        })
+        #expect(failure.contains("IF attempt THEN"))
+        #expect(failure.contains("ELSE FALSE"))
+    }
+
     @Test("Choice branches retain independent lexical bindings")
     func disjunctionsAndDefinitionsDoNotShareSelections() throws {
         let action = ActionExpr.or(
@@ -97,6 +120,10 @@ struct ChoiceScopeTests {
         for action in unreachable {
             #expect(try successors(of: .and(.guard_(.bool(false)), action)).isEmpty)
         }
+
+        let guarded = ActionExpr.and(
+            .guard_(.equal(.variable("chosen"), .int(1))), unreachable[0])
+        #expect(try successors(of: guarded).isEmpty)
     }
 
     @Test("Repeated normalization preserves conditional choice scopes and frame clauses")

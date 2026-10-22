@@ -64,7 +64,7 @@ extension NativeSwiftEmitter {
                 let projected = try expression(view, state: "snapshot.")
                 viewRuns.append("""
                 case \(index):
-                    return try MachineValidator.run(initialMachines: initialMachines, maximumStates: maximumStates,
+                    return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
                         checking: checking, stopOnViolation: stopOnViolation,
                         stopOnReachability: stopOnReachability,
                         identity: { machine, level in \(identity) }, emit: emit)
@@ -117,6 +117,7 @@ extension NativeSwiftEmitter {
             """)
         }
         let arguments = hasConfiguration ? "configuration: configuration" : ""
+        let hasRandomSubset = hasRandomSubsetInitializer
         return try nativeDeclarations("""
         public struct ValidationScenario: ModelValidationScenario {
             public typealias Machine = \(model.typeName)
@@ -147,8 +148,14 @@ extension NativeSwiftEmitter {
                 }
             }
 
+            public func initialOutcomes() throws -> InitialEvaluationOutcomes<Machine> {
+                \(hasRandomSubset ? "if case .simulation = checkingMode { return try .init(states: \(model.typeName).sampledInitialMachines(\(arguments)), firstFailure: nil) }" : "")
+                return try \(model.typeName).initialOutcomes(\(arguments))
+            }
             public func initialMachines() throws -> [\(model.typeName)] {
-                try \(model.typeName).initialMachines(\(arguments))
+                let outcome = try initialOutcomes()
+                if let failure = outcome.firstFailure { throw failure }
+                return outcome.states
             }
             public var formalPropertyNames: [Property: String] {
                 Machine.formalPropertyNames
@@ -165,10 +172,17 @@ extension NativeSwiftEmitter {
             public func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
                 stopOnViolation: Bool, stopOnReachability: Bool,
                 emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+                try runValidation(initialOutcomes: .init(states: initialMachines, firstFailure: nil),
+                    maximumStates: maximumStates, checking: checking,
+                    stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability, emit: emit)
+            }
+            public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: Int,
+                checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
+                emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
                 switch selectedView {
                 \(viewRuns.joined(separator: "\n"))
                 case nil:
-                    return try MachineValidator.run(initialMachines: initialMachines, maximumStates: maximumStates,
+                    return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
                         checking: checking, stopOnViolation: stopOnViolation,
                         stopOnReachability: stopOnReachability, emit: emit)
                 default: throw ExplorationError.configurationMismatch

@@ -51,3 +51,45 @@ struct ArrayAppendReadMachine {
         }
     }
 }
+
+@TLAModel
+struct ArrayReadOutsideDomainMachine {
+    enum Step: String, CaseIterable { case read }
+
+    static var spec: TLASpec {
+        #spec("ArrayReadOutsideDomainMachine") { scope in
+            let sequence = scope.sharedVar(initial: [Int]())
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.read) { Assign(result, to: sequence[1.expr]) }
+        }
+    }
+}
+
+@TLAModel
+struct SequenceEditBoundsMachine {
+    enum Step: String, CaseIterable { case remove, prefix }
+
+    static var spec: TLASpec {
+        #spec("SequenceEditBoundsMachine") { scope in
+            let row = scope.sharedVar(initial: Array<Int>([4, 5]))
+            let position = scope.sharedVar(in: 2...3)
+            Do(Step.remove) { Assign(row, to: row.removing(at: position)) }
+            Do(Step.prefix) { Assign(row, to: row.prefix(length: position)) }
+        }
+    }
+}
+
+@TLAModel
+struct EmptySequenceReadMachine {
+    enum Step: String, CaseIterable { case readHead, readTail }
+
+    static var spec: TLASpec {
+        #spec("EmptySequenceReadMachine") { scope in
+            let sequence = scope.sharedVar(initial: [Int]())
+            let head = scope.sharedVar(initial: 0)
+            let tail = scope.sharedVar(initial: [Int]())
+            Do(Step.readHead) { Assign(head, to: sequence.head()) }
+            Do(Step.readTail) { Assign(tail, to: sequence.tail()) }
+        }
+    }
+}

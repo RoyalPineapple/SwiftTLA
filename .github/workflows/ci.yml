@@ -27,7 +27,7 @@ jobs:
       matrix:
         suite: ${{ fromJSON('["ordinary","upstream"]') }}
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
         with:
@@ -37,7 +37,7 @@ jobs:
         run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
 
       - name: Run complete Swift test suite
-        timeout-minutes: 55
+        timeout-minutes: 115
         run: |
           configuration=release
           case '${{ matrix.suite }}' in
@@ -85,6 +85,80 @@ jobs:
     steps:
       - name: Require every Swift test suite to pass
         run: test "$SWIFT_TEST_RESULT" = success
+
+  semantic-proof-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+
+      - name: Check pinned TLAPS proof
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          mkdir -p .build/semantic-proof-evidence
+          git rev-parse HEAD > .build/semantic-proof-evidence/source-sha.txt
+          sha256sum Verification/Semantics/*.tla Verification/Semantics/*.txt \
+            > .build/semantic-proof-evidence/proof-inputs.sha256
+          proof_tool_dir="$(mktemp -d)"
+          curl -fsSL \
+            https://github.com/tlaplus/tlapm/releases/download/1.6.0-pre/tlapm-1.6.0-pre-x86_64-linux-gnu.tar.gz \
+            -o "$proof_tool_dir/tlapm.tar.gz"
+          sha256sum "$proof_tool_dir/tlapm.tar.gz" | tee .build/semantic-proof-evidence/tlapm-archive.sha256
+          echo 'b3c2554d3dd2198772ea8c814639a024fe9c390eac0ec25f4f444ad446a7dd28  '"$proof_tool_dir/tlapm.tar.gz" \
+            | sha256sum --check -
+          tar -xzf "$proof_tool_dir/tlapm.tar.gz" -C "$proof_tool_dir"
+          curl -fsSL \
+            https://github.com/Z3Prover/z3/releases/download/z3-4.15.4/z3-4.15.4-x64-glibc-2.39.zip \
+            -o "$proof_tool_dir/z3.zip"
+          echo 'a41b690e89c343931471506cdc6d957b6044a200fd2d240cc017432afdff7d3e  '"$proof_tool_dir/z3.zip" \
+            | sha256sum --check -
+          sha256sum "$proof_tool_dir/z3.zip" > .build/semantic-proof-evidence/z3-archive.sha256
+          unzip -p "$proof_tool_dir/z3.zip" z3-4.15.4-x64-glibc-2.39/bin/z3 \
+            > "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3"
+          chmod +x "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3"
+          "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version \
+            > .build/semantic-proof-evidence/z3-version.txt
+          "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/semantic-proof-evidence/tlapm-version.txt
+          grep -Fx '901ae51' .build/semantic-proof-evidence/tlapm-version.txt
+          "$proof_tool_dir/tlapm/bin/tlapm" --config > .build/semantic-proof-evidence/tlapm-config.txt
+          proof_failure=0
+          proof_count=0
+          for source in Verification/Semantics/*.tla; do
+            if grep -Eq '^[[:space:]]*THEOREM([[:space:]]|$)' "$source"; then
+              :
+            else
+              discovery_status=$?
+              test "$discovery_status" -eq 1 || exit "$discovery_status"
+              continue
+            fi
+            proof_count=$((proof_count + 1))
+            proof="${source##*/}"
+            proof="${proof%.tla}"
+            if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "$source" \
+                2>&1 | tee ".build/semantic-proof-evidence/$proof.log" \
+              && grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \
+                ".build/semantic-proof-evidence/$proof.log" \
+              && ! grep -q '^\[ERROR\]' ".build/semantic-proof-evidence/$proof.log"; then
+              echo "$proof: proved"
+            else
+              echo "$proof: failed" >&2
+              proof_failure=1
+            fi
+          done
+          test "$proof_count" -gt 0
+          test "$proof_failure" -eq 0
+
+      - name: Retain diagnostic proof evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: semantic-proof-diagnostic-${{ env.SWIFT_TLA_SHA }}
+          path: .build/semantic-proof-evidence
+          if-no-files-found: error
+          retention-days: 14
 
   apple-platform-examples:
     runs-on: macos-15

@@ -1195,8 +1195,9 @@ enum AlgorithmLowerer {
                 return .forAll(rewritten(set, localRoots: localRoots), variable, rewritten(predicate, localRoots: localRoots.subtracting([variable])))
             case .exists(let set, let variable, let predicate):
                 return .exists(rewritten(set, localRoots: localRoots), variable, rewritten(predicate, localRoots: localRoots.subtracting([variable])))
-            case .choose(let set, let variable, let predicate):
-                return .choose(rewritten(set, localRoots: localRoots), variable, rewritten(predicate, localRoots: localRoots.subtracting([variable])))
+            case .choose(let set, let variable, let predicate, let preferredType):
+                return .choose(rewritten(set, localRoots: localRoots), variable,
+                    rewritten(predicate, localRoots: localRoots.subtracting([variable])), preferredType: preferredType)
             case .enabledAction:
                 return expression
             case .sequenceFromSet(let set): return .sequenceFromSet(rewritten(set, localRoots: localRoots))

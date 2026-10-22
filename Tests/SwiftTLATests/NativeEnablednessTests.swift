@@ -52,5 +52,7 @@ struct NativeEnablednessTests {
         #expect(try machine.matchedReachabilityProperties(checking: [.guardedReachable]) == [.guardedReachable])
         #expect(throws: (any Error).self) { try machine.violatedInvariants(checking: [.demandedInvariant], atLevel: 1) }
         #expect(throws: (any Error).self) { try machine.matchedReachabilityProperties(checking: [.demandedReachable]) }
+        let rendered = try GuardedEnabledness.render().tlaBundle.root.tla
+        #expect(rendered.contains("IF (count > 0) THEN ENABLED divide ELSE FALSE"))
     }
 }

@@ -1,0 +1,27 @@
+private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                           _ emit: (_Updates) throws -> Void) throws {
+    func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    let ___atomic_0_0 = (try { () throws -> [Int] in
+    let _sequenceValue = state.state.row
+    let _sequenceIndex = state.state.position
+    return try _NativeMachineOperations.sequenceRemoving(_sequenceValue, at: _sequenceIndex)
+}())
+try _actionPart1(___atomic_0_0, updates, emit)
+}
+func _actionPart1(_ ___atomic_0_0: [Int], _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart3(___atomic_0_0, updates, { candidate in try _actionPart2(___atomic_0_0, candidate, emit) })
+}
+func _actionPart3(_ ___atomic_0_0: [Int], _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart5(___atomic_0_0, updates, { candidate in try _actionPart4(___atomic_0_0, candidate, emit) })
+}
+func _actionPart5(_ ___atomic_0_0: [Int], _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+}
+func _actionPart4(_ ___atomic_0_0: [Int], _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_row_0: ___atomic_0_0)) { try emit(merged) }
+}
+func _actionPart2(_ ___atomic_0_0: [Int], _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_position_1: state.state.position)) { try emit(merged) }
+}
+try _actionPart0(_Updates(), emit)
+}

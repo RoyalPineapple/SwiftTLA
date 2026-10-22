@@ -114,6 +114,15 @@ extension TLCProcessError {
       RetainedFileLocation(role: "TLC graph event output", location: request.graphEvents.path)
     ]
     switch self {
+    case .unsupportedNonASCIIInput(let file, let line):
+      return .init(
+        whatFailed: "This TLC input cannot provide trustworthy string-state evidence.",
+        whereItFailed: "\(file) line \(line)",
+        expected: "ASCII-only TLC code and string literals until reversible formal encoding is available.",
+        actual: "The declared input contains non-ASCII text outside a comment.",
+        nextSafeAction: "Use native Swift checking for now; add and verify reversible ASCII formal encoding before using TLC parity for this model.",
+        evidence: evidence
+      )
     case .timedOut(let stdout, let stderr):
       return .init(
         whatFailed: "TLC did not finish before the configured time limit.",

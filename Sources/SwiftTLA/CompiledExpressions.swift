@@ -357,6 +357,42 @@ package indirect enum CompiledActionExpr: Sendable {
     }
 }
 
+extension CompiledActionExpr {
+    func verifyBranchwiseContinuation(at path: String) throws {
+        var pending: [(CompiledActionExpr, Bool)] = [(self, false)]
+        while let (node, withinConjunctionLeft) = pending.popLast() {
+            switch node {
+            case .assign, .unchanged, .guard_:
+                break
+            case .define(_, _, let body):
+                pending.append((body, withinConjunctionLeft))
+            case .ifElse(_, let yes, let no):
+                pending.append((no, withinConjunctionLeft))
+                pending.append((yes, withinConjunctionLeft))
+            case .and(let left, let right):
+                pending.append((right, withinConjunctionLeft))
+                pending.append((left, true))
+            case .or(let left, let right):
+                guard !withinConjunctionLeft else { throw nonBranchwiseContinuation(at: path) }
+                pending.append((right, false))
+                pending.append((left, false))
+            case .existsAction(_, _, let body):
+                guard !withinConjunctionLeft else { throw nonBranchwiseContinuation(at: path) }
+                pending.append((body, false))
+            }
+        }
+    }
+
+    private func nonBranchwiseContinuation(at path: String) -> CompilationDiagnostic {
+        CompilationDiagnostic(
+            code: .invalidFormalDeclaration, stage: .lowering, path: path,
+            expected: "a compiled action with each alternative's continuation inside its branch",
+            actual: "a conjunction may pass multiple left-hand candidates to a fallible continuation",
+            nextSafeAction: "Report this action-lowering defect; no generated output is safe to use."
+        )
+    }
+}
+
 package struct CompiledAction: Sendable {
     package let id: ActionID
     package let bindings: [CompiledActionBinding]

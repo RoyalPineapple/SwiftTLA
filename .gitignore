@@ -3,6 +3,7 @@ Derived/
 *.xcodeproj
 *.xcworkspace
 .swiftpm/
+.tlacache/
 *.DS_Store
 *.profraw
 states/

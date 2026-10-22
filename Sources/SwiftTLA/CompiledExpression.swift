@@ -111,6 +111,10 @@ package struct CompiledExpression: Hashable, Sendable {
         self.children = children
     }
 
+    package func hasSameOccurrence(as other: Self) -> Bool {
+        identity == other.identity
+    }
+
     /// The operation before its explicit representation conversion.
     package var computation: Self {
         if case .convert = operation { return children[0] }
@@ -221,8 +225,9 @@ extension CompiledExpression {
     package static func exists(_ domain: Self, _ binder: BinderID, _ predicate: Self) -> Self {
         .init(operation: .exists(binder), children: [domain, predicate])
     }
-    package static func choose(_ domain: Self, _ binder: BinderID, _ predicate: Self) -> Self {
-        .init(operation: .choose(binder), children: [domain, predicate])
+    package static func choose(_ domain: Self, _ binder: BinderID, _ predicate: Self,
+                               preferredType: CompiledValueType = .unknown) -> Self {
+        .init(operation: .choose(binder), resultType: preferredType, children: [domain, predicate])
     }
     package static func enabledAction(_ id: ActionID) -> Self {
         .init(operation: .enabledAction(id), children: [])

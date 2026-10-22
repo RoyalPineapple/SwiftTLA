@@ -102,7 +102,8 @@ import SwiftTLAMacros
         guard case .choose(
             .setLiteral([.int(1), .int(2)]),
             _,
-            .value(.bool(true))
+            .value(.bool(true)),
+            _
         ) = SpecParser.decodeStateExpr(
             try parseSpecTestExpression("StateExpr.any(from: StateExpr.set([1, 2]))")
         ) else {

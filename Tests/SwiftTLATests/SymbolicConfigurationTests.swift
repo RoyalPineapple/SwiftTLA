@@ -32,5 +32,8 @@ struct SymbolicConfigurationTests {
         #expect(first.tla == second.tla.replacingOccurrences(of: emptyBinding, with: inputBinding))
         #expect(first.cfg != second.cfg)
         #expect(first.tla.contains("input \\in Seq(members)"))
+        #expect(first.tla.split(separator: "\n").contains {
+            $0.hasPrefix("append ==") && $0.contains("(1 \\in members)")
+        })
     }
 }

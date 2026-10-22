@@ -476,7 +476,7 @@ final class ParserSession {
         }
         if let stringLit = expression.as(StringLiteralExprSyntax.self) {
             guard let value = stringLit.representedLiteralValue else { return nil }
-            return .value(.string(value))
+            return .value(.canonicalSwiftString(value))
         }
         if let ref = expression.as(DeclReferenceExprSyntax.self) {
             let name = ref.baseName.sourceIdentifierName
@@ -727,11 +727,12 @@ final class ParserSession {
                     shape: typedFacadeValueType(candidatesSyntax, scope: scope)?.selectedElement)
               )
         else { return nil }
-        return .choose(
-            candidates,
-            canonicalBinding,
-            predicate
-        )
+        let preferredType: _SelectionResultTypeHint? = switch typedFacadeValueType(candidatesSyntax, scope: scope)?.selectedElement {
+        case .int: .init(.integer)
+        case .bool: .init(.boolean)
+        default: nil
+        }
+        return .choose(candidates, canonicalBinding, predicate, preferredType: preferredType)
     }
 
     private func decodeBoundedFilteredDomain(
@@ -1667,7 +1668,7 @@ final class ParserSession {
         }
         if let literal = expression.as(StringLiteralExprSyntax.self),
            let value = literal.representedLiteralValue {
-            return .value(.string(value))
+            return .value(.canonicalSwiftString(value))
         }
         if let enumCase = decodeEnumCase(expression, expectedType: expectedEnumType) {
             return enumCase

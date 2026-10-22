@@ -37,6 +37,89 @@ struct ArrayStepMachine {
 }
 
 @TLAModel
+struct SequenceConcatenationMachine {
+    enum Step: String, CaseIterable { case combine }
+
+    static var spec: TLASpec {
+        #spec("SequenceConcatenationMachine") { scope in
+            let front = scope.sharedVar(initial: [Int]([1]))
+            let back = scope.sharedVar(initial: [Int]([2, 2]))
+            Do(Step.combine) {
+                When(front.count == 1)
+                Assign(front, to: front.concatenating(back))
+            }
+            let bounded = Invariant()
+            bounded { front.count <= 3 && back.count == 2 }
+        }
+    }
+}
+
+@TLAModel
+struct FallibleSequenceConcatenationMachine {
+    enum Step: String, CaseIterable { case combine }
+
+    static var spec: TLASpec {
+        #spec("FallibleSequenceConcatenationMachine") { scope in
+            let front = scope.sharedVar(initial: [Int]([1]))
+            let back = scope.sharedVar(initial: [Int]([2, 2]))
+            let frontLength = scope.sharedVar(in: 1...2)
+            let backLength = scope.sharedVar(in: 2...3)
+            Do(Step.combine) {
+                Assign(front, to: front.prefix(length: frontLength)
+                    .concatenating(back.prefix(length: backLength)))
+            }
+        }
+    }
+}
+
+@TLAModel
+struct FallibleSequenceAppendMachine {
+    enum Step: String, CaseIterable { case append }
+
+    static var spec: TLASpec {
+        #spec("FallibleSequenceAppendMachine") { scope in
+            let values = scope.sharedVar(initial: [Int]([1]))
+            let length = scope.sharedVar(in: 1...2)
+            Do(Step.append) {
+                Assign(values, to: values.prefix(length: length).appending(3))
+            }
+        }
+    }
+}
+
+@TLAModel
+struct FallibleSequenceLengthMachine {
+    enum Step: String, CaseIterable { case measure }
+
+    static var spec: TLASpec {
+        #spec("FallibleSequenceLengthMachine") { scope in
+            let values = scope.sharedVar(initial: [Int]([1]))
+            let length = scope.sharedVar(in: 1...2)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.measure) {
+                Assign(result, to: values.prefix(length: length).count)
+            }
+        }
+    }
+}
+
+@TLAModel
+struct FallibleSequenceHeadMachine {
+    enum Step: String, CaseIterable { case readHead }
+
+    static var spec: TLASpec {
+        #spec("FallibleSequenceHeadMachine") { scope in
+            let values = scope.sharedVar(initial: [Int]([1]))
+            let length = scope.sharedVar(in: 0...2)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.readHead) {
+                Assign(result, to: values.prefix(length: length).head())
+            }
+        }
+    }
+}
+
+@TLAModel
 struct FiniteInitialStepMachine {
     enum Step: String, CaseIterable { case prepare }
 

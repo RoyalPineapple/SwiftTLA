@@ -42,3 +42,23 @@ struct ActionConstrainedRegisterCounter {
         }
     }
 }
+
+@TLAModel
+struct ActionConstrainedMixedOutcomeModel {
+    enum Step: String, CaseIterable { case pick }
+
+    static var spec: TLASpec {
+        #spec("ActionConstrainedMixedOutcomeModel") { scope in
+            let divisor = scope.sharedVar(initial: 0)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.pick) {
+                Either {
+                    Assign(result, to: 1)
+                } or: {
+                    Assign(result, to: 1 / divisor)
+                }
+            }
+            ActionConstraint(on: result) { _, after in after >= 0 }
+        }
+    }
+}
