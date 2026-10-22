@@ -2479,6 +2479,20 @@ token pin, TLAPS backend, and typed-record premise. It does not prove the
 general checked-view emitter, nested or effectful projections, other source
 value shapes, or a hosted TLC/native failure-verdict comparison.
 
+The accepted `IncompatibleCheckedRecordView` model asks for a record view of
+an `Int` state value. Its independent source rule reports `noMatchingCase`
+without a labeled successor. The generated Swift machine throws that failure
+without changing state. The output test pins the entire generated TLA+ module
+and its selected `__SwiftTLAEvaluationOK` check; the renderer now emits a
+total `FALSE` shape guard instead of applying `DOMAIN` to the integer.
+`IncompatibleCheckedRecordViewProof.tla` imports the pinned module and proves
+the initial state, complete labeled steps, failure verdict, and an omitted-guard
+control that adds an edge. All nine TLAPS obligations pass locally. This closes
+the named scalar-to-record mismatch under the Swift compiler/runtime, output
+pin, and TLAPS backend assumptions. Nested shape mismatches, mixed source
+unions, and general checked-view emission remain unproved; there is no hosted
+TLC/native failure-verdict parity claim for this fixture yet.
+
 ## Independent evidence
 
 Keep purpose-built finite conformance models with hand-specified expected

@@ -75,10 +75,13 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         }
     }
 
-    func predicate(for value: String, depth: Int = 0) -> String {
+    func predicate(for value: String, sourceType: CompiledValueType? = nil, depth: Int = 0) -> String {
+        if let sourceType, !sourceType.canHaveOuterShape(self) { return "FALSE" }
         var bound = "_shapeMember\(depth)"
         while value.contains(bound) || String(describing: self).contains(bound) { bound += "_" }
-        func nested(_ shape: Self, _ value: String) -> String { shape.predicate(for: value, depth: depth + 1) }
+        func nested(_ shape: Self, _ value: String) -> String {
+            shape.predicate(for: value, depth: depth + 1)
+        }
         switch self {
         case .integer: return "\(value) \\in Int"
         case .boolean: return "\(value) \\in BOOLEAN"
@@ -98,8 +101,36 @@ public indirect enum FormalValueShape: Hashable, Sendable {
             return "(DOMAIN \(value) = {\(keys)}" + checks.map { " /\\ (\($0))" }.joined() + ")"
         case .union:
             let ordered = possibleShapes.filter(\.isScalar) + possibleShapes.filter { !$0.isScalar }
-            return "(" + ordered.map { "(\(nested($0, value)))" }.joined(separator: " \\/ ") + ")"
+            return "(" + ordered.map {
+                "(\($0.predicate(for: value, sourceType: sourceType, depth: depth + 1)))"
+            }.joined(separator: " \\/ ") + ")"
         case .unsupported: return "FALSE"
+        }
+    }
+}
+
+private extension CompiledValueType {
+    func canHaveOuterShape(_ shape: FormalValueShape) -> Bool {
+        if let alternatives = unionAlternatives {
+            return alternatives.contains { $0.canHaveOuterShape(shape) }
+        }
+        if case .union(let first, let second) = shape {
+            return canHaveOuterShape(first) || canHaveOuterShape(second)
+        }
+        switch shape {
+        case .integer: if case .int = self { return true }
+        case .boolean: if case .bool = self { return true }
+        case .string: if case .string = self { return true }
+        case .set: if case .set = self { return true }
+        case .sequence, .tuple: if case .array = self { return true }; if case .tuple = self { return true }
+        case .function: if case .dictionary = self { return true }
+        case .record: if recordFields != nil { return true }
+        case .finite, .unsupported, .union: return true
+        }
+        // Named and finite domains need their resolved members to establish disjointness.
+        switch self {
+        case .unknown, .named, .finite: return true
+        default: return false
         }
     }
 }

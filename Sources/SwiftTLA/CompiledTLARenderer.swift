@@ -3,7 +3,7 @@ private enum StateRenderingTask {
     case setMember(CompiledExpression)
     case finishSetMember(start: Int)
     case finishSet(start: Int)
-    case checkedView(FormalValueShape, start: Int)
+    case checkedView(FormalValueShape, sourceType: CompiledValueType, start: Int)
     case formalArgument(CompiledFormalCallArgument)
     case formalOperator(CompiledFormalOperator)
     case localOperator(CompiledOperatorDefinition)
@@ -673,7 +673,8 @@ struct CompiledTLARenderer {
                 guard value.children.count == 1,
                       let preceding = try collect(value.children[0]) else { return nil }
                 let operand = try state(value.children[0], stateNames: stateNames)
-                return preceding + [.noMatchingCase(guard_: shape.predicate(for: operand))]
+                return preceding + [.noMatchingCase(guard_: shape.predicate(for: operand,
+                    sourceType: value.children[0].resultType))]
             case .ifThenElse:
                 guard value.children.count == 3,
                       let condition = try collect(value.children[0]),
@@ -1132,13 +1133,13 @@ struct CompiledTLARenderer {
                     parts.append("\(name)\(parameters.isEmpty ? "" : "(\(parameters))") == ")
                     tasks.append(.expression(operation.body))
                 }
-            case .checkedView(let shape, let start):
+            case .checkedView(let shape, let sourceType, let start):
                 let operand = parts[start...].joined()
                 parts.removeSubrange(start...)
                 var name = "_checkedValue"
                 let shapeNames = String(describing: shape)
                 while operand.contains(name) || shapeNames.contains(name) { name += "_" }
-                parts.append("(LET \(name) == \(operand) IN CASE \(shape.predicate(for: name)) -> \(name))")
+                parts.append("(LET \(name) == \(operand) IN CASE \(shape.predicate(for: name, sourceType: sourceType)) -> \(name))")
             case .expression(let expression):
                 switch expression.operation {
                 case .setMap, .unionAll:
@@ -1160,7 +1161,7 @@ struct CompiledTLARenderer {
                 case .assertView(let shape):
                     let value = expression.children[0]
 
-                    tasks.append(.checkedView(shape, start: parts.count))
+                    tasks.append(.checkedView(shape, sourceType: value.resultType, start: parts.count))
                     tasks.append(.expression(value))
                 case .nextState, .stutteringStep:
                     try schedule(expression.operation, expression.children)
