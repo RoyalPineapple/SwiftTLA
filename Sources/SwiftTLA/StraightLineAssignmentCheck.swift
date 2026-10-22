@@ -9,6 +9,11 @@ enum StraightLineAssignmentCheck {
         case unbind(String)
     }
 
+    private enum CompiledVisit {
+        case pair(ActionExpr, CompiledActionExpr)
+        case unbind(String)
+    }
+
     static func verify(_ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>) throws {
         guard step.bindings.isEmpty else { return }
 
@@ -84,6 +89,108 @@ enum StraightLineAssignmentCheck {
 
         guard stateRoots.allSatisfy({ (writes[$0] ?? .prior($0)) == (source[$0] ?? .prior($0)) }) else {
             throw mismatch()
+        }
+    }
+
+    static func verifyCompiled(_ action: NamedAction, body: CompiledActionExpr,
+                               layout: CompiledLayout) throws {
+        guard action.bindings.isEmpty else { return }
+        let stateIDs = Dictionary(uniqueKeysWithValues: layout.variables.map {
+            ($0.declaration.name, $0.id)
+        })
+        var pendingSource = [action.body]
+        var definedNames: Set<String> = []
+        var readNames: Set<String> = []
+        while let node = pendingSource.popLast() {
+            switch node {
+            case .define(let name, let expression, let child):
+                guard definedNames.insert(name).inserted else { return }
+                guard simple(expression, reads: &readNames) else { return }
+                pendingSource.append(child)
+            case .and(let left, let right):
+                pendingSource.append(right)
+                pendingSource.append(left)
+            case .guard_(.value(.bool(true))):
+                break
+            case .assign(.named, let expression):
+                guard simple(expression, reads: &readNames) else { return }
+            case .unchanged(.named):
+                break
+            default:
+                return
+            }
+        }
+        guard readNames.isSubset(of: Set(stateIDs.keys).union(definedNames)) else { return }
+
+        func mismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(
+                code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "actions.\(action.name).compiledAssignments",
+                expected: "the source assignment constructors, values, and identities",
+                actual: "the compiled action differs from the source action",
+                nextSafeAction: "Report this compiled assignment lowering failure."
+            )
+        }
+        func matching(_ source: StateExpr, _ compiled: CompiledExpression,
+                      bindings: [String: BinderID]) -> Bool {
+            guard compiled.children.isEmpty else { return false }
+            switch source {
+            case .variable(let name):
+                if let binder = bindings[name] { return compiled.operation == .boundValue(binder) }
+                guard let variable = stateIDs[name] else { return false }
+                return compiled.operation == .stateVariable(variable)
+            case .value(.int(let number)):
+                return compiled.operation == .value(.integer(number))
+            case .value(.bool(let value)):
+                return compiled.operation == .value(.boolean(value))
+            default:
+                return false
+            }
+        }
+
+        var bindings: [String: BinderID] = [:]
+        var usedBinders: Set<BinderID> = []
+        var pending: [CompiledVisit] = [.pair(action.body, body)]
+        while let next = pending.popLast() {
+            switch next {
+            case .unbind(let name):
+                bindings.removeValue(forKey: name)
+            case .pair(let source, let compiled):
+                switch (source, compiled) {
+                case (.define(let name, let expression, let child),
+                      .define(let binder, let value, let compiledChild)):
+                    guard bindings[name] == nil, usedBinders.insert(binder).inserted,
+                          matching(expression, value, bindings: bindings) else { throw mismatch() }
+                    bindings[name] = binder
+                    pending.append(.unbind(name))
+                    pending.append(.pair(child, compiledChild))
+                case (.and(let left, let right), .and(let compiledLeft, let compiledRight)):
+                    pending.append(.pair(right, compiledRight))
+                    pending.append(.pair(left, compiledLeft))
+                case (.guard_(.value(.bool(true))), .guard_(let value)):
+                    guard matching(.value(.bool(true)), value, bindings: bindings) else { throw mismatch() }
+                case (.assign(.named(let name), let expression), .assign(let id, let value)):
+                    guard stateIDs[name] == id, matching(expression, value, bindings: bindings) else {
+                        throw mismatch()
+                    }
+                case (.unchanged(.named(let name)), .unchanged(let id)):
+                    guard stateIDs[name] == id else { throw mismatch() }
+                default:
+                    throw mismatch()
+                }
+            }
+        }
+    }
+
+    private static func simple(_ expression: StateExpr, reads: inout Set<String>) -> Bool {
+        switch expression {
+        case .variable(let name):
+            reads.insert(name)
+            return true
+        case .value(.int), .value(.bool):
+            return true
+        default:
+            return false
         }
     }
 }

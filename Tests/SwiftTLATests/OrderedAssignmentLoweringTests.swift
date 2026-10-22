@@ -268,7 +268,10 @@ struct OrderedAssignmentLoweringTests {
 
         let compiled = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
         let compiledAction = try #require(compiled.behavior.actions.first)
+        let loweredAction = try #require(specification.loweredSourceModel().actions.first)
         #expect(try compiledResult(compiledAction.body, program: compiled) == expected)
+        try StraightLineAssignmentCheck.verifyCompiled(loweredAction,
+            body: compiledAction.body, layout: compiled.layout)
         guard case .define(let firstID, let firstRead, .define(let secondID, let secondRead, let compiledWrites))
                 = compiledAction.body,
               let firstVariable = compiled.layout.variables.first(where: { $0.declaration.name == "first" })
@@ -277,6 +280,10 @@ struct OrderedAssignmentLoweringTests {
             resultType: secondRead.resultType, children: [])
         let staleCompiled = CompiledActionExpr.define(firstID, firstRead,
             .define(secondID, oldStateRead, compiledWrites))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyCompiled(loweredAction,
+                body: staleCompiled, layout: compiled.layout)
+        }
         #expect(try compiledResult(staleCompiled, program: compiled) != expected)
     }
 
