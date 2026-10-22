@@ -256,6 +256,13 @@ struct OrderedAssignmentLoweringTests {
         }
         let stale = ActionExpr.define(first, read, .define(second, .variable("first"), writes))
         let expected = try sourceResult(source, roots: roots)
+        try StraightLineAssignmentCheck.verify(step, lowered: action, stateRoots: Set(roots))
+        try StraightLineAssignmentCheck.verify(step,
+            lowered: .and(action, .unchanged(.named("untouched"))),
+            stateRoots: Set(roots + ["untouched"]))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verify(step, lowered: stale, stateRoots: Set(roots))
+        }
         #expect(try loweredResult(action, roots: roots) == expected)
         #expect(try loweredResult(stale, roots: roots) != expected)
 
