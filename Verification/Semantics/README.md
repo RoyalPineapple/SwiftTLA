@@ -1161,6 +1161,14 @@ the abstract rules. The indexed formulation avoids a recursive-operator
 limitation in this pinned TLAPS build; that tool workaround does not discharge
 the compiler and output obligations.
 
+`OrderedAssignmentLoweringTests` independently interprets straight-line root
+copies and literal assignments over symbolic complete states, then checks the
+real lowered action for every prefix of a repeated-write sequence and for the
+accepted `GeneratedAtomicCopyProofModel` source. A stale pre-step read changes
+the symbolic result and is rejected. This checks that source-to-lowered subset;
+it is not a theorem about the Swift checker, arbitrary expressions or failures,
+or either general emitted-output link.
+
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is
 placed at history index `Len(prefix)`. TLAPS proves that restricting a full
