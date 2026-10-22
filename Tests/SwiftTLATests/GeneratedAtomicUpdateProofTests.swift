@@ -1171,7 +1171,8 @@ struct GeneratedAtomicUpdateProofTests {
         var all: [String: String] = [:]
         let declarations: [(String, Int?)] = [
             ("_Updates", nil), ("_visitUpdates0", 3), ("_visitSuccessors0", 3),
-            ("visitSuccessors", 2), ("_visitSuccessors", 3), ("_visitSuccessors", 2),
+            ("visitSuccessors", 2), ("_visitActionCandidates", 1),
+            ("_visitSuccessors", 3), ("_visitSuccessors", 2),
         ]
         for (name, parameterCount) in declarations {
             let emitted = try #require(member(named: name, parameterCount: parameterCount, in: actualMembers))

@@ -156,7 +156,8 @@ import SwiftSyntax
             $0.as(FunctionDeclSyntax.self)?.name.text == "_actions"
         })
         let wrongCandidates = members[candidateIndex].description.replacingOccurrences(
-            of: "result.append(.repeatWrites)", with: "result.append(.copy)")
+            of: "try _visitActionCandidates { result.append($0) }",
+            with: "try _visitActionCandidates { _ in }")
         #expect(wrongCandidates != members[candidateIndex].description)
         wrongMembers = members
         wrongMembers[candidateIndex] = try #require(Parser.parse(source: wrongCandidates)
@@ -164,7 +165,7 @@ import SwiftSyntax
         do {
             try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
                 actionCount: compiled.api.actions.count, configurationArguments: "")
-            Issue.record("A generated candidate list duplicated one action")
+            Issue.record("A generated candidate list discarded every action")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.candidates")
         }
@@ -174,7 +175,8 @@ import SwiftSyntax
                     == "onEvaluationFailure"
         })
         let wrongEnumeration = members[visitorIndex].description.replacingOccurrences(
-            of: "try _visitAction(.repeatWrites)", with: "try _visitAction(.copy)")
+            of: "try _visitActionCandidates(_visitAction)",
+            with: "try _visitActionCandidates { _ in }")
         #expect(wrongEnumeration != members[visitorIndex].description)
         wrongMembers = members
         wrongMembers[visitorIndex] = try #require(Parser.parse(source: wrongEnumeration)
@@ -182,9 +184,25 @@ import SwiftSyntax
         do {
             try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
                 actionCount: compiled.api.actions.count, configurationArguments: "")
-            Issue.record("Generated checking duplicated one action candidate")
+            Issue.record("Generated checking ignored every action candidate")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.enumeration")
+        }
+        let sourceIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitActionCandidates"
+        })
+        let wrongSource = members[sourceIndex].description.replacingOccurrences(
+            of: "try visit(.repeatWrites)", with: "try visit(.copy)")
+        #expect(wrongSource != members[sourceIndex].description)
+        wrongMembers = members
+        wrongMembers[sourceIndex] = try #require(Parser.parse(source: wrongSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
+                actionCount: compiled.api.actions.count, configurationArguments: "")
+            Issue.record("Generated candidate traversal duplicated one action")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.candidateSource")
         }
     }
 
