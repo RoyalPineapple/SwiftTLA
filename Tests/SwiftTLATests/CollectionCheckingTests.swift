@@ -26,6 +26,7 @@ struct CollectionCheckingTests {
     func checksArraySteps() throws {
         let graph = try ReachabilityGraph(initialMachines: ArrayStepMachine.initialMachines(), maximumStates: 10)
         #expect(graph.initialStates.count == 1)
+        #expect(Set(graph.initialStates.map(\.state.values)) == [[]])
         #expect(Set(graph.transitions.keys.map(\.state.values)) == [[], [1], [1, 1]])
         #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == 2)
         #expect(Set(graph.deadlockedStates.map(\.state.values)) == [[1, 1]])

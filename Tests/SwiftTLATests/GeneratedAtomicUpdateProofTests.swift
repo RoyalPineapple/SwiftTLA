@@ -1013,6 +1013,8 @@ struct GeneratedAtomicUpdateProofTests {
 
         let machines = try GeneratedScalarConditionalProofModel.initialMachines()
         #expect(machines.count == 2)
+        #expect(Set(machines.map(\.state.left)) == Set([2, 4]))
+        #expect(machines.allSatisfy { $0.state.right == 3 && !$0.state.selected })
         for machine in machines {
             var selected = machine
             _ = try selected.send(.choose)

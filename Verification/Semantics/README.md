@@ -711,8 +711,8 @@ function against its witness. `DynamicBooleanSequenceSelectionProof.tla` proves
 the source rank and emitted lexicographic order agree for every pair and
 nonempty subset of this three-value domain, then composes complete initial
 states, labeled steps, no-match failure, and the selected evaluation check.
-A reversed chosen edge is a negative control. All 32 obligations pass locally;
-hosted proof evidence is pending. The Swift compiler/runtime,
+A reversed chosen edge is a negative control. The proof is included in the
+pinned semantic-proof diagnostic. The Swift compiler/runtime,
 `lexicographicallyPrecedes`, `Result`, `choose`, and update merge remain
 trusted. This does not prove arbitrary mutable Boolean-sequence domains,
 other element types, or general generated Swift emission.
@@ -1869,8 +1869,8 @@ regression first showed that a changed `When(values.count < 2)` bound passed
 the old structural check; the repaired verifier rejects it.
 `ArrayLengthGuardProof.tla` imports the complete generated
 `ArrayStepMachine.tla` module, which a test pins byte-for-byte to the actual
-TLA+ output. For every integer sequence, its 15 locally discharged
-obligations relate the independent append rule to the emitted initial state,
+TLA+ output. For every integer sequence, its obligations relate the
+independent append rule to the emitted initial state,
 complete `append`-labeled step, `Next`, bound, and enabledness. They also show
 that relaxing the guard adds an edge from the two-element state. The native
 regression checks the generated machine's complete three-state, two-edge
@@ -2217,12 +2217,12 @@ is enabled exactly when the evaluation check holds on the declared initial
 domain. The three actual emitted failure predicates are connected to the
 generic ordered-site theorem, not merely proved separately; the aggregate is
 proved equivalent to their disjunction, and an eager-failure negative control
-is included (36 local TLAPS obligations). The finite
+is included. The finite
 Swift-machine test covers the exact four initial
 states and their successors. These facts do not prove the Swift compiler,
 the concrete `_NativeMachineOperations` implementations, arbitrary source
-lowering, or every expression form. Hosted proof and parity evidence for this
-new instance are still pending.
+lowering, or every expression form. The hosted proof diagnostic and the full
+parity matrix must qualify the same source revision.
 
 `ShortCircuitFailureModel` connects the same ordered-site rule to both
 expression-level Boolean operators. Its output check pins the complete
@@ -2231,8 +2231,7 @@ either Swift short-circuit branch or making the TLA+ conjunction failure eager
 breaks the check. `ShortCircuitFailureProof.tla` proves the two complete
 labeled relations, all four emitted failure predicates, the two aggregates,
 and selected invariant, reachable-state closure, and the instantiated
-ordered-site rule (29 local
-TLAPS obligations). In particular, `enabled = TRUE, divisor = 0` retains a
+ordered-site rule. In particular, `enabled = TRUE, divisor = 0` retains a
 valid disjunction step while the conjunction reports division by zero. The
 native test checks all four initial states, successor counts and failures.
 With non-decisive checking, the generated validation visitor reports a failing
