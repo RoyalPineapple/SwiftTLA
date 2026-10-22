@@ -48,3 +48,18 @@ struct NestedCheckedSequenceView {
         }
     }
 }
+
+@TLAModel
+struct NestedCheckedSetView {
+    enum Step: String, CaseIterable { case inspect }
+
+    static var spec: TLASpec {
+        #spec("NestedCheckedSetView") {
+            let model = Algorithm(label: "NestedCheckedSetView", scoped: { scope in
+                let members = scope.sharedVar(_name: "members", initial: SetExpr<Int>(1))
+                Do(Step.inspect, when: members.expr.assuming(SetExpr<[Int]>.self).isEmpty) {}
+            })
+            model
+        }
+    }
+}

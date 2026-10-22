@@ -2529,6 +2529,23 @@ accepted-model output link or theorem for those collection forms. Union-typed
 source elements, general checked-view emission, and hosted TLC/native
 failure-verdict parity remain open.
 
+The accepted NestedCheckedSetView model supplies one set-form output link.
+The native machine reports noMatchingCase on its nonempty integer-set initial
+state without committing a transition. The test pins the complete generated
+TLA+ module, selected evaluation check, and generated Swift visitor; changing
+the visitor's thrown failure to a returned sequence breaks its token pin. The
+renderer previously lost that failure under Cardinality, leaving a partial
+TLA+ CASE and no intrinsic check; the focused regression failed before the
+operand-failure propagation repair. NestedCheckedSetViewProof.tla imports the
+exact module and proves initial states, complete labeled steps, the selected
+failure verdict, and an omitted-guard negative control for every integer
+set. It proves empty-set cardinality explicitly; all 14 obligations pass
+locally. This closes the named set-view slice under the macro parser, Swift
+compiler/runtime and standard collection semantics, tokenized output pin,
+and TLAPS backend assumptions. The native runtime test executes only the
+nonempty initial state. Other set expressions, general checked-view Swift
+emission, and hosted TLC/native failure-verdict parity remain open.
+
 ## Independent evidence
 
 Keep purpose-built finite conformance models with hand-specified expected

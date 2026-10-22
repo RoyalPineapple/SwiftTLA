@@ -778,7 +778,8 @@ struct CompiledTLARenderer {
                         guard_: site.guard_, operands: site.operands)]
                 }
             case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
-                 .in, .setLiteral, .tupleLiteral, .tupleAppend, .tupleConcatenate, .tupleLength:
+                 .in, .setLiteral, .tupleLiteral, .tupleAppend, .tupleConcatenate, .tupleLength,
+                 .cardinality:
                 var preceding: [OrderedEvaluationSite] = []
                 let children = value.operation.evaluatesRightOperandFirst
                     ? Array(value.children.reversed()) : value.children
