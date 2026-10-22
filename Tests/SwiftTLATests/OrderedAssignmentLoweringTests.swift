@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 
@@ -11,6 +12,7 @@ struct OrderedAssignmentLoweringTests {
     private enum InvalidShape: Error {
         case source
         case lowered
+        case rendered
     }
 
     private func value(
@@ -59,16 +61,101 @@ struct OrderedAssignmentLoweringTests {
             case .assign(.named(let root), let expression):
                 guard original[root] != nil, writes[root] == nil else { throw InvalidShape.lowered }
                 writes[root] = try value(expression, state: original, bindings: bindings)
+            case .unchanged(.named(let root)):
+                guard let previous = original[root], writes[root] == nil else { throw InvalidShape.lowered }
+                writes[root] = previous
             default: throw InvalidShape.lowered
             }
         }
         try visit(action, bindings: [:])
-        return original.merging(writes) { _, written in written }
+        guard writes.count == original.count else { throw InvalidShape.lowered }
+        return writes
     }
 
-    private func lower(_ statements: [AlgorithmStatementModel]) throws -> ActionExpr {
+    private func lower(_ statements: [AlgorithmStatementModel], roots: [String]) throws -> ActionExpr {
         let step = AtomicStep(model: .init(label: .init(name: "advance"), statements: statements))
-        return try AlgorithmLowerer.lowerAtomicStep(step).action
+        let action = try AlgorithmLowerer.lowerAtomicStep(step).action
+        return ActionNormalization.complete(action, variables: roots.map { NamedVar(name: $0, initial: .int(0)) })
+    }
+
+    private func renderedResult(_ declaration: String, roots: [String]) throws -> [String: Symbol] {
+        let pattern = try NSRegularExpression(pattern: #"\s+|==|/\\|[()]|=|[A-Za-z_][A-Za-z0-9_]*'?|-?[0-9]+"#)
+        let text = declaration as NSString
+        var tokens: [String] = []
+        var offset = 0
+        while offset < text.length {
+            guard let match = pattern.firstMatch(in: declaration, range: NSRange(location: offset, length: text.length - offset)),
+                  match.range.location == offset else { throw InvalidShape.rendered }
+            let token = text.substring(with: match.range)
+            if !token.first!.isWhitespace { tokens.append(token) }
+            offset = match.range.upperBound
+        }
+
+        let original = initial(roots)
+        var position = 0
+        func take(_ expected: String) throws {
+            guard tokens.indices.contains(position), tokens[position] == expected else { throw InvalidShape.rendered }
+            position += 1
+        }
+        func atom(_ bindings: [String: Symbol]) throws -> Symbol {
+            guard tokens.indices.contains(position) else { throw InvalidShape.rendered }
+            let token = tokens[position]
+            position += 1
+            if let number = Int(token) { return .literal(.int(number)) }
+            if let bound = bindings[token] { return bound }
+            guard let value = original[token] else { throw InvalidShape.rendered }
+            return value
+        }
+        func action(_ bindings: [String: Symbol]) throws -> [String: Symbol] {
+            if tokens.indices.contains(position), tokens[position] == "(" {
+                try take("(")
+                if tokens.indices.contains(position), tokens[position] == "LET" {
+                    try take("LET")
+                    guard tokens.indices.contains(position) else { throw InvalidShape.rendered }
+                    let name = tokens[position]
+                    position += 1
+                    guard name.range(of: #"^[A-Za-z_][A-Za-z0-9_]*$"#, options: .regularExpression) != nil,
+                          original[name] == nil, bindings[name] == nil else { throw InvalidShape.rendered }
+                    try take("==")
+                    let value = try atom(bindings)
+                    try take("IN")
+                    var nested = bindings
+                    nested[name] = value
+                    let writes = try action(nested)
+                    try take(")")
+                    return writes
+                }
+                let left = try action(bindings)
+                try take("/\\")
+                let right = try action(bindings)
+                try take(")")
+                return try left.merging(right) { _, _ in throw InvalidShape.rendered }
+            }
+            guard tokens.indices.contains(position) else { throw InvalidShape.rendered }
+            if tokens[position] == "TRUE" {
+                position += 1
+                return [:]
+            }
+            if tokens[position] == "UNCHANGED" {
+                position += 1
+                guard tokens.indices.contains(position), let previous = original[tokens[position]] else {
+                    throw InvalidShape.rendered
+                }
+                let root = tokens[position]
+                position += 1
+                return [root: previous]
+            }
+            let target = tokens[position]
+            position += 1
+            guard target.hasSuffix("'"), original[String(target.dropLast())] != nil else {
+                throw InvalidShape.rendered
+            }
+            try take("=")
+            return [String(target.dropLast()): try atom(bindings)]
+        }
+        let writes = try action([:])
+        guard position == tokens.count, writes.count == original.count else { throw InvalidShape.rendered }
+        return writes
     }
 
     @Test("Straight-line copy and literal assignments read the preceding complete state")
@@ -82,21 +169,43 @@ struct OrderedAssignmentLoweringTests {
         ]
         for prefix in 0...statements.count {
             let source = Array(statements.prefix(prefix))
-            #expect(try loweredResult(lower(source), roots: roots) == sourceResult(source, roots: roots))
+            #expect(try loweredResult(lower(source, roots: roots), roots: roots) == sourceResult(source, roots: roots))
         }
     }
 
     @Test("A stale pre-step read is rejected by the independent symbolic rule")
     func staleReadMutationChangesTheResult() throws {
         let roots = ["first", "second"]
-        let step = try #require(GeneratedAtomicCopyProofModel.spec.sourceAtomicSteps.first)
+        let specification = GeneratedAtomicCopyProofModel.spec
+        let step = try #require(specification.sourceAtomicSteps.first)
         let source = step.model.statements
-        let action = try AlgorithmLowerer.lowerAtomicStep(step).action
+        let action = ActionNormalization.complete(
+            try AlgorithmLowerer.lowerAtomicStep(step).action, variables: specification.variables)
         guard case .define(let first, let read, .define(let second, _, let writes)) = action else {
             throw InvalidShape.lowered
         }
         let stale = ActionExpr.define(first, read, .define(second, .variable("first"), writes))
         #expect(try loweredResult(action, roots: roots) == sourceResult(source, roots: roots))
         #expect(try loweredResult(stale, roots: roots) != sourceResult(source, roots: roots))
+    }
+
+    @Test("The emitted TLA assignment action has the source's complete symbolic result")
+    func renderedCopyKeepsOrderedReadsAndTargets() throws {
+        let roots = ["first", "second"]
+        let step = try #require(GeneratedAtomicCopyProofModel.spec.sourceAtomicSteps.first)
+        let expected = try sourceResult(step.model.statements, roots: roots)
+        let module = try GeneratedAtomicCopyProofModel.render().tlaBundle.root.tla
+        let name = step.model.label.name
+        let header = "\(name) == "
+        let declarations = module.split(separator: "\n").filter { $0.hasPrefix(header) }
+        let declaration = try #require(declarations.count == 1 ? declarations[0].dropFirst(header.count) : nil)
+        #expect(module.contains("\nNext == \(name)\n"))
+        #expect(try renderedResult(String(declaration), roots: roots) == expected)
+        #expect(throws: InvalidShape.self) { try renderedResult("TRUE", roots: roots) }
+
+        let stale = String(declaration).replacingOccurrences(
+            of: "__atomic_1 == __atomic_0", with: "__atomic_1 == first")
+        #expect(stale != declaration)
+        #expect(try renderedResult(stale, roots: roots) != expected)
     }
 }
