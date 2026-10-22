@@ -765,8 +765,7 @@ extension NativeSwiftEmitter {
         }
         var visitorCases: [String] = []
         var formalCases: [String] = []
-        var enumeration: [String] = []
-        var visitorEnumeration: [String] = []
+        var candidateEnumeration: [String] = []
         for api in model.api.actions {
             let action = program[api.compiledAction]
             var pattern: [String] = []
@@ -812,8 +811,7 @@ extension NativeSwiftEmitter {
                 try Self._visitSuccessors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(configurationArguments), checking: &context, visit)
             """)
             let actionValue = ".\(api.swiftIdentifier)" + (actionArguments.isEmpty ? "" : "(\(actionArguments.joined(separator: ", ")))")
-            enumeration.append("do {\n" + loops + "result.append(\(actionValue))\n" + closing + "}\n")
-            visitorEnumeration.append("do {\n" + loops + "try _visitAction(\(actionValue))\n" + closing + "}\n")
+            candidateEnumeration.append("do {\n" + loops + "try visit(\(actionValue))\n" + closing + "}\n")
         }
         let declarations = try nativeDeclarations("""
         public func visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>,
@@ -860,9 +858,12 @@ extension NativeSwiftEmitter {
                 return Self(execution: execution\(configurationArguments))
             }
         }
+        private func _visitActionCandidates(_ visit: (Action) throws -> Void) throws {
+            \(candidateEnumeration.joined(separator: "\n"))
+        }
         private func _actions() throws -> [Action] {
             var result: [Action] = []
-            \(enumeration.joined(separator: "\n"))
+            try _visitActionCandidates { result.append($0) }
             return result
         }
         public func actionCandidates() throws -> [Action] { try _actions() }
@@ -911,7 +912,7 @@ extension NativeSwiftEmitter {
                         throw error
                     }
                 }
-                \(visitorEnumeration.joined(separator: "\n"))
+                try _visitActionCandidates(_visitAction)
             } catch is _StopSuccessorTraversal {
             }
             return found
@@ -1492,7 +1493,6 @@ func verifyGeneratedActionRoutingOutput(
     _ declarations: [DeclSyntax], routes: [(name: String, id: Int, formalName: String)],
     actionCount: Int, configurationArguments: String
 ) throws {
-    guard !routes.isEmpty else { return }
     func invalid(_ path: String, _ expected: String) -> CompilationDiagnostic {
         CompilationDiagnostic(
             code: .unsupportedGeneratedValueShape, stage: .validation, path: path,
@@ -1555,16 +1555,17 @@ func verifyGeneratedActionRoutingOutput(
             throw invalid("native.action.label.\(name)", "the compiled formal action label \(route.formalName)")
         }
     }
-    guard routes.count == actionCount else { return }
     let methods = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }
     let candidates = methods.filter { $0.name.text == "_actions" }
-    let expectedCandidates = "var result: [Action] = []\n"
-        + routes.map { "do { result.append(.\($0.name)) }" }.joined(separator: "\n")
-        + "\nreturn result"
+    let expectedCandidates = """
+        var result: [Action] = []
+        try _visitActionCandidates { result.append($0) }
+        return result
+        """
     guard candidates.count == 1, let candidateBody = candidates.first?.body?.statements,
           Array(candidateBody.tokens(viewMode: .sourceAccurate)).map(\.text)
             == tokens(expectedCandidates) else {
-        throw invalid("native.action.candidates", "every compiled action candidate once, in order")
+        throw invalid("native.action.candidates", "the public action list delegates to the candidate visitor")
     }
     let visitors = methods.filter {
         $0.name.text == "_visitSuccessors"
@@ -1578,12 +1579,18 @@ func verifyGeneratedActionRoutingOutput(
         throw invalid("native.action.enumeration", "one checking visitor for every compiled action")
     }
     let calls = Array(outer.body.statements.dropFirst())
-    guard calls.count == routes.count,
-          zip(calls, routes).allSatisfy({ item, route in
-              Array(item.tokens(viewMode: .sourceAccurate)).map(\.text)
-                == tokens("do { try _visitAction(.\(route.name)) }")
-          }) else {
-        throw invalid("native.action.enumeration", "every compiled action visited once, in order")
+    guard calls.count == 1,
+          Array(calls[0].tokens(viewMode: .sourceAccurate)).map(\.text)
+            == tokens("try _visitActionCandidates(_visitAction)") else {
+        throw invalid("native.action.enumeration", "checking delegates to the same candidate visitor")
+    }
+    guard routes.count == actionCount else { return }
+    let sources = methods.filter { $0.name.text == "_visitActionCandidates" }
+    let expectedSource = routes.map { "do { try visit(.\($0.name)) }" }.joined(separator: "\n")
+    guard sources.count == 1, let body = sources.first?.body?.statements,
+          Array(body.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == tokens(expectedSource) else {
+        throw invalid("native.action.candidateSource", "every compiled action emitted once in the shared visitor")
     }
 }
 

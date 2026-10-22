@@ -91,6 +91,12 @@ private func _visitSuccessors(checking context: inout CheckingContext<CheckingRe
     })
 }
 
+private func _visitActionCandidates(_ visit: (Action) throws -> Void) throws {
+    do {
+        try visit(.__PROOF_ACTION__)
+    }
+}
+
 private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
                               _ visit: (Action, Self) throws -> Bool,
                               onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool) throws -> Bool {
@@ -118,9 +124,7 @@ private func _visitSuccessors(checking context: inout CheckingContext<CheckingRe
                 throw error
             }
         }
-        do {
-            try _visitAction(.__PROOF_ACTION__)
-        }
+        try _visitActionCandidates(_visitAction)
     } catch is _StopSuccessorTraversal {
     }
     return found
