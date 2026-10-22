@@ -2165,11 +2165,14 @@ private extension CompiledModuleMetadata {
                     nextSafeAction: "Compile the source model again."
                 )
             }
+            let renderedBody = try renderer.action(compiled.body)
+            try StraightLineRenderedActionCheck.verify(compiled.body, rendered: renderedBody,
+                layout: layout, binders: renderer.bindings.binders)
             return DirectModuleAction(
                 sourceName: declaration.declaration.name,
                 renderedName: renderedName,
                 renderedParameters: try compiled.bindings.map { try renderer.binderName($0.binder) },
-                renderedBody: try renderer.action(compiled.body),
+                renderedBody: renderedBody,
                 calls: try callsByAction[compiled.id, default: []].map { emitted in
                     RenderedAction(
                         sourceName: declaration.declaration.name,

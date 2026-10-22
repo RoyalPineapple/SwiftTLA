@@ -3,6 +3,11 @@ extension CompiledProgram {
         var checker = try CompiledTypeChecker(inputs: inputs)
         self = try ProgramResolver(checked: checker.checkProgram(), types: inputs.types,
             nextBinder: (inputs.bindings.binders.keys.map(\.ordinal).max() ?? -1) + 1).resolve()
+        for action in inputs.semantics.behavior.actions {
+            try StraightLineAssignmentCheck.verifyResolved(action,
+                resolved: behavior.actions.first { $0.id == action.id }, variableTypes: inputs.variableTypes,
+                resolvedVariableTypes: variableTypes, resolvedBindingTypes: bindingTypes)
+        }
     }
 }
 

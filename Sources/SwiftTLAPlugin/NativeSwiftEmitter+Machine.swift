@@ -682,7 +682,8 @@ extension NativeSwiftEmitter {
         }
         """)
         try verifyGeneratedActionWriteOutput(declaration, action: action.body, program: program,
-            stateFields: stateMemberNames, parts: parts.writes, conditions: parts.conditions)
+            stateFields: stateMemberNames, parts: parts.writes, conditions: parts.conditions,
+            requireScalarLeaves: action.bindings.isEmpty && isTotalScalarAssignment(action.body))
         return declaration
     }
 
@@ -1477,11 +1478,43 @@ func verifyGeneratedUpdateApplyOutput(
     }
 }
 
+private func isTotalScalarAssignment(_ root: CompiledActionExpr) -> Bool {
+    func scalar(_ expression: CompiledExpression) -> Bool {
+        guard expression.children.isEmpty else { return false }
+        switch expression.operation {
+        case .stateVariable, .boundValue:
+            return expression.resultType == .int || expression.resultType == .bool
+        case .value(.integer): return expression.resultType == .int
+        case .value(.boolean): return expression.resultType == .bool
+        default: return false
+        }
+    }
+    var pending = [root]
+    while let node = pending.popLast() {
+        switch node {
+        case .define(_, let value, let body):
+            guard scalar(value) else { return false }
+            pending.append(body)
+        case .and(let left, let right):
+            pending.append(right)
+            pending.append(left)
+        case .assign(_, let value):
+            guard scalar(value) else { return false }
+        case .unchanged: break
+        case .guard_(let value):
+            guard value.operation == .value(.boolean(true)), value.resultType == .bool,
+                  value.children.isEmpty else { return false }
+        default: return false
+        }
+    }
+    return true
+}
+
 func verifyGeneratedActionWriteOutput(
     _ declaration: DeclSyntax?, action: CompiledActionExpr, program: CompiledProgram,
     stateFields: [VariableID: String],
     parts: [(id: Int, slot: String, value: String)],
-    conditions: [(id: Int, value: String)] = []
+    conditions: [(id: Int, value: String)] = [], requireScalarLeaves: Bool = false
 ) throws {
     guard let visitor = declaration?.as(FunctionDeclSyntax.self),
           visitor.body != nil else {
@@ -2165,9 +2198,9 @@ func verifyGeneratedActionWriteOutput(
         }
         let initializer = Array(tokens[3..<(tokens.count - expectedCall.count)])
         let checkedInitializer = checkedValueTokens(value, parameters: parent, actual: initializer)
-        if checkedInitializer == nil, booleanPredicateNodes(value) != nil {
+        if checkedInitializer == nil, requireScalarLeaves || booleanPredicateNodes(value) != nil {
             throw invalid("native.action.binding.\(id)",
-                "a complete generated Boolean branch tree", "unreadable predicate functions")
+                "a complete generated scalar value or Boolean branch tree", "unreadable value expression")
         }
         if let checkedInitializer,
            canonicalPredicateNames(checkedInitializer.actual) !=
@@ -2325,9 +2358,9 @@ func verifyGeneratedActionWriteOutput(
         }
         if let assignment = assignments[part.id], let bindings = parameters[part.id] {
             let checkedValue = checkedValueTokens(assignment, parameters: bindings, actual: actualBody)
-            if checkedValue == nil, booleanPredicateNodes(assignment) != nil {
+            if checkedValue == nil, requireScalarLeaves || booleanPredicateNodes(assignment) != nil {
                 throw invalid("native.action.write.\(part.id)",
-                    "a complete generated Boolean branch tree", "unreadable predicate functions")
+                    "a complete generated scalar value or Boolean branch tree", "unreadable value expression")
             }
             guard let checkedValue else { continue }
             let compiled = Parser.parse(source: """

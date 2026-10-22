@@ -1189,9 +1189,18 @@ second independent gate checks unparameterized actions with distinct binding
 names in the same total Int/Boolean copy-and-literal grammar as
 `CompiledLowerer` converts source names into variable and binder IDs; a wrong
 compiled read is rejected. It runs before type checking,
-so inserted conversions and the final resolved typed program remain separate
-obligations. Both gate implementations are part of the trusted base until
-verified.
+and a third gate checks that type checking and resolution retain the same
+complete action topology, Int/Boolean reads, values, writes, and inferred
+state and binder types whenever no conversion is needed. A wrong resolved read
+is rejected. The direct TLA+ renderer checks the emitted body against the same
+compiled constructor grammar before placing it in the final module; a wrong
+rendered read is rejected. The native emitter already checks its actual update
+visitor and now refuses an unrecognized scalar leaf in this grammar. These
+checks connect the `OrderedDoTransitionEquivalence` and `OrderedDoLabeledEdges`
+rules to actual compiler outputs for this restricted action class, subject to
+the checkers' correctness and the Swift compiler/runtime. Conversions, other
+expressions, initialization, and selected temporal outcomes remain separate
+obligations; none of these checker implementations is formally verified.
 
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is

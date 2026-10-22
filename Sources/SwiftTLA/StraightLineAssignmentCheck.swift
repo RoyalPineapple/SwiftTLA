@@ -14,6 +14,12 @@ enum StraightLineAssignmentCheck {
         case unbind(String)
     }
 
+    private enum ResolvedVisit {
+        case scan(CompiledActionExpr)
+        case pair(CompiledActionExpr, CompiledActionExpr)
+        case unbind(BinderID)
+    }
+
     static func verify(_ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>) throws {
         guard step.bindings.isEmpty else { return }
 
@@ -191,6 +197,115 @@ enum StraightLineAssignmentCheck {
             return true
         default:
             return false
+        }
+    }
+
+    static func verifyResolved(_ original: CompiledAction, resolved: CompiledAction?,
+                               variableTypes: [VariableID: CompiledValueType],
+                               resolvedVariableTypes: [VariableID: CompiledValueType],
+                               resolvedBindingTypes: [BinderID: CompiledValueType]) throws {
+        guard original.bindings.isEmpty else { return }
+        func scalar(_ type: CompiledValueType?) -> Bool { type == .int || type == .bool }
+        func leafType(_ expression: CompiledExpression,
+                      bindings: [BinderID: CompiledValueType]) -> CompiledValueType? {
+            guard expression.children.isEmpty else { return nil }
+            switch expression.operation {
+            case .stateVariable(let id): return variableTypes[id]
+            case .boundValue(let id): return bindings[id]
+            case .value(.integer): return .int
+            case .value(.boolean): return .bool
+            default: return nil
+            }
+        }
+
+        var bindings: [BinderID: CompiledValueType] = [:]
+        var seenBinders: Set<BinderID> = []
+        var usedVariables: Set<VariableID> = []
+        var inferredBindings: [BinderID: CompiledValueType] = [:]
+        var pending: [ResolvedVisit] = [.scan(original.body)]
+        while let next = pending.popLast() {
+            switch next {
+            case .unbind(let id): bindings.removeValue(forKey: id)
+            case .pair: break
+            case .scan(let node):
+                switch node {
+                case .define(let id, let value, let body):
+                    guard seenBinders.insert(id).inserted,
+                          let type = leafType(value, bindings: bindings), scalar(type) else { return }
+                    if case .stateVariable(let read) = value.operation { usedVariables.insert(read) }
+                    bindings[id] = type
+                    inferredBindings[id] = type
+                    pending.append(.unbind(id))
+                    pending.append(.scan(body))
+                case .and(let left, let right):
+                    pending.append(.scan(right))
+                    pending.append(.scan(left))
+                case .assign(let id, let value):
+                    guard let type = leafType(value, bindings: bindings), scalar(type),
+                          variableTypes[id] == type else { return }
+                    usedVariables.insert(id)
+                    if case .stateVariable(let read) = value.operation { usedVariables.insert(read) }
+                case .unchanged(let id):
+                    guard scalar(variableTypes[id]) else { return }
+                    usedVariables.insert(id)
+                case .guard_(let value):
+                    guard value.children.isEmpty,
+                          value.operation == .value(.boolean(true)) else { return }
+                default: return
+                }
+            }
+        }
+
+        func mismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(
+                code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "actions[\(original.id.ordinal)].resolvedAssignments",
+                expected: "the same total scalar assignment rule with resolved Int/Boolean values",
+                actual: "type checking or resolution changed an action, read, write, or value",
+                nextSafeAction: "Report this typed assignment compilation failure."
+            )
+        }
+        guard usedVariables.allSatisfy({ resolvedVariableTypes[$0] == variableTypes[$0] }),
+              inferredBindings.allSatisfy({ resolvedBindingTypes[$0.key] == $0.value }) else {
+            throw mismatch()
+        }
+        guard let resolved, resolved.id == original.id, resolved.bindings.isEmpty else {
+            throw mismatch()
+        }
+        func same(_ before: CompiledExpression, _ after: CompiledExpression,
+                  bindings: [BinderID: CompiledValueType]) -> Bool {
+            guard let type = leafType(before, bindings: bindings) else { return false }
+            return after.children.isEmpty && before.operation == after.operation && after.resultType == type
+        }
+        bindings.removeAll()
+        pending = [.pair(original.body, resolved.body)]
+        while let next = pending.popLast() {
+            switch next {
+            case .unbind(let id): bindings.removeValue(forKey: id)
+            case .scan: break
+            case .pair(let before, let after):
+                switch (before, after) {
+                case (.define(let firstID, let firstValue, let firstBody),
+                      .define(let secondID, let secondValue, let secondBody)):
+                    guard firstID == secondID,
+                          let type = leafType(firstValue, bindings: bindings),
+                          same(firstValue, secondValue, bindings: bindings) else { throw mismatch() }
+                    bindings[firstID] = type
+                    pending.append(.unbind(firstID))
+                    pending.append(.pair(firstBody, secondBody))
+                case (.and(let firstLeft, let firstRight), .and(let secondLeft, let secondRight)):
+                    pending.append(.pair(firstRight, secondRight))
+                    pending.append(.pair(firstLeft, secondLeft))
+                case (.assign(let firstID, let firstValue), .assign(let secondID, let secondValue)):
+                    guard firstID == secondID,
+                          same(firstValue, secondValue, bindings: bindings) else { throw mismatch() }
+                case (.unchanged(let firstID), .unchanged(let secondID)):
+                    guard firstID == secondID else { throw mismatch() }
+                case (.guard_(let firstValue), .guard_(let secondValue)):
+                    guard same(firstValue, secondValue, bindings: bindings) else { throw mismatch() }
+                default: throw mismatch()
+                }
+            }
         }
     }
 }
