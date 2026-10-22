@@ -153,6 +153,8 @@ struct OrderedAssignmentLoweringTests {
             let token = tokens[position]
             position += 1
             if let number = Int(token) { return .literal(.int(number)) }
+            if token == "TRUE" { return .literal(.bool(true)) }
+            if token == "FALSE" { return .literal(.bool(false)) }
             if let bound = bindings[token] { return bound }
             guard let value = original[token] else { throw InvalidShape.rendered }
             return value
@@ -239,7 +241,39 @@ struct OrderedAssignmentLoweringTests {
             let header = "advance == "
             let declarations = module.split(separator: "\n").filter { $0.hasPrefix(header) }
             let declaration = try #require(declarations.count == 1 ? declarations[0].dropFirst(header.count) : nil)
+            try StraightLineRenderedActionCheck.verify(compiled.body, rendered: String(declaration),
+                layout: program.layout, binders: program.binderNames)
             #expect(try renderedResult(String(declaration), roots: roots) == expected)
+        }
+    }
+
+    @Test("Boolean literals and copies keep their complete TLA+ assignment meaning")
+    func booleanAssignmentsPreserveOrderedState() throws {
+        let roots = ["flag", "copy"]
+        let statements: [AlgorithmStatementModel] = [
+            .set(target: .root("flag"), value: .value(.bool(true))),
+            .set(target: .root("copy"), value: .variable("flag")),
+        ]
+        var specification = TLASpec(name: "OrderedBooleanAssignments", variables: roots.map {
+            NamedVar(name: $0, initial: .bool(false))
+        }, actions: [], invariants: [])
+        specification.sourceAtomicSteps = [AtomicStep(model: .init(
+            label: .init(name: "advance"), statements: statements))]
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let action = try #require(program.behavior.actions.first)
+        let module = try program.renderModule().renderedModuleSource
+        let header = "advance == "
+        let declarations = module.split(separator: "\n").filter { $0.hasPrefix(header) }
+        let declaration = try #require(declarations.count == 1 ? declarations[0].dropFirst(header.count) : nil)
+        try StraightLineRenderedActionCheck.verify(action.body, rendered: String(declaration),
+            layout: program.layout, binders: program.binderNames)
+        #expect(try renderedResult(String(declaration), roots: roots)
+            == sourceResult(statements, roots: roots))
+        let wrong = String(declaration).replacingOccurrences(of: "== TRUE", with: "== FALSE")
+        #expect(wrong != declaration)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verify(action.body, rendered: wrong,
+                layout: program.layout, binders: program.binderNames)
         }
     }
 
@@ -266,12 +300,17 @@ struct OrderedAssignmentLoweringTests {
         #expect(try loweredResult(action, roots: roots) == expected)
         #expect(try loweredResult(stale, roots: roots) != expected)
 
-        let compiled = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let inputs = try SourceTypeResolver().resolve(in: specification.compile())
+        let compiled = try CompiledProgram(inputs: inputs)
         let compiledAction = try #require(compiled.behavior.actions.first)
+        let untypedAction = try #require(inputs.semantics.behavior.actions.first)
         let loweredAction = try #require(specification.loweredSourceModel().actions.first)
         #expect(try compiledResult(compiledAction.body, program: compiled) == expected)
         try StraightLineAssignmentCheck.verifyCompiled(loweredAction,
             body: compiledAction.body, layout: compiled.layout)
+        try StraightLineAssignmentCheck.verifyResolved(untypedAction,
+            resolved: compiledAction, variableTypes: inputs.variableTypes,
+            resolvedVariableTypes: compiled.variableTypes, resolvedBindingTypes: compiled.bindingTypes)
         guard case .define(let firstID, let firstRead, .define(let secondID, let secondRead, let compiledWrites))
                 = compiledAction.body,
               let firstVariable = compiled.layout.variables.first(where: { $0.declaration.name == "first" })
@@ -283,6 +322,12 @@ struct OrderedAssignmentLoweringTests {
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineAssignmentCheck.verifyCompiled(loweredAction,
                 body: staleCompiled, layout: compiled.layout)
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyResolved(untypedAction,
+                resolved: CompiledAction(id: compiledAction.id, bindings: compiledAction.bindings,
+                    body: staleCompiled), variableTypes: inputs.variableTypes,
+                resolvedVariableTypes: compiled.variableTypes, resolvedBindingTypes: compiled.bindingTypes)
         }
         #expect(try compiledResult(staleCompiled, program: compiled) != expected)
     }
@@ -304,6 +349,14 @@ struct OrderedAssignmentLoweringTests {
         let stale = String(declaration).replacingOccurrences(
             of: "__atomic_1 == __atomic_0", with: "__atomic_1 == first")
         #expect(stale != declaration)
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: GeneratedAtomicCopyProofModel.spec.compile()))
+        let action = try #require(program.behavior.actions.first)
+        try StraightLineRenderedActionCheck.verify(action.body, rendered: String(declaration),
+            layout: program.layout, binders: program.binderNames)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verify(action.body, rendered: stale,
+                layout: program.layout, binders: program.binderNames)
+        }
         #expect(try renderedResult(stale, roots: roots) != expected)
     }
 }
