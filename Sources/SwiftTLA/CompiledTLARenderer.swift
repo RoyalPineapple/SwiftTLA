@@ -17,6 +17,7 @@ private enum ActionRenderingTask {
 
 private enum OrderedEvaluationSite {
     case choice(guard_: String)
+    case noMatchingCase(guard_: String)
     case arithmetic(operation: NativeMachineEvaluationError.IntegerOperation, guard_: String, operands: String)
     case divisionByZero(guard_: String, divisor: String)
     case negativeModuloDivisor(guard_: String, divisor: String)
@@ -26,7 +27,7 @@ private enum OrderedEvaluationSite {
 
     var guard_: String {
         switch self {
-        case .choice(let guard_), .arithmetic(_, let guard_, _),
+        case .choice(let guard_), .noMatchingCase(let guard_), .arithmetic(_, let guard_, _),
              .divisionByZero(let guard_, _), .negativeModuloDivisor(let guard_, _),
              .functionArgumentOutsideDomain(let guard_),
              .sequenceIndexOutOfBounds(let guard_, _),
@@ -40,6 +41,7 @@ private enum OrderedEvaluationSite {
             : "(IF \(predicate) THEN TRUE ELSE \(guard_))"
         switch self {
         case .choice: return .choice(guard_: guarded)
+        case .noMatchingCase: return .noMatchingCase(guard_: guarded)
         case .arithmetic(let operation, _, let operands):
             return .arithmetic(operation: operation, guard_: guarded, operands: operands)
         case .divisionByZero(_, let divisor):
@@ -57,6 +59,7 @@ private enum OrderedEvaluationSite {
 }
 
 enum RenderedEvaluationFailureKind {
+    case noMatchingCase
     case overflow(NativeMachineEvaluationError.IntegerOperation)
     case divisionByZero
     case negativeModuloDivisor
@@ -596,6 +599,9 @@ struct CompiledTLARenderer {
             for site in sites {
                 switch site {
                 case .choice: break
+                case .noMatchingCase(let guard_):
+                    failures.append(.init(predicate: preceded("~(\(guard_))", by: preceding),
+                        operands: nil, kind: .noMatchingCase))
                 case .arithmetic(let operation, let guard_, let operands):
                     failures.append(.init(predicate: preceded("~(\(guard_))", by: preceding),
                         operands: operands, kind: .overflow(operation)))
@@ -660,6 +666,14 @@ struct CompiledTLARenderer {
             case .convert:
                 guard value.children.count == 1 else { return nil }
                 return try collect(value.children[0])
+            case .recordAccess, .tupleAccess:
+                guard value.children.count == 1 else { return nil }
+                return try collect(value.children[0])
+            case .assertView(let shape):
+                guard value.children.count == 1,
+                      let preceding = try collect(value.children[0]) else { return nil }
+                let operand = try state(value.children[0], stateNames: stateNames)
+                return preceding + [.noMatchingCase(guard_: shape.predicate(for: operand))]
             case .ifThenElse:
                 guard value.children.count == 3,
                       let condition = try collect(value.children[0]),
@@ -779,7 +793,7 @@ struct CompiledTLARenderer {
         guard let sites = try collect(expression) else { return nil }
         let hasSpecialFailure = sites.contains {
             switch $0 {
-            case .divisionByZero, .negativeModuloDivisor, .functionArgumentOutsideDomain,
+            case .noMatchingCase, .divisionByZero, .negativeModuloDivisor, .functionArgumentOutsideDomain,
                  .sequenceIndexOutOfBounds, .emptySequence: true
             case .arithmetic(operation: .summation, guard_: _, operands: _): true
             default: false

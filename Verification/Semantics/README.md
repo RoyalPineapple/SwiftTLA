@@ -2464,6 +2464,21 @@ parser/TLC, PlusCal translator, serialization, and proof-checker facts remain
 assumptions. Do not describe a result as a universal guarantee if a backend
 or text-generation boundary remains unproved or unchecked.
 
+The accepted `CheckedRecordConversion` model narrows an `Int` record field to
+the finite case `0`. Its generated Swift machine succeeds at `0`, then reports
+`noMatchingCase` without committing a state when the field is `1`. The output
+test pins the complete generated TLA+ module and the actual generated Swift
+visitor; a changed-case control breaks the Swift pin.
+`CheckedRecordConversionProof.tla` imports that exact module and proves the
+independent initial-state, complete labeled-step, checked-view failure, and
+selected `__SwiftTLAEvaluationOK` rules under the source record-domain
+assumption. Its omitted-guard control adds an invalid edge. All nine TLAPS
+obligations pass locally. This closes this named record-narrowing fixture's
+source-to-output links under the trusted Swift compiler/runtime, macro parser,
+token pin, TLAPS backend, and typed-record premise. It does not prove the
+general checked-view emitter, nested or effectful projections, other source
+value shapes, or a hosted TLC/native failure-verdict comparison.
+
 ## Independent evidence
 
 Keep purpose-built finite conformance models with hand-specified expected
