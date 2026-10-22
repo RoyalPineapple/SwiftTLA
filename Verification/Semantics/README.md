@@ -1165,16 +1165,17 @@ the compiler and output obligations.
 copies and literal assignments over symbolic complete states, then checks the
 real frame-completed lowered action for every prefix of a repeated-write
 sequence and for the accepted `GeneratedAtomicCopyProofModel` source. A stale
-pre-step read changes the symbolic result and is rejected. The same checker
-reads the actual emitted TLA+ `copy` declaration with a fully consumed,
-restricted grammar and compares its symbolic complete-state result. A stale
-rendered read also differs. It
+pre-step read changes the symbolic result and is rejected. It also interprets
+that model's actual typed compiled action and rejects the same stale read at
+the compiled boundary. The same checker reads the actual emitted TLA+ `copy`
+declaration with a fully consumed, restricted grammar and compares its
+symbolic complete-state result. A stale rendered read also differs. It
 requires an assignment or `UNCHANGED` for every state variable, so a bare
 `TRUE` cannot masquerade as an unchanged transition. This checks the named
-source-to-lowered and source-to-rendered instances, not every
-accepted expression or emitted action. The reader and Swift compiler/runtime
-remain trusted; arbitrary expression failures and the general Swift and TLA+
-output links are open.
+source-to-lowered, source-to-compiled, and source-to-rendered instances, not
+every accepted expression or emitted action. The reader and Swift
+compiler/runtime remain trusted; arbitrary expression failures and the
+general Swift and TLA+ output links are open.
 
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is
