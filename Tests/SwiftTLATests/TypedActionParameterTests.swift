@@ -1,7 +1,48 @@
+import Foundation
 import Testing
+import SwiftParser
+import SwiftSyntax
 @testable import SwiftTLA
+@testable import SwiftTLAPlugin
 
 struct TypedActionParameterTests {
+    @Test("Generated candidates pass each bound value to its labeled action argument")
+    func candidateBindingOutputRejectsSubstitution() throws {
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("TypedActionParameterFixtures.swift")
+        let syntax = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(syntax.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "TypedParameterSelection" })
+        let compiled = try TLASpecVerifier.parseAndVerify(declaration)
+        var emitter = NativeSwiftEmitter(model: compiled)
+        let members = try emitter.machineMembers()
+        let candidates = compiled.api.actions.map { api in
+            (name: api.swiftIdentifier, labels: api.bindings.filter(\.isPublic).map(\.swiftIdentifier))
+        }
+        try verifyGeneratedActionRoutingOutput(members, routes: [],
+            candidates: candidates, configurationArguments: "")
+
+        let sourceIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitActionCandidates"
+        })
+        let binding = try #require(compiled.program.behavior.actions.first?.bindings.first)
+        let boundName = "_\(compiled.program.binderNames[binding.binder]!)_\(binding.binder.ordinal)"
+        let wrongSource = members[sourceIndex].description.replacingOccurrences(
+            of: "selection: \(boundName)", with: "selection: 1")
+        #expect(wrongSource != members[sourceIndex].description)
+        var wrongMembers = members
+        wrongMembers[sourceIndex] = try #require(Parser.parse(source: wrongSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: [],
+                candidates: candidates, configurationArguments: "")
+            Issue.record("A generated candidate replaced its bound argument with a constant")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.candidateSource")
+        }
+    }
+
     @Test("A typed step argument retains its domain, formal call, and assigned result")
     func declaredParametersPreserveNativeAndFormalBindings() throws {
         let machine = try TypedParameterSelection.makeMachine()

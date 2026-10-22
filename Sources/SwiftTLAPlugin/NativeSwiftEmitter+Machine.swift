@@ -937,7 +937,10 @@ extension NativeSwiftEmitter {
                 program.layout.actions[action.id.ordinal].renderedName)
         }
         try verifyGeneratedActionRoutingOutput(declarations, routes: directRoutes,
-            actionCount: model.api.actions.count,
+            candidates: model.api.actions.map { api in
+                (name: api.swiftIdentifier,
+                    labels: api.bindings.filter(\.isPublic).map(\.swiftIdentifier))
+            },
             configurationArguments: configurationArguments)
         return declarations
     }
@@ -1491,7 +1494,7 @@ func verifyGeneratedUpdateApplyOutput(
 
 func verifyGeneratedActionRoutingOutput(
     _ declarations: [DeclSyntax], routes: [(name: String, id: Int, formalName: String)],
-    actionCount: Int, configurationArguments: String
+    candidates candidatePlans: [(name: String, labels: [String])], configurationArguments: String
 ) throws {
     func invalid(_ path: String, _ expected: String) -> CompilationDiagnostic {
         CompilationDiagnostic(
@@ -1584,13 +1587,34 @@ func verifyGeneratedActionRoutingOutput(
             == tokens("try _visitActionCandidates(_visitAction)") else {
         throw invalid("native.action.enumeration", "checking delegates to the same candidate visitor")
     }
-    guard routes.count == actionCount else { return }
     let sources = methods.filter { $0.name.text == "_visitActionCandidates" }
-    let expectedSource = routes.map { "do { try visit(.\($0.name)) }" }.joined(separator: "\n")
     guard sources.count == 1, let body = sources.first?.body?.statements,
-          Array(body.tokens(viewMode: .sourceAccurate)).map(\.text)
-            == tokens(expectedSource) else {
-        throw invalid("native.action.candidateSource", "every compiled action emitted once in the shared visitor")
+          body.count == candidatePlans.count else {
+        throw invalid("native.action.candidateSource", "one candidate block per compiled action")
+    }
+    for (statement, plan) in zip(body, candidatePlans) {
+        guard let action = statement.item.as(DoStmtSyntax.self), action.catchClauses.isEmpty else {
+            throw invalid("native.action.candidateSource", "one unguarded candidate block for \(plan.name)")
+        }
+        var statements = action.body.statements
+        var boundNames: [String] = []
+        for _ in plan.labels {
+            guard statements.count == 1,
+                  let loop = statements.first?.item.as(ForStmtSyntax.self),
+                  let name = loop.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+                  loop.whereClause == nil, loop.tryKeyword == nil, loop.awaitKeyword == nil else {
+                throw invalid("native.action.candidateSource", "one ordered binding loop for \(plan.name)")
+            }
+            boundNames.append(name)
+            statements = loop.body.statements
+        }
+        let arguments = zip(plan.labels, boundNames).map { "\($0.0): \($0.1)" }.joined(separator: ", ")
+        let candidate = ".\(plan.name)" + (arguments.isEmpty ? "" : "(\(arguments))")
+        guard statements.count == 1, let call = statements.first,
+              Array(call.tokens(viewMode: .sourceAccurate)).map(\.text)
+                == tokens("try visit(\(candidate))") else {
+            throw invalid("native.action.candidateSource", "the bound values reach \(plan.name) exactly once")
+        }
     }
 }
 

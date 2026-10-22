@@ -117,8 +117,12 @@ import SwiftSyntax
             (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
              formalName: compiled.program.layout.actions[api.compiledAction.ordinal].renderedName)
         }
+        let candidatePlans = compiled.api.actions.map { api in
+            (name: api.swiftIdentifier,
+             labels: api.bindings.filter(\.isPublic).map(\.swiftIdentifier))
+        }
         try verifyGeneratedActionRoutingOutput(members, routes: routes,
-            actionCount: compiled.api.actions.count, configurationArguments: "")
+            candidates: candidatePlans, configurationArguments: "")
         let wrongDispatch = try #require(Parser.parse(source: wrongRoute)
             .statements.first?.item.as(DeclSyntax.self))
         var wrongMembers = members
@@ -128,7 +132,7 @@ import SwiftSyntax
         wrongMembers[dispatchIndex] = wrongDispatch
         do {
             try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
-                actionCount: compiled.api.actions.count,
+                candidates: candidatePlans,
                 configurationArguments: "")
             Issue.record("A generated action routed to the wrong compiled visitor")
         } catch let diagnostic as CompilationDiagnostic {
@@ -146,7 +150,7 @@ import SwiftSyntax
         wrongMembers[formalIndex] = wrongFormalCall
         do {
             try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
-                actionCount: compiled.api.actions.count,
+                candidates: candidatePlans,
                 configurationArguments: "")
             Issue.record("A generated action used the wrong formal label")
         } catch let diagnostic as CompilationDiagnostic {
@@ -164,7 +168,7 @@ import SwiftSyntax
             .statements.first?.item.as(DeclSyntax.self))
         do {
             try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
-                actionCount: compiled.api.actions.count, configurationArguments: "")
+                candidates: candidatePlans, configurationArguments: "")
             Issue.record("A generated candidate list discarded every action")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.candidates")
@@ -183,7 +187,7 @@ import SwiftSyntax
             .statements.first?.item.as(DeclSyntax.self))
         do {
             try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
-                actionCount: compiled.api.actions.count, configurationArguments: "")
+                candidates: candidatePlans, configurationArguments: "")
             Issue.record("Generated checking ignored every action candidate")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.enumeration")
@@ -199,7 +203,7 @@ import SwiftSyntax
             .statements.first?.item.as(DeclSyntax.self))
         do {
             try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
-                actionCount: compiled.api.actions.count, configurationArguments: "")
+                candidates: candidatePlans, configurationArguments: "")
             Issue.record("Generated candidate traversal duplicated one action")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.candidateSource")
