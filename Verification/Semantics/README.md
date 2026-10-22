@@ -1205,11 +1205,13 @@ native emitter additionally checks that each unparameterized action's emitted
 dispatch reaches its compiled visitor and that its formal call has the compiled
 label. Wrong-route and wrong-label mutations are rejected. Candidate
 enumeration now uses one generated lazy candidate visitor for both the public
-list and native checking. Both delegations are checked, and when every action
-is unparameterized the visitor body is checked against the complete compiled
-action list. A duplicate-action mutation is rejected in that shared body.
-Parameterized domain enumeration and argument routing remain open output
-obligations, and these checker implementations remain trusted.
+list and native checking. Both delegations are checked. The visitor body is
+checked against the complete compiled action list, including the number and
+nesting of binding loops and the values passed to each public action argument. A
+duplicate-action mutation and a parameter-substitution mutation are rejected.
+The meaning of each parameterized domain expression and the parameterized
+dispatch and formal-call routes remain open output obligations; these checker
+implementations remain trusted.
 
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is
