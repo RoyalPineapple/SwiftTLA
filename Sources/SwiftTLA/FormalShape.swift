@@ -87,17 +87,39 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         case .boolean: return "\(value) \\in BOOLEAN"
         case .string: return "\(value) \\in STRING"
         case .finite(_, let values): return "\(value) \\in {\(values.map(\.description).joined(separator: ", "))}"
-        case .set(let item): return "(\\A \(bound) \\in \(value) : \(nested(item, bound)))"
+        case .set(let item):
+            let elementType: CompiledValueType?
+            if case .set(let element)? = sourceType { elementType = element }
+            else { elementType = nil }
+            return "(\\A \(bound) \\in \(value) : \(nested(item, bound, sourceType: elementType)))"
         case .sequence(let item):
             let elementType: CompiledValueType?
             if case .array(let element)? = sourceType { elementType = element }
             else { elementType = nil }
             return "(DOMAIN \(value) = 1..Len(\(value)) /\\ (\\A \(bound) \\in DOMAIN \(value) : \(nested(item, "\(value)[\(bound)]", sourceType: elementType))))"
         case .tuple(let items):
-            let checks = items.enumerated().map { nested($0.element, "\(value)[\($0.offset + 1)]") }
+            let sourceItems: [CompiledValueType]?
+            switch sourceType {
+            case .tuple(let elements)?: sourceItems = elements
+            case .array(let element)?: sourceItems = Array(repeating: element, count: items.count)
+            default: sourceItems = nil
+            }
+            if let sourceItems, sourceItems.count != items.count { return "FALSE" }
+            let checks = items.enumerated().map {
+                nested($0.element, "\(value)[\($0.offset + 1)]", sourceType: sourceItems?[$0.offset])
+            }
             return "(DOMAIN \(value) = 1..\(items.count)" + checks.map { " /\\ (\($0))" }.joined() + ")"
         case .function(let key, let item):
-            return "(\\A \(bound) \\in DOMAIN \(value) : (\(nested(key, bound))) /\\ (\(nested(item, "\(value)[\(bound)]"))))"
+            let keyType: CompiledValueType?
+            let valueType: CompiledValueType?
+            if case .dictionary(let sourceKey, let sourceValue)? = sourceType {
+                keyType = sourceKey
+                valueType = sourceValue
+            } else {
+                keyType = nil
+                valueType = nil
+            }
+            return "(\\A \(bound) \\in DOMAIN \(value) : (\(nested(key, bound, sourceType: keyType))) /\\ (\(nested(item, "\(value)[\(bound)]", sourceType: valueType))))"
         case .record(let fields):
             let sourceFields = sourceType?.recordFields
             if let sourceFields, Set(sourceFields.map(\.name)) != Set(fields.map(\.name)) { return "FALSE" }

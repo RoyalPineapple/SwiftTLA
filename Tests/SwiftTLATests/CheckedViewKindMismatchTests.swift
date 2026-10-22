@@ -7,6 +7,28 @@ import SwiftSyntax
 
 @Suite("Checked view kind mismatch")
 struct CheckedViewKindMismatchTests {
+    @Test("Nested collection views reject disjoint member kinds without partial predicates")
+    func nestedCollectionViewsRemainTotal() {
+        let set = FormalValueShape.set(.sequence(.integer))
+            .predicate(for: "members", sourceType: .set(.int))
+        #expect(set.contains(": FALSE"))
+        #expect(!set.contains("DOMAIN _shapeMember0"))
+
+        let function = FormalValueShape.function(key: .integer, value: .sequence(.integer))
+            .predicate(for: "mapping", sourceType: .dictionary(.int, .int))
+        #expect(function.contains("/\\ (FALSE)"))
+        #expect(!function.contains("DOMAIN mapping[_shapeMember0]"))
+
+        let tuple = FormalValueShape.tuple([.sequence(.integer)])
+            .predicate(for: "pair", sourceType: .tuple([.int]))
+        #expect(tuple.contains("/\\ (FALSE)"))
+        #expect(!tuple.contains("DOMAIN pair[1]"))
+
+        let wrongLength = FormalValueShape.tuple([.integer, .integer])
+            .predicate(for: "pair", sourceType: .tuple([.int]))
+        #expect(wrongLength == "FALSE")
+    }
+
     @Test("A scalar-to-record checked view reports a matched failure without a successor")
     func scalarToRecordFailure() throws {
         var machine = try IncompatibleCheckedRecordView.makeMachine()

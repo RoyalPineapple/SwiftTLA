@@ -2521,8 +2521,13 @@ the native runtime test exercises only the concrete initial state `<<1>>`.
 This closes the named sequence-element case under the macro parser, Swift
 compiler/runtime, tokenized output-pin, and TLAPS backend assumptions; it
 does not prove a general Swift emitter rule.
-Set, tuple, function, union-typed source elements, general sequence-view
-emission, and hosted TLC/native failure-verdict parity remain open.
+Set, tuple, and function predicates now pass known source element types to
+their nested shape checks. A focused regression rejects partial `DOMAIN` and
+`Len` uses for disjoint `Int`-to-sequence children and returns `FALSE` for a
+known tuple-arity mismatch. This is a formal-predicate totality check, not an
+accepted-model output link or theorem for those collection forms. Union-typed
+source elements, general checked-view emission, and hosted TLC/native
+failure-verdict parity remain open.
 
 ## Independent evidence
 
