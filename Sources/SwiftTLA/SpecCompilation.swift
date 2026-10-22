@@ -2339,12 +2339,19 @@ private extension CompiledModuleMetadata {
             var functionDomainOccurrence = 0
             var sequenceIndexOccurrence = 0
             var emptySequenceOccurrence = 0
+            var noMatchingCaseOccurrence = 0
             for failure in try renderer.evaluationFailures(behavior.actions[index].body) {
                 let occurrence: Int
                 let failurePrefix: String
                 let operandsPrefix: String?
                 let operation: String?
                 switch failure.kind {
+                case .noMatchingCase:
+                    occurrence = noMatchingCaseOccurrence
+                    noMatchingCaseOccurrence += 1
+                    failurePrefix = "__SwiftTLANoMatchingCaseFailure"
+                    operandsPrefix = nil
+                    operation = nil
                 case .overflow(let name):
                     occurrence = overflowOccurrence
                     overflowOccurrence += 1
@@ -2617,6 +2624,9 @@ private extension CompiledModuleMetadata {
                 let stem: String
                 let operation: String?
                 switch failure.kind {
+                case .noMatchingCase:
+                    stem = "NoMatchingCase"
+                    operation = nil
                 case .overflow(let kind):
                     stem = "Overflow"
                     operation = kind.rawValue

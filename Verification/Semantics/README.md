@@ -2464,6 +2464,104 @@ parser/TLC, PlusCal translator, serialization, and proof-checker facts remain
 assumptions. Do not describe a result as a universal guarantee if a backend
 or text-generation boundary remains unproved or unchecked.
 
+The accepted `CheckedRecordConversion` model narrows an `Int` record field to
+the finite case `0`. Its generated Swift machine succeeds at `0`, then reports
+`noMatchingCase` without committing a state when the field is `1`. The output
+test pins the complete generated TLA+ module and the actual generated Swift
+visitor; a changed-case control breaks the Swift pin.
+`CheckedRecordConversionProof.tla` imports that exact module and proves the
+independent initial-state, complete labeled-step, checked-view failure, and
+selected `__SwiftTLAEvaluationOK` rules under the source record-domain
+assumption. Its omitted-guard control adds an invalid edge. All nine TLAPS
+obligations pass locally. This closes this named record-narrowing fixture's
+source-to-output links under the trusted Swift compiler/runtime, macro parser,
+token pin, TLAPS backend, and typed-record premise. It does not prove the
+general checked-view emitter, nested or effectful projections, other source
+value shapes, or a hosted TLC/native failure-verdict comparison.
+
+The accepted `IncompatibleCheckedRecordView` model asks for a record view of
+an `Int` state value. Its independent source rule reports `noMatchingCase`
+without a labeled successor. The generated Swift machine throws that failure
+without changing state. The output test pins the entire generated TLA+ module
+and its selected `__SwiftTLAEvaluationOK` check; the renderer now emits a
+total `FALSE` shape guard instead of applying `DOMAIN` to the integer.
+`IncompatibleCheckedRecordViewProof.tla` imports the pinned module and proves
+the initial state, complete labeled steps, failure verdict, and an omitted-guard
+control that adds an edge. All nine TLAPS obligations pass locally. This closes
+the named scalar-to-record mismatch under the Swift compiler/runtime, output
+pin, and TLAPS backend assumptions. Other nested shape mismatches, mixed source
+unions, and general checked-view emission remain unproved; there is no hosted
+TLC/native failure-verdict parity claim for this fixture yet.
+
+The accepted `FiniteCheckedRecordView` model makes the same checked request
+from a finite enum whose sole value is represented by the integer `1`.
+The source rule reports `noMatchingCase` and no successor. The generated Swift
+machine throws without changing state; the test pins the complete emitted
+TLA+ module and selected evaluation check. The renderer now resolves the
+named finite domain before constructing its shape predicate, so this
+disjoint domain produces `FALSE` rather than the undefined `DOMAIN level`.
+`FiniteCheckedRecordViewProof.tla` imports that exact module and proves the
+initial state, complete labeled steps, failure verdict, and an omitted-guard
+control that adds an edge (nine local TLAPS obligations). This closes this
+finite-enum instance under the macro parser, Swift compiler/runtime, output
+pin, finite-domain encoding, and TLAPS backend assumptions. The generated
+Swift visitor is exercised but not independently pinned; arbitrary finite
+domains, general checked-view emission, and hosted failure-verdict parity
+remain unproved.
+
+The accepted `NestedCheckedRecordView` model checks an `Int` field through a
+record view that expects a sequence. Generated Swift reports `noMatchingCase`
+without changing state. The output test pins the entire emitted TLA+ module and
+its selected evaluation check; the field's compiled source type makes the
+nested guard `FALSE`, avoiding `DOMAIN` on the integer. The independent source
+rule and exact module agree on initial state, complete labeled steps, and
+failure verdict in `NestedCheckedRecordViewProof.tla` (nine local obligations).
+Removing the guard adds an edge. This closes only this named nested-field case
+under the same Swift compiler/runtime, output-pin, and TLAPS assumptions.
+Other nested shapes, mixed source unions, and the general checked-view rule
+remain open; no hosted TLC/native failure-verdict parity is claimed here.
+
+The accepted `NestedCheckedSequenceView` model starts with `numbers = <<1>>`
+and checks it as a sequence of sequences. Generated Swift reports
+`noMatchingCase` without changing state. The output test pins the generated
+Swift update visitor and the entire generated TLA+ module with its selected
+evaluation check; changing the Swift failure branch breaks that pin. The
+source array element type makes the nested predicate `FALSE` for each `Int`,
+avoiding a partial `DOMAIN` on an element.
+`NestedCheckedSequenceViewProof.tla` imports the exact module and proves the
+independent initial state, labeled steps, and failure verdict for every state
+with `numbers \in Seq(Int)`; it proves both empty and nonempty inputs satisfy
+that premise. Its omitted-guard control adds an edge. All eleven TLAPS
+obligations pass locally. The generated Swift visitor is token-pinned, while
+the native runtime test exercises only the concrete initial state `<<1>>`.
+This closes the named sequence-element case under the macro parser, Swift
+compiler/runtime, tokenized output-pin, and TLAPS backend assumptions; it
+does not prove a general Swift emitter rule.
+Set, tuple, and function predicates now pass known source element types to
+their nested shape checks. A focused regression rejects partial `DOMAIN` and
+`Len` uses for disjoint `Int`-to-sequence children and returns `FALSE` for a
+known tuple-arity mismatch. This is a formal-predicate totality check, not an
+accepted-model output link or theorem for those collection forms. Union-typed
+source elements, general checked-view emission, and hosted TLC/native
+failure-verdict parity remain open.
+
+The accepted NestedCheckedSetView model supplies one set-form output link.
+The native machine reports noMatchingCase on its nonempty integer-set initial
+state without committing a transition. The test pins the complete generated
+TLA+ module, selected evaluation check, and generated Swift visitor; changing
+the visitor's thrown failure to a returned sequence breaks its token pin. The
+renderer previously lost that failure under Cardinality, leaving a partial
+TLA+ CASE and no intrinsic check; the focused regression failed before the
+operand-failure propagation repair. NestedCheckedSetViewProof.tla imports the
+exact module and proves initial states, complete labeled steps, the selected
+failure verdict, and an omitted-guard negative control for every integer
+set. It proves empty-set cardinality explicitly; all 14 obligations pass
+locally. This closes the named set-view slice under the macro parser, Swift
+compiler/runtime and standard collection semantics, tokenized output pin,
+and TLAPS backend assumptions. The native runtime test executes only the
+nonempty initial state. Other set expressions, general checked-view Swift
+emission, and hosted TLC/native failure-verdict parity remain open.
+
 ## Independent evidence
 
 Keep purpose-built finite conformance models with hand-specified expected
