@@ -117,11 +117,16 @@ import SwiftSyntax
             (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
              formalName: compiled.program.layout.actions[api.compiledAction.ordinal].renderedName)
         }
+        let allActions = compiled.api.actions.map { api in
+            (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
+             formalName: compiled.program.layout.actions[api.compiledAction.ordinal].renderedName,
+             publicBindings: api.bindings.filter(\.isPublic).count)
+        }
         let candidatePlans = compiled.api.actions.map { api in
             (name: api.swiftIdentifier,
              labels: api.bindings.filter(\.isPublic).map(\.swiftIdentifier))
         }
-        try verifyGeneratedActionRoutingOutput(members, routes: routes,
+        try verifyGeneratedActionRoutingOutput(members, routes: routes, allActions: allActions,
             candidates: candidatePlans, configurationArguments: "")
         let wrongDispatch = try #require(Parser.parse(source: wrongRoute)
             .statements.first?.item.as(DeclSyntax.self))
@@ -131,7 +136,7 @@ import SwiftSyntax
         })
         wrongMembers[dispatchIndex] = wrongDispatch
         do {
-            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
                 candidates: candidatePlans,
                 configurationArguments: "")
             Issue.record("A generated action routed to the wrong compiled visitor")
@@ -149,7 +154,7 @@ import SwiftSyntax
         wrongMembers = members
         wrongMembers[formalIndex] = wrongFormalCall
         do {
-            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
                 candidates: candidatePlans,
                 configurationArguments: "")
             Issue.record("A generated action used the wrong formal label")
@@ -167,7 +172,7 @@ import SwiftSyntax
         wrongMembers[candidateIndex] = try #require(Parser.parse(source: wrongCandidates)
             .statements.first?.item.as(DeclSyntax.self))
         do {
-            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
                 candidates: candidatePlans, configurationArguments: "")
             Issue.record("A generated candidate list discarded every action")
         } catch let diagnostic as CompilationDiagnostic {
@@ -186,7 +191,7 @@ import SwiftSyntax
         wrongMembers[visitorIndex] = try #require(Parser.parse(source: wrongEnumeration)
             .statements.first?.item.as(DeclSyntax.self))
         do {
-            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
                 candidates: candidatePlans, configurationArguments: "")
             Issue.record("Generated checking ignored every action candidate")
         } catch let diagnostic as CompilationDiagnostic {
@@ -202,7 +207,7 @@ import SwiftSyntax
         wrongMembers[sourceIndex] = try #require(Parser.parse(source: wrongSource)
             .statements.first?.item.as(DeclSyntax.self))
         do {
-            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
                 candidates: candidatePlans, configurationArguments: "")
             Issue.record("Generated candidate traversal duplicated one action")
         } catch let diagnostic as CompilationDiagnostic {
