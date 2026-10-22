@@ -1,8 +1,8 @@
 ---------------- MODULE NestedCheckedSequenceViewProof ----------------
 EXTENDS TLAPS, NestedCheckedSequenceView
 
-SourceState == numbers = <<1>>
-SourceInit == pc = "inspect" /\ SourceState
+SourceState == numbers \in Seq(Int)
+SourceInit == pc = "inspect" /\ numbers = <<1>>
 SourceViewOK == numbers = <<>>
 SourceInspect == pc = "inspect" /\ SourceViewOK /\ numbers = <<<<1>>>>
     /\ pc' = "Done" /\ UNCHANGED numbers
@@ -10,6 +10,11 @@ SourceTerminating == pc = "Done" /\ UNCHANGED <<pc, numbers>>
 SourceNext == SourceInspect \/ SourceTerminating
 SourceNoMatchingCase == pc = "inspect" /\ ~SourceViewOK
 SourceEvaluationOK == ~SourceNoMatchingCase
+
+THEOREM EmptyAndNonemptyInputsAreTyped ==
+    /\ <<>> \in Seq(Int)
+    /\ <<1>> \in Seq(Int)
+    BY SMT
 
 THEOREM InitialStatePreserved == Init <=> SourceInit
     BY SMT DEF Init, SourceInit, SourceState

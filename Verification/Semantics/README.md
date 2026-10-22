@@ -2511,14 +2511,16 @@ and checks it as a sequence of sequences. Generated Swift reports
 Swift update visitor and the entire generated TLA+ module with its selected
 evaluation check; changing the Swift failure branch breaks that pin. The
 source array element type makes the nested predicate `FALSE` for each `Int`,
-avoiding a partial `DOMAIN` on an element. The empty-sequence case is not in
-this fixture's reachable-state proof.
+avoiding a partial `DOMAIN` on an element.
 `NestedCheckedSequenceViewProof.tla` imports the exact module and proves the
-independent initial state, labeled steps, and failure verdict on the reachable
-source state, plus an omitted-guard control that adds an edge. All nine TLAPS
-obligations pass locally. This closes only that named sequence-element case
-under the macro parser, Swift compiler/runtime, tokenized output-pin, and
-TLAPS backend assumptions.
+independent initial state, labeled steps, and failure verdict for every state
+with `numbers \in Seq(Int)`; it proves both empty and nonempty inputs satisfy
+that premise. Its omitted-guard control adds an edge. All eleven TLAPS
+obligations pass locally. The generated Swift visitor is token-pinned, while
+the native runtime test exercises only the concrete initial state `<<1>>`.
+This closes the named sequence-element case under the macro parser, Swift
+compiler/runtime, tokenized output-pin, and TLAPS backend assumptions; it
+does not prove a general Swift emitter rule.
 Set, tuple, function, union-typed source elements, general sequence-view
 emission, and hosted TLC/native failure-verdict parity remain open.
 
