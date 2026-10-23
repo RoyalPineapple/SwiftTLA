@@ -1206,6 +1206,16 @@ disjunctions of this total scalar grammar; changing an alternative to
 conjunction is rejected at each boundary. These structural checks do not
 prove the general source alternative rule, failure aggregation, or arbitrary
 `Either` bodies.
+For direct scalar Boolean guards and `ifElse` conditions in that grammar, the
+production source-to-compiled and typed-resolution checks now compare the
+condition's variable or binder identity, both conditional branches, and their
+complete frames. The resolver check uses the inferred Boolean type when the
+pre-resolution variable type is unknown. Replacing either tested state guard
+or branch condition with `FALSE` is rejected at both boundaries. Together
+with the normalization and emitted-TLA+ checks, this closes those structural
+links for direct total conditions; it does not prove expression evaluation,
+fallible predicates, or the Swift/TLA+ execution semantics of every accepted
+conditional.
 The source and compiled gates now also carry a `Do` parameter as a symbolic value
 through ordered root assignments. For nonshadowing actions with a finite,
 nonempty literal Int/Boolean parameter domain, the compiled gate checks the
