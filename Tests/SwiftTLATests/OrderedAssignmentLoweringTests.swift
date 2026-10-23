@@ -574,6 +574,26 @@ struct OrderedAssignmentLoweringTests {
                 layout: program.layout, binders: program.binderNames)
         }
 
+        let terminalAction = try #require(program.behavior.actions.last)
+        let terminalName = try #require(program.layout.actions.first {
+            $0.id == terminalAction.id
+        }?.renderedName)
+        let terminalHeader = "\(terminalName) == "
+        let terminalDeclarations = module.split(separator: "\n").filter {
+            $0.hasPrefix(terminalHeader)
+        }
+        let terminalBody = try #require(terminalDeclarations.count == 1
+            ? String(terminalDeclarations[0].dropFirst(terminalHeader.count)) : nil)
+        try StraightLineRenderedActionCheck.verify(terminalAction.body, rendered: terminalBody,
+            layout: program.layout, binders: program.binderNames)
+        let wrongTerminalBody = terminalBody.replacingOccurrences(of: "pc = \"Done\"",
+            with: "pc = \"copy\"")
+        #expect(wrongTerminalBody != terminalBody)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verify(terminalAction.body, rendered: wrongTerminalBody,
+                layout: program.layout, binders: program.binderNames)
+        }
+
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "SequentialCopyProofModel", program: program))
         let visitor = try #require(try emitter.machineMembers().first {
@@ -608,6 +628,24 @@ struct OrderedAssignmentLoweringTests {
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedActionWriteOutput(wrongWriteVisitor, action: action.body,
                 program: program, stateFields: emitter.stateMemberNames, parts: wrongParts)
+        }
+
+        let terminalVisitor = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text
+                == "_visitUpdates\(terminalAction.id.ordinal)"
+        })
+        let terminalParts = try emitter.actionFunctions(terminalAction.body)
+        try verifyGeneratedActionWriteOutput(terminalVisitor, action: terminalAction.body,
+            program: program, stateFields: emitter.stateMemberNames, parts: terminalParts.writes)
+        let wrongTerminalVisitor = terminalVisitor.description.replacingOccurrences(
+            of: " == _ControlLocation.", with: " != _ControlLocation.")
+        #expect(wrongTerminalVisitor != terminalVisitor.description)
+        let wrongTerminalDeclaration = try #require(Parser.parse(source: wrongTerminalVisitor)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionWriteOutput(wrongTerminalDeclaration,
+                action: terminalAction.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: terminalParts.writes)
         }
 
         let machine = try SequentialCopyProofModel.makeMachine()
@@ -659,6 +697,33 @@ struct OrderedAssignmentLoweringTests {
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineAssignmentCheck.verifySequential(source, lowered: wrongLabel,
                 enumerateInitialControl: false)
+        }
+
+        let terminalIndex = lowered.actions.count - 1
+        let terminal = lowered.actions[terminalIndex]
+        func replacingTerminal(_ action: ActionExpr, guardLocation: Bool) -> ActionExpr {
+            switch action {
+            case .guard_(.equal(.programCounter, .controlLocation)) where guardLocation:
+                return .guard_(.equal(.programCounter, .controlLocation(.init(
+                    owner: .sequential(algorithm: source.name), sourceName: "copy"))))
+            case .unchanged(.named("first")) where !guardLocation:
+                return .assign(.named("first"), .value(.int(9)))
+            case .and(let left, let right):
+                return .and(replacingTerminal(left, guardLocation: guardLocation),
+                    replacingTerminal(right, guardLocation: guardLocation))
+            default: return action
+            }
+        }
+        for guardLocation in [true, false] {
+            let wrongBody = replacingTerminal(terminal.body, guardLocation: guardLocation)
+            #expect(wrongBody != terminal.body)
+            var wrongTerminal = lowered
+            wrongTerminal.actions[terminalIndex] = NamedAction(name: terminal.name,
+                body: wrongBody, isTermination: true)
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineAssignmentCheck.verifySequential(source, lowered: wrongTerminal,
+                    enumerateInitialControl: false)
+            }
         }
     }
 

@@ -2694,6 +2694,154 @@ THEOREM OrderedSequentialIntOutcomesCompose ==
            DEF SourceSequentialIntFailures, GeneratedSequentialIntFailures
     <1>. QED BY <1>1, <1>2, <1>6
 
+SourceSequentialTerminalEdges(done, label) ==
+    {edge \in SequentialEdges :
+        /\ edge[1].location = done
+        /\ edge[2] = label
+        /\ edge[3] = edge[1]}
+
+GeneratedSequentialTerminalEdges(done, label) ==
+    {edge \in SequentialEdges :
+        /\ edge[1].location = done
+        /\ edge[2] = label
+        /\ edge[3].location = done
+        /\ edge[3].data = edge[1].data}
+
+SourceSequentialIntProgramEdges(count, entries, exits, labels, steps,
+                                guards, done, terminalLabel) ==
+    UNION {SourceCheckedSequentialEdges(entries[index], exits[index],
+        labels[index], steps[index], guards[index]) : index \in 1..count}
+    \cup SourceSequentialTerminalEdges(done, terminalLabel)
+
+GeneratedSequentialIntProgramEdges(count, entries, exits, labels, steps,
+                                   guards, done, terminalLabel) ==
+    UNION {GeneratedCheckedSequentialEdges(entries[index], exits[index],
+        labels[index], steps[index], guards[index]) : index \in 1..count}
+    \cup GeneratedSequentialTerminalEdges(done, terminalLabel)
+
+SourceSequentialIntProgramFailures(before, count, entries, labels, steps,
+                                   checks, operands, source) ==
+    UNION {SourceSequentialIntFailures(before, entries[index], labels[index],
+        steps[index], checks[index], operands[index], source[index]) :
+        index \in 1..count}
+
+GeneratedSequentialIntProgramFailures(before, count, entries, labels, steps,
+                                      checks, operands, scheduled) ==
+    UNION {GeneratedSequentialIntFailures(before, entries[index], labels[index],
+        steps[index], checks[index], operands[index], before.data,
+        scheduled[index]) : index \in 1..count}
+
+THEOREM OrderedSequentialIntProgramCompose ==
+    ASSUME Values = Int,
+           NEW count \in Nat,
+           count > 0,
+           NEW entries \in [1..count -> ActionLabels],
+           NEW exits \in [1..count -> ActionLabels],
+           NEW labels \in [1..count -> ActionLabels],
+           NEW steps \in [1..count -> Seq(Instructions)],
+           NEW guards, NEW checks, NEW operands, NEW source, NEW scheduled,
+           NEW done \in ActionLabels,
+           NEW terminalLabel \in ActionLabels,
+           NEW initial \in States,
+           NEW before \in SequentialStates,
+           exits[count] = done,
+           (\A index \in 1..(count - 1) : exits[index] = entries[index + 1]),
+           (\A index \in 1..count :
+               /\ guards[index] \in GuardPlans(steps[index])
+               /\ checks[index] \in [1..Len(steps[index]) -> [States -> BOOLEAN]]
+               /\ operands[index] \in [1..Len(steps[index]) ->
+                   [States -> (Int \X Int)]]
+               /\ source[index] \in [0..Len(steps[index]) -> States]
+               /\ scheduled[index] \in [0..Len(steps[index]) -> ScheduledRecords]
+               /\ (\A position \in 1..Len(steps[index]) :
+                   guards[index][position - 1] = checks[index][position])
+               /\ guards[index][Len(steps[index])] = AlwaysGuard
+               /\ SourceHistory(before.data, steps[index], source[index])
+               /\ ScheduledHistory(before.data, steps[index], scheduled[index]))
+    PROVE /\ SourceSequentialIntInitial(entries[1], initial)
+                 = GeneratedSequentialIntInitial(entries[1], initial)
+          /\ SourceSequentialIntProgramEdges(count, entries, exits, labels,
+                 steps, guards, done, terminalLabel)
+                 = GeneratedSequentialIntProgramEdges(count, entries, exits,
+                     labels, steps, guards, done, terminalLabel)
+          /\ SourceSequentialIntProgramFailures(before, count, entries,
+                 labels, steps, checks, operands, source)
+                 = GeneratedSequentialIntProgramFailures(before, count,
+                     entries, labels, steps, checks, operands, scheduled)
+    PROOF
+    <1>1. \A index \in 1..count :
+            /\ SourceCheckedSequentialEdges(entries[index], exits[index],
+                   labels[index], steps[index], guards[index])
+                 = GeneratedCheckedSequentialEdges(entries[index], exits[index],
+                     labels[index], steps[index], guards[index])
+            /\ SourceSequentialIntFailures(before, entries[index],
+                   labels[index], steps[index], checks[index], operands[index],
+                   source[index])
+                 = GeneratedSequentialIntFailures(before, entries[index],
+                     labels[index], steps[index], checks[index], operands[index],
+                     before.data, scheduled[index])
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 1..count
+                      PROVE /\ SourceCheckedSequentialEdges(entries[index],
+                                   exits[index], labels[index], steps[index],
+                                   guards[index])
+                                = GeneratedCheckedSequentialEdges(entries[index],
+                                    exits[index], labels[index], steps[index],
+                                    guards[index])
+                            /\ SourceSequentialIntFailures(before,
+                                   entries[index], labels[index], steps[index],
+                                   checks[index], operands[index], source[index])
+                                = GeneratedSequentialIntFailures(before,
+                                    entries[index], labels[index], steps[index],
+                                    checks[index], operands[index], before.data,
+                                    scheduled[index])
+            BY SMT
+        <2>1. /\ guards[index] \in GuardPlans(steps[index])
+              /\ checks[index] \in [1..Len(steps[index]) -> [States -> BOOLEAN]]
+              /\ operands[index] \in [1..Len(steps[index]) ->
+                  [States -> (Int \X Int)]]
+              /\ source[index] \in [0..Len(steps[index]) -> States]
+              /\ scheduled[index] \in [0..Len(steps[index]) -> ScheduledRecords]
+              /\ (\A position \in 1..Len(steps[index]) :
+                  guards[index][position - 1] = checks[index][position])
+              /\ guards[index][Len(steps[index])] = AlwaysGuard
+              /\ SourceHistory(before.data, steps[index], source[index])
+              /\ ScheduledHistory(before.data, steps[index], scheduled[index])
+            BY SMT
+        <2>2. /\ SourceCheckedSequentialEdges(entries[index], exits[index],
+                     labels[index], steps[index], guards[index])
+                   = GeneratedCheckedSequentialEdges(entries[index], exits[index],
+                       labels[index], steps[index], guards[index])
+              /\ SourceSequentialIntFailures(before, entries[index],
+                     labels[index], steps[index], checks[index], operands[index],
+                     source[index])
+                   = GeneratedSequentialIntFailures(before, entries[index],
+                       labels[index], steps[index], checks[index], operands[index],
+                       before.data, scheduled[index])
+            BY <2>1, OrderedSequentialIntOutcomesCompose
+        <2>. QED BY <2>2
+    <1>2. SourceSequentialTerminalEdges(done, terminalLabel)
+            = GeneratedSequentialTerminalEdges(done, terminalLabel)
+        BY SMT DEF SourceSequentialTerminalEdges,
+            GeneratedSequentialTerminalEdges, SequentialStates, SequentialEdges
+    <1>3. SourceSequentialIntInitial(entries[1], initial)
+            = GeneratedSequentialIntInitial(entries[1], initial)
+        BY DEF SourceSequentialIntInitial,
+            GeneratedSequentialIntInitial, SequentialStates
+    <1>4. SourceSequentialIntProgramEdges(count, entries, exits, labels,
+               steps, guards, done, terminalLabel)
+            = GeneratedSequentialIntProgramEdges(count, entries, exits,
+                labels, steps, guards, done, terminalLabel)
+        BY <1>1, <1>2, SMT DEF SourceSequentialIntProgramEdges,
+            GeneratedSequentialIntProgramEdges
+    <1>5. SourceSequentialIntProgramFailures(before, count, entries,
+               labels, steps, checks, operands, source)
+            = GeneratedSequentialIntProgramFailures(before, count,
+                entries, labels, steps, checks, operands, scheduled)
+        BY <1>1, SMT DEF SourceSequentialIntProgramFailures,
+            GeneratedSequentialIntProgramFailures
+    <1>. QED BY <1>3, <1>4, <1>5
+
 GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
     LET firstUpdate ==
             GeneratedMerge(GeneratedEmptyUpdates(state), firstKey, firstValue)
