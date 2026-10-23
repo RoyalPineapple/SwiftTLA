@@ -2763,7 +2763,15 @@ private extension CompiledModuleMetadata {
         lines.append("====")
         let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
-        try verifyRenderedInitialConjunction(source, predicates: initialPredicates)
+        let expectedIntLiterals = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
+            variable -> (String, Int)? in
+            guard case .value(let expression)? = initializations[variable.id],
+                  case .value(.integer(let value)) = expression.operation,
+                  expression.resultType == .int else { return nil }
+            return (variable.declaration.name, value)
+        })
+        try verifyRenderedInitialConjunction(source, predicates: initialPredicates,
+            expectedIntLiterals: expectedIntLiterals)
         try verifyRenderedActionDeclarations(source, declarations: actionDeclarations)
         return (source, evaluationFailureDeclarations, evaluationInvariant)
     }
@@ -2820,7 +2828,8 @@ func verifyRenderedVariableDeclaration(_ source: String, names: [String]) throws
     }
 }
 
-func verifyRenderedInitialConjunction(_ source: String, predicates: [String]) throws {
+func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
+                                      expectedIntLiterals: [String: Int] = [:]) throws {
     let lines = source.components(separatedBy: "\n")
     let starts = lines.indices.filter { lines[$0] == "Init ==" || lines[$0].hasPrefix("Init == ") }
     let expected = predicates.isEmpty
@@ -2836,7 +2845,10 @@ func verifyRenderedInitialConjunction(_ source: String, predicates: [String]) th
     } else {
         actual = "\(starts.count) Init declarations"
     }
-    guard actual == expected else {
+    guard actual == expected,
+          expectedIntLiterals.allSatisfy({ name, value in
+              predicates.filter { $0 == "\(name) = \(TLAValue.int(value).description)" }.count == 1
+          }) else {
         throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
             path: "tla.Init", expected: expected, actual: actual,
             nextSafeAction: "Regenerate the TLA+ module from the compiled initializations.")
