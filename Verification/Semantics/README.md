@@ -1416,6 +1416,14 @@ forms, the emitted initial-state set and termination behavior, and a general
 proof of every Swift visitor form remain open. The output checkers' parsing,
 the project-owned update/visitor kernel, and documented Swift compiler/runtime
 behavior remain trusted for this slice.
+For a single root assignment, the production source-to-lowered check also
+requires the exact source expression to be captured once, used within its
+binding, and published to the intended root. For a controlled step, its entry
+guard must precede that capture. Mutations to the expression, capture count,
+binding scope, and guard order are rejected. This rule applies regardless of
+the expression constructor, but establishes only the structural lowering
+boundary: evaluation-failure equivalence and the actual Swift and TLA+ output
+links still need their own expression rules.
 The macro also checks every emitted `Snapshot`
 declaration against the compiled hidden-field list: it permits exactly the
 public state and those hidden fields, with `Hashable` and `Sendable` synthesis

@@ -228,6 +228,8 @@ enum StraightLineAssignmentCheck {
         let parameters = Set(parameterNames)
         guard parameters.count == parameterNames.count,
               parameters.isDisjoint(with: stateRoots) else { return }
+        try verifySingleAssignmentCapture(step, lowered: lowered, stateRoots: stateRoots,
+            control: control)
 
         var source: [String: Term] = [:]
         for statement in step.model.statements {
@@ -318,6 +320,70 @@ enum StraightLineAssignmentCheck {
               stateRoots.allSatisfy({ (writes[$0] ?? .prior($0)) == (source[$0] ?? .prior($0)) }) else {
             throw mismatch()
         }
+    }
+
+    private static func verifySingleAssignmentCapture(
+        _ step: AtomicStep, lowered: ActionExpr?, stateRoots: Set<String>,
+        control: (entry: ControlLocationReference, next: ControlLocationReference)?
+    ) throws {
+        guard step.model.statements.count == 1,
+              case .set(let target, let expression) = step.model.statements[0],
+              case .root(let root) = target, stateRoots.contains(root) else { return }
+        func mismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(
+                code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "actions.\(step.model.label.name).singleAssignmentCapture",
+                expected: "one guarded evaluation of the source expression followed by its captured write and unchanged frame",
+                actual: "the lowered action changed the expression, capture, write, or frame",
+                nextSafeAction: "Report this single-assignment lowering failure."
+            )
+        }
+        guard let lowered else { throw mismatch() }
+        var capture: String?
+        var writes: [String: StateExpr] = [:]
+        var sawControlGuard = false
+        var sawControlWrite = false
+        var pending: [(action: ActionExpr, activeCapture: String?)] = [(lowered, nil)]
+        while let (action, activeCapture) = pending.popLast() {
+            switch action {
+            case .define(let name, let value, let body):
+                guard capture == nil, activeCapture == nil, !stateRoots.contains(name),
+                      !step.bindings.contains(where: { $0.name == name }),
+                      !expression.freeVariableNames.contains(name),
+                      control == nil || sawControlGuard,
+                      value == expression else { throw mismatch() }
+                capture = name
+                pending.append((body, name))
+            case .and(let left, let right):
+                pending.append((right, activeCapture))
+                pending.append((left, activeCapture))
+            case .guard_(.value(.bool(true))):
+                break
+            case .guard_(.equal(.programCounter, .controlLocation(let location))):
+                guard let control, location == control.entry, !sawControlGuard else { throw mismatch() }
+                sawControlGuard = true
+            case .assign(.programCounter, .controlLocation(let location)):
+                guard let control, location == control.next, !sawControlWrite else { throw mismatch() }
+                sawControlWrite = true
+            case .assign(.named(let name), let value):
+                guard stateRoots.contains(name),
+                      name != root || activeCapture == capture && capture != nil,
+                      writes.updateValue(value, forKey: name) == nil else {
+                    throw mismatch()
+                }
+            case .unchanged(.named(let name)):
+                guard stateRoots.contains(name),
+                      writes.updateValue(.variable(name), forKey: name) == nil else {
+                    throw mismatch()
+                }
+            default:
+                throw mismatch()
+            }
+        }
+        guard let capture, writes[root] == .variable(capture),
+              writes.keys.allSatisfy({ stateRoots.contains($0) }),
+              stateRoots.subtracting([root]).allSatisfy({ writes[$0] == nil || writes[$0] == .variable($0) }),
+              control == nil || (sawControlGuard && sawControlWrite) else { throw mismatch() }
     }
 
     static func verifyCompiled(_ action: NamedAction, bindings compiledBindings: [CompiledActionBinding],
