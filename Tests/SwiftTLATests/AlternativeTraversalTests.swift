@@ -6,6 +6,34 @@ import Testing
 
 @Suite("Alternative traversal")
 struct AlternativeTraversalTests {
+    @Test("Rendered alternatives retain the union of both complete assignments")
+    func renderedAlternativesKeepBothBranches() throws {
+        let specification = TLASpec(name: "ScalarAlternatives", variables: [
+            .init(name: "value", initial: .int(0))
+        ], actions: [
+            .init(name: "pick", body: .or(
+                .assign(.named("value"), .int(1)),
+                .assign(.named("value"), .int(2))))
+        ], invariants: [])
+        let compilation = try specification.compile()
+        let action = try #require(compilation.semantics.behavior.actions.first)
+        let module = try compilation.render().tlaBundle.tla
+        let declaration = try #require(module.split(separator: "\n").first { $0.hasPrefix("pick == ") })
+        let body = String(declaration.dropFirst("pick == ".count))
+        try StraightLineRenderedActionCheck.verify(action.body, rendered: body,
+            layout: compilation.layout, binders: compilation.bindings.binders)
+
+        let conjunction = body.replacingOccurrences(of: " \\/ ", with: " /\\ ")
+        #expect(conjunction != body)
+        do {
+            try StraightLineRenderedActionCheck.verify(action.body, rendered: conjunction,
+                layout: compilation.layout, binders: compilation.bindings.binders)
+            Issue.record("A rendered conjunction discarded an alternative successor")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.action.scalarAssignments")
+        }
+    }
+
     @Test("Nested alternatives retain source order after normalization")
     func nestedAlternativeOrder() {
         let leaves = (1...4).map { ActionExpr.assign(.named("value"), .int($0)) }
