@@ -1851,15 +1851,16 @@ compose associatively, with an empty identity: reparenthesizing a binary
 alternative tree preserves the complete update sequence and first failure when
 leaf order stays fixed. Reversing two distinct failures changes that result.
 A focused lowering test checks that the compiler extracts the same leaf order
-from left- and right-nested source alternatives. This closes the algebraic
-rebalancing rule, not arbitrary conjunction distribution or either emitter's
-general output link.
-For every finite list of already-computed branch outcomes, the same module
-proves a visitor history exists. Histories satisfying its recurrence compose
-across group concatenation, including every ordered update and the first
-failure. It does not establish that a continuation produces the correct
-outcome for each branch; that source-to-lowered `and` rule and the general
-TLA+ output link remain open.
+from left- and right-nested source alternatives. The module also proves that
+applying an arbitrary branchwise continuation to two concatenated choice lists
+produces the same ordered outcome list as applying it to each list separately
+and concatenating the results. Each continuation outcome may contain both
+updates and a failure. For every finite list of such outcomes, a visitor
+history exists; its recurrence preserves every ordered update and the first
+failure across group concatenation. These are algebraic composition rules,
+conditional on each branch producing the specified outcome. They do not prove
+that the actual lowerer or either emitter computes those outcomes for arbitrary
+fallible expressions; those implementation links remain open.
 
 `BranchwiseConjunctionFailureOrderProof.tla` closes that ordering for one
 accepted `#spec` instance with eight initial states. Its independent source
