@@ -347,6 +347,65 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
+    @Test("One fallible assignment retains its complete expression and captured write")
+    func fallibleSingleAssignmentRetainsOneCapture() throws {
+        let expression = StateExpr.divide(
+            .add(.variable("value"), .value(.int(1))), .variable("divisor"))
+        let step = AtomicStep(model: .init(label: .init(name: "advance"), statements: [
+            .set(target: .root("value"), value: expression),
+        ]))
+        let action = try AlgorithmLowerer.lowerAtomicStep(step).action
+        try StraightLineAssignmentCheck.verify(step, lowered: action,
+            stateRoots: ["value", "divisor"])
+        guard case .define(let binder, _, let body) = action else {
+            throw InvalidShape.lowered
+        }
+        let changedExpression = StateExpr.divide(
+            .add(.variable("divisor"), .value(.int(1))), .variable("divisor"))
+        do {
+            try StraightLineAssignmentCheck.verify(step,
+                lowered: .define(binder, changedExpression, body),
+                stateRoots: ["value", "divisor"])
+            Issue.record("A changed source expression passed the assignment capture check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "actions.advance.singleAssignmentCapture")
+        }
+        let owner = ControlOwner.sequential(algorithm: "OrderedAssignment")
+        let entry = ControlLocationReference(owner: owner, sourceName: "advance")
+        let next = ControlLocationReference(owner: owner, sourceName: "done")
+        let guardControl = ActionExpr.guard_(.equal(.programCounter, .controlLocation(entry)))
+        let writeControl = ActionExpr.assign(.programCounter, .controlLocation(next))
+        try StraightLineAssignmentCheck.verify(step,
+            lowered: .and(guardControl, .and(action, writeControl)),
+            stateRoots: ["value", "divisor"], control: (entry, next))
+        do {
+            try StraightLineAssignmentCheck.verify(step,
+                lowered: .and(action, .and(guardControl, writeControl)),
+                stateRoots: ["value", "divisor"], control: (entry, next))
+            Issue.record("A disabled action could evaluate a fallible capture before its control guard")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "actions.advance.singleAssignmentCapture")
+        }
+        let outOfScope = ActionExpr.and(
+            .assign(.named("value"), .variable(binder)),
+            .define(binder, expression, .guard_(.bool(true))))
+        do {
+            try StraightLineAssignmentCheck.verify(step, lowered: outOfScope,
+                stateRoots: ["value", "divisor"])
+            Issue.record("A captured value used outside its binding passed the assignment check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "actions.advance.singleAssignmentCapture")
+        }
+        do {
+            try StraightLineAssignmentCheck.verify(step,
+                lowered: .define(binder, expression, .define("extra", expression, body)),
+                stateRoots: ["value", "divisor"])
+            Issue.record("A duplicated fallible evaluation passed the assignment capture check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "actions.advance.singleAssignmentCapture")
+        }
+    }
+
     @Test("A control-free #spec loop preserves ordered source writes through both emitters")
     func authoredLoopPreservesOrderedWrites() throws {
         let specification = OrderedAlgorithmCopyProofModel.spec
