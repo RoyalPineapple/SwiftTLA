@@ -306,7 +306,7 @@ struct OrderedAssignmentLoweringTests {
         let untypedAction = try #require(inputs.semantics.behavior.actions.first)
         let loweredAction = try #require(specification.loweredSourceModel().actions.first)
         #expect(try compiledResult(compiledAction.body, program: compiled) == expected)
-        try StraightLineAssignmentCheck.verifyCompiled(loweredAction,
+        try StraightLineAssignmentCheck.verifyCompiled(loweredAction, bindings: compiledAction.bindings,
             body: compiledAction.body, layout: compiled.layout)
         try StraightLineAssignmentCheck.verifyResolved(untypedAction,
             resolved: compiledAction, variableTypes: inputs.variableTypes,
@@ -320,7 +320,7 @@ struct OrderedAssignmentLoweringTests {
         let staleCompiled = CompiledActionExpr.define(firstID, firstRead,
             .define(secondID, oldStateRead, compiledWrites))
         #expect(throws: CompilationDiagnostic.self) {
-            try StraightLineAssignmentCheck.verifyCompiled(loweredAction,
+            try StraightLineAssignmentCheck.verifyCompiled(loweredAction, bindings: compiledAction.bindings,
                 body: staleCompiled, layout: compiled.layout)
         }
         #expect(throws: CompilationDiagnostic.self) {
@@ -330,6 +330,93 @@ struct OrderedAssignmentLoweringTests {
                 resolvedVariableTypes: compiled.variableTypes, resolvedBindingTypes: compiled.bindingTypes)
         }
         #expect(try compiledResult(staleCompiled, program: compiled) != expected)
+    }
+
+    @Test("Bound action values retain ordered reads through source lowering")
+    func boundValueFeedsLaterAssignment() throws {
+        let variables = [NamedVar(name: "value", initial: .int(0)),
+                         NamedVar(name: "copied", initial: .int(0))]
+        let step = AtomicStep(model: .init(label: .init(name: "select"), statements: [
+            .set(target: .root("value"), value: .variable("member")),
+            .set(target: .root("copied"), value: .variable("value")),
+        ]), bindings: [ActionBinding(name: "member", values: [.int(1), .int(2)])])
+        let lowered = ActionNormalization.complete(
+            try AlgorithmLowerer.lowerAtomicStep(step).action, variables: variables)
+        try StraightLineAssignmentCheck.verify(step, lowered: lowered,
+            stateRoots: ["value", "copied"])
+        let stale = ActionExpr.and(
+            .assign(.named("value"), .variable("member")),
+            .assign(.named("copied"), .variable("copied")))
+        do {
+            try StraightLineAssignmentCheck.verify(step, lowered: stale,
+                stateRoots: ["value", "copied"])
+            Issue.record("A bound value was replaced by a stale pre-step read")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "actions.select.orderedAssignments")
+        }
+        var specification = TLASpec(name: "BoundOrderedAssignments", variables: variables,
+            actions: [], invariants: [])
+        specification.sourceAtomicSteps = [step]
+        let inputs = try SourceTypeResolver().resolve(in: specification.compile())
+        let program = try CompiledProgram(inputs: inputs)
+        let sourceAction = try #require(specification.loweredSourceModel().actions.first)
+        let untypedAction = try #require(inputs.semantics.behavior.actions.first)
+        let compiledAction = try #require(program.behavior.actions.first)
+        #expect(untypedAction.id == compiledAction.id)
+        let untypedBinding = try #require(untypedAction.bindings.first)
+        #expect(untypedBinding.literalMembers?.count == 2,
+            "Original binding domain: \(untypedBinding.domain.diagnosticName)")
+        try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+            bindings: compiledAction.bindings, body: compiledAction.body, layout: program.layout)
+        try StraightLineAssignmentCheck.verifyResolved(untypedAction,
+            resolved: compiledAction, variableTypes: inputs.variableTypes,
+            resolvedVariableTypes: program.variableTypes, resolvedBindingTypes: program.bindingTypes)
+        let memberID = try #require(compiledAction.bindings.first?.binder)
+        let valueID = try #require(program.layout.variables.first {
+            $0.declaration.name == "value"
+        }?.id)
+        var replaced = 0
+        let staleCompiled = compiledAction.body.map { expression in
+            guard expression.operation == .boundValue(memberID) else { return expression }
+            replaced += 1
+            return CompiledExpression(operation: .stateVariable(valueID),
+                resultType: expression.resultType, children: [])
+        }
+        #expect(replaced > 0)
+        do {
+            try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+                bindings: compiledAction.bindings, body: staleCompiled, layout: program.layout)
+            Issue.record("The compiled action read the old state instead of its bound argument")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "actions.select.compiledAssignments")
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyResolved(untypedAction,
+                resolved: .init(id: compiledAction.id, bindings: compiledAction.bindings,
+                    body: staleCompiled), variableTypes: inputs.variableTypes,
+                resolvedVariableTypes: program.variableTypes, resolvedBindingTypes: program.bindingTypes)
+        }
+        let binding = try #require(compiledAction.bindings.first)
+        #expect(binding.domain.children.count == 2)
+        let wrongMembers = binding.domain.children.enumerated().map { index, child in
+            index == 1 ? CompiledExpression(operation: .value(.integer(3)),
+                resultType: child.resultType, children: []) : child
+        }
+        let wrongBinding = CompiledActionBinding(binder: binding.binder,
+            sourceName: binding.sourceName,
+            domain: .init(operation: binding.domain.operation,
+                resultType: binding.domain.resultType, children: wrongMembers),
+            generatedSwiftType: binding.generatedSwiftType)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+                bindings: [wrongBinding], body: compiledAction.body, layout: program.layout)
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyResolved(untypedAction,
+                resolved: .init(id: compiledAction.id, bindings: [wrongBinding],
+                    body: compiledAction.body), variableTypes: inputs.variableTypes,
+                resolvedVariableTypes: program.variableTypes, resolvedBindingTypes: program.bindingTypes)
+        }
     }
 
     @Test("The emitted TLA assignment action has the source's complete symbolic result")

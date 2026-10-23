@@ -1,6 +1,7 @@
 enum StraightLineAssignmentCheck {
     private enum Term: Equatable {
         case prior(String)
+        case parameter(String)
         case literal(TLAValue)
     }
 
@@ -21,7 +22,10 @@ enum StraightLineAssignmentCheck {
     }
 
     static func verify(_ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>) throws {
-        guard step.bindings.isEmpty else { return }
+        let parameterNames = step.bindings.map(\.name)
+        let parameters = Set(parameterNames)
+        guard parameters.count == parameterNames.count,
+              parameters.isDisjoint(with: stateRoots) else { return }
 
         var source: [String: Term] = [:]
         for statement in step.model.statements {
@@ -30,6 +34,8 @@ enum StraightLineAssignmentCheck {
             switch expression {
             case .variable(let name) where stateRoots.contains(name):
                 source[root] = source[name] ?? .prior(name)
+            case .variable(let name) where parameters.contains(name):
+                source[root] = .parameter(name)
             case .value(let literal):
                 source[root] = .literal(literal)
             default:
@@ -61,7 +67,7 @@ enum StraightLineAssignmentCheck {
         }
 
         var writes: [String: Term] = [:]
-        var bindings: [String: Term] = [:]
+        var bindings = Dictionary(uniqueKeysWithValues: parameterNames.map { ($0, Term.parameter($0)) })
         var pending: [Visit] = [.action(lowered)]
         while let next = pending.popLast() {
             guard case .action(let action) = next else {
@@ -98,12 +104,20 @@ enum StraightLineAssignmentCheck {
         }
     }
 
-    static func verifyCompiled(_ action: NamedAction, body: CompiledActionExpr,
+    static func verifyCompiled(_ action: NamedAction, bindings compiledBindings: [CompiledActionBinding],
+                               body: CompiledActionExpr,
                                layout: CompiledLayout) throws {
-        guard action.bindings.isEmpty else { return }
+        guard action.bindings.allSatisfy({ binding in
+            binding.literalMembers?.allSatisfy { member in
+                if case .int = member { return true }
+                if case .bool = member { return true }
+                return false
+            } == true
+        }) else { return }
         let stateIDs = Dictionary(uniqueKeysWithValues: layout.variables.map {
             ($0.declaration.name, $0.id)
         })
+        let parameterNames = Set(action.bindings.map(\.name))
         var pendingSource = [action.body]
         var definedNames: Set<String> = []
         var readNames: Set<String> = []
@@ -126,7 +140,11 @@ enum StraightLineAssignmentCheck {
                 return
             }
         }
-        guard readNames.isSubset(of: Set(stateIDs.keys).union(definedNames)) else { return }
+        guard parameterNames.count == action.bindings.count,
+              parameterNames.isDisjoint(with: Set(stateIDs.keys)),
+              parameterNames.isDisjoint(with: definedNames),
+              readNames.isSubset(of: Set(stateIDs.keys).union(definedNames).union(parameterNames))
+        else { return }
 
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(
@@ -154,8 +172,18 @@ enum StraightLineAssignmentCheck {
             }
         }
 
-        var bindings: [String: BinderID] = [:]
-        var usedBinders: Set<BinderID> = []
+        guard action.bindings.count == compiledBindings.count else { throw mismatch() }
+        for (source, compiled) in zip(action.bindings, compiledBindings) {
+            guard source.name == compiled.sourceName,
+                  let sourceMembers = source.literalMembers,
+                  let compiledMembers = compiled.literalMembers,
+                  Set(sourceMembers.map(CompiledValue.init(formal:))) == Set(compiledMembers)
+            else { throw mismatch() }
+        }
+        var usedBinders = Set(compiledBindings.map(\.binder))
+        guard usedBinders.count == compiledBindings.count else { throw mismatch() }
+        var bindings = Dictionary(uniqueKeysWithValues: zip(action.bindings, compiledBindings)
+            .map { ($0.name, $1.binder) })
         var pending: [CompiledVisit] = [.pair(action.body, body)]
         while let next = pending.popLast() {
             switch next {
@@ -204,8 +232,29 @@ enum StraightLineAssignmentCheck {
                                variableTypes: [VariableID: CompiledValueType],
                                resolvedVariableTypes: [VariableID: CompiledValueType],
                                resolvedBindingTypes: [BinderID: CompiledValueType]) throws {
-        guard original.bindings.isEmpty else { return }
         func scalar(_ type: CompiledValueType?) -> Bool { type == .int || type == .bool }
+        func parameterType(_ binding: CompiledActionBinding) -> CompiledValueType? {
+            guard let members = binding.literalMembers, let first = members.first else { return nil }
+            let type: CompiledValueType
+            switch first {
+            case .integer: type = .int
+            case .boolean: type = .bool
+            default: return nil
+            }
+            guard members.allSatisfy({ member in
+                switch (type, member) {
+                case (.int, .integer), (.bool, .boolean): true
+                default: false
+                }
+            }) else { return nil }
+            return type
+        }
+        guard original.bindings.allSatisfy({ parameterType($0) != nil }) else { return }
+        let parameterIDs = Set(original.bindings.map(\.binder))
+        guard parameterIDs.count == original.bindings.count else { return }
+        let parameterTypes = Dictionary(uniqueKeysWithValues: original.bindings.map {
+            ($0.binder, parameterType($0)!)
+        })
         func leafType(_ expression: CompiledExpression,
                       bindings: [BinderID: CompiledValueType]) -> CompiledValueType? {
             guard expression.children.isEmpty else { return nil }
@@ -218,10 +267,10 @@ enum StraightLineAssignmentCheck {
             }
         }
 
-        var bindings: [BinderID: CompiledValueType] = [:]
-        var seenBinders: Set<BinderID> = []
+        var bindings = parameterTypes
+        var seenBinders = parameterIDs
         var usedVariables: Set<VariableID> = []
-        var inferredBindings: [BinderID: CompiledValueType] = [:]
+        var inferredBindings = parameterTypes
         var pending: [ResolvedVisit] = [.scan(original.body)]
         while let next = pending.popLast() {
             switch next {
@@ -242,7 +291,8 @@ enum StraightLineAssignmentCheck {
                     pending.append(.scan(left))
                 case .assign(let id, let value):
                     guard let type = leafType(value, bindings: bindings), scalar(type),
-                          variableTypes[id] == type else { return }
+                          variableTypes[id] == type || (variableTypes[id] == .unknown
+                              && resolvedVariableTypes[id] == type) else { return }
                     usedVariables.insert(id)
                     if case .stateVariable(let read) = value.operation { usedVariables.insert(read) }
                 case .unchanged(let id):
@@ -265,19 +315,34 @@ enum StraightLineAssignmentCheck {
                 nextSafeAction: "Report this typed assignment compilation failure."
             )
         }
-        guard usedVariables.allSatisfy({ resolvedVariableTypes[$0] == variableTypes[$0] }),
+        guard usedVariables.allSatisfy({ variableTypes[$0] == .unknown
+                || resolvedVariableTypes[$0] == variableTypes[$0] }),
               inferredBindings.allSatisfy({ resolvedBindingTypes[$0.key] == $0.value }) else {
             throw mismatch()
         }
-        guard let resolved, resolved.id == original.id, resolved.bindings.isEmpty else {
+        guard let resolved, resolved.id == original.id,
+              resolved.bindings.count == original.bindings.count else {
             throw mismatch()
+        }
+        for (before, after) in zip(original.bindings, resolved.bindings) {
+            guard let type = parameterTypes[before.binder],
+                  before.binder == after.binder,
+                  before.sourceName == after.sourceName,
+                  before.generatedSwiftType == after.generatedSwiftType,
+                  after.domain.operation == .setLiteral,
+                  after.domain.resultType == .set(type),
+                  before.domain.children.count == after.domain.children.count,
+                  zip(before.domain.children, after.domain.children).allSatisfy({ lhs, rhs in
+                      lhs.children.isEmpty && rhs.children.isEmpty
+                          && lhs.operation == rhs.operation && rhs.resultType == type
+                  }) else { throw mismatch() }
         }
         func same(_ before: CompiledExpression, _ after: CompiledExpression,
                   bindings: [BinderID: CompiledValueType]) -> Bool {
             guard let type = leafType(before, bindings: bindings) else { return false }
             return after.children.isEmpty && before.operation == after.operation && after.resultType == type
         }
-        bindings.removeAll()
+        bindings = parameterTypes
         pending = [.pair(original.body, resolved.body)]
         while let next = pending.popLast() {
             switch next {

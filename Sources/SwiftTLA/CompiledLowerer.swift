@@ -1216,7 +1216,8 @@ struct CompiledLowerer {
         var scope = rootScope
         let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
         let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope)
-        try StraightLineAssignmentCheck.verifyCompiled(action, body: body, layout: layout)
+        try StraightLineAssignmentCheck.verifyCompiled(action, bindings: bindings,
+            body: body, layout: layout)
         try body.verifyBranchwiseContinuation(at: "actions.\(action.name).body")
         return CompiledAction(
             id: id,
