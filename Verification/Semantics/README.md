@@ -274,14 +274,20 @@ an `Int` literal `c`; the generated termination action is separate. The
 production single-assignment capture and typed compiled-action checks retain
 the source expression, target, guard order, and types. The native visitor
 check derives the checked addition call, operands, target, and control update
-from that compiled action. The TLA+ action and failure checks derive the
+from that compiled action. The generated successor wrapper is checked to apply
+each update to the complete snapshot and visit each distinct result. The
+generated failure visitor must forward the exact action and evaluation reason,
+and the public validation entry point must delegate both outcomes to it.
+Mutations that drop an update, replace the failure reason, or omit the failure
+callback are rejected. The TLA+ action and failure checks derive the
 value guard, operation and operands, control-gated failure, and selected
 evaluation invariant. Focused negative controls change the source capture,
 compiled operation/operands/type, Swift addition call, and TLA+ action or
 failure declarations; the unguarded-addition theorem supplies the semantic
 negative control. These gates and theorem establish this step/failure path
 conditional on their parsers and checkers, the generated update and checked
-arithmetic kernels, the formal value encoding, and documented Swift behavior.
+arithmetic kernels, the native checking traversal, the formal value encoding,
+and documented Swift behavior.
 They do not prove arbitrary initializers, other expressions, temporal claims,
 or the universal `#spec` theorem.
 The native branch trusts Swift's `addingReportingOverflow` contract and the small

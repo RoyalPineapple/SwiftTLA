@@ -69,6 +69,9 @@ extension NativeSwiftEmitter {
         try verifyGeneratedSnapshotOutput(machineDeclarations.first {
             $0.as(StructDeclSyntax.self)?.name.text == "Snapshot"
         }, hiddenFields: hiddenFields)
+        try verifyGeneratedValidationDelegationOutput(machineDeclarations.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "visitValidationOutcomes"
+        })
         declarations += machineDeclarations
         declarations += try nativeDeclarations("""
         private init(execution: Snapshot\(appendedParameters)) {
@@ -733,7 +736,7 @@ extension NativeSwiftEmitter {
             "\(binder(binding.binder)): \(try swiftType(program.bindingTypes[binding.binder]!))"
         }.joined(separator: ", ")
         let arguments = action.bindings.map { "\(binder($0.binder)): \(binder($0.binder))" }.joined(separator: ", ")
-        return DeclSyntax(stringLiteral: """
+        let declaration = DeclSyntax(stringLiteral: """
         private static func _visitSuccessors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
                                                       _ visit: (Snapshot) throws -> Void) throws {
             var emitted: [Snapshot] = []
@@ -746,6 +749,11 @@ extension NativeSwiftEmitter {
             }
         }
         """)
+        try verifyGeneratedSuccessorOutput(declaration, actionID: action.id.ordinal,
+            parameters: parameters, arguments: arguments,
+            configurationParameters: configurationParameters,
+            configurationArguments: configurationArguments)
+        return declaration
     }
 
     mutating func dispatchDeclarations(configurationArguments: String) throws -> [DeclSyntax] {
@@ -1498,6 +1506,59 @@ func verifyGeneratedUpdateApplyOutput(
     }
 }
 
+func verifyGeneratedValidationDelegationOutput(_ declaration: DeclSyntax?) throws {
+    let expected = Parser.parse(source: """
+    public func visitValidationOutcomes(checking context: inout CheckingContext<CheckingRegisters>,
+                                        _ visit: (Action, Self) throws -> Bool,
+                                        onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool) throws -> Bool {
+        var run: CheckingContext<CheckingRegisters>? = context
+        defer { context = run! }
+        return try _visitSuccessors(checking: &run, visit, onEvaluationFailure: onEvaluationFailure)
+    }
+    """).statements.first?.item.as(FunctionDeclSyntax.self)
+    guard let actual = declaration?.as(FunctionDeclSyntax.self), let expected,
+          Array(actual.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(expected.tokens(viewMode: .sourceAccurate)).map(\.text) else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.validation.delegation",
+            expected: "forward every successor and exact action failure through the generated checking entry point",
+            actual: "the emitted validation entry point differs from the checked rule",
+            nextSafeAction: "Report this native validation generation failure."
+        )
+    }
+}
+
+func verifyGeneratedSuccessorOutput(
+    _ declaration: DeclSyntax?, actionID: Int, parameters: String, arguments: String,
+    configurationParameters: String, configurationArguments: String
+) throws {
+    let expected = Parser.parse(source: """
+    private static func _visitSuccessors\(actionID)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
+                                                  _ visit: (Snapshot) throws -> Void) throws {
+        var emitted: [Snapshot] = []
+        try _visitUpdates\(actionID)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(configurationArguments), checking: &context) { updates in
+            let candidate = updates.applying(to: state)
+            if !emitted.contains(candidate) {
+                emitted.append(candidate)
+                try visit(candidate)
+            }
+        }
+    }
+    """).statements.first?.item.as(FunctionDeclSyntax.self)
+    guard let actual = declaration?.as(FunctionDeclSyntax.self), let expected,
+          Array(actual.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(expected.tokens(viewMode: .sourceAccurate)).map(\.text) else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.action.successor.\(actionID)",
+            expected: "apply every complete compiled update and visit each resulting snapshot once",
+            actual: "the emitted successor wrapper differs from the checked rule",
+            nextSafeAction: "Report this native successor generation failure."
+        )
+    }
+}
+
 struct ScalarBoundRoute {
     struct Binding {
         let label: String
@@ -1673,18 +1734,45 @@ func verifyGeneratedActionRoutingOutput(
         $0.name.text == "_visitSuccessors"
             && $0.signature.parameterClause.parameters.last?.firstName.text == "onEvaluationFailure"
     }
-    guard visitors.count == 1, let statements = visitors.first?.body?.statements,
-          statements.count == 3,
-          let outer = Array(statements)[1].item.as(DoStmtSyntax.self),
-          let first = outer.body.statements.first,
-          first.item.as(FunctionDeclSyntax.self)?.name.text == "_visitAction" else {
-        throw invalid("native.action.enumeration", "one checking visitor for every compiled action")
+    let failureVisitor = Parser.parse(source: """
+    private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
+                                  _ visit: (Action, Self) throws -> Bool,
+                                  onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool) throws -> Bool {
+        var found = false
+        do {
+            func _visitAction(_ action: Action) throws {
+                var callbackFailed = false
+                do {
+                    try _visitSuccessors(for: action, checking: &context) { execution in
+                        found = true
+                        do {
+                            if try !visit(action, Self(execution: execution\(configurationArguments))) {
+                                throw _StopSuccessorTraversal()
+                            }
+                        } catch {
+                            callbackFailed = true
+                            throw error
+                        }
+                    }
+                } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+                    if try !onEvaluationFailure(action, reason) {
+                        throw _StopSuccessorTraversal()
+                    }
+                } catch {
+                    throw error
+                }
+            }
+            try _visitActionCandidates(_visitAction)
+        } catch is _StopSuccessorTraversal {
+        }
+        return found
     }
-    let calls = Array(outer.body.statements.dropFirst())
-    guard calls.count == 1,
-          Array(calls[0].tokens(viewMode: .sourceAccurate)).map(\.text)
-            == tokens("try _visitActionCandidates(_visitAction)") else {
-        throw invalid("native.action.enumeration", "checking delegates to the same candidate visitor")
+    """).statements.first?.item.as(FunctionDeclSyntax.self)
+    guard visitors.count == 1, let visitor = visitors.first, let failureVisitor,
+          Array(visitor.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(failureVisitor.tokens(viewMode: .sourceAccurate)).map(\.text) else {
+        throw invalid("native.action.failureRouting",
+            "preserve every successor and forward its exact action and evaluation failure")
     }
     let sources = methods.filter { $0.name.text == "_visitActionCandidates" }
     guard sources.count == 1, let body = sources.first?.body?.statements,
