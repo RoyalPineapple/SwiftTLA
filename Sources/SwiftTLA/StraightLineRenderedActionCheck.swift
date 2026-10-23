@@ -214,7 +214,7 @@ enum StraightLineRenderedActionCheck {
                                                layout: CompiledLayout, binders: [BinderID: String],
                                                parameters: [String],
                                                failureDeclarations: [String]) throws {
-        // shortcut: branching or multiply-fallible continuations need their own failure rule.
+        // shortcut: branching continuations need their own failure rule.
         let programCounter = layout.programCounterID()
         func controlWrite(_ node: CompiledActionExpr) -> Bool {
             guard case .assign(let id, let value) = node, id == programCounter,
@@ -234,33 +234,6 @@ enum StraightLineRenderedActionCheck {
             body = guardedBody
         }
         if case .and(let assignment, let tail) = body, controlWrite(tail) { body = assignment }
-        guard case .define(let binder, let expression, let continuation) = body,
-              case .add = expression.operation,
-              binders[binder] != nil,
-              let tree = addition(expression,
-                  variables: Dictionary(uniqueKeysWithValues: layout.variables.map {
-                      ($0.id, $0.declaration.name)
-                  }), binders: binders) else { return }
-        var assigned = false
-        var pending = [continuation]
-        while let node = pending.popLast() {
-            switch node {
-            case .assign(_, let value):
-                if controlWrite(node) { break }
-                guard !assigned, case .boundValue(let usedBinder) = value.operation,
-                      usedBinder == binder, value.children.isEmpty else { return }
-                assigned = true
-            case .unchanged: break
-            case .guard_(let condition):
-                guard case .value(.boolean(true)) = condition.operation,
-                      condition.children.isEmpty else { return }
-            case .and(let left, let right):
-                pending.append(right)
-                pending.append(left)
-            default: return
-            }
-        }
-        guard assigned else { return }
         func mismatch(_ name: String) -> CompilationDiagnostic {
             CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                 path: "tla.evaluationFailures.\(name)",
@@ -289,26 +262,94 @@ enum StraightLineRenderedActionCheck {
                 throw mismatch(base)
             }
         }
-        var preceding: [String] = []
-        for (position, site) in tree.sites.enumerated() {
-            let suffix = position == 0 ? "\(index)" : "\(index)_\(position)"
-            let unselected = preceding.isEmpty ? "~(\(site.guardText))"
-                : "(\(preceding.joined(separator: " /\\ ")) /\\ ~(\(site.guardText)))"
-            let predicate = selection.map { "((\($0)) = TRUE /\\ \(unselected))" } ?? unselected
-            let expected = [
-                ("__SwiftTLAOverflowFailure\(suffix)", predicate),
-                ("__SwiftTLAOverflowOperands\(suffix)", site.operands),
-                ("__SwiftTLAOverflowOperation\(suffix)", "\"addition\""),
-            ]
-            for (name, value) in expected {
-                try verifyDeclaration(name, value: value)
+        let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
+            ($0.id, $0.declaration.name)
+        })
+        func scalarValue(_ expression: CompiledExpression) -> String? {
+            if case .add = expression.operation {
+                return addition(expression, variables: variables, binders: binders)?.value
             }
-            preceding.append(site.guardText)
+            guard expression.children.isEmpty else { return nil }
+            switch expression.operation {
+            case .stateVariable(let id): return variables[id]
+            case .boundValue(let id): return binders[id]
+            case .value(.integer(let value)): return TLAValue.int(value).description
+            default: return nil
+            }
         }
-        let aggregateName = "__SwiftTLAAnyEvaluationFailure\(index)"
-        let failure = "~(\(tree.defined))"
-        try verifyDeclaration(aggregateName,
-            value: selection.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure)
+        var definitions: [(name: String, value: String, addition: AdditionTree?)] = []
+        var remainder = body
+        while case .define(let binder, let expression, let continuation) = remainder {
+            guard let name = binders[binder], let value = scalarValue(expression) else { break }
+            definitions.append((name, value, addition(expression, variables: variables, binders: binders)))
+            remainder = continuation
+        }
+        if definitions.contains(where: { $0.addition != nil }) {
+            var pending = [remainder]
+            var finalWrites = 0
+            var supported = true
+            while let node = pending.popLast() {
+                switch node {
+                case .assign(_, _) where controlWrite(node): break
+                case .assign(_, let value):
+                    guard case .boundValue = value.operation, value.children.isEmpty else {
+                        supported = false; break
+                    }
+                    finalWrites += 1
+                case .unchanged: break
+                case .guard_(let condition):
+                    guard case .value(.boolean(true)) = condition.operation,
+                          condition.children.isEmpty else { supported = false; break }
+                case .and(let left, let right):
+                    pending.append(right)
+                    pending.append(left)
+                default: supported = false
+                }
+            }
+            if supported, finalWrites > 0 {
+                var occurrence = 0
+                for (position, definition) in definitions.enumerated() {
+                    guard let tree = definition.addition else { continue }
+                    var preceding: [String] = []
+                    for site in tree.sites {
+                        let suffix = occurrence == 0 ? "\(index)" : "\(index)_\(occurrence)"
+                        var predicate = preceding.isEmpty ? "~(\(site.guardText))"
+                            : "(\(preceding.joined(separator: " /\\ ")) /\\ ~(\(site.guardText)))"
+                        var operands = site.operands
+                        for earlier in definitions[..<position].reversed() {
+                            predicate = "(LET \(earlier.name) == \(earlier.value) IN \(predicate))"
+                            operands = "(LET \(earlier.name) == \(earlier.value) IN \(operands))"
+                            if let guardText = earlier.addition?.defined {
+                                predicate = "(IF \(guardText) THEN \(predicate) ELSE FALSE)"
+                            }
+                        }
+                        let selected = selection.map { "((\($0)) = TRUE /\\ \(predicate))" } ?? predicate
+                        try verifyDeclaration("__SwiftTLAOverflowFailure\(suffix)", value: selected)
+                        try verifyDeclaration("__SwiftTLAOverflowOperands\(suffix)", value: operands)
+                        try verifyDeclaration("__SwiftTLAOverflowOperation\(suffix)", value: "\"addition\"")
+                        preceding.append(site.guardText)
+                        occurrence += 1
+                    }
+                }
+                var aggregate: String?
+                for definition in definitions.reversed() {
+                    let current = definition.addition.map { "~(\($0.defined))" }
+                    if let later = aggregate {
+                        var continuation = "(LET \(definition.name) == \(definition.value) IN \(later))"
+                        if let guardText = definition.addition?.defined {
+                            continuation = "(IF \(guardText) THEN \(continuation) ELSE FALSE)"
+                        }
+                        aggregate = current.map { "(\($0) \\/ \(continuation))" } ?? continuation
+                    } else {
+                        aggregate = current
+                    }
+                }
+                guard let aggregate else { throw mismatch("__SwiftTLAAnyEvaluationFailure\(index)") }
+                try verifyDeclaration("__SwiftTLAAnyEvaluationFailure\(index)",
+                    value: selection.map { "(IF \($0) THEN \(aggregate) ELSE FALSE)" } ?? aggregate)
+                return
+            }
+        }
     }
 
     static func verifyEvaluationSelection(_ behavior: CompiledBehavior, module: String,
