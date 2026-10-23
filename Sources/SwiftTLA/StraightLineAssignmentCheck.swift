@@ -1,4 +1,36 @@
 enum StraightLineAssignmentCheck {
+    static func verifyInitialIntLiteral(_ source: VariableInitialization,
+                                        lowered: CompiledVariableInitialization, at path: String) throws {
+        guard case .value(.int(let value)) = source else { return }
+        guard case .value(let expression) = lowered,
+              case .value(.integer(let actual)) = expression.operation,
+              actual == value,
+              expression.children.isEmpty else {
+            throw initialIntMismatch(at: path)
+        }
+    }
+
+    static func verifyResolvedInitialIntLiteral(_ original: CompiledVariableInitialization,
+                                                resolved: CompiledVariableInitialization?, at path: String) throws {
+        guard case .value(let source) = original,
+              case .value(.integer(let value)) = source.operation,
+              source.children.isEmpty else { return }
+        guard case .value(let expression)? = resolved,
+              case .value(.integer(let actual)) = expression.operation,
+              actual == value,
+              expression.children.isEmpty,
+              expression.resultType == .int else {
+            throw initialIntMismatch(at: path)
+        }
+    }
+
+    private static func initialIntMismatch(at path: String) -> CompilationDiagnostic {
+        CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: path, expected: "the same typed Int literal as the source initializer",
+            actual: "the compiled initializer changed its value, shape, or type",
+            nextSafeAction: "Report this initializer translation failure.")
+    }
+
     private enum Term: Hashable {
         case prior(String)
         case parameter(String)

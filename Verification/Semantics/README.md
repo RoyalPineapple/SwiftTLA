@@ -290,14 +290,18 @@ negative control. These gates and theorem establish this step/failure path
 conditional on their parsers and checkers, the generated update and checked
 arithmetic kernels, the native checking traversal, the formal value encoding,
 and documented Swift behavior.
-They do not prove arbitrary initializers, other expressions, temporal claims,
-or the universal `#spec` theorem.
-For a typed deterministic `Int` literal initializer, the native and TLA+ output
-checks independently derive the expected literal from the compiled value and
-reject changed emitted values. The negative controls alter the Swift binding
-and both the TLA+ `Init` text and its renderer-supplied predicate. This closes
-those two output links, not the source-to-typed-initializer link or a proof of
-the trusted formal integer encoding.
+`SequentialAdditionPreservesInitialsEdgesAndFailures` composes this step rule
+with the deterministic singleton-initialization rule. For the stated class,
+the source-to-lowered check retains the authored `Int` literal, the compiler
+checks its value before type resolution and its value and `Int` type afterward,
+and the native and TLA+ output checks independently derive that literal from
+the compiled value. Negative controls alter the lowered shared value, the
+compiled literal and type,
+the Swift binding, and both the TLA+ `Init` text and its renderer-supplied
+predicate. This closes the initial-state link for this class, conditional on
+the project-owned checkers and formal integer encoding. It does not prove
+arbitrary initializers, other expressions, temporal claims, or the universal
+`#spec` theorem.
 The native branch trusts Swift's `addingReportingOverflow` contract and the small
 `_NativeMachineOperations.add` wrapper; the fixture's generated-Swift witness
 and runtime failure test check that link, but are not a proof of the Swift

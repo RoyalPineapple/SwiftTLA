@@ -647,11 +647,57 @@ struct OrderedAssignmentLoweringTests {
             try StraightLineAssignmentCheck.verifySequential(source, lowered: wrongInitial,
                 enumerateInitialControl: false)
         }
+        var wrongSharedInitial = lowered
+        let first = try #require(wrongSharedInitial.variables.firstIndex { $0.name == "first" })
+        wrongSharedInitial.variables[first] = NamedVar(name: "first", initial: .int(9))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifySequential(source, lowered: wrongSharedInitial,
+                enumerateInitialControl: false)
+        }
         var wrongLabel = lowered
         wrongLabel.actions[0] = NamedAction(name: "other", body: lowered.actions[0].body)
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineAssignmentCheck.verifySequential(source, lowered: wrongLabel,
                 enumerateInitialControl: false)
+        }
+    }
+
+    @Test("An authored Int initializer retains its value and type through compilation")
+    func authoredIntInitializerRetainsCompiledValue() throws {
+        let source = try #require(SequentialCopyProofModel.spec.loweredSourceModel().variables.first {
+            $0.name == "first"
+        })
+        let inputs = try SourceTypeResolver().resolve(in: SequentialCopyProofModel.spec.compile())
+        let variable = try #require(inputs.layout.variables.first { $0.declaration.name == "first" })
+        let lowered = try #require(inputs.semantics.behavior.initializations.first {
+            $0.variable == variable.id
+        }?.initialization)
+        let program = try CompiledProgram(inputs: inputs)
+        let resolved = try #require(program.behavior.initializations.first {
+            $0.variable == variable.id
+        }?.initialization)
+        let path = "variables.first.initialization"
+        try StraightLineAssignmentCheck.verifyInitialIntLiteral(source.initialization,
+            lowered: lowered, at: path)
+        try StraightLineAssignmentCheck.verifyResolvedInitialIntLiteral(lowered,
+            resolved: resolved, at: path)
+
+        let wrongValue = CompiledVariableInitialization.value(.value(.integer(9)))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyInitialIntLiteral(source.initialization,
+                lowered: wrongValue, at: path)
+        }
+        let wrongResolvedValue = CompiledVariableInitialization.value(.init(
+            operation: .value(.integer(9)), resultType: .int, children: []))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntLiteral(lowered,
+                resolved: wrongResolvedValue, at: path)
+        }
+        let wrongType = CompiledVariableInitialization.value(.init(
+            operation: .value(.integer(1)), resultType: .bool, children: []))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntLiteral(lowered,
+                resolved: wrongType, at: path)
         }
     }
 
