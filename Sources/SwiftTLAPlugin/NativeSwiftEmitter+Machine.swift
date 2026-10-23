@@ -683,7 +683,7 @@ extension NativeSwiftEmitter {
         """)
         try verifyGeneratedActionWriteOutput(declaration, action: action.body, program: program,
             stateFields: stateMemberNames, parts: parts.writes, conditions: parts.conditions,
-            requireScalarLeaves: action.bindings.isEmpty && isTotalScalarAssignment(action.body))
+            requireScalarLeaves: isTotalScalarAssignment(action.body), externalBindings: action.bindings)
         return declaration
     }
 
@@ -946,7 +946,8 @@ extension NativeSwiftEmitter {
                 (name: api.swiftIdentifier,
                     labels: api.bindings.filter(\.isPublic).map(\.swiftIdentifier))
             },
-            configurationArguments: configurationArguments)
+            configurationArguments: configurationArguments,
+            boundRoutes: scalarBoundRoutes(program: program, actions: model.api.actions))
         return declarations
     }
 
@@ -1497,10 +1498,48 @@ func verifyGeneratedUpdateApplyOutput(
     }
 }
 
+struct ScalarBoundRoute {
+    struct Binding {
+        let label: String
+        let name: String
+        let type: CompiledValueType
+        let members: [CompiledValue]
+    }
+    let name: String
+    let id: Int
+    let formalName: String
+    let bindings: [Binding]
+}
+
+func scalarBoundRoutes(program: CompiledProgram, actions: [GeneratedMachineAPI.Action]) -> [ScalarBoundRoute] {
+    actions.compactMap { api in
+        let action = program[api.compiledAction]
+        guard !action.bindings.isEmpty, isTotalScalarAssignment(action.body),
+              action.bindings.count == api.bindings.count,
+              api.bindings.allSatisfy(\.isPublic) else { return nil }
+        var bindings: [ScalarBoundRoute.Binding] = []
+        for (binding, exposed) in zip(action.bindings, api.bindings) {
+            guard let type = program.bindingTypes[binding.binder], type == .int || type == .bool,
+                  let members = binding.literalMembers, members.count > 1,
+                  members.allSatisfy({ member in
+                      switch (member, type) {
+                      case (.integer, .int), (.boolean, .bool): true
+                      default: false
+                      }
+                  }), let sourceName = program.binderNames[binding.binder] else { return nil }
+            bindings.append(.init(label: exposed.swiftIdentifier,
+                name: "_\(sourceName)_\(binding.binder.ordinal)", type: type, members: members))
+        }
+        return ScalarBoundRoute(name: api.swiftIdentifier, id: action.id.ordinal,
+            formalName: program.layout.actions[action.id.ordinal].renderedName, bindings: bindings)
+    }
+}
+
 func verifyGeneratedActionRoutingOutput(
     _ declarations: [DeclSyntax], routes: [(name: String, id: Int, formalName: String)],
     allActions: [(name: String, id: Int, formalName: String, publicBindings: Int)],
-    candidates candidatePlans: [(name: String, labels: [String])], configurationArguments: String
+    candidates candidatePlans: [(name: String, labels: [String])], configurationArguments: String,
+    boundRoutes: [ScalarBoundRoute] = []
 ) throws {
     func invalid(_ path: String, _ expected: String) -> CompilationDiagnostic {
         CompilationDiagnostic(
@@ -1509,7 +1548,7 @@ func verifyGeneratedActionRoutingOutput(
             nextSafeAction: "Report this native action routing failure."
         )
     }
-    func cases(of name: String) throws -> [String: CodeBlockItemListSyntax] {
+    func cases(of name: String) throws -> [String: (pattern: [String], body: CodeBlockItemListSyntax)] {
         let methods = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }.filter {
             $0.name.text == name && $0.signature.parameterClause.parameters.first?.firstName.text == "for"
         }
@@ -1530,7 +1569,7 @@ func verifyGeneratedActionRoutingOutput(
               choice.subject.as(DeclReferenceExprSyntax.self)?.baseName.text == "action" else {
             throw invalid("native.action.routing.switch", "one direct switch over the selected action")
         }
-        var result: [String: CodeBlockItemListSyntax] = [:]
+        var result: [String: (pattern: [String], body: CodeBlockItemListSyntax)] = [:]
         for element in choice.cases {
             guard let branch = element.as(SwitchCaseSyntax.self),
                   let label = branch.label.as(SwitchCaseLabelSyntax.self),
@@ -1546,13 +1585,23 @@ func verifyGeneratedActionRoutingOutput(
             guard result[identifier] == nil else {
                 throw invalid("native.action.routing", "one case per action identity")
             }
-            result[identifier] = branch.statements
+            result[identifier] = (pattern.map(\.text), branch.statements)
         }
         return result
     }
     func tokens(_ source: String) -> [String] {
         Array(Parser.parse(source: source).tokens(viewMode: .sourceAccurate))
             .filter { $0.tokenKind != .endOfFile }.map(\.text)
+    }
+    func scalarDomain(_ binding: ScalarBoundRoute.Binding) -> String {
+        let values = binding.members.map { member in
+            switch member {
+            case .integer(let value): value == Int.min ? "Int.min" : String(value)
+            case .boolean(let value): String(value)
+            default: ""
+            }
+        }.joined(separator: ", ")
+        return "[\(values)]"
     }
     let dispatched = try cases(of: "_visitSuccessors")
     let labeled = try cases(of: "formalCall")
@@ -1563,28 +1612,49 @@ func verifyGeneratedActionRoutingOutput(
     for route in routes {
         let name = route.name.filter { $0 != "`" }
         let expectedDispatch = tokens("try Self._visitSuccessors\(route.id)(from: _execution\(configurationArguments), checking: &context, visit)")
-        guard dispatched[name].map({ Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }) == expectedDispatch else {
+        guard dispatched[name].map({ Array($0.body.tokens(viewMode: .sourceAccurate)).map(\.text) }) == expectedDispatch else {
             throw invalid("native.action.route.\(name)", "the complete successor route for compiled action \(route.id)")
         }
         let expectedLabel = tokens("return FormalActionCall(name: \(String(reflecting: route.formalName)), arguments: [])")
-        guard labeled[name].map({ Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }) == expectedLabel else {
+        guard labeled[name].map({ Array($0.body.tokens(viewMode: .sourceAccurate)).map(\.text) }) == expectedLabel else {
             throw invalid("native.action.label.\(name)", "the compiled formal action label \(route.formalName)")
         }
     }
     let directNames = Set(routes.map { $0.name })
     for route in allActions where !directNames.contains(route.name) {
         let name = route.name.filter { $0 != "`" }
-        guard let branch = dispatched[name], branch.count == route.publicBindings + 1,
+        guard let branch = dispatched[name]?.body, branch.count == route.publicBindings + 1,
               Array(branch.dropLast()).allSatisfy({ $0.item.as(GuardStmtSyntax.self) != nil }),
               let call = branch.last,
               Array(call.tokens(viewMode: .sourceAccurate)).map(\.text).starts(with:
                 tokens("try Self._visitSuccessors\(route.id)(from: _execution")) else {
             throw invalid("native.action.route.\(name)", "the selected action reaches compiled successor \(route.id)")
         }
-        guard let label = labeled[name], label.count == 1, let statement = label.first,
+        guard let label = labeled[name]?.body, label.count == 1, let statement = label.first,
               Array(statement.tokens(viewMode: .sourceAccurate)).map(\.text).starts(with:
                 tokens("return FormalActionCall(name: \(String(reflecting: route.formalName)), arguments:")) else {
             throw invalid("native.action.label.\(name)", "the compiled formal action label \(route.formalName)")
+        }
+    }
+    for route in boundRoutes {
+        let name = route.name.filter { $0 != "`" }
+        let pattern = ".\(route.name)(" + route.bindings.map { "\($0.label): let \($0.name)" }.joined(separator: ", ") + ")"
+        let guards = route.bindings.map { binding in
+            "guard \(scalarDomain(binding)).contains(\(binding.name)) else { return }"
+        }.joined(separator: "\n")
+        let arguments = route.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
+        let dispatch = "\(guards)\ntry Self._visitSuccessors\(route.id)(from: _execution, \(arguments)\(configurationArguments), checking: &context, visit)"
+        guard dispatched[name]?.pattern == tokens(pattern),
+              dispatched[name].map({ Array($0.body.tokens(viewMode: .sourceAccurate)).map(\.text) }) == tokens(dispatch) else {
+            throw invalid("native.action.route.\(name)", "the complete bound successor route for compiled action \(route.id)")
+        }
+        let values = route.bindings.map { binding in
+            "TLAValue.\(binding.type == .int ? "int" : "bool")(\(binding.name))"
+        }.joined(separator: ", ")
+        let formal = "return FormalActionCall(name: \(String(reflecting: route.formalName)), arguments: [\(values)])"
+        guard labeled[name]?.pattern == tokens(pattern),
+              labeled[name].map({ Array($0.body.tokens(viewMode: .sourceAccurate)).map(\.text) }) == tokens(formal) else {
+            throw invalid("native.action.label.\(name)", "the complete bound formal call for \(route.formalName)")
         }
     }
     let methods = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }
@@ -1622,17 +1692,26 @@ func verifyGeneratedActionRoutingOutput(
         throw invalid("native.action.candidateSource", "one candidate block per compiled action")
     }
     for (statement, plan) in zip(body, candidatePlans) {
+        let bound = boundRoutes.first { $0.name == plan.name }
+        guard bound == nil || bound?.bindings.count == plan.labels.count else {
+            throw invalid("native.action.candidateSource", "every checked domain binds one candidate argument")
+        }
         guard let action = statement.item.as(DoStmtSyntax.self), action.catchClauses.isEmpty else {
             throw invalid("native.action.candidateSource", "one unguarded candidate block for \(plan.name)")
         }
         var statements = action.body.statements
         var boundNames: [String] = []
-        for _ in plan.labels {
+        for index in plan.labels.indices {
             guard statements.count == 1,
                   let loop = statements.first?.item.as(ForStmtSyntax.self),
                   let name = loop.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   loop.whereClause == nil, loop.tryKeyword == nil, loop.awaitKeyword == nil else {
                 throw invalid("native.action.candidateSource", "one ordered binding loop for \(plan.name)")
+            }
+            if let binding = bound?.bindings[index],
+               name != binding.name ||
+               Array(loop.sequence.tokens(viewMode: .sourceAccurate)).map(\.text) != tokens(scalarDomain(binding)) {
+                throw invalid("native.action.candidateSource", "the compiled literal domain binds \(binding.name)")
             }
             boundNames.append(name)
             statements = loop.body.statements
@@ -1683,7 +1762,8 @@ func verifyGeneratedActionWriteOutput(
     _ declaration: DeclSyntax?, action: CompiledActionExpr, program: CompiledProgram,
     stateFields: [VariableID: String],
     parts: [(id: Int, slot: String, value: String)],
-    conditions: [(id: Int, value: String)] = [], requireScalarLeaves: Bool = false
+    conditions: [(id: Int, value: String)] = [], requireScalarLeaves: Bool = false,
+    externalBindings: [CompiledActionBinding] = []
 ) throws {
     guard let visitor = declaration?.as(FunctionDeclSyntax.self),
           visitor.body != nil else {
@@ -1699,6 +1779,24 @@ func verifyGeneratedActionWriteOutput(
             expected: expected, actual: actual,
             nextSafeAction: "Report this native code generation failure."
         )
+    }
+    var externalScalarNames: Set<String> = []
+    for binding in externalBindings {
+        let type = program.bindingTypes[binding.binder]
+        // shortcut: only scalar outer binders have an independent leaf rule; extend this when other value encodings are checked.
+        guard type == .int || type == .bool else { continue }
+        guard let sourceName = program.binderNames[binding.binder] else {
+            throw invalid("native.action.parameter", "a compiled scalar binder name", "missing binder")
+        }
+        let name = "_\(sourceName)_\(binding.binder.ordinal)"
+        let matches = visitor.signature.parameterClause.parameters.filter {
+            $0.firstName.text == name &&
+                Array($0.type.tokens(viewMode: .sourceAccurate)).map(\.text) == [type == .int ? "Int" : "Bool"]
+        }
+        guard matches.count == 1 else {
+            throw invalid("native.action.parameter", "one typed outer parameter for \(name)", "missing or wrong type")
+        }
+        externalScalarNames.insert(name)
     }
     let visitorTokens = Array(visitor.tokens(viewMode: .sourceAccurate)).map(\.text)
     var tokenDepths: [Int] = []
@@ -1876,7 +1974,7 @@ func verifyGeneratedActionWriteOutput(
             return ["(", "state", ".", "state", ".", field, ".", "count", ")"]
         case .boundValue(let binding) where program.bindingTypes[binding] == expression.resultType:
             guard let name = program.binderNames[binding].map({ "_\($0)_\(binding.ordinal)" }),
-                  parameters.contains(name) else { return nil }
+                  parameters.contains(name) || externalScalarNames.contains(name) else { return nil }
             return [name]
         case .value(.integer(let integer)) where expression.resultType == .int:
             if integer == Int.min { return ["Int", ".", "min"] }

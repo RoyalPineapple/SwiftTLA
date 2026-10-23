@@ -6,6 +6,133 @@ import SwiftSyntax
 @testable import SwiftTLAPlugin
 
 struct TypedActionParameterTests {
+    @Test("A bound ordered assignment keeps its source value through both emitted action routes")
+    func boundOrderedAssignmentOutputRejectsRerouting() throws {
+        let specification = BoundOrderedAssignment.spec
+        let step = try #require(specification.sourceAtomicSteps.first)
+        let lowered = ActionNormalization.complete(
+            try AlgorithmLowerer.lowerAtomicStep(step).action, variables: specification.variables)
+        try StraightLineAssignmentCheck.verify(step, lowered: lowered,
+            stateRoots: ["value", "copied"])
+        let inputs = try SourceTypeResolver().resolve(in: specification.compile())
+        let program = try CompiledProgram(inputs: inputs)
+        let source = try #require(specification.loweredSourceModel().actions.first)
+        let untyped = try #require(inputs.semantics.behavior.actions.first)
+        let action = try #require(program.behavior.actions.first)
+        try StraightLineAssignmentCheck.verifyCompiled(source, bindings: action.bindings,
+            body: action.body, layout: program.layout)
+        try StraightLineAssignmentCheck.verifyResolved(untyped, resolved: action,
+            variableTypes: inputs.variableTypes, resolvedVariableTypes: program.variableTypes,
+            resolvedBindingTypes: program.bindingTypes)
+
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("TypedActionParameterFixtures.swift")
+        let syntax = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let declaration = try #require(syntax.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "BoundOrderedAssignment" })
+        let compiled = try TLASpecVerifier.parseAndVerify(declaration)
+        var emitter = NativeSwiftEmitter(model: compiled)
+        let members = try emitter.machineMembers()
+        let update = try #require(members.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let emittedAction = try #require(compiled.program.behavior.actions.first)
+        let parts = try emitter.actionFunctions(emittedAction.body)
+        try verifyGeneratedActionWriteOutput(update, action: emittedAction.body, program: compiled.program,
+            stateFields: emitter.stateMemberNames, parts: parts.writes,
+            conditions: parts.conditions, requireScalarLeaves: true,
+            externalBindings: emittedAction.bindings)
+        let api = try #require(compiled.api.actions.first)
+        let boundRoutes = scalarBoundRoutes(program: compiled.program, actions: compiled.api.actions)
+        #expect(boundRoutes.count == 1)
+        let routes = compiled.api.actions.map { item in
+            (name: item.swiftIdentifier, id: item.compiledAction.ordinal,
+             formalName: compiled.program.layout.actions[item.compiledAction.ordinal].renderedName,
+             publicBindings: item.bindings.filter(\.isPublic).count)
+        }
+        let candidates = compiled.api.actions.map { item in
+            (name: item.swiftIdentifier, labels: item.bindings.filter(\.isPublic).map(\.swiftIdentifier))
+        }
+        try verifyGeneratedActionRoutingOutput(members, routes: [], allActions: routes,
+            candidates: candidates, configurationArguments: "", boundRoutes: boundRoutes)
+        let candidateIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitActionCandidates"
+        })
+        let wrongCandidates = members[candidateIndex].description.replacingOccurrences(
+            of: "[1, 2]", with: "[1]")
+        #expect(wrongCandidates != members[candidateIndex].description)
+        var wrongMembers = members
+        wrongMembers[candidateIndex] = try #require(Parser.parse(source: wrongCandidates)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: [], allActions: routes,
+                candidates: candidates, configurationArguments: "", boundRoutes: boundRoutes)
+        }
+        let dispatchIndex = try #require(members.firstIndex {
+            $0.description.contains("private func _visitSuccessors(for action: Action,")
+        })
+        let binder = try #require(boundRoutes.first?.bindings.first?.name)
+        let wrongUpdateSource = update.description.replacingOccurrences(
+            of: "= \(binder)", with: "= state.state.value")
+        #expect(wrongUpdateSource != update.description)
+        let wrongUpdate = try #require(Parser.parse(source: wrongUpdateSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionWriteOutput(wrongUpdate, action: emittedAction.body, program: compiled.program,
+                stateFields: emitter.stateMemberNames, parts: parts.writes,
+                conditions: parts.conditions, requireScalarLeaves: true,
+                externalBindings: emittedAction.bindings)
+        }
+        let wrongDispatch = members[dispatchIndex].description.replacingOccurrences(
+            of: "\(binder): \(binder), checking:", with: "\(binder): 1, checking:")
+        #expect(wrongDispatch != members[dispatchIndex].description)
+        wrongMembers = members
+        wrongMembers[dispatchIndex] = try #require(Parser.parse(source: wrongDispatch)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: [], allActions: routes,
+                candidates: candidates, configurationArguments: "", boundRoutes: boundRoutes)
+        }
+        let formalIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "formalCall"
+        })
+        let wrongFormal = members[formalIndex].description.replacingOccurrences(
+            of: "TLAValue.int(\(binder))", with: "TLAValue.int(1)")
+        #expect(wrongFormal != members[formalIndex].description)
+        wrongMembers = members
+        wrongMembers[formalIndex] = try #require(Parser.parse(source: wrongFormal)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: [], allActions: routes,
+                candidates: candidates, configurationArguments: "", boundRoutes: boundRoutes)
+        }
+
+        let module = try program.renderModule().renderedModuleSource
+        let formalBinder = try #require(program.binderNames[action.bindings[0].binder])
+        let header = "select(\(formalBinder)) == "
+        let lines = module.split(separator: "\n").filter { $0.hasPrefix(header) }
+        let body = try #require(lines.count == 1 ? lines[0].dropFirst(header.count) : nil)
+        try StraightLineRenderedActionCheck.verifyDeclaration(action, named: "select",
+            body: String(body), module: module, layout: program.layout, binders: program.binderNames)
+        let wrongModule = module.replacingOccurrences(of: header, with: "select(wrong) == ")
+        #expect(wrongModule != module)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyDeclaration(action, named: "select",
+                body: String(body), module: wrongModule, layout: program.layout, binders: program.binderNames)
+        }
+        let machine = try BoundOrderedAssignment.makeMachine()
+        #expect(try machine.actionCandidates() == [.select(member: 1), .select(member: 2)])
+        for member in [1, 2] {
+            var selected = machine
+            _ = try selected.send(.select(member: member))
+            #expect(selected.state.value == member && selected.state.copied == member)
+            #expect(try machine.formalCall(for: .select(member: member)) ==
+                FormalActionCall(name: "select", arguments: [.int(member)]))
+        }
+        #expect(api.bindings.count == 1)
+    }
+
     @Test("Generated candidates pass each bound value to its labeled action argument")
     func candidateBindingOutputRejectsSubstitution() throws {
         let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
