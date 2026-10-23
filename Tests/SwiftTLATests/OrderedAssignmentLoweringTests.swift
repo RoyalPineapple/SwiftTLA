@@ -332,6 +332,19 @@ struct OrderedAssignmentLoweringTests {
         #expect(try compiledResult(staleCompiled, program: compiled) != expected)
     }
 
+    @Test("Each source assignment target has one final lowered write")
+    func duplicateFinalWriteIsRejected() throws {
+        let step = AtomicStep(model: .init(label: .init(name: "advance"), statements: [
+            .set(target: .root("value"), value: .value(.int(1))),
+        ]))
+        let lowered = try AlgorithmLowerer.lowerAtomicStep(step).action
+        try StraightLineAssignmentCheck.verify(step, lowered: lowered, stateRoots: ["value"])
+        let duplicate = ActionExpr.and(lowered, .assign(.named("value"), .value(.int(1))))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verify(step, lowered: duplicate, stateRoots: ["value"])
+        }
+    }
+
     @Test("Bound action values retain ordered reads through source lowering")
     func boundValueFeedsLaterAssignment() throws {
         let variables = [NamedVar(name: "value", initial: .int(0)),
