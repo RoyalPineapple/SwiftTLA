@@ -308,6 +308,57 @@ enum StraightLineRenderedActionCheck {
             value: selection.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure)
     }
 
+    static func verifyUnboundEvaluationSelection(_ behavior: CompiledBehavior, module: String,
+                                                  failureDeclarations: [String],
+                                                  evaluationInvariant: String?,
+                                                  configuration: TLCConfiguration) throws {
+        // shortcut: bound action failures need an independently checked quantifier rule.
+        let lines = module.components(separatedBy: "\n")
+        func mismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "tla.evaluationSelection",
+                expected: "all emitted action failures selected by the TLC evaluation invariant",
+                actual: "the module or configuration omits or changes that selection",
+                nextSafeAction: "Regenerate the evaluation invariant and TLC configuration.")
+        }
+        var references: [String] = []
+        var hasBoundFailure = false
+        for index in behavior.enabledActionIndices {
+            let prefix = "__SwiftTLAAnyEvaluationFailure\(index)"
+            let candidates = failureDeclarations.filter { declaration in
+                guard let header = declaration.components(separatedBy: " == ").first else { return false }
+                guard header.hasPrefix(prefix) else { return false }
+                let suffix = header.dropFirst(prefix.count)
+                let arguments = suffix.drop(while: { $0 == "_" })
+                return suffix.allSatisfy { $0 == "_" }
+                    || (arguments.first == "(" && arguments.last == ")")
+            }
+            guard candidates.count <= 1 else { throw mismatch() }
+            guard let declaration = candidates.first else { continue }
+            guard lines.filter({ $0 == declaration }).count == 1,
+                  let name = declaration.components(separatedBy: " == ").first else { throw mismatch() }
+            if name.contains("(") { hasBoundFailure = true }
+            references.append(name)
+        }
+        guard !hasBoundFailure else { return }
+        guard let evaluationInvariant else {
+            guard references.isEmpty else { throw mismatch() }
+            return
+        }
+        guard evaluationInvariant.hasPrefix("__SwiftTLAEvaluationOK"),
+              evaluationInvariant.dropFirst("__SwiftTLAEvaluationOK".count).allSatisfy({ $0 == "_" }),
+              !references.isEmpty else { throw mismatch() }
+        let expected = "\(evaluationInvariant) == "
+            + references.map { "~(\($0))" }.joined(separator: " /\\ ")
+        guard lines.filter({ $0.hasPrefix("\(evaluationInvariant) == ") }) == [expected],
+              failureDeclarations.filter({ $0.hasPrefix("\(evaluationInvariant) == ") }) == [expected],
+              configuration.intrinsicInvariants.filter({ $0 == evaluationInvariant }).count == 1,
+              configuration.assumptionsOnly
+                || configuration.render(usesSymmetryReduction: false)
+                    .components(separatedBy: "\n").contains("INVARIANT \(evaluationInvariant)")
+        else { throw mismatch() }
+    }
+
     static func verifyFiniteInvocations(_ behavior: CompiledBehavior,
                                         layout: CompiledLayout, binders: [BinderID: String],
                                         module: String) throws {

@@ -325,6 +325,24 @@ import SwiftSyntax
                     binders: program.binderNames, failureDeclarations: wrongDeclarations)
             }
         }
+        try StraightLineRenderedActionCheck.verifyUnboundEvaluationSelection(program.behavior,
+            module: output.renderedModuleSource,
+            failureDeclarations: output.evaluationFailureDeclarations,
+            evaluationInvariant: "__SwiftTLAEvaluationOK",
+            configuration: output.configuration)
+        let selection = try #require(output.evaluationFailureDeclarations.first {
+            $0.hasPrefix("__SwiftTLAEvaluationOK == ")
+        })
+        let omittedFailure = "__SwiftTLAEvaluationOK == TRUE"
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyUnboundEvaluationSelection(program.behavior,
+                module: output.renderedModuleSource.replacingOccurrences(of: selection, with: omittedFailure),
+                failureDeclarations: output.evaluationFailureDeclarations.map {
+                    $0 == selection ? omittedFailure : $0
+                },
+                evaluationInvariant: "__SwiftTLAEvaluationOK",
+                configuration: output.configuration)
+        }
     }
 
     @Test("Choices and following statements read their current branch values")

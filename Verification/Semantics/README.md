@@ -1959,8 +1959,15 @@ expected semantics. The same checker also recognizes a sequential `#spec` `Do`
 with a program-counter guard and control write, and requires both the detailed
 overflow and action-level aggregate predicates to select that control location.
 Paired mutations of the actual module and declaration list are rejected for
-both predicates. Other sequential or branching actions and the global selected
-evaluation invariant remain uncovered.
+both predicates. For parameter-free actions, the output checker now also
+collects every emitted action-level aggregate failure, checks the actual
+module's global negated conjunction, and requires the TLC configuration to
+select that invariant. A paired module-and-metadata mutation that replaces the
+global check with `TRUE` is rejected. This module composition assumes each
+action-level failure predicate has been established separately; it does not
+prove the unchecked constructors' predicates. Parameterized action failures
+still need an independent quantifier rule. Other sequential and branching
+actions remain uncovered.
 The output checker and shared `TLAValue` integer-literal serialization remain
 project-owned trusted components until their own correctness is proved.
 
