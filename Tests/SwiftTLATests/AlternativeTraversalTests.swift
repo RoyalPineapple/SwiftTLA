@@ -7,7 +7,7 @@ import Testing
 
 @Suite("Alternative traversal")
 struct AlternativeTraversalTests {
-    @Test("Boolean conditions survive normalization and TLA+ emission")
+    @Test("Boolean conditions survive normalization, compilation, and TLA+ emission")
     func scalarConditionsSurviveNormalizationAndRendering() throws {
         let variables = [
             NamedVar(name: "enabled", initial: .bool(false)),
@@ -17,9 +17,10 @@ struct AlternativeTraversalTests {
         let conditional = ActionExpr.ifElse(.variable("enabled"),
             .assign(.named("x"), .int(1)), .assign(.named("x"), .int(2)))
         let guarded = ActionExpr.and(.guard_(.variable("enabled")), .assign(.named("x"), .int(3)))
-        let compilation = try TLASpec(name: "ConditionalNormalization", variables: variables,
+        let specification = TLASpec(name: "ConditionalNormalization", variables: variables,
             actions: [.init(name: "choose", body: conditional), .init(name: "gated", body: guarded)],
-            invariants: []).compile()
+            invariants: [])
+        let compilation = try specification.compile()
         try StraightLineAssignmentCheck.verifyNormalization(conditional,
             normalized: ActionNormalization.complete(conditional, variables: variables),
             stateRoots: roots, at: "actions.choose.normalization")
@@ -38,6 +39,49 @@ struct AlternativeTraversalTests {
             try StraightLineAssignmentCheck.verifyNormalization(guarded,
                 normalized: ActionNormalization.complete(.assign(.named("x"), .int(3)),
                     variables: variables), stateRoots: roots, at: "actions.gated.normalization")
+        }
+
+        let inputs = try SourceTypeResolver().resolve(in: compilation)
+        let program = try CompiledProgram(inputs: inputs)
+        let sourceActions = try specification.loweredSourceModel().actions
+        let untypedActions = compilation.semantics.behavior.actions
+        let resolvedActions = program.behavior.actions
+        let enabledID = try #require(compilation.layout.variables.first {
+            $0.declaration.name == "enabled"
+        }?.id)
+        try #require(sourceActions.count == 2 && untypedActions.count == 2 && resolvedActions.count == 2)
+        for index in 0..<2 {
+            let source = sourceActions[index]
+            let untyped = untypedActions[index]
+            let resolved = resolvedActions[index]
+            try StraightLineAssignmentCheck.verifyCompiled(source, bindings: untyped.bindings,
+                body: untyped.body, layout: compilation.layout)
+            try StraightLineAssignmentCheck.verifyResolved(untyped, resolved: resolved,
+                variableTypes: inputs.variableTypes, resolvedVariableTypes: program.variableTypes,
+                resolvedBindingTypes: program.bindingTypes)
+            var changed = 0
+            let wrong = untyped.body.map { expression in
+                guard expression.operation == .stateVariable(enabledID) else { return expression }
+                changed += 1
+                return CompiledExpression(operation: .value(.boolean(false)),
+                    resultType: expression.resultType, children: [])
+            }
+            #expect(changed == 1)
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineAssignmentCheck.verifyCompiled(source, bindings: untyped.bindings,
+                    body: wrong, layout: compilation.layout)
+            }
+            let wrongResolved = resolved.body.map { expression in
+                guard expression.operation == .stateVariable(enabledID) else { return expression }
+                return CompiledExpression(operation: .value(.boolean(false)),
+                    resultType: expression.resultType, children: [])
+            }
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineAssignmentCheck.verifyResolved(untyped,
+                    resolved: .init(id: resolved.id, bindings: resolved.bindings, body: wrongResolved),
+                    variableTypes: inputs.variableTypes, resolvedVariableTypes: program.variableTypes,
+                    resolvedBindingTypes: program.bindingTypes)
+            }
         }
 
         let module = try compilation.render().tlaBundle.tla

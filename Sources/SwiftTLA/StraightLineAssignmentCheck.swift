@@ -279,12 +279,16 @@ enum StraightLineAssignmentCheck {
             case .and(let left, let right), .or(let left, let right):
                 pendingSource.append(right)
                 pendingSource.append(left)
-            case .guard_(.value(.bool(true))):
-                break
+            case .guard_(let predicate):
+                guard simple(predicate, reads: &readNames) else { return }
             case .assign(.named, let expression):
                 guard simple(expression, reads: &readNames) else { return }
             case .unchanged(.named):
                 break
+            case .ifElse(let predicate, let yes, let no):
+                guard simple(predicate, reads: &readNames) else { return }
+                pendingSource.append(no)
+                pendingSource.append(yes)
             default:
                 return
             }
@@ -353,8 +357,13 @@ enum StraightLineAssignmentCheck {
                 case (.or(let left, let right), .or(let compiledLeft, let compiledRight)):
                     pending.append(.pair(right, compiledRight))
                     pending.append(.pair(left, compiledLeft))
-                case (.guard_(.value(.bool(true))), .guard_(let value)):
-                    guard matching(.value(.bool(true)), value, bindings: bindings) else { throw mismatch() }
+                case (.guard_(let predicate), .guard_(let value)):
+                    guard matching(predicate, value, bindings: bindings) else { throw mismatch() }
+                case (.ifElse(let predicate, let yes, let no),
+                      .ifElse(let value, let compiledYes, let compiledNo)):
+                    guard matching(predicate, value, bindings: bindings) else { throw mismatch() }
+                    pending.append(.pair(no, compiledNo))
+                    pending.append(.pair(yes, compiledYes))
                 case (.assign(.named(let name), let expression), .assign(let id, let value)):
                     guard stateIDs[name] == id, matching(expression, value, bindings: bindings) else {
                         throw mismatch()
@@ -411,7 +420,9 @@ enum StraightLineAssignmentCheck {
                       bindings: [BinderID: CompiledValueType]) -> CompiledValueType? {
             guard expression.children.isEmpty else { return nil }
             switch expression.operation {
-            case .stateVariable(let id): return variableTypes[id]
+            case .stateVariable(let id):
+                guard let type = variableTypes[id] else { return nil }
+                return type == .unknown ? resolvedVariableTypes[id] : type
             case .boundValue(let id): return bindings[id]
             case .value(.integer): return .int
             case .value(.boolean): return .bool
@@ -448,11 +459,17 @@ enum StraightLineAssignmentCheck {
                     usedVariables.insert(id)
                     if case .stateVariable(let read) = value.operation { usedVariables.insert(read) }
                 case .unchanged(let id):
-                    guard scalar(variableTypes[id]) else { return }
+                    guard scalar(variableTypes[id])
+                        || (variableTypes[id] == .unknown && scalar(resolvedVariableTypes[id])) else { return }
                     usedVariables.insert(id)
                 case .guard_(let value):
-                    guard value.children.isEmpty,
-                          value.operation == .value(.boolean(true)) else { return }
+                    guard leafType(value, bindings: bindings) == .bool else { return }
+                    if case .stateVariable(let read) = value.operation { usedVariables.insert(read) }
+                case .ifElse(let value, let yes, let no):
+                    guard leafType(value, bindings: bindings) == .bool else { return }
+                    if case .stateVariable(let read) = value.operation { usedVariables.insert(read) }
+                    pending.append(.scan(no))
+                    pending.append(.scan(yes))
                 default: return
                 }
             }
@@ -523,6 +540,11 @@ enum StraightLineAssignmentCheck {
                     guard firstID == secondID else { throw mismatch() }
                 case (.guard_(let firstValue), .guard_(let secondValue)):
                     guard same(firstValue, secondValue, bindings: bindings) else { throw mismatch() }
+                case (.ifElse(let firstValue, let firstYes, let firstNo),
+                      .ifElse(let secondValue, let secondYes, let secondNo)):
+                    guard same(firstValue, secondValue, bindings: bindings) else { throw mismatch() }
+                    pending.append(.pair(firstNo, secondNo))
+                    pending.append(.pair(firstYes, secondYes))
                 default: throw mismatch()
                 }
             }
