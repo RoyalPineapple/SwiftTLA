@@ -1955,8 +1955,12 @@ operand tuples, operation labels, and action-level aggregate failure from the
 compiled tree, then checks their declarations in the actual module. Separate
 mutations of each declaration are rejected. The renderer's declaration list is
 used only to locate symbols renamed to avoid collisions; its values are not the
-expected semantics. This does not yet cover sequential or branching actions,
-the global selected evaluation invariant, or the `#spec` control-flow wrapper.
+expected semantics. The same checker also recognizes a sequential `#spec` `Do`
+with a program-counter guard and control write, and requires both the detailed
+overflow and action-level aggregate predicates to select that control location.
+Paired mutations of the actual module and declaration list are rejected for
+both predicates. Other sequential or branching actions and the global selected
+evaluation invariant remain uncovered.
 The output checker and shared `TLAValue` integer-literal serialization remain
 project-owned trusted components until their own correctness is proved.
 
