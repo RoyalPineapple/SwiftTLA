@@ -782,6 +782,47 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
+    @Test("Sequential Do captures every ordered Int read and checked addition")
+    func sequentialOrderedIntCapturesRejectStaleReads() throws {
+        let specification = OrderedCopyModel.spec
+        let source = try #require(specification.sourceAlgorithms.first?.model)
+        let lowered = try specification.loweredSourceModel()
+        try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
+            enumerateInitialControl: false)
+
+        func replacingSecondCapture(in action: ActionExpr, with replacement: StateExpr) -> ActionExpr {
+            var captures = 0
+            func replace(_ action: ActionExpr) -> ActionExpr {
+                switch action {
+                case .define(let name, let value, let body):
+                    captures += 1
+                    return .define(name, captures == 2 ? replacement : value, replace(body))
+                case .and(let left, let right): return .and(replace(left), replace(right))
+                default: return action
+                }
+            }
+            return replace(action)
+        }
+        var wrongRead = lowered
+        wrongRead.actions[0] = NamedAction(name: lowered.actions[0].name,
+            body: replacingSecondCapture(in: lowered.actions[0].body, with: .variable("x")))
+        #expect(wrongRead.actions[0].body != lowered.actions[0].body)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifySequential(source, lowered: wrongRead,
+                enumerateInitialControl: false)
+        }
+
+        var wrongAddition = lowered
+        wrongAddition.actions[1] = NamedAction(name: lowered.actions[1].name,
+            body: replacingSecondCapture(in: lowered.actions[1].body,
+                with: .add(.variable("x"), .value(.int(1)))))
+        #expect(wrongAddition.actions[1].body != lowered.actions[1].body)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifySequential(source, lowered: wrongAddition,
+                enumerateInitialControl: false)
+        }
+    }
+
     @Test("Bound action values retain ordered reads through source lowering")
     func boundValueFeedsLaterAssignment() throws {
         let variables = [NamedVar(name: "value", initial: .int(0)),
