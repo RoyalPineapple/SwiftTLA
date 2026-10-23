@@ -3164,6 +3164,40 @@ THEOREM SequentialAdditionPreservesLabeledEdgesAndFailures ==
     BY RootAdditionPreservesCompleteLabeledEdgesAndFailures, SMT
        DEF SequentialAddEdges, SequentialAddFailures
 
+THEOREM SequentialAdditionPreservesInitialsEdgesAndFailures ==
+    ASSUME NEW prior \in States,
+           NEW initial \in Values,
+           NEW before \in SequentialStates,
+           NEW entry \in ActionLabels,
+           NEW next \in ActionLabels,
+           NEW label \in ActionLabels,
+           NEW rhs \in Int,
+           before.data \in [Vars -> Int],
+           WithinSwiftInt(before.data[Key]),
+           WithinSwiftInt(rhs),
+           SwiftIntMin <= -2000000000,
+           2000000000 <= SwiftIntMax
+    PROVE /\ EnumeratedInitialStates(prior, Key, <<initial>>)
+                = EqualityInitialStates(prior, Key, initial)
+          /\ SequentialAddEdges(before, entry, next, label,
+                   SourceCheckedAddEdges(before.data, label, rhs))
+                = SequentialAddEdges(before, entry, next, label,
+                   EmittedCheckedAddEdges(before.data, label, rhs))
+          /\ SequentialAddEdges(before, entry, next, label,
+                   SourceCheckedAddEdges(before.data, label, rhs))
+                = SequentialAddEdges(before, entry, next, label,
+                   NativeCheckedAddEdges(before.data, label, rhs))
+          /\ SequentialAddFailures(before, entry, label,
+                   SourceCheckedAddFailures(before.data, label, rhs))
+                = SequentialAddFailures(before, entry, label,
+                   EmittedCheckedAddFailures(before.data, label, rhs))
+          /\ SequentialAddFailures(before, entry, label,
+                   SourceCheckedAddFailures(before.data, label, rhs))
+                = SequentialAddFailures(before, entry, label,
+                   NativeCheckedAddFailures(before.data, label, rhs))
+    BY KeyIsVariable, InitialEqualityMatchesSingletonEnumeration,
+       SequentialAdditionPreservesLabeledEdgesAndFailures, SMT
+
 THEOREM CurrentAdditionAgreementIsExactlyRangeSafety ==
     \A lhs, rhs \in Int :
         (WithinSwiftInt(lhs) /\ WithinSwiftInt(rhs)) =>

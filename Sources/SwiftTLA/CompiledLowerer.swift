@@ -179,11 +179,14 @@ struct CompiledLowerer {
             if case .value(let value) = declaration.initialization {
                 try validateValue(value, at: "\(path).initialization")
             }
-            initializations[variableLayout.id] = try lower(
+            let lowered = try lower(
                 declaration.initialization,
                 at: "\(path).initialization",
                 scope: rootScope
             )
+            try StraightLineAssignmentCheck.verifyInitialIntLiteral(
+                declaration.initialization, lowered: lowered, at: "\(path).initialization")
+            initializations[variableLayout.id] = lowered
         }
         let actions: [CompiledAction] = try zip(spec.actions, layout.actions).map {
             try lower($0.0, id: $0.1.id)

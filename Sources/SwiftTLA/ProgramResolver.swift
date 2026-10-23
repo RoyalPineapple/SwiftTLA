@@ -3,6 +3,16 @@ extension CompiledProgram {
         var checker = try CompiledTypeChecker(inputs: inputs)
         self = try ProgramResolver(checked: checker.checkProgram(), types: inputs.types,
             nextBinder: (inputs.bindings.binders.keys.map(\.ordinal).max() ?? -1) + 1).resolve()
+        let resolvedInitializations = Dictionary(uniqueKeysWithValues: behavior.initializations.map {
+            ($0.variable, $0.initialization)
+        })
+        for original in inputs.semantics.behavior.initializations
+            where variableTypes[original.variable] == .int {
+            let name = inputs.layout.variables[original.variable.ordinal].declaration.name
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntLiteral(
+                original.initialization, resolved: resolvedInitializations[original.variable],
+                at: "variables.\(name).initialization")
+        }
         for action in inputs.semantics.behavior.actions {
             try StraightLineAssignmentCheck.verifyResolved(action,
                 resolved: behavior.actions.first { $0.id == action.id }, variableTypes: inputs.variableTypes,
