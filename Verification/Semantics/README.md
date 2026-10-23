@@ -1938,6 +1938,16 @@ or either emitter preserves branchwise order for arbitrary action trees; the
 Swift compiler/runtime interpretation of the emitted visitor and the checked
 arithmetic kernels remains trusted.
 
+The compiler now checks a reusable subset of source-to-compiled assignment
+translation for nested `Int` addition: it compares every operand and bound read
+in order, then requires the resolved tree to retain those operations, identities,
+and `Int` types. A changed addition operation, reversed operands, or wrong
+resolved result type fails the independent compiler check. This closes that
+lowering/resolution boundary for the checked subset, not the actual TLA+ emitter
+or the full accepted expression language. The existing generated-Swift arithmetic
+check and parameterized TLAPS addition theorem are separate links; no universal
+composition claim follows from them yet.
+
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
 | `assign`, `unchanged` | Complete-state delta and unchanged-frame equality; output-linked one-variable `Skip` instance; every generated write part has a structural target-and-merge check; reconstructible Int/Bool assignments also have an independent compiled-value check; direct fallible assignments emit a definedness guard and failure predicates | Prove each emitted Swift update and TLA clause denotes that delta for every compiled expression and state type. |
