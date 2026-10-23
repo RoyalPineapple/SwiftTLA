@@ -1383,7 +1383,15 @@ the Swift helper's implementation. `OrderedSourceAndGeneratedMergeStepsAgree`
 composes that result with arbitrary finite ordered source assignments, in both
 directions, including repeated writes and intermediate reads. It requires a
 distinct generated-slot sequence whose complete key set equals the source
-instruction targets. For the supported scalar `sourceAtomicSteps` slice,
+instruction targets. `OrderedHistoriesPreserveFirstFailure` adds a failure-order
+rule for any length of that sequence and any Boolean definedness predicate at
+each step: corresponding complete intermediate states identify the same first
+failing step. TLAPS checked this rule locally without fingerprint reuse. It
+does not establish that either real emitter computes those predicates for
+every accepted expression; their output links remain separate obligations.
+The stale-read mutation in `OrderedAssignmentLoweringTests` guards the
+intermediate-state premise for the checked scalar slice.
+For the supported scalar `sourceAtomicSteps` slice,
 `StraightLineAssignmentCheck.verify` now rejects a duplicate final assignment
 or a different target set, so the source-to-lowered action supplies that
 premise; a same-value duplicate mutation is rejected. The compiled-action and
