@@ -735,6 +735,19 @@ THEOREM ExistentialEnumerationPreservesEnabledness ==
                     <=> EnabledIn(QuantifiedExistentialEdges(domains, rendered), state, action)
     BY ExistentialEnumerationPreservesEdges, SMT DEF EnabledIn
 
+SourceBoundEvaluationOK(domains, failures, state) ==
+    \A value \in domains[state] : ~failures[state][value]
+RenderedBoundEvaluationOK(domains, failures, state) ==
+    ~(\E value \in domains[state] : failures[state][value])
+
+THEOREM BoundEvaluationSelectionPreservesFailure ==
+    \A domains \in [States -> SUBSET Values],
+       failures \in [States -> [Values -> BOOLEAN]],
+       state \in States :
+        SourceBoundEvaluationOK(domains, failures, state)
+        <=> RenderedBoundEvaluationOK(domains, failures, state)
+    BY SMT DEF SourceBoundEvaluationOK, RenderedBoundEvaluationOK, States
+
 NativeDefinedEdges(values, branches) ==
     {edge \in LabeledEdges : edge \in branches[edge[1]][values[edge[1]]]}
 RenderedDefinedEdges(values, branches) ==

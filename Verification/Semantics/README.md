@@ -1966,10 +1966,18 @@ and requires the TLC configuration to select that invariant. Paired
 module-and-metadata mutations replacing the global check with `TRUE` or
 narrowing a bound argument domain are rejected. This module composition assumes
 each action-level failure predicate has been established separately; it does
-not prove the unchecked constructors' predicates. The formal meaning and
-rendering of arbitrary binding-domain expressions, and the general
-existential-failure selection theorem, remain open. Other sequential and
-branching actions remain uncovered.
+not prove the unchecked constructors' predicates. The new parameterized rule
+in `SingleAssignment.tla` proves, for any one binding domain and Boolean
+failure predicate, that no candidate fails exactly when the emitted
+existential-failure check is false. Its two focused obligations and all 1,728
+obligations in `SingleAssignment.tla` passed locally with fingerprint reuse
+disabled, using the current official `1.6.0-pre` archive (SHA-256
+`f1f9cf19bc9f0a4fbdaa0ba325b1d00c8eb92426afc92e8442cba4e434a01309`,
+revision `5f5037f`) and pinned arm64 Z3 4.15.4. This archive differs from the
+CI-pinned revision, so this is diagnostic evidence, not hosted admission.
+The formal meaning and rendering of arbitrary binding-domain expressions,
+multi-binding quantifier nesting, and unchecked action constructors remain
+open. Other sequential and branching actions remain uncovered.
 The output checker and shared `TLAValue` integer-literal serialization remain
 project-owned trusted components until their own correctness is proved.
 
