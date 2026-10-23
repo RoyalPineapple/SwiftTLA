@@ -264,7 +264,27 @@ with a complete-state update and action identity: the source, abstract native
 checked-add, and emitted TLA rules have equal labeled edge sets and failure
 records, including the original state, action, operation, and operands. Its
 assumptions require representable operands and the same target bounds. The
-native branch trusts Swift's `addingReportingOverflow` contract and the small
+`SequentialAdditionPreservesLabeledEdgesAndFailures` theorem lifts that rule
+through a sequential step's entry control, next control, and action label.
+It preserves the complete `(pc, data)` successor and suppresses both edges
+and failures when the step is disabled. The class connected to actual compiler
+outputs is an accepted `#spec` sequential `Algorithm` with one shared `Int`
+variable, one unparameterized `Do` step, and only `Assign(x, to: x + c)` for
+an `Int` literal `c`; the generated termination action is separate. The
+production single-assignment capture and typed compiled-action checks retain
+the source expression, target, guard order, and types. The native visitor
+check derives the checked addition call, operands, target, and control update
+from that compiled action. The TLA+ action and failure checks derive the
+value guard, operation and operands, control-gated failure, and selected
+evaluation invariant. Focused negative controls change the source capture,
+compiled operation/operands/type, Swift addition call, and TLA+ action or
+failure declarations; the unguarded-addition theorem supplies the semantic
+negative control. These gates and theorem establish this step/failure path
+conditional on their parsers and checkers, the generated update and checked
+arithmetic kernels, the formal value encoding, and documented Swift behavior.
+They do not prove arbitrary initializers, other expressions, temporal claims,
+or the universal `#spec` theorem.
+The native branch trusts Swift's `addingReportingOverflow` contract and the small
 `_NativeMachineOperations.add` wrapper; the fixture's generated-Swift witness
 and runtime failure test check that link, but are not a proof of the Swift
 compiler or every accepted addition lowering to this root form.
@@ -1957,7 +1977,19 @@ tokenizable compiled literal values, including sets, in the actual assignment
 body. A set-valued wrong-target mutation previously passed because this form
 was skipped; it now fails. The formal literal serializer remains a shared,
 project-owned trusted link, and expressions outside the checker's grammar
-remain uncovered. For the nested-addition subset, the TLA+ action-output
+remain uncovered. Within its restricted action grammar, the production
+source-to-compiled check now compares every complete source literal with the
+corresponding compiled literal, not just Int and Boolean scalars; changing a
+set member in the compiled action is
+rejected. It shares the project's formal-to-compiled value conversion, so
+that conversion's semantic correctness remains an open proof obligation.
+The generated-Swift visitor checker independently derives
+the emitted value of a compiled literal `Set<Int>` or `Set<Bool>` assignment
+from its typed members. A mutation that changes the Swift set literal and the
+emitter's own write metadata together is rejected. This establishes the
+literal-value output check for those two set types, not set expressions with
+computed members or the Swift `Set` implementation (which remains trusted).
+For the nested-addition subset, the TLA+ action-output
 checker matches the actual nested addition tree and every emitted overflow
 guard against the compiled identities; changing a value or guard fails. The
 generated-Swift arithmetic checker is exercised on the same compiled action, and the
