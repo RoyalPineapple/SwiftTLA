@@ -2598,6 +2598,102 @@ THEOREM OrderedSequentialLabeledEdgesAgree ==
        DEF SourceSequentialEdges, GeneratedSequentialEdges, SequentialEdges,
            SequentialStates
 
+SourceSequentialIntInitial(entry, initial) ==
+    {[location |-> entry, data |-> initial]}
+GeneratedSequentialIntInitial(entry, initial) ==
+    {state \in SequentialStates :
+        state.location = entry /\ state.data = initial}
+
+SourceCheckedSequentialEdges(entry, next, label, steps, guards) ==
+    {edge \in SequentialEdges :
+        /\ edge[2] = label
+        /\ edge[1].location = entry
+        /\ edge[3].location = next
+        /\ SourceGuardedDoStep(edge[1].data, steps,
+            guards, edge[3].data)}
+
+GeneratedCheckedSequentialEdges(entry, next, label, steps, guards) ==
+    {edge \in SequentialEdges :
+        /\ edge[2] = label
+        /\ edge[1].location = entry
+        /\ edge[3].location = next
+        /\ ScheduledGuardedDoStep(edge[1].data, steps,
+            guards, edge[3].data)}
+
+SourceSequentialIntFailures(before, entry, label, steps, checks, operands, source) ==
+    IF before.location = entry
+    THEN {<<before, label, "addition", operands[index][source[index - 1]]>> :
+        index \in {step \in 1..Len(steps) :
+            SourceFirstFailureAt(steps, checks, source, step)}}
+    ELSE {}
+
+GeneratedSequentialIntFailures(before, entry, label, steps, checks, operands,
+                               original, scheduled) ==
+    IF before.location = entry
+    THEN {<<before, label, "addition",
+        operands[index][ApplyDelta(original, scheduled[index - 1].keys,
+            scheduled[index - 1].values)]>> :
+        index \in {step \in 1..Len(steps) :
+            ScheduledFirstFailureAt(original, steps, checks, scheduled, step)}}
+    ELSE {}
+
+THEOREM OrderedSequentialIntOutcomesCompose ==
+    ASSUME Values = Int,
+           NEW entry \in ActionLabels,
+           NEW next \in ActionLabels,
+           NEW label \in ActionLabels,
+           NEW initial \in States,
+           NEW before \in SequentialStates,
+           NEW steps \in Seq(Instructions),
+           NEW guards \in GuardPlans(steps),
+           NEW checks \in [1..Len(steps) -> [States -> BOOLEAN]],
+           NEW operands \in [1..Len(steps) -> [States -> (Int \X Int)]],
+           NEW source \in [0..Len(steps) -> States],
+           NEW scheduled \in [0..Len(steps) -> ScheduledRecords],
+           (\A index \in 1..Len(steps) : guards[index - 1] = checks[index]),
+           guards[Len(steps)] = AlwaysGuard,
+           SourceHistory(before.data, steps, source),
+           ScheduledHistory(before.data, steps, scheduled)
+    PROVE /\ SourceSequentialIntInitial(entry, initial)
+                 = GeneratedSequentialIntInitial(entry, initial)
+          /\ SourceCheckedSequentialEdges(entry, next, label, steps, guards)
+                 = GeneratedCheckedSequentialEdges(entry, next, label, steps, guards)
+          /\ SourceSequentialIntFailures(before, entry, label, steps, checks,
+                 operands, source)
+                 = GeneratedSequentialIntFailures(before, entry, label, steps,
+                     checks, operands, before.data, scheduled)
+    PROOF
+    <1>1. SourceSequentialIntInitial(entry, initial)
+            = GeneratedSequentialIntInitial(entry, initial)
+        BY SMT DEF SourceSequentialIntInitial,
+            GeneratedSequentialIntInitial, SequentialStates
+    <1>2. SourceCheckedSequentialEdges(entry, next, label, steps, guards)
+            = GeneratedCheckedSequentialEdges(entry, next, label, steps, guards)
+        BY OrderedGuardedDoTransitionEquivalence, SMT
+           DEF SourceCheckedSequentialEdges, GeneratedCheckedSequentialEdges,
+               SequentialEdges, SequentialStates
+    <1>3. \A index \in 0..Len(steps) :
+            source[index] = ApplyDelta(before.data, scheduled[index].keys,
+                scheduled[index].values)
+        BY OrderedHistoriesAgree DEF HistoryAgrees, SequentialStates
+    <1>4. \A index \in 1..Len(steps) :
+            SourceFirstFailureAt(steps, checks, source, index)
+            <=> ScheduledFirstFailureAt(before.data, steps, checks,
+                scheduled, index)
+        BY OrderedHistoriesPreserveFirstFailure DEF SequentialStates
+    <1>5. \A index \in 1..Len(steps) :
+            operands[index][source[index - 1]]
+            = operands[index][ApplyDelta(before.data,
+                scheduled[index - 1].keys, scheduled[index - 1].values)]
+        BY <1>3, SMT
+    <1>6. SourceSequentialIntFailures(before, entry, label, steps, checks,
+            operands, source)
+            = GeneratedSequentialIntFailures(before, entry, label, steps,
+                checks, operands, before.data, scheduled)
+        BY <1>4, <1>5, SMT
+           DEF SourceSequentialIntFailures, GeneratedSequentialIntFailures
+    <1>. QED BY <1>1, <1>2, <1>6
+
 GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
     LET firstUpdate ==
             GeneratedMerge(GeneratedEmptyUpdates(state), firstKey, firstValue)

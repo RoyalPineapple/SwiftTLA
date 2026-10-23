@@ -282,6 +282,47 @@ import SwiftSyntax
         #expect(laterFailure.contains("LET __atomic_0 == (count + 1)"))
         #expect(operands.contains("<<__atomic_0, 1>>"))
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: OrderedOverflowModel.spec.compile()))
+        let action = try #require(program.behavior.actions.first)
+        let output = try program.renderModule()
+        let name = try #require(program.layout.actions.first?.renderedName)
+        let header = "\(name) == "
+        let body = try #require(output.renderedModuleSource.split(separator: "\n")
+            .first { $0.hasPrefix(header) }?.dropFirst(header.count))
+        try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+            body: String(body), module: output.renderedModuleSource,
+            layout: program.layout, binders: program.binderNames,
+            failureDeclarations: output.evaluationFailureDeclarations)
+        for prefix in ["__SwiftTLAOverflowFailure0 == ",
+                       "__SwiftTLAOverflowFailure0_1 == ",
+                       "__SwiftTLAOverflowOperands0_1 == ",
+                       "__SwiftTLAAnyEvaluationFailure0 == "] {
+            let original = try #require(output.evaluationFailureDeclarations.first {
+                $0.hasPrefix(prefix)
+            })
+            let changed = "\(prefix)FALSE"
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+                    body: String(body),
+                    module: output.renderedModuleSource.replacingOccurrences(of: original, with: changed),
+                    layout: program.layout, binders: program.binderNames,
+                    failureDeclarations: output.evaluationFailureDeclarations.map {
+                        $0 == original ? changed : $0
+                    })
+            }
+        }
+        let omitted = try #require(output.evaluationFailureDeclarations.first {
+            $0.hasPrefix("__SwiftTLAOverflowFailure0_1 == ")
+        })
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+                body: String(body),
+                module: output.renderedModuleSource.replacingOccurrences(of: "\(omitted)\n", with: ""),
+                layout: program.layout, binders: program.binderNames,
+                failureDeclarations: output.evaluationFailureDeclarations.filter { $0 != omitted })
+        }
     }
 
     @Test("Nested checked additions retain the selected failure in both outputs")
