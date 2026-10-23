@@ -2205,6 +2205,13 @@ private extension CompiledModuleMetadata {
             importedNames: importedNames,
             instancesAfterBehavior: instancesAfterBehavior
         )
+        for index in behavior.enabledActionIndices {
+            let rendered = directModuleActions[index]
+            guard !rendered.sourceName.isEmpty else { continue }
+            try StraightLineRenderedActionCheck.verifyDeclaration(behavior.actions[index],
+                named: rendered.renderedName, body: rendered.renderedBody,
+                module: directOutput.source, layout: layout, binders: renderer.bindings.binders)
+        }
         return RenderedModule(
             renderedModuleSource: directOutput.source,
             evaluationFailureDeclarations: directOutput.evaluationFailureDeclarations,

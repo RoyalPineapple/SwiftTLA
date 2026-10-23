@@ -71,6 +71,25 @@ enum StraightLineRenderedActionCheck {
         guard let actual = tokens(rendered), actual == expected else { throw mismatch() }
     }
 
+    static func verifyDeclaration(_ action: CompiledAction, named name: String,
+                                  body: String, module: String, layout: CompiledLayout,
+                                  binders: [BinderID: String]) throws {
+        try verify(action.body, rendered: body, layout: layout, binders: binders)
+        let parameters = try action.bindings.map { binding -> String in
+            guard let name = binders[binding.binder], isFormalIdentifier(name) else {
+                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape,
+                    stage: .validation, path: "tla.action.parameters",
+                    expected: "a rendered parameter for each compiled binder",
+                    actual: "a compiled binder has no valid rendered name",
+                    nextSafeAction: "Report this TLA+ action emission failure.")
+            }
+            return name
+        }
+        let header = parameters.isEmpty ? name : "\(name)(\(parameters.joined(separator: ", ")))"
+        try verifyRenderedActionDeclarations(module,
+            declarations: [(header, "\(header) == \(body)")])
+    }
+
     private static func tokens(_ source: String) -> [String]? {
         guard let tokenPattern else { return nil }
         let text = source as NSString

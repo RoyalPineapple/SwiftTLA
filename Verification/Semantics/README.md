@@ -1206,10 +1206,21 @@ through ordered root assignments. For nonshadowing actions with a finite,
 nonempty literal Int/Boolean parameter domain, the compiled gate checks the
 exact domain members and binder references, and the resolution gate checks
 the inferred parameter type, resolved domain, and ordered body. Wrong bound
-reads, stale state reads, and changed domains are rejected. State-dependent
-domains, empty-domain type inference, other value types, and parameterized
-output argument encodings remain open; these verifier implementations remain
-trusted. The native emitter additionally checks that each unparameterized
+reads, stale state reads, and changed domains are rejected. For nonshadowing
+finite Int/Boolean bindings in the total scalar assignment grammar, the native
+emitter also checks typed outer binders and bound reads in the actual update
+visitor, the candidate loop's complete literal domain, the selected-action
+binder pattern and guard, the successor argument, and the formal Int/Boolean
+value encoding. The TLA+ renderer checks the completed module's action header
+against compiled binder identities as well as checking the action body. A
+missing candidate, bound-route substitution, wrong formal value, and changed
+TLA+ binder are rejected. State-dependent domains, hidden singleton arguments,
+empty-domain type inference, other value types, and other output argument
+encodings remain open; these verifier implementations remain trusted.
+The TLA+ call aliases and `Next` disjunction are not yet independently checked
+against the compiled finite invocation set, so this is an action-level output
+link, not a complete-machine theorem.
+The native emitter additionally checks that each unparameterized
 action's emitted dispatch reaches its compiled visitor and that its formal
 call has the compiled label. Wrong-route and wrong-label mutations are
 rejected. Candidate enumeration now uses one generated lazy candidate visitor for both the public
@@ -1220,9 +1231,9 @@ duplicate-action mutation and a parameter-substitution mutation are rejected.
 Every emitted action case is checked against its compiled identity: a selected
 parameterized action reaches the correct successor function and carries the
 correct formal action name. Wrong-target and wrong-label mutations are rejected.
-The meaning of each parameterized domain expression, the guard and argument
-values within those routes, and their formal value encodings remain open output
-obligations; these checker implementations remain trusted.
+Outside the finite Int/Boolean scalar class above, the meaning of parameterized
+domain expressions, guard and argument values, and formal value encodings remains
+an open output obligation; these checker implementations remain trusted.
 
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is
