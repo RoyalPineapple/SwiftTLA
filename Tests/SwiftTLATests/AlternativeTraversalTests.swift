@@ -7,8 +7,8 @@ import Testing
 
 @Suite("Alternative traversal")
 struct AlternativeTraversalTests {
-    @Test("Normalization preserves state-dependent branch and guard conditions")
-    func scalarNormalizationPreservesConditions() throws {
+    @Test("Boolean conditions survive normalization and TLA+ emission")
+    func scalarConditionsSurviveNormalizationAndRendering() throws {
         let variables = [
             NamedVar(name: "enabled", initial: .bool(false)),
             NamedVar(name: "x", initial: .int(0)),
@@ -17,7 +17,7 @@ struct AlternativeTraversalTests {
         let conditional = ActionExpr.ifElse(.variable("enabled"),
             .assign(.named("x"), .int(1)), .assign(.named("x"), .int(2)))
         let guarded = ActionExpr.and(.guard_(.variable("enabled")), .assign(.named("x"), .int(3)))
-        _ = try TLASpec(name: "ConditionalNormalization", variables: variables,
+        let compilation = try TLASpec(name: "ConditionalNormalization", variables: variables,
             actions: [.init(name: "choose", body: conditional), .init(name: "gated", body: guarded)],
             invariants: []).compile()
         try StraightLineAssignmentCheck.verifyNormalization(conditional,
@@ -38,6 +38,30 @@ struct AlternativeTraversalTests {
             try StraightLineAssignmentCheck.verifyNormalization(guarded,
                 normalized: ActionNormalization.complete(.assign(.named("x"), .int(3)),
                     variables: variables), stateRoots: roots, at: "actions.gated.normalization")
+        }
+
+        let module = try compilation.render().tlaBundle.tla
+        let actions = compilation.semantics.behavior.actions
+        let chooseLine = try #require(module.split(separator: "\n").first { $0.hasPrefix("choose == ") })
+        let gatedLine = try #require(module.split(separator: "\n").first { $0.hasPrefix("gated == ") })
+        let chooseBody = String(chooseLine.dropFirst("choose == ".count))
+        let gatedBody = String(gatedLine.dropFirst("gated == ".count))
+        try StraightLineRenderedActionCheck.verify(actions[0].body, rendered: chooseBody,
+            layout: compilation.layout, binders: compilation.bindings.binders)
+        try StraightLineRenderedActionCheck.verify(actions[1].body, rendered: gatedBody,
+            layout: compilation.layout, binders: compilation.bindings.binders)
+
+        let wrongCondition = chooseBody.replacingOccurrences(of: "IF enabled THEN", with: "IF FALSE THEN")
+        #expect(wrongCondition != chooseBody)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verify(actions[0].body, rendered: wrongCondition,
+                layout: compilation.layout, binders: compilation.bindings.binders)
+        }
+        let droppedGuard = gatedBody.replacingOccurrences(of: "(enabled) = TRUE", with: "TRUE")
+        #expect(droppedGuard != gatedBody)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verify(actions[1].body, rendered: droppedGuard,
+                layout: compilation.layout, binders: compilation.bindings.binders)
         }
     }
 
