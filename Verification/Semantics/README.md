@@ -1201,9 +1201,11 @@ rules to actual compiler outputs for this restricted action class, subject to
 the checkers' correctness and the Swift compiler/runtime. Conversions, other
 expressions, initialization, and selected temporal outcomes remain separate
 obligations; none of these checker implementations is formally verified. The
-TLA+ action-body check also covers disjunctions of this total scalar grammar;
-changing an emitted alternative to conjunction is rejected. This checks the
-actual TLA+ union form, not failure aggregation or arbitrary `Either` bodies.
+source-to-compiled, typed-resolution, and TLA+ action-body checks also cover
+disjunctions of this total scalar grammar; changing an alternative to
+conjunction is rejected at each boundary. These structural checks do not
+prove the general source alternative rule, failure aggregation, or arbitrary
+`Either` bodies.
 The source and compiled gates now also carry a `Do` parameter as a symbolic value
 through ordered root assignments. For nonshadowing actions with a finite,
 nonempty literal Int/Boolean parameter domain, the compiled gate checks the

@@ -127,7 +127,7 @@ enum StraightLineAssignmentCheck {
                 guard definedNames.insert(name).inserted else { return }
                 guard simple(expression, reads: &readNames) else { return }
                 pendingSource.append(child)
-            case .and(let left, let right):
+            case .and(let left, let right), .or(let left, let right):
                 pendingSource.append(right)
                 pendingSource.append(left)
             case .guard_(.value(.bool(true))):
@@ -199,6 +199,9 @@ enum StraightLineAssignmentCheck {
                     pending.append(.unbind(name))
                     pending.append(.pair(child, compiledChild))
                 case (.and(let left, let right), .and(let compiledLeft, let compiledRight)):
+                    pending.append(.pair(right, compiledRight))
+                    pending.append(.pair(left, compiledLeft))
+                case (.or(let left, let right), .or(let compiledLeft, let compiledRight)):
                     pending.append(.pair(right, compiledRight))
                     pending.append(.pair(left, compiledLeft))
                 case (.guard_(.value(.bool(true))), .guard_(let value)):
@@ -286,7 +289,7 @@ enum StraightLineAssignmentCheck {
                     inferredBindings[id] = type
                     pending.append(.unbind(id))
                     pending.append(.scan(body))
-                case .and(let left, let right):
+                case .and(let left, let right), .or(let left, let right):
                     pending.append(.scan(right))
                     pending.append(.scan(left))
                 case .assign(let id, let value):
@@ -359,6 +362,9 @@ enum StraightLineAssignmentCheck {
                     pending.append(.unbind(firstID))
                     pending.append(.pair(firstBody, secondBody))
                 case (.and(let firstLeft, let firstRight), .and(let secondLeft, let secondRight)):
+                    pending.append(.pair(firstRight, secondRight))
+                    pending.append(.pair(firstLeft, secondLeft))
+                case (.or(let firstLeft, let firstRight), .or(let secondLeft, let secondRight)):
                     pending.append(.pair(firstRight, secondRight))
                     pending.append(.pair(firstLeft, secondLeft))
                 case (.assign(let firstID, let firstValue), .assign(let secondID, let secondValue)):
