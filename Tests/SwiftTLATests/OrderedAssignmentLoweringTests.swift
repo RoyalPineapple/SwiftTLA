@@ -769,4 +769,28 @@ struct OrderedAssignmentLoweringTests {
         }
         #expect(try renderedResult(stale, roots: roots) != expected)
     }
+
+    @Test("A set-valued assignment cannot change its emitted target")
+    func setAssignmentOutputKeepsTarget() throws {
+        let specification = TLASpec(name: "SetAssignmentTarget", variables: [
+            .init(name: "items", initialization: .value(.set([.int(0)])),
+                generatedSwiftType: "Set<Int>", origin: .source)
+        ], actions: [
+            NamedAction(name: "replace", body: .assign(.named("items"), .value(.set([.int(1)]))))
+        ], invariants: [])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let action = try #require(program.behavior.actions.first)
+        let module = try program.renderModule().renderedModuleSource
+        let header = "replace == "
+        let declaration = try #require(module.split(separator: "\n")
+            .first(where: { $0.hasPrefix(header) })?.dropFirst(header.count))
+        try StraightLineRenderedActionCheck.verify(action.body, rendered: String(declaration),
+            layout: program.layout, binders: program.binderNames)
+        let wrongTarget = String(declaration).replacingOccurrences(of: "items' =", with: "other' =")
+        #expect(wrongTarget != declaration)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verify(action.body, rendered: wrongTarget,
+                layout: program.layout, binders: program.binderNames)
+        }
+    }
 }

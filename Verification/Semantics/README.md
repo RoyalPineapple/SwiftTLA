@@ -1952,10 +1952,15 @@ in order, then requires the resolved tree to retain those operations, identities
 and `Int` types. A changed addition operation, reversed operands, or wrong
 resolved result type fails the independent compiler check. This closes that
 lowering/resolution boundary for the checked subset, not the full accepted
-expression language. For the same subset, the TLA+ action-output checker now
-matches the actual nested addition tree and every emitted overflow guard against
-the compiled identities; changing a value or guard fails. The generated-Swift
-arithmetic checker is exercised on the same compiled action, and the
+expression language. The TLA+ action-output checker also recognizes
+tokenizable compiled literal values, including sets, in the actual assignment
+body. A set-valued wrong-target mutation previously passed because this form
+was skipped; it now fails. The formal literal serializer remains a shared,
+project-owned trusted link, and expressions outside the checker's grammar
+remain uncovered. For the nested-addition subset, the TLA+ action-output
+checker matches the actual nested addition tree and every emitted overflow
+guard against the compiled identities; changing a value or guard fails. The
+generated-Swift arithmetic checker is exercised on the same compiled action, and the
 parameterized TLAPS theorem supplies the guard's semantic rule. For a single
 captured addition assignment with only a true guard and unchanged frame, the
 same output checker now independently derives the ordered overflow predicates,
