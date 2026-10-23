@@ -2229,6 +2229,164 @@ THEOREM AppliedUpdateComposesWithStateConstruction ==
         BY SourceAppliedUpdateIsExactlyGenerated
     <1>. QED BY <1>2, <1>3, <1>4, SMT
 
+DistinctFinalWriteKeys(keys) ==
+    \A first, second \in 1..Len(keys) :
+        first # second => keys[first] # keys[second]
+FinalWritePrefix(keys, index) ==
+    {keys[position] : position \in 1..index}
+GeneratedFinalWriteHistory(original, keys, values, history) ==
+    /\ history[0] = GeneratedEmptyUpdates(original)
+    /\ \A index \in 1..Len(keys) :
+        history[index] = GeneratedMerge(history[index - 1],
+            keys[index], values[keys[index]])
+
+THEOREM DistinctFinalWritesPreserveCompleteDelta ==
+    ASSUME NEW original \in States,
+           NEW values \in States,
+           NEW keys \in Seq(Vars),
+           DistinctFinalWriteKeys(keys),
+           NEW history \in [0..Len(keys) -> GeneratedUpdates],
+           GeneratedFinalWriteHistory(original, keys, values, history)
+    PROVE /\ history[Len(keys)].accepted
+          /\ history[Len(keys)].written = FinalWritePrefix(keys, Len(keys))
+          /\ GeneratedApply(original, history[Len(keys)])
+                = ApplyDelta(original, FinalWritePrefix(keys, Len(keys)), values)
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(keys) =>
+            /\ history[index].accepted
+            /\ history[index].written = FinalWritePrefix(keys, index)
+            /\ \A key \in FinalWritePrefix(keys, index) :
+                history[index].values[key] = values[key]
+    <1>1. P(0)
+        BY SMT DEF P, GeneratedFinalWriteHistory,
+            GeneratedEmptyUpdates, FinalWritePrefix
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(keys)
+                     PROVE /\ history[index + 1].accepted
+                           /\ history[index + 1].written = FinalWritePrefix(keys, index + 1)
+                           /\ \A key \in FinalWritePrefix(keys, index + 1) :
+                                history[index + 1].values[key] = values[key]
+            BY SMT DEF P
+        <2>1. index \in 0..Len(keys)
+            BY SMT
+        <2>2. keys[index + 1] \in Vars
+            BY SMT
+        <2>3. keys[index + 1] \notin FinalWritePrefix(keys, index)
+            BY SMT DEF DistinctFinalWriteKeys, FinalWritePrefix
+        <2>4. FinalWritePrefix(keys, index + 1)
+                = FinalWritePrefix(keys, index) \cup {keys[index + 1]}
+            BY SMT DEF FinalWritePrefix
+        <2>5. history[index + 1] = GeneratedMerge(history[index],
+                keys[index + 1], values[keys[index + 1]])
+            BY SMT DEF GeneratedFinalWriteHistory
+        <2>. QED
+            BY <2>1, <2>2, <2>3, <2>4, <2>5, P(index), SMT
+                DEF P, GeneratedMerge, GeneratedUpdates, States
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>4. /\ history[Len(keys)].accepted
+          /\ history[Len(keys)].written = FinalWritePrefix(keys, Len(keys))
+          /\ \A key \in FinalWritePrefix(keys, Len(keys)) :
+                history[Len(keys)].values[key] = values[key]
+        BY <1>3, SMT DEF P
+    <1>. QED
+        BY <1>4, SMT DEF GeneratedApply, ApplyDelta, States
+
+ExtendFinalWriteHistory(history, length, key, value) ==
+    [index \in 0..(length + 1) |->
+        IF index = length + 1
+        THEN GeneratedMerge(history[length], key, value)
+        ELSE history[index]]
+FinalWriteHistoryExists(original, keys, values) ==
+    \E history \in [0..Len(keys) -> GeneratedUpdates] :
+        GeneratedFinalWriteHistory(original, keys, values, history)
+
+THEOREM GeneratedFinalWriteHistoryExists ==
+    ASSUME NEW original \in States,
+           NEW values \in States
+    PROVE \A keys \in Seq(Vars) :
+        FinalWriteHistoryExists(original, keys, values)
+    PROOF
+    <1>1. FinalWriteHistoryExists(original, <<>>, values)
+        <2>. DEFINE emptyHistory ==
+            [index \in 0..0 |-> GeneratedEmptyUpdates(original)]
+        <2>1. emptyHistory \in [0..Len(<<>>) -> GeneratedUpdates]
+            BY SMT DEF emptyHistory, GeneratedEmptyUpdates, GeneratedUpdates
+        <2>2. GeneratedFinalWriteHistory(original, <<>>, values, emptyHistory)
+            BY SMT DEF GeneratedFinalWriteHistory, emptyHistory
+        <2>. QED
+            BY <2>1, <2>2 DEF FinalWriteHistoryExists
+    <1>2. ASSUME NEW prior \in Seq(Vars),
+                  NEW key \in Vars,
+                  FinalWriteHistoryExists(original, prior, values)
+          PROVE FinalWriteHistoryExists(original, Append(prior, key), values)
+        <2>1. PICK history \in [0..Len(prior) -> GeneratedUpdates] :
+                    GeneratedFinalWriteHistory(original, prior, values, history)
+            BY FinalWriteHistoryExists(original, prior, values)
+                DEF FinalWriteHistoryExists
+        <2>2. Len(Append(prior, key)) = Len(prior) + 1
+            BY AppendProperties
+        <2>3. GeneratedMerge(history[Len(prior)], key, values[key])
+                \in GeneratedUpdates
+            BY <2>1, SMT DEF GeneratedMerge, GeneratedUpdates, States
+        <2>4. ExtendFinalWriteHistory(history, Len(prior), key, values[key])
+                \in [0..Len(Append(prior, key)) -> GeneratedUpdates]
+            BY <2>1, <2>2, <2>3, SMT DEF ExtendFinalWriteHistory
+        <2>5. GeneratedFinalWriteHistory(original, Append(prior, key), values,
+                ExtendFinalWriteHistory(history, Len(prior), key, values[key]))
+            <3>1. ExtendFinalWriteHistory(history, Len(prior), key,
+                    values[key])[0] = GeneratedEmptyUpdates(original)
+                BY <2>1, SMT
+                    DEF GeneratedFinalWriteHistory, ExtendFinalWriteHistory
+            <3>2. \A index \in 1..Len(prior) :
+                    ExtendFinalWriteHistory(history, Len(prior), key,
+                        values[key])[index]
+                    = GeneratedMerge(
+                        ExtendFinalWriteHistory(history, Len(prior), key,
+                            values[key])[index - 1],
+                        Append(prior, key)[index],
+                        values[Append(prior, key)[index]])
+                BY <2>1, AppendProperties, SMT
+                    DEF GeneratedFinalWriteHistory, ExtendFinalWriteHistory
+            <3>3. ExtendFinalWriteHistory(history, Len(prior), key,
+                    values[key])[Len(prior) + 1]
+                    = GeneratedMerge(
+                        ExtendFinalWriteHistory(history, Len(prior), key,
+                            values[key])[Len(prior)],
+                        Append(prior, key)[Len(prior) + 1],
+                        values[Append(prior, key)[Len(prior) + 1]])
+                BY AppendProperties, SMT DEF ExtendFinalWriteHistory
+            <3>. QED BY <2>2, <3>1, <3>2, <3>3, SMT
+                DEF GeneratedFinalWriteHistory
+        <2>. QED BY <2>4, <2>5 DEF FinalWriteHistoryExists
+    <1>. QED BY <1>1, <1>2, SequencesInductionAppend
+
+THEOREM EveryDistinctFinalWriteSequencePreservesCompleteDelta ==
+    ASSUME NEW original \in States,
+           NEW values \in States,
+           NEW keys \in Seq(Vars),
+           DistinctFinalWriteKeys(keys)
+    PROVE \E history \in [0..Len(keys) -> GeneratedUpdates] :
+        /\ GeneratedFinalWriteHistory(original, keys, values, history)
+        /\ history[Len(keys)].accepted
+        /\ history[Len(keys)].written = FinalWritePrefix(keys, Len(keys))
+        /\ GeneratedApply(original, history[Len(keys)])
+            = ApplyDelta(original, FinalWritePrefix(keys, Len(keys)), values)
+    PROOF
+    <1>1. FinalWriteHistoryExists(original, keys, values)
+        BY GeneratedFinalWriteHistoryExists
+    <1>2. PICK history \in [0..Len(keys) -> GeneratedUpdates] :
+            GeneratedFinalWriteHistory(original, keys, values, history)
+        BY <1>1 DEF FinalWriteHistoryExists
+    <1>3. /\ history[Len(keys)].accepted
+          /\ history[Len(keys)].written = FinalWritePrefix(keys, Len(keys))
+          /\ GeneratedApply(original, history[Len(keys)])
+                = ApplyDelta(original, FinalWritePrefix(keys, Len(keys)), values)
+        BY <1>2, DistinctFinalWritesPreserveCompleteDelta
+    <1>. QED BY <1>2, <1>3, SMT
+
 GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
     LET firstUpdate ==
             GeneratedMerge(GeneratedEmptyUpdates(state), firstKey, firstValue)
