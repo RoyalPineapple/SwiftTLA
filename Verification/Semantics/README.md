@@ -1468,6 +1468,13 @@ source and resolved initial `Int` literals and control location. The production
 Swift and TLA+ emitters check their actual initial bindings, action bodies,
 and selected addition-failure declarations. Wrong value, location, read order,
 termination body, and omitted-failure mutations are rejected by focused tests.
+For direct `let algorithm = Algorithm(scoped:)` declarations with literal `Int`
+`scope.sharedVar` initializers and nonempty `Do` bodies of root `Assign`s, the
+macro independently reads the authored syntax and checks the parsed source
+model's initial values, registered enum-label values, assignment targets,
+expression trees, and statement order. Syntax mutations to each are rejected.
+Other accepted spellings and constructs still compile but are not certified by
+this syntax check; its recognition and enum metadata remain trusted code.
 `OrderedSequentialIntProgramCompose` proves the independent initial, labeled
 edge, and ordered-failure rules compose over any finite number of steps,
 including the terminal self-loop; its new focused TLAPS obligations pass
@@ -1476,10 +1483,10 @@ this addition, and this local revision has no hosted evidence yet. Nonliteral
 deterministic `Int` initial expressions and other accepted statement or
 expression forms remain outside this slice; they are not rejected by the DSL
 merely because this proof does not cover them. The output checkers' parsing,
-the `#spec` syntax parser that constructs the source model, the project-owned
+the remaining `#spec` syntax parser that constructs the source model, the project-owned
 update/visitor kernel, and documented Swift compiler/runtime behavior remain
 trusted boundaries. The theorem does not independently certify that the parser
-interprets every authored Swift syntax tree as intended. `@TLAModel` generates
+interprets every accepted Swift syntax tree as intended. `@TLAModel` generates
 both Swift and TLA+ from the macro-time parsed `CompiledProgram`; agreement
 between those outputs cannot independently validate that shared parsing step.
 For a single root assignment, the production source-to-lowered check also

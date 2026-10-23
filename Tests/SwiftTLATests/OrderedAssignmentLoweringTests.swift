@@ -7,6 +7,62 @@ import SwiftSyntax
 
 @Suite("Ordered assignment lowering")
 struct OrderedAssignmentLoweringTests {
+    @Test("Authored sequential Int syntax agrees with its parsed initial values and ordered steps")
+    func authoredSequentialIntSyntaxRejectsDrift() throws {
+        let source = """
+        {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(initial: 1)
+                let second = scope.sharedVar(initial: 2)
+                Do(Step.copy) {
+                    Assign(first, to: second + 1)
+                    Assign(second, to: first)
+                }
+                Do(Step.finish) {
+                    Assign(first, to: 0)
+                }
+            })
+            algorithm
+        }
+        """
+        let enums = [parserTestEnum("Step", cases: ["copy": .string("copy"),
+            "finish": .string("finish")])]
+        let original = try parseSpecTestClosure(source)
+        let parsed = SpecParser.parseSpecClosure(named: "OrderedInt", original,
+            sourceTypes: .init(enums: enums))
+        #expect(parsed.diagnostics.isEmpty)
+        try OrderedIntSourceSyntaxCheck.verify(original, parsed: parsed, enums: enums)
+        let unused = source.replacingOccurrences(of: "algorithm\n",
+            with: "let ignored = Algorithm(scoped: { scope in\n"
+                + "    let value = scope.sharedVar(initial: 4)\n"
+                + "    Do(Step.copy) { Assign(value, to: 5) }\n"
+                + "})\nalgorithm\n")
+        #expect(unused != source)
+        try OrderedIntSourceSyntaxCheck.verify(try parseSpecTestClosure(unused),
+            parsed: parsed, enums: enums)
+        let reversed = source
+            .replacingOccurrences(of: "Assign(first, to: second + 1)", with: "__FIRST__")
+            .replacingOccurrences(of: "Assign(second, to: first)",
+                with: "Assign(first, to: second + 1)")
+            .replacingOccurrences(of: "__FIRST__", with: "Assign(second, to: first)")
+
+        for changed in [
+            source.replacingOccurrences(of: "initial: 1", with: "initial: 3"),
+            source.replacingOccurrences(of: "Do(Step.copy)", with: "Do(Step.finish)"),
+            source.replacingOccurrences(of: "Assign(first, to: second + 1)",
+                with: "Assign(first, to: first + 1)"),
+            source.replacingOccurrences(of: "Assign(second, to: first)",
+                with: "Assign(first, to: second)"),
+            reversed,
+        ] {
+            #expect(changed != source)
+            #expect(throws: CompilationDiagnostic.self) {
+                try OrderedIntSourceSyntaxCheck.verify(
+                    try parseSpecTestClosure(changed), parsed: parsed, enums: enums)
+            }
+        }
+    }
+
     private enum Symbol: Equatable {
         case initial(String)
         case literal(TLAValue)
