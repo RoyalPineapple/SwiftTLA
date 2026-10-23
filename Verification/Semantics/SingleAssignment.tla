@@ -60,6 +60,7 @@ THEOREM PerFieldStateEncodingIsInjective ==
                   PROVE InjectiveOn(
                       [state \in TypedStates(domains) |-> PerFieldStateEncoding(valueMaps, state)],
                       TypedStates(domains))
+        BY SMT
     <1>1. \A first, second \in TypedStates(domains) :
              PerFieldStateEncoding(valueMaps, first)
                  = PerFieldStateEncoding(valueMaps, second)
@@ -70,10 +71,12 @@ THEOREM PerFieldStateEncodingIsInjective ==
                               PerFieldStateEncoding(valueMaps, first)
                                   = PerFieldStateEncoding(valueMaps, second)
                       PROVE first = second
+            BY SMT DEF InjectiveOn
         <2>1. \A key \in Vars : first[key] = second[key]
             PROOF
             <3>. SUFFICES ASSUME NEW key \in Vars
                           PROVE first[key] = second[key]
+                BY SMT
             <3>1. first[key] \in domains[key]
                 BY SMT DEF TypedStates, States
             <3>2. second[key] \in domains[key]
@@ -272,6 +275,7 @@ THEOREM InjectiveFunctionGraphEncoding ==
         PROOF
         <2>. SUFFICES ASSUME NEW key \in DOMAIN second
                       PROVE key \in DOMAIN first
+            BY SMT
         <2>1. <<keyMap[key], valueMap[second[key]]>>
                 \in MappedFunctionGraph(keyMap, valueMap, second)
             BY SMT DEF MappedFunctionGraph
