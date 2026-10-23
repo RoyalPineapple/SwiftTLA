@@ -186,6 +186,9 @@ struct CompiledLowerer {
             )
             try StraightLineAssignmentCheck.verifyInitialIntLiteral(
                 declaration.initialization, lowered: lowered, at: "\(path).initialization")
+            try StraightLineAssignmentCheck.verifyInitialControlLocation(
+                declaration.initialization, lowered: lowered, layout: layout,
+                at: "\(path).initialization")
             initializations[variableLayout.id] = lowered
         }
         let actions: [CompiledAction] = try zip(spec.actions, layout.actions).map {
