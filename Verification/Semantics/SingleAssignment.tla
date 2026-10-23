@@ -1406,6 +1406,33 @@ THEOREM OrderedHistoriesAgree ==
     <1>4. QED
         BY <1>3, SMT DEF P
 
+SourceFirstFailureAt(steps, checks, history, index) ==
+    /\ index \in 1..Len(steps)
+    /\ (\A prior \in 1..(index - 1) : checks[prior][history[prior - 1]])
+    /\ ~checks[index][history[index - 1]]
+
+ScheduledFirstFailureAt(original, steps, checks, history, index) ==
+    /\ index \in 1..Len(steps)
+    /\ (\A prior \in 1..(index - 1) :
+        checks[prior][ApplyDelta(original, history[prior - 1].keys,
+            history[prior - 1].values)])
+    /\ ~checks[index][ApplyDelta(original, history[index - 1].keys,
+        history[index - 1].values)]
+
+THEOREM OrderedHistoriesPreserveFirstFailure ==
+    ASSUME NEW original \in States,
+           NEW steps \in Seq(Instructions),
+           NEW checks \in [1..Len(steps) -> [States -> BOOLEAN]],
+           NEW source \in [0..Len(steps) -> States],
+           NEW scheduled \in [0..Len(steps) -> ScheduledRecords],
+           SourceHistory(original, steps, source),
+           ScheduledHistory(original, steps, scheduled)
+    PROVE \A index \in 1..Len(steps) :
+        SourceFirstFailureAt(steps, checks, source, index)
+        <=> ScheduledFirstFailureAt(original, steps, checks, scheduled, index)
+    BY OrderedHistoriesAgree, SMT DEF SourceFirstFailureAt,
+        ScheduledFirstFailureAt, HistoryAgrees
+
 THEOREM SourceHistoryIsUnique ==
     ASSUME NEW original \in States,
            NEW steps \in Seq(Instructions),
