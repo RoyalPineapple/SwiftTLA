@@ -2505,6 +2505,59 @@ THEOREM OrderedSourceAndGeneratedMergeStepsAgree ==
         <2>. QED BY <2>6, OrderedDoTransitionEquivalence
     <1>. QED BY <1>1, <1>2, SMT
 
+SequentialStates == [location: ActionLabels, data: States]
+SequentialEdges == SequentialStates \X ActionLabels \X SequentialStates
+
+SourceSequentialStep(entry, next, steps, before, after) ==
+    /\ before.location = entry
+    /\ after.location = next
+    /\ SourceDoStep(before.data, steps, after.data)
+
+GeneratedSequentialStep(entry, next, steps, slots, before, after) ==
+    /\ before.location = entry
+    /\ after.location = next
+    /\ GeneratedOrderedDoStep(before.data, steps, slots, after.data)
+
+THEOREM OrderedSequentialControlStepAgreement ==
+    ASSUME NEW entry \in ActionLabels,
+           NEW next \in ActionLabels,
+           NEW before \in SequentialStates,
+           NEW after \in SequentialStates,
+           NEW steps \in Seq(Instructions),
+           NEW slots \in Seq(Vars),
+           DistinctFinalWriteKeys(slots),
+           FinalWritePrefix(slots, Len(slots))
+               = InstructionTargetPrefix(steps, Len(steps))
+    PROVE SourceSequentialStep(entry, next, steps, before, after)
+        <=> GeneratedSequentialStep(entry, next, steps, slots, before, after)
+    BY OrderedSourceAndGeneratedMergeStepsAgree, SMT
+       DEF SourceSequentialStep, GeneratedSequentialStep, SequentialStates
+
+SourceSequentialEdges(entry, next, label, steps) ==
+    {edge \in SequentialEdges :
+        /\ edge[2] = label
+        /\ SourceSequentialStep(entry, next, steps, edge[1], edge[3])}
+
+GeneratedSequentialEdges(entry, next, label, steps, slots) ==
+    {edge \in SequentialEdges :
+        /\ edge[2] = label
+        /\ GeneratedSequentialStep(entry, next, steps, slots, edge[1], edge[3])}
+
+THEOREM OrderedSequentialLabeledEdgesAgree ==
+    ASSUME NEW entry \in ActionLabels,
+           NEW next \in ActionLabels,
+           NEW label \in ActionLabels,
+           NEW steps \in Seq(Instructions),
+           NEW slots \in Seq(Vars),
+           DistinctFinalWriteKeys(slots),
+           FinalWritePrefix(slots, Len(slots))
+               = InstructionTargetPrefix(steps, Len(steps))
+    PROVE SourceSequentialEdges(entry, next, label, steps)
+        = GeneratedSequentialEdges(entry, next, label, steps, slots)
+    BY OrderedSequentialControlStepAgreement, SMT
+       DEF SourceSequentialEdges, GeneratedSequentialEdges, SequentialEdges,
+           SequentialStates
+
 GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
     LET firstUpdate ==
             GeneratedMerge(GeneratedEmptyUpdates(state), firstKey, firstValue)

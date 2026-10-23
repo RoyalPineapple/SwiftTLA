@@ -1393,6 +1393,24 @@ scalar assignment form is supported. `OrderedAssignmentLoweringTests` checks
 that authored route against its actual generated Swift successor and TLA+
 action, and rejects a duplicate final write. This certificate does not yet
 cover all accepted `#spec` algorithm forms or prove the Swift merge helper.
+`OrderedSequentialControlStepAgreement` lifts the finite ordered-write rule
+to a complete state with a control location; its labeled-edge corollary keeps
+the source action label and proves both directions. The focused TLAPS proofs
+discharge three obligations each without fingerprint reuse. For scalar actions,
+the direct-TLA output checker now recognizes a compiled program-counter
+equality guard and a control-location write, and rejects either wrong location
+in the emitted action. `SequentialCopyProofModel` also checks the generated
+Swift machine's complete formal projection through `copy -> finish`. This
+links compiled control expressions to the actual TLA+ output for that form.
+The source-to-lowered checker now checks the exact source variable inventory,
+initial control choice, and labeled step inventory for sequential algorithms.
+For each plain `Do` whose statements are root copies or literals, it also
+requires the exact entry guard, one next-location write, and the complete
+ordered user-variable result. Mutations to the initial control, action label,
+and next location are rejected. Other accepted statement and expression
+forms, the emitted initial-state set and termination behavior, and a general
+proof of the Swift visitor remain open. The output checker's parsing and Swift
+compiler/runtime remain trusted.
 The macro also checks every emitted `Snapshot`
 declaration against the compiled hidden-field list: it permits exactly the
 public state and those hidden fields, with `Hashable` and `Sendable` synthesis

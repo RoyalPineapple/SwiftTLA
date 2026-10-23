@@ -381,6 +381,79 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
+    @Test("A sequential Do step preserves its complete control location in both outputs")
+    func sequentialStepPreservesControlLocation() throws {
+        let specification = SequentialCopyProofModel.spec
+        let source = try #require(specification.sourceAlgorithms.first?.model)
+        let lowered = try specification.loweredSourceModel()
+        try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
+            enumerateInitialControl: false)
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let action = try #require(program.behavior.actions.first)
+        let module = try program.renderModule().renderedModuleSource
+        let header = "copy == "
+        let declarations = module.split(separator: "\n").filter { $0.hasPrefix(header) }
+        let body = try #require(declarations.count == 1 ? String(declarations[0].dropFirst(header.count)) : nil)
+        try StraightLineRenderedActionCheck.verify(action.body, rendered: body,
+            layout: program.layout, binders: program.binderNames)
+        let wrongGuard = body.replacingOccurrences(of: "pc = \"copy\"", with: "pc = \"finish\"")
+        #expect(wrongGuard != body)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verify(action.body, rendered: wrongGuard,
+                layout: program.layout, binders: program.binderNames)
+        }
+        let wrongTarget = body.replacingOccurrences(of: "pc' = \"finish\"", with: "pc' = \"copy\"")
+        #expect(wrongTarget != body)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verify(action.body, rendered: wrongTarget,
+                layout: program.layout, binders: program.binderNames)
+        }
+
+        let machine = try SequentialCopyProofModel.makeMachine()
+        let pc = try #require(TLAStateProjection.Token(validating: "pc"))
+        #expect(try machine.formalProjection(of: machine.snapshot).value(for: pc) == .string("copy"))
+        let successors = try machine.successors(for: .copy)
+        let successor = try #require(successors.count == 1 ? successors.first : nil)
+        #expect(successor.state.first == 2 && successor.state.second == 2)
+        #expect(try successor.formalProjection(of: successor.snapshot).value(for: pc)
+            == .string("finish"))
+
+        var changed = 0
+        func wrongNext(_ action: ActionExpr) -> ActionExpr {
+            switch action {
+            case .assign(.programCounter, .controlLocation):
+                changed += 1
+                return .assign(.programCounter, .controlLocation(.init(
+                    owner: .sequential(algorithm: source.name), sourceName: "copy")))
+            case .and(let left, let right): return .and(wrongNext(left), wrongNext(right))
+            case .define(let name, let value, let body): return .define(name, value, wrongNext(body))
+            default: return action
+            }
+        }
+        var mutated = lowered
+        mutated.actions[0] = NamedAction(name: "copy", body: wrongNext(lowered.actions[0].body))
+        #expect(changed == 1)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifySequential(source, lowered: mutated,
+                enumerateInitialControl: false)
+        }
+
+        var wrongInitial = lowered
+        wrongInitial.variables[0] = NamedVar(name: "pc", initialization: .expression(
+            .controlLocation(.init(owner: .sequential(algorithm: source.name), sourceName: "finish"))),
+            origin: .programCounter)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifySequential(source, lowered: wrongInitial,
+                enumerateInitialControl: false)
+        }
+        var wrongLabel = lowered
+        wrongLabel.actions[0] = NamedAction(name: "other", body: lowered.actions[0].body)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifySequential(source, lowered: wrongLabel,
+                enumerateInitialControl: false)
+        }
+    }
+
     @Test("Bound action values retain ordered reads through source lowering")
     func boundValueFeedsLaterAssignment() throws {
         let variables = [NamedVar(name: "value", initial: .int(0)),

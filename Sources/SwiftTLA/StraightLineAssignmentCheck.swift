@@ -170,7 +170,60 @@ enum StraightLineAssignmentCheck {
         }
     }
 
-    static func verify(_ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>) throws {
+    static func verifySequential(_ algorithm: AlgorithmModel, lowered: TLASpec,
+                                 enumerateInitialControl: Bool) throws {
+        let steps = algorithm.sequentialSteps
+        guard steps.contains(where: { $0.loopCondition == nil }) else { return }
+        func mismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(
+                code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "algorithms.\(algorithm.name).sequentialShape",
+                expected: "the source variables, initial control, and labeled steps",
+                actual: "the lowered sequential model has a different state or action inventory",
+                nextSafeAction: "Report this sequential algorithm lowering failure."
+            )
+        }
+        let shared = algorithm.components.compactMap { component -> AlgorithmStateModel? in
+            guard case .shared(let state) = component else { return nil }
+            return state
+        }
+        let owner = ControlOwner.sequential(algorithm: algorithm.name)
+        let locations = steps.map { StateExpr.controlLocation(.init(owner: owner, sourceName: $0.label.name)) }
+        let initialControl: VariableInitialization = enumerateInitialControl
+            ? .memberOf(.setLiteral(locations)) : .expression(locations[0])
+        guard lowered.variables.count == shared.count + 1,
+              lowered.variables[0].origin == .programCounter,
+              lowered.variables[0].name == CompilerControlSymbol.programCounter.rawValue,
+              lowered.variables[0].initialization == initialControl,
+              zip(lowered.variables.dropFirst(), shared).allSatisfy({ variable, source in
+                  variable.origin == .source && variable.name == source.root &&
+                  variable.initialization == source.initialization &&
+                  variable.generatedSwiftType == source.swiftTypeName &&
+                  variable.resolvedValueType == source.resolvedValueType &&
+                  variable.displayLabel == source.displayLabel
+              }),
+              lowered.actions.count == steps.count + 1,
+              lowered.actions.last?.isTermination == true,
+              lowered.actions.last?.name == CompilerControlSymbol.terminatingAction.rawValue,
+              zip(lowered.actions, steps).allSatisfy({ action, step in
+                  !action.isTermination && action.name == step.label.name
+              }) else { throw mismatch() }
+        let roots = Set(shared.map(\.root))
+        for (index, step) in steps.enumerated() where step.loopCondition == nil {
+            let entry = ControlLocationReference(owner: owner, sourceName: step.label.name)
+            let next = steps.indices.contains(index + 1)
+                ? ControlLocationReference(owner: owner, sourceName: steps[index + 1].label.name)
+                : ControlLocationReference(owner: .generated(algorithm: algorithm.name,
+                    purpose: CompilerControlSymbol.done.rawValue),
+                    sourceName: CompilerControlSymbol.done.rawValue)
+            try verify(AtomicStep(model: step),
+                lowered: lowered.actions[index].bindings.isEmpty ? lowered.actions[index].body : nil,
+                stateRoots: roots, control: (entry, next))
+        }
+    }
+
+    static func verify(_ step: AtomicStep, lowered: ActionExpr?, stateRoots: Set<String>,
+                       control: (entry: ControlLocationReference, next: ControlLocationReference)? = nil) throws {
         let parameterNames = step.bindings.map(\.name)
         let parameters = Set(parameterNames)
         guard parameters.count == parameterNames.count,
@@ -218,6 +271,9 @@ enum StraightLineAssignmentCheck {
         var writes: [String: Term] = [:]
         var assignedRoots: Set<String> = []
         var bindings = Dictionary(uniqueKeysWithValues: parameterNames.map { ($0, Term.parameter($0)) })
+        guard let lowered else { throw mismatch() }
+        var sawControlGuard = false
+        var sawControlWrite = false
         var pending: [Visit] = [.action(lowered)]
         while let next = pending.popLast() {
             guard case .action(let action) = next else {
@@ -235,6 +291,12 @@ enum StraightLineAssignmentCheck {
                 pending.append(.action(left))
             case .guard_(.value(.bool(true))):
                 break
+            case .guard_(.equal(.programCounter, .controlLocation(let location))):
+                guard let control, location == control.entry, !sawControlGuard else { throw mismatch() }
+                sawControlGuard = true
+            case .assign(.programCounter, .controlLocation(let location)):
+                guard let control, location == control.next, !sawControlWrite else { throw mismatch() }
+                sawControlWrite = true
             case .assign(.named(let root), let expression):
                 guard stateRoots.contains(root), assignedRoots.insert(root).inserted else {
                     throw mismatch()
@@ -251,6 +313,7 @@ enum StraightLineAssignmentCheck {
             }
         }
 
+        if case .some = control, !(sawControlGuard && sawControlWrite) { throw mismatch() }
         guard assignedRoots == Set(source.keys),
               stateRoots.allSatisfy({ (writes[$0] ?? .prior($0)) == (source[$0] ?? .prior($0)) }) else {
             throw mismatch()
