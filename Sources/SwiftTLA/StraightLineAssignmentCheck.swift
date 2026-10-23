@@ -31,6 +31,44 @@ enum StraightLineAssignmentCheck {
             nextSafeAction: "Report this initializer translation failure.")
     }
 
+    static func verifyInitialControlLocation(_ source: VariableInitialization,
+                                             lowered: CompiledVariableInitialization,
+                                             layout: CompiledLayout, at path: String) throws {
+        guard case .expression(.controlLocation(let reference)) = source else { return }
+        let matches = layout.controlLocations.filter { location in
+            location.sourceName == reference.sourceName &&
+                (reference.owner.map { $0 == location.owner } ?? true)
+        }
+        guard matches.count == 1,
+              case .value(let expression) = lowered,
+              case .controlLocation(let actual) = expression.operation,
+              actual == matches[0].id,
+              expression.children.isEmpty else {
+            throw initialControlMismatch(at: path)
+        }
+    }
+
+    static func verifyResolvedInitialControlLocation(_ original: CompiledVariableInitialization,
+                                                     resolved: CompiledVariableInitialization?, at path: String) throws {
+        guard case .value(let source) = original,
+              case .controlLocation(let location) = source.operation,
+              source.children.isEmpty else { return }
+        guard case .value(let expression)? = resolved,
+              case .controlLocation(let actual) = expression.operation,
+              actual == location,
+              expression.children.isEmpty,
+              expression.resultType == .controlLocation else {
+            throw initialControlMismatch(at: path)
+        }
+    }
+
+    private static func initialControlMismatch(at path: String) -> CompilationDiagnostic {
+        CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: path, expected: "the source initial control location and type",
+            actual: "the compiled initializer changed its location, shape, or type",
+            nextSafeAction: "Report this control-location translation failure.")
+    }
+
     private enum Term: Hashable {
         case prior(String)
         case parameter(String)

@@ -6,12 +6,15 @@ extension CompiledProgram {
         let resolvedInitializations = Dictionary(uniqueKeysWithValues: behavior.initializations.map {
             ($0.variable, $0.initialization)
         })
-        for original in inputs.semantics.behavior.initializations
-            where variableTypes[original.variable] == .int {
+        for original in inputs.semantics.behavior.initializations {
             let name = inputs.layout.variables[original.variable.ordinal].declaration.name
-            try StraightLineAssignmentCheck.verifyResolvedInitialIntLiteral(
-                original.initialization, resolved: resolvedInitializations[original.variable],
-                at: "variables.\(name).initialization")
+            let path = "variables.\(name).initialization"
+            if variableTypes[original.variable] == .int {
+                try StraightLineAssignmentCheck.verifyResolvedInitialIntLiteral(
+                    original.initialization, resolved: resolvedInitializations[original.variable], at: path)
+            }
+            try StraightLineAssignmentCheck.verifyResolvedInitialControlLocation(
+                original.initialization, resolved: resolvedInitializations[original.variable], at: path)
         }
         for action in inputs.semantics.behavior.actions {
             try StraightLineAssignmentCheck.verifyResolved(action,

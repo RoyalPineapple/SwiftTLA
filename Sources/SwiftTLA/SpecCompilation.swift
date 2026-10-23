@@ -2770,8 +2770,17 @@ private extension CompiledModuleMetadata {
                   expression.resultType == .int else { return nil }
             return (variable.declaration.name, value)
         })
+        let expectedControlLocations = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
+            variable -> (String, String)? in
+            guard case .value(let expression)? = initializations[variable.id],
+                  case .controlLocation(let id) = expression.operation,
+                  expression.resultType == .controlLocation,
+                  let location = layout.controlLocation(id) else { return nil }
+            return (variable.declaration.name, location.formalName)
+        })
         try verifyRenderedInitialConjunction(source, predicates: initialPredicates,
-            expectedIntLiterals: expectedIntLiterals)
+            expectedIntLiterals: expectedIntLiterals,
+            expectedControlLocations: expectedControlLocations)
         try verifyRenderedActionDeclarations(source, declarations: actionDeclarations)
         return (source, evaluationFailureDeclarations, evaluationInvariant)
     }
@@ -2829,7 +2838,8 @@ func verifyRenderedVariableDeclaration(_ source: String, names: [String]) throws
 }
 
 func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
-                                      expectedIntLiterals: [String: Int] = [:]) throws {
+                                      expectedIntLiterals: [String: Int] = [:],
+                                      expectedControlLocations: [String: String] = [:]) throws {
     let lines = source.components(separatedBy: "\n")
     let starts = lines.indices.filter { lines[$0] == "Init ==" || lines[$0].hasPrefix("Init == ") }
     let expected = predicates.isEmpty
@@ -2848,6 +2858,9 @@ func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
     guard actual == expected,
           expectedIntLiterals.allSatisfy({ name, value in
               predicates.filter { $0 == "\(name) = \(TLAValue.int(value).description)" }.count == 1
+          }),
+          expectedControlLocations.allSatisfy({ name, location in
+              predicates.filter { $0 == "\(name) = \(TLAValue.string(location).description)" }.count == 1
           }) else {
         throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
             path: "tla.Init", expected: expected, actual: actual,

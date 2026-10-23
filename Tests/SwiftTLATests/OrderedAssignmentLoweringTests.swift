@@ -662,9 +662,10 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
-    @Test("An authored Int initializer retains its value and type through compilation")
-    func authoredIntInitializerRetainsCompiledValue() throws {
-        let source = try #require(SequentialCopyProofModel.spec.loweredSourceModel().variables.first {
+    @Test("Authored data and control initializers retain their identities through compilation")
+    func authoredInitializersRetainCompiledValues() throws {
+        let sourceModel = try SequentialCopyProofModel.spec.loweredSourceModel()
+        let source = try #require(sourceModel.variables.first {
             $0.name == "first"
         })
         let inputs = try SourceTypeResolver().resolve(in: SequentialCopyProofModel.spec.compile())
@@ -698,6 +699,86 @@ struct OrderedAssignmentLoweringTests {
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineAssignmentCheck.verifyResolvedInitialIntLiteral(lowered,
                 resolved: wrongType, at: path)
+        }
+
+        let control = try #require(sourceModel.variables.first { $0.origin == .programCounter })
+        let controlVariable = try #require(inputs.layout.variables.first {
+            $0.declaration.origin == .programCounter
+        })
+        let loweredControl = try #require(inputs.semantics.behavior.initializations.first {
+            $0.variable == controlVariable.id
+        }?.initialization)
+        let resolvedControl = try #require(program.behavior.initializations.first {
+            $0.variable == controlVariable.id
+        }?.initialization)
+        let controlPath = "variables.\(control.name).initialization"
+        try StraightLineAssignmentCheck.verifyInitialControlLocation(control.initialization,
+            lowered: loweredControl, layout: inputs.layout, at: controlPath)
+        try StraightLineAssignmentCheck.verifyResolvedInitialControlLocation(loweredControl,
+            resolved: resolvedControl, at: controlPath)
+        let wrongLocation = try #require(inputs.layout.controlLocations.first {
+            $0.sourceName == "finish"
+        })
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyInitialControlLocation(control.initialization,
+                lowered: .value(.controlLocation(wrongLocation.id)),
+                layout: inputs.layout, at: controlPath)
+        }
+        let wrongResolvedControl = CompiledVariableInitialization.value(.init(
+            operation: .controlLocation(wrongLocation.id), resultType: .controlLocation, children: []))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyResolvedInitialControlLocation(loweredControl,
+                resolved: wrongResolvedControl, at: controlPath)
+        }
+
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "SequentialCopyProofModel", program: program))
+        let nativeInitial = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        let slot = emitter.variable(controlVariable.id)
+        let bindings = program.behavior.initializations.map { "let \(emitter.variable($0.variable))" }
+        guard case .value(let initialControlExpression) = resolvedControl,
+              case .controlLocation(let initialControlID) = initialControlExpression.operation else {
+            throw InvalidShape.lowered
+        }
+        let expectedControl = [slot: initialControlID.ordinal]
+        try verifyGeneratedInitialBindings(nativeInitial, expected: bindings,
+            expectedLoops: [:], expectedCandidateSources: [:],
+            expectedControlLocations: expectedControl)
+        let originalBinding = "let \(slot): _ControlLocation = _ControlLocation.location\(initialControlID.ordinal)"
+        let wrongBinding = "let \(slot): _ControlLocation = _ControlLocation.location\(wrongLocation.id.ordinal)"
+        let wrongNative = nativeInitial.description.replacingOccurrences(of: originalBinding,
+            with: wrongBinding)
+        #expect(wrongNative != nativeInitial.description)
+        let wrongNativeDeclaration = try #require(Parser.parse(source: wrongNative)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedInitialBindings(wrongNativeDeclaration, expected: bindings,
+                expectedLoops: [:], expectedCandidateSources: [:],
+                expectedControlLocations: expectedControl)
+        }
+
+        let module = try program.renderModule().renderedModuleSource
+        let initialLines = module.components(separatedBy: "\n")
+        let start = try #require(initialLines.firstIndex(of: "Init =="))
+        let end = initialLines[(start + 1)...].firstIndex(of: "") ?? initialLines.count
+        let predicates = initialLines[(start + 1)..<end].map {
+            String($0.dropFirst("  /\\ ".count))
+        }
+        let expectedFormalControl = try #require(inputs.layout.controlLocations.first {
+            $0.id == initialControlID
+        }?.formalName)
+        try verifyRenderedInitialConjunction(module, predicates: predicates,
+            expectedControlLocations: [control.name: expectedFormalControl])
+        let initialClause = "\(control.name) = \(TLAValue.string(expectedFormalControl).description)"
+        let wrongClause = "\(control.name) = \(TLAValue.string(wrongLocation.formalName).description)"
+        let wrongModule = module.replacingOccurrences(of: initialClause, with: wrongClause)
+        #expect(wrongModule != module)
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyRenderedInitialConjunction(wrongModule, predicates: predicates.map {
+                $0.replacingOccurrences(of: initialClause, with: wrongClause)
+            }, expectedControlLocations: [control.name: expectedFormalControl])
         }
     }
 
