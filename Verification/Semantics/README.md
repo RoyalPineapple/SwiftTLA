@@ -1374,7 +1374,13 @@ wrong-field assignment is rejected by a negative control. In
 `SingleAssignment.tla`, `SourceConstructedStateIsExactlyGenerated` proves the
 independent complete-state construction rule, and
 `AppliedUpdateComposesWithStateConstruction` composes it with the existing
-update-application theorem. The macro also checks every emitted `Snapshot`
+update-application theorem. `EveryDistinctFinalWriteSequencePreservesCompleteDelta`
+proves that, for any finite sequence of distinct final state slots and complete
+source values, a generated merge history exists, every merge is accepted, and
+applying the result preserves the entire source delta. This generalizes the
+abstract write-and-apply rule beyond the two-slot fixture; it does not prove
+the Swift helper's implementation or the reads and control flow that produce
+those final writes. The macro also checks every emitted `Snapshot`
 declaration against the compiled hidden-field list: it permits exactly the
 public state and those hidden fields, with `Hashable` and `Sendable` synthesis
 and no custom identity implementation. A missing-hidden-field mutation is
