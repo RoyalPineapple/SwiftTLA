@@ -1387,9 +1387,13 @@ instruction targets. For the supported scalar `sourceAtomicSteps` slice,
 `StraightLineAssignmentCheck.verify` now rejects a duplicate final assignment
 or a different target set, so the source-to-lowered action supplies that
 premise; a same-value duplicate mutation is rejected. The compiled-action and
-emitted-output checks above remain separate links, and this certificate does
-not yet cover all accepted `#spec` algorithm forms or prove the Swift merge
-helper. The macro also checks every emitted `Snapshot`
+emitted-output checks above remain separate links. The same source-to-lowered
+check now runs on a control-free, single-step `#spec` `Algorithm` loop when its
+scalar assignment form is supported. `OrderedAssignmentLoweringTests` checks
+that authored route against its actual generated Swift successor and TLA+
+action, and rejects a duplicate final write. This certificate does not yet
+cover all accepted `#spec` algorithm forms or prove the Swift merge helper.
+The macro also checks every emitted `Snapshot`
 declaration against the compiled hidden-field list: it permits exactly the
 public state and those hidden fields, with `Hashable` and `Sendable` synthesis
 and no custom identity implementation. A missing-hidden-field mutation is
