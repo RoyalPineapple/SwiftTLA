@@ -1201,10 +1201,18 @@ rules to actual compiler outputs for this restricted action class, subject to
 the checkers' correctness and the Swift compiler/runtime. Conversions, other
 expressions, initialization, and selected temporal outcomes remain separate
 obligations; none of these checker implementations is formally verified. The
-native emitter additionally checks that each unparameterized action's emitted
-dispatch reaches its compiled visitor and that its formal call has the compiled
-label. Wrong-route and wrong-label mutations are rejected. Candidate
-enumeration now uses one generated lazy candidate visitor for both the public
+source and compiled gates now also carry a `Do` parameter as a symbolic value
+through ordered root assignments. For nonshadowing actions with a finite,
+nonempty literal Int/Boolean parameter domain, the compiled gate checks the
+exact domain members and binder references, and the resolution gate checks
+the inferred parameter type, resolved domain, and ordered body. Wrong bound
+reads, stale state reads, and changed domains are rejected. State-dependent
+domains, empty-domain type inference, other value types, and parameterized
+output argument encodings remain open; these verifier implementations remain
+trusted. The native emitter additionally checks that each unparameterized
+action's emitted dispatch reaches its compiled visitor and that its formal
+call has the compiled label. Wrong-route and wrong-label mutations are
+rejected. Candidate enumeration now uses one generated lazy candidate visitor for both the public
 list and native checking. Both delegations are checked. The visitor body is
 checked against the complete compiled action list, including the number and
 nesting of binding loops and the values passed to each public action argument. A
