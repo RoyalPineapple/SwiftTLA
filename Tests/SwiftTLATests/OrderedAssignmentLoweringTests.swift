@@ -347,7 +347,7 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
-    @Test("Nested addition preserves ordered operands and Int types through compilation")
+    @Test("Nested addition retains its compiled operands and guarded TLA+ action")
     func nestedAdditionPreservesCompiledExpression() throws {
         let expression = StateExpr.add(.variable("value"),
             .add(.variable("offset"), .value(.int(1))))
@@ -369,6 +369,9 @@ struct OrderedAssignmentLoweringTests {
         try StraightLineAssignmentCheck.verifyResolved(untyped, resolved: action,
             variableTypes: inputs.variableTypes, resolvedVariableTypes: program.variableTypes,
             resolvedBindingTypes: program.bindingTypes)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "OrderedAddition", program: program))
+        _ = try emitter.machineMembers()
 
         guard case .define(let binder, let sum, let body) = action.body,
               sum.operation == .add, sum.children.count == 2 else { throw InvalidShape.lowered }
@@ -401,6 +404,27 @@ struct OrderedAssignmentLoweringTests {
             Issue.record("A changed addition result type passed typed-resolution verification")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "actions[\(action.id.ordinal)].resolvedAssignments")
+        }
+
+        let module = try program.renderModule().renderedModuleSource
+        let header = "advance == "
+        let declarations = module.split(separator: "\n").filter { $0.hasPrefix(header) }
+        let rendered = String(try #require(declarations.count == 1
+            ? declarations[0].dropFirst(header.count) : nil))
+        try StraightLineRenderedActionCheck.verify(action.body, rendered: rendered,
+            layout: program.layout, binders: program.binderNames)
+        let wrongValue = rendered.replacingOccurrences(of: "(offset + 1)", with: "(offset - 1)")
+        #expect(wrongValue != rendered)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verify(action.body, rendered: wrongValue,
+                layout: program.layout, binders: program.binderNames)
+        }
+        let wrongGuard = rendered.replacingOccurrences(
+            of: "offset <= 1000000000", with: "offset <= 999999999")
+        #expect(wrongGuard != rendered)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verify(action.body, rendered: wrongGuard,
+                layout: program.layout, binders: program.binderNames)
         }
     }
 
