@@ -1873,15 +1873,15 @@ func verifyGeneratedActionWriteOutput(
     var conditionalPredicates: [Int: CompiledExpression] = [:]
     var guards: [(id: Int, predicate: CompiledExpression)] = []
     var definitions: [(id: Int, child: Int, value: CompiledExpression)] = []
-    var assignments: [Int: CompiledExpression] = [:]
+    var assignments: [Int: (variable: VariableID, value: CompiledExpression)] = [:]
     var nextID = 1
     var expectedWriteCount = 0
     while let (id, node) = pending.popLast() {
         switch node {
-        case .assign(_, let value):
+        case .assign(let variable, let value):
             expectedWriteCount += 1
             expectedChildren[id] = []
-            assignments[id] = value
+            assignments[id] = (variable, value)
         case .unchanged:
             expectedWriteCount += 1
             expectedChildren[id] = []
@@ -1954,6 +1954,42 @@ func verifyGeneratedActionWriteOutput(
                 return name
             case .value(.string(let value)):
                 return String(reflecting: value)
+            default: return nil
+            }
+        }
+        guard let left = operand(expression.children[0]),
+              let right = operand(expression.children[1]) else { return nil }
+        return "(\(left) \(symbol) \(right))"
+    }
+    func slotName(_ id: VariableID) -> String? {
+        guard let declaration = program.layout.variables.first(where: { $0.id == id })?.declaration else {
+            return nil
+        }
+        let name = String(declaration.name.unicodeScalars.map { scalar -> Character in
+            switch scalar.value {
+            case 65...90, 97...122, 48...57, 95: Character(String(scalar))
+            default: "_"
+            }
+        })
+        return "_value_\(name)_\(id.ordinal)"
+    }
+    func controlComparisonSource(_ expression: CompiledExpression) -> String? {
+        guard expression.resultType == .bool, expression.children.count == 2,
+              expression.children.allSatisfy({ $0.resultType == .controlLocation }) else { return nil }
+        let symbol: String
+        switch expression.operation {
+        case .equal: symbol = "=="
+        case .notEqual: symbol = "!="
+        default: return nil
+        }
+        func operand(_ node: CompiledExpression) -> String? {
+            switch node.operation {
+            case .stateVariable(let id) where program.layout.variables.contains(where: {
+                $0.id == id && $0.declaration.origin == .programCounter
+            }):
+                return slotName(id).map { "state.\($0)" }
+            case .controlLocation(let id) where program.layout.controlLocations.contains(where: { $0.id == id }):
+                return "_ControlLocation.location\(id.ordinal)"
             default: return nil
             }
         }
@@ -2035,6 +2071,10 @@ func verifyGeneratedActionWriteOutput(
             ["return", result, "}", "(", ")", ")"]
     }
     func scalarPredicateTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+        if let source = controlComparisonSource(expression) {
+            return Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                .map(\.text).filter { !$0.isEmpty }
+        }
         if let source = stringComparisonSource(expression, parameters: parameters) {
             return Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
                 .map(\.text).filter { !$0.isEmpty }
@@ -2268,6 +2308,11 @@ func verifyGeneratedActionWriteOutput(
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
                 .map(\.text).filter { !$0.isEmpty }
+        }
+        if case .controlLocation(let id) = expression.operation,
+           expression.resultType == .controlLocation, expression.children.isEmpty,
+           program.layout.controlLocations.contains(where: { $0.id == id }) {
+            return (tokens("_ControlLocation.location\(id.ordinal)"), actual)
         }
         func checkedSequenceSource(_ node: CompiledExpression) -> String? {
             guard case .array(let element) = node.resultType,
@@ -2624,8 +2669,14 @@ func verifyGeneratedActionWriteOutput(
             )
         }
         if let assignment = assignments[part.id], let bindings = parameters[part.id] {
-            let checkedValue = checkedValueTokens(assignment, parameters: bindings, actual: actualBody)
-            if checkedValue == nil, requireScalarLeaves || booleanPredicateNodes(assignment) != nil {
+            guard part.slot == slotName(assignment.variable) else {
+                throw invalid("native.action.write.\(part.id)",
+                    "the compiled assignment target", "a different generated state slot")
+            }
+            let checkedValue = checkedValueTokens(assignment.value, parameters: bindings, actual: actualBody)
+            let controlLiteral: Bool = if case .controlLocation = assignment.value.operation { true } else { false }
+            if checkedValue == nil, requireScalarLeaves || controlLiteral ||
+                booleanPredicateNodes(assignment.value) != nil {
                 throw invalid("native.action.write.\(part.id)",
                     "a complete generated scalar value or Boolean branch tree", "unreadable value expression")
             }

@@ -1,5 +1,7 @@
 import Foundation
 import Testing
+import SwiftParser
+import SwiftSyntax
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
@@ -407,6 +409,42 @@ struct OrderedAssignmentLoweringTests {
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineRenderedActionCheck.verify(action.body, rendered: wrongTarget,
                 layout: program.layout, binders: program.binderNames)
+        }
+
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "SequentialCopyProofModel", program: program))
+        let visitor = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let parts = try emitter.actionFunctions(action.body)
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
+            stateFields: emitter.stateMemberNames, parts: parts.writes)
+        let wrongSwiftGuard = visitor.description.replacingOccurrences(
+            of: " == _ControlLocation.", with: " != _ControlLocation.")
+        #expect(wrongSwiftGuard != visitor.description)
+        let wrongGuardVisitor = try #require(Parser.parse(source: wrongSwiftGuard)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionWriteOutput(wrongGuardVisitor, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: parts.writes)
+        }
+        let controlWrite = try #require(parts.writes.first {
+            $0.value.hasPrefix("_ControlLocation.location")
+        })
+        let wrongLocation = "_ControlLocation.location999"
+        let wrongSwiftWrite = visitor.description.replacingOccurrences(
+            of: "\(controlWrite.slot): \(controlWrite.value)",
+            with: "\(controlWrite.slot): \(wrongLocation)")
+        #expect(wrongSwiftWrite != visitor.description)
+        let wrongWriteVisitor = try #require(Parser.parse(source: wrongSwiftWrite)
+            .statements.first?.item.as(DeclSyntax.self))
+        let wrongParts = parts.writes.map { part in
+            (id: part.id, slot: part.slot,
+             value: part.id == controlWrite.id ? wrongLocation : part.value)
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionWriteOutput(wrongWriteVisitor, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: wrongParts)
         }
 
         let machine = try SequentialCopyProofModel.makeMachine()
