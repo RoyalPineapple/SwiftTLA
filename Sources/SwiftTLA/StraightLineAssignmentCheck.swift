@@ -1,8 +1,36 @@
 enum StraightLineAssignmentCheck {
-    private enum Term: Equatable {
+    private enum Term: Hashable {
         case prior(String)
         case parameter(String)
         case literal(TLAValue)
+    }
+
+    private struct Delta: Hashable {
+        let writes: [String: Term]
+
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.writes == rhs.writes }
+
+        func hash(into hasher: inout Hasher) {
+            for name in writes.keys.sorted() {
+                hasher.combine(name)
+                hasher.combine(writes[name])
+            }
+        }
+
+        func merging(_ other: Self) -> Self? {
+            var combined = writes
+            for (name, value) in other.writes {
+                if let prior = combined[name], prior != value { return nil }
+                combined[name] = value
+            }
+            return .init(writes: combined)
+        }
+    }
+
+    private enum NormalizationVisit {
+        case action(ActionExpr, [String: Term])
+        case conjunction
+        case alternative
     }
 
     private enum Visit {
@@ -19,6 +47,86 @@ enum StraightLineAssignmentCheck {
         case scan(CompiledActionExpr)
         case pair(CompiledActionExpr, CompiledActionExpr)
         case unbind(BinderID)
+    }
+
+    static func verifyNormalization(_ source: ActionExpr, normalized: ActionExpr,
+                                    stateRoots: Set<String>, at path: String) throws {
+        func value(_ expression: StateExpr, bindings: [String: Term]) -> Term? {
+            switch expression {
+            case .variable(let name):
+                if let bound = bindings[name] { return bound }
+                return stateRoots.contains(name) ? .prior(name) : nil
+            case .value(let literal):
+                switch literal {
+                case .int, .bool: return .literal(literal)
+                default: return nil
+                }
+            default: return nil
+            }
+        }
+
+        func outcomes(_ action: ActionExpr) -> [Delta]? {
+            var pending: [NormalizationVisit] = [.action(action, [:])]
+            var results: [[Delta]] = []
+            while let next = pending.popLast() {
+                switch next {
+                case .action(let node, let bindings):
+                    switch node {
+                    case .assign(.named(let name), let expression):
+                        guard stateRoots.contains(name), let term = value(expression, bindings: bindings) else {
+                            return nil
+                        }
+                        results.append([.init(writes: [name: term])])
+                    case .unchanged(.named(let name)):
+                        guard stateRoots.contains(name) else { return nil }
+                        results.append([.init(writes: [name: .prior(name)])])
+                    case .guard_(.value(.bool(let enabled))):
+                        results.append(enabled ? [.init(writes: [:])] : [])
+                    case .define(let name, let expression, let body):
+                        guard let term = value(expression, bindings: bindings) else { return nil }
+                        var scoped = bindings
+                        scoped[name] = term
+                        pending.append(.action(body, scoped))
+                    case .and(let left, let right):
+                        pending.append(.conjunction)
+                        pending.append(.action(right, bindings))
+                        pending.append(.action(left, bindings))
+                    case .or(let left, let right):
+                        pending.append(.alternative)
+                        pending.append(.action(right, bindings))
+                        pending.append(.action(left, bindings))
+                    default: return nil
+                    }
+                case .conjunction:
+                    let right = results.removeLast()
+                    let left = results.removeLast()
+                    results.append(left.flatMap { first in right.compactMap { first.merging($0) } })
+                case .alternative:
+                    let right = results.removeLast()
+                    let left = results.removeLast()
+                    results.append(left + right)
+                }
+            }
+            return results.count == 1 ? results[0] : nil
+        }
+
+        guard let sourceOutcomes = outcomes(source) else { return }
+        let expected = Set(sourceOutcomes.map { delta in
+            Delta(writes: stateRoots.reduce(into: delta.writes) { writes, name in
+                if writes[name] == nil { writes[name] = .prior(name) }
+            })
+        })
+        guard let actual = outcomes(normalized),
+              actual.allSatisfy({ Set($0.writes.keys) == stateRoots }),
+              Set(actual) == expected else {
+            throw CompilationDiagnostic(
+                code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: path,
+                expected: "the same complete successor relation and frame as the source scalar action",
+                actual: "action normalization changed a branch, assignment, or frame",
+                nextSafeAction: "Report this action-normalization failure."
+            )
+        }
     }
 
     static func verify(_ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>) throws {

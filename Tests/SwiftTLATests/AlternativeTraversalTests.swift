@@ -7,6 +7,40 @@ import Testing
 
 @Suite("Alternative traversal")
 struct AlternativeTraversalTests {
+    @Test("Normalization retains every scalar branch and completes its state frame")
+    func scalarNormalizationPreservesCompleteSuccessors() throws {
+        let variables = ["x", "y", "z"].map { NamedVar(name: $0, initial: .int(0)) }
+        let source = ActionExpr.and(
+            .or(.assign(.named("x"), .int(1)), .assign(.named("x"), .int(2))),
+            .assign(.named("y"), .int(3)))
+        let normalized = ActionNormalization.complete(source, variables: variables)
+        try StraightLineAssignmentCheck.verifyNormalization(source, normalized: normalized,
+            stateRoots: ["x", "y", "z"], at: "actions.pick.normalization")
+        _ = try TLASpec(name: "ScalarNormalization", variables: variables,
+            actions: [.init(name: "pick", body: source)], invariants: []).compile()
+
+        let bound = ActionExpr.define("chosen", .int(2),
+            .or(.assign(.named("x"), .variable("chosen")), .assign(.named("x"), .int(1))))
+        try StraightLineAssignmentCheck.verifyNormalization(bound,
+            normalized: ActionNormalization.complete(bound, variables: variables),
+            stateRoots: ["x", "y", "z"], at: "actions.bound.normalization")
+
+        let dropped = ActionNormalization.complete(
+            .and(.assign(.named("x"), .int(1)), .assign(.named("y"), .int(3))),
+            variables: variables)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyNormalization(source, normalized: dropped,
+                stateRoots: ["x", "y", "z"], at: "actions.pick.normalization")
+        }
+        let unframed = ActionExpr.or(
+            .and(.assign(.named("x"), .int(1)), .and(.assign(.named("y"), .int(3)), .unchanged(.named("z")))),
+            .and(.assign(.named("x"), .int(2)), .assign(.named("y"), .int(3))))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyNormalization(source, normalized: unframed,
+                stateRoots: ["x", "y", "z"], at: "actions.pick.normalization")
+        }
+    }
+
     @Test("Scalar alternatives retain both branches through compilation and TLA+ emission")
     func renderedAlternativesKeepBothBranches() throws {
         let specification = TLASpec(name: "ScalarAlternatives", variables: [
