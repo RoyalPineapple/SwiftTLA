@@ -8,7 +8,7 @@ enum StraightLineRenderedActionCheck {
     }
 
     private static let tokenPattern = try? NSRegularExpression(
-        pattern: #"\s+|==|/\\|[()]|=|[A-Za-z_][A-Za-z0-9_]*'?|-?[0-9]+"#)
+        pattern: #"\s+|==|/\\|\\/|[()]|=|[A-Za-z_][A-Za-z0-9_]*'?|-?[0-9]+"#)
 
     static func verify(_ action: CompiledActionExpr, rendered: String,
                        layout: CompiledLayout, binders: [BinderID: String]) throws {
@@ -64,6 +64,8 @@ enum StraightLineRenderedActionCheck {
                         .value(value), .token("IN"), .action(body), .token(")")])
                 case .and(let left, let right):
                     schedule([.token("("), .action(left), .token("/\\"), .action(right), .token(")")])
+                case .or(let left, let right):
+                    schedule([.token("("), .action(left), .token("\\/"), .action(right), .token(")")])
                 default: return
                 }
             }

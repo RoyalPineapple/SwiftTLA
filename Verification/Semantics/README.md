@@ -1201,7 +1201,10 @@ rules to actual compiler outputs for this restricted action class, subject to
 the checkers' correctness and the Swift compiler/runtime. Conversions, other
 expressions, initialization, and selected temporal outcomes remain separate
 obligations; none of these checker implementations is formally verified. The
-source and compiled gates now also carry a `Do` parameter as a symbolic value
+TLA+ action-body check also covers disjunctions of this total scalar grammar;
+changing an emitted alternative to conjunction is rejected. This checks the
+actual TLA+ union form, not failure aggregation or arbitrary `Either` bodies.
+The source and compiled gates now also carry a `Do` parameter as a symbolic value
 through ordered root assignments. For nonshadowing actions with a finite,
 nonempty literal Int/Boolean parameter domain, the compiled gate checks the
 exact domain members and binder references, and the resolution gate checks
