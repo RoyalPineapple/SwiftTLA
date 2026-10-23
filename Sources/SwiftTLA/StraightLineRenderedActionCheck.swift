@@ -8,13 +8,52 @@ enum StraightLineRenderedActionCheck {
     }
 
     private static let tokenPattern = try? NSRegularExpression(
-        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|/\\|\\/|[()]|=|[A-Za-z_][A-Za-z0-9_]*'?|-?[0-9]+"#)
+        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[()+*<>-]|="#)
 
     static func verify(_ action: CompiledActionExpr, rendered: String,
                        layout: CompiledLayout, binders: [BinderID: String]) throws {
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
             ($0.id, $0.declaration.name)
         })
+        let swiftIntMinimum = TLAValue.int(.min).description
+        let swiftIntMaximum = TLAValue.int(.max).description
+        // shortcut: only direct scalar addition trees are checked here; extend to other expression forms with their output rules.
+        func addition(_ expression: CompiledExpression) -> (value: String, guards: [String])? {
+            var pending = [(expression, false)]
+            var values: [String] = []
+            var guards: [String] = []
+            while let (node, expanded) = pending.popLast() {
+                if expanded {
+                    guard values.count >= 2 else { return nil }
+                    let rhs = values.removeLast()
+                    let lhs = values.removeLast()
+                    values.append("(\(lhs) + \(rhs))")
+                    let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000 /\\ \(rhs) >= -1000000000 /\\ \(rhs) <= 1000000000)"
+                    let exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(swiftIntMaximum) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(swiftIntMinimum) - (\(rhs)) ELSE TRUE)"
+                    guards.append("(IF \(small) THEN TRUE ELSE \(exact))")
+                    continue
+                }
+                switch node.operation {
+                case .add:
+                    guard node.resultType == .int, node.children.count == 2 else { return nil }
+                    pending.append((node, true))
+                    pending.append((node.children[1], false))
+                    pending.append((node.children[0], false))
+                case .stateVariable(let id):
+                    guard node.children.isEmpty, let name = variables[id] else { return nil }
+                    values.append(name)
+                case .boundValue(let id):
+                    guard node.children.isEmpty, let name = binders[id] else { return nil }
+                    values.append(name)
+                case .value(.integer(let value)):
+                    guard node.children.isEmpty else { return nil }
+                    values.append(TLAValue.int(value).description)
+                default: return nil
+                }
+            }
+            guard values.count == 1, !guards.isEmpty else { return nil }
+            return (values[0], guards)
+        }
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(
                 code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -52,6 +91,11 @@ enum StraightLineRenderedActionCheck {
                         .value(expression.children[1]), .token(")")])
                     continue
                 }
+                if case .add = expression.operation {
+                    guard let value = addition(expression), let rendered = tokens(value.value) else { return }
+                    expected.append(contentsOf: rendered)
+                    continue
+                }
                 guard expression.children.isEmpty else { return }
                 switch expression.operation {
                 case .stateVariable(let id):
@@ -72,7 +116,15 @@ enum StraightLineRenderedActionCheck {
                 switch node {
                 case .assign(let id, let value):
                     guard let name = variables[id] else { throw mismatch() }
-                    schedule([.token("\(name)'"), .token("="), .value(value)])
+                    let assignment: [Task] = [.token("\(name)'"), .token("="), .value(value)]
+                    if case .add = value.operation, let tree = addition(value) {
+                        let defined = tree.guards.count == 1 ? tree.guards[0]
+                            : "(\(tree.guards.joined(separator: " /\\ ")))"
+                        guard let guardTokens = tokens(defined) else { throw mismatch() }
+                        schedule([.token("("), .token("IF")] + guardTokens.map(Task.token)
+                            + [.token("THEN")] + assignment
+                            + [.token("ELSE"), .token("FALSE"), .token(")")])
+                    } else { schedule(assignment) }
                 case .unchanged(let id):
                     guard let name = variables[id] else { throw mismatch() }
                     schedule([.token("UNCHANGED"), .token(name)])
@@ -88,8 +140,16 @@ enum StraightLineRenderedActionCheck {
                     guard let name = binders[id], isFormalIdentifier(name),
                           !variables.values.contains(name),
                           usedBinderNames.insert(name).inserted else { return }
-                    schedule([.token("("), .token("LET"), .token(name), .token("=="),
-                        .value(value), .token("IN"), .action(body), .token(")")])
+                    let definition: [Task] = [.token("("), .token("LET"), .token(name),
+                        .token("=="), .value(value), .token("IN"), .action(body), .token(")")]
+                    if case .add = value.operation, let tree = addition(value) {
+                        let defined = tree.guards.count == 1 ? tree.guards[0]
+                            : "(\(tree.guards.joined(separator: " /\\ ")))"
+                        guard let guardTokens = tokens(defined) else { throw mismatch() }
+                        schedule([.token("("), .token("IF")] + guardTokens.map(Task.token)
+                            + [.token("THEN")] + definition
+                            + [.token("ELSE"), .token("FALSE"), .token(")")])
+                    } else { schedule(definition) }
                 case .and(let left, let right):
                     schedule([.token("("), .action(left), .token("/\\"), .action(right), .token(")")])
                 case .or(let left, let right):

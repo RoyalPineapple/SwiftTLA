@@ -1943,10 +1943,16 @@ translation for nested `Int` addition: it compares every operand and bound read
 in order, then requires the resolved tree to retain those operations, identities,
 and `Int` types. A changed addition operation, reversed operands, or wrong
 resolved result type fails the independent compiler check. This closes that
-lowering/resolution boundary for the checked subset, not the actual TLA+ emitter
-or the full accepted expression language. The existing generated-Swift arithmetic
-check and parameterized TLAPS addition theorem are separate links; no universal
-composition claim follows from them yet.
+lowering/resolution boundary for the checked subset, not the full accepted
+expression language. For the same subset, the TLA+ action-output checker now
+matches the actual nested addition tree and every emitted overflow guard against
+the compiled identities; changing a value or guard fails. The generated-Swift
+arithmetic checker is exercised on the same compiled action, and the
+parameterized TLAPS theorem supplies the guard's semantic rule. The separately
+emitted overflow-failure predicates, payloads, and aggregate checking result
+remain unlinked, so this is not yet a complete end-to-end proof slice. The
+independent output checker and shared `TLAValue` integer-literal serialization
+remain project-owned trusted components until their own correctness is proved.
 
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
