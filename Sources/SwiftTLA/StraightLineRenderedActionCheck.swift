@@ -102,7 +102,7 @@ enum StraightLineRenderedActionCheck {
         }
         guard behavior.actions.count == layout.actions.count else { throw mismatch() }
         let included = layout.actions.indices.filter { !layout.actions[$0].declaration.name.isEmpty }
-        guard !included.isEmpty, included.contains(where: { !behavior.actions[$0].bindings.isEmpty }) else { return }
+        guard !layout.variables.isEmpty || !included.isEmpty else { return }
         let enabled = Set(behavior.enabledActionIndices)
         func values(_ binding: CompiledActionBinding) -> [CompiledValue]? {
             guard case .set(let element) = binding.domain.resultType,

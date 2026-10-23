@@ -124,6 +124,13 @@ struct CompiledSpecificationRendererTests {
         #expect(rendered.contains("advance_step__2 =="))
         #expect(rendered.contains("CanAdvance == ENABLED advance_step\n"))
         #expect(rendered.contains("CanAlsoAdvance == ENABLED advance_step__2\n"))
+        let withoutSecondAction = rendered.replacingOccurrences(of: "  \\/ advance_step__2\n", with: "")
+        #expect(withoutSecondAction != rendered)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyFiniteInvocations(compilation.semantics.behavior,
+                layout: compilation.layout, binders: compilation.bindings.binders,
+                module: withoutSecondAction)
+        }
     }
 
     @Test("Action dependencies are declared before their enabledness consumers")

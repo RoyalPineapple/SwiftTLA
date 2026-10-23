@@ -1217,12 +1217,12 @@ missing candidate, bound-route substitution, wrong formal value, and changed
 TLA+ binder are rejected. State-dependent domains, hidden singleton arguments,
 empty-domain type inference, other value types, and other output argument
 encodings remain open; these verifier implementations remain trusted.
-For modules with at least one bound action, where every participating binding
-is a finite Int/Boolean literal or constant set, the completed TLA+ call aliases,
+For modules where every participating binding is a finite Int/Boolean literal
+or constant set, including state-bearing modules with no bound actions, the completed TLA+ call aliases,
 constant-set quantifiers, and full `Next` disjunction are checked against the
 compiled domains independently of the renderer's invocation construction.
 A changed bound domain or omitted `Next` call is rejected. State-dependent
-domains, other value types, and unbound-only modules still lack this invocation link;
+domains and other value types still lack this invocation link;
 initialization, failures, and temporal claims also remain separate obligations,
 so this is not a complete-machine theorem.
 The native emitter additionally checks that each unparameterized
