@@ -294,6 +294,8 @@ enum StraightLineAssignmentCheck {
 
     static func verify(_ step: AtomicStep, lowered: ActionExpr?, stateRoots: Set<String>,
                        control: (entry: ControlLocationReference, next: ControlLocationReference)? = nil) throws {
+        if try verifySequentialIntAssignments(step, lowered: lowered, stateRoots: stateRoots,
+                                              control: control) { return }
         let parameterNames = step.bindings.map(\.name)
         let parameters = Set(parameterNames)
         guard parameters.count == parameterNames.count,
@@ -390,6 +392,92 @@ enum StraightLineAssignmentCheck {
               stateRoots.allSatisfy({ (writes[$0] ?? .prior($0)) == (source[$0] ?? .prior($0)) }) else {
             throw mismatch()
         }
+    }
+
+    private static func verifySequentialIntAssignments(
+        _ step: AtomicStep, lowered: ActionExpr?, stateRoots: Set<String>,
+        control: (entry: ControlLocationReference, next: ControlLocationReference)?
+    ) throws -> Bool {
+        guard control != nil, step.bindings.isEmpty, !step.model.statements.isEmpty else { return false }
+        var source: [(root: String, expression: StateExpr)] = []
+        for statement in step.model.statements {
+            guard case .set(.root(let root), let expression) = statement,
+                  stateRoots.contains(root) else { return false }
+            var pending = [expression]
+            while let value = pending.popLast() {
+                switch value {
+                case .variable(let name): guard stateRoots.contains(name) else { return false }
+                case .value(.int): break
+                case .add(let lhs, let rhs): pending.append(rhs); pending.append(lhs)
+                default: return false
+                }
+            }
+            source.append((root, expression))
+        }
+        func mismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "actions.\(step.model.label.name).orderedAssignments",
+                expected: "ordered Int captures, complete root writes, and exact control transfer",
+                actual: "the lowered action changes an ordered value, write, or control location",
+                nextSafeAction: "Report this sequential assignment lowering failure.")
+        }
+        guard let lowered, let control else { throw mismatch() }
+        var current = Dictionary(uniqueKeysWithValues: stateRoots.map { ($0, $0) })
+        func matches(_ authored: StateExpr, _ actual: StateExpr) -> Bool {
+            var pending = [(authored, actual)]
+            while let (authored, actual) = pending.popLast() {
+                switch (authored, actual) {
+                case (.variable(let root), .variable(let name)):
+                    guard current[root] == name else { return false }
+                case (.value(.int(let expected)), .value(.int(let found))):
+                    guard expected == found else { return false }
+                case (.add(let left, let right), .add(let actualLeft, let actualRight)):
+                    pending.append((right, actualRight))
+                    pending.append((left, actualLeft))
+                default: return false
+                }
+            }
+            return true
+        }
+        var captured = 0
+        var captureNames: Set<String> = []
+        var guardSeen = false
+        var controlWriteSeen = false
+        var writes: [String: String] = [:]
+        var pending = [lowered]
+        while let action = pending.popLast() {
+            switch action {
+            case .and(let left, let right):
+                pending.append(right)
+                pending.append(left)
+            case .guard_(.equal(.programCounter, .controlLocation(let location))):
+                guard !guardSeen, captured == 0, location == control.entry else { throw mismatch() }
+                guardSeen = true
+            case .guard_(.value(.bool(true))): break
+            case .define(let name, let value, let body):
+                guard guardSeen, captured < source.count, writes.isEmpty,
+                      !stateRoots.contains(name), captureNames.insert(name).inserted,
+                      matches(source[captured].expression, value) else { throw mismatch() }
+                current[source[captured].root] = name
+                captured += 1
+                pending.append(body)
+            case .assign(.programCounter, .controlLocation(let location)):
+                guard captured == source.count, !controlWriteSeen,
+                      location == control.next else { throw mismatch() }
+                controlWriteSeen = true
+            case .assign(.named(let root), .variable(let value)):
+                guard captured == source.count, stateRoots.contains(root),
+                      writes.updateValue(value, forKey: root) == nil else { throw mismatch() }
+            case .unchanged(.named(let root)):
+                guard captured == source.count, stateRoots.contains(root),
+                      writes.updateValue(root, forKey: root) == nil else { throw mismatch() }
+            default: throw mismatch()
+            }
+        }
+        guard guardSeen, controlWriteSeen, captured == source.count,
+              writes.count == stateRoots.count,
+              stateRoots.allSatisfy({ writes[$0] == current[$0] }) else { throw mismatch() }
+        return true
     }
 
     private static func verifySingleAssignmentCapture(

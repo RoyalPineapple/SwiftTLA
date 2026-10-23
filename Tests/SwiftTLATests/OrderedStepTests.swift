@@ -195,7 +195,7 @@ import SwiftSyntax
                 candidates: candidatePlans, configurationArguments: "")
             Issue.record("Generated checking ignored every action candidate")
         } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.path == "native.action.enumeration")
+            #expect(diagnostic.path == "native.action.failureRouting")
         }
         let sourceIndex = try #require(members.firstIndex {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitActionCandidates"
