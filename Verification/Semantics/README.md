@@ -1823,13 +1823,14 @@ with a distinct compatible update changes the graph. A `#spec` regression with
 two `Either` statements retains both generated Swift successors while also
 reporting a division failure. The production lowerers now independently check
 `ActionNormalization.complete` for total scalar actions made of named Int/Bool
-literal or prior-state assignments, named `UNCHANGED`, literal Boolean guards,
-scalar `define`, conjunction, and alternatives. The checker compares the full
-symbolic successor set and requires an explicit frame for every declared
-variable; negative controls remove a branch and a frame. This connects those
-specific normalized actions to the distribution rule, but is not itself
-machine-checked, and skips unsupported expression forms. It does not establish
-that every generated TLA+ action has the same complete relation, or that
+literal or prior-state assignments, named `UNCHANGED`, literal or prior-state
+Boolean guards and conditionals, scalar `define`, conjunction, and alternatives.
+The checker compares the full symbolic successor set with Boolean path
+conditions and requires an explicit frame for every declared variable; negative
+controls remove an alternative or frame, swap conditional arms, and drop a
+guard. This connects the supported alternatives to the distribution rule, but
+the checker is not itself machine-checked and skips unsupported expressions.
+It does not establish parity of every generated TLA+ action, or prove that
 distribution preserves first-failure order and checking effects. A second negative control
 proves that eager evaluation of both alternatives before the right action can
 report a later alternative's failure where branchwise evaluation reports the

@@ -7,6 +7,40 @@ import Testing
 
 @Suite("Alternative traversal")
 struct AlternativeTraversalTests {
+    @Test("Normalization preserves state-dependent branch and guard conditions")
+    func scalarNormalizationPreservesConditions() throws {
+        let variables = [
+            NamedVar(name: "enabled", initial: .bool(false)),
+            NamedVar(name: "x", initial: .int(0)),
+        ]
+        let roots: Set<String> = ["enabled", "x"]
+        let conditional = ActionExpr.ifElse(.variable("enabled"),
+            .assign(.named("x"), .int(1)), .assign(.named("x"), .int(2)))
+        let guarded = ActionExpr.and(.guard_(.variable("enabled")), .assign(.named("x"), .int(3)))
+        _ = try TLASpec(name: "ConditionalNormalization", variables: variables,
+            actions: [.init(name: "choose", body: conditional), .init(name: "gated", body: guarded)],
+            invariants: []).compile()
+        try StraightLineAssignmentCheck.verifyNormalization(conditional,
+            normalized: ActionNormalization.complete(conditional, variables: variables),
+            stateRoots: roots, at: "actions.choose.normalization")
+        try StraightLineAssignmentCheck.verifyNormalization(guarded,
+            normalized: ActionNormalization.complete(guarded, variables: variables),
+            stateRoots: roots, at: "actions.gated.normalization")
+
+        let reversed = ActionExpr.ifElse(.variable("enabled"),
+            .assign(.named("x"), .int(2)), .assign(.named("x"), .int(1)))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyNormalization(conditional,
+                normalized: ActionNormalization.complete(reversed, variables: variables),
+                stateRoots: roots, at: "actions.choose.normalization")
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyNormalization(guarded,
+                normalized: ActionNormalization.complete(.assign(.named("x"), .int(3)),
+                    variables: variables), stateRoots: roots, at: "actions.gated.normalization")
+        }
+    }
+
     @Test("Normalization retains every scalar branch and completes its state frame")
     func scalarNormalizationPreservesCompleteSuccessors() throws {
         let variables = ["x", "y", "z"].map { NamedVar(name: $0, initial: .int(0)) }
