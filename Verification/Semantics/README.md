@@ -1821,10 +1821,16 @@ alternatives preserves every compatible complete update and its labeled edge,
 for arbitrary update sets. Its negative control proves that dropping a branch
 with a distinct compatible update changes the graph. A `#spec` regression with
 two `Either` statements retains both generated Swift successors while also
-reporting a division failure. These facts do not yet prove that
-`ActionNormalization.complete` implements the general distribution rule, that
-the generated TLA+ action has the same complete relation, or that distribution
-preserves first-failure order and checking effects. A second negative control
+reporting a division failure. The production lowerers now independently check
+`ActionNormalization.complete` for total scalar actions made of named Int/Bool
+literal or prior-state assignments, named `UNCHANGED`, literal Boolean guards,
+scalar `define`, conjunction, and alternatives. The checker compares the full
+symbolic successor set and requires an explicit frame for every declared
+variable; negative controls remove a branch and a frame. This connects those
+specific normalized actions to the distribution rule, but is not itself
+machine-checked, and skips unsupported expression forms. It does not establish
+that every generated TLA+ action has the same complete relation, or that
+distribution preserves first-failure order and checking effects. A second negative control
 proves that eager evaluation of both alternatives before the right action can
 report a later alternative's failure where branchwise evaluation reports the
 right action's failure first. The source rule must specify branchwise outcome

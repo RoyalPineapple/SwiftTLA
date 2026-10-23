@@ -152,16 +152,18 @@ extension TLASpec {
       }
     }
 
-    actions = actions.map { action in
+    actions = try actions.map { action in
       let body: ActionExpr
       if case .existsAction(let binder, let domain, let memberBody) = action.body {
         body = .existsAction(
           binder,
           domain,
-          ActionNormalization.complete(memberBody, variables: variables)
+          try ActionNormalization.checkedComplete(memberBody, variables: variables,
+            at: "actions.\(action.name).normalization")
         )
       } else {
-        body = ActionNormalization.complete(action.body, variables: variables)
+        body = try ActionNormalization.checkedComplete(action.body, variables: variables,
+          at: "actions.\(action.name).normalization")
       }
       return NamedAction(
         name: action.name,
