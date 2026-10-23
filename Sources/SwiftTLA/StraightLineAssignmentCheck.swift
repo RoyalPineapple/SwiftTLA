@@ -416,6 +416,8 @@ enum StraightLineAssignmentCheck {
                 guard simple(predicate, reads: &readNames) else { return }
             case .assign(.named, let expression):
                 guard simple(expression, reads: &readNames) else { return }
+            case .assign(.programCounter, let expression):
+                guard simple(expression, reads: &readNames) else { return }
             case .unchanged(.named):
                 break
             case .ifElse(let predicate, let yes, let no):
@@ -450,6 +452,21 @@ enum StraightLineAssignmentCheck {
                     guard compiled.operation == .add, compiled.children.count == 2 else { return false }
                     pending.append((right, compiled.children[1]))
                     pending.append((left, compiled.children[0]))
+                case .equal(let left, let right):
+                    guard compiled.operation == .equal, compiled.children.count == 2 else { return false }
+                    pending.append((right, compiled.children[1]))
+                    pending.append((left, compiled.children[0]))
+                case .programCounter:
+                    guard compiled.children.isEmpty, let id = layout.programCounterID(),
+                          compiled.operation == .stateVariable(id) else { return false }
+                case .controlLocation(let reference):
+                    let matches = layout.controlLocations.filter { location in
+                        location.sourceName == reference.sourceName
+                            && (reference.owner.map { $0 == location.owner } ?? true)
+                    }
+                    guard compiled.children.isEmpty, matches.count == 1,
+                          let id = matches.first?.id,
+                          compiled.operation == .controlLocation(id) else { return false }
                 case .variable(let name):
                     guard compiled.children.isEmpty else { return false }
                     if let binder = bindings[name] {
@@ -510,6 +527,9 @@ enum StraightLineAssignmentCheck {
                     guard stateIDs[name] == id, matching(expression, value, bindings: bindings) else {
                         throw mismatch()
                     }
+                case (.assign(.programCounter, let expression), .assign(let id, let value)):
+                    guard id == layout.programCounterID(),
+                          matching(expression, value, bindings: bindings) else { throw mismatch() }
                 case (.unchanged(.named(let name)), .unchanged(let id)):
                     guard stateIDs[name] == id else { throw mismatch() }
                 default:
@@ -528,6 +548,10 @@ enum StraightLineAssignmentCheck {
             case .add(let left, let right):
                 pending.append(right)
                 pending.append(left)
+            case .equal(let left, let right):
+                pending.append(right)
+                pending.append(left)
+            case .programCounter, .controlLocation: break
             default: return false
             }
         }
