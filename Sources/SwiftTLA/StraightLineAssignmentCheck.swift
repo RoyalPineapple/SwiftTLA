@@ -5,16 +5,30 @@ enum StraightLineAssignmentCheck {
         case literal(TLAValue)
     }
 
+    private struct Requirement: Hashable {
+        let term: Term
+        let value: Bool
+    }
+
     private struct Delta: Hashable {
         let writes: [String: Term]
+        let requirements: Set<Requirement>
 
-        static func == (lhs: Self, rhs: Self) -> Bool { lhs.writes == rhs.writes }
+        init(writes: [String: Term], requirements: Set<Requirement> = []) {
+            self.writes = writes
+            self.requirements = requirements
+        }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.writes == rhs.writes && lhs.requirements == rhs.requirements
+        }
 
         func hash(into hasher: inout Hasher) {
             for name in writes.keys.sorted() {
                 hasher.combine(name)
                 hasher.combine(writes[name])
             }
+            hasher.combine(requirements)
         }
 
         func merging(_ other: Self) -> Self? {
@@ -23,7 +37,14 @@ enum StraightLineAssignmentCheck {
                 if let prior = combined[name], prior != value { return nil }
                 combined[name] = value
             }
-            return .init(writes: combined)
+            for requirement in other.requirements where requirements.contains(
+                .init(term: requirement.term, value: !requirement.value)) { return nil }
+            return .init(writes: combined, requirements: requirements.union(other.requirements))
+        }
+
+        func requiring(_ term: Term, value: Bool) -> Self? {
+            if case .literal(.bool(let literal)) = term { return literal == value ? self : nil }
+            return merging(.init(writes: [:], requirements: [.init(term: term, value: value)]))
         }
     }
 
@@ -31,6 +52,7 @@ enum StraightLineAssignmentCheck {
         case action(ActionExpr, [String: Term])
         case conjunction
         case alternative
+        case conditional(Term)
     }
 
     private enum Visit {
@@ -65,6 +87,14 @@ enum StraightLineAssignmentCheck {
             }
         }
 
+        func boolean(_ expression: StateExpr, bindings: [String: Term]) -> Term? {
+            guard let term = value(expression, bindings: bindings) else { return nil }
+            switch term {
+            case .prior, .literal(.bool): return term
+            default: return nil
+            }
+        }
+
         func outcomes(_ action: ActionExpr) -> [Delta]? {
             var pending: [NormalizationVisit] = [.action(action, [:])]
             var results: [[Delta]] = []
@@ -80,8 +110,9 @@ enum StraightLineAssignmentCheck {
                     case .unchanged(.named(let name)):
                         guard stateRoots.contains(name) else { return nil }
                         results.append([.init(writes: [name: .prior(name)])])
-                    case .guard_(.value(.bool(let enabled))):
-                        results.append(enabled ? [.init(writes: [:])] : [])
+                    case .guard_(let predicate):
+                        guard let term = boolean(predicate, bindings: bindings) else { return nil }
+                        results.append(Delta(writes: [:]).requiring(term, value: true).map { [$0] } ?? [])
                     case .define(let name, let expression, let body):
                         guard let term = value(expression, bindings: bindings) else { return nil }
                         var scoped = bindings
@@ -95,6 +126,11 @@ enum StraightLineAssignmentCheck {
                         pending.append(.alternative)
                         pending.append(.action(right, bindings))
                         pending.append(.action(left, bindings))
+                    case .ifElse(let predicate, let yes, let no):
+                        guard let term = boolean(predicate, bindings: bindings) else { return nil }
+                        pending.append(.conditional(term))
+                        pending.append(.action(no, bindings))
+                        pending.append(.action(yes, bindings))
                     default: return nil
                     }
                 case .conjunction:
@@ -105,6 +141,11 @@ enum StraightLineAssignmentCheck {
                     let right = results.removeLast()
                     let left = results.removeLast()
                     results.append(left + right)
+                case .conditional(let term):
+                    let no = results.removeLast()
+                    let yes = results.removeLast()
+                    results.append(yes.compactMap { $0.requiring(term, value: true) } +
+                        no.compactMap { $0.requiring(term, value: false) })
                 }
             }
             return results.count == 1 ? results[0] : nil
@@ -114,7 +155,7 @@ enum StraightLineAssignmentCheck {
         let expected = Set(sourceOutcomes.map { delta in
             Delta(writes: stateRoots.reduce(into: delta.writes) { writes, name in
                 if writes[name] == nil { writes[name] = .prior(name) }
-            })
+            }, requirements: delta.requirements)
         })
         guard let actual = outcomes(normalized),
               actual.allSatisfy({ Set($0.writes.keys) == stateRoots }),
