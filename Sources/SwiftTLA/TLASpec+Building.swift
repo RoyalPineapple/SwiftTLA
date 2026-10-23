@@ -139,6 +139,17 @@ extension TLASpec {
           formalOperatorDefinitions: formalOperatorDefinitions,
           enumerateInitialControl: !initialInvariantSelections.isEmpty
         )
+        if algorithm.model.processes.isEmpty,
+           algorithm.model.procedures.isEmpty,
+           let sourceStep = algorithm.model.sequentialSteps.first,
+           algorithm.model.sequentialSteps.count == 1,
+           let condition = sourceStep.loopCondition,
+           case .value(.bool(true)) = condition,
+           lowered.actions.count == 1,
+           !lowered.variables.contains(where: { $0.origin == .programCounter }) {
+          try StraightLineAssignmentCheck.verify(AtomicStep(model: sourceStep),
+            lowered: lowered.actions[0].body, stateRoots: Set(lowered.variables.map(\.name)))
+        }
         authoredPlusCalAlgorithmPlan = authoredPlusCalPlan
         variables += lowered.variables
         actions += lowered.actions

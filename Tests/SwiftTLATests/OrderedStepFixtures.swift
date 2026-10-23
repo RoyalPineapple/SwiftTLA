@@ -2,6 +2,25 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
+struct OrderedAlgorithmCopyProofModel {
+    enum Step: String, CaseIterable { case copy }
+
+    static var spec: TLASpec {
+        #spec("OrderedAlgorithmCopyProofModel") {
+            let algorithm = Algorithm(label: "OrderedAlgorithmCopyProofModel", scoped: { scope in
+                let first = scope.sharedVar(_name: "first", initial: 1)
+                let second = scope.sharedVar(_name: "second", initial: 2)
+                While(Step.copy, true) {
+                    Assign(first, to: second)
+                    Assign(second, to: first)
+                }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
 struct OrderedCopyModel {
     enum Step: String, CaseIterable { case copy, repeatWrites }
 

@@ -345,6 +345,42 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
+    @Test("A control-free #spec loop preserves ordered source writes through both emitters")
+    func authoredLoopPreservesOrderedWrites() throws {
+        let specification = OrderedAlgorithmCopyProofModel.spec
+        let sourceStep = try #require(specification.sourceAlgorithms.first?.model.sequentialSteps.first)
+        let roots = ["first", "second"]
+        let expected = try sourceResult(sourceStep.statements, roots: roots)
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let action = try #require(program.behavior.actions.first)
+        #expect(try compiledResult(action.body, program: program) == expected)
+
+        let module = try program.renderModule().renderedModuleSource
+        let header = "copy == "
+        let declarations = module.split(separator: "\n").filter { $0.hasPrefix(header) }
+        let declaration = try #require(declarations.count == 1 ? declarations[0].dropFirst(header.count) : nil)
+        try StraightLineRenderedActionCheck.verify(action.body, rendered: String(declaration),
+            layout: program.layout, binders: program.binderNames)
+        #expect(try renderedResult(String(declaration), roots: roots) == expected)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "OrderedAlgorithmCopyProofModel", program: program))
+        _ = try emitter.machineMembers()
+
+        let machine = try OrderedAlgorithmCopyProofModel.makeMachine()
+        #expect(machine.state.first == 1 && machine.state.second == 2)
+        let successors = try machine.successors(for: .copy)
+        #expect(successors.count == 1)
+        #expect(successors.first?.state.first == 2)
+        #expect(successors.first?.state.second == 2)
+
+        let lowered = try #require(specification.loweredSourceModel().actions.first)
+        let duplicate = ActionExpr.and(lowered.body, .assign(.named("first"), .variable("second")))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verify(AtomicStep(model: sourceStep),
+                lowered: duplicate, stateRoots: Set(roots))
+        }
+    }
+
     @Test("Bound action values retain ordered reads through source lowering")
     func boundValueFeedsLaterAssignment() throws {
         let variables = [NamedVar(name: "value", initial: .int(0)),
