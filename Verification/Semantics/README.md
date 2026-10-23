@@ -1402,6 +1402,10 @@ equality guard and a control-location write, and rejects either wrong location
 in the emitted action. `SequentialCopyProofModel` also checks the generated
 Swift machine's complete formal projection through `copy -> finish`. This
 links compiled control expressions to the actual TLA+ output for that form.
+The native visitor checker now derives the program-counter slot and location
+from the compiled layout and checks the actual emitted Swift guard and literal
+control write. Mutations to either are rejected even when the emitter's write
+metadata agrees with the bad output.
 The source-to-lowered checker now checks the exact source variable inventory,
 initial control choice, and labeled step inventory for sequential algorithms.
 For each plain `Do` whose statements are root copies or literals, it also
@@ -1409,8 +1413,9 @@ requires the exact entry guard, one next-location write, and the complete
 ordered user-variable result. Mutations to the initial control, action label,
 and next location are rejected. Other accepted statement and expression
 forms, the emitted initial-state set and termination behavior, and a general
-proof of the Swift visitor remain open. The output checker's parsing and Swift
-compiler/runtime remain trusted.
+proof of every Swift visitor form remain open. The output checkers' parsing,
+the project-owned update/visitor kernel, and documented Swift compiler/runtime
+behavior remain trusted for this slice.
 The macro also checks every emitted `Snapshot`
 declaration against the compiled hidden-field list: it permits exactly the
 public state and those hidden fields, with `Hashable` and `Sendable` synthesis
