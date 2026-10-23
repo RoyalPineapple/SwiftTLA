@@ -150,6 +150,10 @@ extension TLASpec {
           try StraightLineAssignmentCheck.verify(AtomicStep(model: sourceStep),
             lowered: lowered.actions[0].body, stateRoots: Set(lowered.variables.map(\.name)))
         }
+        if algorithm.model.processes.isEmpty, algorithm.model.procedures.isEmpty {
+          try StraightLineAssignmentCheck.verifySequential(algorithm.model, lowered: lowered,
+            enumerateInitialControl: !initialInvariantSelections.isEmpty)
+        }
         authoredPlusCalAlgorithmPlan = authoredPlusCalPlan
         variables += lowered.variables
         actions += lowered.actions

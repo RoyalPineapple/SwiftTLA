@@ -21,6 +21,29 @@ struct OrderedAlgorithmCopyProofModel {
 }
 
 @TLAModel
+struct SequentialCopyProofModel {
+    enum Step: String, CaseIterable { case copy, finish }
+
+    static var spec: TLASpec {
+        #spec("SequentialCopyProofModel") {
+            let algorithm = Algorithm(label: "SequentialCopyProofModel", scoped: { scope in
+                let first = scope.sharedVar(_name: "first", initial: 1)
+                let second = scope.sharedVar(_name: "second", initial: 2)
+                Do(Step.copy) {
+                    Assign(first, to: second)
+                    Assign(second, to: first)
+                }
+                Do(Step.finish) {
+                    Assign(first, to: 1)
+                    Assign(second, to: 2)
+                }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
 struct OrderedCopyModel {
     enum Step: String, CaseIterable { case copy, repeatWrites }
 

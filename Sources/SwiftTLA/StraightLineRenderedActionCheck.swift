@@ -8,7 +8,7 @@ enum StraightLineRenderedActionCheck {
     }
 
     private static let tokenPattern = try? NSRegularExpression(
-        pattern: #"\s+|==|/\\|\\/|[()]|=|[A-Za-z_][A-Za-z0-9_]*'?|-?[0-9]+"#)
+        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|/\\|\\/|[()]|=|[A-Za-z_][A-Za-z0-9_]*'?|-?[0-9]+"#)
 
     static func verify(_ action: CompiledActionExpr, rendered: String,
                        layout: CompiledLayout, binders: [BinderID: String]) throws {
@@ -28,7 +28,15 @@ enum StraightLineRenderedActionCheck {
         var usedBinderNames: Set<String> = []
         var pending: [Task] = [.action(action)]
         func schedule(_ tasks: [Task]) { pending.append(contentsOf: tasks.reversed()) }
+        func controlledEquality(_ expression: CompiledExpression) -> Bool {
+            guard case .equal = expression.operation, expression.children.count == 2,
+                  case .stateVariable(let variable) = expression.children[0].operation,
+                  variable == layout.programCounterID(),
+                  case .controlLocation = expression.children[1].operation else { return false }
+            return true
+        }
         func directBoolean(_ expression: CompiledExpression) -> Bool {
+            if controlledEquality(expression) { return true }
             guard expression.children.isEmpty else { return false }
             switch expression.operation {
             case .stateVariable, .boundValue, .value(.boolean): return true
@@ -39,6 +47,11 @@ enum StraightLineRenderedActionCheck {
             switch task {
             case .token(let token): expected.append(token)
             case .value(let expression):
+                if controlledEquality(expression) {
+                    schedule([.token("("), .value(expression.children[0]), .token("="),
+                        .value(expression.children[1]), .token(")")])
+                    continue
+                }
                 guard expression.children.isEmpty else { return }
                 switch expression.operation {
                 case .stateVariable(let id):
@@ -49,6 +62,10 @@ enum StraightLineRenderedActionCheck {
                     expected.append(name)
                 case .value(.integer(let value)): expected.append(String(value))
                 case .value(.boolean(let value)): expected.append(value ? "TRUE" : "FALSE")
+                case .controlLocation(let id):
+                    guard let name = layout.controlLocation(id)?.formalName,
+                          isFormalIdentifier(name) else { return }
+                    expected.append("\"\(name)\"")
                 default: return
                 }
             case .action(let node):
