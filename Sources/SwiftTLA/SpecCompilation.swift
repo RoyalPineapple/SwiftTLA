@@ -2212,6 +2212,8 @@ private extension CompiledModuleMetadata {
                 named: rendered.renderedName, body: rendered.renderedBody,
                 module: directOutput.source, layout: layout, binders: renderer.bindings.binders)
         }
+        try StraightLineRenderedActionCheck.verifyFiniteInvocations(behavior,
+            layout: layout, binders: renderer.bindings.binders, module: directOutput.source)
         return RenderedModule(
             renderedModuleSource: directOutput.source,
             evaluationFailureDeclarations: directOutput.evaluationFailureDeclarations,

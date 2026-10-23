@@ -6,6 +6,35 @@ import SwiftSyntax
 @testable import SwiftTLAPlugin
 
 struct TypedActionParameterTests {
+    @Test("Finite bound action calls form the complete generated TLA transition relation")
+    func finiteBoundCallsRejectMissingOrChangedInvocation() throws {
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: BoundOrderedAssignment.spec.compile()))
+        let module = try program.renderModule().renderedModuleSource
+        try StraightLineRenderedActionCheck.verifyFiniteInvocations(program.behavior,
+            layout: program.layout, binders: program.binderNames, module: module)
+
+        let wrongDomain = module.replacingOccurrences(of: "member \\in {1, 2}",
+            with: "member \\in {1}")
+        #expect(wrongDomain != module)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyFiniteInvocations(program.behavior,
+                layout: program.layout, binders: program.binderNames, module: wrongDomain)
+        }
+
+        let wrongNext = module.replacingOccurrences(
+            of: "Next == (\\E member \\in {1, 2}: select(member))",
+            with: "Next == FALSE")
+        #expect(wrongNext != module)
+        do {
+            try StraightLineRenderedActionCheck.verifyFiniteInvocations(program.behavior,
+                layout: program.layout, binders: program.binderNames, module: wrongNext)
+            Issue.record("The completed TLA transition relation omitted a compiled action invocation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.Next.finiteInvocations")
+        }
+    }
+
     @Test("A bound ordered assignment keeps its source value through both emitted action routes")
     func boundOrderedAssignmentOutputRejectsRerouting() throws {
         let specification = BoundOrderedAssignment.spec
