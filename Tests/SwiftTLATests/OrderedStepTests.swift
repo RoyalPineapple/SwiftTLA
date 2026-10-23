@@ -284,7 +284,7 @@ import SwiftSyntax
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
     }
 
-    @Test("Nested checked additions retain the failing operation in both outputs")
+    @Test("Nested checked additions retain the selected failure in both outputs")
     func nestedAdditionFailure() throws {
         let machine = try NestedAdditionOverflowModel.makeMachine()
         #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
@@ -296,6 +296,35 @@ import SwiftSyntax
         #expect(definitions.filter { $0.hasPrefix("__SwiftTLAOverflowFailure") }.count == 2)
         #expect(definitions.contains { $0.hasPrefix("__SwiftTLAOverflowOperands0_1 ==") && $0.contains("count + 1") })
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: NestedAdditionOverflowModel.spec.compile()))
+        let action = try #require(program.behavior.actions.first)
+        let output = try program.renderModule()
+        let name = try #require(program.layout.actions.first?.renderedName)
+        let header = "\(name) == "
+        let body = try #require(output.renderedModuleSource.split(separator: "\n")
+            .first { $0.hasPrefix(header) }?.dropFirst(header.count))
+        try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+            body: String(body), module: output.renderedModuleSource,
+            layout: program.layout, binders: program.binderNames,
+            failureDeclarations: output.evaluationFailureDeclarations)
+        for prefix in ["__SwiftTLAOverflowFailure0_1 == ",
+                       "__SwiftTLAAnyEvaluationFailure0 == "] {
+            let original = try #require(output.evaluationFailureDeclarations.first {
+                $0.hasPrefix(prefix)
+            })
+            let changed = "\(prefix)FALSE"
+            let wrongModule = output.renderedModuleSource.replacingOccurrences(of: original, with: changed)
+            let wrongDeclarations = output.evaluationFailureDeclarations.map { $0 == original ? changed : $0 }
+            #expect(wrongModule != output.renderedModuleSource)
+            #expect(wrongDeclarations != output.evaluationFailureDeclarations)
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+                    body: String(body), module: wrongModule, layout: program.layout,
+                    binders: program.binderNames, failureDeclarations: wrongDeclarations)
+            }
+        }
     }
 
     @Test("Choices and following statements read their current branch values")

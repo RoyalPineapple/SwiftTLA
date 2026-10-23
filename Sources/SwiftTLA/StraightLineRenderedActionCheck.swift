@@ -211,9 +211,27 @@ enum StraightLineRenderedActionCheck {
                                                layout: CompiledLayout, binders: [BinderID: String],
                                                parameters: [String],
                                                failureDeclarations: [String]) throws {
-        // shortcut: failure declarations are checked for one captured addition assignment;
-        // extend this rule to sequential and branching actions before claiming full coverage.
-        guard case .define(let binder, let expression, let continuation) = action.body,
+        // shortcut: branching or multiply-fallible continuations need their own failure rule.
+        let programCounter = layout.programCounterID()
+        func controlWrite(_ node: CompiledActionExpr) -> Bool {
+            guard case .assign(let id, let value) = node, id == programCounter,
+                  case .controlLocation = value.operation, value.children.isEmpty else { return false }
+            return true
+        }
+        var body = action.body
+        var selection: String?
+        if case .and(.guard_(let condition), let guardedBody) = body,
+           case .equal = condition.operation, condition.children.count == 2,
+           case .stateVariable(let id) = condition.children[0].operation,
+           id == programCounter,
+           case .controlLocation(let location) = condition.children[1].operation,
+           let variableName = layout.variables.first(where: { $0.id == id })?.declaration.name,
+           let locationName = layout.controlLocation(location)?.formalName {
+            selection = "(\(variableName) = \"\(locationName)\")"
+            body = guardedBody
+        }
+        if case .and(let assignment, let tail) = body, controlWrite(tail) { body = assignment }
+        guard case .define(let binder, let expression, let continuation) = body,
               case .add = expression.operation,
               binders[binder] != nil,
               let tree = addition(expression,
@@ -225,6 +243,7 @@ enum StraightLineRenderedActionCheck {
         while let node = pending.popLast() {
             switch node {
             case .assign(_, let value):
+                if controlWrite(node) { break }
                 guard !assigned, case .boundValue(let usedBinder) = value.operation,
                       usedBinder == binder, value.children.isEmpty else { return }
                 assigned = true
@@ -270,8 +289,9 @@ enum StraightLineRenderedActionCheck {
         var preceding: [String] = []
         for (position, site) in tree.sites.enumerated() {
             let suffix = position == 0 ? "\(index)" : "\(index)_\(position)"
-            let predicate = preceding.isEmpty ? "~(\(site.guardText))"
+            let unselected = preceding.isEmpty ? "~(\(site.guardText))"
                 : "(\(preceding.joined(separator: " /\\ ")) /\\ ~(\(site.guardText)))"
+            let predicate = selection.map { "((\($0)) = TRUE /\\ \(unselected))" } ?? unselected
             let expected = [
                 ("__SwiftTLAOverflowFailure\(suffix)", predicate),
                 ("__SwiftTLAOverflowOperands\(suffix)", site.operands),
@@ -283,7 +303,9 @@ enum StraightLineRenderedActionCheck {
             preceding.append(site.guardText)
         }
         let aggregateName = "__SwiftTLAAnyEvaluationFailure\(index)"
-        try verifyDeclaration(aggregateName, value: "~(\(tree.defined))")
+        let failure = "~(\(tree.defined))"
+        try verifyDeclaration(aggregateName,
+            value: selection.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure)
     }
 
     static func verifyFiniteInvocations(_ behavior: CompiledBehavior,
