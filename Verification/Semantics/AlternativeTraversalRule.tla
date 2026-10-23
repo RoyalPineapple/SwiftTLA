@@ -13,6 +13,9 @@ CombineOrdered(first, second) ==
 
 EmptyOrdered == [updates |-> <<>>, failure |-> NoFailure]
 
+BranchwiseContinuation(choices, continuation) ==
+    [index \in 1..Len(choices) |-> continuation[choices[index]]]
+
 THEOREM OrderedCompositionIsClosed ==
     ASSUME NEW first \in OrderedOutcome,
            NEW second \in OrderedOutcome
@@ -37,6 +40,43 @@ THEOREM EmptyOrderedIsAnIdentity ==
     PROVE /\ CombineOrdered(EmptyOrdered, result) = result
           /\ CombineOrdered(result, EmptyOrdered) = result
     BY ConcatEmptySeq, SMT DEF CombineOrdered, EmptyOrdered, OrderedOutcome
+
+THEOREM BranchwiseContinuationDistributesOverAlternatives ==
+    ASSUME NEW first \in Seq(UpdateValues),
+           NEW second \in Seq(UpdateValues),
+           NEW continuation \in [UpdateValues -> OrderedOutcome]
+    PROVE BranchwiseContinuation(first \o second, continuation) =
+          BranchwiseContinuation(first, continuation) \o
+          BranchwiseContinuation(second, continuation)
+    PROOF
+    <1>. DEFINE combined == BranchwiseContinuation(first \o second, continuation)
+                before == BranchwiseContinuation(first, continuation)
+                after == BranchwiseContinuation(second, continuation)
+    <1>1. first \o second \in Seq(UpdateValues) /\
+          Len(first \o second) = Len(first) + Len(second)
+        BY ConcatProperties
+    <1>2. combined \in Seq(OrderedOutcome) /\
+          before \in Seq(OrderedOutcome) /\
+          after \in Seq(OrderedOutcome)
+        BY <1>1, IsASeq, ElementOfSeq, SMT
+           DEF combined, before, after, BranchwiseContinuation
+    <1>3. Len(combined) = Len(before \o after)
+        BY <1>1, <1>2, ConcatProperties, SMT
+           DEF combined, before, after, BranchwiseContinuation
+    <1>4. \A index \in 1..Len(combined) :
+              combined[index] = (before \o after)[index]
+        <2>. SUFFICES ASSUME NEW index \in 1..Len(combined)
+                     PROVE combined[index] = (before \o after)[index]
+            BY SMT
+        <2>1. CASE index <= Len(first)
+            BY <1>1, <1>2, <1>3, <2>1, ConcatProperties, SMT
+               DEF combined, before, after, BranchwiseContinuation
+        <2>2. CASE index > Len(first)
+            BY <1>1, <1>2, <1>3, <2>2, ConcatProperties, SMT
+               DEF combined, before, after, BranchwiseContinuation
+        <2>. QED BY <2>1, <2>2, SMT
+    <1>. QED
+        BY <1>2, <1>3, <1>4, SeqEqual, SMT DEF combined, before, after
 
 THEOREM ReversingFailingAlternativesChangesFirstFailure ==
     ASSUME NEW first \in OrderedOutcome,
