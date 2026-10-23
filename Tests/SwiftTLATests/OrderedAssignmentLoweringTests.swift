@@ -793,4 +793,56 @@ struct OrderedAssignmentLoweringTests {
                 layout: program.layout, binders: program.binderNames)
         }
     }
+
+    @Test("A set-valued Swift assignment cannot change its compiled literal")
+    func setAssignmentSwiftOutputKeepsValue() throws {
+        let specification = TLASpec(name: "SetAssignmentValue", variables: [
+            .init(name: "items", initialization: .value(.set([.int(0)])),
+                generatedSwiftType: "Set<Int>", origin: .source)
+        ], actions: [
+            NamedAction(name: "replace", body: .assign(.named("items"), .value(.set([.int(1)]))))
+        ], invariants: [])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let action = try #require(program.behavior.actions.first)
+        let sourceAction = try #require(specification.actions.first)
+        try StraightLineAssignmentCheck.verifyCompiled(sourceAction, bindings: action.bindings,
+            body: action.body, layout: program.layout)
+        var changedCompiledLiteral = false
+        let wrongCompiled = action.body.map { expression in
+            guard case .value(.set) = expression.operation else { return expression }
+            changedCompiledLiteral = true
+            return CompiledExpression(operation: .value(.set([.integer(2)])),
+                resultType: expression.resultType, children: expression.children)
+        }
+        #expect(changedCompiledLiteral)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyCompiled(sourceAction, bindings: action.bindings,
+                body: wrongCompiled, layout: program.layout)
+        }
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "SetAssignmentValue", program: program))
+        let visitor = try #require(emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
+            stateFields: emitter.stateMemberNames, parts: writes)
+
+        let write = try #require(writes.first)
+        let replacement = write.value.replacingOccurrences(of: "[1]", with: "[2]")
+        #expect(replacement != write.value)
+        let wrongSource = visitor.description.replacingOccurrences(
+            of: "_Updates(\(write.slot): \(write.value))",
+            with: "_Updates(\(write.slot): \(replacement))")
+        #expect(wrongSource != visitor.description)
+        let wrongVisitor = try #require(Parser.parse(source: wrongSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        let selfConsistentWrites = writes.map {
+            (id: $0.id, slot: $0.slot, value: $0.id == write.id ? replacement : $0.value)
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionWriteOutput(wrongVisitor, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: selfConsistentWrites)
+        }
+    }
 }

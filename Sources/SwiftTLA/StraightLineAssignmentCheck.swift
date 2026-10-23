@@ -458,12 +458,9 @@ enum StraightLineAssignmentCheck {
                         guard let variable = stateIDs[name],
                               compiled.operation == .stateVariable(variable) else { return false }
                     }
-                case .value(.int(let number)):
+                case .value(let value):
                     guard compiled.children.isEmpty,
-                          compiled.operation == .value(.integer(number)) else { return false }
-                case .value(.bool(let value)):
-                    guard compiled.children.isEmpty,
-                          compiled.operation == .value(.boolean(value)) else { return false }
+                          compiled.operation == .value(CompiledValue(formal: value)) else { return false }
                 default: return false
                 }
             }
@@ -527,7 +524,7 @@ enum StraightLineAssignmentCheck {
         while let node = pending.popLast() {
             switch node {
             case .variable(let name): reads.insert(name)
-            case .value(.int), .value(.bool): break
+            case .value: break
             case .add(let left, let right):
                 pending.append(right)
                 pending.append(left)

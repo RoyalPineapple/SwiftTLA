@@ -2314,6 +2314,23 @@ func verifyGeneratedActionWriteOutput(
            program.layout.controlLocations.contains(where: { $0.id == id }) {
             return (tokens("_ControlLocation.location\(id.ordinal)"), actual)
         }
+        if case .value(.set(let members)) = expression.operation,
+           case .set(let element) = expression.resultType,
+           expression.children.isEmpty, element == .int || element == .bool {
+            let values = members.sorted().compactMap { member -> String? in
+                switch (member, element) {
+                case (.integer(let value), .int):
+                    return value == Int.min ? "Int.min" : String(value)
+                case (.boolean(let value), .bool):
+                    return value ? "true" : "false"
+                default:
+                    return nil
+                }
+            }
+            guard values.count == members.count else { return nil }
+            let type = element == .int ? "Int" : "Bool"
+            return (tokens("Set<\(type)>([\(values.joined(separator: ", "))])"), actual)
+        }
         func checkedSequenceSource(_ node: CompiledExpression) -> String? {
             guard case .array(let element) = node.resultType,
                   element == .int || element == .bool else { return nil }
@@ -2675,8 +2692,12 @@ func verifyGeneratedActionWriteOutput(
             }
             let checkedValue = checkedValueTokens(assignment.value, parameters: bindings, actual: actualBody)
             let controlLiteral: Bool = if case .controlLocation = assignment.value.operation { true } else { false }
+            let scalarSetLiteral: Bool = if case .value(.set) = assignment.value.operation,
+                case .set(let element) = assignment.value.resultType {
+                element == .int || element == .bool
+            } else { false }
             if checkedValue == nil, requireScalarLeaves || controlLiteral ||
-                booleanPredicateNodes(assignment.value) != nil {
+                scalarSetLiteral || booleanPredicateNodes(assignment.value) != nil {
                 throw invalid("native.action.write.\(part.id)",
                     "a complete generated scalar value or Boolean branch tree", "unreadable value expression")
             }

@@ -3124,6 +3124,46 @@ THEOREM RootAdditionPreservesCompleteLabeledEdgesAndFailures ==
         EmittedCheckedAddFailures, NativeCheckedAddEdges,
         NativeCheckedAddFailures
 
+SequentialAddEdges(before, entry, next, label, edges) ==
+    IF before.location = entry
+    THEN {<<before, label, [location |-> next, data |-> edge[3]]>> : edge \in edges}
+    ELSE {}
+
+SequentialAddFailures(before, entry, label, failures) ==
+    IF before.location = entry
+    THEN {<<before, label, failure[3], failure[4]>> : failure \in failures}
+    ELSE {}
+
+THEOREM SequentialAdditionPreservesLabeledEdgesAndFailures ==
+    ASSUME NEW before \in SequentialStates,
+           NEW entry \in ActionLabels,
+           NEW next \in ActionLabels,
+           NEW label \in ActionLabels,
+           NEW rhs \in Int,
+           before.data \in [Vars -> Int],
+           WithinSwiftInt(before.data[Key]),
+           WithinSwiftInt(rhs),
+           SwiftIntMin <= -2000000000,
+           2000000000 <= SwiftIntMax
+    PROVE /\ SequentialAddEdges(before, entry, next, label,
+                   SourceCheckedAddEdges(before.data, label, rhs))
+                = SequentialAddEdges(before, entry, next, label,
+                   EmittedCheckedAddEdges(before.data, label, rhs))
+          /\ SequentialAddEdges(before, entry, next, label,
+                   SourceCheckedAddEdges(before.data, label, rhs))
+                = SequentialAddEdges(before, entry, next, label,
+                   NativeCheckedAddEdges(before.data, label, rhs))
+          /\ SequentialAddFailures(before, entry, label,
+                   SourceCheckedAddFailures(before.data, label, rhs))
+                = SequentialAddFailures(before, entry, label,
+                   EmittedCheckedAddFailures(before.data, label, rhs))
+          /\ SequentialAddFailures(before, entry, label,
+                   SourceCheckedAddFailures(before.data, label, rhs))
+                = SequentialAddFailures(before, entry, label,
+                   NativeCheckedAddFailures(before.data, label, rhs))
+    BY RootAdditionPreservesCompleteLabeledEdgesAndFailures, SMT
+       DEF SequentialAddEdges, SequentialAddFailures
+
 THEOREM CurrentAdditionAgreementIsExactlyRangeSafety ==
     \A lhs, rhs \in Int :
         (WithinSwiftInt(lhs) /\ WithinSwiftInt(rhs)) =>
