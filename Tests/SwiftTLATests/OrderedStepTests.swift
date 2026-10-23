@@ -301,6 +301,11 @@ import SwiftSyntax
             in: NestedAdditionOverflowModel.spec.compile()))
         let action = try #require(program.behavior.actions.first)
         let output = try program.renderModule()
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
         let name = try #require(program.layout.actions.first?.renderedName)
         let header = "\(name) == "
         let body = try #require(output.renderedModuleSource.split(separator: "\n")
@@ -325,23 +330,23 @@ import SwiftSyntax
                     binders: program.binderNames, failureDeclarations: wrongDeclarations)
             }
         }
-        try StraightLineRenderedActionCheck.verifyUnboundEvaluationSelection(program.behavior,
+        try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
             module: output.renderedModuleSource,
             failureDeclarations: output.evaluationFailureDeclarations,
             evaluationInvariant: "__SwiftTLAEvaluationOK",
-            configuration: output.configuration)
+            configuration: output.configuration, renderer: renderer)
         let selection = try #require(output.evaluationFailureDeclarations.first {
             $0.hasPrefix("__SwiftTLAEvaluationOK == ")
         })
         let omittedFailure = "__SwiftTLAEvaluationOK == TRUE"
         #expect(throws: CompilationDiagnostic.self) {
-            try StraightLineRenderedActionCheck.verifyUnboundEvaluationSelection(program.behavior,
+            try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
                 module: output.renderedModuleSource.replacingOccurrences(of: selection, with: omittedFailure),
                 failureDeclarations: output.evaluationFailureDeclarations.map {
                     $0 == selection ? omittedFailure : $0
                 },
                 evaluationInvariant: "__SwiftTLAEvaluationOK",
-                configuration: output.configuration)
+                configuration: output.configuration, renderer: renderer)
         }
     }
 

@@ -308,11 +308,11 @@ enum StraightLineRenderedActionCheck {
             value: selection.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure)
     }
 
-    static func verifyUnboundEvaluationSelection(_ behavior: CompiledBehavior, module: String,
-                                                  failureDeclarations: [String],
-                                                  evaluationInvariant: String?,
-                                                  configuration: TLCConfiguration) throws {
-        // shortcut: bound action failures need an independently checked quantifier rule.
+    static func verifyEvaluationSelection(_ behavior: CompiledBehavior, module: String,
+                                          failureDeclarations: [String],
+                                          evaluationInvariant: String?,
+                                          configuration: TLCConfiguration,
+                                          renderer: CompiledTLARenderer) throws {
         let lines = module.components(separatedBy: "\n")
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
@@ -322,25 +322,39 @@ enum StraightLineRenderedActionCheck {
                 nextSafeAction: "Regenerate the evaluation invariant and TLC configuration.")
         }
         var references: [String] = []
-        var hasBoundFailure = false
         for index in behavior.enabledActionIndices {
             let prefix = "__SwiftTLAAnyEvaluationFailure\(index)"
+            let action = behavior.actions[index]
+            let parameters = try action.bindings.map { try renderer.binderName($0.binder) }
+            let parameterSuffix = parameters.isEmpty ? "" : "(\(parameters.joined(separator: ", ")))"
             let candidates = failureDeclarations.filter { declaration in
                 guard let header = declaration.components(separatedBy: " == ").first else { return false }
-                guard header.hasPrefix(prefix) else { return false }
-                let suffix = header.dropFirst(prefix.count)
-                let arguments = suffix.drop(while: { $0 == "_" })
+                guard header.hasPrefix(prefix), header.hasSuffix(parameterSuffix) else { return false }
+                let suffix = header.dropFirst(prefix.count).dropLast(parameterSuffix.count)
                 return suffix.allSatisfy { $0 == "_" }
-                    || (arguments.first == "(" && arguments.last == ")")
             }
             guard candidates.count <= 1 else { throw mismatch() }
             guard let declaration = candidates.first else { continue }
             guard lines.filter({ $0 == declaration }).count == 1,
-                  let name = declaration.components(separatedBy: " == ").first else { throw mismatch() }
-            if name.contains("(") { hasBoundFailure = true }
-            references.append(name)
+                  let header = declaration.components(separatedBy: " == ").first else { throw mismatch() }
+            let name = String(header.dropLast(parameterSuffix.count))
+            guard !parameters.isEmpty else {
+                references.append(name)
+                continue
+            }
+            let domains = try zip(parameters, action.bindings).map { parameter, binding in
+                let domain = try binding.literalMembers.map {
+                    try CompiledValue.set(Set($0)).rendered(using: renderer.layout).description
+                } ?? renderer.state(binding.domain)
+                return "\(parameter) \\in \(domain)"
+            }
+            let call = "\(name)(\(parameters.joined(separator: ", ")))"
+            if action.bindings.allSatisfy({ $0.literalMembers != nil }) {
+                references.append("(\\E \(domains.joined(separator: ", ")): \(call))")
+            } else {
+                references.append(domains.reversed().reduce(call) { "(\\E \($1): \($0))" })
+            }
         }
-        guard !hasBoundFailure else { return }
         guard let evaluationInvariant else {
             guard references.isEmpty else { throw mismatch() }
             return

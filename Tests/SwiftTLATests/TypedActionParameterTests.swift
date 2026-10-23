@@ -269,6 +269,30 @@ struct TypedActionParameterTests {
         #expect(selected.intrinsicInvariantNames == ["__SwiftTLAEvaluationOK"])
         let cfg = try #require(rendered.tlaBundle(checking: [], checkDeadlock: false).root.cfg)
         #expect(cfg.contains("INVARIANT __SwiftTLAEvaluationOK\n"))
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: TypedParameterSelection.spec.compile()))
+        let output = try program.renderModule()
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        let selection = try #require(output.evaluationFailureDeclarations.first {
+            $0.hasPrefix("__SwiftTLAEvaluationOK == ")
+        })
+        let wrongDomain = selection.replacingOccurrences(of: "selection \\in {1, 2}",
+            with: "selection \\in {1}")
+        #expect(wrongDomain != selection)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+                module: output.renderedModuleSource.replacingOccurrences(of: selection, with: wrongDomain),
+                failureDeclarations: output.evaluationFailureDeclarations.map {
+                    $0 == selection ? wrongDomain : $0
+                },
+                evaluationInvariant: "__SwiftTLAEvaluationOK",
+                configuration: output.configuration, renderer: renderer)
+        }
     }
 
     @Test("Symbolic parameter failures retain the action guard and domain")
