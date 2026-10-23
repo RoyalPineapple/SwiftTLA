@@ -2216,11 +2216,11 @@ private extension CompiledModuleMetadata {
         try StraightLineRenderedActionCheck.verifyFiniteInvocations(behavior,
             layout: layout, binders: renderer.bindings.binders, module: directOutput.source)
         let renderedConfiguration = configuration.includingIntrinsicInvariant(directOutput.evaluationInvariant)
-        try StraightLineRenderedActionCheck.verifyUnboundEvaluationSelection(behavior,
+        try StraightLineRenderedActionCheck.verifyEvaluationSelection(behavior,
             module: directOutput.source,
             failureDeclarations: directOutput.evaluationFailureDeclarations,
             evaluationInvariant: directOutput.evaluationInvariant,
-            configuration: renderedConfiguration)
+            configuration: renderedConfiguration, renderer: renderer)
         return RenderedModule(
             renderedModuleSource: directOutput.source,
             evaluationFailureDeclarations: directOutput.evaluationFailureDeclarations,
