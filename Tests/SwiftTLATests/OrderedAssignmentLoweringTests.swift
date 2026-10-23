@@ -406,13 +406,36 @@ struct OrderedAssignmentLoweringTests {
             #expect(diagnostic.path == "actions[\(action.id.ordinal)].resolvedAssignments")
         }
 
-        let module = try program.renderModule().renderedModuleSource
+        let output = try program.renderModule()
+        let module = output.renderedModuleSource
         let header = "advance == "
         let declarations = module.split(separator: "\n").filter { $0.hasPrefix(header) }
         let rendered = String(try #require(declarations.count == 1
             ? declarations[0].dropFirst(header.count) : nil))
         try StraightLineRenderedActionCheck.verify(action.body, rendered: rendered,
             layout: program.layout, binders: program.binderNames)
+        try StraightLineRenderedActionCheck.verifyDeclaration(action, named: "advance",
+            body: rendered, module: module, layout: program.layout, binders: program.binderNames,
+            failureDeclarations: output.evaluationFailureDeclarations)
+        for prefix in ["__SwiftTLAOverflowFailure0_1 == ",
+                       "__SwiftTLAOverflowOperands0_1 == ",
+                       "__SwiftTLAOverflowOperation0_1 == ",
+                       "__SwiftTLAAnyEvaluationFailure0 == "] {
+            let line = try #require(module.split(separator: "\n").first { $0.hasPrefix(prefix) })
+            let replacement = "\(prefix)FALSE"
+            let corrupted = module.replacingOccurrences(of: String(line), with: replacement)
+            let wrongDeclarations = output.evaluationFailureDeclarations.map {
+                $0 == String(line) ? replacement : $0
+            }
+            #expect(corrupted != module)
+            #expect(wrongDeclarations != output.evaluationFailureDeclarations)
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineRenderedActionCheck.verifyDeclaration(action, named: "advance",
+                    body: rendered, module: corrupted, layout: program.layout,
+                    binders: program.binderNames,
+                    failureDeclarations: wrongDeclarations)
+            }
+        }
         let wrongValue = rendered.replacingOccurrences(of: "(offset + 1)", with: "(offset - 1)")
         #expect(wrongValue != rendered)
         #expect(throws: CompilationDiagnostic.self) {

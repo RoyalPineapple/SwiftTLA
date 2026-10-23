@@ -137,18 +137,21 @@ struct TypedActionParameterTests {
                 candidates: candidates, configurationArguments: "", boundRoutes: boundRoutes)
         }
 
-        let module = try program.renderModule().renderedModuleSource
+        let output = try program.renderModule()
+        let module = output.renderedModuleSource
         let formalBinder = try #require(program.binderNames[action.bindings[0].binder])
         let header = "select(\(formalBinder)) == "
         let lines = module.split(separator: "\n").filter { $0.hasPrefix(header) }
         let body = try #require(lines.count == 1 ? lines[0].dropFirst(header.count) : nil)
         try StraightLineRenderedActionCheck.verifyDeclaration(action, named: "select",
-            body: String(body), module: module, layout: program.layout, binders: program.binderNames)
+            body: String(body), module: module, layout: program.layout, binders: program.binderNames,
+            failureDeclarations: output.evaluationFailureDeclarations)
         let wrongModule = module.replacingOccurrences(of: header, with: "select(wrong) == ")
         #expect(wrongModule != module)
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineRenderedActionCheck.verifyDeclaration(action, named: "select",
-                body: String(body), module: wrongModule, layout: program.layout, binders: program.binderNames)
+                body: String(body), module: wrongModule, layout: program.layout, binders: program.binderNames,
+                failureDeclarations: output.evaluationFailureDeclarations)
         }
         let machine = try BoundOrderedAssignment.makeMachine()
         #expect(try machine.actionCandidates() == [.select(member: 1), .select(member: 2)])
