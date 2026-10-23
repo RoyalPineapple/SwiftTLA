@@ -2,11 +2,12 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 @testable import SwiftTLA
+@testable import SwiftTLAPlugin
 import Testing
 
 @Suite("Alternative traversal")
 struct AlternativeTraversalTests {
-    @Test("Rendered alternatives retain the union of both complete assignments")
+    @Test("Scalar alternatives retain both branches through compilation and TLA+ emission")
     func renderedAlternativesKeepBothBranches() throws {
         let specification = TLASpec(name: "ScalarAlternatives", variables: [
             .init(name: "value", initial: .int(0))
@@ -17,6 +18,25 @@ struct AlternativeTraversalTests {
         ], invariants: [])
         let compilation = try specification.compile()
         let action = try #require(compilation.semantics.behavior.actions.first)
+        let sourceAction = try #require(specification.loweredSourceModel().actions.first)
+        let inputs = try SourceTypeResolver().resolve(in: compilation)
+        let program = try CompiledProgram(inputs: inputs)
+        let resolved = try #require(program.behavior.actions.first)
+        guard case .or(let left, let right) = action.body else {
+            Issue.record("The compiled action lost its alternatives")
+            return
+        }
+        let lostAlternative = CompiledActionExpr.and(left, right)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyCompiled(sourceAction, bindings: action.bindings,
+                body: lostAlternative, layout: compilation.layout)
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyResolved(action,
+                resolved: .init(id: resolved.id, bindings: resolved.bindings, body: lostAlternative),
+                variableTypes: inputs.variableTypes, resolvedVariableTypes: program.variableTypes,
+                resolvedBindingTypes: program.bindingTypes)
+        }
         let module = try compilation.render().tlaBundle.tla
         let declaration = try #require(module.split(separator: "\n").first { $0.hasPrefix("pick == ") })
         let body = String(declaration.dropFirst("pick == ".count))
