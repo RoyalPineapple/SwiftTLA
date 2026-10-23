@@ -279,6 +279,13 @@ enum StraightLineAssignmentCheck {
                   !action.isTermination && action.name == step.label.name
               }) else { throw mismatch() }
         let roots = Set(shared.map(\.root))
+        var orderedIntSteps = !enumerateInitialControl
+            && steps.allSatisfy { $0.loopCondition == nil }
+            && shared.allSatisfy { variable in
+                guard variable.swiftTypeName == "Int",
+                      case .value(.int) = variable.initialization else { return false }
+                return true
+            }
         for (index, step) in steps.enumerated() where step.loopCondition == nil {
             let entry = ControlLocationReference(owner: owner, sourceName: step.label.name)
             let next = steps.indices.contains(index + 1)
@@ -286,9 +293,39 @@ enum StraightLineAssignmentCheck {
                 : ControlLocationReference(owner: .generated(algorithm: algorithm.name,
                     purpose: CompilerControlSymbol.done.rawValue),
                     sourceName: CompilerControlSymbol.done.rawValue)
-            try verify(AtomicStep(model: step),
-                lowered: lowered.actions[index].bindings.isEmpty ? lowered.actions[index].body : nil,
-                stateRoots: roots, control: (entry, next))
+            let atomic = AtomicStep(model: step)
+            let action = lowered.actions[index].bindings.isEmpty ? lowered.actions[index].body : nil
+            if try verifySequentialIntAssignments(atomic, lowered: action,
+                                                  stateRoots: roots, control: (entry, next)) { continue }
+            orderedIntSteps = false
+            try verify(atomic, lowered: action, stateRoots: roots, control: (entry, next))
+        }
+        if orderedIntSteps {
+            let done = StateExpr.controlLocation(.init(
+                owner: .generated(algorithm: algorithm.name,
+                    purpose: CompilerControlSymbol.done.rawValue),
+                sourceName: CompilerControlSymbol.done.rawValue))
+            var missingFrames = Set(lowered.variables.map { ActionTarget.named($0.name) })
+            var sawDoneGuard = false
+            var sawResolvedControlFrame = false
+            guard let termination = lowered.actions.last, termination.bindings.isEmpty else { throw mismatch() }
+            var pendingTermination = [termination.body]
+            while let node = pendingTermination.popLast() {
+                switch node {
+                case .and(let left, let right):
+                    pendingTermination.append(right)
+                    pendingTermination.append(left)
+                case .guard_(let condition)
+                    where condition == .equal(.programCounter, done) && !sawDoneGuard:
+                    sawDoneGuard = true
+                case .unchanged(.programCounter) where !sawResolvedControlFrame:
+                    sawResolvedControlFrame = true
+                case .unchanged(let target):
+                    guard missingFrames.remove(target) != nil else { throw mismatch() }
+                default: throw mismatch()
+                }
+            }
+            guard sawDoneGuard, missingFrames.isEmpty else { throw mismatch() }
         }
     }
 

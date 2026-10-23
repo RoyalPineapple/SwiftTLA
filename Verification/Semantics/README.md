@@ -1457,11 +1457,31 @@ initial control choice, and labeled step inventory for sequential algorithms.
 For each plain `Do` whose statements are root copies or literals, it also
 requires the exact entry guard, one next-location write, and the complete
 ordered user-variable result. Mutations to the initial control, action label,
-and next location are rejected. Other accepted statement and expression
-forms, the emitted initial-state set and termination behavior, and a general
-proof of every Swift visitor form remain open. The output checkers' parsing,
-the project-owned update/visitor kernel, and documented Swift compiler/runtime
-behavior remain trusted for this slice.
+and next location are rejected. The first compositional `Int` slice is more
+specific: every shared variable has a literal `Int` initializer, every `Do`
+step is a nonempty ordered sequence of root assignments built from `Int`
+literals, prior reads, and checked addition, and there are no loops or action
+binders. For any number of such steps, the production checker requires ordered
+captures, complete user-variable writes, exact entry/exit control locations,
+and an exact `Done`-guarded, unchanged terminating action. It also checks the
+source and resolved initial `Int` literals and control location. The production
+Swift and TLA+ emitters check their actual initial bindings, action bodies,
+and selected addition-failure declarations. Wrong value, location, read order,
+termination body, and omitted-failure mutations are rejected by focused tests.
+`OrderedSequentialIntProgramCompose` proves the independent initial, labeled
+edge, and ordered-failure rules compose over any finite number of steps,
+including the terminal self-loop; its new focused TLAPS obligations pass
+locally. The complete proof file has not yet been rerun to completion after
+this addition, and this local revision has no hosted evidence yet. Nonliteral
+deterministic `Int` initial expressions and other accepted statement or
+expression forms remain outside this slice; they are not rejected by the DSL
+merely because this proof does not cover them. The output checkers' parsing,
+the `#spec` syntax parser that constructs the source model, the project-owned
+update/visitor kernel, and documented Swift compiler/runtime behavior remain
+trusted boundaries. The theorem does not independently certify that the parser
+interprets every authored Swift syntax tree as intended. `@TLAModel` generates
+both Swift and TLA+ from the macro-time parsed `CompiledProgram`; agreement
+between those outputs cannot independently validate that shared parsing step.
 For a single root assignment, the production source-to-lowered check also
 requires the exact source expression to be captured once, used within its
 binding, and published to the intended root. For a controlled step, its entry
