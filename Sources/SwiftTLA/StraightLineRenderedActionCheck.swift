@@ -23,7 +23,7 @@ enum StraightLineRenderedActionCheck {
     }
 
     private static let tokenPattern = try? NSRegularExpression(
-        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[()+*<>-]|="#)
+        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}+*<>-]|="#)
 
     // shortcut: only direct scalar addition trees are checked here; extend to other expression forms with their output rules.
     private static func addition(_ expression: CompiledExpression,
@@ -126,6 +126,9 @@ enum StraightLineRenderedActionCheck {
                     expected.append(name)
                 case .value(.integer(let value)): expected.append(String(value))
                 case .value(.boolean(let value)): expected.append(value ? "TRUE" : "FALSE")
+                case .value(let value):
+                    guard let literal = tokens(try value.rendered(using: layout).description) else { return }
+                    expected.append(contentsOf: literal)
                 case .controlLocation(let id):
                     guard let name = layout.controlLocation(id)?.formalName,
                           isFormalIdentifier(name) else { return }
