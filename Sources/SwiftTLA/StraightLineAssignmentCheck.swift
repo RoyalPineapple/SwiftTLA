@@ -443,19 +443,31 @@ enum StraightLineAssignmentCheck {
         }
         func matching(_ source: StateExpr, _ compiled: CompiledExpression,
                       bindings: [String: BinderID]) -> Bool {
-            guard compiled.children.isEmpty else { return false }
-            switch source {
-            case .variable(let name):
-                if let binder = bindings[name] { return compiled.operation == .boundValue(binder) }
-                guard let variable = stateIDs[name] else { return false }
-                return compiled.operation == .stateVariable(variable)
-            case .value(.int(let number)):
-                return compiled.operation == .value(.integer(number))
-            case .value(.bool(let value)):
-                return compiled.operation == .value(.boolean(value))
-            default:
-                return false
+            var pending = [(source, compiled)]
+            while let (source, compiled) = pending.popLast() {
+                switch source {
+                case .add(let left, let right):
+                    guard compiled.operation == .add, compiled.children.count == 2 else { return false }
+                    pending.append((right, compiled.children[1]))
+                    pending.append((left, compiled.children[0]))
+                case .variable(let name):
+                    guard compiled.children.isEmpty else { return false }
+                    if let binder = bindings[name] {
+                        guard compiled.operation == .boundValue(binder) else { return false }
+                    } else {
+                        guard let variable = stateIDs[name],
+                              compiled.operation == .stateVariable(variable) else { return false }
+                    }
+                case .value(.int(let number)):
+                    guard compiled.children.isEmpty,
+                          compiled.operation == .value(.integer(number)) else { return false }
+                case .value(.bool(let value)):
+                    guard compiled.children.isEmpty,
+                          compiled.operation == .value(.boolean(value)) else { return false }
+                default: return false
+                }
             }
+            return true
         }
 
         guard action.bindings.count == compiledBindings.count else { throw mismatch() }
@@ -511,15 +523,18 @@ enum StraightLineAssignmentCheck {
     }
 
     private static func simple(_ expression: StateExpr, reads: inout Set<String>) -> Bool {
-        switch expression {
-        case .variable(let name):
-            reads.insert(name)
-            return true
-        case .value(.int), .value(.bool):
-            return true
-        default:
-            return false
+        var pending = [expression]
+        while let node = pending.popLast() {
+            switch node {
+            case .variable(let name): reads.insert(name)
+            case .value(.int), .value(.bool): break
+            case .add(let left, let right):
+                pending.append(right)
+                pending.append(left)
+            default: return false
+            }
         }
+        return true
     }
 
     static func verifyResolved(_ original: CompiledAction, resolved: CompiledAction?,
@@ -549,18 +564,34 @@ enum StraightLineAssignmentCheck {
         let parameterTypes = Dictionary(uniqueKeysWithValues: original.bindings.map {
             ($0.binder, parameterType($0)!)
         })
-        func leafType(_ expression: CompiledExpression,
+        func nodeType(_ expression: CompiledExpression,
                       bindings: [BinderID: CompiledValueType]) -> CompiledValueType? {
-            guard expression.children.isEmpty else { return nil }
             switch expression.operation {
+            case .add: return expression.children.count == 2 ? .int : nil
             case .stateVariable(let id):
+                guard expression.children.isEmpty else { return nil }
                 guard let type = variableTypes[id] else { return nil }
                 return type == .unknown ? resolvedVariableTypes[id] : type
-            case .boundValue(let id): return bindings[id]
-            case .value(.integer): return .int
-            case .value(.boolean): return .bool
+            case .boundValue(let id): return expression.children.isEmpty ? bindings[id] : nil
+            case .value(.integer): return expression.children.isEmpty ? .int : nil
+            case .value(.boolean): return expression.children.isEmpty ? .bool : nil
             default: return nil
             }
+        }
+        func expressionType(_ expression: CompiledExpression,
+                            bindings: [BinderID: CompiledValueType],
+                            reads: inout Set<VariableID>) -> CompiledValueType? {
+            guard let rootType = nodeType(expression, bindings: bindings) else { return nil }
+            var pending = [(expression, rootType)]
+            while let (node, expected) = pending.popLast() {
+                guard nodeType(node, bindings: bindings) == expected else { return nil }
+                if case .stateVariable(let id) = node.operation { reads.insert(id) }
+                if case .add = node.operation {
+                    pending.append((node.children[1], .int))
+                    pending.append((node.children[0], .int))
+                }
+            }
+            return rootType
         }
 
         var bindings = parameterTypes
@@ -576,8 +607,8 @@ enum StraightLineAssignmentCheck {
                 switch node {
                 case .define(let id, let value, let body):
                     guard seenBinders.insert(id).inserted,
-                          let type = leafType(value, bindings: bindings), scalar(type) else { return }
-                    if case .stateVariable(let read) = value.operation { usedVariables.insert(read) }
+                          let type = expressionType(value, bindings: bindings,
+                              reads: &usedVariables), scalar(type) else { return }
                     bindings[id] = type
                     inferredBindings[id] = type
                     pending.append(.unbind(id))
@@ -586,21 +617,21 @@ enum StraightLineAssignmentCheck {
                     pending.append(.scan(right))
                     pending.append(.scan(left))
                 case .assign(let id, let value):
-                    guard let type = leafType(value, bindings: bindings), scalar(type),
+                    guard let type = expressionType(value, bindings: bindings,
+                                  reads: &usedVariables), scalar(type),
                           variableTypes[id] == type || (variableTypes[id] == .unknown
                               && resolvedVariableTypes[id] == type) else { return }
                     usedVariables.insert(id)
-                    if case .stateVariable(let read) = value.operation { usedVariables.insert(read) }
                 case .unchanged(let id):
                     guard scalar(variableTypes[id])
                         || (variableTypes[id] == .unknown && scalar(resolvedVariableTypes[id])) else { return }
                     usedVariables.insert(id)
                 case .guard_(let value):
-                    guard leafType(value, bindings: bindings) == .bool else { return }
-                    if case .stateVariable(let read) = value.operation { usedVariables.insert(read) }
+                    guard expressionType(value, bindings: bindings,
+                              reads: &usedVariables) == .bool else { return }
                 case .ifElse(let value, let yes, let no):
-                    guard leafType(value, bindings: bindings) == .bool else { return }
-                    if case .stateVariable(let read) = value.operation { usedVariables.insert(read) }
+                    guard expressionType(value, bindings: bindings,
+                              reads: &usedVariables) == .bool else { return }
                     pending.append(.scan(no))
                     pending.append(.scan(yes))
                 default: return
@@ -641,8 +672,17 @@ enum StraightLineAssignmentCheck {
         }
         func same(_ before: CompiledExpression, _ after: CompiledExpression,
                   bindings: [BinderID: CompiledValueType]) -> Bool {
-            guard let type = leafType(before, bindings: bindings) else { return false }
-            return after.children.isEmpty && before.operation == after.operation && after.resultType == type
+            var reads: Set<VariableID> = []
+            guard expressionType(before, bindings: bindings, reads: &reads) != nil else { return false }
+            var pending = [(before, after)]
+            while let (before, after) = pending.popLast() {
+                guard let type = nodeType(before, bindings: bindings),
+                      before.operation == after.operation,
+                      before.children.count == after.children.count,
+                      after.resultType == type else { return false }
+                pending.append(contentsOf: zip(before.children, after.children))
+            }
+            return true
         }
         bindings = parameterTypes
         pending = [.pair(original.body, resolved.body)]
@@ -655,7 +695,7 @@ enum StraightLineAssignmentCheck {
                 case (.define(let firstID, let firstValue, let firstBody),
                       .define(let secondID, let secondValue, let secondBody)):
                     guard firstID == secondID,
-                          let type = leafType(firstValue, bindings: bindings),
+                          let type = nodeType(firstValue, bindings: bindings),
                           same(firstValue, secondValue, bindings: bindings) else { throw mismatch() }
                     bindings[firstID] = type
                     pending.append(.unbind(firstID))

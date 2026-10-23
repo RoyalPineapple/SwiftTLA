@@ -347,6 +347,63 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
+    @Test("Nested addition preserves ordered operands and Int types through compilation")
+    func nestedAdditionPreservesCompiledExpression() throws {
+        let expression = StateExpr.add(.variable("value"),
+            .add(.variable("offset"), .value(.int(1))))
+        let step = AtomicStep(model: .init(label: .init(name: "advance"), statements: [
+            .set(target: .root("value"), value: expression),
+        ]))
+        var specification = TLASpec(name: "OrderedAddition", variables: [
+            NamedVar(name: "value", initial: .int(0)),
+            NamedVar(name: "offset", initial: .int(2)),
+        ], actions: [], invariants: [])
+        specification.sourceAtomicSteps = [step]
+        let inputs = try SourceTypeResolver().resolve(in: specification.compile())
+        let program = try CompiledProgram(inputs: inputs)
+        let source = try #require(specification.loweredSourceModel().actions.first)
+        let untyped = try #require(inputs.semantics.behavior.actions.first)
+        let action = try #require(program.behavior.actions.first)
+        try StraightLineAssignmentCheck.verifyCompiled(source, bindings: action.bindings,
+            body: action.body, layout: program.layout)
+        try StraightLineAssignmentCheck.verifyResolved(untyped, resolved: action,
+            variableTypes: inputs.variableTypes, resolvedVariableTypes: program.variableTypes,
+            resolvedBindingTypes: program.bindingTypes)
+
+        guard case .define(let binder, let sum, let body) = action.body,
+              sum.operation == .add, sum.children.count == 2 else { throw InvalidShape.lowered }
+        let wrongOperation = CompiledExpression(operation: .subtract,
+            resultType: sum.resultType, children: sum.children)
+        let changed = CompiledActionExpr.define(binder, wrongOperation, body)
+        do {
+            try StraightLineAssignmentCheck.verifyCompiled(source, bindings: action.bindings,
+                body: changed, layout: program.layout)
+            Issue.record("A changed addition operation passed source-to-compiled verification")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "actions.advance.compiledAssignments")
+        }
+        let reversed = CompiledActionExpr.define(binder,
+            .init(operation: .add, resultType: sum.resultType,
+                children: Array(sum.children.reversed())), body)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyCompiled(source, bindings: action.bindings,
+                body: reversed, layout: program.layout)
+        }
+
+        let wrongType = CompiledExpression(operation: sum.operation,
+            resultType: .bool, children: sum.children)
+        do {
+            try StraightLineAssignmentCheck.verifyResolved(untyped,
+                resolved: .init(id: action.id, bindings: action.bindings,
+                    body: .define(binder, wrongType, body)), variableTypes: inputs.variableTypes,
+                resolvedVariableTypes: program.variableTypes,
+                resolvedBindingTypes: program.bindingTypes)
+            Issue.record("A changed addition result type passed typed-resolution verification")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "actions[\(action.id.ordinal)].resolvedAssignments")
+        }
+    }
+
     @Test("One fallible assignment retains its complete expression and captured write")
     func fallibleSingleAssignmentRetainsOneCapture() throws {
         let expression = StateExpr.divide(
