@@ -7,53 +7,72 @@ enum StraightLineRenderedActionCheck {
         case token(String)
     }
 
+    private struct AdditionSite {
+        let guardText: String
+        let operands: String
+    }
+
+    private struct AdditionTree {
+        let value: String
+        let sites: [AdditionSite]
+
+        var defined: String {
+            let guards = sites.map(\.guardText)
+            return guards.count == 1 ? guards[0] : "(\(guards.joined(separator: " /\\ ")))"
+        }
+    }
+
     private static let tokenPattern = try? NSRegularExpression(
         pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[()+*<>-]|="#)
+
+    // shortcut: only direct scalar addition trees are checked here; extend to other expression forms with their output rules.
+    private static func addition(_ expression: CompiledExpression,
+                                 variables: [VariableID: String],
+                                 binders: [BinderID: String]) -> AdditionTree? {
+        let swiftIntMinimum = TLAValue.int(.min).description
+        let swiftIntMaximum = TLAValue.int(.max).description
+        var pending = [(expression, false)]
+        var values: [String] = []
+        var sites: [AdditionSite] = []
+        while let (node, expanded) = pending.popLast() {
+            if expanded {
+                guard values.count >= 2 else { return nil }
+                let rhs = values.removeLast()
+                let lhs = values.removeLast()
+                values.append("(\(lhs) + \(rhs))")
+                let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000 /\\ \(rhs) >= -1000000000 /\\ \(rhs) <= 1000000000)"
+                let exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(swiftIntMaximum) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(swiftIntMinimum) - (\(rhs)) ELSE TRUE)"
+                sites.append(.init(guardText: "(IF \(small) THEN TRUE ELSE \(exact))",
+                    operands: "<<\(lhs), \(rhs)>>"))
+                continue
+            }
+            switch node.operation {
+            case .add:
+                guard node.resultType == .int, node.children.count == 2 else { return nil }
+                pending.append((node, true))
+                pending.append((node.children[1], false))
+                pending.append((node.children[0], false))
+            case .stateVariable(let id):
+                guard node.children.isEmpty, let name = variables[id] else { return nil }
+                values.append(name)
+            case .boundValue(let id):
+                guard node.children.isEmpty, let name = binders[id] else { return nil }
+                values.append(name)
+            case .value(.integer(let value)):
+                guard node.children.isEmpty else { return nil }
+                values.append(TLAValue.int(value).description)
+            default: return nil
+            }
+        }
+        guard values.count == 1, !sites.isEmpty else { return nil }
+        return .init(value: values[0], sites: sites)
+    }
 
     static func verify(_ action: CompiledActionExpr, rendered: String,
                        layout: CompiledLayout, binders: [BinderID: String]) throws {
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
             ($0.id, $0.declaration.name)
         })
-        let swiftIntMinimum = TLAValue.int(.min).description
-        let swiftIntMaximum = TLAValue.int(.max).description
-        // shortcut: only direct scalar addition trees are checked here; extend to other expression forms with their output rules.
-        func addition(_ expression: CompiledExpression) -> (value: String, guards: [String])? {
-            var pending = [(expression, false)]
-            var values: [String] = []
-            var guards: [String] = []
-            while let (node, expanded) = pending.popLast() {
-                if expanded {
-                    guard values.count >= 2 else { return nil }
-                    let rhs = values.removeLast()
-                    let lhs = values.removeLast()
-                    values.append("(\(lhs) + \(rhs))")
-                    let small = "(\(lhs) >= -1000000000 /\\ \(lhs) <= 1000000000 /\\ \(rhs) >= -1000000000 /\\ \(rhs) <= 1000000000)"
-                    let exact = "(IF \(rhs) > 0 THEN \(lhs) <= \(swiftIntMaximum) - (\(rhs)) ELSE IF \(rhs) < 0 THEN \(lhs) >= \(swiftIntMinimum) - (\(rhs)) ELSE TRUE)"
-                    guards.append("(IF \(small) THEN TRUE ELSE \(exact))")
-                    continue
-                }
-                switch node.operation {
-                case .add:
-                    guard node.resultType == .int, node.children.count == 2 else { return nil }
-                    pending.append((node, true))
-                    pending.append((node.children[1], false))
-                    pending.append((node.children[0], false))
-                case .stateVariable(let id):
-                    guard node.children.isEmpty, let name = variables[id] else { return nil }
-                    values.append(name)
-                case .boundValue(let id):
-                    guard node.children.isEmpty, let name = binders[id] else { return nil }
-                    values.append(name)
-                case .value(.integer(let value)):
-                    guard node.children.isEmpty else { return nil }
-                    values.append(TLAValue.int(value).description)
-                default: return nil
-                }
-            }
-            guard values.count == 1, !guards.isEmpty else { return nil }
-            return (values[0], guards)
-        }
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(
                 code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -92,7 +111,8 @@ enum StraightLineRenderedActionCheck {
                     continue
                 }
                 if case .add = expression.operation {
-                    guard let value = addition(expression), let rendered = tokens(value.value) else { return }
+                    guard let value = addition(expression, variables: variables, binders: binders),
+                          let rendered = tokens(value.value) else { return }
                     expected.append(contentsOf: rendered)
                     continue
                 }
@@ -117,10 +137,9 @@ enum StraightLineRenderedActionCheck {
                 case .assign(let id, let value):
                     guard let name = variables[id] else { throw mismatch() }
                     let assignment: [Task] = [.token("\(name)'"), .token("="), .value(value)]
-                    if case .add = value.operation, let tree = addition(value) {
-                        let defined = tree.guards.count == 1 ? tree.guards[0]
-                            : "(\(tree.guards.joined(separator: " /\\ ")))"
-                        guard let guardTokens = tokens(defined) else { throw mismatch() }
+                    if case .add = value.operation,
+                       let tree = addition(value, variables: variables, binders: binders) {
+                        guard let guardTokens = tokens(tree.defined) else { throw mismatch() }
                         schedule([.token("("), .token("IF")] + guardTokens.map(Task.token)
                             + [.token("THEN")] + assignment
                             + [.token("ELSE"), .token("FALSE"), .token(")")])
@@ -142,10 +161,9 @@ enum StraightLineRenderedActionCheck {
                           usedBinderNames.insert(name).inserted else { return }
                     let definition: [Task] = [.token("("), .token("LET"), .token(name),
                         .token("=="), .value(value), .token("IN"), .action(body), .token(")")]
-                    if case .add = value.operation, let tree = addition(value) {
-                        let defined = tree.guards.count == 1 ? tree.guards[0]
-                            : "(\(tree.guards.joined(separator: " /\\ ")))"
-                        guard let guardTokens = tokens(defined) else { throw mismatch() }
+                    if case .add = value.operation,
+                       let tree = addition(value, variables: variables, binders: binders) {
+                        guard let guardTokens = tokens(tree.defined) else { throw mismatch() }
                         schedule([.token("("), .token("IF")] + guardTokens.map(Task.token)
                             + [.token("THEN")] + definition
                             + [.token("ELSE"), .token("FALSE"), .token(")")])
@@ -168,7 +186,8 @@ enum StraightLineRenderedActionCheck {
 
     static func verifyDeclaration(_ action: CompiledAction, named name: String,
                                   body: String, module: String, layout: CompiledLayout,
-                                  binders: [BinderID: String]) throws {
+                                  binders: [BinderID: String],
+                                  failureDeclarations: [String]) throws {
         try verify(action.body, rendered: body, layout: layout, binders: binders)
         let parameters = try action.bindings.map { binding -> String in
             guard let name = binders[binding.binder], isFormalIdentifier(name) else {
@@ -183,6 +202,88 @@ enum StraightLineRenderedActionCheck {
         let header = parameters.isEmpty ? name : "\(name)(\(parameters.joined(separator: ", ")))"
         try verifyRenderedActionDeclarations(module,
             declarations: [(header, "\(header) == \(body)")])
+        try verifyAdditionFailures(action, module: module, layout: layout,
+            binders: binders, parameters: parameters,
+            failureDeclarations: failureDeclarations)
+    }
+
+    private static func verifyAdditionFailures(_ action: CompiledAction, module: String,
+                                               layout: CompiledLayout, binders: [BinderID: String],
+                                               parameters: [String],
+                                               failureDeclarations: [String]) throws {
+        // shortcut: failure declarations are checked for one captured addition assignment;
+        // extend this rule to sequential and branching actions before claiming full coverage.
+        guard case .define(let binder, let expression, let continuation) = action.body,
+              case .add = expression.operation,
+              binders[binder] != nil,
+              let tree = addition(expression,
+                  variables: Dictionary(uniqueKeysWithValues: layout.variables.map {
+                      ($0.id, $0.declaration.name)
+                  }), binders: binders) else { return }
+        var assigned = false
+        var pending = [continuation]
+        while let node = pending.popLast() {
+            switch node {
+            case .assign(_, let value):
+                guard !assigned, case .boundValue(let usedBinder) = value.operation,
+                      usedBinder == binder, value.children.isEmpty else { return }
+                assigned = true
+            case .unchanged: break
+            case .guard_(let condition):
+                guard case .value(.boolean(true)) = condition.operation,
+                      condition.children.isEmpty else { return }
+            case .and(let left, let right):
+                pending.append(right)
+                pending.append(left)
+            default: return
+            }
+        }
+        guard assigned else { return }
+        func mismatch(_ name: String) -> CompilationDiagnostic {
+            CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "tla.evaluationFailures.\(name)",
+                expected: "the captured addition's ordered failure and operand declarations",
+                actual: "a generated declaration differs or is missing",
+                nextSafeAction: "Regenerate the TLA+ failure declarations from the compiled action.")
+        }
+        let index = action.id.ordinal
+        let parameterSuffix = parameters.isEmpty ? "" : "(\(parameters.joined(separator: ", ")))"
+        let lines = module.components(separatedBy: "\n")
+        func verifyDeclaration(_ base: String, value: String) throws {
+            // The emitter may append underscores when an authored symbol owns the base name.
+            let candidates = failureDeclarations.filter { declaration in
+                guard let header = declaration.components(separatedBy: " == ").first,
+                      header.hasSuffix(parameterSuffix) else { return false }
+                let name = String(header.dropLast(parameterSuffix.count))
+                return name.hasPrefix(base) && name.dropFirst(base.count).allSatisfy { $0 == "_" }
+            }
+            guard candidates.count == 1,
+                  let header = candidates[0].components(separatedBy: " == ").first else {
+                throw mismatch(base)
+            }
+            let expected = "\(header) == \(value)"
+            guard candidates[0] == expected,
+                  lines.filter({ $0.hasPrefix("\(header) == ") }) == [expected] else {
+                throw mismatch(base)
+            }
+        }
+        var preceding: [String] = []
+        for (position, site) in tree.sites.enumerated() {
+            let suffix = position == 0 ? "\(index)" : "\(index)_\(position)"
+            let predicate = preceding.isEmpty ? "~(\(site.guardText))"
+                : "(\(preceding.joined(separator: " /\\ ")) /\\ ~(\(site.guardText)))"
+            let expected = [
+                ("__SwiftTLAOverflowFailure\(suffix)", predicate),
+                ("__SwiftTLAOverflowOperands\(suffix)", site.operands),
+                ("__SwiftTLAOverflowOperation\(suffix)", "\"addition\""),
+            ]
+            for (name, value) in expected {
+                try verifyDeclaration(name, value: value)
+            }
+            preceding.append(site.guardText)
+        }
+        let aggregateName = "__SwiftTLAAnyEvaluationFailure\(index)"
+        try verifyDeclaration(aggregateName, value: "~(\(tree.defined))")
     }
 
     static func verifyFiniteInvocations(_ behavior: CompiledBehavior,

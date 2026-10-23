@@ -2210,7 +2210,8 @@ private extension CompiledModuleMetadata {
             guard !rendered.sourceName.isEmpty else { continue }
             try StraightLineRenderedActionCheck.verifyDeclaration(behavior.actions[index],
                 named: rendered.renderedName, body: rendered.renderedBody,
-                module: directOutput.source, layout: layout, binders: renderer.bindings.binders)
+                module: directOutput.source, layout: layout, binders: renderer.bindings.binders,
+                failureDeclarations: directOutput.evaluationFailureDeclarations)
         }
         try StraightLineRenderedActionCheck.verifyFiniteInvocations(behavior,
             layout: layout, binders: renderer.bindings.binders, module: directOutput.source)

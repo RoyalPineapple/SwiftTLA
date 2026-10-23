@@ -1948,11 +1948,17 @@ expression language. For the same subset, the TLA+ action-output checker now
 matches the actual nested addition tree and every emitted overflow guard against
 the compiled identities; changing a value or guard fails. The generated-Swift
 arithmetic checker is exercised on the same compiled action, and the
-parameterized TLAPS theorem supplies the guard's semantic rule. The separately
-emitted overflow-failure predicates, payloads, and aggregate checking result
-remain unlinked, so this is not yet a complete end-to-end proof slice. The
-independent output checker and shared `TLAValue` integer-literal serialization
-remain project-owned trusted components until their own correctness is proved.
+parameterized TLAPS theorem supplies the guard's semantic rule. For a single
+captured addition assignment with only a true guard and unchanged frame, the
+same output checker now independently derives the ordered overflow predicates,
+operand tuples, operation labels, and action-level aggregate failure from the
+compiled tree, then checks their declarations in the actual module. Separate
+mutations of each declaration are rejected. The renderer's declaration list is
+used only to locate symbols renamed to avoid collisions; its values are not the
+expected semantics. This does not yet cover sequential or branching actions,
+the global selected evaluation invariant, or the `#spec` control-flow wrapper.
+The output checker and shared `TLAValue` integer-literal serialization remain
+project-owned trusted components until their own correctness is proved.
 
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
