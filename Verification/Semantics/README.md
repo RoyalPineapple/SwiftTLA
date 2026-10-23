@@ -1379,8 +1379,17 @@ proves that, for any finite sequence of distinct final state slots and complete
 source values, a generated merge history exists, every merge is accepted, and
 applying the result preserves the entire source delta. This generalizes the
 abstract write-and-apply rule beyond the two-slot fixture; it does not prove
-the Swift helper's implementation or the reads and control flow that produce
-those final writes. The macro also checks every emitted `Snapshot`
+the Swift helper's implementation. `OrderedSourceAndGeneratedMergeStepsAgree`
+composes that result with arbitrary finite ordered source assignments, in both
+directions, including repeated writes and intermediate reads. It requires a
+distinct generated-slot sequence whose complete key set equals the source
+instruction targets. For the supported scalar `sourceAtomicSteps` slice,
+`StraightLineAssignmentCheck.verify` now rejects a duplicate final assignment
+or a different target set, so the source-to-lowered action supplies that
+premise; a same-value duplicate mutation is rejected. The compiled-action and
+emitted-output checks above remain separate links, and this certificate does
+not yet cover all accepted `#spec` algorithm forms or prove the Swift merge
+helper. The macro also checks every emitted `Snapshot`
 declaration against the compiled hidden-field list: it permits exactly the
 public state and those hidden fields, with `Hashable` and `Sendable` synthesis
 and no custom identity implementation. A missing-hidden-field mutation is

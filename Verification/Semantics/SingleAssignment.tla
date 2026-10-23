@@ -2391,6 +2391,120 @@ THEOREM EveryDistinctFinalWriteSequencePreservesCompleteDelta ==
         BY <1>2, DistinctFinalWritesPreserveCompleteDelta
     <1>. QED BY <1>2, <1>3, SMT
 
+InstructionTargetPrefix(steps, index) ==
+    {steps[position].target : position \in 1..index}
+
+THEOREM ScheduledHistoryWritesExactlySourceTargets ==
+    ASSUME NEW original \in States,
+           NEW steps \in Seq(Instructions),
+           NEW history \in [0..Len(steps) -> ScheduledRecords],
+           ScheduledHistory(original, steps, history)
+    PROVE \A index \in 0..Len(steps) :
+        history[index].keys = InstructionTargetPrefix(steps, index)
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(steps) =>
+            history[index].keys = InstructionTargetPrefix(steps, index)
+    <1>1. P(0)
+        BY SMT DEF P, ScheduledHistory, InstructionTargetPrefix
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(steps)
+                     PROVE history[index + 1].keys
+                           = InstructionTargetPrefix(steps, index + 1)
+            BY SMT DEF P
+        <2>1. index \in 0..Len(steps)
+            BY SMT
+        <2>2. history[index + 1]
+                = AdvanceScheduleRecord(original, history[index], steps[index + 1])
+            BY SMT DEF ScheduledHistory
+        <2>3. InstructionTargetPrefix(steps, index + 1)
+                = InstructionTargetPrefix(steps, index) \cup {steps[index + 1].target}
+            BY SMT DEF InstructionTargetPrefix
+        <2>. QED BY <2>1, <2>2, <2>3, P(index), SMT
+            DEF P, AdvanceScheduleRecord
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED BY <1>3, SMT DEF P
+
+GeneratedOrderedDoStep(original, steps, slots, target) ==
+    \E scheduled \in [0..Len(steps) -> ScheduledRecords] :
+        /\ ScheduledHistory(original, steps, scheduled)
+        /\ \E updates \in [0..Len(slots) -> GeneratedUpdates] :
+            /\ GeneratedFinalWriteHistory(original, slots,
+                scheduled[Len(steps)].values, updates)
+            /\ updates[Len(slots)].accepted
+            /\ target = GeneratedApply(original, updates[Len(slots)])
+
+THEOREM OrderedSourceAndGeneratedMergeStepsAgree ==
+    ASSUME NEW original \in States,
+           NEW target \in States,
+           NEW steps \in Seq(Instructions),
+           NEW slots \in Seq(Vars),
+           DistinctFinalWriteKeys(slots),
+           FinalWritePrefix(slots, Len(slots))
+               = InstructionTargetPrefix(steps, Len(steps))
+    PROVE SourceDoStep(original, steps, target)
+        <=> GeneratedOrderedDoStep(original, steps, slots, target)
+    PROOF
+    <1>1. SourceDoStep(original, steps, target)
+            => GeneratedOrderedDoStep(original, steps, slots, target)
+        <2>. SUFFICES ASSUME SourceDoStep(original, steps, target)
+                     PROVE GeneratedOrderedDoStep(original, steps, slots, target)
+            BY SMT
+        <2>1. ScheduledDoStep(original, steps, target)
+            BY OrderedDoTransitionEquivalence
+        <2>2. PICK scheduled \in [0..Len(steps) -> ScheduledRecords] :
+                /\ ScheduledHistory(original, steps, scheduled)
+                /\ ApplyDelta(original, scheduled[Len(steps)].keys,
+                    scheduled[Len(steps)].values) = target
+            BY <2>1 DEF ScheduledDoStep
+        <2>3. scheduled[Len(steps)].values \in States
+            BY <2>2, SMT DEF ScheduledRecords
+        <2>4. scheduled[Len(steps)].keys
+                = InstructionTargetPrefix(steps, Len(steps))
+            BY <2>2, ScheduledHistoryWritesExactlySourceTargets, SMT
+        <2>5. \E updates \in [0..Len(slots) -> GeneratedUpdates] :
+                /\ GeneratedFinalWriteHistory(original, slots,
+                    scheduled[Len(steps)].values, updates)
+                /\ updates[Len(slots)].accepted
+                /\ target = GeneratedApply(original, updates[Len(slots)])
+            BY <2>2, <2>3, <2>4,
+                EveryDistinctFinalWriteSequencePreservesCompleteDelta, SMT
+        <2>. QED BY <2>2, <2>5 DEF GeneratedOrderedDoStep
+    <1>2. GeneratedOrderedDoStep(original, steps, slots, target)
+            => SourceDoStep(original, steps, target)
+        <2>. SUFFICES ASSUME GeneratedOrderedDoStep(original, steps, slots, target)
+                     PROVE SourceDoStep(original, steps, target)
+            BY SMT
+        <2>1. PICK scheduled \in [0..Len(steps) -> ScheduledRecords] :
+                /\ ScheduledHistory(original, steps, scheduled)
+                /\ \E updates \in [0..Len(slots) -> GeneratedUpdates] :
+                    /\ GeneratedFinalWriteHistory(original, slots,
+                        scheduled[Len(steps)].values, updates)
+                    /\ updates[Len(slots)].accepted
+                    /\ target = GeneratedApply(original, updates[Len(slots)])
+            BY DEF GeneratedOrderedDoStep
+        <2>2. PICK updates \in [0..Len(slots) -> GeneratedUpdates] :
+                /\ GeneratedFinalWriteHistory(original, slots,
+                    scheduled[Len(steps)].values, updates)
+                /\ updates[Len(slots)].accepted
+                /\ target = GeneratedApply(original, updates[Len(slots)])
+            BY <2>1
+        <2>3. scheduled[Len(steps)].values \in States
+            BY <2>1, SMT DEF ScheduledRecords
+        <2>4. scheduled[Len(steps)].keys
+                = InstructionTargetPrefix(steps, Len(steps))
+            BY <2>1, ScheduledHistoryWritesExactlySourceTargets, SMT
+        <2>5. GeneratedApply(original, updates[Len(slots)])
+                = ApplyDelta(original, FinalWritePrefix(slots, Len(slots)),
+                    scheduled[Len(steps)].values)
+            BY <2>2, <2>3, DistinctFinalWritesPreserveCompleteDelta, SMT
+        <2>6. ScheduledDoStep(original, steps, target)
+            BY <2>1, <2>2, <2>4, <2>5, SMT DEF ScheduledDoStep
+        <2>. QED BY <2>6, OrderedDoTransitionEquivalence
+    <1>. QED BY <1>1, <1>2, SMT
+
 GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
     LET firstUpdate ==
             GeneratedMerge(GeneratedEmptyUpdates(state), firstKey, firstValue)

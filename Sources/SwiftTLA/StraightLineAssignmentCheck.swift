@@ -216,6 +216,7 @@ enum StraightLineAssignmentCheck {
         }
 
         var writes: [String: Term] = [:]
+        var assignedRoots: Set<String> = []
         var bindings = Dictionary(uniqueKeysWithValues: parameterNames.map { ($0, Term.parameter($0)) })
         var pending: [Visit] = [.action(lowered)]
         while let next = pending.popLast() {
@@ -235,7 +236,9 @@ enum StraightLineAssignmentCheck {
             case .guard_(.value(.bool(true))):
                 break
             case .assign(.named(let root), let expression):
-                guard stateRoots.contains(root) else { throw mismatch() }
+                guard stateRoots.contains(root), assignedRoots.insert(root).inserted else {
+                    throw mismatch()
+                }
                 let assigned = try value(expression, bindings: bindings)
                 guard writes[root] == nil || writes[root] == assigned else { throw mismatch() }
                 writes[root] = assigned
@@ -248,7 +251,8 @@ enum StraightLineAssignmentCheck {
             }
         }
 
-        guard stateRoots.allSatisfy({ (writes[$0] ?? .prior($0)) == (source[$0] ?? .prior($0)) }) else {
+        guard assignedRoots == Set(source.keys),
+              stateRoots.allSatisfy({ (writes[$0] ?? .prior($0)) == (source[$0] ?? .prior($0)) }) else {
             throw mismatch()
         }
     }
