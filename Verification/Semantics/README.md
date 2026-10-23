@@ -272,7 +272,9 @@ outputs is an accepted `#spec` sequential `Algorithm` with one shared `Int`
 variable, one unparameterized `Do` step, and only `Assign(x, to: x + c)` for
 an `Int` literal `c`; the generated termination action is separate. The
 production single-assignment capture and typed compiled-action checks retain
-the source expression, target, guard order, and types. The native visitor
+the source expression, target, entry-control guard, next-control write, and
+types. Changing the compiled entry location is rejected by a negative control.
+The native visitor
 check derives the checked addition call, operands, target, and control update
 from that compiled action. The generated successor wrapper is checked to apply
 each update to the complete snapshot and visit each distinct result. The

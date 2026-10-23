@@ -339,6 +339,22 @@ private struct ReachableInvariantFailure {
 
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         let generatedAction = try #require(program.behavior.actions.first)
+        let sourceAction = try #require(CheckedExecutionOverflow.spec.loweredSourceModel().actions.first)
+        try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+            bindings: generatedAction.bindings, body: generatedAction.body, layout: program.layout)
+        guard case .and(.guard_(let compiledControlGuard), let compiledTail) = generatedAction.body,
+              compiledControlGuard.children.count == 2 else {
+            Issue.record("The compiled action lost its sequential control guard")
+            return
+        }
+        let wrongControlGuard = CompiledExpression(operation: .equal,
+            resultType: compiledControlGuard.resultType,
+            children: [compiledControlGuard.children[0], .controlLocation(done.id)])
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+                bindings: generatedAction.bindings,
+                body: .and(.guard_(wrongControlGuard), compiledTail), layout: program.layout)
+        }
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "CheckedExecutionOverflow", program: program))
         let members = try emitter.machineMembers()
