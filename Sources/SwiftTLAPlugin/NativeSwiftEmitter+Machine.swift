@@ -426,7 +426,14 @@ extension NativeSwiftEmitter {
                 case .value: return "let \(name)"
                 case .memberOf: return "for \(name)"
                 }
-            }, expectedLoops: expectedLoops, expectedCandidateSources: expectedCandidateSources)
+            }, expectedLoops: expectedLoops, expectedCandidateSources: expectedCandidateSources,
+            expectedIntLiterals: Dictionary(uniqueKeysWithValues:
+                program.behavior.initializations.compactMap { initialization -> (String, Int)? in
+                    guard case .value(let expression) = initialization.initialization,
+                          case .value(.integer(let value)) = expression.operation,
+                          expression.resultType == .int else { return nil }
+                    return (variable(initialization.variable), value)
+                }))
         try verifyRandomSubsetInitialSupport(declarations.first,
             expected: program.behavior.initializations.compactMap { initialization -> (String, Bool)? in
                 guard case .memberOf(let expression) = initialization.initialization,
@@ -1318,7 +1325,7 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
 
 func verifyGeneratedInitialBindings(
     _ declaration: DeclSyntax?, expected: [String], expectedLoops: [String: String],
-    expectedCandidateSources: [String: String]
+    expectedCandidateSources: [String: String], expectedIntLiterals: [String: Int] = [:]
 ) throws {
     guard let initialStates = declaration?.as(FunctionDeclSyntax.self) else {
         throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -1343,6 +1350,23 @@ func verifyGeneratedInitialBindings(
     }
     func expectedTokens(_ source: String) -> [String] {
         Array(Parser.parse(source: source).tokens(viewMode: .sourceAccurate)).map(\.text).filter { !$0.isEmpty }
+    }
+    for (name, value) in expectedIntLiterals {
+        let literal = value == Int.min ? "Int.min" : String(value)
+        let required = ["let", name, ":", "Int", "="] + expectedTokens(literal)
+        let positions = tokens.indices.filter { index in
+            index + 1 < tokens.count && tokens[index] == "let" && tokens[index + 1] == name
+        }
+        guard positions.count == 1, let start = positions.first,
+              start + required.count < tokens.count,
+              Array(tokens[start..<(start + required.count)]) == required,
+              ["if", "let", "for", "result", "}"].contains(tokens[start + required.count]) else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native._initialStates.literal.\(name)",
+                expected: "the compiled Int initializer \(literal)",
+                actual: "the emitted initializer differs from its compiled value",
+                nextSafeAction: "Report this native initialization generation failure.")
+        }
     }
     for (name, sequence) in expectedLoops {
         var positions: [Int] = []

@@ -358,6 +358,24 @@ private struct ReachableInvariantFailure {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "CheckedExecutionOverflow", program: program))
         let members = try emitter.machineMembers()
+        let initialDeclaration = try #require(members.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        let countBinding = emitter.variable(count.id)
+        let originalLiteral = "let \(countBinding): Int = \(Int.max)"
+        let wrongInitialSource = initialDeclaration.description.replacingOccurrences(
+            of: originalLiteral, with: "let \(countBinding): Int = 0")
+        #expect(wrongInitialSource != initialDeclaration.description)
+        let wrongInitial = try #require(Parser.parse(source: wrongInitialSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        let initialBindings = program.behavior.initializations.map { initialization in
+            "let \(emitter.variable(initialization.variable))"
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedInitialBindings(wrongInitial, expected: initialBindings,
+                expectedLoops: [:], expectedCandidateSources: [:],
+                expectedIntLiterals: [countBinding: Int.max])
+        }
         let failureVisitor = try #require(members.first { declaration in
             guard let function = declaration.as(FunctionDeclSyntax.self) else { return false }
             return function.name.text == "_visitSuccessors"
@@ -452,6 +470,15 @@ private struct ReachableInvariantFailure {
         }
 
         let rendered = try CheckedExecutionOverflow.render()
+        let initialPredicate = "  /\\ count = \(TLAValue.int(Int.max).description)"
+        let wrongInitialModule = rendered.tlaBundle.root.tla.replacingOccurrences(
+            of: initialPredicate, with: "  /\\ count = 0")
+        #expect(wrongInitialModule != rendered.tlaBundle.root.tla)
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyRenderedInitialConjunction(wrongInitialModule,
+                predicates: ["pc = \"advance\"", "count = 0"],
+                expectedIntLiterals: ["count": Int.max])
+        }
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflow.tla")

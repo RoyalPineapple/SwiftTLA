@@ -292,6 +292,12 @@ arithmetic kernels, the native checking traversal, the formal value encoding,
 and documented Swift behavior.
 They do not prove arbitrary initializers, other expressions, temporal claims,
 or the universal `#spec` theorem.
+For a typed deterministic `Int` literal initializer, the native and TLA+ output
+checks independently derive the expected literal from the compiled value and
+reject changed emitted values. The negative controls alter the Swift binding
+and both the TLA+ `Init` text and its renderer-supplied predicate. This closes
+those two output links, not the source-to-typed-initializer link or a proof of
+the trusted formal integer encoding.
 The native branch trusts Swift's `addingReportingOverflow` contract and the small
 `_NativeMachineOperations.add` wrapper; the fixture's generated-Swift witness
 and runtime failure test check that link, but are not a proof of the Swift
