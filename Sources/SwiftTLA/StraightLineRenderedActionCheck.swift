@@ -28,6 +28,13 @@ enum StraightLineRenderedActionCheck {
         var usedBinderNames: Set<String> = []
         var pending: [Task] = [.action(action)]
         func schedule(_ tasks: [Task]) { pending.append(contentsOf: tasks.reversed()) }
+        func directBoolean(_ expression: CompiledExpression) -> Bool {
+            guard expression.children.isEmpty else { return false }
+            switch expression.operation {
+            case .stateVariable, .boundValue, .value(.boolean): return true
+            default: return false
+            }
+        }
         while let task = pending.popLast() {
             switch task {
             case .token(let token): expected.append(token)
@@ -53,9 +60,13 @@ enum StraightLineRenderedActionCheck {
                     guard let name = variables[id] else { throw mismatch() }
                     schedule([.token("UNCHANGED"), .token(name)])
                 case .guard_(let value):
-                    guard value.children.isEmpty,
-                          value.operation == .value(.boolean(true)) else { return }
-                    expected.append("TRUE")
+                    guard directBoolean(value) else { return }
+                    if case .value(.boolean) = value.operation {
+                        schedule([.value(value)])
+                    } else {
+                        schedule([.token("("), .value(value), .token(")"),
+                            .token("="), .token("TRUE")])
+                    }
                 case .define(let id, let value, let body):
                     guard let name = binders[id], isFormalIdentifier(name),
                           !variables.values.contains(name),
@@ -66,6 +77,11 @@ enum StraightLineRenderedActionCheck {
                     schedule([.token("("), .action(left), .token("/\\"), .action(right), .token(")")])
                 case .or(let left, let right):
                     schedule([.token("("), .action(left), .token("\\/"), .action(right), .token(")")])
+                case .ifElse(let condition, let yes, let no):
+                    guard directBoolean(condition) else { return }
+                    schedule([.token("("), .token("IF"), .value(condition), .token("THEN"),
+                        .token("("), .action(yes), .token(")"), .token("ELSE"),
+                        .token("("), .action(no), .token(")"), .token(")")])
                 default: return
                 }
             }

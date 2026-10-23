@@ -2152,6 +2152,12 @@ conditional *control-shape* link for every compiled action tree, conditional
 on ordinary Swift semantics for the pinned kernel and on expression emission
 denoting the compiled condition. Source lowering, arbitrary branch failures,
 and the independent TLA+ conditional output still need their general links.
+The production TLA+ output check now reconstructs direct Boolean state,
+bound, and literal guards and `ifElse` branch structure from the compiled
+action before accepting the rendered module. Focused mutations replacing a
+condition with `FALSE` or dropping a guard are rejected. This is an actual
+output-syntax link for those direct operands, not a proof of general Boolean
+expression rendering, condition typing, or branch/failure semantics.
 
 For every compiled `or` node, the output checker additionally requires the
 complete emitted body to call the shared ordered alternative visitor with
