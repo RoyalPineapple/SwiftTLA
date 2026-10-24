@@ -167,6 +167,11 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   relations in source order. The emitted-output checker rejects swapped
   failure sites; this local regression does not establish every initializer
   expression's Swift/TLA+ output link.
+- [x] Independently decode the actual generated Swift for deterministic
+  `Int` initializer leaves and nested checked additions. The checker compares
+  its ordered operations and operands to the compiled tree and rejects a
+  swapped-operand mutation. This covers that output rule, not the native
+  operation kernel or other initializer expression families.
 - [ ] Then close **one missing link at a time** in the inventory above. Do not
   add upstream families or more named proof fixtures in place of rule coverage.
 
