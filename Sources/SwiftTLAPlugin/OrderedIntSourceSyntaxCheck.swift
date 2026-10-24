@@ -51,7 +51,9 @@ enum OrderedIntSourceSyntaxCheck {
                let member = initializer.calledExpression.as(MemberAccessExprSyntax.self),
                member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == scope,
                member.declName.baseName.text == "sharedVar",
-               initializer.arguments.allSatisfy({ $0.label?.text == "_name" || $0.label?.text == "initial" }),
+               initializer.arguments.allSatisfy({
+                   $0.label?.text == "_name" || $0.label?.text == "label" || $0.label?.text == "initial"
+               }),
                let initial = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
                let initialValue = value(initial, roots: roots) {
                 let root = initializer.arguments.first(where: { $0.label?.text == "_name" })?

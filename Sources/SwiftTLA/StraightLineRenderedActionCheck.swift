@@ -123,7 +123,9 @@ enum StraightLineRenderedActionCheck {
             }
             switch node.operation {
             case .add:
-                guard node.resultType == .int, node.children.count == 2 else { return nil }
+                // Rendered expressions can precede type resolution; the accepted rule checks Int operands.
+                guard (node.resultType == .int || node.resultType == .unknown),
+                      node.children.count == 2 else { return nil }
                 pending.append((node, true))
                 pending.append((node.children[1], false))
                 pending.append((node.children[0], false))
