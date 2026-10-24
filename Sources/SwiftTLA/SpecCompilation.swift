@@ -2814,7 +2814,9 @@ private extension CompiledModuleMetadata {
         try verifyRenderedInitialConjunction(source, predicates: initialPredicates,
             expectedIntLiterals: expectedIntLiterals,
             expectedControlLocations: expectedControlLocations,
-            expectedIntPredicates: expectedIntPredicates)
+            expectedIntPredicates: expectedIntPredicates,
+            requireCompleteSimpleInitials: behavior.initialInvariant == nil
+                && expectedIntLiterals.count + expectedControlLocations.count == layout.variables.count)
         try verifyRenderedActionDeclarations(source, declarations: actionDeclarations)
         return (source, evaluationFailureDeclarations, evaluationInvariant)
     }
@@ -2874,7 +2876,8 @@ func verifyRenderedVariableDeclaration(_ source: String, names: [String]) throws
 func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
                                       expectedIntLiterals: [String: Int] = [:],
                                       expectedControlLocations: [String: String] = [:],
-                                      expectedIntPredicates: [String: String] = [:]) throws {
+                                      expectedIntPredicates: [String: String] = [:],
+                                      requireCompleteSimpleInitials: Bool = false) throws {
     let lines = source.components(separatedBy: "\n")
     let starts = lines.indices.filter { lines[$0] == "Init ==" || lines[$0].hasPrefix("Init == ") }
     let expected = predicates.isEmpty
@@ -2891,6 +2894,8 @@ func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
         actual = "\(starts.count) Init declarations"
     }
     guard actual == expected,
+          (!requireCompleteSimpleInitials
+              || predicates.count == expectedIntLiterals.count + expectedControlLocations.count),
           expectedIntLiterals.allSatisfy({ name, value in
               predicates.filter { $0 == "\(name) = \(TLAValue.int(value).description)" }.count == 1
           }),
