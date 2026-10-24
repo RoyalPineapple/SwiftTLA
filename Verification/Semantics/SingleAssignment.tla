@@ -1070,6 +1070,47 @@ THEOREM OrderedInitialHistoriesAgree ==
     <1>. QED
         BY <1>3, SMT DEF P
 
+DeterministicInitialPlans ==
+    [key: Vars, values: [States -> Values], defined: [States -> BOOLEAN]]
+AsDeterministicInitialPlan(plan) ==
+    [key |-> plan.key,
+     candidates |-> [prior \in States |->
+         IF plan.defined[prior] THEN <<plan.values[prior]>> ELSE <<>>],
+     domains |-> [prior \in States |->
+         IF plan.defined[prior] THEN {plan.values[prior]} ELSE {}]]
+
+THEOREM DeterministicInitialPlanAgrees ==
+    \A plan \in DeterministicInitialPlans :
+        /\ AsDeterministicInitialPlan(plan) \in InitializationPlans
+        /\ InitializationPlanAgrees(AsDeterministicInitialPlan(plan))
+    BY SMT DEF DeterministicInitialPlans, AsDeterministicInitialPlan,
+        InitializationPlans, InitializationPlanAgrees, SequenceMembers
+
+THEOREM OrderedDeterministicInitialHistoriesAgree ==
+    ASSUME NEW start \in SUBSET States,
+           NEW plans \in Seq(DeterministicInitialPlans),
+           NEW enumerated \in [0..Len(plans) -> SUBSET States],
+           NEW relational \in [0..Len(plans) -> SUBSET States],
+           LET mapped == [index \in 1..Len(plans) |->
+               AsDeterministicInitialPlan(plans[index])]
+           IN /\ EnumeratedInitialHistory(start, mapped, enumerated)
+              /\ MembershipInitialHistory(start, mapped, relational)
+    PROVE \A index \in 0..Len(plans) : enumerated[index] = relational[index]
+    PROOF
+    <1>. DEFINE mapped == [index \in 1..Len(plans) |->
+            AsDeterministicInitialPlan(plans[index])]
+    <1>1. mapped \in Seq(InitializationPlans)
+        BY DeterministicInitialPlanAgrees, LenProperties, SMT
+           DEF mapped
+    <1>2. Len(mapped) = Len(plans)
+        BY DEF mapped
+    <1>3. \A index \in 1..Len(mapped) :
+            InitializationPlanAgrees(mapped[index])
+        BY <1>2, DeterministicInitialPlanAgrees, LenProperties, SMT
+           DEF mapped
+    <1>. QED BY <1>1, <1>2, <1>3, OrderedInitialHistoriesAgree,
+        SMT DEF mapped
+
 ValidInitializationPlans(plans) ==
     \A index \in 1..Len(plans) : InitializationPlanAgrees(plans[index])
 InitialHistoriesExist(start, plans) ==
@@ -2650,6 +2691,19 @@ SourceSequentialIntInitial(entry, initial) ==
 GeneratedSequentialIntInitial(entry, initial) ==
     {state \in SequentialStates :
         state.location = entry /\ state.data = initial}
+SourceSequentialIntInitialSet(entry, initials) ==
+    UNION {SourceSequentialIntInitial(entry, initial) : initial \in initials}
+GeneratedSequentialIntInitialSet(entry, initials) ==
+    UNION {GeneratedSequentialIntInitial(entry, initial) : initial \in initials}
+
+THEOREM SequentialInitialControlLiftPreservesEquality ==
+    \A entry \in ActionLabels, sourceInitials, generatedInitials \in SUBSET States :
+        sourceInitials = generatedInitials =>
+            SourceSequentialIntInitialSet(entry, sourceInitials)
+                = GeneratedSequentialIntInitialSet(entry, generatedInitials)
+    BY SMT DEF SourceSequentialIntInitialSet,
+        GeneratedSequentialIntInitialSet, SourceSequentialIntInitial,
+        GeneratedSequentialIntInitial, SequentialStates, States
 
 SourceCheckedSequentialEdges(entry, next, label, steps, guards) ==
     {edge \in SequentialEdges :
