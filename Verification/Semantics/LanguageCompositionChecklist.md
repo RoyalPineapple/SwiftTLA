@@ -172,6 +172,12 @@ ordered root `Int` assignments from literals, prior-state reads and checked addi
 deterministic `Int` initializers of those forms, and the hidden program
 counter. `SingleAssignment.tla` has a general composition theorem for complete
 initial sets, labeled steps, ordered action/initial failures, and termination.
+`ExactSequentialCheckingOutcomes` derives invariant, reachability, and
+deadlock verdict agreement from equal complete initial/edge sets and
+pointwise-equal selected state predicates. This is a graph-to-verdict rule:
+it does not establish that an arbitrary authored predicate is lowered and
+emitted identically. That property-output link, assumptions, fairness, and
+checker resource-limit semantics remain open.
 Production source/lowering and actual-output checkers plus wrong-value,
 wrong-location, wrong-order, and omitted-failure mutations are described in
 `README.md`. This is **not** coverage of other accepted constructors.

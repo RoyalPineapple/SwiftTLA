@@ -3184,6 +3184,58 @@ THEOREM OrderedSequentialIntProgramCompose ==
         BY OrderedInitialFailurePayloadsAgree
     <1>. QED BY <1>3, <1>4, <1>5, <1>6
 
+SequentialTraceStep(edges, before, after) ==
+    before = after
+    \/ (\E action \in ActionLabels : <<before, action, after>> \in edges)
+
+SequentialValidRun(initials, edges, run) ==
+    /\ run[0] \in initials
+    /\ \A index \in Nat :
+        SequentialTraceStep(edges, run[index], run[index + 1])
+
+SequentialInvariantVerdict(initials, edges, claim) ==
+    \A run \in [Nat -> SequentialStates] :
+        SequentialValidRun(initials, edges, run)
+        => \A index \in Nat : claim[run[index]]
+
+SequentialReachabilityVerdict(initials, edges, claim) ==
+    \E run \in [Nat -> SequentialStates] :
+        /\ SequentialValidRun(initials, edges, run)
+        /\ \E index \in Nat : claim[run[index]]
+
+SequentialNoDeadlockVerdict(initials, edges) ==
+    \A run \in [Nat -> SequentialStates] :
+        SequentialValidRun(initials, edges, run)
+        => \A index \in Nat :
+            \E action \in ActionLabels, next \in SequentialStates :
+                <<run[index], action, next>> \in edges
+
+THEOREM ExactSequentialCheckingOutcomes ==
+    ASSUME NEW sourceInitials \in SUBSET SequentialStates,
+           NEW generatedInitials \in SUBSET SequentialStates,
+           NEW sourceEdges \in SUBSET SequentialEdges,
+           NEW generatedEdges \in SUBSET SequentialEdges,
+           NEW sourceClaim \in [SequentialStates -> BOOLEAN],
+           NEW generatedClaim \in [SequentialStates -> BOOLEAN],
+           sourceInitials = generatedInitials,
+           sourceEdges = generatedEdges,
+           (\A state \in SequentialStates :
+               sourceClaim[state] = generatedClaim[state])
+    PROVE /\ SequentialInvariantVerdict(sourceInitials, sourceEdges,
+                   sourceClaim)
+                 = SequentialInvariantVerdict(generatedInitials,
+                     generatedEdges, generatedClaim)
+          /\ SequentialReachabilityVerdict(sourceInitials, sourceEdges,
+                   sourceClaim)
+                 = SequentialReachabilityVerdict(generatedInitials,
+                     generatedEdges, generatedClaim)
+          /\ SequentialNoDeadlockVerdict(sourceInitials, sourceEdges)
+                 = SequentialNoDeadlockVerdict(generatedInitials,
+                     generatedEdges)
+    BY SMT DEF SequentialInvariantVerdict, SequentialReachabilityVerdict,
+        SequentialNoDeadlockVerdict, SequentialValidRun, SequentialTraceStep,
+        SequentialStates, SequentialEdges
+
 GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
     LET firstUpdate ==
             GeneratedMerge(GeneratedEmptyUpdates(state), firstKey, firstValue)

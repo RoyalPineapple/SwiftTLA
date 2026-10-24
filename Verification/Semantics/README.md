@@ -1554,6 +1554,10 @@ including the terminal self-loop. The complete proof file passed the hosted sema
 on `a22d49d7920a8f32ae12cb5e5708ba6332f949cf`; the dependent-initializer
 extension above remains unhosted. The current slice covers deterministic `Int`
 initializers built from literals, earlier root reads, and checked addition.
+Given equal selected state predicates, `ExactSequentialCheckingOutcomes` also
+derives invariant, reachability, and deadlock verdict equality from those
+complete initial and edge sets. It does not prove the emitted property predicates
+or checking configuration agree with authored `#spec` checks.
 Other accepted statement and expression forms remain outside this slice; the
 DSL does not reject them because this proof does not cover them. The output checkers' parsing,
 the remaining `#spec` syntax parser that constructs the source model, the project-owned
