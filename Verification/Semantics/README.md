@@ -1489,8 +1489,9 @@ literal-initializer slice.
 `OrderedSequentialIntProgramCompose` proves the independent initial, labeled
 edge, and ordered-failure rules compose over any finite number of steps,
 including the terminal self-loop; its new focused TLAPS obligations pass
-locally. The complete proof file has not yet been rerun to completion after
-this addition, and this local revision has no hosted evidence yet. Nonliteral
+locally. The complete proof file passed the hosted semantic-proof diagnostic
+on `a22d49d7920a8f32ae12cb5e5708ba6332f949cf`; the dependent-initializer
+extension above remains unhosted. Nonliteral
 deterministic `Int` initial expressions and other accepted statement or
 expression forms remain outside this slice; they are not rejected by the DSL
 merely because this proof does not cover them. The output checkers' parsing,
