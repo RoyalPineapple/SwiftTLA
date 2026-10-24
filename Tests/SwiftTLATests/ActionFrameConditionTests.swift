@@ -1,9 +1,10 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 
 struct ActionFrameConditionTests {
-    @Test("Nested frame lowering retains each source variable identity")
-    func nestedFrameLoweringRetainsVariableIdentity() throws {
+    @Test("Nested frames retain source identities through lowering and TLA+ emission")
+    func nestedFramesRetainVariableIdentity() throws {
         let source = ActionExpr.existsAction("selected", .setLiteral([.int(0)]),
             .and(.unchanged(.named("left")), .unchanged(.named("right"))))
         let spec = canonicalTestSpec(
@@ -23,6 +24,20 @@ struct ActionFrameConditionTests {
             try StraightLineAssignmentCheck.verifyCompiled(spec.actions[0], bindings: action.bindings,
                 body: .existsAction(binder, domain,
                     .and(.unchanged(right), .unchanged(left))), layout: compiled.layout)
+        }
+
+        let renderer = CompiledTLARenderer(moduleName: spec.name, reservedNames: [],
+            layout: compiled.layout, bindings: compiled.bindings,
+            operators: compiled.semantics.operators,
+            actions: compiled.semantics.behavior.actions, functions: [])
+        let rendered = try renderer.action(action.body)
+        let wrongFrame = rendered.replacingOccurrences(of: "UNCHANGED left", with: "UNCHANGED right")
+        #expect(wrongFrame != rendered)
+        try StraightLineRenderedActionCheck.verifyStructure(action.body,
+            rendered: rendered, renderer: renderer)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyStructure(action.body,
+                rendered: wrongFrame, renderer: renderer)
         }
     }
 
