@@ -2619,6 +2619,7 @@ private extension CompiledModuleMetadata {
             }
             lines.append("\(name)(\(failedCount)) == \(relation)")
         }
+        var initialFailureDeclarations: [String] = []
         func appendInitialEvaluationFailures(
             _ expression: CompiledExpression,
             after prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>,
@@ -2640,7 +2641,9 @@ private extension CompiledModuleMetadata {
                 prefixNames[prior.variable] = binder
             }
             var occurrences: [String: Int] = [:]
-            for failure in try renderer.expressionEvaluationFailures(expression, stateNames: prefixNames) {
+            let failures = try renderer.expressionEvaluationFailures(expression, stateNames: prefixNames)
+            var emitted: [(failure: RenderedEvaluationFailure, relation: String, operandsName: String?)] = []
+            for failure in failures {
                 let stem: String
                 let operation: String?
                 switch failure.kind {
@@ -2699,14 +2702,21 @@ private extension CompiledModuleMetadata {
                     }
                 }
                 let parameters = operandsName.map { "(\($0))" } ?? ""
-                lines.append("\(name)\(parameters) == \(relation)")
+                let declaration = "\(name)\(parameters) == \(relation)"
+                lines.append(declaration)
+                initialFailureDeclarations.append(declaration)
+                emitted.append((failure, relation, operandsName))
                 if let operation {
                     var operationName = "__SwiftTLA\(namePrefix)OverflowOperation\(suffix)"
                     while occupied.contains(operationName) { operationName += "_" }
                     occupied.insert(operationName)
-                    lines.append("\(operationName) == \"\(operation)\"")
+                    let declaration = "\(operationName) == \"\(operation)\""
+                    lines.append(declaration)
+                    initialFailureDeclarations.append(declaration)
                 }
             }
+            try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
+                after: prefix, names: prefixNames, emitted: emitted, layout: layout)
         }
         for (index, initialization) in behavior.initializations.enumerated() {
             guard case .value(let expression) = initialization.initialization else { continue }
@@ -2767,6 +2777,17 @@ private extension CompiledModuleMetadata {
         if instancesAfterBehavior { lines += instanceDeclarations }
         lines.append("====")
         let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
+        for declaration in initialFailureDeclarations {
+            guard let first = source.range(of: declaration),
+                  source.range(of: declaration,
+                    range: first.upperBound..<source.endIndex) == nil else {
+                throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                    path: "tla.initialEvaluationFailures",
+                    expected: "each checked initial failure declaration in the emitted module",
+                    actual: "an initial failure declaration is missing or duplicated",
+                    nextSafeAction: "Regenerate the TLA+ initial failure declarations.")
+            }
+        }
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
         let expectedIntLiterals = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
             variable -> (String, Int)? in

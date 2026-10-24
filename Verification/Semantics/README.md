@@ -1491,7 +1491,10 @@ when an earlier initializer has a checked definedness rule. It guards the
 earlier binding before evaluating that relation, so a failed prefix cannot
 create a later failure. A generated `#spec` model with two dependent checked
 additions detects the prior omission. This is an output repair and regression,
-not yet a general source-to-both-outputs proof for fallible initialization.
+and the production output checker independently reconstructs the relation for
+deterministic scalar checked-addition prefixes. A TRUE-instead-of-definedness
+mutation is rejected. It is not yet a general source-to-both-outputs proof for
+fallible initialization or for other initializer expression forms.
 `OrderedSequentialIntProgramCompose` proves the independent initial, labeled
 edge, and ordered-failure rules compose over any finite number of steps,
 including the terminal self-loop; its new focused TLAPS obligations pass

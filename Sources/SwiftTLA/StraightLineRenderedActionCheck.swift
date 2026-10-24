@@ -84,6 +84,72 @@ enum StraightLineRenderedActionCheck {
         }
     }
 
+    static func verifyInitialAdditionFailures(
+        _ expression: CompiledExpression,
+        after prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>,
+        names: [VariableID: String],
+        emitted: [(failure: RenderedEvaluationFailure, relation: String, operandsName: String?)],
+        layout: CompiledLayout
+    ) throws {
+        guard let tree = addition(expression, variables: names, binders: [:]) else { return }
+        func mismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "tla.initialEvaluationFailures",
+                expected: "the checked additions' ordered initial failure relations",
+                actual: "an initial failure, operand, or prefix guard differs from its compiled expression",
+                nextSafeAction: "Regenerate the TLA+ initial failure declarations.")
+        }
+        func initialValue(_ expression: CompiledExpression) -> (value: String, defined: String?)? {
+            guard expression.children.isEmpty else {
+                guard let tree = addition(expression, variables: names, binders: [:]) else { return nil }
+                return (tree.value, tree.defined)
+            }
+            switch expression.operation {
+            case .stateVariable(let id):
+                return names[id].map { ($0, nil) }
+            case .value(.integer(let value)):
+                return (TLAValue.int(value).description, nil)
+            case .controlLocation(let id):
+                return layout.controlLocation(id).map {
+                    (TLAValue.string($0.formalName).description, nil)
+                }
+            default: return nil
+            }
+        }
+        var earlier: [(name: String, value: String, defined: String?)] = []
+        for prior in prefix {
+            guard case .value(let expression) = prior.initialization,
+                  let name = names[prior.variable],
+                  let value = initialValue(expression) else { return }
+            earlier.append((name, value.value, value.defined))
+        }
+        guard emitted.count == tree.sites.count else { throw mismatch() }
+        var preceding: [String] = []
+        for (site, output) in zip(tree.sites, emitted) {
+            guard case .overflow(.addition) = output.failure.kind,
+                  let operandsName = output.operandsName,
+                  output.failure.operands == site.operands else { throw mismatch() }
+            let predicate = preceding.reversed().reduce("~(\(site.guardText))") { value, guard_ in
+                "(IF \(guard_) THEN \(value) ELSE FALSE)"
+            }
+            var relation = "(IF \(predicate) THEN \(operandsName) = \(site.operands) ELSE FALSE)"
+            for prior in earlier.reversed() {
+                relation = "(LET \(prior.name) == \(prior.value) IN \(relation))"
+                if let defined = prior.defined {
+                    relation = "(IF \(defined) THEN \(relation) ELSE FALSE)"
+                }
+            }
+            guard output.failure.predicate == predicate,
+                  output.relation == relation else {
+                throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                    path: "tla.initialEvaluationFailures",
+                    expected: relation, actual: output.relation,
+                    nextSafeAction: "Regenerate the TLA+ initial failure declarations.")
+            }
+            preceding.append(site.guardText)
+        }
+    }
+
     static func verify(_ action: CompiledActionExpr, rendered: String,
                        layout: CompiledLayout, binders: [BinderID: String]) throws {
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
