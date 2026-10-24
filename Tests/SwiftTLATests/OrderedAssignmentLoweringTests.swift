@@ -608,8 +608,11 @@ struct OrderedAssignmentLoweringTests {
         let specification = SequentialCopyProofModel.spec
         let source = try #require(specification.sourceAlgorithms.first?.model)
         let lowered = try specification.loweredSourceModel()
-        try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
+        let provedActions = try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
             enumerateInitialControl: false)
+        #expect(provedActions == Set(["copy", "finish",
+            CompilerControlSymbol.terminatingAction.rawValue]))
+        #expect(lowered.orderedIntProofActionNames == provedActions)
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
         let action = try #require(program.behavior.actions.first)
         let module = try program.renderModule().renderedModuleSource
@@ -617,7 +620,7 @@ struct OrderedAssignmentLoweringTests {
         let declarations = module.split(separator: "\n").filter { $0.hasPrefix(header) }
         let body = try #require(declarations.count == 1 ? String(declarations[0].dropFirst(header.count)) : nil)
         try StraightLineRenderedActionCheck.verify(action.body, rendered: body,
-            layout: program.layout, binders: program.binderNames)
+            layout: program.layout, binders: program.binderNames, required: true)
         let wrongGuard = body.replacingOccurrences(of: "pc = \"copy\"", with: "pc = \"finish\"")
         #expect(wrongGuard != body)
         #expect(throws: CompilationDiagnostic.self) {
@@ -642,7 +645,7 @@ struct OrderedAssignmentLoweringTests {
         let terminalBody = try #require(terminalDeclarations.count == 1
             ? String(terminalDeclarations[0].dropFirst(terminalHeader.count)) : nil)
         try StraightLineRenderedActionCheck.verify(terminalAction.body, rendered: terminalBody,
-            layout: program.layout, binders: program.binderNames)
+            layout: program.layout, binders: program.binderNames, required: true)
         let wrongTerminalBody = terminalBody.replacingOccurrences(of: "pc = \"Done\"",
             with: "pc = \"copy\"")
         #expect(wrongTerminalBody != terminalBody)
@@ -932,7 +935,7 @@ struct OrderedAssignmentLoweringTests {
         let specification = SequentialDependentIntInitialProofModel.spec
         let source = try #require(specification.sourceAlgorithms.first?.model)
         let lowered = try specification.loweredSourceModel()
-        try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
+        _ = try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
             enumerateInitialControl: false)
         let terminal = try #require(lowered.actions.last)
         var changed = 0
@@ -1179,7 +1182,7 @@ struct OrderedAssignmentLoweringTests {
         let specification = OrderedCopyModel.spec
         let source = try #require(specification.sourceAlgorithms.first?.model)
         let lowered = try specification.loweredSourceModel()
-        try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
+        _ = try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
             enumerateInitialControl: false)
 
         func replacingSecondCapture(in action: ActionExpr, with replacement: StateExpr) -> ActionExpr {

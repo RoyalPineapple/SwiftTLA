@@ -192,6 +192,16 @@ cannot establish source-order behavior.
 - [ ] Compose initializers with hidden control/procedure state and selected
   initial-state checks. Prove the complete set, not one replay.
 - [ ] `.assign`: value/failure evaluation, one intended update, exact frame.
+  For sequential `Do` algorithms whose shared state is `Int` and whose steps
+  contain only ordered root assignments from literals, prior-state reads, and
+  checked addition, the source-to-lowered check now records every qualified
+  step and the terminal action. Compilation requires the independent scalar
+  TLA+ action check for each recorded action, plus its checked-addition failure
+  declarations; an unsupported output shape fails instead of silently skipping
+  that check. Actual action declarations and selected failure checks still run
+  on the emitted module. This closes the output-check *coverage* gap for that
+  stated class, not the general `.assign` rule or the Swift execution-kernel
+  trust boundary.
 - [ ] `.unchanged`: exact frame, including hidden state.
   The compiler checks action-constructor shape and assignment/frame target IDs
   across nested compiled actions. The generated Swift verifier independently

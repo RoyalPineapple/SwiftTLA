@@ -226,7 +226,8 @@ enum StraightLineRenderedActionCheck {
     }
 
     static func verify(_ action: CompiledActionExpr, rendered: String,
-                       layout: CompiledLayout, binders: [BinderID: String]) throws {
+                       layout: CompiledLayout, binders: [BinderID: String],
+                       required: Bool = false) throws {
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
             ($0.id, $0.declaration.name)
         })
@@ -238,6 +239,9 @@ enum StraightLineRenderedActionCheck {
                 actual: "the emitted action body differs from its compiled identities and values",
                 nextSafeAction: "Report this TLA+ action emission failure."
             )
+        }
+        func unsupported() throws {
+            if required { throw mismatch() }
         }
         var expected: [String] = []
         var usedBinderNames: Set<String> = []
@@ -269,11 +273,11 @@ enum StraightLineRenderedActionCheck {
                 }
                 if case .add = expression.operation {
                     guard let value = addition(expression, variables: variables, binders: binders),
-                          let rendered = tokens(value.value) else { return }
+                          let rendered = tokens(value.value) else { try unsupported(); return }
                     expected.append(contentsOf: rendered)
                     continue
                 }
-                guard expression.children.isEmpty else { return }
+                guard expression.children.isEmpty else { try unsupported(); return }
                 switch expression.operation {
                 case .stateVariable(let id):
                     guard let name = variables[id] else { throw mismatch() }
@@ -284,13 +288,15 @@ enum StraightLineRenderedActionCheck {
                 case .value(.integer(let value)): expected.append(String(value))
                 case .value(.boolean(let value)): expected.append(value ? "TRUE" : "FALSE")
                 case .value(let value):
-                    guard let literal = tokens(try value.rendered(using: layout).description) else { return }
+                    guard let literal = tokens(try value.rendered(using: layout).description) else {
+                        try unsupported(); return
+                    }
                     expected.append(contentsOf: literal)
                 case .controlLocation(let id):
                     guard let name = layout.controlLocation(id)?.formalName,
-                          isFormalIdentifier(name) else { return }
+                          isFormalIdentifier(name) else { try unsupported(); return }
                     expected.append("\"\(name)\"")
-                default: return
+                default: try unsupported(); return
                 }
             case .action(let node):
                 switch node {
@@ -308,7 +314,7 @@ enum StraightLineRenderedActionCheck {
                     guard let name = variables[id] else { throw mismatch() }
                     schedule([.token("UNCHANGED"), .token(name)])
                 case .guard_(let value):
-                    guard directBoolean(value) else { return }
+                    guard directBoolean(value) else { try unsupported(); return }
                     if case .value(.boolean) = value.operation {
                         schedule([.value(value)])
                     } else {
@@ -318,7 +324,7 @@ enum StraightLineRenderedActionCheck {
                 case .define(let id, let value, let body):
                     guard let name = binders[id], isFormalIdentifier(name),
                           !variables.values.contains(name),
-                          usedBinderNames.insert(name).inserted else { return }
+                          usedBinderNames.insert(name).inserted else { try unsupported(); return }
                     let definition: [Task] = [.token("("), .token("LET"), .token(name),
                         .token("=="), .value(value), .token("IN"), .action(body), .token(")")]
                     if case .add = value.operation,
@@ -333,11 +339,11 @@ enum StraightLineRenderedActionCheck {
                 case .or(let left, let right):
                     schedule([.token("("), .action(left), .token("\\/"), .action(right), .token(")")])
                 case .ifElse(let condition, let yes, let no):
-                    guard directBoolean(condition) else { return }
+                    guard directBoolean(condition) else { try unsupported(); return }
                     schedule([.token("("), .token("IF"), .value(condition), .token("THEN"),
                         .token("("), .action(yes), .token(")"), .token("ELSE"),
                         .token("("), .action(no), .token(")"), .token(")")])
-                default: return
+                default: try unsupported(); return
                 }
             }
         }
@@ -347,7 +353,7 @@ enum StraightLineRenderedActionCheck {
     static func verifyDeclaration(_ action: CompiledAction, named name: String,
                                   body: String, module: String, layout: CompiledLayout,
                                   binders: [BinderID: String],
-                                  failureDeclarations: [String]) throws {
+                                  failureDeclarations: [String], required: Bool = false) throws {
         try verify(action.body, rendered: body, layout: layout, binders: binders)
         let parameters = try action.bindings.map { binding -> String in
             guard let name = binders[binding.binder], isFormalIdentifier(name) else {
@@ -364,13 +370,13 @@ enum StraightLineRenderedActionCheck {
             declarations: [(header, "\(header) == \(body)")])
         try verifyAdditionFailures(action, module: module, layout: layout,
             binders: binders, parameters: parameters,
-            failureDeclarations: failureDeclarations)
+            failureDeclarations: failureDeclarations, required: required)
     }
 
     private static func verifyAdditionFailures(_ action: CompiledAction, module: String,
                                                layout: CompiledLayout, binders: [BinderID: String],
                                                parameters: [String],
-                                               failureDeclarations: [String]) throws {
+                                               failureDeclarations: [String], required: Bool) throws {
         // shortcut: branching continuations need their own failure rule.
         let programCounter = layout.programCounterID()
         func controlWrite(_ node: CompiledActionExpr) -> Bool {
@@ -507,6 +513,19 @@ enum StraightLineRenderedActionCheck {
                     value: selection.map { "(IF \($0) THEN \(aggregate) ELSE FALSE)" } ?? aggregate)
                 return
             }
+        }
+        if required {
+            guard !definitions.contains(where: { $0.addition != nil }) else {
+                throw mismatch("__SwiftTLAAnyEvaluationFailure\(index)")
+            }
+            let prefix = "__SwiftTLAAnyEvaluationFailure\(index)"
+            let unexpected = failureDeclarations.contains { declaration in
+                guard let header = declaration.components(separatedBy: " == ").first,
+                      header.hasPrefix(prefix), header.hasSuffix(parameterSuffix) else { return false }
+                return header.dropFirst(prefix.count).dropLast(parameterSuffix.count)
+                    .allSatisfy { $0 == "_" }
+            }
+            guard !unexpected else { throw mismatch(prefix) }
         }
     }
 
