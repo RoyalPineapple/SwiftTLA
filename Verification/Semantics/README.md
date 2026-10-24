@@ -1526,12 +1526,12 @@ undefined initializer contributes none.
 `GuardedDeterministicInitialHistoriesExist` reuses the generic existence rule
 to construct a common history for that chain using an independent source
 equality-update rule, so equality is not conditional on histories that might
-not exist. The full local module proved all 1,877 obligations; hosted evidence
-for this addition remains pending. By
-`SequentialInitialControlLiftPreservesEquality`, adding the hidden program
-counter preserves equality of the complete initial-state sets. These are
-general rules, not fixture-specific counts, and their focused obligations
-pass locally. `OrderedSequentialIntProgramCompose` now takes those complete
+not exist. `GuardedSequentialIntInitialSetsAgree` then lifts its final set
+through the hidden program counter, discharging the initial-set equality
+premise for this class of guarded deterministic initializers. These are
+general rules, not fixture-specific counts; their focused obligations pass
+locally, while hosted evidence for this addition remains pending.
+`OrderedSequentialIntProgramCompose` takes those complete
 initial-state sets and selected initial-failure payloads into the same theorem
 as the labeled `Do` edges, ordered action failures, and terminal action. The
 output checkers enforce the compiled site order and operands against emitted

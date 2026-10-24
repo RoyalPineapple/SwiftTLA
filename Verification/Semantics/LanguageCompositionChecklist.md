@@ -157,6 +157,12 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   the actual-output checkers' correctness, remaining source parsing, SwiftTLA
   update/visitor kernel, and documented Swift behavior are not discharged by
   TLAPS. Give each link its rejected mutation.
+- [x] Derive the sequential program's complete initial-set equality from
+  arbitrary guarded deterministic initializer plans rather than assuming
+  equal final sets. `GuardedSequentialIntInitialSetsAgree` constructs the
+  common history and lifts it through the hidden program counter. Matching
+  each accepted initializer expression's value and definedness function to
+  its actual emitted Swift/TLA+ remains an output-link obligation.
 - [ ] Then close **one missing link at a time** in the inventory above. Do not
   add upstream families or more named proof fixtures in place of rule coverage.
 
