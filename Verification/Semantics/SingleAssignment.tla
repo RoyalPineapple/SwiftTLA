@@ -999,6 +999,28 @@ THEOREM OrderedInitialGuardsPreserveFirstFailure ==
     <1>. QED BY <1>4, SMT
         DEF P, SourceInitialFailureAt, RenderedInitialFailureAt
 
+SourceInitialFailureRecords(guards, operands) ==
+    {<<"addition", operands[index]>> :
+        index \in {site \in 1..Len(guards) :
+            SourceInitialFailureAt(guards, site)}}
+RenderedInitialFailureRecords(guards, defined, operands) ==
+    {<<"addition", operands[index]>> :
+        index \in {site \in 1..Len(guards) :
+            RenderedInitialFailureAt(guards, defined, site)}}
+
+THEOREM OrderedInitialFailurePayloadsAgree ==
+    ASSUME NEW guards \in Seq(BOOLEAN),
+           NEW defined \in [0..Len(guards) -> BOOLEAN],
+           NEW sourceOperands \in [1..Len(guards) -> (Int \X Int)],
+           NEW renderedOperands \in [1..Len(guards) -> (Int \X Int)],
+           InitialGuardHistory(guards, defined),
+           \A index \in 1..Len(guards) :
+               sourceOperands[index] = renderedOperands[index]
+    PROVE SourceInitialFailureRecords(guards, sourceOperands)
+        = RenderedInitialFailureRecords(guards, defined, renderedOperands)
+    BY OrderedInitialGuardsPreserveFirstFailure, SMT
+       DEF SourceInitialFailureRecords, RenderedInitialFailureRecords
+
 THEOREM InitialMembershipComposesAcrossPriorChoices ==
     \A key \in Vars, priorStates \in SUBSET States :
         \A candidates \in [States -> Seq(Values)] :
@@ -2843,8 +2865,17 @@ THEOREM OrderedSequentialIntProgramCompose ==
            NEW guards, NEW checks, NEW operands, NEW source, NEW scheduled,
            NEW done \in ActionLabels,
            NEW terminalLabel \in ActionLabels,
-           NEW initial \in States,
+           NEW sourceInitials \in SUBSET States,
+           NEW generatedInitials \in SUBSET States,
            NEW before \in SequentialStates,
+           sourceInitials = generatedInitials,
+           NEW initialGuards \in Seq(BOOLEAN),
+           NEW initialDefined \in [0..Len(initialGuards) -> BOOLEAN],
+           NEW sourceInitialOperands \in [1..Len(initialGuards) -> (Int \X Int)],
+           NEW generatedInitialOperands \in [1..Len(initialGuards) -> (Int \X Int)],
+           InitialGuardHistory(initialGuards, initialDefined),
+           (\A index \in 1..Len(initialGuards) :
+               sourceInitialOperands[index] = generatedInitialOperands[index]),
            exits[count] = done,
            (\A index \in 1..(count - 1) : exits[index] = entries[index + 1]),
            (\A index \in 1..count :
@@ -2859,8 +2890,12 @@ THEOREM OrderedSequentialIntProgramCompose ==
                /\ guards[index][Len(steps[index])] = AlwaysGuard
                /\ SourceHistory(before.data, steps[index], source[index])
                /\ ScheduledHistory(before.data, steps[index], scheduled[index]))
-    PROVE /\ SourceSequentialIntInitial(entries[1], initial)
-                 = GeneratedSequentialIntInitial(entries[1], initial)
+    PROVE /\ SourceSequentialIntInitialSet(entries[1], sourceInitials)
+                 = GeneratedSequentialIntInitialSet(entries[1], generatedInitials)
+          /\ SourceInitialFailureRecords(initialGuards,
+                 sourceInitialOperands)
+                 = RenderedInitialFailureRecords(initialGuards,
+                     initialDefined, generatedInitialOperands)
           /\ SourceSequentialIntProgramEdges(count, entries, exits, labels,
                  steps, guards, done, terminalLabel)
                  = GeneratedSequentialIntProgramEdges(count, entries, exits,
@@ -2925,10 +2960,13 @@ THEOREM OrderedSequentialIntProgramCompose ==
             = GeneratedSequentialTerminalEdges(done, terminalLabel)
         BY SMT DEF SourceSequentialTerminalEdges,
             GeneratedSequentialTerminalEdges, SequentialStates, SequentialEdges
-    <1>3. SourceSequentialIntInitial(entries[1], initial)
-            = GeneratedSequentialIntInitial(entries[1], initial)
-        BY DEF SourceSequentialIntInitial,
-            GeneratedSequentialIntInitial, SequentialStates
+    <1>3. SourceSequentialIntInitialSet(entries[1], sourceInitials)
+            = GeneratedSequentialIntInitialSet(entries[1], generatedInitials)
+        PROOF
+        <2>1. entries[1] \in ActionLabels
+            BY LenProperties
+        <2>. QED BY <2>1, SequentialInitialControlLiftPreservesEquality,
+            SMT
     <1>4. SourceSequentialIntProgramEdges(count, entries, exits, labels,
                steps, guards, done, terminalLabel)
             = GeneratedSequentialIntProgramEdges(count, entries, exits,
@@ -2941,7 +2979,11 @@ THEOREM OrderedSequentialIntProgramCompose ==
                 entries, labels, steps, checks, operands, scheduled)
         BY <1>1, SMT DEF SourceSequentialIntProgramFailures,
             GeneratedSequentialIntProgramFailures
-    <1>. QED BY <1>3, <1>4, <1>5
+    <1>6. SourceInitialFailureRecords(initialGuards, sourceInitialOperands)
+            = RenderedInitialFailureRecords(initialGuards, initialDefined,
+                generatedInitialOperands)
+        BY OrderedInitialFailurePayloadsAgree
+    <1>. QED BY <1>3, <1>4, <1>5, <1>6
 
 GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
     LET firstUpdate ==

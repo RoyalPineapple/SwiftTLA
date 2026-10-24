@@ -1505,17 +1505,23 @@ self-consistent wrong-`Init`, missing-failure, and extra-conjunct mutations are
 rejected. The parameterized `OrderedInitialGuardsPreserveFirstFailure` theorem
 proves that the checked prefix selects the same first failing guard for any
 finite ordered sequence of guards. Connecting every nested checked-addition
-site to that sequence remains a separate compiler-output obligation.
-`OrderedDeterministicInitialHistoriesAgree`
-applies the existing induction to any finite chain of state-dependent values
+site to that sequence remains a separate compiler-output obligation. Given
+matching operands at each site, `OrderedInitialFailurePayloadsAgree` proves
+that the selected `addition` operation and operand pair also match.
+`OrderedDeterministicInitialHistoriesAgree` applies the existing induction
+to any finite chain of state-dependent values
 and definedness guards: a defined initializer contributes one state; an
 undefined initializer contributes none. By
 `SequentialInitialControlLiftPreservesEquality`, adding the hidden program
 counter preserves equality of the complete initial-state sets. These are
 general rules, not fixture-specific counts, and their focused obligations
-pass locally. The source-to-emitted failure operation and operand link,
-complete composition with the `Do` program theorem, and a hosted check remain
-open, so this does not yet enlarge the completed literal-initializer slice.
+pass locally. `OrderedSequentialIntProgramCompose` now takes those complete
+initial-state sets and selected initial-failure payloads into the same theorem
+as the labeled `Do` edges, ordered action failures, and terminal action. The
+output checkers enforce the compiled site order and operands against emitted
+Swift and TLA+, but their correctness remains trusted. The full theorem has
+not yet passed a hosted check with the new output links, so this does not yet
+enlarge the hosted-verified literal-initializer slice.
 The renderer now retains a later initializer's evaluation-failure relation
 when an earlier initializer has a checked definedness rule. It guards the
 earlier binding before evaluating that relation, so a failed prefix cannot
@@ -1525,8 +1531,8 @@ and the production output checker independently reconstructs the relation for
 deterministic scalar checked-addition prefixes. A TRUE-instead-of-definedness
 mutation is rejected. It is not yet a general source-to-both-outputs proof for
 fallible initialization or for other initializer expression forms.
-`OrderedSequentialIntProgramCompose` proves the independent initial, labeled
-edge, and ordered-failure rules compose over any finite number of steps,
+`OrderedSequentialIntProgramCompose` proves the independent complete initial,
+labeled-edge, and ordered-failure rules compose over any finite number of steps,
 including the terminal self-loop; its new focused TLAPS obligations pass
 locally. The complete proof file passed the hosted semantic-proof diagnostic
 on `a22d49d7920a8f32ae12cb5e5708ba6332f949cf`; the dependent-initializer
