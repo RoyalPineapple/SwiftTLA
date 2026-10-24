@@ -958,7 +958,7 @@ struct OrderedAssignmentLoweringTests {
 
     @Test("Dependent Int initialization retains its ordered source expression through compilation")
     func dependentIntInitializerRetainsExpression() throws {
-        let source = StateExpr.add(.variable("first"), .value(.int(2)))
+        let source = StateExpr.add(.add(.variable("first"), .value(.int(2))), .value(.int(1)))
         let specification = SequentialDependentIntInitialProofModel.spec
         let inputs = try SourceTypeResolver().resolve(in: specification.compile())
         let program = try CompiledProgram(inputs: inputs)
@@ -1065,7 +1065,7 @@ struct OrderedAssignmentLoweringTests {
                 requireCompleteSimpleInitials: true)
         }
         let wrongPredicate = expectedPredicate.replacingOccurrences(
-            of: "second = (first + 2)", with: "second = (first + 3)")
+            of: "second = ((first + 2) + 1)", with: "second = ((first + 3) + 1)")
         #expect(wrongPredicate != expectedPredicate)
         let wrongModule = module.replacingOccurrences(
             of: "  /\\ \(expectedPredicate)", with: "  /\\ \(wrongPredicate)")
@@ -1077,6 +1077,44 @@ struct OrderedAssignmentLoweringTests {
             Issue.record("A changed generated Init expression was accepted")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.Init")
+        }
+
+        let initialIndex = try #require(program.behavior.initializations.firstIndex {
+            $0.variable == variable.id
+        })
+        let prefix = program.behavior.initializations[..<initialIndex]
+        let declarations = lines.filter { $0.hasPrefix("__SwiftTLAInitialOverflowFailure\(variable.id.ordinal)") }
+        let firstDeclaration = try #require(declarations.first)
+        let binders = firstDeclaration.components(separatedBy: "LET ").dropFirst().map {
+            String($0.prefix(while: { $0 != " " }))
+        }
+        let names = Dictionary(uniqueKeysWithValues: zip(prefix.map(\.variable), binders))
+        #expect(binders.count == prefix.count)
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        let failures = try renderer.expressionEvaluationFailures(resolvedExpression, stateNames: names)
+        #expect(failures.count == 2)
+        #expect(declarations.count == 2)
+        let emitted = try zip(failures, declarations).map { failure, declaration ->
+            (failure: RenderedEvaluationFailure, relation: String, operandsName: String?) in
+            let separator = try #require(declaration.range(of: " == "))
+            let header = String(declaration[..<separator.lowerBound])
+            let open = try #require(header.firstIndex(of: "("))
+            let close = try #require(header.lastIndex(of: ")"))
+            return (failure, String(declaration[separator.upperBound...]),
+                String(header[header.index(after: open)..<close]))
+        }
+        try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(resolvedExpression,
+            after: prefix, names: names, emitted: emitted, layout: program.layout)
+        var reversedRelations = emitted
+        reversedRelations[0].relation = emitted[1].relation
+        reversedRelations[1].relation = emitted[0].relation
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(resolvedExpression,
+                after: prefix, names: names, emitted: reversedRelations, layout: program.layout)
         }
     }
 
