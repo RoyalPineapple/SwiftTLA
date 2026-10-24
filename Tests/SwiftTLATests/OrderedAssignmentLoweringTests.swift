@@ -996,6 +996,50 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
+    @Test("Generated deterministic Int initialization rejects an early exit before its complete state")
+    func deterministicIntInitializationRejectsEarlyExit() throws {
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: SequentialCopyProofModel.spec.compile()))
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "SequentialCopyProofModel", program: program))
+        let original = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        try emitter.verifyDeterministicIntInitialOutput(original)
+
+        let marker = "var firstFailure: NativeMachineEvaluationError?"
+        let wrong = original.description.replacingOccurrences(of: marker, with: """
+        \(marker)
+        if true { return InitialEvaluationOutcomes(states: [], firstFailure: nil) }
+        """)
+        #expect(wrong != original.description)
+        let declaration = try #require(Parser.parse(source: wrong)
+            .statements.first?.item.as(DeclSyntax.self))
+        try verifyGeneratedInitialBindings(declaration,
+            expected: program.behavior.initializations.map { "let \(emitter.variable($0.variable))" },
+            expectedLoops: [:], expectedCandidateSources: [:],
+            expectedIntLiterals: Dictionary(uniqueKeysWithValues:
+                program.behavior.initializations.compactMap { initialization -> (String, Int)? in
+                    guard case .value(let expression) = initialization.initialization,
+                          case .value(.integer(let value)) = expression.operation else { return nil }
+                    return (emitter.variable(initialization.variable), value)
+                }),
+            expectedControlLocations: Dictionary(uniqueKeysWithValues:
+                program.behavior.initializations.compactMap { initialization -> (String, Int)? in
+                    guard case .value(let expression) = initialization.initialization,
+                          case .controlLocation(let location) = expression.operation else { return nil }
+                    return (emitter.variable(initialization.variable), location.ordinal)
+                }))
+        try emitter.verifyInitialSelection(declaration, expectedMembershipSources: [:])
+        try emitter.verifyInitialStateAssembly(declaration)
+        do {
+            try emitter.verifyDeterministicIntInitialOutput(declaration)
+            Issue.record("An early return discarded the compiled initial state")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+        }
+    }
+
     @Test("Sequential Do captures every ordered Int read and checked addition")
     func sequentialOrderedIntCapturesRejectStaleReads() throws {
         let specification = OrderedCopyModel.spec

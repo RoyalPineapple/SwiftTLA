@@ -1468,6 +1468,13 @@ source and resolved initial `Int` literals and control location. The production
 Swift and TLA+ emitters check their actual initial bindings, action bodies,
 and selected addition-failure declarations. Wrong value, location, read order,
 termination body, and omitted-failure mutations are rejected by focused tests.
+For deterministic literal-`Int` and control initializers without parameters or
+an initial invariant, the generated-Swift check also compares the complete
+`_initialStates` function with an independently assembled template from the
+compiled plan. An inserted early return that discards the initial state is
+rejected even though the earlier binding and suffix checks accept it. Other
+initializer shapes remain accepted but are not covered by this whole-function
+certificate; the output checker and Swift execution kernel remain trusted.
 For direct `let algorithm = Algorithm(scoped:)` declarations with `Int`
 `scope.sharedVar` initializers built from literals, earlier-variable reads, and
 addition, plus nonempty `Do` bodies of root `Assign`s, the

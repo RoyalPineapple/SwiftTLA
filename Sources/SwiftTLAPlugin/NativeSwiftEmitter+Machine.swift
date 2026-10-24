@@ -463,6 +463,7 @@ extension NativeSwiftEmitter {
             })
         try verifyInitialSelection(declarations.first, expectedMembershipSources: expectedMembershipSources)
         try verifyInitialStateAssembly(declarations.first)
+        try verifyDeterministicIntInitialOutput(declarations.first)
         try verifyGeneratedInitialConstruction(declarations, configured: !program.layout.parameters.isEmpty,
             sampled: hasRandomSubset)
         if hasRandomSubset {
@@ -584,6 +585,71 @@ extension NativeSwiftEmitter {
                 actual: "the generated initial-state suffix differs from the checked assembly rule",
                 nextSafeAction: "Report this native code generation failure."
             )
+        }
+    }
+
+    func verifyDeterministicIntInitialOutput(_ declaration: DeclSyntax?) throws {
+        // shortcut: this exact template covers literal Int and control initializers; extend it with each proved initializer form.
+        guard program.layout.parameters.isEmpty, program.behavior.initialInvariant == nil,
+              !program.behavior.initializations.isEmpty,
+              program.behavior.initializations.count == program.layout.variables.count else { return }
+        var bindings: [(name: String, type: String, value: String)] = []
+        for initialization in program.behavior.initializations {
+            guard case .value(let expression) = initialization.initialization else { return }
+            let value: String
+            let type: String
+            switch (expression.operation, expression.resultType) {
+            case (.value(.integer(let integer)), .int):
+                type = "Int"
+                value = integer == Int.min ? "Int.min" : String(integer)
+            case (.controlLocation(let location), .controlLocation):
+                type = "_ControlLocation"
+                value = "_ControlLocation.location\(location.ordinal)"
+            default: return
+            }
+            bindings.append((variable(initialization.variable), type, value))
+        }
+        let visible = Dictionary(uniqueKeysWithValues: model.api.variables.map {
+            ($0.id, $0.swiftIdentifier)
+        })
+        let publicFields = model.api.variables.map {
+            "\($0.argumentLabel): \(variable($0.id))"
+        }.joined(separator: ", ")
+        let hiddenFields = program.layout.variables.filter { visible[$0.id] == nil }.map {
+            ", \(variable($0.id)): \(variable($0.id))"
+        }.joined()
+        var body = "var result: [Snapshot] = []\nvar firstFailure: NativeMachineEvaluationError?\n"
+        body += "try _NativeMachineOperations.visitInitialBranch({\n"
+        for (initialization, binding) in zip(program.behavior.initializations, bindings) {
+            body += "let \(binding.name): \(binding.type) = \(binding.value)\n"
+            if let field = visible[initialization.variable] {
+                body += "if _selectedInitial == nil || _selectedInitial!.\(field) == \(binding.name) {\n"
+            }
+        }
+        body += "result.append(Snapshot(state: State(\(publicFields))\(hiddenFields)))\n"
+        for initialization in program.behavior.initializations.reversed()
+            where visible[initialization.variable] != nil {
+            body += "}\n"
+        }
+        body += """
+        }, onEvaluationFailure: { failure in
+            if firstFailure == nil { firstFailure = failure }
+        })
+        return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure)
+        """
+        let expected = Parser.parse(source: """
+        private static func _initialStates(_selectedInitial: State? = nil) throws -> InitialEvaluationOutcomes<Snapshot> {
+            \(body)
+        }
+        """).statements.first?.item.as(FunctionDeclSyntax.self)
+        let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+        let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+        guard expectedTokens != nil, actualTokens == expectedTokens else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native._initialStates.completeIntOutput",
+                expected: "the complete ordered Int initial-state and failure template",
+                actual: "the generated initial function contains an unrecognized statement or changed value",
+                nextSafeAction: "Report this native initialization generation failure.")
         }
     }
 
