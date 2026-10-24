@@ -800,26 +800,26 @@ struct OrderedAssignmentLoweringTests {
             $0.variable == variable.id
         }?.initialization)
         let path = "variables.first.initialization"
-        try StraightLineAssignmentCheck.verifyInitialIntLiteral(source.initialization,
-            lowered: lowered, at: path)
-        try StraightLineAssignmentCheck.verifyResolvedInitialIntLiteral(lowered,
+        try StraightLineAssignmentCheck.verifyInitialIntExpression(source.initialization,
+            lowered: lowered, layout: inputs.layout, at: path)
+        try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
             resolved: resolved, at: path)
 
         let wrongValue = CompiledVariableInitialization.value(.value(.integer(9)))
         #expect(throws: CompilationDiagnostic.self) {
-            try StraightLineAssignmentCheck.verifyInitialIntLiteral(source.initialization,
-                lowered: wrongValue, at: path)
+            try StraightLineAssignmentCheck.verifyInitialIntExpression(source.initialization,
+                lowered: wrongValue, layout: inputs.layout, at: path)
         }
         let wrongResolvedValue = CompiledVariableInitialization.value(.init(
             operation: .value(.integer(9)), resultType: .int, children: []))
         #expect(throws: CompilationDiagnostic.self) {
-            try StraightLineAssignmentCheck.verifyResolvedInitialIntLiteral(lowered,
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
                 resolved: wrongResolvedValue, at: path)
         }
         let wrongType = CompiledVariableInitialization.value(.init(
             operation: .value(.integer(1)), resultType: .bool, children: []))
         #expect(throws: CompilationDiagnostic.self) {
-            try StraightLineAssignmentCheck.verifyResolvedInitialIntLiteral(lowered,
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
                 resolved: wrongType, at: path)
         }
 
@@ -901,6 +901,44 @@ struct OrderedAssignmentLoweringTests {
             try verifyRenderedInitialConjunction(wrongModule, predicates: predicates.map {
                 $0.replacingOccurrences(of: initialClause, with: wrongClause)
             }, expectedControlLocations: [control.name: expectedFormalControl])
+        }
+    }
+
+    @Test("Dependent Int initialization retains its ordered source expression through compilation")
+    func dependentIntInitializerRetainsExpression() throws {
+        let source = StateExpr.add(.variable("first"), .value(.int(2)))
+        let specification = SequentialDependentIntInitialProofModel.spec
+        let inputs = try SourceTypeResolver().resolve(in: specification.compile())
+        let program = try CompiledProgram(inputs: inputs)
+        let variable = try #require(inputs.layout.variables.first { $0.declaration.name == "second" })
+        let lowered = try #require(inputs.semantics.behavior.initializations.first {
+            $0.variable == variable.id
+        }?.initialization)
+        let resolved = try #require(program.behavior.initializations.first {
+            $0.variable == variable.id
+        }?.initialization)
+        let path = "variables.second.initialization"
+        try StraightLineAssignmentCheck.verifyInitialIntExpression(.expression(source),
+            lowered: lowered, layout: inputs.layout, at: path)
+        try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
+            resolved: resolved, at: path)
+
+        guard case .value(let loweredExpression) = lowered,
+              case .value(let resolvedExpression) = resolved else { throw InvalidShape.lowered }
+        let reversed = CompiledVariableInitialization.value(.init(operation: .add,
+            resultType: loweredExpression.resultType,
+            children: Array(loweredExpression.children.reversed())))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyInitialIntExpression(.expression(source),
+                lowered: reversed, layout: inputs.layout, at: path)
+        }
+        let wrongResolved = CompiledVariableInitialization.value(.init(operation: .add,
+            resultType: resolvedExpression.resultType,
+            children: [.init(operation: .value(.integer(3)), resultType: .int, children: []),
+                resolvedExpression.children[1]]))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
+                resolved: wrongResolved, at: path)
         }
     }
 

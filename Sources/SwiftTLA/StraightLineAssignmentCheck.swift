@@ -1,32 +1,74 @@
 enum StraightLineAssignmentCheck {
-    static func verifyInitialIntLiteral(_ source: VariableInitialization,
-                                        lowered: CompiledVariableInitialization, at path: String) throws {
-        guard case .value(.int(let value)) = source else { return }
-        guard case .value(let expression) = lowered,
-              case .value(.integer(let actual)) = expression.operation,
-              actual == value,
-              expression.children.isEmpty else {
-            throw initialIntMismatch(at: path)
+    static func verifyInitialIntExpression(_ source: VariableInitialization,
+                                           lowered: CompiledVariableInitialization,
+                                           layout: CompiledLayout, at path: String) throws {
+        let value: StateExpr
+        switch source {
+        case .value(.int(let integer)): value = .value(.int(integer))
+        case .expression(let expression): value = expression
+        default: return
+        }
+        let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
+            ($0.declaration.name, $0.id)
+        })
+        var supported = [value]
+        while let node = supported.popLast() {
+            switch node {
+            case .value(.int): break
+            case .variable(let name):
+                guard variables[name] != nil else { return }
+            case .add(let left, let right): supported.append(right); supported.append(left)
+            default: return
+            }
+        }
+        guard case .value(let expression) = lowered else { throw initialIntMismatch(at: path) }
+        var pending = [(value, expression)]
+        while let (source, compiled) = pending.popLast() {
+            switch source {
+            case .value(.int(let integer)):
+                guard compiled.operation == .value(.integer(integer)), compiled.children.isEmpty else {
+                    throw initialIntMismatch(at: path)
+                }
+            case .variable(let name):
+                guard let id = variables[name], compiled.operation == .stateVariable(id),
+                      compiled.children.isEmpty else { throw initialIntMismatch(at: path) }
+            case .add(let left, let right):
+                guard compiled.operation == .add, compiled.children.count == 2 else {
+                    throw initialIntMismatch(at: path)
+                }
+                pending.append((right, compiled.children[1]))
+                pending.append((left, compiled.children[0]))
+            default: return
+            }
         }
     }
 
-    static func verifyResolvedInitialIntLiteral(_ original: CompiledVariableInitialization,
-                                                resolved: CompiledVariableInitialization?, at path: String) throws {
-        guard case .value(let source) = original,
-              case .value(.integer(let value)) = source.operation,
-              source.children.isEmpty else { return }
-        guard case .value(let expression)? = resolved,
-              case .value(.integer(let actual)) = expression.operation,
-              actual == value,
-              expression.children.isEmpty,
-              expression.resultType == .int else {
-            throw initialIntMismatch(at: path)
+    static func verifyResolvedInitialIntExpression(_ original: CompiledVariableInitialization,
+                                                   resolved: CompiledVariableInitialization?, at path: String) throws {
+        guard case .value(let source) = original else { return }
+        var supported = [source]
+        while let node = supported.popLast() {
+            switch node.operation {
+            case .value(.integer), .stateVariable:
+                guard node.children.isEmpty else { return }
+            case .add:
+                guard node.children.count == 2 else { return }
+                supported.append(contentsOf: node.children)
+            default: return
+            }
+        }
+        guard case .value(let expression)? = resolved else { throw initialIntMismatch(at: path) }
+        var pending = [(source, expression)]
+        while let (before, after) = pending.popLast() {
+            guard before.operation == after.operation, before.children.count == after.children.count,
+                  after.resultType == .int else { throw initialIntMismatch(at: path) }
+            pending.append(contentsOf: zip(before.children, after.children))
         }
     }
 
     private static func initialIntMismatch(at path: String) -> CompilationDiagnostic {
         CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
-            path: path, expected: "the same typed Int literal as the source initializer",
+            path: path, expected: "the same typed Int expression as the source initializer",
             actual: "the compiled initializer changed its value, shape, or type",
             nextSafeAction: "Report this initializer translation failure.")
     }
