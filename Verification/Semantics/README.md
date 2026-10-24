@@ -1496,6 +1496,9 @@ For that dependent-initializer form, the production lowerer now checks the
 literal, prior-state read, and addition tree against the source, and the
 resolver checks its typed `Int` tree without changing operand order. A real
 sequential `#spec` fixture and changed-tree mutations exercise those links.
+The complete sequential `Done`-guard check now applies to `Int` steps
+independently of whether their initializers are literals or dependent
+expressions; a changed terminal guard in the dependent fixture is rejected.
 The production output checks compare its actual generated Swift initializer
 and TLA+ `Init` clause with independent literal/read/add forms; operator,
 self-consistent wrong-`Init`, missing-failure, and extra-conjunct mutations are

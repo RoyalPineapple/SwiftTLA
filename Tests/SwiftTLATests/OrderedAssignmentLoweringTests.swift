@@ -927,6 +927,35 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
+    @Test("Dependent Int initialization retains complete sequential control checking")
+    func dependentIntInitializerRetainsTerminalControl() throws {
+        let specification = SequentialDependentIntInitialProofModel.spec
+        let source = try #require(specification.sourceAlgorithms.first?.model)
+        let lowered = try specification.loweredSourceModel()
+        try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
+            enumerateInitialControl: false)
+        let terminal = try #require(lowered.actions.last)
+        var changed = 0
+        func wrongGuard(_ action: ActionExpr) -> ActionExpr {
+            switch action {
+            case .guard_(.equal(.programCounter, .controlLocation)):
+                changed += 1
+                return .guard_(.value(.bool(true)))
+            case .and(let left, let right): return .and(wrongGuard(left), wrongGuard(right))
+            default: return action
+            }
+        }
+        var mutated = lowered
+        mutated.actions[mutated.actions.count - 1] = NamedAction(
+            name: terminal.name, body: wrongGuard(terminal.body),
+            bindings: terminal.bindings, isTermination: true)
+        #expect(changed == 1)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifySequential(source, lowered: mutated,
+                enumerateInitialControl: false)
+        }
+    }
+
     @Test("Dependent Int initialization retains its ordered source expression through compilation")
     func dependentIntInitializerRetainsExpression() throws {
         let source = StateExpr.add(.variable("first"), .value(.int(2)))
