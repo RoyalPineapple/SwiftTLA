@@ -323,11 +323,7 @@ enum StraightLineAssignmentCheck {
         let roots = Set(shared.map(\.root))
         var orderedIntSteps = !enumerateInitialControl
             && steps.allSatisfy { $0.loopCondition == nil }
-            && shared.allSatisfy { variable in
-                guard variable.swiftTypeName == "Int",
-                      case .value(.int) = variable.initialization else { return false }
-                return true
-            }
+            && shared.allSatisfy { $0.swiftTypeName == "Int" }
         for (index, step) in steps.enumerated() where step.loopCondition == nil {
             let entry = ControlLocationReference(owner: owner, sourceName: step.label.name)
             let next = steps.indices.contains(index + 1)
