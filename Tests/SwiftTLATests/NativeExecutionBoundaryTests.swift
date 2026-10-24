@@ -511,6 +511,18 @@ private struct ReachableInvariantFailure {
         let operands = try #require(direct.first { $0.hasPrefix("__SwiftTLAOverflowOperands0 ==") })
         let operation = try #require(direct.first { $0.hasPrefix("__SwiftTLAOverflowOperation0 ==") })
         let evaluation = try #require(direct.first { $0.hasPrefix("__SwiftTLAEvaluationOK ==") })
+        let output = try program.renderModule()
+        let renderedAction = try #require(direct.first { $0.hasPrefix("advance == ") })
+            .dropFirst("advance == ".count)
+        let missingFailure = output.renderedModuleSource.replacingOccurrences(
+            of: "\(failure)\n", with: "")
+        #expect(missingFailure != output.renderedModuleSource)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyDeclaration(generatedAction, named: "advance",
+                body: String(renderedAction), module: missingFailure,
+                layout: program.layout, binders: program.binderNames,
+                failureDeclarations: output.evaluationFailureDeclarations)
+        }
         #expect(operands == "__SwiftTLAOverflowOperands0 == <<count, 1>>")
         #expect(operation == "__SwiftTLAOverflowOperation0 == \"addition\"")
         #expect(direct.contains { $0.hasPrefix("__SwiftTLAAnyEvaluationFailure0 ==") })
