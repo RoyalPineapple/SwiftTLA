@@ -28,6 +28,24 @@ struct ActionFrameConditionTests {
             at: "actions.step.body")
     }
 
+    @Test("Terminal normalization retains the hidden program-counter frame")
+    func terminalRequiresHiddenControlFrame() throws {
+        let variables = [
+            NamedVar(name: "pc", initialization: .expression(.controlLocation(.init(
+                owner: .sequential(algorithm: "Frame"), sourceName: "done"))),
+                origin: .programCounter),
+            NamedVar(name: "value", initial: .int(0)),
+        ]
+        let source = ActionExpr.and(.unchanged(.named("pc")), .unchanged(.named("value")))
+        #expect(throws: CompilationDiagnostic.self) {
+            try ActionNormalization.verifyComplete(source, variables: variables,
+                at: "actions.Terminating.body")
+        }
+        try ActionNormalization.verifyComplete(
+            ActionNormalization.complete(source, variables: variables),
+            variables: variables, at: "actions.Terminating.body")
+    }
+
     @Test("Frame completion preserves shared effects and short-circuited continuations")
     func completionKeepsEffectOrder() {
         let variables = [NamedVar(name: "value", initial: .int(0))]
