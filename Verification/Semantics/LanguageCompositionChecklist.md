@@ -45,6 +45,39 @@ acceptance-rule decision.
 
 ## Inventory and proof work
 
+### Action-constructor domain
+
+`ActionExpr` and `CompiledActionExpr` each have the eight cases below. The
+`#spec` accepts direct `Action` declarations through
+`SpecParser+SpecBuilder.parseAction` and `SpecParser.decodeActionExpr`:
+`FormalDefinitionFidelityMacro` is a compiled macro fixture, and
+`SpecificationSourceAuthorityTests.initialDomainsUseDeclarationContext`
+checks that route through type resolution. The Algorithm lowerer also builds
+these cases from scoped statements. Repository authoring guidance prefers
+`Algorithm`, but that preference does **not** remove accepted `Action` from
+the proof domain. Individual constructor combinations and rejection
+diagnostics still need an acceptance audit.
+
+The inventory is taken from `SpecParser+SpecBuilder.swift`, `SpecParser.swift`,
+`AlgorithmLowering.swift`, `ActionExpr.swift`, and `CompiledExpressions.swift`.
+
+| Source / compiled case | Accepted route | Rule coverage |
+| --- | --- | --- |
+| `assign` | Direct `ActionExpr.assign`, `.becomes`, collection updates; scheduled `Assign` and control writes | Ordered root-`Int` `Do` slice only; other targets and expressions open |
+| `unchanged` | Direct `.stays`; generated frame and terminal actions | General frame/output rule open |
+| `guard_` | Direct predicate or `.when`; Algorithm `When` and entry guards | General disabled/failure rule open |
+| `existsAction` | Direct `ActionExpr.exists`; Algorithm `With` and scheduled `Choose` | General domain, binding, and outcome rule open |
+| `ifElse` | Algorithm `If` | General branch and condition-failure rule open |
+| `define` | Algorithm `Let` and scheduled write captures | General lexical binding and failure rule open |
+| `and` | Direct `&&` or action closure sequence; Algorithm atomic composition | Ordered root-`Int` `Do` composition only; arbitrary nesting open |
+| `or` | Direct `\|\|`; Algorithm `Either` and control-branch composition | General union of successful and failing branches open |
+
+The rows name constructor *reachability*, not proof completion. For each route,
+the remaining audit must verify its parsed source tree, the real lowerer's
+matching compiled case, both actual outputs, and a rejecting mutation. Keep
+compiler-synthesized uses in the domain too: they affect accepted programs
+even when authors cannot spell the constructor directly.
+
 ### 0. Fix the domain of the theorem
 
 - [ ] Enumerate all accepted `#spec` syntax after parsing, binding, type and
