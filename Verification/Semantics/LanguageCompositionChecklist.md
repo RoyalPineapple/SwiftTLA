@@ -78,6 +78,37 @@ matching compiled case, both actual outputs, and a rejecting mutation. Keep
 compiler-synthesized uses in the domain too: they affect accepted programs
 even when authors cannot spell the constructor directly.
 
+### Expression-constructor domain
+
+These are the exact outer cases in `StateExpr` and `CompiledOperation` at this
+revision, grouped only to keep the inventory readable. A group is **not** one
+proof rule: each named case still needs its own source, lowering, Swift, and
+TLA+ links. `CompiledLowerer.lowerWithReferences` maps source expressions to
+compiled operations; some compiled cases are synthesized during binding or
+type checking. Parser reachability and rejection diagnostics for every spelling
+remain to be audited, so this inventory does not claim that every public
+`StateExpr` case can be authored in `#spec`.
+
+| Domain | `StateExpr` cases | `CompiledOperation` cases |
+| --- | --- | --- |
+| Values, names, and control | `sourceIssue`, `value`, `integerSet`, `variable`, `parameter`, `checkingRegister`, `setCheckingRegister`, `checkingLevel`, `checkingDiameter`, `processLocalFamily`, `currentProcess`, `programCounter`, `procedureStack`, `controlLocation` | `value`, `integerSet`, `stateVariable`, `boundValue`, `checkingRegister`, `setCheckingRegister`, `checkingLevel`, `checkingDiameter`, `controlLocation`, `operatorReference`, `convert` |
+| Arithmetic | `add`, `subtract`, `multiply`, `divide`, `modulo`, `negate`, `integerDivide` | `add`, `subtract`, `multiply`, `divide`, `modulo`, `negate`, `integerDivide` |
+| Equality, order, and Boolean control | `equal`, `notEqual`, `lessThan`, `lessOrEqual`, `greaterThan`, `greaterOrEqual`, `and`, `or`, `not`, `ifThenElse`, `printT` | `equal`, `notEqual`, `lessThan`, `lessOrEqual`, `greaterThan`, `greaterOrEqual`, `and`, `or`, `not`, `ifThenElse`, `printT` |
+| Transition and explicit view | `assertView`, `nextState`, `stutteringStep`, `enabledAction` | `assertView`, `nextState`, `stutteringStep`, `enabledAction` |
+| Sets and ranges | `setLiteral`, `in`, `subset`, `union`, `intersection`, `setDifference`, `cardinality`, `setFilter`, `setMap`, `powerSet`, `sequenceSet`, `unionAll`, `integerRange`, `setSum`, `functionSet`, `randomSubset`, `randomElement` | `setLiteral`, `in`, `subset`, `union`, `intersection`, `setDifference`, `cardinality`, `setFilter`, `setMap`, `powerSet`, `sequenceSet`, `unionAll`, `integerRange`, `setSum`, `functionSet`, `randomSubset`, `randomElement` |
+| Tuples and sequences | `tupleLiteral`, `tupleAccess`, `tupleDynamicAccess`, `tupleLength`, `tupleAppend`, `tupleHead`, `tupleTail`, `tupleConcatenate`, `tupleRemoving`, `tuplePrefix`, `sequenceSelect`, `sequenceFromSet`, `sequenceFromFunction` | `tupleLiteral`, `tupleAccess`, `tupleDynamicAccess`, `tupleLength`, `tupleAppend`, `tupleHead`, `tupleTail`, `tupleConcatenate`, `tupleRemoving`, `tuplePrefix`, `sequenceSelect`, `sequenceFromSet`, `sequenceFromFunction` |
+| Records and functions | `recordLiteral`, `recordAccess`, `domain`, `functionLiteral`, `functionApply`, `except` | `recordLiteral`, `recordAccess`, `domain`, `functionLiteral`, `functionApply`, `except` |
+| Binding, choice, and calls | `caseExpr`, `forAll`, `exists`, `choose`, `foldFunction`, `operatorApplication`, `recursiveCall`, `letValue`, `letIn` | `caseExpr`, `forAll`, `exists`, `choose`, `foldFunction`, `operatorApplication`, `call`, `checkedCall`, `letValue`, `letIn` |
+
+`sourceIssue` must fail before a compiled expression exists. `currentProcess`
+and `processLocalFamily` are rejected outside their algorithm scope; the
+algorithm lowerer may replace them before this general expression pass.
+`convert`, `operatorReference`, `boundValue`, `call`, and `checkedCall` are
+compiled-side obligations even though they have no same-named source case.
+The first ordered-`Int` slice covers only literal `value`, resolved prior-state
+reads, and checked `add` in its stated positions; every other case above
+remains open unless a separate complete rule is established.
+
 ### Algorithm-statement domain
 
 `AlgorithmStatementModel` has the fifteen cases below. Authored statements
