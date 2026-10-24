@@ -1503,9 +1503,18 @@ The production output checks compare its actual generated Swift initializer
 and TLA+ `Init` clause with independent literal/read/add forms; operator,
 self-consistent wrong-`Init`, missing-failure, and extra-conjunct mutations are
 rejected. The parameterized `OrderedInitialGuardsPreserveFirstFailure` theorem
-proves that the checked prefix selects the same first failing initializer for
-any finite sequence of guards; its focused obligations pass locally. The
-complete dependent-initializer-to-step composition and hosted check remain
+proves that the checked prefix selects the same first failing guard for any
+finite ordered sequence of guards. Connecting every nested checked-addition
+site to that sequence remains a separate compiler-output obligation.
+`OrderedDeterministicInitialHistoriesAgree`
+applies the existing induction to any finite chain of state-dependent values
+and definedness guards: a defined initializer contributes one state; an
+undefined initializer contributes none. By
+`SequentialInitialControlLiftPreservesEquality`, adding the hidden program
+counter preserves equality of the complete initial-state sets. These are
+general rules, not fixture-specific counts, and their focused obligations
+pass locally. The source-to-emitted failure operation and operand link,
+complete composition with the `Do` program theorem, and a hosted check remain
 open, so this does not yet enlarge the completed literal-initializer slice.
 The renderer now retains a later initializer's evaluation-failure relation
 when an earlier initializer has a checked definedness rule. It guards the
