@@ -1486,6 +1486,12 @@ operator and self-consistent wrong-`Init` mutations are rejected. Selected
 initial-failure outcomes and the general semantic composition for dependent
 initializers remain open; this does not enlarge the completed
 literal-initializer slice.
+The renderer now retains a later initializer's evaluation-failure relation
+when an earlier initializer has a checked definedness rule. It guards the
+earlier binding before evaluating that relation, so a failed prefix cannot
+create a later failure. A generated `#spec` model with two dependent checked
+additions detects the prior omission. This is an output repair and regression,
+not yet a general source-to-both-outputs proof for fallible initialization.
 `OrderedSequentialIntProgramCompose` proves the independent initial, labeled
 edge, and ordered-failure rules compose over any finite number of steps,
 including the terminal self-loop; its new focused TLAPS obligations pass

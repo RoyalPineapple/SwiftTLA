@@ -2570,7 +2570,7 @@ private extension CompiledModuleMetadata {
         }
         lines.append("")
 
-        // shortcut: only total prefixes receive this relation; other initial failures still need outcome lowering.
+        // shortcut: prefixes without a definedness rule still need outcome lowering.
         func isTotalInitialExpression(_ expression: CompiledExpression) -> Bool {
             switch expression.operation {
             case .value, .stateVariable, .controlLocation:
@@ -2625,12 +2625,13 @@ private extension CompiledModuleMetadata {
             namePrefix: String,
             indexSuffix: String
         ) throws {
-            guard prefix.allSatisfy({ prior in
-                switch prior.initialization {
-                case .value(let expression), .memberOf(let expression):
-                    return isTotalInitialExpression(expression)
+            for prior in prefix {
+                let expression: CompiledExpression = switch prior.initialization {
+                case .value(let expression), .memberOf(let expression): expression
                 }
-            }) else { return }
+                let defined = try renderer.evaluationDefined(expression)
+                guard isTotalInitialExpression(expression) || defined != nil else { return }
+            }
             var prefixNames: [VariableID: String] = [:]
             for prior in prefix {
                 var binder = "__SwiftTLAInitialValue\(prior.variable.ordinal)"
@@ -2688,9 +2689,13 @@ private extension CompiledModuleMetadata {
                     let binder = prefixNames[prior.variable]!
                     switch prior.initialization {
                     case .value(let expression):
-                        relation = "(LET \(binder) == \(try renderer.state(expression, stateNames: prefixNames)) IN \(relation))"
+                        let bound = "(LET \(binder) == \(try renderer.state(expression, stateNames: prefixNames)) IN \(relation))"
+                        relation = try renderer.evaluationDefined(expression, stateNames: prefixNames)
+                            .map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
                     case .memberOf(let expression):
-                        relation = "(\\E \(binder) \\in \(try renderer.state(expression, stateNames: prefixNames)): \(relation))"
+                        let bound = "(\\E \(binder) \\in \(try renderer.state(expression, stateNames: prefixNames)): \(relation))"
+                        relation = try renderer.evaluationDefined(expression, stateNames: prefixNames)
+                            .map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
                     }
                 }
                 let parameters = operandsName.map { "(\($0))" } ?? ""

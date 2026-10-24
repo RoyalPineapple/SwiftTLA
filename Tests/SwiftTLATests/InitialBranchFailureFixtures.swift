@@ -71,3 +71,20 @@ struct DependentFunctionReadInitialModel {
         }
     }
 }
+
+@TLAModel
+struct CheckedAdditionPrefixInitialModel {
+    enum Step: String, CaseIterable { case stay }
+
+    static var spec: TLASpec {
+        #spec {
+            let algorithm = Algorithm(label: "CheckedAdditionPrefixInitial", scoped: { scope in
+                let first = scope.sharedVar(initial: 1)
+                let second = scope.sharedVar(initial: first + 2)
+                let last = scope.sharedVar(initial: second + 9223372036854775807)
+                Do(Step.stay) { Assign(last, to: last) }
+            })
+            algorithm
+        }
+    }
+}

@@ -81,6 +81,22 @@ struct InitialBranchFailureTests {
         #expect(try compiled.states[0].value(for: result) == .integer(42))
     }
 
+    @Test("A later initial overflow remains visible after an earlier checked addition")
+    func preservesFailureAfterFallibleInitialPrefix() throws {
+        let generated = try CheckedAdditionPrefixInitialModel.initialOutcomes()
+        #expect(generated.states.isEmpty)
+        #expect(generated.firstFailure == .integerOverflow(.addition,
+            operands: [3, Int.max]))
+
+        let rendered = try CheckedAdditionPrefixInitialModel.render().tlaBundle.root.tla
+        let failures = rendered.split(separator: "\n").filter {
+            $0.hasPrefix("__SwiftTLAInitialOverflowFailure3(")
+        }
+        let failure = try #require(failures.count == 1 ? failures[0] : nil)
+        #expect(failure.contains("THEN (LET __SwiftTLAInitialValue2 =="))
+        #expect(rendered.contains("__SwiftTLAInitialOverflowOperation3 == \"addition\""))
+    }
+
     @Test("An invalid compiled value shape is not relabeled as a model failure")
     func rejectsUnmappedFailure() {
         #expect(throws: EvalError.expected(.integer, actual: [])) {
