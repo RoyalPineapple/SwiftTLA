@@ -68,6 +68,22 @@ enum StraightLineRenderedActionCheck {
         return .init(value: values[0], sites: sites)
     }
 
+    static func initialIntPredicate(_ expression: CompiledExpression, named name: String,
+                                    layout: CompiledLayout) -> String? {
+        guard expression.resultType == .int else { return nil }
+        let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
+            ($0.id, $0.declaration.name)
+        })
+        switch expression.operation {
+        case .stateVariable(let id) where expression.children.isEmpty:
+            return variables[id].map { "\(name) = \($0)" }
+        case .add:
+            guard let tree = addition(expression, variables: variables, binders: [:]) else { return nil }
+            return "(IF \(tree.defined) THEN \(name) = \(tree.value) ELSE FALSE)"
+        default: return nil
+        }
+    }
+
     static func verify(_ action: CompiledActionExpr, rendered: String,
                        layout: CompiledLayout, binders: [BinderID: String]) throws {
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
