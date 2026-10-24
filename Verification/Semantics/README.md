@@ -1522,7 +1522,12 @@ that the selected `addition` operation and operand pair also match.
 `OrderedDeterministicInitialHistoriesAgree` applies the existing induction
 to any finite chain of state-dependent values
 and definedness guards: a defined initializer contributes one state; an
-undefined initializer contributes none. By
+undefined initializer contributes none.
+`GuardedDeterministicInitialHistoriesExist` reuses the generic existence rule
+to construct a common history for that chain using an independent source
+equality-update rule, so equality is not conditional on histories that might
+not exist. The full local module proved all 1,877 obligations; hosted evidence
+for this addition remains pending. By
 `SequentialInitialControlLiftPreservesEquality`, adding the hidden program
 counter preserves equality of the complete initial-state sets. These are
 general rules, not fixture-specific counts, and their focused obligations
