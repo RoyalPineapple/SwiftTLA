@@ -234,6 +234,7 @@ struct CompiledModuleMetadata: Sendable {
     let symmetrySets: [SymmetrySet]
     let formalDefinitionCount: Int
     let recursiveFunctionCount: Int
+    let orderedIntProofActionNames: Set<String>
 
     func constantDeclaration(including additionalNames: [String]) -> String? {
         let formalConstants = formalParameters.filter { $0.kind == .constant }.map(\.name)
@@ -251,6 +252,7 @@ struct CompiledModuleMetadata: Sendable {
         symmetrySets = source.symmetrySets
         formalDefinitionCount = source.formalOperatorDefinitions.count
         recursiveFunctionCount = source.recursiveFuncs.count
+        orderedIntProofActionNames = source.orderedIntProofActionNames
     }
 }
 
@@ -2169,7 +2171,8 @@ private extension CompiledModuleMetadata {
             try StraightLineRenderedActionCheck.verifyStructure(compiled.body,
                 rendered: renderedBody, renderer: renderer)
             try StraightLineRenderedActionCheck.verify(compiled.body, rendered: renderedBody,
-                layout: layout, binders: renderer.bindings.binders)
+                layout: layout, binders: renderer.bindings.binders,
+                required: orderedIntProofActionNames.contains(declaration.declaration.name))
             return DirectModuleAction(
                 sourceName: declaration.declaration.name,
                 renderedName: renderedName,
@@ -2213,7 +2216,8 @@ private extension CompiledModuleMetadata {
             try StraightLineRenderedActionCheck.verifyDeclaration(behavior.actions[index],
                 named: rendered.renderedName, body: rendered.renderedBody,
                 module: directOutput.source, layout: layout, binders: renderer.bindings.binders,
-                failureDeclarations: directOutput.evaluationFailureDeclarations)
+                failureDeclarations: directOutput.evaluationFailureDeclarations,
+                required: orderedIntProofActionNames.contains(rendered.sourceName))
         }
         try StraightLineRenderedActionCheck.verifyFiniteInvocations(behavior,
             layout: layout, binders: renderer.bindings.binders, module: directOutput.source)

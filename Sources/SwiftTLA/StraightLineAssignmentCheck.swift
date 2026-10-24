@@ -376,9 +376,9 @@ enum StraightLineAssignmentCheck {
     }
 
     static func verifySequential(_ algorithm: AlgorithmModel, lowered: TLASpec,
-                                 enumerateInitialControl: Bool) throws {
+                                 enumerateInitialControl: Bool) throws -> Set<String> {
         let steps = algorithm.sequentialSteps
-        guard steps.contains(where: { $0.loopCondition == nil }) else { return }
+        guard steps.contains(where: { $0.loopCondition == nil }) else { return [] }
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(
                 code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -458,6 +458,8 @@ enum StraightLineAssignmentCheck {
             }
             guard sawDoneGuard, missingFrames.isEmpty else { throw mismatch() }
         }
+        return orderedIntSteps
+            ? Set(steps.map(\.label.name) + [CompilerControlSymbol.terminatingAction.rawValue]) : []
     }
 
     static func verify(_ step: AtomicStep, lowered: ActionExpr?, stateRoots: Set<String>,
