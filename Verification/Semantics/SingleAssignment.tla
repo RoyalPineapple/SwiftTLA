@@ -2809,6 +2809,68 @@ THEOREM SequentialInitialControlLiftPreservesEquality ==
         GeneratedSequentialIntInitialSet, SourceSequentialIntInitial,
         GeneratedSequentialIntInitial, SequentialStates, States
 
+SourceGuardedInitialHistory(start, plans, history) ==
+    /\ history[0] = start
+    /\ \A index \in 1..Len(plans) :
+        history[index] = SourceGuardedInitialStates(
+            history[index - 1], plans[index].key,
+            plans[index].values, plans[index].defined)
+GeneratedGuardedInitialHistory(start, plans, history) ==
+    /\ history[0] = start
+    /\ \A index \in 1..Len(plans) :
+        history[index] = GeneratedGuardedInitialStates(
+            history[index - 1], plans[index].key,
+            plans[index].values, plans[index].defined)
+
+THEOREM GuardedInitialHistoriesAgree ==
+    ASSUME NEW start \in SUBSET States,
+           NEW plans \in Seq(DeterministicInitialPlans),
+           NEW source \in [0..Len(plans) -> SUBSET States],
+           NEW generated \in [0..Len(plans) -> SUBSET States],
+           SourceGuardedInitialHistory(start, plans, source),
+           GeneratedGuardedInitialHistory(start, plans, generated)
+    PROVE \A index \in 0..Len(plans) : source[index] = generated[index]
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(plans) => source[index] = generated[index]
+    <1>1. P(0)
+        BY SMT DEF P, SourceGuardedInitialHistory,
+            GeneratedGuardedInitialHistory
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(plans)
+                     PROVE source[index + 1] = generated[index + 1]
+            BY SMT DEF P
+        <2>1. source[index] = generated[index]
+            BY P(index), SMT DEF P
+        <2>2. plans[index + 1] \in DeterministicInitialPlans
+            BY LenProperties, SMT
+        <2>3. source[index + 1] = SourceGuardedInitialStates(
+                source[index], plans[index + 1].key,
+                plans[index + 1].values, plans[index + 1].defined)
+            BY SMT DEF SourceGuardedInitialHistory
+        <2>4. generated[index + 1] = GeneratedGuardedInitialStates(
+                generated[index], plans[index + 1].key,
+                plans[index + 1].values, plans[index + 1].defined)
+            BY SMT DEF GeneratedGuardedInitialHistory
+        <2>5. source[index] \in SUBSET States
+            BY SMT
+        <2>6. /\ plans[index + 1].key \in Vars
+              /\ plans[index + 1].values \in [States -> Values]
+              /\ plans[index + 1].defined \in [States -> BOOLEAN]
+            BY <2>2, SMT DEF DeterministicInitialPlans
+        <2>7. SourceGuardedInitialStates(source[index],
+                plans[index + 1].key, plans[index + 1].values,
+                plans[index + 1].defined)
+            = GeneratedGuardedInitialStates(source[index],
+                plans[index + 1].key, plans[index + 1].values,
+                plans[index + 1].defined)
+            BY <2>5, <2>6, GuardedDeterministicInitializationComposes
+        <2>. QED BY <2>1, <2>3, <2>4, <2>7, SMT
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED BY <1>3, SMT DEF P
+
 THEOREM GuardedSequentialIntInitialSetsAgree ==
     ASSUME NEW start \in SUBSET States,
            NEW plans \in Seq(DeterministicInitialPlans),
@@ -2983,7 +3045,18 @@ THEOREM OrderedSequentialIntProgramCompose ==
            NEW sourceInitials \in SUBSET States,
            NEW generatedInitials \in SUBSET States,
            NEW before \in SequentialStates,
-           sourceInitials = generatedInitials,
+           NEW initialStart \in SUBSET States,
+           NEW initialPlans \in Seq(DeterministicInitialPlans),
+           NEW sourceInitialHistory
+               \in [0..Len(initialPlans) -> SUBSET States],
+           NEW generatedInitialHistory
+               \in [0..Len(initialPlans) -> SUBSET States],
+           SourceGuardedInitialHistory(initialStart, initialPlans,
+               sourceInitialHistory),
+           GeneratedGuardedInitialHistory(initialStart, initialPlans,
+               generatedInitialHistory),
+           sourceInitials = sourceInitialHistory[Len(initialPlans)],
+           generatedInitials = generatedInitialHistory[Len(initialPlans)],
            NEW initialGuards \in Seq(BOOLEAN),
            NEW initialDefined \in [0..Len(initialGuards) -> BOOLEAN],
            NEW sourceInitialOperands \in [1..Len(initialGuards) -> (Int \X Int)],
@@ -3084,9 +3157,14 @@ THEOREM OrderedSequentialIntProgramCompose ==
     <1>3. SourceSequentialIntInitialSet(entries[1], sourceInitials)
             = GeneratedSequentialIntInitialSet(entries[1], generatedInitials)
         PROOF
-        <2>1. entries[1] \in ActionLabels
+        <2>1. sourceInitialHistory[Len(initialPlans)]
+                = generatedInitialHistory[Len(initialPlans)]
+            BY GuardedInitialHistoriesAgree, SMT
+        <2>2. sourceInitials = generatedInitials
+            BY <2>1, SMT
+        <2>3. entries[1] \in ActionLabels
             BY LenProperties
-        <2>. QED BY <2>1, SequentialInitialControlLiftPreservesEquality,
+        <2>. QED BY <2>2, <2>3, SequentialInitialControlLiftPreservesEquality,
             SMT
     <1>4. SourceSequentialIntProgramEdges(count, entries, exits, labels,
                steps, guards, done, terminalLabel)

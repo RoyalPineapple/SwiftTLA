@@ -144,7 +144,7 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
 `README.md`. This is **not** coverage of other accepted constructors.
 
 - [x] Finish the full local proof for the current dependent-initializer
-  extension. TLAPS `--nofp` proved all 1,839 obligations in
+  extension. TLAPS `--nofp` proved all 1,931 obligations in
   `SingleAssignment.tla`; the ordered-assignment and generated-initialization
   suites passed locally. This is not hosted evidence for the extension.
 - [x] Baseline literal-initializer slice: ordinary CI, semantic-proof
@@ -153,16 +153,14 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   extension in this worktree is not included in that evidence.
 - [ ] Obtain the same hosted evidence for the dependent-initializer extension
   after its full local proof and related regressions pass.
-- [ ] Record, for this slice, what is proved versus checked versus trusted:
-  the actual-output checkers' correctness, remaining source parsing, SwiftTLA
-  update/visitor kernel, and documented Swift behavior are not discharged by
-  TLAPS. Give each link its rejected mutation.
+- [x] Record the proof boundary below. The output checks do not prove their
+  own correctness, and the local proof does not qualify a hosted revision.
 - [x] Derive the sequential program's complete initial-set equality from
-  arbitrary guarded deterministic initializer plans rather than assuming
-  equal final sets. `GuardedSequentialIntInitialSetsAgree` constructs the
-  common history and lifts it through the hidden program counter. Matching
-  each accepted initializer expression's value and definedness function to
-  its actual emitted Swift/TLA+ remains an output-link obligation.
+  separate guarded source and generated histories. `GuardedInitialHistoriesAgree`
+  proves equality at every prefix. `OrderedSequentialIntProgramCompose` uses
+  that result to prove equality after it adds the hidden program counter.
+  The theorem does not assume equal initial sets. The actual Swift and TLA+
+  output checks must still link each accepted initializer to its plan.
 - [x] Check nested dependent `Int` addition's actual TLA+ initial-failure
   relations in source order. The emitted-output checker rejects swapped
   failure sites; this local regression does not establish every initializer
@@ -179,5 +177,23 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   operation kernel or other initializer expression families.
 - [ ] Then close **one missing link at a time** in the inventory above. Do not
   add upstream families or more named proof fixtures in place of rule coverage.
+
+For the stated ordered-`Int` class, `SingleAssignment.tla` proves initial-set,
+labeled-step, and failure composition from the rule premises. The proof does
+not inspect emitted files.
+
+`OrderedIntSourceSyntaxCheck` checks the authored syntax against the parsed
+source model. Its mutation test changes initial values, labels, reads, targets,
+and write order. `StraightLineAssignmentCheck` checks the lowerer and rejects
+changed operands, writes, and control locations.
+
+The Swift output check reads the emitted initializer and rejects swapped
+addition operands, missing failure handling, and an early return. The TLA+
+output check reads `Init`, actions, and failure relations. It rejects changed
+values, changed control, and swapped failure sites.
+
+The source parser, output checks, native update and visitor kernel, and TLA+
+renderer remain SwiftTLA-owned trust boundaries. Documented Swift behavior is
+trusted. Hosted evidence for these side-branch changes is still missing.
 
 The detailed contract and slice evidence live in [README.md](README.md).
