@@ -2809,6 +2809,39 @@ THEOREM SequentialInitialControlLiftPreservesEquality ==
         GeneratedSequentialIntInitialSet, SourceSequentialIntInitial,
         GeneratedSequentialIntInitial, SequentialStates, States
 
+THEOREM GuardedSequentialIntInitialSetsAgree ==
+    ASSUME NEW start \in SUBSET States,
+           NEW plans \in Seq(DeterministicInitialPlans),
+           NEW entry \in ActionLabels
+    PROVE \E history \in [0..Len(plans) -> SUBSET States] :
+        /\ history[0] = start
+        /\ (\A index \in 1..Len(plans) :
+            /\ history[index] = SourceGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+            /\ history[index] = GeneratedGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined))
+        /\ SourceSequentialIntInitialSet(entry, history[Len(plans)])
+            = GeneratedSequentialIntInitialSet(entry, history[Len(plans)])
+    PROOF
+    <1>1. PICK history \in [0..Len(plans) -> SUBSET States] :
+              /\ history[0] = start
+              /\ (\A index \in 1..Len(plans) :
+                  /\ history[index] = SourceGuardedInitialStates(
+                      history[index - 1], plans[index].key,
+                      plans[index].values, plans[index].defined)
+                  /\ history[index] = GeneratedGuardedInitialStates(
+                      history[index - 1], plans[index].key,
+                      plans[index].values, plans[index].defined))
+        BY GuardedDeterministicInitialHistoriesExist
+    <1>2. history[Len(plans)] \in SUBSET States
+        BY <1>1, SMT
+    <1>3. SourceSequentialIntInitialSet(entry, history[Len(plans)])
+            = GeneratedSequentialIntInitialSet(entry, history[Len(plans)])
+        BY <1>2, SequentialInitialControlLiftPreservesEquality
+    <1>. QED BY <1>1, <1>3
+
 SourceCheckedSequentialEdges(entry, next, label, steps, guards) ==
     {edge \in SequentialEdges :
         /\ edge[2] = label
