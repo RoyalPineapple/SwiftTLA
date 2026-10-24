@@ -952,6 +952,25 @@ THEOREM DependentDeterministicInitializationComposes ==
     BY InitialEqualityMatchesSingletonEnumeration,
         SMT DEF ExtendEnumeratedInitialStates
 
+SourceGuardedInitialStates(priorStates, key, values, enabled) ==
+    UNION {IF enabled[prior]
+           THEN EqualityInitialStates(prior, key, values[prior])
+           ELSE {} : prior \in priorStates}
+GeneratedGuardedInitialStates(priorStates, key, values, enabled) ==
+    ExtendEnumeratedInitialStates(priorStates, key,
+        [prior \in States |-> IF enabled[prior] THEN <<values[prior]>> ELSE <<>>])
+
+THEOREM GuardedDeterministicInitializationComposes ==
+    ASSUME NEW key \in Vars,
+           NEW priorStates \in SUBSET States,
+           NEW values \in [States -> Values],
+           NEW enabled \in [States -> BOOLEAN]
+    PROVE SourceGuardedInitialStates(priorStates, key, values, enabled)
+        = GeneratedGuardedInitialStates(priorStates, key, values, enabled)
+    BY InitialEqualityMatchesSingletonEnumeration, SMT
+       DEF SourceGuardedInitialStates, GeneratedGuardedInitialStates,
+           ExtendEnumeratedInitialStates, EnumeratedInitialStates
+
 InitialGuardHistory(guards, defined) ==
     /\ defined[0] = TRUE
     /\ \A index \in 1..Len(guards) :
@@ -1238,6 +1257,69 @@ THEOREM OrderedInitialHistoriesExist ==
         BY <1>1, <1>2, SequencesInductionAppend
     <1>. QED
         BY <1>3 DEF P
+
+THEOREM GuardedDeterministicInitialHistoriesExist ==
+    ASSUME NEW start \in SUBSET States,
+           NEW plans \in Seq(DeterministicInitialPlans)
+    PROVE \E history \in [0..Len(plans) -> SUBSET States] :
+        /\ history[0] = start
+        /\ \A index \in 1..Len(plans) :
+            /\ history[index] = SourceGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+            /\ history[index] = GeneratedGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+    PROOF
+    <1>. DEFINE mapped == [index \in 1..Len(plans) |->
+            AsDeterministicInitialPlan(plans[index])]
+    <1>1. mapped \in Seq(InitializationPlans)
+        BY DeterministicInitialPlanAgrees, LenProperties, SMT DEF mapped
+    <1>2. ValidInitializationPlans(mapped)
+        BY <1>1, DeterministicInitialPlanAgrees, LenProperties, SMT
+           DEF mapped, ValidInitializationPlans
+    <1>3. PICK history \in [0..Len(mapped) -> SUBSET States] :
+              EnumeratedInitialHistory(start, mapped, history)
+              /\ MembershipInitialHistory(start, mapped, history)
+        BY <1>1, <1>2, OrderedInitialHistoriesExist
+           DEF InitialHistoriesExist
+    <1>4. Len(mapped) = Len(plans)
+        BY DEF mapped
+    <1>5. \A index \in 1..Len(plans) :
+            /\ history[index] = SourceGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+            /\ history[index] = GeneratedGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 1..Len(plans)
+                     PROVE /\ history[index] = SourceGuardedInitialStates(
+                                  history[index - 1], plans[index].key,
+                                  plans[index].values, plans[index].defined)
+                           /\ history[index] = GeneratedGuardedInitialStates(
+                                  history[index - 1], plans[index].key,
+                                  plans[index].values, plans[index].defined)
+            BY SMT
+        <2>1. /\ plans[index] \in DeterministicInitialPlans
+              /\ history[index - 1] \in SUBSET States
+            BY <1>3, SMT
+        <2>2. history[index] = GeneratedGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+            BY <1>3, <1>4, SMT
+               DEF EnumeratedInitialHistory, mapped,
+                   AsDeterministicInitialPlan,
+                   GeneratedGuardedInitialStates
+        <2>3. SourceGuardedInitialStates(history[index - 1],
+                plans[index].key, plans[index].values, plans[index].defined)
+                = GeneratedGuardedInitialStates(history[index - 1],
+                    plans[index].key, plans[index].values, plans[index].defined)
+            BY <2>1, GuardedDeterministicInitializationComposes, SMT
+               DEF DeterministicInitialPlans
+        <2>. QED BY <2>2, <2>3
+    <1>. QED BY <1>3, <1>4, <1>5, SMT
+        DEF EnumeratedInitialHistory
 
 ConjunctiveInitialPrefix(plans, index) ==
     {state \in States :
