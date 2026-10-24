@@ -347,11 +347,14 @@ reads, targets, and write order when `@TLAModel` invokes
 `TLASpecVerifier.parseAndVerify`. Other accepted spellings that the syntax
 checker does not recognize are not covered by this source-syntax link.
 Standalone `#spec` expansion instead runs `SpecExpressionMacro` and its
-`DSLRewriter` before the `TLASpec` builder; it does not invoke that syntax
-check. The first-slice theorem therefore starts at the parsed source model,
-not at every authored `#spec` spelling. The standalone rewrite and its
-source-to-model link remain SwiftTLA-owned proof obligations; this route must
-not inherit the hosted model-macro claim by analogy.
+`DSLRewriter` before the `TLASpec` builder. For the recognized ordered-`Int`
+class, expansion now independently checks that the rewrite adds only the
+binding identities and preserves the complete initializer and step syntax,
+including registration; altered identities, reads, targets, and registration
+are negative controls. This closes the syntax-to-expanded-Swift link for that
+class, not the expanded-Swift-to-runtime-`AlgorithmModel` link. The latter
+builder rule remains SwiftTLA-owned and unproved for standalone `#spec`, so the
+route must not inherit the hosted model-macro claim by analogy.
 
 `StraightLineAssignmentCheck` checks the lowerer and rejects changed operands,
 writes, and control locations.
