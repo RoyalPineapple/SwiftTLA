@@ -210,6 +210,15 @@ pointwise-equal selected state predicates. This is a graph-to-verdict rule:
 it does not establish that an arbitrary authored predicate is lowered and
 emitted identically. That property-output link, assumptions, fairness, and
 checker resource-limit semantics remain open.
+The actual checking paths differ: generated Swift evaluates an authored
+reachability predicate positively, while the TLA+ renderer negates it and
+selects that definition as a TLC invariant. Neither transformation is proved
+for arbitrary accepted predicates. Both deadlock directives interpolate the
+compiled Boolean directly; checking those printed literals against that same
+Boolean would only duplicate the emitter, not independently prove source
+selection. The current first slice has no authored state predicate; its
+selected outcomes are the automatic evaluation-failure check and default
+deadlock, not general invariant or reachability predicates.
 Production source/lowering and actual-output checkers plus wrong-value,
 wrong-location, wrong-order, and omitted-failure mutations are described in
 `README.md`. This is **not** coverage of other accepted constructors.
