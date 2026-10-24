@@ -940,6 +940,60 @@ struct OrderedAssignmentLoweringTests {
             try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
                 resolved: wrongResolved, at: path)
         }
+
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "SequentialDependentIntInitialProofModel", program: program))
+        let declaration = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        let slots = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
+            ($0.id, emitter.variable($0.id))
+        })
+        let name = emitter.variable(variable.id)
+        let bindings = program.behavior.initializations.map { "let \(emitter.variable($0.variable))" }
+        func verify(_ declaration: DeclSyntax) throws {
+            try verifyGeneratedInitialBindings(declaration, expected: bindings,
+                expectedLoops: [:], expectedCandidateSources: [:],
+                expectedIntExpressions: [name: resolvedExpression], stateSlots: slots)
+        }
+        try verify(declaration)
+        let wrongSwift = declaration.description.replacingOccurrences(
+            of: "_NativeMachineOperations.add", with: "_NativeMachineOperations.subtract")
+        #expect(wrongSwift != declaration.description)
+        let wrongDeclaration = try #require(Parser.parse(source: wrongSwift)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verify(wrongDeclaration)
+            Issue.record("A changed generated initializer operation was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.value.\(name)")
+        }
+
+        let module = try program.renderModule().renderedModuleSource
+        let lines = module.components(separatedBy: "\n")
+        let start = try #require(lines.firstIndex(of: "Init =="))
+        let end = lines[(start + 1)...].firstIndex(of: "") ?? lines.count
+        let predicates = lines[(start + 1)..<end].map {
+            String($0.dropFirst("  /\\ ".count))
+        }
+        let expectedPredicate = try #require(StraightLineRenderedActionCheck.initialIntPredicate(
+            resolvedExpression, named: "second", layout: program.layout))
+        try verifyRenderedInitialConjunction(module, predicates: predicates,
+            expectedIntPredicates: ["second": expectedPredicate])
+        let wrongPredicate = expectedPredicate.replacingOccurrences(
+            of: "second = (first + 2)", with: "second = (first + 3)")
+        #expect(wrongPredicate != expectedPredicate)
+        let wrongModule = module.replacingOccurrences(
+            of: "  /\\ \(expectedPredicate)", with: "  /\\ \(wrongPredicate)")
+        #expect(wrongModule != module)
+        do {
+            try verifyRenderedInitialConjunction(wrongModule,
+                predicates: predicates.map { $0 == expectedPredicate ? wrongPredicate : $0 },
+                expectedIntPredicates: ["second": expectedPredicate])
+            Issue.record("A changed generated Init expression was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.Init")
+        }
     }
 
     @Test("Sequential Do captures every ordered Int read and checked addition")

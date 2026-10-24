@@ -1480,8 +1480,12 @@ For that dependent-initializer form, the production lowerer now checks the
 literal, prior-state read, and addition tree against the source, and the
 resolver checks its typed `Int` tree without changing operand order. A real
 sequential `#spec` fixture and changed-tree mutations exercise those links.
-Both emitted initializer expressions and selected initial-failure outcomes
-remain open; this does not enlarge the completed literal-initializer slice.
+The production output checks also compare its actual generated Swift
+initializer and TLA+ `Init` clause with independent literal/read/add forms;
+operator and self-consistent wrong-`Init` mutations are rejected. Selected
+initial-failure outcomes and the general semantic composition for dependent
+initializers remain open; this does not enlarge the completed
+literal-initializer slice.
 `OrderedSequentialIntProgramCompose` proves the independent initial, labeled
 edge, and ordered-failure rules compose over any finite number of steps,
 including the terminal self-loop; its new focused TLAPS obligations pass

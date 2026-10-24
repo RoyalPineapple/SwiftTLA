@@ -418,6 +418,9 @@ extension NativeSwiftEmitter {
             }
             """)
         }
+        let initialSlots = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
+            ($0.id, variable($0.id))
+        })
         try verifyGeneratedInitialBindings(
             declarations.first { $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates" },
             expected: program.behavior.initializations.map { initialization in
@@ -440,7 +443,16 @@ extension NativeSwiftEmitter {
                           case .controlLocation(let id) = expression.operation,
                           expression.resultType == .controlLocation else { return nil }
                     return (variable(initialization.variable), id.ordinal)
-                }))
+                }),
+            expectedIntExpressions: Dictionary(uniqueKeysWithValues:
+                program.behavior.initializations.compactMap { initialization -> (String, CompiledExpression)? in
+                    guard case .value(let expression) = initialization.initialization,
+                          expression.resultType == .int,
+                          checkedIntInitialValue(expression, slots: initialSlots) != nil else { return nil }
+                    if case .value(.integer) = expression.operation { return nil }
+                    return (variable(initialization.variable), expression)
+                }),
+            stateSlots: initialSlots)
         try verifyRandomSubsetInitialSupport(declarations.first,
             expected: program.behavior.initializations.compactMap { initialization -> (String, Bool)? in
                 guard case .memberOf(let expression) = initialization.initialization,
@@ -1330,10 +1342,56 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
     }
 }
 
+private func checkedIntInitialValue(_ root: CompiledExpression,
+                                    slots: [VariableID: String]) -> String? {
+    let arithmetic: Bool
+    if case .add = root.operation { arithmetic = true } else { arithmetic = false }
+    var pending = [(root, false)]
+    var values: [String] = []
+    var statements: [String] = []
+    while let (node, expanded) = pending.popLast() {
+        guard node.resultType == .int else { return nil }
+        let value: String
+        switch node.operation {
+        case .add:
+            guard node.children.count == 2 else { return nil }
+            if !expanded {
+                pending.append((node, true))
+                pending.append((node.children[1], false))
+                pending.append((node.children[0], false))
+                continue
+            }
+            guard values.count >= 2 else { return nil }
+            let rhs = values.removeLast()
+            let lhs = values.removeLast()
+            value = "try _NativeMachineOperations.add(\(lhs), \(rhs))"
+        case .stateVariable(let id):
+            guard node.children.isEmpty, let slot = slots[id] else { return nil }
+            value = slot
+        case .value(.integer(let integer)):
+            guard node.children.isEmpty else { return nil }
+            value = integer == Int.min ? "Int.min" : String(integer)
+        default: return nil
+        }
+        if arithmetic {
+            let name = "_arithmetic\(statements.count)"
+            statements.append("let \(name): Int = \(value)")
+            values.append(name)
+        } else {
+            values.append(value)
+        }
+    }
+    guard values.count == 1, let value = values.first else { return nil }
+    if !arithmetic { return value }
+    return "(try { () throws -> Int in\n\(statements.joined(separator: "\n"))\nreturn \(value)\n}())"
+}
+
 func verifyGeneratedInitialBindings(
     _ declaration: DeclSyntax?, expected: [String], expectedLoops: [String: String],
     expectedCandidateSources: [String: String], expectedIntLiterals: [String: Int] = [:],
-    expectedControlLocations: [String: Int] = [:]
+    expectedControlLocations: [String: Int] = [:],
+    expectedIntExpressions: [String: CompiledExpression] = [:],
+    stateSlots: [VariableID: String] = [:]
 ) throws {
     guard let initialStates = declaration?.as(FunctionDeclSyntax.self) else {
         throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -1369,7 +1427,7 @@ func verifyGeneratedInitialBindings(
               Array(tokens[start..<(start + required.count)]) == required,
               ["if", "let", "for", "result", "}"].contains(tokens[start + required.count]) else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
-                path: "native._initialStates.literal.\(name)",
+                path: "native._initialStates.value.\(name)",
                 expected: "the compiled \(type) initializer \(value)",
                 actual: "the emitted initializer differs from its compiled value",
                 nextSafeAction: "Report this native initialization generation failure.")
@@ -1377,6 +1435,16 @@ func verifyGeneratedInitialBindings(
     }
     for (name, value) in expectedIntLiterals {
         try verifyInitializer(name, type: "Int", value: value == Int.min ? "Int.min" : String(value))
+    }
+    for (name, expression) in expectedIntExpressions {
+        guard let expected = checkedIntInitialValue(expression, slots: stateSlots) else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native._initialStates.expression.\(name)",
+                expected: "a checked Int literal, prior-state read, or addition",
+                actual: "the compiled initializer has another expression form",
+                nextSafeAction: "Report this native initialization checking failure.")
+        }
+        try verifyInitializer(name, type: "Int", value: expected)
     }
     for (name, id) in expectedControlLocations {
         try verifyInitializer(name, type: "_ControlLocation", value: "_ControlLocation.location\(id)")
