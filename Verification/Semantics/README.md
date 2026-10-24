@@ -1,5 +1,16 @@
 # Semantic-preservation contract
 
+[Language-composition proof checklist](LanguageCompositionChecklist.md) tracks
+the accepted-rule inventory and the remaining source-to-both-outputs links.
+
+The slice histories below are regression evidence, not language-proof credit.
+Some modules mix general lemmas with model-specific checks; retain them until
+their reusable rules have been extracted and verified. The sequence-removal
+domain and value lemmas now live in `SequenceRemoveRule.tla`; the former
+`SequenceEditPreservationProof.tla` model instance is retired. Only a general
+rule connected to the real lowerer and both real outputs can advance the
+language-wide claim.
+
 Status: **unproved**. This document defines the claim to prove. Finite graph
 comparisons do not discharge it.
 
@@ -2692,25 +2703,12 @@ interpretation of the visitors remain trusted. This instance
 does not establish arbitrary sequence-expression lowering, initialization,
 or temporal fidelity.
 
-SequenceEditPreservationProof.tla imports the exact generated TLA+ module for
-a `#spec` array removal and prefix. For arbitrary integer sequences and valid
-indices, it uses the shared indexed prefix rule and proves the independent
-removal value equals its lowered `SubSeq` form; it then connects both complete
-labeled actions, the two initial states, index/length failure payloads, and
-the selected evaluation check to the emitted module, including both aggregate
-failure predicates. Its invalid-initial-state negative control fails
-if the evaluation check is omitted. The focused generated-machine test pins
-both complete Swift update visitors and checks that replacing either shared
-checked sequence operation breaks its output witness; it executes both
-successful and failing transitions. The generation-time verifier also
-reconstructs typed Int/Bool removal and prefix operands from their compiled
-expressions; type-correct mutations of the sequence source, removal index,
-and prefix length passed before this check and are now rejected. Its
-obligations and the shared prefix rule passed locally; hosted evidence is
-pending. The Swift compiler/runtime and the shared array operations'
-implementation of the stated one-based
-sequence rules remain trusted. The proof covers these two operators and this emitted model, not
-arbitrary expression composition, initialization plans, or temporal claims.
+`SequenceRemoveRule.tla` proves the removal domain and value law for every
+sequence over an arbitrary element set and each valid index. The focused
+generated-machine regression still checks successful and failing removal and
+prefix transitions and rejects changed visitor operations or operands. The
+actual lowerer, both general output links, and failure composition for these
+operators remain open; the Swift array operations remain trusted.
 
 For a direct `memberOf(RandomSubset(upTo: k, from: S))` initializer, the
 exhaustive source rule admits every member of `S` when `k > 0`, and none when
