@@ -162,26 +162,25 @@ struct RandomSubsetExpressionTests {
         }
     }
 
-    @Test("rendered initial states and negative-count failures match their proved source rules")
+    @Test("rendered initial states and negative-count failures match the source rule")
     func renderedMixedInitialOutcomes() throws {
         let tla = try MixedInitialEvaluationModel.render().tlaBundle.tla
         let predicates = ["pc = \"stay\"", "limit \\in {-1, 1}",
             "(limit > 0 /\\ chosen \\in {7})"]
         try verifyRenderedInitialConjunction(tla, predicates: predicates)
-        let proof = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/RandomSubsetInitialOutcomeProof.tla")
-            .standardizedFileURL
-        let proofLines = try String(contentsOf: proof, encoding: .utf8).components(separatedBy: "\n")
         let name = "__SwiftTLAInitialRandomSubsetCountFailure2("
-        let proved = try #require(proofLines.first { $0.hasPrefix(name) })
+        let expected = "__SwiftTLAInitialRandomSubsetCountFailure2(__SwiftTLAInitialFailedCount2) == "
+            + "(LET __SwiftTLAInitialValue0 == \"stay\" IN (\\E __SwiftTLAInitialValue1 \\in {-1, 1}: "
+            + "(__SwiftTLAInitialFailedCount2 < 0 /\\ "
+            + "__SwiftTLAInitialFailedCount2 = __SwiftTLAInitialValue1)))"
         func emittedFailure(in module: String) -> String? {
             module.components(separatedBy: "\n").first { $0.hasPrefix(name) }
         }
-        #expect(emittedFailure(in: tla) == proved)
+        #expect(emittedFailure(in: tla) == expected)
         let altered = tla.replacingOccurrences(of: "__SwiftTLAInitialFailedCount2 < 0",
             with: "__SwiftTLAInitialFailedCount2 > 0")
         #expect(altered != tla)
-        #expect(emittedFailure(in: altered) != proved)
+        #expect(emittedFailure(in: altered) != expected)
         let weakened = tla.replacingOccurrences(of: "limit > 0", with: "limit < 0")
         #expect(throws: CompilationDiagnostic.self) {
             try verifyRenderedInitialConjunction(weakened, predicates: predicates)

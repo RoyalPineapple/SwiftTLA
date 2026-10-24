@@ -42,6 +42,23 @@ public struct SpecExpressionMacro: ExpressionMacro {
             return specCall(named: StringLiteralExprSyntax(content: "InvalidSpec"), body: closure)
         }
 
+        for statement in closure.statements {
+            guard case .expr(let expression) = statement.item,
+                  var call = expression.as(FunctionCallExprSyntax.self) else { continue }
+            while let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+                  let base = member.base?.as(FunctionCallExprSyntax.self) {
+                call = base
+            }
+            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self)
+            let member = call.calledExpression.as(MemberAccessExprSyntax.self)
+            let constructor = reference?.baseName.sourceIdentifierName
+                ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SwiftTLA"
+                    ? member?.declName.baseName.sourceIdentifierName : nil)
+            if constructor == "Algorithm" || constructor == "Validation" {
+                context.diagnose(Diagnostic(node: Syntax(statement.item), message: BuilderBindingDiagnostic()))
+            }
+        }
+
         let parameterScope: String?
         switch closure.signature?.parameterClause {
         case .simpleInput(let list): parameterScope = list.first?.name.sourceIdentifierName

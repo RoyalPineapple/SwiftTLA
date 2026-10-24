@@ -113,8 +113,141 @@ import SwiftSyntax
         let wrongRoute = dispatch.description.replacingOccurrences(
             of: "Self._visitSuccessors1", with: "Self._visitSuccessors0")
         #expect(wrongRoute != dispatch.description)
-        #expect(tokens((visitors.map(\.description) + [wrongRoute, formalCall.description])
-            .joined(separator: "\n")) != tokens(expected))
+        let routes = compiled.api.actions.map { api in
+            (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
+             formalName: compiled.program.layout.actions[api.compiledAction.ordinal].renderedName)
+        }
+        let allActions = compiled.api.actions.map { api in
+            (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
+             formalName: compiled.program.layout.actions[api.compiledAction.ordinal].renderedName,
+             publicBindings: api.bindings.filter(\.isPublic).count)
+        }
+        let candidatePlans = compiled.api.actions.map { api in
+            (name: api.swiftIdentifier,
+             labels: api.bindings.filter(\.isPublic).map(\.swiftIdentifier))
+        }
+        try verifyGeneratedActionRoutingOutput(members, routes: routes, allActions: allActions,
+            candidates: candidatePlans, configurationArguments: "")
+        let wrongDispatch = try #require(Parser.parse(source: wrongRoute)
+            .statements.first?.item.as(DeclSyntax.self))
+        var wrongMembers = members
+        let dispatchIndex = try #require(wrongMembers.firstIndex {
+            $0.description.contains("private func _visitSuccessors(for action: Action,")
+        })
+        wrongMembers[dispatchIndex] = wrongDispatch
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans,
+                configurationArguments: "")
+            Issue.record("A generated action routed to the wrong compiled visitor")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.route."))
+        }
+        let wrongLabel = formalCall.description.replacingOccurrences(
+            of: "name: \"copy\"", with: "name: \"wrong\"")
+        #expect(wrongLabel != formalCall.description)
+        let wrongFormalCall = try #require(Parser.parse(source: wrongLabel)
+            .statements.first?.item.as(DeclSyntax.self))
+        let formalIndex = try #require(wrongMembers.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "formalCall"
+        })
+        wrongMembers = members
+        wrongMembers[formalIndex] = wrongFormalCall
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans,
+                configurationArguments: "")
+            Issue.record("A generated action used the wrong formal label")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.label.copy")
+        }
+        let candidateIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_actions"
+        })
+        let wrongCandidates = members[candidateIndex].description.replacingOccurrences(
+            of: "try _visitActionCandidates { result.append($0) }",
+            with: "try _visitActionCandidates { _ in }")
+        #expect(wrongCandidates != members[candidateIndex].description)
+        wrongMembers = members
+        wrongMembers[candidateIndex] = try #require(Parser.parse(source: wrongCandidates)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("A generated candidate list discarded every action")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.candidates")
+        }
+        let visitorIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitSuccessors"
+                && $0.as(FunctionDeclSyntax.self)?.signature.parameterClause.parameters.last?.firstName.text
+                    == "onEvaluationFailure"
+        })
+        let wrongEnumeration = members[visitorIndex].description.replacingOccurrences(
+            of: "try _visitActionCandidates(_visitAction)",
+            with: "try _visitActionCandidates { _ in }")
+        #expect(wrongEnumeration != members[visitorIndex].description)
+        wrongMembers = members
+        wrongMembers[visitorIndex] = try #require(Parser.parse(source: wrongEnumeration)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated checking ignored every action candidate")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.failureRouting")
+        }
+        let sourceIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitActionCandidates"
+        })
+        let wrongSource = members[sourceIndex].description.replacingOccurrences(
+            of: "try visit(.repeatWrites)", with: "try visit(.copy)")
+        #expect(wrongSource != members[sourceIndex].description)
+        wrongMembers = members
+        wrongMembers[sourceIndex] = try #require(Parser.parse(source: wrongSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated candidate traversal duplicated one action")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.candidateSource")
+        }
+        let sendIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "send"
+        })
+        let wrongSend = members[sendIndex].description.replacingOccurrences(
+            of: "_execution = next", with: "_execution = _execution")
+        #expect(wrongSend != members[sendIndex].description)
+        wrongMembers = members
+        wrongMembers[sendIndex] = try #require(Parser.parse(source: wrongSend)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated send returned a transition without applying its successor")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.send")
+        }
+        let successorIndex = try #require(members.firstIndex {
+            guard let method = $0.as(FunctionDeclSyntax.self) else { return false }
+            return method.name.text == "_successors"
+                && method.signature.parameterClause.parameters.first?.firstName.text == "for"
+                && method.signature.parameterClause.parameters.count == 2
+        })
+        let wrongSuccessors = members[successorIndex].description.replacingOccurrences(
+            of: "{ result.append($0) }", with: "{ _ in }")
+        #expect(wrongSuccessors != members[successorIndex].description)
+        wrongMembers = members
+        wrongMembers[successorIndex] = try #require(Parser.parse(source: wrongSuccessors)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated successors discarded the complete visited relation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.successorRoute")
+        }
     }
 
     @Test("Later reads observe earlier writes in one atomic transition")
@@ -184,9 +317,50 @@ import SwiftSyntax
         #expect(laterFailure.contains("LET __atomic_0 == (count + 1)"))
         #expect(operands.contains("<<__atomic_0, 1>>"))
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: OrderedOverflowModel.spec.compile()))
+        let action = try #require(program.behavior.actions.first)
+        let output = try program.renderModule()
+        let name = try #require(program.layout.actions.first?.renderedName)
+        let header = "\(name) == "
+        let body = try #require(output.renderedModuleSource.split(separator: "\n")
+            .first { $0.hasPrefix(header) }?.dropFirst(header.count))
+        try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+            body: String(body), module: output.renderedModuleSource,
+            layout: program.layout, binders: program.binderNames,
+            failureDeclarations: output.evaluationFailureDeclarations)
+        for prefix in ["__SwiftTLAOverflowFailure0 == ",
+                       "__SwiftTLAOverflowFailure0_1 == ",
+                       "__SwiftTLAOverflowOperands0_1 == ",
+                       "__SwiftTLAAnyEvaluationFailure0 == "] {
+            let original = try #require(output.evaluationFailureDeclarations.first {
+                $0.hasPrefix(prefix)
+            })
+            let changed = "\(prefix)FALSE"
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+                    body: String(body),
+                    module: output.renderedModuleSource.replacingOccurrences(of: original, with: changed),
+                    layout: program.layout, binders: program.binderNames,
+                    failureDeclarations: output.evaluationFailureDeclarations.map {
+                        $0 == original ? changed : $0
+                    })
+            }
+        }
+        let omitted = try #require(output.evaluationFailureDeclarations.first {
+            $0.hasPrefix("__SwiftTLAOverflowFailure0_1 == ")
+        })
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+                body: String(body),
+                module: output.renderedModuleSource.replacingOccurrences(of: "\(omitted)\n", with: ""),
+                layout: program.layout, binders: program.binderNames,
+                failureDeclarations: output.evaluationFailureDeclarations.filter { $0 != omitted })
+        }
     }
 
-    @Test("Nested checked additions retain the failing operation in both outputs")
+    @Test("Nested checked additions retain the selected failure in both outputs")
     func nestedAdditionFailure() throws {
         let machine = try NestedAdditionOverflowModel.makeMachine()
         #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
@@ -198,6 +372,58 @@ import SwiftSyntax
         #expect(definitions.filter { $0.hasPrefix("__SwiftTLAOverflowFailure") }.count == 2)
         #expect(definitions.contains { $0.hasPrefix("__SwiftTLAOverflowOperands0_1 ==") && $0.contains("count + 1") })
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: NestedAdditionOverflowModel.spec.compile()))
+        let action = try #require(program.behavior.actions.first)
+        let output = try program.renderModule()
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        let name = try #require(program.layout.actions.first?.renderedName)
+        let header = "\(name) == "
+        let body = try #require(output.renderedModuleSource.split(separator: "\n")
+            .first { $0.hasPrefix(header) }?.dropFirst(header.count))
+        try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+            body: String(body), module: output.renderedModuleSource,
+            layout: program.layout, binders: program.binderNames,
+            failureDeclarations: output.evaluationFailureDeclarations)
+        for prefix in ["__SwiftTLAOverflowFailure0_1 == ",
+                       "__SwiftTLAAnyEvaluationFailure0 == "] {
+            let original = try #require(output.evaluationFailureDeclarations.first {
+                $0.hasPrefix(prefix)
+            })
+            let changed = "\(prefix)FALSE"
+            let wrongModule = output.renderedModuleSource.replacingOccurrences(of: original, with: changed)
+            let wrongDeclarations = output.evaluationFailureDeclarations.map { $0 == original ? changed : $0 }
+            #expect(wrongModule != output.renderedModuleSource)
+            #expect(wrongDeclarations != output.evaluationFailureDeclarations)
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineRenderedActionCheck.verifyDeclaration(action, named: name,
+                    body: String(body), module: wrongModule, layout: program.layout,
+                    binders: program.binderNames, failureDeclarations: wrongDeclarations)
+            }
+        }
+        try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+            module: output.renderedModuleSource,
+            failureDeclarations: output.evaluationFailureDeclarations,
+            evaluationInvariant: "__SwiftTLAEvaluationOK",
+            configuration: output.configuration, renderer: renderer)
+        let selection = try #require(output.evaluationFailureDeclarations.first {
+            $0.hasPrefix("__SwiftTLAEvaluationOK == ")
+        })
+        let omittedFailure = "__SwiftTLAEvaluationOK == TRUE"
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+                module: output.renderedModuleSource.replacingOccurrences(of: selection, with: omittedFailure),
+                failureDeclarations: output.evaluationFailureDeclarations.map {
+                    $0 == selection ? omittedFailure : $0
+                },
+                evaluationInvariant: "__SwiftTLAEvaluationOK",
+                configuration: output.configuration, renderer: renderer)
+        }
     }
 
     @Test("Choices and following statements read their current branch values")

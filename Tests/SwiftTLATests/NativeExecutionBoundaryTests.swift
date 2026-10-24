@@ -339,9 +339,92 @@ private struct ReachableInvariantFailure {
 
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         let generatedAction = try #require(program.behavior.actions.first)
+        let sourceAction = try #require(CheckedExecutionOverflow.spec.loweredSourceModel().actions.first)
+        try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+            bindings: generatedAction.bindings, body: generatedAction.body, layout: program.layout)
+        guard case .and(.guard_(let compiledControlGuard), let compiledTail) = generatedAction.body,
+              compiledControlGuard.children.count == 2 else {
+            Issue.record("The compiled action lost its sequential control guard")
+            return
+        }
+        let wrongControlGuard = CompiledExpression(operation: .equal,
+            resultType: compiledControlGuard.resultType,
+            children: [compiledControlGuard.children[0], .controlLocation(done.id)])
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+                bindings: generatedAction.bindings,
+                body: .and(.guard_(wrongControlGuard), compiledTail), layout: program.layout)
+        }
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "CheckedExecutionOverflow", program: program))
         let members = try emitter.machineMembers()
+        let initialDeclaration = try #require(members.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        let countBinding = emitter.variable(count.id)
+        let originalLiteral = "let \(countBinding): Int = \(Int.max)"
+        let wrongInitialSource = initialDeclaration.description.replacingOccurrences(
+            of: originalLiteral, with: "let \(countBinding): Int = 0")
+        #expect(wrongInitialSource != initialDeclaration.description)
+        let wrongInitial = try #require(Parser.parse(source: wrongInitialSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        let initialBindings = program.behavior.initializations.map { initialization in
+            "let \(emitter.variable(initialization.variable))"
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedInitialBindings(wrongInitial, expected: initialBindings,
+                expectedLoops: [:], expectedCandidateSources: [:],
+                expectedIntLiterals: [countBinding: Int.max])
+        }
+        let failureVisitor = try #require(members.first { declaration in
+            guard let function = declaration.as(FunctionDeclSyntax.self) else { return false }
+            return function.name.text == "_visitSuccessors"
+                && function.signature.parameterClause.parameters.last?.firstName.text == "onEvaluationFailure"
+        })
+        let lostFailure = failureVisitor.description.replacingOccurrences(
+            of: "onEvaluationFailure(action, reason)",
+            with: "onEvaluationFailure(action, .noSatisfyingChoice)")
+        #expect(lostFailure != failureVisitor.description)
+        let wrongFailureVisitor = try #require(Parser.parse(source: lostFailure)
+            .statements.first?.item.as(DeclSyntax.self))
+        let wrongMembers = members.map { $0.id == failureVisitor.id ? wrongFailureVisitor : $0 }
+        let actions = emitter.model.api.actions
+        #expect(actions.allSatisfy { $0.bindings.isEmpty })
+        let routes = actions.map { api in
+            (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
+             formalName: program.layout.actions[api.compiledAction.ordinal].renderedName)
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes,
+                allActions: routes.map { ($0.name, $0.id, $0.formalName, 0) },
+                candidates: routes.map { ($0.name, []) }, configurationArguments: "")
+        }
+        let successor = try #require(members.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitSuccessors\(generatedAction.id.ordinal)"
+        })
+        try verifyGeneratedSuccessorOutput(successor, actionID: generatedAction.id.ordinal,
+            parameters: "", arguments: "", configurationParameters: "", configurationArguments: "")
+        let droppedUpdate = successor.description.replacingOccurrences(
+            of: "let candidate = updates.applying(to: state)", with: "let candidate = state")
+        #expect(droppedUpdate != successor.description)
+        let wrongSuccessor = try #require(Parser.parse(source: droppedUpdate)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedSuccessorOutput(wrongSuccessor, actionID: generatedAction.id.ordinal,
+                parameters: "", arguments: "", configurationParameters: "", configurationArguments: "")
+        }
+        let validationEntry = try #require(members.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "visitValidationOutcomes"
+        })
+        try verifyGeneratedValidationDelegationOutput(validationEntry)
+        let droppedFailureHandler = validationEntry.description.replacingOccurrences(
+            of: ", onEvaluationFailure: onEvaluationFailure", with: "")
+        #expect(droppedFailureHandler != validationEntry.description)
+        let wrongEntry = try #require(Parser.parse(source: droppedFailureHandler)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedValidationDelegationOutput(wrongEntry)
+        }
         let swiftAction = try #require(members.first {
             $0.description.contains("private static func _visitUpdates0(")
         }?.description)
@@ -387,6 +470,15 @@ private struct ReachableInvariantFailure {
         }
 
         let rendered = try CheckedExecutionOverflow.render()
+        let initialPredicate = "  /\\ count = \(TLAValue.int(Int.max).description)"
+        let wrongInitialModule = rendered.tlaBundle.root.tla.replacingOccurrences(
+            of: initialPredicate, with: "  /\\ count = 0")
+        #expect(wrongInitialModule != rendered.tlaBundle.root.tla)
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyRenderedInitialConjunction(wrongInitialModule,
+                predicates: ["pc = \"advance\"", "count = 0"],
+                expectedIntLiterals: ["count": Int.max])
+        }
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflow.tla")
@@ -419,6 +511,18 @@ private struct ReachableInvariantFailure {
         let operands = try #require(direct.first { $0.hasPrefix("__SwiftTLAOverflowOperands0 ==") })
         let operation = try #require(direct.first { $0.hasPrefix("__SwiftTLAOverflowOperation0 ==") })
         let evaluation = try #require(direct.first { $0.hasPrefix("__SwiftTLAEvaluationOK ==") })
+        let output = try program.renderModule()
+        let renderedAction = try #require(direct.first { $0.hasPrefix("advance == ") })
+            .dropFirst("advance == ".count)
+        let missingFailure = output.renderedModuleSource.replacingOccurrences(
+            of: "\(failure)\n", with: "")
+        #expect(missingFailure != output.renderedModuleSource)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyDeclaration(generatedAction, named: "advance",
+                body: String(renderedAction), module: missingFailure,
+                layout: program.layout, binders: program.binderNames,
+                failureDeclarations: output.evaluationFailureDeclarations)
+        }
         #expect(operands == "__SwiftTLAOverflowOperands0 == <<count, 1>>")
         #expect(operation == "__SwiftTLAOverflowOperation0 == \"addition\"")
         #expect(direct.contains { $0.hasPrefix("__SwiftTLAAnyEvaluationFailure0 ==") })
@@ -733,9 +837,41 @@ extension NativeExecutionBoundaryTests {
         _ = try machine.send(.valid)
         _ = try machine.send(.change)
         let before = machine.state
+        #expect(before.record.count == 1)
         #expect(throws: NativeMachineEvaluationError.noMatchingCase) {
             try machine.send(.invalid)
         }
         #expect(machine.state == before)
+
+        let rendered = try CheckedRecordConversion.render()
+        #expect(rendered.intrinsicInvariantNames == ["__SwiftTLAEvaluationOK"])
+        let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CheckedRecordConversion.tla")
+            .standardizedFileURL
+        let emitted = rendered.tlaBundle.root.tla
+        let checked = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(emitted == checked)
+        let cfg = try #require(rendered.tlaBundle(checking: [], checkDeadlock: false).root.cfg)
+        #expect(cfg.contains("INVARIANT __SwiftTLAEvaluationOK\n"))
+
+        let syntax = Parser.parse(source: try String(contentsOfFile: #filePath, encoding: .utf8))
+        let declaration = try #require(syntax.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "CheckedRecordConversion" })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
+        let visitor = try #require(emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates2"
+        })
+        let swiftInput = proofInput.deletingLastPathComponent()
+            .appendingPathComponent("CheckedRecordConversionSwiftVisitor.txt")
+        let expectedSwift = try String(contentsOf: swiftInput, encoding: .utf8)
+        func tokens(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
+        }
+        #expect(tokens(visitor.description) == tokens(expectedSwift))
+        let wrongCase = visitor.description.replacingOccurrences(
+            of: "case 0: return Level.`zero`", with: "case 1: return Level.`zero`")
+        #expect(wrongCase != visitor.description)
+        #expect(tokens(wrongCase) != tokens(expectedSwift))
     }
 }

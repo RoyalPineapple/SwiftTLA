@@ -1,6 +1,9 @@
 import Foundation
 import Testing
 @testable import SwiftTLA
+@testable import SwiftTLAPlugin
+
+private enum InvalidInitialFailureShape: Error { case unexpected }
 
 @Suite("Initial branch failures")
 struct InitialBranchFailureTests {
@@ -79,6 +82,82 @@ struct InitialBranchFailureTests {
         let result = try #require(compilation.layout.testVariableID(named: "result"))
         #expect(try compiled.states[0].value(for: key) == .integer(0))
         #expect(try compiled.states[0].value(for: result) == .integer(42))
+    }
+
+    @Test("A later initial overflow remains visible after an earlier checked addition")
+    func preservesFailureAfterFallibleInitialPrefix() throws {
+        let generated = try CheckedAdditionPrefixInitialModel.initialOutcomes()
+        #expect(generated.states.isEmpty)
+        #expect(generated.firstFailure == .integerOverflow(.addition,
+            operands: [3, Int.max]))
+
+        let rendered = try CheckedAdditionPrefixInitialModel.render().tlaBundle.root.tla
+        let failures = rendered.split(separator: "\n").filter {
+            $0.hasPrefix("__SwiftTLAInitialOverflowFailure3(")
+        }
+        let failure = try #require(failures.count == 1 ? failures[0] : nil)
+        #expect(failure.contains("THEN (LET __SwiftTLAInitialValue2 =="))
+        #expect(rendered.contains("__SwiftTLAInitialOverflowOperation3 == \"addition\""))
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: CheckedAdditionPrefixInitialModel.spec.compile()))
+        let last = try #require(program.layout.variables.first { $0.declaration.name == "last" })
+        guard let index = program.behavior.initializations.firstIndex(where: {
+            $0.variable == last.id
+        }) else {
+            throw InvalidInitialFailureShape.unexpected
+        }
+        guard case .value(let expression) = program.behavior.initializations[index].initialization else {
+            throw InvalidInitialFailureShape.unexpected
+        }
+        let prefix = program.behavior.initializations[..<index]
+        let binders = String(failure).components(separatedBy: "LET ").dropFirst().map {
+            String($0.prefix(while: { $0 != " " }))
+        }
+        guard binders.count == prefix.count else { throw InvalidInitialFailureShape.unexpected }
+        let names = Dictionary(uniqueKeysWithValues: zip(prefix.map(\.variable), binders))
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        let checkedFailure = try #require(try renderer.expressionEvaluationFailures(
+            expression, stateNames: names).first)
+        guard let separator = failure.range(of: " == ") else {
+            throw InvalidInitialFailureShape.unexpected
+        }
+        let header = String(failure[..<separator.lowerBound])
+        let relation = String(failure[separator.upperBound...])
+        let open = try #require(header.firstIndex(of: "("))
+        let close = try #require(header.lastIndex(of: ")"))
+        let operandsName = String(header[header.index(after: open)..<close])
+        try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
+            after: prefix, names: names,
+            emitted: [(checkedFailure, relation, operandsName)], layout: program.layout)
+
+        let secondVariable = try #require(program.layout.variables.first {
+            $0.declaration.name == "second"
+        })
+        let second = try #require(program.behavior.initializations.first {
+            $0.variable == secondVariable.id
+        })
+        guard case .value(let secondExpression) = second.initialization else {
+            throw InvalidInitialFailureShape.unexpected
+        }
+        let defined = try #require(try renderer.evaluationDefined(secondExpression,
+            stateNames: names))
+        let wrong = relation.replacingOccurrences(
+            of: "(IF \(defined) THEN (LET __SwiftTLAInitialValue2 ==",
+            with: "(IF TRUE THEN (LET __SwiftTLAInitialValue2 ==")
+        #expect(wrong != relation)
+        do {
+            try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
+                after: prefix, names: names,
+                emitted: [(checkedFailure, wrong, operandsName)], layout: program.layout)
+            Issue.record("A later initial failure escaped its checked prefix")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.initialEvaluationFailures")
+        }
     }
 
     @Test("An invalid compiled value shape is not relabeled as a model failure")

@@ -60,6 +60,7 @@ THEOREM PerFieldStateEncodingIsInjective ==
                   PROVE InjectiveOn(
                       [state \in TypedStates(domains) |-> PerFieldStateEncoding(valueMaps, state)],
                       TypedStates(domains))
+        BY SMT
     <1>1. \A first, second \in TypedStates(domains) :
              PerFieldStateEncoding(valueMaps, first)
                  = PerFieldStateEncoding(valueMaps, second)
@@ -70,10 +71,12 @@ THEOREM PerFieldStateEncodingIsInjective ==
                               PerFieldStateEncoding(valueMaps, first)
                                   = PerFieldStateEncoding(valueMaps, second)
                       PROVE first = second
+            BY SMT DEF InjectiveOn
         <2>1. \A key \in Vars : first[key] = second[key]
             PROOF
             <3>. SUFFICES ASSUME NEW key \in Vars
                           PROVE first[key] = second[key]
+                BY SMT
             <3>1. first[key] \in domains[key]
                 BY SMT DEF TypedStates, States
             <3>2. second[key] \in domains[key]
@@ -272,6 +275,7 @@ THEOREM InjectiveFunctionGraphEncoding ==
         PROOF
         <2>. SUFFICES ASSUME NEW key \in DOMAIN second
                       PROVE key \in DOMAIN first
+            BY SMT
         <2>1. <<keyMap[key], valueMap[second[key]]>>
                 \in MappedFunctionGraph(keyMap, valueMap, second)
             BY SMT DEF MappedFunctionGraph
@@ -731,6 +735,19 @@ THEOREM ExistentialEnumerationPreservesEnabledness ==
                     <=> EnabledIn(QuantifiedExistentialEdges(domains, rendered), state, action)
     BY ExistentialEnumerationPreservesEdges, SMT DEF EnabledIn
 
+SourceBoundEvaluationOK(domains, failures, state) ==
+    \A value \in domains[state] : ~failures[state][value]
+RenderedBoundEvaluationOK(domains, failures, state) ==
+    ~(\E value \in domains[state] : failures[state][value])
+
+THEOREM BoundEvaluationSelectionPreservesFailure ==
+    \A domains \in [States -> SUBSET Values],
+       failures \in [States -> [Values -> BOOLEAN]],
+       state \in States :
+        SourceBoundEvaluationOK(domains, failures, state)
+        <=> RenderedBoundEvaluationOK(domains, failures, state)
+    BY SMT DEF SourceBoundEvaluationOK, RenderedBoundEvaluationOK, States
+
 NativeDefinedEdges(values, branches) ==
     {edge \in LabeledEdges : edge \in branches[edge[1]][values[edge[1]]]}
 RenderedDefinedEdges(values, branches) ==
@@ -935,6 +952,94 @@ THEOREM DependentDeterministicInitializationComposes ==
     BY InitialEqualityMatchesSingletonEnumeration,
         SMT DEF ExtendEnumeratedInitialStates
 
+SourceGuardedInitialStates(priorStates, key, values, enabled) ==
+    UNION {IF enabled[prior]
+           THEN EqualityInitialStates(prior, key, values[prior])
+           ELSE {} : prior \in priorStates}
+GeneratedGuardedInitialStates(priorStates, key, values, enabled) ==
+    ExtendEnumeratedInitialStates(priorStates, key,
+        [prior \in States |-> IF enabled[prior] THEN <<values[prior]>> ELSE <<>>])
+
+THEOREM GuardedDeterministicInitializationComposes ==
+    ASSUME NEW key \in Vars,
+           NEW priorStates \in SUBSET States,
+           NEW values \in [States -> Values],
+           NEW enabled \in [States -> BOOLEAN]
+    PROVE SourceGuardedInitialStates(priorStates, key, values, enabled)
+        = GeneratedGuardedInitialStates(priorStates, key, values, enabled)
+    BY InitialEqualityMatchesSingletonEnumeration, SMT
+       DEF SourceGuardedInitialStates, GeneratedGuardedInitialStates,
+           ExtendEnumeratedInitialStates, EnumeratedInitialStates
+
+InitialGuardHistory(guards, defined) ==
+    /\ defined[0] = TRUE
+    /\ \A index \in 1..Len(guards) :
+        defined[index] = (IF defined[index - 1] THEN guards[index] ELSE FALSE)
+
+SourceInitialFailureAt(guards, index) ==
+    /\ ~guards[index]
+    /\ \A earlier \in 1..(index - 1) : guards[earlier]
+
+RenderedInitialFailureAt(guards, defined, index) ==
+    defined[index - 1] /\ ~guards[index]
+
+THEOREM OrderedInitialGuardsPreserveFirstFailure ==
+    ASSUME NEW guards \in Seq(BOOLEAN),
+           NEW defined \in [0..Len(guards) -> BOOLEAN],
+           InitialGuardHistory(guards, defined)
+    PROVE \A index \in 1..Len(guards) :
+        SourceInitialFailureAt(guards, index)
+        <=> RenderedInitialFailureAt(guards, defined, index)
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(guards) =>
+            (defined[index] <=>
+                \A earlier \in 1..index : guards[earlier])
+    <1>1. P(0)
+        BY SMT DEF P, InitialGuardHistory
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(guards)
+                     PROVE defined[index + 1] <=>
+                         \A earlier \in 1..(index + 1) : guards[earlier]
+            BY SMT DEF P
+        <2>1. index \in 0..Len(guards)
+            BY SMT
+        <2>2. defined[index] <=>
+                \A earlier \in 1..index : guards[earlier]
+            BY <2>1, P(index), SMT DEF P
+        <2>3. defined[index + 1] =
+                (IF defined[index] THEN guards[index + 1] ELSE FALSE)
+            BY SMT DEF InitialGuardHistory
+        <2>. QED BY <2>2, <2>3, SMT
+    <1>3. HIDE DEF P
+    <1>4. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED BY <1>4, SMT
+        DEF P, SourceInitialFailureAt, RenderedInitialFailureAt
+
+SourceInitialFailureRecords(guards, operands) ==
+    {<<"addition", operands[index]>> :
+        index \in {site \in 1..Len(guards) :
+            SourceInitialFailureAt(guards, site)}}
+RenderedInitialFailureRecords(guards, defined, operands) ==
+    {<<"addition", operands[index]>> :
+        index \in {site \in 1..Len(guards) :
+            RenderedInitialFailureAt(guards, defined, site)}}
+
+THEOREM OrderedInitialFailurePayloadsAgree ==
+    ASSUME NEW guards \in Seq(BOOLEAN),
+           NEW defined \in [0..Len(guards) -> BOOLEAN],
+           NEW sourceOperands \in [1..Len(guards) -> (Int \X Int)],
+           NEW renderedOperands \in [1..Len(guards) -> (Int \X Int)],
+           InitialGuardHistory(guards, defined),
+           \A index \in 1..Len(guards) :
+               sourceOperands[index] = renderedOperands[index]
+    PROVE SourceInitialFailureRecords(guards, sourceOperands)
+        = RenderedInitialFailureRecords(guards, defined, renderedOperands)
+    BY OrderedInitialGuardsPreserveFirstFailure, SMT
+       DEF SourceInitialFailureRecords, RenderedInitialFailureRecords
+
 THEOREM InitialMembershipComposesAcrossPriorChoices ==
     \A key \in Vars, priorStates \in SUBSET States :
         \A candidates \in [States -> Seq(Values)] :
@@ -1005,6 +1110,47 @@ THEOREM OrderedInitialHistoriesAgree ==
         BY <1>1, <1>2, NatInduction
     <1>. QED
         BY <1>3, SMT DEF P
+
+DeterministicInitialPlans ==
+    [key: Vars, values: [States -> Values], defined: [States -> BOOLEAN]]
+AsDeterministicInitialPlan(plan) ==
+    [key |-> plan.key,
+     candidates |-> [prior \in States |->
+         IF plan.defined[prior] THEN <<plan.values[prior]>> ELSE <<>>],
+     domains |-> [prior \in States |->
+         IF plan.defined[prior] THEN {plan.values[prior]} ELSE {}]]
+
+THEOREM DeterministicInitialPlanAgrees ==
+    \A plan \in DeterministicInitialPlans :
+        /\ AsDeterministicInitialPlan(plan) \in InitializationPlans
+        /\ InitializationPlanAgrees(AsDeterministicInitialPlan(plan))
+    BY SMT DEF DeterministicInitialPlans, AsDeterministicInitialPlan,
+        InitializationPlans, InitializationPlanAgrees, SequenceMembers
+
+THEOREM OrderedDeterministicInitialHistoriesAgree ==
+    ASSUME NEW start \in SUBSET States,
+           NEW plans \in Seq(DeterministicInitialPlans),
+           NEW enumerated \in [0..Len(plans) -> SUBSET States],
+           NEW relational \in [0..Len(plans) -> SUBSET States],
+           LET mapped == [index \in 1..Len(plans) |->
+               AsDeterministicInitialPlan(plans[index])]
+           IN /\ EnumeratedInitialHistory(start, mapped, enumerated)
+              /\ MembershipInitialHistory(start, mapped, relational)
+    PROVE \A index \in 0..Len(plans) : enumerated[index] = relational[index]
+    PROOF
+    <1>. DEFINE mapped == [index \in 1..Len(plans) |->
+            AsDeterministicInitialPlan(plans[index])]
+    <1>1. mapped \in Seq(InitializationPlans)
+        BY DeterministicInitialPlanAgrees, LenProperties, SMT
+           DEF mapped
+    <1>2. Len(mapped) = Len(plans)
+        BY DEF mapped
+    <1>3. \A index \in 1..Len(mapped) :
+            InitializationPlanAgrees(mapped[index])
+        BY <1>2, DeterministicInitialPlanAgrees, LenProperties, SMT
+           DEF mapped
+    <1>. QED BY <1>1, <1>2, <1>3, OrderedInitialHistoriesAgree,
+        SMT DEF mapped
 
 ValidInitializationPlans(plans) ==
     \A index \in 1..Len(plans) : InitializationPlanAgrees(plans[index])
@@ -1111,6 +1257,69 @@ THEOREM OrderedInitialHistoriesExist ==
         BY <1>1, <1>2, SequencesInductionAppend
     <1>. QED
         BY <1>3 DEF P
+
+THEOREM GuardedDeterministicInitialHistoriesExist ==
+    ASSUME NEW start \in SUBSET States,
+           NEW plans \in Seq(DeterministicInitialPlans)
+    PROVE \E history \in [0..Len(plans) -> SUBSET States] :
+        /\ history[0] = start
+        /\ \A index \in 1..Len(plans) :
+            /\ history[index] = SourceGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+            /\ history[index] = GeneratedGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+    PROOF
+    <1>. DEFINE mapped == [index \in 1..Len(plans) |->
+            AsDeterministicInitialPlan(plans[index])]
+    <1>1. mapped \in Seq(InitializationPlans)
+        BY DeterministicInitialPlanAgrees, LenProperties, SMT DEF mapped
+    <1>2. ValidInitializationPlans(mapped)
+        BY <1>1, DeterministicInitialPlanAgrees, LenProperties, SMT
+           DEF mapped, ValidInitializationPlans
+    <1>3. PICK history \in [0..Len(mapped) -> SUBSET States] :
+              EnumeratedInitialHistory(start, mapped, history)
+              /\ MembershipInitialHistory(start, mapped, history)
+        BY <1>1, <1>2, OrderedInitialHistoriesExist
+           DEF InitialHistoriesExist
+    <1>4. Len(mapped) = Len(plans)
+        BY DEF mapped
+    <1>5. \A index \in 1..Len(plans) :
+            /\ history[index] = SourceGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+            /\ history[index] = GeneratedGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 1..Len(plans)
+                     PROVE /\ history[index] = SourceGuardedInitialStates(
+                                  history[index - 1], plans[index].key,
+                                  plans[index].values, plans[index].defined)
+                           /\ history[index] = GeneratedGuardedInitialStates(
+                                  history[index - 1], plans[index].key,
+                                  plans[index].values, plans[index].defined)
+            BY SMT
+        <2>1. /\ plans[index] \in DeterministicInitialPlans
+              /\ history[index - 1] \in SUBSET States
+            BY <1>3, SMT
+        <2>2. history[index] = GeneratedGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+            BY <1>3, <1>4, SMT
+               DEF EnumeratedInitialHistory, mapped,
+                   AsDeterministicInitialPlan,
+                   GeneratedGuardedInitialStates
+        <2>3. SourceGuardedInitialStates(history[index - 1],
+                plans[index].key, plans[index].values, plans[index].defined)
+                = GeneratedGuardedInitialStates(history[index - 1],
+                    plans[index].key, plans[index].values, plans[index].defined)
+            BY <2>1, GuardedDeterministicInitializationComposes, SMT
+               DEF DeterministicInitialPlans
+        <2>. QED BY <2>2, <2>3
+    <1>. QED BY <1>3, <1>4, <1>5, SMT
+        DEF EnumeratedInitialHistory
 
 ConjunctiveInitialPrefix(plans, index) ==
     {state \in States :
@@ -1388,6 +1597,33 @@ THEOREM OrderedHistoriesAgree ==
         BY <1>1, <1>2, NatInduction
     <1>4. QED
         BY <1>3, SMT DEF P
+
+SourceFirstFailureAt(steps, checks, history, index) ==
+    /\ index \in 1..Len(steps)
+    /\ (\A prior \in 1..(index - 1) : checks[prior][history[prior - 1]])
+    /\ ~checks[index][history[index - 1]]
+
+ScheduledFirstFailureAt(original, steps, checks, history, index) ==
+    /\ index \in 1..Len(steps)
+    /\ (\A prior \in 1..(index - 1) :
+        checks[prior][ApplyDelta(original, history[prior - 1].keys,
+            history[prior - 1].values)])
+    /\ ~checks[index][ApplyDelta(original, history[index - 1].keys,
+        history[index - 1].values)]
+
+THEOREM OrderedHistoriesPreserveFirstFailure ==
+    ASSUME NEW original \in States,
+           NEW steps \in Seq(Instructions),
+           NEW checks \in [1..Len(steps) -> [States -> BOOLEAN]],
+           NEW source \in [0..Len(steps) -> States],
+           NEW scheduled \in [0..Len(steps) -> ScheduledRecords],
+           SourceHistory(original, steps, source),
+           ScheduledHistory(original, steps, scheduled)
+    PROVE \A index \in 1..Len(steps) :
+        SourceFirstFailureAt(steps, checks, source, index)
+        <=> ScheduledFirstFailureAt(original, steps, checks, scheduled, index)
+    BY OrderedHistoriesAgree, SMT DEF SourceFirstFailureAt,
+        ScheduledFirstFailureAt, HistoryAgrees
 
 THEOREM SourceHistoryIsUnique ==
     ASSUME NEW original \in States,
@@ -2229,6 +2465,725 @@ THEOREM AppliedUpdateComposesWithStateConstruction ==
         BY SourceAppliedUpdateIsExactlyGenerated
     <1>. QED BY <1>2, <1>3, <1>4, SMT
 
+DistinctFinalWriteKeys(keys) ==
+    \A first, second \in 1..Len(keys) :
+        first # second => keys[first] # keys[second]
+FinalWritePrefix(keys, index) ==
+    {keys[position] : position \in 1..index}
+GeneratedFinalWriteHistory(original, keys, values, history) ==
+    /\ history[0] = GeneratedEmptyUpdates(original)
+    /\ \A index \in 1..Len(keys) :
+        history[index] = GeneratedMerge(history[index - 1],
+            keys[index], values[keys[index]])
+
+THEOREM DistinctFinalWritesPreserveCompleteDelta ==
+    ASSUME NEW original \in States,
+           NEW values \in States,
+           NEW keys \in Seq(Vars),
+           DistinctFinalWriteKeys(keys),
+           NEW history \in [0..Len(keys) -> GeneratedUpdates],
+           GeneratedFinalWriteHistory(original, keys, values, history)
+    PROVE /\ history[Len(keys)].accepted
+          /\ history[Len(keys)].written = FinalWritePrefix(keys, Len(keys))
+          /\ GeneratedApply(original, history[Len(keys)])
+                = ApplyDelta(original, FinalWritePrefix(keys, Len(keys)), values)
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(keys) =>
+            /\ history[index].accepted
+            /\ history[index].written = FinalWritePrefix(keys, index)
+            /\ \A key \in FinalWritePrefix(keys, index) :
+                history[index].values[key] = values[key]
+    <1>1. P(0)
+        BY SMT DEF P, GeneratedFinalWriteHistory,
+            GeneratedEmptyUpdates, FinalWritePrefix
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(keys)
+                     PROVE /\ history[index + 1].accepted
+                           /\ history[index + 1].written = FinalWritePrefix(keys, index + 1)
+                           /\ \A key \in FinalWritePrefix(keys, index + 1) :
+                                history[index + 1].values[key] = values[key]
+            BY SMT DEF P
+        <2>1. index \in 0..Len(keys)
+            BY SMT
+        <2>2. keys[index + 1] \in Vars
+            BY SMT
+        <2>3. keys[index + 1] \notin FinalWritePrefix(keys, index)
+            BY SMT DEF DistinctFinalWriteKeys, FinalWritePrefix
+        <2>4. FinalWritePrefix(keys, index + 1)
+                = FinalWritePrefix(keys, index) \cup {keys[index + 1]}
+            BY SMT DEF FinalWritePrefix
+        <2>5. history[index + 1] = GeneratedMerge(history[index],
+                keys[index + 1], values[keys[index + 1]])
+            BY SMT DEF GeneratedFinalWriteHistory
+        <2>. QED
+            BY <2>1, <2>2, <2>3, <2>4, <2>5, P(index), SMT
+                DEF P, GeneratedMerge, GeneratedUpdates, States
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>4. /\ history[Len(keys)].accepted
+          /\ history[Len(keys)].written = FinalWritePrefix(keys, Len(keys))
+          /\ \A key \in FinalWritePrefix(keys, Len(keys)) :
+                history[Len(keys)].values[key] = values[key]
+        BY <1>3, SMT DEF P
+    <1>. QED
+        BY <1>4, SMT DEF GeneratedApply, ApplyDelta, States
+
+ExtendFinalWriteHistory(history, length, key, value) ==
+    [index \in 0..(length + 1) |->
+        IF index = length + 1
+        THEN GeneratedMerge(history[length], key, value)
+        ELSE history[index]]
+FinalWriteHistoryExists(original, keys, values) ==
+    \E history \in [0..Len(keys) -> GeneratedUpdates] :
+        GeneratedFinalWriteHistory(original, keys, values, history)
+
+THEOREM GeneratedFinalWriteHistoryExists ==
+    ASSUME NEW original \in States,
+           NEW values \in States
+    PROVE \A keys \in Seq(Vars) :
+        FinalWriteHistoryExists(original, keys, values)
+    PROOF
+    <1>1. FinalWriteHistoryExists(original, <<>>, values)
+        <2>. DEFINE emptyHistory ==
+            [index \in 0..0 |-> GeneratedEmptyUpdates(original)]
+        <2>1. emptyHistory \in [0..Len(<<>>) -> GeneratedUpdates]
+            BY SMT DEF emptyHistory, GeneratedEmptyUpdates, GeneratedUpdates
+        <2>2. GeneratedFinalWriteHistory(original, <<>>, values, emptyHistory)
+            BY SMT DEF GeneratedFinalWriteHistory, emptyHistory
+        <2>. QED
+            BY <2>1, <2>2 DEF FinalWriteHistoryExists
+    <1>2. ASSUME NEW prior \in Seq(Vars),
+                  NEW key \in Vars,
+                  FinalWriteHistoryExists(original, prior, values)
+          PROVE FinalWriteHistoryExists(original, Append(prior, key), values)
+        <2>1. PICK history \in [0..Len(prior) -> GeneratedUpdates] :
+                    GeneratedFinalWriteHistory(original, prior, values, history)
+            BY FinalWriteHistoryExists(original, prior, values)
+                DEF FinalWriteHistoryExists
+        <2>2. Len(Append(prior, key)) = Len(prior) + 1
+            BY AppendProperties
+        <2>3. GeneratedMerge(history[Len(prior)], key, values[key])
+                \in GeneratedUpdates
+            BY <2>1, SMT DEF GeneratedMerge, GeneratedUpdates, States
+        <2>4. ExtendFinalWriteHistory(history, Len(prior), key, values[key])
+                \in [0..Len(Append(prior, key)) -> GeneratedUpdates]
+            BY <2>1, <2>2, <2>3, SMT DEF ExtendFinalWriteHistory
+        <2>5. GeneratedFinalWriteHistory(original, Append(prior, key), values,
+                ExtendFinalWriteHistory(history, Len(prior), key, values[key]))
+            <3>1. ExtendFinalWriteHistory(history, Len(prior), key,
+                    values[key])[0] = GeneratedEmptyUpdates(original)
+                BY <2>1, SMT
+                    DEF GeneratedFinalWriteHistory, ExtendFinalWriteHistory
+            <3>2. \A index \in 1..Len(prior) :
+                    ExtendFinalWriteHistory(history, Len(prior), key,
+                        values[key])[index]
+                    = GeneratedMerge(
+                        ExtendFinalWriteHistory(history, Len(prior), key,
+                            values[key])[index - 1],
+                        Append(prior, key)[index],
+                        values[Append(prior, key)[index]])
+                BY <2>1, AppendProperties, SMT
+                    DEF GeneratedFinalWriteHistory, ExtendFinalWriteHistory
+            <3>3. ExtendFinalWriteHistory(history, Len(prior), key,
+                    values[key])[Len(prior) + 1]
+                    = GeneratedMerge(
+                        ExtendFinalWriteHistory(history, Len(prior), key,
+                            values[key])[Len(prior)],
+                        Append(prior, key)[Len(prior) + 1],
+                        values[Append(prior, key)[Len(prior) + 1]])
+                BY AppendProperties, SMT DEF ExtendFinalWriteHistory
+            <3>. QED BY <2>2, <3>1, <3>2, <3>3, SMT
+                DEF GeneratedFinalWriteHistory
+        <2>. QED BY <2>4, <2>5 DEF FinalWriteHistoryExists
+    <1>. QED BY <1>1, <1>2, SequencesInductionAppend
+
+THEOREM EveryDistinctFinalWriteSequencePreservesCompleteDelta ==
+    ASSUME NEW original \in States,
+           NEW values \in States,
+           NEW keys \in Seq(Vars),
+           DistinctFinalWriteKeys(keys)
+    PROVE \E history \in [0..Len(keys) -> GeneratedUpdates] :
+        /\ GeneratedFinalWriteHistory(original, keys, values, history)
+        /\ history[Len(keys)].accepted
+        /\ history[Len(keys)].written = FinalWritePrefix(keys, Len(keys))
+        /\ GeneratedApply(original, history[Len(keys)])
+            = ApplyDelta(original, FinalWritePrefix(keys, Len(keys)), values)
+    PROOF
+    <1>1. FinalWriteHistoryExists(original, keys, values)
+        BY GeneratedFinalWriteHistoryExists
+    <1>2. PICK history \in [0..Len(keys) -> GeneratedUpdates] :
+            GeneratedFinalWriteHistory(original, keys, values, history)
+        BY <1>1 DEF FinalWriteHistoryExists
+    <1>3. /\ history[Len(keys)].accepted
+          /\ history[Len(keys)].written = FinalWritePrefix(keys, Len(keys))
+          /\ GeneratedApply(original, history[Len(keys)])
+                = ApplyDelta(original, FinalWritePrefix(keys, Len(keys)), values)
+        BY <1>2, DistinctFinalWritesPreserveCompleteDelta
+    <1>. QED BY <1>2, <1>3, SMT
+
+InstructionTargetPrefix(steps, index) ==
+    {steps[position].target : position \in 1..index}
+
+THEOREM ScheduledHistoryWritesExactlySourceTargets ==
+    ASSUME NEW original \in States,
+           NEW steps \in Seq(Instructions),
+           NEW history \in [0..Len(steps) -> ScheduledRecords],
+           ScheduledHistory(original, steps, history)
+    PROVE \A index \in 0..Len(steps) :
+        history[index].keys = InstructionTargetPrefix(steps, index)
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(steps) =>
+            history[index].keys = InstructionTargetPrefix(steps, index)
+    <1>1. P(0)
+        BY SMT DEF P, ScheduledHistory, InstructionTargetPrefix
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(steps)
+                     PROVE history[index + 1].keys
+                           = InstructionTargetPrefix(steps, index + 1)
+            BY SMT DEF P
+        <2>1. index \in 0..Len(steps)
+            BY SMT
+        <2>2. history[index + 1]
+                = AdvanceScheduleRecord(original, history[index], steps[index + 1])
+            BY SMT DEF ScheduledHistory
+        <2>3. InstructionTargetPrefix(steps, index + 1)
+                = InstructionTargetPrefix(steps, index) \cup {steps[index + 1].target}
+            BY SMT DEF InstructionTargetPrefix
+        <2>. QED BY <2>1, <2>2, <2>3, P(index), SMT
+            DEF P, AdvanceScheduleRecord
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED BY <1>3, SMT DEF P
+
+GeneratedOrderedDoStep(original, steps, slots, target) ==
+    \E scheduled \in [0..Len(steps) -> ScheduledRecords] :
+        /\ ScheduledHistory(original, steps, scheduled)
+        /\ \E updates \in [0..Len(slots) -> GeneratedUpdates] :
+            /\ GeneratedFinalWriteHistory(original, slots,
+                scheduled[Len(steps)].values, updates)
+            /\ updates[Len(slots)].accepted
+            /\ target = GeneratedApply(original, updates[Len(slots)])
+
+THEOREM OrderedSourceAndGeneratedMergeStepsAgree ==
+    ASSUME NEW original \in States,
+           NEW target \in States,
+           NEW steps \in Seq(Instructions),
+           NEW slots \in Seq(Vars),
+           DistinctFinalWriteKeys(slots),
+           FinalWritePrefix(slots, Len(slots))
+               = InstructionTargetPrefix(steps, Len(steps))
+    PROVE SourceDoStep(original, steps, target)
+        <=> GeneratedOrderedDoStep(original, steps, slots, target)
+    PROOF
+    <1>1. SourceDoStep(original, steps, target)
+            => GeneratedOrderedDoStep(original, steps, slots, target)
+        <2>. SUFFICES ASSUME SourceDoStep(original, steps, target)
+                     PROVE GeneratedOrderedDoStep(original, steps, slots, target)
+            BY SMT
+        <2>1. ScheduledDoStep(original, steps, target)
+            BY OrderedDoTransitionEquivalence
+        <2>2. PICK scheduled \in [0..Len(steps) -> ScheduledRecords] :
+                /\ ScheduledHistory(original, steps, scheduled)
+                /\ ApplyDelta(original, scheduled[Len(steps)].keys,
+                    scheduled[Len(steps)].values) = target
+            BY <2>1 DEF ScheduledDoStep
+        <2>3. scheduled[Len(steps)].values \in States
+            BY <2>2, SMT DEF ScheduledRecords
+        <2>4. scheduled[Len(steps)].keys
+                = InstructionTargetPrefix(steps, Len(steps))
+            BY <2>2, ScheduledHistoryWritesExactlySourceTargets, SMT
+        <2>5. \E updates \in [0..Len(slots) -> GeneratedUpdates] :
+                /\ GeneratedFinalWriteHistory(original, slots,
+                    scheduled[Len(steps)].values, updates)
+                /\ updates[Len(slots)].accepted
+                /\ target = GeneratedApply(original, updates[Len(slots)])
+            BY <2>2, <2>3, <2>4,
+                EveryDistinctFinalWriteSequencePreservesCompleteDelta, SMT
+        <2>. QED BY <2>2, <2>5 DEF GeneratedOrderedDoStep
+    <1>2. GeneratedOrderedDoStep(original, steps, slots, target)
+            => SourceDoStep(original, steps, target)
+        <2>. SUFFICES ASSUME GeneratedOrderedDoStep(original, steps, slots, target)
+                     PROVE SourceDoStep(original, steps, target)
+            BY SMT
+        <2>1. PICK scheduled \in [0..Len(steps) -> ScheduledRecords] :
+                /\ ScheduledHistory(original, steps, scheduled)
+                /\ \E updates \in [0..Len(slots) -> GeneratedUpdates] :
+                    /\ GeneratedFinalWriteHistory(original, slots,
+                        scheduled[Len(steps)].values, updates)
+                    /\ updates[Len(slots)].accepted
+                    /\ target = GeneratedApply(original, updates[Len(slots)])
+            BY DEF GeneratedOrderedDoStep
+        <2>2. PICK updates \in [0..Len(slots) -> GeneratedUpdates] :
+                /\ GeneratedFinalWriteHistory(original, slots,
+                    scheduled[Len(steps)].values, updates)
+                /\ updates[Len(slots)].accepted
+                /\ target = GeneratedApply(original, updates[Len(slots)])
+            BY <2>1
+        <2>3. scheduled[Len(steps)].values \in States
+            BY <2>1, SMT DEF ScheduledRecords
+        <2>4. scheduled[Len(steps)].keys
+                = InstructionTargetPrefix(steps, Len(steps))
+            BY <2>1, ScheduledHistoryWritesExactlySourceTargets, SMT
+        <2>5. GeneratedApply(original, updates[Len(slots)])
+                = ApplyDelta(original, FinalWritePrefix(slots, Len(slots)),
+                    scheduled[Len(steps)].values)
+            BY <2>2, <2>3, DistinctFinalWritesPreserveCompleteDelta, SMT
+        <2>6. ScheduledDoStep(original, steps, target)
+            BY <2>1, <2>2, <2>4, <2>5, SMT DEF ScheduledDoStep
+        <2>. QED BY <2>6, OrderedDoTransitionEquivalence
+    <1>. QED BY <1>1, <1>2, SMT
+
+SequentialStates == [location: ActionLabels, data: States]
+SequentialEdges == SequentialStates \X ActionLabels \X SequentialStates
+
+SourceSequentialStep(entry, next, steps, before, after) ==
+    /\ before.location = entry
+    /\ after.location = next
+    /\ SourceDoStep(before.data, steps, after.data)
+
+GeneratedSequentialStep(entry, next, steps, slots, before, after) ==
+    /\ before.location = entry
+    /\ after.location = next
+    /\ GeneratedOrderedDoStep(before.data, steps, slots, after.data)
+
+THEOREM OrderedSequentialControlStepAgreement ==
+    ASSUME NEW entry \in ActionLabels,
+           NEW next \in ActionLabels,
+           NEW before \in SequentialStates,
+           NEW after \in SequentialStates,
+           NEW steps \in Seq(Instructions),
+           NEW slots \in Seq(Vars),
+           DistinctFinalWriteKeys(slots),
+           FinalWritePrefix(slots, Len(slots))
+               = InstructionTargetPrefix(steps, Len(steps))
+    PROVE SourceSequentialStep(entry, next, steps, before, after)
+        <=> GeneratedSequentialStep(entry, next, steps, slots, before, after)
+    BY OrderedSourceAndGeneratedMergeStepsAgree, SMT
+       DEF SourceSequentialStep, GeneratedSequentialStep, SequentialStates
+
+SourceSequentialEdges(entry, next, label, steps) ==
+    {edge \in SequentialEdges :
+        /\ edge[2] = label
+        /\ SourceSequentialStep(entry, next, steps, edge[1], edge[3])}
+
+GeneratedSequentialEdges(entry, next, label, steps, slots) ==
+    {edge \in SequentialEdges :
+        /\ edge[2] = label
+        /\ GeneratedSequentialStep(entry, next, steps, slots, edge[1], edge[3])}
+
+THEOREM OrderedSequentialLabeledEdgesAgree ==
+    ASSUME NEW entry \in ActionLabels,
+           NEW next \in ActionLabels,
+           NEW label \in ActionLabels,
+           NEW steps \in Seq(Instructions),
+           NEW slots \in Seq(Vars),
+           DistinctFinalWriteKeys(slots),
+           FinalWritePrefix(slots, Len(slots))
+               = InstructionTargetPrefix(steps, Len(steps))
+    PROVE SourceSequentialEdges(entry, next, label, steps)
+        = GeneratedSequentialEdges(entry, next, label, steps, slots)
+    BY OrderedSequentialControlStepAgreement, SMT
+       DEF SourceSequentialEdges, GeneratedSequentialEdges, SequentialEdges,
+           SequentialStates
+
+SourceSequentialIntInitial(entry, initial) ==
+    {[location |-> entry, data |-> initial]}
+GeneratedSequentialIntInitial(entry, initial) ==
+    {state \in SequentialStates :
+        state.location = entry /\ state.data = initial}
+SourceSequentialIntInitialSet(entry, initials) ==
+    UNION {SourceSequentialIntInitial(entry, initial) : initial \in initials}
+GeneratedSequentialIntInitialSet(entry, initials) ==
+    UNION {GeneratedSequentialIntInitial(entry, initial) : initial \in initials}
+
+THEOREM SequentialInitialControlLiftPreservesEquality ==
+    \A entry \in ActionLabels, sourceInitials, generatedInitials \in SUBSET States :
+        sourceInitials = generatedInitials =>
+            SourceSequentialIntInitialSet(entry, sourceInitials)
+                = GeneratedSequentialIntInitialSet(entry, generatedInitials)
+    BY SMT DEF SourceSequentialIntInitialSet,
+        GeneratedSequentialIntInitialSet, SourceSequentialIntInitial,
+        GeneratedSequentialIntInitial, SequentialStates, States
+
+SourceGuardedInitialHistory(start, plans, history) ==
+    /\ history[0] = start
+    /\ \A index \in 1..Len(plans) :
+        history[index] = SourceGuardedInitialStates(
+            history[index - 1], plans[index].key,
+            plans[index].values, plans[index].defined)
+GeneratedGuardedInitialHistory(start, plans, history) ==
+    /\ history[0] = start
+    /\ \A index \in 1..Len(plans) :
+        history[index] = GeneratedGuardedInitialStates(
+            history[index - 1], plans[index].key,
+            plans[index].values, plans[index].defined)
+
+THEOREM GuardedInitialHistoriesAgree ==
+    ASSUME NEW start \in SUBSET States,
+           NEW plans \in Seq(DeterministicInitialPlans),
+           NEW source \in [0..Len(plans) -> SUBSET States],
+           NEW generated \in [0..Len(plans) -> SUBSET States],
+           SourceGuardedInitialHistory(start, plans, source),
+           GeneratedGuardedInitialHistory(start, plans, generated)
+    PROVE \A index \in 0..Len(plans) : source[index] = generated[index]
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(plans) => source[index] = generated[index]
+    <1>1. P(0)
+        BY SMT DEF P, SourceGuardedInitialHistory,
+            GeneratedGuardedInitialHistory
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(plans)
+                     PROVE source[index + 1] = generated[index + 1]
+            BY SMT DEF P
+        <2>1. source[index] = generated[index]
+            BY P(index), SMT DEF P
+        <2>2. plans[index + 1] \in DeterministicInitialPlans
+            BY LenProperties, SMT
+        <2>3. source[index + 1] = SourceGuardedInitialStates(
+                source[index], plans[index + 1].key,
+                plans[index + 1].values, plans[index + 1].defined)
+            BY SMT DEF SourceGuardedInitialHistory
+        <2>4. generated[index + 1] = GeneratedGuardedInitialStates(
+                generated[index], plans[index + 1].key,
+                plans[index + 1].values, plans[index + 1].defined)
+            BY SMT DEF GeneratedGuardedInitialHistory
+        <2>5. source[index] \in SUBSET States
+            BY SMT
+        <2>6. /\ plans[index + 1].key \in Vars
+              /\ plans[index + 1].values \in [States -> Values]
+              /\ plans[index + 1].defined \in [States -> BOOLEAN]
+            BY <2>2, SMT DEF DeterministicInitialPlans
+        <2>7. SourceGuardedInitialStates(source[index],
+                plans[index + 1].key, plans[index + 1].values,
+                plans[index + 1].defined)
+            = GeneratedGuardedInitialStates(source[index],
+                plans[index + 1].key, plans[index + 1].values,
+                plans[index + 1].defined)
+            BY <2>5, <2>6, GuardedDeterministicInitializationComposes
+        <2>. QED BY <2>1, <2>3, <2>4, <2>7, SMT
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED BY <1>3, SMT DEF P
+
+THEOREM GuardedSequentialIntInitialSetsAgree ==
+    ASSUME NEW start \in SUBSET States,
+           NEW plans \in Seq(DeterministicInitialPlans),
+           NEW entry \in ActionLabels
+    PROVE \E history \in [0..Len(plans) -> SUBSET States] :
+        /\ history[0] = start
+        /\ (\A index \in 1..Len(plans) :
+            /\ history[index] = SourceGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined)
+            /\ history[index] = GeneratedGuardedInitialStates(
+                history[index - 1], plans[index].key,
+                plans[index].values, plans[index].defined))
+        /\ SourceSequentialIntInitialSet(entry, history[Len(plans)])
+            = GeneratedSequentialIntInitialSet(entry, history[Len(plans)])
+    PROOF
+    <1>1. PICK history \in [0..Len(plans) -> SUBSET States] :
+              /\ history[0] = start
+              /\ (\A index \in 1..Len(plans) :
+                  /\ history[index] = SourceGuardedInitialStates(
+                      history[index - 1], plans[index].key,
+                      plans[index].values, plans[index].defined)
+                  /\ history[index] = GeneratedGuardedInitialStates(
+                      history[index - 1], plans[index].key,
+                      plans[index].values, plans[index].defined))
+        BY GuardedDeterministicInitialHistoriesExist
+    <1>2. history[Len(plans)] \in SUBSET States
+        BY <1>1, SMT
+    <1>3. SourceSequentialIntInitialSet(entry, history[Len(plans)])
+            = GeneratedSequentialIntInitialSet(entry, history[Len(plans)])
+        BY <1>2, SequentialInitialControlLiftPreservesEquality
+    <1>. QED BY <1>1, <1>3
+
+SourceCheckedSequentialEdges(entry, next, label, steps, guards) ==
+    {edge \in SequentialEdges :
+        /\ edge[2] = label
+        /\ edge[1].location = entry
+        /\ edge[3].location = next
+        /\ SourceGuardedDoStep(edge[1].data, steps,
+            guards, edge[3].data)}
+
+GeneratedCheckedSequentialEdges(entry, next, label, steps, guards) ==
+    {edge \in SequentialEdges :
+        /\ edge[2] = label
+        /\ edge[1].location = entry
+        /\ edge[3].location = next
+        /\ ScheduledGuardedDoStep(edge[1].data, steps,
+            guards, edge[3].data)}
+
+SourceSequentialIntFailures(before, entry, label, steps, checks, operands, source) ==
+    IF before.location = entry
+    THEN {<<before, label, "addition", operands[index][source[index - 1]]>> :
+        index \in {step \in 1..Len(steps) :
+            SourceFirstFailureAt(steps, checks, source, step)}}
+    ELSE {}
+
+GeneratedSequentialIntFailures(before, entry, label, steps, checks, operands,
+                               original, scheduled) ==
+    IF before.location = entry
+    THEN {<<before, label, "addition",
+        operands[index][ApplyDelta(original, scheduled[index - 1].keys,
+            scheduled[index - 1].values)]>> :
+        index \in {step \in 1..Len(steps) :
+            ScheduledFirstFailureAt(original, steps, checks, scheduled, step)}}
+    ELSE {}
+
+THEOREM OrderedSequentialIntOutcomesCompose ==
+    ASSUME Values = Int,
+           NEW entry \in ActionLabels,
+           NEW next \in ActionLabels,
+           NEW label \in ActionLabels,
+           NEW initial \in States,
+           NEW before \in SequentialStates,
+           NEW steps \in Seq(Instructions),
+           NEW guards \in GuardPlans(steps),
+           NEW checks \in [1..Len(steps) -> [States -> BOOLEAN]],
+           NEW operands \in [1..Len(steps) -> [States -> (Int \X Int)]],
+           NEW source \in [0..Len(steps) -> States],
+           NEW scheduled \in [0..Len(steps) -> ScheduledRecords],
+           (\A index \in 1..Len(steps) : guards[index - 1] = checks[index]),
+           guards[Len(steps)] = AlwaysGuard,
+           SourceHistory(before.data, steps, source),
+           ScheduledHistory(before.data, steps, scheduled)
+    PROVE /\ SourceSequentialIntInitial(entry, initial)
+                 = GeneratedSequentialIntInitial(entry, initial)
+          /\ SourceCheckedSequentialEdges(entry, next, label, steps, guards)
+                 = GeneratedCheckedSequentialEdges(entry, next, label, steps, guards)
+          /\ SourceSequentialIntFailures(before, entry, label, steps, checks,
+                 operands, source)
+                 = GeneratedSequentialIntFailures(before, entry, label, steps,
+                     checks, operands, before.data, scheduled)
+    PROOF
+    <1>1. SourceSequentialIntInitial(entry, initial)
+            = GeneratedSequentialIntInitial(entry, initial)
+        BY SMT DEF SourceSequentialIntInitial,
+            GeneratedSequentialIntInitial, SequentialStates
+    <1>2. SourceCheckedSequentialEdges(entry, next, label, steps, guards)
+            = GeneratedCheckedSequentialEdges(entry, next, label, steps, guards)
+        BY OrderedGuardedDoTransitionEquivalence, SMT
+           DEF SourceCheckedSequentialEdges, GeneratedCheckedSequentialEdges,
+               SequentialEdges, SequentialStates
+    <1>3. \A index \in 0..Len(steps) :
+            source[index] = ApplyDelta(before.data, scheduled[index].keys,
+                scheduled[index].values)
+        BY OrderedHistoriesAgree DEF HistoryAgrees, SequentialStates
+    <1>4. \A index \in 1..Len(steps) :
+            SourceFirstFailureAt(steps, checks, source, index)
+            <=> ScheduledFirstFailureAt(before.data, steps, checks,
+                scheduled, index)
+        BY OrderedHistoriesPreserveFirstFailure DEF SequentialStates
+    <1>5. \A index \in 1..Len(steps) :
+            operands[index][source[index - 1]]
+            = operands[index][ApplyDelta(before.data,
+                scheduled[index - 1].keys, scheduled[index - 1].values)]
+        BY <1>3, SMT
+    <1>6. SourceSequentialIntFailures(before, entry, label, steps, checks,
+            operands, source)
+            = GeneratedSequentialIntFailures(before, entry, label, steps,
+                checks, operands, before.data, scheduled)
+        BY <1>4, <1>5, SMT
+           DEF SourceSequentialIntFailures, GeneratedSequentialIntFailures
+    <1>. QED BY <1>1, <1>2, <1>6
+
+SourceSequentialTerminalEdges(done, label) ==
+    {edge \in SequentialEdges :
+        /\ edge[1].location = done
+        /\ edge[2] = label
+        /\ edge[3] = edge[1]}
+
+GeneratedSequentialTerminalEdges(done, label) ==
+    {edge \in SequentialEdges :
+        /\ edge[1].location = done
+        /\ edge[2] = label
+        /\ edge[3].location = done
+        /\ edge[3].data = edge[1].data}
+
+SourceSequentialIntProgramEdges(count, entries, exits, labels, steps,
+                                guards, done, terminalLabel) ==
+    UNION {SourceCheckedSequentialEdges(entries[index], exits[index],
+        labels[index], steps[index], guards[index]) : index \in 1..count}
+    \cup SourceSequentialTerminalEdges(done, terminalLabel)
+
+GeneratedSequentialIntProgramEdges(count, entries, exits, labels, steps,
+                                   guards, done, terminalLabel) ==
+    UNION {GeneratedCheckedSequentialEdges(entries[index], exits[index],
+        labels[index], steps[index], guards[index]) : index \in 1..count}
+    \cup GeneratedSequentialTerminalEdges(done, terminalLabel)
+
+SourceSequentialIntProgramFailures(before, count, entries, labels, steps,
+                                   checks, operands, source) ==
+    UNION {SourceSequentialIntFailures(before, entries[index], labels[index],
+        steps[index], checks[index], operands[index], source[index]) :
+        index \in 1..count}
+
+GeneratedSequentialIntProgramFailures(before, count, entries, labels, steps,
+                                      checks, operands, scheduled) ==
+    UNION {GeneratedSequentialIntFailures(before, entries[index], labels[index],
+        steps[index], checks[index], operands[index], before.data,
+        scheduled[index]) : index \in 1..count}
+
+THEOREM OrderedSequentialIntProgramCompose ==
+    ASSUME Values = Int,
+           NEW count \in Nat,
+           count > 0,
+           NEW entries \in [1..count -> ActionLabels],
+           NEW exits \in [1..count -> ActionLabels],
+           NEW labels \in [1..count -> ActionLabels],
+           NEW steps \in [1..count -> Seq(Instructions)],
+           NEW guards, NEW checks, NEW operands, NEW source, NEW scheduled,
+           NEW done \in ActionLabels,
+           NEW terminalLabel \in ActionLabels,
+           NEW sourceInitials \in SUBSET States,
+           NEW generatedInitials \in SUBSET States,
+           NEW before \in SequentialStates,
+           NEW initialStart \in SUBSET States,
+           NEW initialPlans \in Seq(DeterministicInitialPlans),
+           NEW sourceInitialHistory
+               \in [0..Len(initialPlans) -> SUBSET States],
+           NEW generatedInitialHistory
+               \in [0..Len(initialPlans) -> SUBSET States],
+           SourceGuardedInitialHistory(initialStart, initialPlans,
+               sourceInitialHistory),
+           GeneratedGuardedInitialHistory(initialStart, initialPlans,
+               generatedInitialHistory),
+           sourceInitials = sourceInitialHistory[Len(initialPlans)],
+           generatedInitials = generatedInitialHistory[Len(initialPlans)],
+           NEW initialGuards \in Seq(BOOLEAN),
+           NEW initialDefined \in [0..Len(initialGuards) -> BOOLEAN],
+           NEW sourceInitialOperands \in [1..Len(initialGuards) -> (Int \X Int)],
+           NEW generatedInitialOperands \in [1..Len(initialGuards) -> (Int \X Int)],
+           InitialGuardHistory(initialGuards, initialDefined),
+           (\A index \in 1..Len(initialGuards) :
+               sourceInitialOperands[index] = generatedInitialOperands[index]),
+           exits[count] = done,
+           (\A index \in 1..(count - 1) : exits[index] = entries[index + 1]),
+           (\A index \in 1..count :
+               /\ guards[index] \in GuardPlans(steps[index])
+               /\ checks[index] \in [1..Len(steps[index]) -> [States -> BOOLEAN]]
+               /\ operands[index] \in [1..Len(steps[index]) ->
+                   [States -> (Int \X Int)]]
+               /\ source[index] \in [0..Len(steps[index]) -> States]
+               /\ scheduled[index] \in [0..Len(steps[index]) -> ScheduledRecords]
+               /\ (\A position \in 1..Len(steps[index]) :
+                   guards[index][position - 1] = checks[index][position])
+               /\ guards[index][Len(steps[index])] = AlwaysGuard
+               /\ SourceHistory(before.data, steps[index], source[index])
+               /\ ScheduledHistory(before.data, steps[index], scheduled[index]))
+    PROVE /\ SourceSequentialIntInitialSet(entries[1], sourceInitials)
+                 = GeneratedSequentialIntInitialSet(entries[1], generatedInitials)
+          /\ SourceInitialFailureRecords(initialGuards,
+                 sourceInitialOperands)
+                 = RenderedInitialFailureRecords(initialGuards,
+                     initialDefined, generatedInitialOperands)
+          /\ SourceSequentialIntProgramEdges(count, entries, exits, labels,
+                 steps, guards, done, terminalLabel)
+                 = GeneratedSequentialIntProgramEdges(count, entries, exits,
+                     labels, steps, guards, done, terminalLabel)
+          /\ SourceSequentialIntProgramFailures(before, count, entries,
+                 labels, steps, checks, operands, source)
+                 = GeneratedSequentialIntProgramFailures(before, count,
+                     entries, labels, steps, checks, operands, scheduled)
+    PROOF
+    <1>1. \A index \in 1..count :
+            /\ SourceCheckedSequentialEdges(entries[index], exits[index],
+                   labels[index], steps[index], guards[index])
+                 = GeneratedCheckedSequentialEdges(entries[index], exits[index],
+                     labels[index], steps[index], guards[index])
+            /\ SourceSequentialIntFailures(before, entries[index],
+                   labels[index], steps[index], checks[index], operands[index],
+                   source[index])
+                 = GeneratedSequentialIntFailures(before, entries[index],
+                     labels[index], steps[index], checks[index], operands[index],
+                     before.data, scheduled[index])
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 1..count
+                      PROVE /\ SourceCheckedSequentialEdges(entries[index],
+                                   exits[index], labels[index], steps[index],
+                                   guards[index])
+                                = GeneratedCheckedSequentialEdges(entries[index],
+                                    exits[index], labels[index], steps[index],
+                                    guards[index])
+                            /\ SourceSequentialIntFailures(before,
+                                   entries[index], labels[index], steps[index],
+                                   checks[index], operands[index], source[index])
+                                = GeneratedSequentialIntFailures(before,
+                                    entries[index], labels[index], steps[index],
+                                    checks[index], operands[index], before.data,
+                                    scheduled[index])
+            BY SMT
+        <2>1. /\ guards[index] \in GuardPlans(steps[index])
+              /\ checks[index] \in [1..Len(steps[index]) -> [States -> BOOLEAN]]
+              /\ operands[index] \in [1..Len(steps[index]) ->
+                  [States -> (Int \X Int)]]
+              /\ source[index] \in [0..Len(steps[index]) -> States]
+              /\ scheduled[index] \in [0..Len(steps[index]) -> ScheduledRecords]
+              /\ (\A position \in 1..Len(steps[index]) :
+                  guards[index][position - 1] = checks[index][position])
+              /\ guards[index][Len(steps[index])] = AlwaysGuard
+              /\ SourceHistory(before.data, steps[index], source[index])
+              /\ ScheduledHistory(before.data, steps[index], scheduled[index])
+            BY SMT
+        <2>2. /\ entries[index] \in ActionLabels
+              /\ exits[index] \in ActionLabels
+              /\ labels[index] \in ActionLabels
+              /\ steps[index] \in Seq(Instructions)
+              /\ before.data \in States
+            BY SMT DEF SequentialStates
+        <2>3. /\ SourceCheckedSequentialEdges(entries[index], exits[index],
+                     labels[index], steps[index], guards[index])
+                   = GeneratedCheckedSequentialEdges(entries[index], exits[index],
+                       labels[index], steps[index], guards[index])
+              /\ SourceSequentialIntFailures(before, entries[index],
+                     labels[index], steps[index], checks[index], operands[index],
+                     source[index])
+                   = GeneratedSequentialIntFailures(before, entries[index],
+                       labels[index], steps[index], checks[index], operands[index],
+                       before.data, scheduled[index])
+            BY <2>1, <2>2, OrderedSequentialIntOutcomesCompose
+        <2>. QED BY <2>3
+    <1>2. SourceSequentialTerminalEdges(done, terminalLabel)
+            = GeneratedSequentialTerminalEdges(done, terminalLabel)
+        BY SMT DEF SourceSequentialTerminalEdges,
+            GeneratedSequentialTerminalEdges, SequentialStates, SequentialEdges
+    <1>3. SourceSequentialIntInitialSet(entries[1], sourceInitials)
+            = GeneratedSequentialIntInitialSet(entries[1], generatedInitials)
+        PROOF
+        <2>1. sourceInitialHistory[Len(initialPlans)]
+                = generatedInitialHistory[Len(initialPlans)]
+            BY GuardedInitialHistoriesAgree, SMT
+        <2>2. sourceInitials = generatedInitials
+            BY <2>1, SMT
+        <2>3. entries[1] \in ActionLabels
+            BY LenProperties
+        <2>. QED BY <2>2, <2>3, SequentialInitialControlLiftPreservesEquality,
+            SMT
+    <1>4. SourceSequentialIntProgramEdges(count, entries, exits, labels,
+               steps, guards, done, terminalLabel)
+            = GeneratedSequentialIntProgramEdges(count, entries, exits,
+                labels, steps, guards, done, terminalLabel)
+        BY <1>1, <1>2, SMT DEF SourceSequentialIntProgramEdges,
+            GeneratedSequentialIntProgramEdges
+    <1>5. SourceSequentialIntProgramFailures(before, count, entries,
+               labels, steps, checks, operands, source)
+            = GeneratedSequentialIntProgramFailures(before, count,
+                entries, labels, steps, checks, operands, scheduled)
+        BY <1>1, SMT DEF SourceSequentialIntProgramFailures,
+            GeneratedSequentialIntProgramFailures
+    <1>6. SourceInitialFailureRecords(initialGuards, sourceInitialOperands)
+            = RenderedInitialFailureRecords(initialGuards, initialDefined,
+                generatedInitialOperands)
+        BY OrderedInitialFailurePayloadsAgree
+    <1>. QED BY <1>3, <1>4, <1>5, <1>6
+
 GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
     LET firstUpdate ==
             GeneratedMerge(GeneratedEmptyUpdates(state), firstKey, firstValue)
@@ -2754,6 +3709,80 @@ THEOREM RootAdditionPreservesCompleteLabeledEdgesAndFailures ==
         EmittedCheckedAddEdges, SourceCheckedAddFailures,
         EmittedCheckedAddFailures, NativeCheckedAddEdges,
         NativeCheckedAddFailures
+
+SequentialAddEdges(before, entry, next, label, edges) ==
+    IF before.location = entry
+    THEN {<<before, label, [location |-> next, data |-> edge[3]]>> : edge \in edges}
+    ELSE {}
+
+SequentialAddFailures(before, entry, label, failures) ==
+    IF before.location = entry
+    THEN {<<before, label, failure[3], failure[4]>> : failure \in failures}
+    ELSE {}
+
+THEOREM SequentialAdditionPreservesLabeledEdgesAndFailures ==
+    ASSUME NEW before \in SequentialStates,
+           NEW entry \in ActionLabels,
+           NEW next \in ActionLabels,
+           NEW label \in ActionLabels,
+           NEW rhs \in Int,
+           before.data \in [Vars -> Int],
+           WithinSwiftInt(before.data[Key]),
+           WithinSwiftInt(rhs),
+           SwiftIntMin <= -2000000000,
+           2000000000 <= SwiftIntMax
+    PROVE /\ SequentialAddEdges(before, entry, next, label,
+                   SourceCheckedAddEdges(before.data, label, rhs))
+                = SequentialAddEdges(before, entry, next, label,
+                   EmittedCheckedAddEdges(before.data, label, rhs))
+          /\ SequentialAddEdges(before, entry, next, label,
+                   SourceCheckedAddEdges(before.data, label, rhs))
+                = SequentialAddEdges(before, entry, next, label,
+                   NativeCheckedAddEdges(before.data, label, rhs))
+          /\ SequentialAddFailures(before, entry, label,
+                   SourceCheckedAddFailures(before.data, label, rhs))
+                = SequentialAddFailures(before, entry, label,
+                   EmittedCheckedAddFailures(before.data, label, rhs))
+          /\ SequentialAddFailures(before, entry, label,
+                   SourceCheckedAddFailures(before.data, label, rhs))
+                = SequentialAddFailures(before, entry, label,
+                   NativeCheckedAddFailures(before.data, label, rhs))
+    BY RootAdditionPreservesCompleteLabeledEdgesAndFailures, SMT
+       DEF SequentialAddEdges, SequentialAddFailures
+
+THEOREM SequentialAdditionPreservesInitialsEdgesAndFailures ==
+    ASSUME NEW prior \in States,
+           NEW initial \in Values,
+           NEW before \in SequentialStates,
+           NEW entry \in ActionLabels,
+           NEW next \in ActionLabels,
+           NEW label \in ActionLabels,
+           NEW rhs \in Int,
+           before.data \in [Vars -> Int],
+           WithinSwiftInt(before.data[Key]),
+           WithinSwiftInt(rhs),
+           SwiftIntMin <= -2000000000,
+           2000000000 <= SwiftIntMax
+    PROVE /\ EnumeratedInitialStates(prior, Key, <<initial>>)
+                = EqualityInitialStates(prior, Key, initial)
+          /\ SequentialAddEdges(before, entry, next, label,
+                   SourceCheckedAddEdges(before.data, label, rhs))
+                = SequentialAddEdges(before, entry, next, label,
+                   EmittedCheckedAddEdges(before.data, label, rhs))
+          /\ SequentialAddEdges(before, entry, next, label,
+                   SourceCheckedAddEdges(before.data, label, rhs))
+                = SequentialAddEdges(before, entry, next, label,
+                   NativeCheckedAddEdges(before.data, label, rhs))
+          /\ SequentialAddFailures(before, entry, label,
+                   SourceCheckedAddFailures(before.data, label, rhs))
+                = SequentialAddFailures(before, entry, label,
+                   EmittedCheckedAddFailures(before.data, label, rhs))
+          /\ SequentialAddFailures(before, entry, label,
+                   SourceCheckedAddFailures(before.data, label, rhs))
+                = SequentialAddFailures(before, entry, label,
+                   NativeCheckedAddFailures(before.data, label, rhs))
+    BY KeyIsVariable, InitialEqualityMatchesSingletonEnumeration,
+       SequentialAdditionPreservesLabeledEdgesAndFailures, SMT
 
 THEOREM CurrentAdditionAgreementIsExactlyRangeSafety ==
     \A lhs, rhs \in Int :

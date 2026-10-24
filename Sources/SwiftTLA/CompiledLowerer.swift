@@ -179,11 +179,26 @@ struct CompiledLowerer {
             if case .value(let value) = declaration.initialization {
                 try validateValue(value, at: "\(path).initialization")
             }
-            initializations[variableLayout.id] = try lower(
+            let lowered = try lower(
                 declaration.initialization,
                 at: "\(path).initialization",
                 scope: rootScope
             )
+            let checkIntInitializer: Bool
+            if case .value(.int) = declaration.initialization {
+                checkIntInitializer = true
+            } else {
+                checkIntInitializer = authoredAlgorithm != nil && layout.programCounterID() != nil
+            }
+            if checkIntInitializer {
+                try StraightLineAssignmentCheck.verifyInitialIntExpression(
+                    declaration.initialization, lowered: lowered, layout: layout,
+                    at: "\(path).initialization")
+            }
+            try StraightLineAssignmentCheck.verifyInitialControlLocation(
+                declaration.initialization, lowered: lowered, layout: layout,
+                at: "\(path).initialization")
+            initializations[variableLayout.id] = lowered
         }
         let actions: [CompiledAction] = try zip(spec.actions, layout.actions).map {
             try lower($0.0, id: $0.1.id)
@@ -1216,6 +1231,8 @@ struct CompiledLowerer {
         var scope = rootScope
         let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
         let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope)
+        try StraightLineAssignmentCheck.verifyCompiled(action, bindings: bindings,
+            body: body, layout: layout)
         try body.verifyBranchwiseContinuation(at: "actions.\(action.name).body")
         return CompiledAction(
             id: id,

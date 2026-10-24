@@ -90,6 +90,13 @@ enum ActionNormalization {
         return results[0]
     }
 
+    static func checkedComplete(_ action: ActionExpr, variables: [NamedVar], at path: String) throws -> ActionExpr {
+        let normalized = complete(action, variables: variables)
+        try StraightLineAssignmentCheck.verifyNormalization(action, normalized: normalized,
+            stateRoots: Set(variables.map(\.name)), at: path)
+        return normalized
+    }
+
     static func verifyComplete(_ action: ActionExpr, variables: [NamedVar], at path: String) throws {
         var tasks = [FrameCheckTask.visit(action)]
         var guaranteed: [Set<ActionTarget>?] = []

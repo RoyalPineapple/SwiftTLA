@@ -107,7 +107,7 @@ jobs:
             https://github.com/tlaplus/tlapm/releases/download/1.6.0-pre/tlapm-1.6.0-pre-x86_64-linux-gnu.tar.gz \
             -o "$proof_tool_dir/tlapm.tar.gz"
           sha256sum "$proof_tool_dir/tlapm.tar.gz" | tee .build/semantic-proof-evidence/tlapm-archive.sha256
-          echo 'b3c2554d3dd2198772ea8c814639a024fe9c390eac0ec25f4f444ad446a7dd28  '"$proof_tool_dir/tlapm.tar.gz" \
+          echo '0d1b393a1042aa08961bb024c784a80a25009a5874258c0ddbbfd95b92e80fe5  '"$proof_tool_dir/tlapm.tar.gz" \
             | sha256sum --check -
           tar -xzf "$proof_tool_dir/tlapm.tar.gz" -C "$proof_tool_dir"
           curl -fsSL \
@@ -122,7 +122,7 @@ jobs:
           "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version \
             > .build/semantic-proof-evidence/z3-version.txt
           "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/semantic-proof-evidence/tlapm-version.txt
-          grep -Fx '901ae51' .build/semantic-proof-evidence/tlapm-version.txt
+          grep -Fx '5f5037f' .build/semantic-proof-evidence/tlapm-version.txt
           "$proof_tool_dir/tlapm/bin/tlapm" --config > .build/semantic-proof-evidence/tlapm-config.txt
           proof_failure=0
           proof_count=0

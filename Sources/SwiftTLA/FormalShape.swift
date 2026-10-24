@@ -75,31 +75,122 @@ public indirect enum FormalValueShape: Hashable, Sendable {
         }
     }
 
-    func predicate(for value: String, depth: Int = 0) -> String {
+    func predicate(
+        for value: String,
+        sourceType: CompiledValueType? = nil,
+        depth: Int = 0,
+        namedMembers: ((String) -> [CompiledValue]?)? = nil,
+        renderFinite: ((CompiledValue) throws -> String)? = nil
+    ) throws -> String {
+        if case .named(let name)? = sourceType {
+            guard let members = namedMembers?(name) else {
+                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
+                    path: "checkedView", expected: "a resolved finite domain for \(name)",
+                    actual: "the named source domain is unavailable",
+                    nextSafeAction: "Declare the domain before rendering the checked view.")
+            }
+            return try predicate(for: value, sourceType: .finite(members), depth: depth,
+                namedMembers: namedMembers, renderFinite: renderFinite)
+        }
+        if case .finite(let members)? = sourceType {
+            let matching = members.filter(accepts).sorted()
+            guard !matching.isEmpty else { return "FALSE" }
+            guard let renderFinite else {
+                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
+                    path: "checkedView", expected: "renderable finite-domain members",
+                    actual: "the finite-domain member renderer is unavailable",
+                    nextSafeAction: "Render the checked view through the compiled TLA+ renderer.")
+            }
+            return "(\(value) \\in {\(try matching.map(renderFinite).joined(separator: ", "))})"
+        }
+        if let sourceType, !sourceType.canHaveOuterShape(self) { return "FALSE" }
         var bound = "_shapeMember\(depth)"
         while value.contains(bound) || String(describing: self).contains(bound) { bound += "_" }
-        func nested(_ shape: Self, _ value: String) -> String { shape.predicate(for: value, depth: depth + 1) }
+        func nested(_ shape: Self, _ value: String, sourceType: CompiledValueType? = nil) throws -> String {
+            try shape.predicate(for: value, sourceType: sourceType, depth: depth + 1,
+                namedMembers: namedMembers, renderFinite: renderFinite)
+        }
         switch self {
         case .integer: return "\(value) \\in Int"
         case .boolean: return "\(value) \\in BOOLEAN"
         case .string: return "\(value) \\in STRING"
         case .finite(_, let values): return "\(value) \\in {\(values.map(\.description).joined(separator: ", "))}"
-        case .set(let item): return "(\\A \(bound) \\in \(value) : \(nested(item, bound)))"
+        case .set(let item):
+            let elementType: CompiledValueType?
+            if case .set(let element)? = sourceType { elementType = element }
+            else { elementType = nil }
+            return "(\\A \(bound) \\in \(value) : \(try nested(item, bound, sourceType: elementType)))"
         case .sequence(let item):
-            return "(DOMAIN \(value) = 1..Len(\(value)) /\\ (\\A \(bound) \\in DOMAIN \(value) : \(nested(item, "\(value)[\(bound)]"))))"
+            let elementType: CompiledValueType?
+            if case .array(let element)? = sourceType { elementType = element }
+            else { elementType = nil }
+            return "(DOMAIN \(value) = 1..Len(\(value)) /\\ (\\A \(bound) \\in DOMAIN \(value) : \(try nested(item, "\(value)[\(bound)]", sourceType: elementType))))"
         case .tuple(let items):
-            let checks = items.enumerated().map { nested($0.element, "\(value)[\($0.offset + 1)]") }
+            let sourceItems: [CompiledValueType]?
+            switch sourceType {
+            case .tuple(let elements)?: sourceItems = elements
+            case .array(let element)?: sourceItems = Array(repeating: element, count: items.count)
+            default: sourceItems = nil
+            }
+            if let sourceItems, sourceItems.count != items.count { return "FALSE" }
+            let checks = try items.enumerated().map {
+                try nested($0.element, "\(value)[\($0.offset + 1)]", sourceType: sourceItems?[$0.offset])
+            }
             return "(DOMAIN \(value) = 1..\(items.count)" + checks.map { " /\\ (\($0))" }.joined() + ")"
         case .function(let key, let item):
-            return "(\\A \(bound) \\in DOMAIN \(value) : (\(nested(key, bound))) /\\ (\(nested(item, "\(value)[\(bound)]"))))"
+            let keyType: CompiledValueType?
+            let valueType: CompiledValueType?
+            if case .dictionary(let sourceKey, let sourceValue)? = sourceType {
+                keyType = sourceKey
+                valueType = sourceValue
+            } else {
+                keyType = nil
+                valueType = nil
+            }
+            return "(\\A \(bound) \\in DOMAIN \(value) : (\(try nested(key, bound, sourceType: keyType))) /\\ (\(try nested(item, "\(value)[\(bound)]", sourceType: valueType))))"
         case .record(let fields):
+            let sourceFields = sourceType?.recordFields
+            if let sourceFields, Set(sourceFields.map(\.name)) != Set(fields.map(\.name)) { return "FALSE" }
             let keys = fields.map { TLAValue.string($0.name).description }.joined(separator: ", ")
-            let checks = fields.map { nested($0.shape, "\(value)[\(TLAValue.string($0.name).description)]") }
+            let checks = try fields.map { field in
+                try nested(field.shape, "\(value)[\(TLAValue.string(field.name).description)]",
+                    sourceType: sourceFields?.first { $0.name == field.name }?.type)
+            }
             return "(DOMAIN \(value) = {\(keys)}" + checks.map { " /\\ (\($0))" }.joined() + ")"
         case .union:
             let ordered = possibleShapes.filter(\.isScalar) + possibleShapes.filter { !$0.isScalar }
-            return "(" + ordered.map { "(\(nested($0, value)))" }.joined(separator: " \\/ ") + ")"
+            let predicates = try ordered.map {
+                try $0.predicate(for: value, sourceType: sourceType, depth: depth + 1,
+                    namedMembers: namedMembers, renderFinite: renderFinite)
+            }
+            return "(" + predicates.map { "(\($0))" }.joined(separator: " \\/ ") + ")"
         case .unsupported: return "FALSE"
+        }
+    }
+}
+
+private extension CompiledValueType {
+    func canHaveOuterShape(_ shape: FormalValueShape) -> Bool {
+        if let alternatives = unionAlternatives {
+            return alternatives.contains { $0.canHaveOuterShape(shape) }
+        }
+        if case .union(let first, let second) = shape {
+            return canHaveOuterShape(first) || canHaveOuterShape(second)
+        }
+        switch shape {
+        case .integer: if case .int = self { return true }
+        case .boolean: if case .bool = self { return true }
+        case .string: if case .string = self { return true }
+        case .set: if case .set = self { return true }
+        case .sequence, .tuple: if case .array = self { return true }; if case .tuple = self { return true }
+        case .function: if case .dictionary = self { return true }
+        case .record: if recordFields != nil { return true }
+        case .finite, .unsupported, .union: return true
+        }
+        // Named and finite domains need their resolved members to establish disjointness.
+        switch self {
+        case .unknown, .named, .finite: return true
+        default: return false
         }
     }
 }

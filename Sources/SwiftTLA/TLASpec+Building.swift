@@ -117,6 +117,8 @@ extension TLASpec {
 
     for step in sourceAtomicSteps {
       let lowered = try AlgorithmLowerer.lowerAtomicStep(step)
+      try StraightLineAssignmentCheck.verify(step, lowered: lowered.action,
+        stateRoots: Set(variables.map(\.name)))
       actions.append(.init(name: step.model.label.name, body: lowered.action, bindings: step.bindings))
       invariants += lowered.assertions.enumerated().map {
         NamedStatePredicate(name: "__step_assert_\(step.model.label.name)_\($0.offset)",
@@ -137,6 +139,21 @@ extension TLASpec {
           formalOperatorDefinitions: formalOperatorDefinitions,
           enumerateInitialControl: !initialInvariantSelections.isEmpty
         )
+        if algorithm.model.processes.isEmpty,
+           algorithm.model.procedures.isEmpty,
+           let sourceStep = algorithm.model.sequentialSteps.first,
+           algorithm.model.sequentialSteps.count == 1,
+           let condition = sourceStep.loopCondition,
+           case .value(.bool(true)) = condition,
+           lowered.actions.count == 1,
+           !lowered.variables.contains(where: { $0.origin == .programCounter }) {
+          try StraightLineAssignmentCheck.verify(AtomicStep(model: sourceStep),
+            lowered: lowered.actions[0].body, stateRoots: Set(lowered.variables.map(\.name)))
+        }
+        if algorithm.model.processes.isEmpty, algorithm.model.procedures.isEmpty {
+          try StraightLineAssignmentCheck.verifySequential(algorithm.model, lowered: lowered,
+            enumerateInitialControl: !initialInvariantSelections.isEmpty)
+        }
         authoredPlusCalAlgorithmPlan = authoredPlusCalPlan
         variables += lowered.variables
         actions += lowered.actions
@@ -150,16 +167,18 @@ extension TLASpec {
       }
     }
 
-    actions = actions.map { action in
+    actions = try actions.map { action in
       let body: ActionExpr
       if case .existsAction(let binder, let domain, let memberBody) = action.body {
         body = .existsAction(
           binder,
           domain,
-          ActionNormalization.complete(memberBody, variables: variables)
+          try ActionNormalization.checkedComplete(memberBody, variables: variables,
+            at: "actions.\(action.name).normalization")
         )
       } else {
-        body = ActionNormalization.complete(action.body, variables: variables)
+        body = try ActionNormalization.checkedComplete(action.body, variables: variables,
+          at: "actions.\(action.name).normalization")
       }
       return NamedAction(
         name: action.name,

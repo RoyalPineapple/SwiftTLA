@@ -1,5 +1,16 @@
 # Semantic-preservation contract
 
+[Language-composition proof checklist](LanguageCompositionChecklist.md) tracks
+the accepted-rule inventory and the remaining source-to-both-outputs links.
+
+The slice histories below are regression evidence, not language-proof credit.
+Some modules mix general lemmas with model-specific checks; retain them until
+their reusable rules have been extracted and verified. The sequence-removal
+domain and value lemmas now live in `SequenceRemoveRule.tla`; the former
+`SequenceEditPreservationProof.tla` model instance is retired. Only a general
+rule connected to the real lowerer and both real outputs can advance the
+language-wide claim.
+
 Status: **unproved**. This document defines the claim to prove. Finite graph
 comparisons do not discharge it.
 
@@ -264,7 +275,45 @@ with a complete-state update and action identity: the source, abstract native
 checked-add, and emitted TLA rules have equal labeled edge sets and failure
 records, including the original state, action, operation, and operands. Its
 assumptions require representable operands and the same target bounds. The
-native branch trusts Swift's `addingReportingOverflow` contract and the small
+`SequentialAdditionPreservesLabeledEdgesAndFailures` theorem lifts that rule
+through a sequential step's entry control, next control, and action label.
+It preserves the complete `(pc, data)` successor and suppresses both edges
+and failures when the step is disabled. The class connected to actual compiler
+outputs is an accepted `#spec` sequential `Algorithm` with one shared `Int`
+variable, one unparameterized `Do` step, and only `Assign(x, to: x + c)` for
+an `Int` literal `c`; the generated termination action is separate. The
+production single-assignment capture and typed compiled-action checks retain
+the source expression, target, entry-control guard, next-control write, and
+types. Changing the compiled entry location is rejected by a negative control.
+The native visitor
+check derives the checked addition call, operands, target, and control update
+from that compiled action. The generated successor wrapper is checked to apply
+each update to the complete snapshot and visit each distinct result. The
+generated failure visitor must forward the exact action and evaluation reason,
+and the public validation entry point must delegate both outcomes to it.
+Mutations that drop an update, replace the failure reason, or omit the failure
+callback are rejected. The TLA+ action and failure checks derive the
+value guard, operation and operands, control-gated failure, and selected
+evaluation invariant. Focused negative controls change the source capture,
+compiled operation/operands/type, Swift addition call, and TLA+ action or
+failure declarations; the unguarded-addition theorem supplies the semantic
+negative control. These gates and theorem establish this step/failure path
+conditional on their parsers and checkers, the generated update and checked
+arithmetic kernels, the native checking traversal, the formal value encoding,
+and documented Swift behavior.
+`SequentialAdditionPreservesInitialsEdgesAndFailures` composes this step rule
+with the deterministic singleton-initialization rule. For the stated class,
+the source-to-lowered check retains the authored `Int` literal, the compiler
+checks its value before type resolution and its value and `Int` type afterward,
+and the native and TLA+ output checks independently derive that literal from
+the compiled value. Negative controls alter the lowered shared value, the
+compiled literal and type,
+the Swift binding, and both the TLA+ `Init` text and its renderer-supplied
+predicate. This closes the initial-state link for this class, conditional on
+the project-owned checkers and formal integer encoding. It does not prove
+arbitrary initializers, other expressions, temporal claims, or the universal
+`#spec` theorem.
+The native branch trusts Swift's `addingReportingOverflow` contract and the small
 `_NativeMachineOperations.add` wrapper; the fixture's generated-Swift witness
 and runtime failure test check that link, but are not a proof of the Swift
 compiler or every accepted addition lowering to this root form.
@@ -1161,6 +1210,100 @@ the abstract rules. The indexed formulation avoids a recursive-operator
 limitation in this pinned TLAPS build; that tool workaround does not discharge
 the compiler and output obligations.
 
+`OrderedAssignmentLoweringTests` independently interprets straight-line root
+copies and literal assignments over symbolic complete states, then checks the
+real frame-completed lowered action, typed compiled action, and rendered TLA+
+action for every prefix of a repeated-write sequence. Each prefix also passes
+through the real Swift emitter's output checks. A stale
+pre-step read changes the symbolic result and is rejected. It also interprets
+that model's actual typed compiled action and rejects the same stale read at
+the compiled boundary. The same checker reads the actual emitted TLA+ `copy`
+declaration with a fully consumed, restricted grammar and compares its
+symbolic complete-state result. A stale rendered read also differs. It
+requires an assignment or `UNCHANGED` for every state variable, so a bare
+`TRUE` cannot masquerade as an unchanged transition. This checks the named
+source-to-lowered, source-to-compiled, and source-to-rendered instances, not
+every accepted expression or emitted action. The reader and Swift
+compiler/runtime remain trusted; arbitrary expression failures and the
+general Swift and TLA+ output links are open.
+
+Compilation now independently checks the source-to-lowered complete-state rule
+for independent, unparameterized `Do` steps containing only root copies and
+literal assignments. It folds source reads over symbolic prior-state terms,
+interprets the lowered action separately, and rejects a different result;
+omitted and explicit unchanged writes have the same meaning. A stale-read
+mutation is rejected by this compiler gate. The gate does not certify the
+emitter implementations, arbitrary expressions, or other action forms. A
+second independent gate checks unparameterized actions with distinct binding
+names in the same total Int/Boolean copy-and-literal grammar as
+`CompiledLowerer` converts source names into variable and binder IDs; a wrong
+compiled read is rejected. It runs before type checking,
+and a third gate checks that type checking and resolution retain the same
+complete action topology, Int/Boolean reads, values, writes, and inferred
+state and binder types whenever no conversion is needed. A wrong resolved read
+is rejected. The direct TLA+ renderer checks the emitted body against the same
+compiled constructor grammar before placing it in the final module; a wrong
+rendered read is rejected. The native emitter already checks its actual update
+visitor and now refuses an unrecognized scalar leaf in this grammar. These
+checks connect the `OrderedDoTransitionEquivalence` and `OrderedDoLabeledEdges`
+rules to actual compiler outputs for this restricted action class, subject to
+the checkers' correctness and the Swift compiler/runtime. Conversions, other
+expressions, initialization, and selected temporal outcomes remain separate
+obligations; none of these checker implementations is formally verified. The
+source-to-compiled, typed-resolution, and TLA+ action-body checks also cover
+disjunctions of this total scalar grammar; changing an alternative to
+conjunction is rejected at each boundary. These structural checks do not
+prove the general source alternative rule, failure aggregation, or arbitrary
+`Either` bodies.
+For direct scalar Boolean guards and `ifElse` conditions in that grammar, the
+production source-to-compiled and typed-resolution checks now compare the
+condition's variable or binder identity, both conditional branches, and their
+complete frames. The resolver check uses the inferred Boolean type when the
+pre-resolution variable type is unknown. Replacing either tested state guard
+or branch condition with `FALSE` is rejected at both boundaries. Together
+with the normalization and emitted-TLA+ checks, this closes those structural
+links for direct total conditions; it does not prove expression evaluation,
+fallible predicates, or the Swift/TLA+ execution semantics of every accepted
+conditional.
+The source and compiled gates now also carry a `Do` parameter as a symbolic value
+through ordered root assignments. For nonshadowing actions with a finite,
+nonempty literal Int/Boolean parameter domain, the compiled gate checks the
+exact domain members and binder references, and the resolution gate checks
+the inferred parameter type, resolved domain, and ordered body. Wrong bound
+reads, stale state reads, and changed domains are rejected. For nonshadowing
+finite Int/Boolean bindings in the total scalar assignment grammar, the native
+emitter also checks typed outer binders and bound reads in the actual update
+visitor, the candidate loop's complete literal domain, the selected-action
+binder pattern and guard, the successor argument, and the formal Int/Boolean
+value encoding. The TLA+ renderer checks the completed module's action header
+against compiled binder identities as well as checking the action body. A
+missing candidate, bound-route substitution, wrong formal value, and changed
+TLA+ binder are rejected. State-dependent domains, hidden singleton arguments,
+empty-domain type inference, other value types, and other output argument
+encodings remain open; these verifier implementations remain trusted.
+For modules where every participating binding is a finite Int/Boolean literal
+or constant set, including state-bearing modules with no bound actions, the completed TLA+ call aliases,
+constant-set quantifiers, and full `Next` disjunction are checked against the
+compiled domains independently of the renderer's invocation construction.
+A changed bound domain or omitted `Next` call is rejected. State-dependent
+domains and other value types still lack this invocation link;
+initialization, failures, and temporal claims also remain separate obligations,
+so this is not a complete-machine theorem.
+The native emitter additionally checks that each unparameterized
+action's emitted dispatch reaches its compiled visitor and that its formal
+call has the compiled label. Wrong-route and wrong-label mutations are
+rejected. Candidate enumeration now uses one generated lazy candidate visitor for both the public
+list and native checking. Both delegations are checked. The visitor body is
+checked against the complete compiled action list, including the number and
+nesting of binding loops and the values passed to each public action argument. A
+duplicate-action mutation and a parameter-substitution mutation are rejected.
+Every emitted action case is checked against its compiled identity: a selected
+parameterized action reaches the correct successor function and carries the
+correct formal action name. Wrong-target and wrong-label mutations are rejected.
+Outside the finite Int/Boolean scalar class above, the meaning of parameterized
+domain expressions, guard and argument values, and formal value encodings remains
+an open output obligation; these checker implementations remain trusted.
+
 The ordered conditional extension permits an arbitrary finite assignment
 prefix, either finite branch, and a common suffix. The branch predicate is
 placed at history index `Len(prefix)`. TLAPS proves that restricting a full
@@ -1280,7 +1423,154 @@ wrong-field assignment is rejected by a negative control. In
 `SingleAssignment.tla`, `SourceConstructedStateIsExactlyGenerated` proves the
 independent complete-state construction rule, and
 `AppliedUpdateComposesWithStateConstruction` composes it with the existing
-update-application theorem. The macro also checks every emitted `Snapshot`
+update-application theorem. `EveryDistinctFinalWriteSequencePreservesCompleteDelta`
+proves that, for any finite sequence of distinct final state slots and complete
+source values, a generated merge history exists, every merge is accepted, and
+applying the result preserves the entire source delta. This generalizes the
+abstract write-and-apply rule beyond the two-slot fixture; it does not prove
+the Swift helper's implementation. `OrderedSourceAndGeneratedMergeStepsAgree`
+composes that result with arbitrary finite ordered source assignments, in both
+directions, including repeated writes and intermediate reads. It requires a
+distinct generated-slot sequence whose complete key set equals the source
+instruction targets. `OrderedHistoriesPreserveFirstFailure` adds a failure-order
+rule for any length of that sequence and any Boolean definedness predicate at
+each step: corresponding complete intermediate states identify the same first
+failing step. TLAPS checked this rule locally without fingerprint reuse. It
+does not establish that either real emitter computes those predicates for
+every accepted expression; their output links remain separate obligations.
+The stale-read mutation in `OrderedAssignmentLoweringTests` guards the
+intermediate-state premise for the checked scalar slice.
+For the supported scalar `sourceAtomicSteps` slice,
+`StraightLineAssignmentCheck.verify` now rejects a duplicate final assignment
+or a different target set, so the source-to-lowered action supplies that
+premise; a same-value duplicate mutation is rejected. The compiled-action and
+emitted-output checks above remain separate links. The same source-to-lowered
+check now runs on a control-free, single-step `#spec` `Algorithm` loop when its
+scalar assignment form is supported. `OrderedAssignmentLoweringTests` checks
+that authored route against its actual generated Swift successor and TLA+
+action, and rejects a duplicate final write. This certificate does not yet
+cover all accepted `#spec` algorithm forms or prove the Swift merge helper.
+`OrderedSequentialControlStepAgreement` lifts the finite ordered-write rule
+to a complete state with a control location; its labeled-edge corollary keeps
+the source action label and proves both directions. The focused TLAPS proofs
+discharge three obligations each without fingerprint reuse. For scalar actions,
+the direct-TLA output checker now recognizes a compiled program-counter
+equality guard and a control-location write, and rejects either wrong location
+in the emitted action. `SequentialCopyProofModel` also checks the generated
+Swift machine's complete formal projection through `copy -> finish`. This
+links compiled control expressions to the actual TLA+ output for that form.
+The native visitor checker now derives the program-counter slot and location
+from the compiled layout and checks the actual emitted Swift guard and literal
+control write. Mutations to either are rejected even when the emitter's write
+metadata agrees with the bad output.
+The native routing check also pins both successor-list wrappers and public
+`send` to that checked visitor; dropping visited successors or reporting a
+transition without updating the machine is rejected. The Swift execution
+kernel and the output checker remain trusted.
+The source-to-lowered checker now checks the exact source variable inventory,
+initial control choice, and labeled step inventory for sequential algorithms.
+For each plain `Do` whose statements are root copies or literals, it also
+requires the exact entry guard, one next-location write, and the complete
+ordered user-variable result. Mutations to the initial control, action label,
+and next location are rejected. The first compositional `Int` slice is more
+specific: every shared variable has a literal `Int` initializer, every `Do`
+step is a nonempty ordered sequence of root assignments built from `Int`
+literals, prior reads, and checked addition, and there are no loops or action
+binders. For any number of such steps, the production checker requires ordered
+captures, complete user-variable writes, exact entry/exit control locations,
+and an exact `Done`-guarded, unchanged terminating action. It also checks the
+source and resolved initial `Int` literals and control location. The production
+Swift and TLA+ emitters check their actual initial bindings, action bodies,
+and selected addition-failure declarations. Wrong value, location, read order,
+termination body, and omitted-failure mutations are rejected by focused tests.
+For deterministic `Int` literal, prior-read, checked-addition, and control
+initializers without parameters or an initial invariant, the generated-Swift
+check also compares the complete
+`_initialStates` function with an independently assembled template from the
+compiled plan. An inserted early return or removed first-failure callback is
+rejected even though the earlier binding checks accept it. Other initializer
+shapes remain accepted but are not covered by this whole-function certificate;
+the output checker and Swift execution kernel remain trusted. The corresponding
+TLA+ `Init` check requires exactly the literal, dependent `Int`, and control
+clauses when they cover every initial variable; an added conjunct that removes
+the initial state is rejected even if the renderer lists it as an expected
+predicate.
+For direct `let algorithm = Algorithm(scoped:)` declarations with `Int`
+`scope.sharedVar` initializers built from literals, earlier-variable reads, and
+addition, plus nonempty `Do` bodies of root `Assign`s, the
+macro independently reads the authored syntax and checks the parsed source
+model's initial values, registered enum-label values, assignment targets,
+expression trees, and statement order. Syntax mutations to each are rejected.
+Other accepted spellings and constructs still compile but are not certified by
+this syntax check; its recognition and enum metadata remain trusted code.
+For that dependent-initializer form, the production lowerer now checks the
+literal, prior-state read, and addition tree against the source, and the
+resolver checks its typed `Int` tree without changing operand order. A real
+sequential `#spec` fixture and changed-tree mutations exercise those links.
+The complete sequential `Done`-guard check now applies to `Int` steps
+independently of whether their initializers are literals or dependent
+expressions; a changed terminal guard in the dependent fixture is rejected.
+The production output checks compare its actual generated Swift initializer
+and TLA+ `Init` clause with independent literal/read/add forms; operator,
+self-consistent wrong-`Init`, missing-failure, and extra-conjunct mutations are
+rejected. The parameterized `OrderedInitialGuardsPreserveFirstFailure` theorem
+proves that the checked prefix selects the same first failing guard for any
+finite ordered sequence of guards. Connecting every nested checked-addition
+site to that sequence remains a separate compiler-output obligation. Given
+matching operands at each site, `OrderedInitialFailurePayloadsAgree` proves
+that the selected `addition` operation and operand pair also match.
+`OrderedDeterministicInitialHistoriesAgree` applies the existing induction
+to any finite chain of state-dependent values
+and definedness guards: a defined initializer contributes one state; an
+undefined initializer contributes none.
+`GuardedDeterministicInitialHistoriesExist` reuses the generic existence rule
+to construct a common history for that chain using an independent source
+equality-update rule, so equality is not conditional on histories that might
+not exist. `GuardedInitialHistoriesAgree` compares separate source and generated
+histories at every prefix. `OrderedSequentialIntProgramCompose` now derives
+initial-set equality from those histories before it adds the hidden program
+counter. It does not assume equal initial sets. These are general rules, not
+fixture-specific counts. All 1,931 obligations pass locally. Hosted evidence
+for this addition remains pending.
+`OrderedSequentialIntProgramCompose` takes the derived complete
+initial-state sets and selected initial-failure payloads into the same theorem
+as the labeled `Do` edges, ordered action failures, and terminal action. The
+output checkers enforce the compiled site order and operands against emitted
+Swift and TLA+, but their correctness remains trusted. The full theorem has
+not yet passed a hosted check with the new output links, so this does not yet
+enlarge the hosted-verified literal-initializer slice.
+The renderer now retains a later initializer's evaluation-failure relation
+when an earlier initializer has a checked definedness rule. It guards the
+earlier binding before evaluating that relation, so a failed prefix cannot
+create a later failure. A generated `#spec` model with two dependent checked
+additions detects the prior omission. This is an output repair and regression,
+and the production output checker independently reconstructs the relation for
+deterministic scalar checked-addition prefixes. A TRUE-instead-of-definedness
+mutation is rejected. It is not yet a general source-to-both-outputs proof for
+fallible initialization or for other initializer expression forms.
+`OrderedSequentialIntProgramCompose` proves the independent complete initial,
+labeled-edge, and ordered-failure rules compose over any finite number of steps,
+including the terminal self-loop. The complete proof file passed the hosted semantic-proof diagnostic
+on `a22d49d7920a8f32ae12cb5e5708ba6332f949cf`; the dependent-initializer
+extension above remains unhosted. The current slice covers deterministic `Int`
+initializers built from literals, earlier root reads, and checked addition.
+Other accepted statement and expression forms remain outside this slice; the
+DSL does not reject them because this proof does not cover them. The output checkers' parsing,
+the remaining `#spec` syntax parser that constructs the source model, the project-owned
+update/visitor kernel, and documented Swift compiler/runtime behavior remain
+trusted boundaries. The theorem does not independently certify that the parser
+interprets every accepted Swift syntax tree as intended. `@TLAModel` generates
+both Swift and TLA+ from the macro-time parsed `CompiledProgram`; agreement
+between those outputs cannot independently validate that shared parsing step.
+For a single root assignment, the production source-to-lowered check also
+requires the exact source expression to be captured once, used within its
+binding, and published to the intended root. For a controlled step, its entry
+guard must precede that capture. Mutations to the expression, capture count,
+binding scope, and guard order are rejected. This rule applies regardless of
+the expression constructor, but establishes only the structural lowering
+boundary: evaluation-failure equivalence and the actual Swift and TLA+ output
+links still need their own expression rules.
+The macro also checks every emitted `Snapshot`
 declaration against the compiled hidden-field list: it permits exactly the
 public state and those hidden fields, with `Hashable` and `Sendable` synthesis
 and no custom identity implementation. A missing-hidden-field mutation is
@@ -1609,8 +1899,8 @@ generated-Swift output links remain mandatory.
 
 Ordinary CI now defines a separate `semantic-proof-diagnostic` job. It verifies
 the official Linux TLAPS archive against SHA-256
-`b3c2554d3dd2198772ea8c814639a024fe9c390eac0ec25f4f444ad446a7dd28`
-and requires its reported source revision to be `901ae51`. The official
+`0d1b393a1042aa08961bb024c784a80a25009a5874258c0ddbbfd95b92e80fe5`
+and requires its reported source revision to be `5f5037f`. The official
 `1.6.0-pre` release is rolling, so replacing its asset will fail this pin
 closed until the new archive and revision are reviewed. The job
 replaces only its bundled Z3 with official Linux Z3 4.15.4 pinned to SHA-256
@@ -1737,10 +2027,17 @@ alternatives preserves every compatible complete update and its labeled edge,
 for arbitrary update sets. Its negative control proves that dropping a branch
 with a distinct compatible update changes the graph. A `#spec` regression with
 two `Either` statements retains both generated Swift successors while also
-reporting a division failure. These facts do not yet prove that
-`ActionNormalization.complete` implements the general distribution rule, that
-the generated TLA+ action has the same complete relation, or that distribution
-preserves first-failure order and checking effects. A second negative control
+reporting a division failure. The production lowerers now independently check
+`ActionNormalization.complete` for total scalar actions made of named Int/Bool
+literal or prior-state assignments, named `UNCHANGED`, literal or prior-state
+Boolean guards and conditionals, scalar `define`, conjunction, and alternatives.
+The checker compares the full symbolic successor set with Boolean path
+conditions and requires an explicit frame for every declared variable; negative
+controls remove an alternative or frame, swap conditional arms, and drop a
+guard. This connects the supported alternatives to the distribution rule, but
+the checker is not itself machine-checked and skips unsupported expressions.
+It does not establish parity of every generated TLA+ action, or prove that
+distribution preserves first-failure order and checking effects. A second negative control
 proves that eager evaluation of both alternatives before the right action can
 report a later alternative's failure where branchwise evaluation reports the
 right action's failure first. The source rule must specify branchwise outcome
@@ -1760,15 +2057,16 @@ compose associatively, with an empty identity: reparenthesizing a binary
 alternative tree preserves the complete update sequence and first failure when
 leaf order stays fixed. Reversing two distinct failures changes that result.
 A focused lowering test checks that the compiler extracts the same leaf order
-from left- and right-nested source alternatives. This closes the algebraic
-rebalancing rule, not arbitrary conjunction distribution or either emitter's
-general output link.
-For every finite list of already-computed branch outcomes, the same module
-proves a visitor history exists. Histories satisfying its recurrence compose
-across group concatenation, including every ordered update and the first
-failure. It does not establish that a continuation produces the correct
-outcome for each branch; that source-to-lowered `and` rule and the general
-TLA+ output link remain open.
+from left- and right-nested source alternatives. The module also proves that
+applying an arbitrary branchwise continuation to two concatenated choice lists
+produces the same ordered outcome list as applying it to each list separately
+and concatenating the results. Each continuation outcome may contain both
+updates and a failure. For every finite list of such outcomes, a visitor
+history exists; its recurrence preserves every ordered update and the first
+failure across group concatenation. These are algebraic composition rules,
+conditional on each branch producing the specified outcome. They do not prove
+that the actual lowerer or either emitter computes those outcomes for arbitrary
+fallible expressions; those implementation links remain open.
 
 `BranchwiseConjunctionFailureOrderProof.tla` closes that ordering for one
 accepted `#spec` instance with eight initial states. Its independent source
@@ -1785,6 +2083,66 @@ is an output-linked instance, not a proof that `ActionNormalization.complete`
 or either emitter preserves branchwise order for arbitrary action trees; the
 Swift compiler/runtime interpretation of the emitted visitor and the checked
 arithmetic kernels remains trusted.
+
+The compiler now checks a reusable subset of source-to-compiled assignment
+translation for nested `Int` addition: it compares every operand and bound read
+in order, then requires the resolved tree to retain those operations, identities,
+and `Int` types. A changed addition operation, reversed operands, or wrong
+resolved result type fails the independent compiler check. This closes that
+lowering/resolution boundary for the checked subset, not the full accepted
+expression language. The TLA+ action-output checker also recognizes
+tokenizable compiled literal values, including sets, in the actual assignment
+body. A set-valued wrong-target mutation previously passed because this form
+was skipped; it now fails. The formal literal serializer remains a shared,
+project-owned trusted link, and expressions outside the checker's grammar
+remain uncovered. Within its restricted action grammar, the production
+source-to-compiled check now compares every complete source literal with the
+corresponding compiled literal, not just Int and Boolean scalars; changing a
+set member in the compiled action is
+rejected. It shares the project's formal-to-compiled value conversion, so
+that conversion's semantic correctness remains an open proof obligation.
+The generated-Swift visitor checker independently derives
+the emitted value of a compiled literal `Set<Int>` or `Set<Bool>` assignment
+from its typed members. A mutation that changes the Swift set literal and the
+emitter's own write metadata together is rejected. This establishes the
+literal-value output check for those two set types, not set expressions with
+computed members or the Swift `Set` implementation (which remains trusted).
+For the nested-addition subset, the TLA+ action-output
+checker matches the actual nested addition tree and every emitted overflow
+guard against the compiled identities; changing a value or guard fails. The
+generated-Swift arithmetic checker is exercised on the same compiled action, and the
+parameterized TLAPS theorem supplies the guard's semantic rule. For a single
+captured addition assignment with only a true guard and unchanged frame, the
+same output checker now independently derives the ordered overflow predicates,
+operand tuples, operation labels, and action-level aggregate failure from the
+compiled tree, then checks their declarations in the actual module. Separate
+mutations of each declaration are rejected. The renderer's declaration list is
+used only to locate symbols renamed to avoid collisions; its values are not the
+expected semantics. The same checker also recognizes a sequential `#spec` `Do`
+with a program-counter guard and control write, and requires both the detailed
+overflow and action-level aggregate predicates to select that control location.
+Paired mutations of the actual module and declaration list are rejected for
+both predicates. The output checker also collects emitted action-level
+aggregate failures, derives each parameterized failure reference from the
+compiled binding plan, checks the actual module's global negated conjunction,
+and requires the TLC configuration to select that invariant. Paired
+module-and-metadata mutations replacing the global check with `TRUE` or
+narrowing a bound argument domain are rejected. This module composition assumes
+each action-level failure predicate has been established separately; it does
+not prove the unchecked constructors' predicates. The new parameterized rule
+in `SingleAssignment.tla` proves, for any one binding domain and Boolean
+failure predicate, that no candidate fails exactly when the emitted
+existential-failure check is false. Its two focused obligations and all 1,728
+obligations in `SingleAssignment.tla` passed locally with fingerprint reuse
+disabled, using the current official `1.6.0-pre` archive (SHA-256
+`f1f9cf19bc9f0a4fbdaa0ba325b1d00c8eb92426afc92e8442cba4e434a01309`,
+revision `5f5037f`) and pinned arm64 Z3 4.15.4. This archive differs from the
+CI-pinned revision, so this is diagnostic evidence, not hosted admission.
+The formal meaning and rendering of arbitrary binding-domain expressions,
+multi-binding quantifier nesting, and unchecked action constructors remain
+open. Other sequential and branching actions remain uncovered.
+The output checker and shared `TLAValue` integer-literal serialization remain
+project-owned trusted components until their own correctness is proved.
 
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
@@ -2060,6 +2418,12 @@ conditional *control-shape* link for every compiled action tree, conditional
 on ordinary Swift semantics for the pinned kernel and on expression emission
 denoting the compiled condition. Source lowering, arbitrary branch failures,
 and the independent TLA+ conditional output still need their general links.
+The production TLA+ output check now reconstructs direct Boolean state,
+bound, and literal guards and `ifElse` branch structure from the compiled
+action before accepting the rendered module. Focused mutations replacing a
+condition with `FALSE` or dropping a guard are rejected. This is an actual
+output-syntax link for those direct operands, not a proof of general Boolean
+expression rendering, condition typing, or branch/failure semantics.
 
 For every compiled `or` node, the output checker additionally requires the
 complete emitted body to call the shared ordered alternative visitor with
@@ -2344,25 +2708,12 @@ interpretation of the visitors remain trusted. This instance
 does not establish arbitrary sequence-expression lowering, initialization,
 or temporal fidelity.
 
-SequenceEditPreservationProof.tla imports the exact generated TLA+ module for
-a `#spec` array removal and prefix. For arbitrary integer sequences and valid
-indices, it uses the shared indexed prefix rule and proves the independent
-removal value equals its lowered `SubSeq` form; it then connects both complete
-labeled actions, the two initial states, index/length failure payloads, and
-the selected evaluation check to the emitted module, including both aggregate
-failure predicates. Its invalid-initial-state negative control fails
-if the evaluation check is omitted. The focused generated-machine test pins
-both complete Swift update visitors and checks that replacing either shared
-checked sequence operation breaks its output witness; it executes both
-successful and failing transitions. The generation-time verifier also
-reconstructs typed Int/Bool removal and prefix operands from their compiled
-expressions; type-correct mutations of the sequence source, removal index,
-and prefix length passed before this check and are now rejected. Its
-obligations and the shared prefix rule passed locally; hosted evidence is
-pending. The Swift compiler/runtime and the shared array operations'
-implementation of the stated one-based
-sequence rules remain trusted. The proof covers these two operators and this emitted model, not
-arbitrary expression composition, initialization plans, or temporal claims.
+`SequenceRemoveRule.tla` proves the removal domain and value law for every
+sequence over an arbitrary element set and each valid index. The focused
+generated-machine regression still checks successful and failing removal and
+prefix transitions and rejects changed visitor operations or operands. The
+actual lowerer, both general output links, and failure composition for these
+operators remain open; the Swift array operations remain trusted.
 
 For a direct `memberOf(RandomSubset(upTo: k, from: S))` initializer, the
 exhaustive source rule admits every member of `S` when `k > 0`, and none when
@@ -2463,6 +2814,104 @@ Record exactly which parser, macro-expansion, Swift compiler/runtime, TLA+
 parser/TLC, PlusCal translator, serialization, and proof-checker facts remain
 assumptions. Do not describe a result as a universal guarantee if a backend
 or text-generation boundary remains unproved or unchecked.
+
+The accepted `CheckedRecordConversion` model narrows an `Int` record field to
+the finite case `0`. Its generated Swift machine succeeds at `0`, then reports
+`noMatchingCase` without committing a state when the field is `1`. The output
+test pins the complete generated TLA+ module and the actual generated Swift
+visitor; a changed-case control breaks the Swift pin.
+`CheckedRecordConversionProof.tla` imports that exact module and proves the
+independent initial-state, complete labeled-step, checked-view failure, and
+selected `__SwiftTLAEvaluationOK` rules under the source record-domain
+assumption. Its omitted-guard control adds an invalid edge. All nine TLAPS
+obligations pass locally. This closes this named record-narrowing fixture's
+source-to-output links under the trusted Swift compiler/runtime, macro parser,
+token pin, TLAPS backend, and typed-record premise. It does not prove the
+general checked-view emitter, nested or effectful projections, other source
+value shapes, or a hosted TLC/native failure-verdict comparison.
+
+The accepted `IncompatibleCheckedRecordView` model asks for a record view of
+an `Int` state value. Its independent source rule reports `noMatchingCase`
+without a labeled successor. The generated Swift machine throws that failure
+without changing state. The output test pins the entire generated TLA+ module
+and its selected `__SwiftTLAEvaluationOK` check; the renderer now emits a
+total `FALSE` shape guard instead of applying `DOMAIN` to the integer.
+`IncompatibleCheckedRecordViewProof.tla` imports the pinned module and proves
+the initial state, complete labeled steps, failure verdict, and an omitted-guard
+control that adds an edge. All nine TLAPS obligations pass locally. This closes
+the named scalar-to-record mismatch under the Swift compiler/runtime, output
+pin, and TLAPS backend assumptions. Other nested shape mismatches, mixed source
+unions, and general checked-view emission remain unproved; there is no hosted
+TLC/native failure-verdict parity claim for this fixture yet.
+
+The accepted `FiniteCheckedRecordView` model makes the same checked request
+from a finite enum whose sole value is represented by the integer `1`.
+The source rule reports `noMatchingCase` and no successor. The generated Swift
+machine throws without changing state; the test pins the complete emitted
+TLA+ module and selected evaluation check. The renderer now resolves the
+named finite domain before constructing its shape predicate, so this
+disjoint domain produces `FALSE` rather than the undefined `DOMAIN level`.
+`FiniteCheckedRecordViewProof.tla` imports that exact module and proves the
+initial state, complete labeled steps, failure verdict, and an omitted-guard
+control that adds an edge (nine local TLAPS obligations). This closes this
+finite-enum instance under the macro parser, Swift compiler/runtime, output
+pin, finite-domain encoding, and TLAPS backend assumptions. The generated
+Swift visitor is exercised but not independently pinned; arbitrary finite
+domains, general checked-view emission, and hosted failure-verdict parity
+remain unproved.
+
+The accepted `NestedCheckedRecordView` model checks an `Int` field through a
+record view that expects a sequence. Generated Swift reports `noMatchingCase`
+without changing state. The output test pins the entire emitted TLA+ module and
+its selected evaluation check; the field's compiled source type makes the
+nested guard `FALSE`, avoiding `DOMAIN` on the integer. The independent source
+rule and exact module agree on initial state, complete labeled steps, and
+failure verdict in `NestedCheckedRecordViewProof.tla` (nine local obligations).
+Removing the guard adds an edge. This closes only this named nested-field case
+under the same Swift compiler/runtime, output-pin, and TLAPS assumptions.
+Other nested shapes, mixed source unions, and the general checked-view rule
+remain open; no hosted TLC/native failure-verdict parity is claimed here.
+
+The accepted `NestedCheckedSequenceView` model starts with `numbers = <<1>>`
+and checks it as a sequence of sequences. Generated Swift reports
+`noMatchingCase` without changing state. The output test pins the generated
+Swift update visitor and the entire generated TLA+ module with its selected
+evaluation check; changing the Swift failure branch breaks that pin. The
+source array element type makes the nested predicate `FALSE` for each `Int`,
+avoiding a partial `DOMAIN` on an element.
+`NestedCheckedSequenceViewProof.tla` imports the exact module and proves the
+independent initial state, labeled steps, and failure verdict for every state
+with `numbers \in Seq(Int)`; it proves both empty and nonempty inputs satisfy
+that premise. Its omitted-guard control adds an edge. All eleven TLAPS
+obligations pass locally. The generated Swift visitor is token-pinned, while
+the native runtime test exercises only the concrete initial state `<<1>>`.
+This closes the named sequence-element case under the macro parser, Swift
+compiler/runtime, tokenized output-pin, and TLAPS backend assumptions; it
+does not prove a general Swift emitter rule.
+Set, tuple, and function predicates now pass known source element types to
+their nested shape checks. A focused regression rejects partial `DOMAIN` and
+`Len` uses for disjoint `Int`-to-sequence children and returns `FALSE` for a
+known tuple-arity mismatch. This is a formal-predicate totality check, not an
+accepted-model output link or theorem for those collection forms. Union-typed
+source elements, general checked-view emission, and hosted TLC/native
+failure-verdict parity remain open.
+
+The accepted NestedCheckedSetView model supplies one set-form output link.
+The native machine reports noMatchingCase on its nonempty integer-set initial
+state without committing a transition. The test pins the complete generated
+TLA+ module, selected evaluation check, and generated Swift visitor; changing
+the visitor's thrown failure to a returned sequence breaks its token pin. The
+renderer previously lost that failure under Cardinality, leaving a partial
+TLA+ CASE and no intrinsic check; the focused regression failed before the
+operand-failure propagation repair. NestedCheckedSetViewProof.tla imports the
+exact module and proves initial states, complete labeled steps, the selected
+failure verdict, and an omitted-guard negative control for every integer
+set. It proves empty-set cardinality explicitly; all 14 obligations pass
+locally. This closes the named set-view slice under the macro parser, Swift
+compiler/runtime and standard collection semantics, tokenized output pin,
+and TLAPS backend assumptions. The native runtime test executes only the
+nonempty initial state. Other set expressions, general checked-view Swift
+emission, and hosted TLC/native failure-verdict parity remain open.
 
 ## Independent evidence
 
