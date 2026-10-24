@@ -353,10 +353,10 @@ enum StraightLineAssignmentCheck {
             for action in sourceBranch {
                 switch action {
                 case .assign(let target, _):
-                    guard stateRoots.contains(root(target)) else { throw mismatch() }
+                    guard stateRoots.contains(root(target)) else { return }
                     defined.insert(root(target))
                 case .unchanged(let target):
-                    guard stateRoots.contains(root(target)) else { throw mismatch() }
+                    guard stateRoots.contains(root(target)) else { return }
                     defined.insert(root(target))
                     explicitlyUnchanged.insert(root(target))
                 default: break

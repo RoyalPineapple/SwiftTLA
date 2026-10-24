@@ -62,6 +62,19 @@ struct OrderedAssignmentLoweringTests {
                     try parseSpecTestClosure(changed), parsed: parsed, enums: enums)
             }
         }
+
+        let labeled = source.replacingOccurrences(of: "scope.sharedVar(initial: 1)",
+            with: "scope.sharedVar(label: \"First\", initial: 1)")
+        let labeledSyntax = try parseSpecTestClosure(labeled)
+        let labeledModel = SpecParser.parseSpecClosure(named: "OrderedInt", labeledSyntax,
+            sourceTypes: .init(enums: enums))
+        #expect(labeledModel.diagnostics.isEmpty)
+        try OrderedIntSourceSyntaxCheck.verify(labeledSyntax, parsed: labeledModel, enums: enums)
+        let wrongLabeledInitial = labeled.replacingOccurrences(of: "initial: 1", with: "initial: 3")
+        #expect(throws: CompilationDiagnostic.self) {
+            try OrderedIntSourceSyntaxCheck.verify(try parseSpecTestClosure(wrongLabeledInitial),
+                parsed: labeledModel, enums: enums)
+        }
     }
 
     private enum Symbol: Equatable {

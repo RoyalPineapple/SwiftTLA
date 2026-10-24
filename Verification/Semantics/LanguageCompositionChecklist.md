@@ -340,10 +340,21 @@ For the stated ordered-`Int` class, `SingleAssignment.tla` proves initial-set,
 labeled-step, and failure composition from the rule premises. The proof does
 not inspect emitted files.
 
-`OrderedIntSourceSyntaxCheck` checks the authored syntax against the parsed
-source model. Its mutation test changes initial values, labels, reads, targets,
-and write order. `StraightLineAssignmentCheck` checks the lowerer and rejects
-changed operands, writes, and control locations.
+`OrderedIntSourceSyntaxCheck` checks the recognized scoped, sequential `Int`
+syntax against the parsed source model, including optional presentation labels
+on shared variables. Its mutation test changes initial values, step identities,
+reads, targets, and write order when `@TLAModel` invokes
+`TLASpecVerifier.parseAndVerify`. Other accepted spellings that the syntax
+checker does not recognize are not covered by this source-syntax link.
+Standalone `#spec` expansion instead runs `SpecExpressionMacro` and its
+`DSLRewriter` before the `TLASpec` builder; it does not invoke that syntax
+check. The first-slice theorem therefore starts at the parsed source model,
+not at every authored `#spec` spelling. The standalone rewrite and its
+source-to-model link remain SwiftTLA-owned proof obligations; this route must
+not inherit the hosted model-macro claim by analogy.
+
+`StraightLineAssignmentCheck` checks the lowerer and rejects changed operands,
+writes, and control locations.
 
 The Swift output check reads the emitted initializer and rejects swapped
 addition operands, missing failure handling, and an early return. The TLA+

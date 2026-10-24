@@ -909,7 +909,7 @@ struct CompiledTLARenderer {
     private func arithmeticTreeIsRepeatable(_ expression: CompiledExpression) -> Bool {
         switch expression.operation {
         case .add, .subtract, .multiply, .negate:
-            return expression.resultType == .int
+            return (expression.resultType == .int || expression.resultType == .unknown)
                 && expression.children.count == (expression.operation == .negate ? 1 : 2)
                 && expression.children.allSatisfy(arithmeticTreeIsRepeatable)
         case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
