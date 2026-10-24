@@ -143,6 +143,27 @@ struct AlternativeTraversalTests {
         }
     }
 
+    @Test("Fallible action alternatives retain source order through normalization")
+    func fallibleBranchwiseNormalization() throws {
+        let variables = ["divisor", "x", "y"].map { NamedVar(name: $0, initial: .int(0)) }
+        let first = ActionExpr.assign(.named("x"), .divide(.int(1), .variable("divisor")))
+        let second = ActionExpr.assign(.named("x"), .int(2))
+        let continuation = ActionExpr.assign(.named("y"), .add(.variable("x"), .int(1)))
+        let source = ActionExpr.and(.or(first, second), continuation)
+        let normalized = ActionNormalization.complete(source, variables: variables)
+        try StraightLineAssignmentCheck.verifyNormalization(source, normalized: normalized,
+            stateRoots: ["divisor", "x", "y"], at: "actions.pick.normalization")
+        _ = try TLASpec(name: "FallibleBranchwiseNormalization", variables: variables,
+            actions: [.init(name: "pick", body: source)], invariants: []).compile()
+
+        let reordered = ActionNormalization.complete(.and(.or(second, first), continuation),
+            variables: variables)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyNormalization(source, normalized: reordered,
+                stateRoots: ["divisor", "x", "y"], at: "actions.pick.normalization")
+        }
+    }
+
     @Test("Scalar alternatives retain both branches through compilation and TLA+ emission")
     func renderedAlternativesKeepBothBranches() throws {
         let specification = TLASpec(name: "ScalarAlternatives", variables: [

@@ -219,7 +219,12 @@ cannot establish source-order behavior.
   shape gate rejects an alternative-producing left conjunct; lowering moves
   continuations inside `or` and `existsAction` branches, and focused generated-
   machine tests exercise a success alongside a later failure. The general
-  source-to-branchwise-lowering proof, a proof that the shape gate discharges
+  source-to-branchwise-lowering proof remains open. For action trees built from
+  `assign`, `unchanged`, `guard_`, `and`, and `or`, the real normalizer now checks
+  ordered branch words, unchanged expression sites, and complete frames even
+  when an expression can fail; a swapped fallible branch is rejected. This
+  structural check does not establish expression evaluation, binding, or
+  action semantics. A proof that the shape gate discharges
   the single-candidate premise for every accepted nested action, and both
   arbitrary-expression output links remain open. The Swift visitor kernel and
   structural output checker remain project-owned trusted boundaries.

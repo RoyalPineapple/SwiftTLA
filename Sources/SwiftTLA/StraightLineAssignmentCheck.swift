@@ -167,6 +167,12 @@ enum StraightLineAssignmentCheck {
         case conditional(Term)
     }
 
+    private enum BranchVisit {
+        case action(ActionExpr)
+        case conjunction
+        case alternative
+    }
+
     private enum Visit {
         case action(ActionExpr)
         case unbind(String)
@@ -185,6 +191,8 @@ enum StraightLineAssignmentCheck {
 
     static func verifyNormalization(_ source: ActionExpr, normalized: ActionExpr,
                                     stateRoots: Set<String>, at path: String) throws {
+        try verifyOrderedBranchNormalization(source, normalized: normalized,
+            stateRoots: stateRoots, at: path)
         func value(_ expression: StateExpr, bindings: [String: Term]) -> Term? {
             switch expression {
             case .variable(let name):
@@ -279,6 +287,91 @@ enum StraightLineAssignmentCheck {
                 actual: "action normalization changed a branch, assignment, or frame",
                 nextSafeAction: "Report this action-normalization failure."
             )
+        }
+    }
+
+    private static func verifyOrderedBranchNormalization(
+        _ source: ActionExpr, normalized: ActionExpr, stateRoots: Set<String>, at path: String
+    ) throws {
+        func words(_ action: ActionExpr) -> [[ActionExpr]]? {
+            var pending: [BranchVisit] = [.action(action)]
+            var results: [[[ActionExpr]]] = []
+            while let task = pending.popLast() {
+                switch task {
+                case .action(let node):
+                    switch node {
+                    case .assign, .unchanged, .guard_:
+                        results.append([[node]])
+                    case .and(let left, let right):
+                        pending.append(.conjunction)
+                        pending.append(.action(right))
+                        pending.append(.action(left))
+                    case .or(let left, let right):
+                        pending.append(.alternative)
+                        pending.append(.action(right))
+                        pending.append(.action(left))
+                    case .existsAction, .ifElse, .define:
+                        // shortcut: binder and conditional trees need their own proved branch rules.
+                        return nil
+                    }
+                case .conjunction:
+                    let right = results.removeLast()
+                    let left = results.removeLast()
+                    results.append(left.flatMap { prefix in
+                        if prefix.last == .guard_(.value(.bool(false))) { return [prefix] }
+                        return right.map { prefix + $0 }
+                    })
+                case .alternative:
+                    let right = results.removeLast()
+                    let left = results.removeLast()
+                    results.append(left + right)
+                }
+            }
+            return results.count == 1 ? results[0] : nil
+        }
+
+        guard let expected = words(source) else { return }
+        func mismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: path, expected: "the source branch order, expression sites, and complete state frame",
+                actual: "normalization changed an action branch, evaluation order, or frame",
+                nextSafeAction: "Report this action-normalization failure.")
+        }
+        guard let actual = words(normalized), actual.count == expected.count else { throw mismatch() }
+        func root(_ target: ActionTarget) -> String {
+            switch target {
+            case .named(let name): name
+            case .programCounter: CompilerControlSymbol.programCounter.rawValue
+            case .procedureStack: CompilerControlSymbol.stack.rawValue
+            }
+        }
+        for (sourceBranch, normalizedBranch) in zip(expected, actual) {
+            guard normalizedBranch.count >= sourceBranch.count,
+                  Array(normalizedBranch.prefix(sourceBranch.count)) == sourceBranch else { throw mismatch() }
+            var defined: Set<String> = []
+            var explicitlyUnchanged: Set<String> = []
+            for action in sourceBranch {
+                switch action {
+                case .assign(let target, _):
+                    guard stateRoots.contains(root(target)) else { throw mismatch() }
+                    defined.insert(root(target))
+                case .unchanged(let target):
+                    guard stateRoots.contains(root(target)) else { throw mismatch() }
+                    defined.insert(root(target))
+                    explicitlyUnchanged.insert(root(target))
+                default: break
+                }
+            }
+            let missing = stateRoots.subtracting(defined)
+            let suffix = normalizedBranch.dropFirst(sourceBranch.count)
+            let frames = suffix.compactMap { action -> String? in
+                if case .unchanged(let target) = action { return root(target) }
+                return nil
+            }
+            let disabled = sourceBranch.last == .guard_(.value(.bool(false)))
+            guard (disabled && suffix.isEmpty) || (!disabled && frames.count == suffix.count &&
+                  missing.isSubset(of: Set(frames)) &&
+                  Set(frames).subtracting(missing).isSubset(of: explicitlyUnchanged)) else { throw mismatch() }
         }
     }
 
