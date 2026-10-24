@@ -1530,7 +1530,8 @@ not exist. `GuardedInitialHistoriesAgree` compares separate source and generated
 histories at every prefix. `OrderedSequentialIntProgramCompose` now derives
 initial-set equality from those histories before it adds the hidden program
 counter. It does not assume equal initial sets. These are general rules, not
-fixture-specific counts. All 1,931 obligations pass locally. Hosted evidence
+fixture-specific counts. The full module passes local TLAPS `--strict --nofp`,
+including the sequential checking-outcome rule. Hosted evidence
 for this addition remains pending.
 `OrderedSequentialIntProgramCompose` takes the derived complete
 initial-state sets and selected initial-failure payloads into the same theorem

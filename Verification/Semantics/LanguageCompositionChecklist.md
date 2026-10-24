@@ -215,9 +215,10 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
 `README.md`. This is **not** coverage of other accepted constructors.
 
 - [x] Finish the full local proof for the current dependent-initializer
-  extension. TLAPS `--nofp` proved all 1,931 obligations in
-  `SingleAssignment.tla`; the ordered-assignment and generated-initialization
-  suites passed locally. This is not hosted evidence for the extension.
+  and checking-outcome rules. TLAPS `--strict --nofp` proved the complete
+  `SingleAssignment.tla` module; the ordered-assignment and
+  generated-initialization suites passed locally before the checking-outcome
+  rule was added. This is not hosted evidence for the extension.
 - [x] Baseline literal-initializer slice: ordinary CI, semantic-proof
   diagnostic, and full validation passed on frozen PR #397 revision
   `318e81f4b88acdcab0fe92224fee95a4d5c9e5b4`. The dependent-initializer
