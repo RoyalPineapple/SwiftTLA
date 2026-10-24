@@ -163,6 +163,10 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   common history and lifts it through the hidden program counter. Matching
   each accepted initializer expression's value and definedness function to
   its actual emitted Swift/TLA+ remains an output-link obligation.
+- [x] Check nested dependent `Int` addition's actual TLA+ initial-failure
+  relations in source order. The emitted-output checker rejects swapped
+  failure sites; this local regression does not establish every initializer
+  expression's Swift/TLA+ output link.
 - [ ] Then close **one missing link at a time** in the inventory above. Do not
   add upstream families or more named proof fixtures in place of rule coverage.
 

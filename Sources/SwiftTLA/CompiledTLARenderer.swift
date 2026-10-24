@@ -634,9 +634,7 @@ struct CompiledTLARenderer {
             var precedingGuards: [String] = []
             for site in try arithmeticSites(value, stateNames: stateNames) {
                 let failure = "~(\(site.guard_))"
-                let predicate = precedingGuards.isEmpty
-                    ? failure
-                    : "(\(precedingGuards.joined(separator: " /\\ ")) /\\ \(failure))"
+                let predicate = preceded(failure, by: precedingGuards)
                 failures.append(.init(predicate: predicate, operands: site.operands,
                     kind: .overflow(site.operation)))
                 precedingGuards.append(site.guard_)

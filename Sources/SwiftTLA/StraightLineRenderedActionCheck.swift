@@ -395,8 +395,9 @@ enum StraightLineRenderedActionCheck {
                     var preceding: [String] = []
                     for site in tree.sites {
                         let suffix = occurrence == 0 ? "\(index)" : "\(index)_\(occurrence)"
-                        var predicate = preceding.isEmpty ? "~(\(site.guardText))"
-                            : "(\(preceding.joined(separator: " /\\ ")) /\\ ~(\(site.guardText)))"
+                        var predicate = preceding.reversed().reduce("~(\(site.guardText))") { value, guard_ in
+                            "(IF \(guard_) THEN \(value) ELSE FALSE)"
+                        }
                         var operands = site.operands
                         for earlier in definitions[..<position].reversed() {
                             predicate = "(LET \(earlier.name) == \(earlier.value) IN \(predicate))"

@@ -51,7 +51,7 @@ struct SequentialDependentIntInitialProofModel {
         #spec("SequentialDependentIntInitialProofModel") {
             let algorithm = Algorithm(scoped: { scope in
                 let first = scope.sharedVar(initial: 1)
-                let second = scope.sharedVar(initial: first + 2)
+                let second = scope.sharedVar(initial: (first + 2) + 1)
                 Do(Step.advance) {
                     Assign(first, to: second + 1)
                 }
