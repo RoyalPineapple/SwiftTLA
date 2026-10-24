@@ -7,6 +7,45 @@ import SwiftSyntax
 
 @Suite("Ordered assignment lowering")
 struct OrderedAssignmentLoweringTests {
+    @Test("The #spec rewrite preserves every ordered Int initializer and step")
+    func orderedIntSpecRewriteRejectsDrift() throws {
+        let source = """
+        {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(initial: 1)
+                let second = scope.sharedVar(_name: "second", initial: first + 2)
+                Do(Step.copy) {
+                    Assign(first, to: second + 1)
+                    Assign(second, to: first)
+                }
+            })
+            algorithm
+        }
+        """
+        let expanded = source
+            .replacingOccurrences(of: "Algorithm(scoped:",
+                with: "Algorithm(_name: \"algorithm\", scoped:")
+            .replacingOccurrences(of: "scope.sharedVar(initial: 1)",
+                with: "scope.sharedVar(_name: \"first\", initial: 1)")
+        let original = try parseSpecTestClosure(source)
+        try OrderedIntSourceSyntaxCheck.verifyRewrite(original,
+            rewritten: try parseSpecTestClosure(expanded))
+        for changed in [
+            expanded.replacingOccurrences(of: "_name: \"algorithm\"", with: "_name: \"other\""),
+            expanded.replacingOccurrences(of: "_name: \"first\"", with: "_name: \"other\""),
+            expanded.replacingOccurrences(of: "second + 1", with: "first + 1"),
+            expanded.replacingOccurrences(of: "Assign(second, to: first)",
+                with: "Assign(first, to: second)"),
+            expanded.replacingOccurrences(of: "\n    algorithm\n", with: "\n    other\n"),
+        ] {
+            #expect(changed != expanded)
+            #expect(throws: CompilationDiagnostic.self) {
+                try OrderedIntSourceSyntaxCheck.verifyRewrite(original,
+                    rewritten: try parseSpecTestClosure(changed))
+            }
+        }
+    }
+
     @Test("Authored sequential Int syntax agrees with its parsed initial values and ordered steps")
     func authoredSequentialIntSyntaxRejectsDrift() throws {
         let source = """

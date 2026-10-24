@@ -34,7 +34,94 @@ enum OrderedIntSourceSyntaxCheck {
         }
     }
 
-    private static func components(of call: FunctionCallExprSyntax, enums: [SourceEnum]) -> [Component]? {
+    static func verifyRewrite(_ source: ClosureExprSyntax, rewritten: ClosureExprSyntax) throws {
+        guard source.statements.count == rewritten.statements.count else {
+            throw drift("specification")
+        }
+        for (original, expanded) in zip(source.statements, rewritten.statements) {
+            guard case .decl(let declaration) = original.item,
+                  let variable = declaration.as(VariableDeclSyntax.self),
+                  variable.bindings.count == 1,
+                  let binding = variable.bindings.first,
+                  let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
+                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm",
+                  components(of: call, enums: nil) != nil else { continue }
+            guard case .decl(let outputDeclaration) = expanded.item,
+                  let output = outputDeclaration.as(VariableDeclSyntax.self),
+                  output.bindings.count == 1,
+                  let outputBinding = output.bindings.first,
+                  outputBinding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName == name,
+                  var outputCall = outputBinding.initializer?.value.as(FunctionCallExprSyntax.self),
+                  let identity = outputCall.arguments.first,
+                  identity.label?.text == "_name",
+                  identity.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue == name,
+                  let sourceBody = call.arguments.first(where: { $0.label?.text == "scoped" })?
+                    .expression.as(ClosureExprSyntax.self),
+                  var outputBody = outputCall.arguments.first(where: { $0.label?.text == "scoped" })?
+                    .expression.as(ClosureExprSyntax.self),
+                  sourceBody.statements.count == outputBody.statements.count else {
+                throw drift(name)
+            }
+
+            var normalizedStatements: [CodeBlockItemSyntax] = []
+            for (sourceItem, outputItem) in zip(sourceBody.statements, outputBody.statements) {
+                var normalized = outputItem
+                if case .decl(let sourceDecl) = sourceItem.item,
+                   let sourceVar = sourceDecl.as(VariableDeclSyntax.self),
+                   let sourceBinding = sourceVar.bindings.first,
+                   sourceVar.bindings.count == 1,
+                   let root = sourceBinding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
+                   let sourceCall = sourceBinding.initializer?.value.as(FunctionCallExprSyntax.self),
+                   sourceCall.arguments.contains(where: { $0.label?.text == "_name" }) == false,
+                   case .decl(let outputDecl) = outputItem.item,
+                   var outputVar = outputDecl.as(VariableDeclSyntax.self),
+                   var outputBinding = outputVar.bindings.first,
+                   var outputInitializer = outputBinding.initializer,
+                   var outputVariableCall = outputInitializer.value.as(FunctionCallExprSyntax.self),
+                   let added = outputVariableCall.arguments.first,
+                   added.label?.text == "_name",
+                   added.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue == root {
+                    outputVariableCall.arguments = LabeledExprListSyntax(outputVariableCall.arguments.dropFirst())
+                    outputInitializer.value = ExprSyntax(outputVariableCall)
+                    outputBinding.initializer = outputInitializer
+                    outputVar.bindings = PatternBindingListSyntax([outputBinding])
+                    normalized.item = .decl(DeclSyntax(outputVar))
+                }
+                guard tokens(sourceItem) == tokens(normalized) else { throw drift(name) }
+                normalizedStatements.append(normalized)
+            }
+            outputBody.statements = CodeBlockItemListSyntax(normalizedStatements)
+            guard tokens(sourceBody) == tokens(outputBody) else { throw drift(name) }
+            outputCall.arguments = LabeledExprListSyntax(outputCall.arguments.dropFirst().map { argument in
+                guard argument.label?.text == "scoped" else { return argument }
+                var result = argument
+                result.expression = ExprSyntax(outputBody)
+                return result
+            })
+            guard tokens(call) == tokens(outputCall) else { throw drift(name) }
+            for (sourceItem, outputItem) in zip(source.statements, rewritten.statements) {
+                guard case .expr(let expression) = sourceItem.item,
+                      expression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == name
+                else { continue }
+                guard tokens(sourceItem) == tokens(outputItem) else { throw drift(name) }
+            }
+        }
+    }
+
+    private static func tokens(_ syntax: some SyntaxProtocol) -> [String] {
+        syntax.tokens(viewMode: .sourceAccurate).map(\.text)
+    }
+
+    private static func drift(_ name: String) -> CompilationDiagnostic {
+        CompilationDiagnostic(code: .unsupportedGeneratedValueShape,
+            stage: .validation, path: "algorithms.\(name).macroRewrite",
+            expected: "the same ordered Int algorithm with only bound identity arguments added",
+            actual: "the expanded #spec changes an identity, initializer, step, or assignment",
+            nextSafeAction: "Report this #spec expansion failure.")
+    }
+
+    private static func components(of call: FunctionCallExprSyntax, enums: [SourceEnum]?) -> [Component]? {
         guard call.arguments.allSatisfy({ $0.label?.text == "label" || $0.label?.text == "scoped" }),
               let closure = call.arguments.first(where: { $0.label?.text == "scoped" })?
                 .expression.as(ClosureExprSyntax.self),
@@ -76,9 +163,15 @@ enum OrderedIntSourceSyntaxCheck {
                   let labelAccess = labelExpression.as(MemberAccessExprSyntax.self),
                   let enumName = labelAccess.base?.as(DeclReferenceExprSyntax.self)?
                     .baseName.sourceIdentifierName,
-                  case .string(let label) = enums.first(where: { $0.typeName == enumName })?
-                    .value(named: labelAccess.declName.baseName.sourceIdentifierName),
                   let body = step.trailingClosure, !body.statements.isEmpty else { return nil }
+            let label: String
+            if let enums {
+                guard case .string(let value) = enums.first(where: { $0.typeName == enumName })?
+                    .value(named: labelAccess.declName.baseName.sourceIdentifierName) else { return nil }
+                label = value
+            } else {
+                label = "\(enumName).\(labelAccess.declName.baseName.sourceIdentifierName)"
+            }
             var assignments: [(root: String, value: StateExpr)] = []
             for statement in body.statements {
                 guard case .expr(let expression) = statement.item,
