@@ -167,6 +167,11 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   relations in source order. The emitted-output checker rejects swapped
   failure sites; this local regression does not establish every initializer
   expression's Swift/TLA+ output link.
+- [x] Emit pure checked-arithmetic definedness as the ordered guard history
+  used by `OrderedInitialGuardsPreserveFirstFailure`, so a later guard cannot
+  evaluate an overflowing earlier result. The independent rendered-output
+  check and related local regressions pass; hosted evidence for this revision
+  remains outstanding.
 - [x] Independently decode the actual generated Swift for deterministic
   `Int` initializer leaves and nested checked additions. The checker compares
   its ordered operations and operands to the compiled tree and rejects a

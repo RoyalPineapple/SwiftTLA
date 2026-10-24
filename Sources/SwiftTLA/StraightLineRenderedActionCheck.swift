@@ -18,7 +18,9 @@ enum StraightLineRenderedActionCheck {
 
         var defined: String {
             let guards = sites.map(\.guardText)
-            return guards.count == 1 ? guards[0] : "(\(guards.joined(separator: " /\\ ")))"
+            return guards.count == 1 ? guards[0] : guards.reversed().reduce("TRUE") { result, guard_ in
+                "(IF \(guard_) THEN \(result) ELSE FALSE)"
+            }
         }
     }
 
