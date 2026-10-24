@@ -1468,13 +1468,17 @@ source and resolved initial `Int` literals and control location. The production
 Swift and TLA+ emitters check their actual initial bindings, action bodies,
 and selected addition-failure declarations. Wrong value, location, read order,
 termination body, and omitted-failure mutations are rejected by focused tests.
-For direct `let algorithm = Algorithm(scoped:)` declarations with literal `Int`
-`scope.sharedVar` initializers and nonempty `Do` bodies of root `Assign`s, the
+For direct `let algorithm = Algorithm(scoped:)` declarations with `Int`
+`scope.sharedVar` initializers built from literals, earlier-variable reads, and
+addition, plus nonempty `Do` bodies of root `Assign`s, the
 macro independently reads the authored syntax and checks the parsed source
 model's initial values, registered enum-label values, assignment targets,
 expression trees, and statement order. Syntax mutations to each are rejected.
 Other accepted spellings and constructs still compile but are not certified by
 this syntax check; its recognition and enum metadata remain trusted code.
+The added dependent-initializer recognition closes only syntax to parsed source:
+compiled initialization, both emitted expressions, and selected initial-failure
+outcomes remain open for those expressions.
 `OrderedSequentialIntProgramCompose` proves the independent initial, labeled
 edge, and ordered-failure rules compose over any finite number of steps,
 including the terminal self-loop; its new focused TLAPS obligations pass

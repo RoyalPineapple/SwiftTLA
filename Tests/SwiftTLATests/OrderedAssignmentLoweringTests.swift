@@ -13,7 +13,7 @@ struct OrderedAssignmentLoweringTests {
         {
             let algorithm = Algorithm(scoped: { scope in
                 let first = scope.sharedVar(initial: 1)
-                let second = scope.sharedVar(initial: 2)
+                let second = scope.sharedVar(initial: first + 2)
                 Do(Step.copy) {
                     Assign(first, to: second + 1)
                     Assign(second, to: first)
@@ -48,6 +48,7 @@ struct OrderedAssignmentLoweringTests {
 
         for changed in [
             source.replacingOccurrences(of: "initial: 1", with: "initial: 3"),
+            source.replacingOccurrences(of: "initial: first + 2", with: "initial: first + 3"),
             source.replacingOccurrences(of: "Do(Step.copy)", with: "Do(Step.finish)"),
             source.replacingOccurrences(of: "Assign(first, to: second + 1)",
                 with: "Assign(first, to: first + 1)"),
