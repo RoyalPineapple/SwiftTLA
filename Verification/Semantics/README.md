@@ -2073,6 +2073,14 @@ conditional on each branch producing the specified outcome. They do not prove
 that the actual lowerer or either emitter computes those outcomes for arbitrary
 fallible expressions; those implementation links remain open.
 
+For an emitted action whose root is an `or` tree, the TLA+ output checker now
+rebuilds each parent aggregate-failure predicate from its two child predicates
+using ordered `IF` selection and verifies the actual declaration selected by
+the checking invariant. A mutation replacing that declaration with `TRUE`
+fails after previously passing. This checks the `or` parent rule conditional
+on correct child predicates; it does not verify detailed failure payloads or
+an `or` nested beneath another action constructor.
+
 `BranchwiseConjunctionFailureOrderProof.tla` closes that ordering for one
 accepted `#spec` instance with eight initial states. Its independent source
 rule visits the first `Either` branch and its shared continuation before the
