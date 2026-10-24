@@ -952,6 +952,53 @@ THEOREM DependentDeterministicInitializationComposes ==
     BY InitialEqualityMatchesSingletonEnumeration,
         SMT DEF ExtendEnumeratedInitialStates
 
+InitialGuardHistory(guards, defined) ==
+    /\ defined[0] = TRUE
+    /\ \A index \in 1..Len(guards) :
+        defined[index] = (IF defined[index - 1] THEN guards[index] ELSE FALSE)
+
+SourceInitialFailureAt(guards, index) ==
+    /\ ~guards[index]
+    /\ \A earlier \in 1..(index - 1) : guards[earlier]
+
+RenderedInitialFailureAt(guards, defined, index) ==
+    defined[index - 1] /\ ~guards[index]
+
+THEOREM OrderedInitialGuardsPreserveFirstFailure ==
+    ASSUME NEW guards \in Seq(BOOLEAN),
+           NEW defined \in [0..Len(guards) -> BOOLEAN],
+           InitialGuardHistory(guards, defined)
+    PROVE \A index \in 1..Len(guards) :
+        SourceInitialFailureAt(guards, index)
+        <=> RenderedInitialFailureAt(guards, defined, index)
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(guards) =>
+            (defined[index] <=>
+                \A earlier \in 1..index : guards[earlier])
+    <1>1. P(0)
+        BY SMT DEF P, InitialGuardHistory
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(guards)
+                     PROVE defined[index + 1] <=>
+                         \A earlier \in 1..(index + 1) : guards[earlier]
+            BY SMT DEF P
+        <2>1. index \in 0..Len(guards)
+            BY SMT
+        <2>2. defined[index] <=>
+                \A earlier \in 1..index : guards[earlier]
+            BY <2>1, P(index), SMT DEF P
+        <2>3. defined[index + 1] =
+                (IF defined[index] THEN guards[index + 1] ELSE FALSE)
+            BY SMT DEF InitialGuardHistory
+        <2>. QED BY <2>2, <2>3, SMT
+    <1>3. HIDE DEF P
+    <1>4. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED BY <1>4, SMT
+        DEF P, SourceInitialFailureAt, RenderedInitialFailureAt
+
 THEOREM InitialMembershipComposesAcrossPriorChoices ==
     \A key \in Vars, priorStates \in SUBSET States :
         \A candidates \in [States -> Seq(Values)] :
