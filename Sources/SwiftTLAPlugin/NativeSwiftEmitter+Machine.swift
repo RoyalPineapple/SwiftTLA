@@ -1890,6 +1890,48 @@ func verifyGeneratedActionRoutingOutput(
         }
     }
     let methods = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }
+    let successorWrappers = methods.filter {
+        $0.name.text == "_successors"
+            && $0.signature.parameterClause.parameters.first?.firstName.text == "for"
+    }
+    let expectedSuccessorWrappers = [
+        """
+        private func _successors(for action: Action) throws -> [Snapshot] {
+            var context: CheckingContext<CheckingRegisters>?
+            return try _successors(for: action, checking: &context)
+        }
+        """,
+        """
+        private func _successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
+            var result: [Snapshot] = []
+            try _visitSuccessors(for: action, checking: &context) { result.append($0) }
+            return result
+        }
+        """,
+    ]
+    guard successorWrappers.count == expectedSuccessorWrappers.count,
+          expectedSuccessorWrappers.allSatisfy({ expected in
+              successorWrappers.filter {
+                  Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) == tokens(expected)
+              }.count == 1
+          }) else {
+        throw invalid("native.action.successorRoute", "both wrappers preserve the complete successor list")
+    }
+    let send = methods.filter { $0.name.text == "send" }
+    let expectedSend = tokens("""
+        public mutating func send(_ action: Action) throws -> Transition {
+            var candidates = try _successors(for: action)[...]
+            guard let next = candidates.popFirst() else { throw GeneratedMachineError.noMatchingSuccessor }
+            guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousAction }
+            let before = state
+            _execution = next
+            return Transition(action: action, before: before, after: state)
+        }
+        """)
+    guard send.count == 1,
+          Array(send[0].tokens(viewMode: .sourceAccurate)).map(\.text) == expectedSend else {
+        throw invalid("native.action.send", "the public send applies exactly one selected successor")
+    }
     let candidates = methods.filter { $0.name.text == "_actions" }
     let expectedCandidates = """
         var result: [Action] = []
