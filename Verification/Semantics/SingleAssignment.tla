@@ -2111,6 +2111,69 @@ THEOREM ConjunctionSuccessorsAgree ==
     BY CompatibleConjunction, ConflictingConjunctionHasNoSuccessor,
         SMT DEF ExecutableConjunction
 
+SourceFramedDelta(s, t, frame, keys, delta) ==
+    /\ t[frame] = s[frame]
+    /\ \A key \in keys : t[key] = delta[key]
+    /\ \A key \in Vars \ keys : t[key] = s[key]
+
+CompiledFramedDelta(s, t, frame, keys, delta) ==
+    /\ (frame \in keys => delta[frame] = s[frame])
+    /\ t = ApplyDelta(s, keys, delta)
+
+RenderedFramedDelta(s, t, frame, keys, delta) ==
+    /\ t[frame] = s[frame]
+    /\ RenderedDelta(s, t, keys, delta)
+
+THEOREM UnchangedConjunctionPreservesCompleteState ==
+    ASSUME NEW frame \in Vars,
+           NEW keys \in SUBSET Vars,
+           NEW s \in States,
+           NEW t \in States,
+           NEW delta \in [keys -> Values]
+    PROVE /\ (SourceFramedDelta(s, t, frame, keys, delta)
+                <=> CompiledFramedDelta(s, t, frame, keys, delta))
+          /\ (CompiledFramedDelta(s, t, frame, keys, delta)
+                <=> RenderedFramedDelta(s, t, frame, keys, delta))
+    PROOF
+    <1>1. SourceFramedDelta(s, t, frame, keys, delta)
+            <=> RenderedFramedDelta(s, t, frame, keys, delta)
+        BY SMT DEF SourceFramedDelta, RenderedFramedDelta, RenderedDelta
+    <1>2. CompiledFramedDelta(s, t, frame, keys, delta)
+            <=> SourceFramedDelta(s, t, frame, keys, delta)
+        BY CompleteDeltaUpdate, SMT
+            DEF CompiledFramedDelta, SourceFramedDelta, RenderedDelta, States
+    <1>. QED BY <1>1, <1>2, SMT
+
+SourceFramedOutcome(s, label, frame, keys, delta, failures) ==
+    [edges |-> {edge \in LabeledEdges : edge[1] = s /\ edge[2] = label /\
+        SourceFramedDelta(s, edge[3], frame, keys, delta)},
+     failures |-> failures]
+
+CompiledFramedOutcome(s, label, frame, keys, delta, failures) ==
+    [edges |-> {edge \in LabeledEdges : edge[1] = s /\ edge[2] = label /\
+        CompiledFramedDelta(s, edge[3], frame, keys, delta)},
+     failures |-> failures]
+
+RenderedFramedOutcome(s, label, frame, keys, delta, failures) ==
+    [edges |-> {edge \in LabeledEdges : edge[1] = s /\ edge[2] = label /\
+        RenderedFramedDelta(s, edge[3], frame, keys, delta)},
+     failures |-> failures]
+
+THEOREM UnchangedConjunctionPreservesOutcome ==
+    ASSUME NEW s \in States,
+           NEW label \in ActionLabels,
+           NEW frame \in Vars,
+           NEW keys \in SUBSET Vars,
+           NEW delta \in [keys -> Values],
+           NEW failures
+    PROVE SourceFramedOutcome(s, label, frame, keys, delta, failures)
+            = CompiledFramedOutcome(s, label, frame, keys, delta, failures)
+            /\ CompiledFramedOutcome(s, label, frame, keys, delta, failures)
+            = RenderedFramedOutcome(s, label, frame, keys, delta, failures)
+    BY UnchangedConjunctionPreservesCompleteState, SMT
+       DEF SourceFramedOutcome, CompiledFramedOutcome, RenderedFramedOutcome,
+           LabeledEdges, States
+
 THEOREM ConjunctionEnablednessAgree ==
     \A firstKeys, secondKeys \in SUBSET Vars :
         \A s \in States :
