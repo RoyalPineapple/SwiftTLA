@@ -2166,6 +2166,8 @@ private extension CompiledModuleMetadata {
                 )
             }
             let renderedBody = try renderer.action(compiled.body)
+            try StraightLineRenderedActionCheck.verifyStructure(compiled.body,
+                rendered: renderedBody, renderer: renderer)
             try StraightLineRenderedActionCheck.verify(compiled.body, rendered: renderedBody,
                 layout: layout, binders: renderer.bindings.binders)
             return DirectModuleAction(

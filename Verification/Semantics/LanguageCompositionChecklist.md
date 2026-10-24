@@ -195,8 +195,11 @@ cannot establish source-order behavior.
 - [ ] `.unchanged`: exact frame, including hidden state.
   The compiler checks action-constructor shape and assignment/frame target IDs
   across nested compiled actions. The generated Swift verifier independently
-  checks the compiled frame variable and prior-state read. Expression semantics,
-  TLA+ output, and the compositional theorem remain open.
+  checks the compiled frame variable and prior-state read. The actual generated
+  TLA+ action is checked against the compiled constructor structure and frame
+  names. Expression values, definedness/failure guards, and the compositional
+  theorem remain open; the TLA+ structure check uses the expression renderer
+  for its leaves.
 - [ ] `.guard_`: enabled/disabled/failure distinction.
 - [ ] `.existsAction`: all bindings, successors, and failures.
 - [ ] `.ifElse`: branch selection and condition failure.

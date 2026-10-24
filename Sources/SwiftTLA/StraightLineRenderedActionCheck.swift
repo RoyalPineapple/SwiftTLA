@@ -1,6 +1,11 @@
 import Foundation
 
 enum StraightLineRenderedActionCheck {
+    private enum StructureTask {
+        case action(CompiledActionExpr)
+        case text(String)
+    }
+
     private enum Task {
         case action(CompiledActionExpr)
         case value(CompiledExpression)
@@ -26,6 +31,74 @@ enum StraightLineRenderedActionCheck {
 
     private static let tokenPattern = try? NSRegularExpression(
         pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}+*<>-]|="#)
+
+    static func verifyStructure(_ action: CompiledActionExpr, rendered: String,
+                                renderer: CompiledTLARenderer) throws {
+        let names = Dictionary(uniqueKeysWithValues: renderer.layout.variables.map {
+            ($0.id, $0.declaration.name)
+        })
+        func mismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "tla.action.structure",
+                expected: "the compiled action constructors and state-variable identities",
+                actual: "the emitted TLA+ action body differs from that structure",
+                nextSafeAction: "Report this TLA+ action emission failure.")
+        }
+        var pending: [StructureTask] = [.action(action)]
+        var parts: [String] = []
+        func schedule(_ tasks: [StructureTask]) { pending.append(contentsOf: tasks.reversed()) }
+        while let task = pending.popLast() {
+            switch task {
+            case .text(let value): parts.append(value)
+            case .action(let node):
+                switch node {
+                case .assign(let id, let value):
+                    guard let name = names[id] else { throw mismatch() }
+                    let assignment = "\(name)' = \(try renderer.state(value))"
+                    let defined = try renderer.evaluationDefined(value)
+                    parts.append(defined.map { "(IF \($0) THEN \(assignment) ELSE FALSE)" } ?? assignment)
+                case .unchanged(let id):
+                    guard let name = names[id] else { throw mismatch() }
+                    parts.append("UNCHANGED \(name)")
+                case .guard_(let condition):
+                    let predicate = try renderer.state(condition)
+                    let body: String
+                    if case .value(.boolean) = condition.operation {
+                        body = predicate
+                    } else {
+                        body = "(\(predicate)) = TRUE"
+                    }
+                    let defined = try renderer.evaluationDefined(condition)
+                    parts.append(defined.map { "(IF \($0) THEN \(body) ELSE FALSE)" } ?? body)
+                case .existsAction(let binder, let domain, let body):
+                    guard let name = renderer.bindings.binders[binder] else { throw mismatch() }
+                    let defined = try renderer.evaluationDefined(domain)
+                    if let defined { parts.append("(IF \(defined) THEN ") }
+                    parts.append("(\\E \(name) \\in \(try renderer.state(domain)): ")
+                    schedule([.action(body), .text(defined == nil ? ")" : ") ELSE FALSE)")])
+                case .define(let binder, let value, let body):
+                    guard let name = renderer.bindings.binders[binder] else { throw mismatch() }
+                    let defined = try renderer.evaluationDefined(value)
+                    if let defined { parts.append("(IF \(defined) THEN ") }
+                    parts.append("(LET \(name) == \(try renderer.state(value)) IN ")
+                    schedule([.action(body), .text(defined == nil ? ")" : ") ELSE FALSE)")])
+                case .ifElse(let condition, let yes, let no):
+                    let defined = try renderer.evaluationDefined(condition)
+                    if let defined { parts.append("(IF \(defined) THEN ") }
+                    parts.append("(IF \(try renderer.state(condition)) THEN (")
+                    schedule([.action(yes), .text(") ELSE ("), .action(no),
+                        .text(defined == nil ? "))" : ")) ELSE FALSE)")])
+                case .and(let left, let right):
+                    parts.append("(")
+                    schedule([.action(left), .text(" /\\ "), .action(right), .text(")")])
+                case .or(let left, let right):
+                    parts.append("(")
+                    schedule([.action(left), .text(" \\/ "), .action(right), .text(")")])
+                }
+            }
+        }
+        guard parts.joined() == rendered else { throw mismatch() }
+    }
 
     // shortcut: only direct scalar addition trees are checked here; extend to other expression forms with their output rules.
     private static func addition(_ expression: CompiledExpression,
