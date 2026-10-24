@@ -55,6 +55,12 @@ struct GeneratedSkipFrameTests {
                 (id: 1, slot: emitter.variable(variable.id), value: "state.state.value"),
             ])
         }
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionWriteOutput(wrongReadVisitor, action: action.body,
+                program: model.program, stateFields: emitter.stateMemberNames, parts: [
+                (id: 1, slot: emitter.variable(variable.id), value: "1"),
+            ])
+        }
 
         let tla = try GeneratedSkipFrameModel.render().tlaBundle.root.tla
         let module = URL(fileURLWithPath: #filePath)

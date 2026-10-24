@@ -2290,6 +2290,7 @@ func verifyGeneratedActionWriteOutput(
     var guards: [(id: Int, predicate: CompiledExpression)] = []
     var definitions: [(id: Int, child: Int, value: CompiledExpression)] = []
     var assignments: [Int: (variable: VariableID, value: CompiledExpression)] = [:]
+    var frames: [Int: VariableID] = [:]
     var nextID = 1
     var expectedWriteCount = 0
     while let (id, node) = pending.popLast() {
@@ -2298,9 +2299,10 @@ func verifyGeneratedActionWriteOutput(
             expectedWriteCount += 1
             expectedChildren[id] = []
             assignments[id] = (variable, value)
-        case .unchanged:
+        case .unchanged(let variable):
             expectedWriteCount += 1
             expectedChildren[id] = []
+            frames[id] = variable
         case .guard_(let predicate):
             expectedChildren[id] = []
             guards.append((id, predicate))
@@ -3073,7 +3075,8 @@ func verifyGeneratedActionWriteOutput(
                 "generated conditional body differs from the checked rule")
         }
     }
-    guard parts.count == expectedWriteCount, Set(parts.map { $0.id }).count == parts.count else {
+    guard parts.count == expectedWriteCount,
+          Set(parts.map(\.id)) == Set(assignments.keys).union(frames.keys) else {
         throw CompilationDiagnostic(
             code: .unsupportedGeneratedValueShape, stage: .validation,
             path: "native.action.write", expected: "one unique generated write per compiled assignment or frame",
@@ -3082,6 +3085,14 @@ func verifyGeneratedActionWriteOutput(
         )
     }
     for part in parts {
+        if let variable = frames[part.id] {
+            guard let slot = slotName(variable), part.slot == slot,
+                  part.value == (stateFields[variable].map { "state.state.\($0)" } ?? "state.\(slot)") else {
+                throw invalid("native.action.write.\(part.id)",
+                    "the compiled frame variable and its prior-state value",
+                    "a different generated frame write")
+            }
+        }
         let name = "_actionPart\(part.id)"
         let expected = Parser.parse(source: """
         func proof() {

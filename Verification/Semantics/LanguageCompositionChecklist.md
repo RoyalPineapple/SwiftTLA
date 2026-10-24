@@ -193,6 +193,9 @@ cannot establish source-order behavior.
   initial-state checks. Prove the complete set, not one replay.
 - [ ] `.assign`: value/failure evaluation, one intended update, exact frame.
 - [ ] `.unchanged`: exact frame, including hidden state.
+  The generated Swift write verifier checks the compiled frame variable and
+  prior-state read independently of emitted write metadata; the source-to-lowered
+  rule, TLA+ output link, and general composition remain open.
 - [ ] `.guard_`: enabled/disabled/failure distinction.
 - [ ] `.existsAction`: all bindings, successors, and failures.
 - [ ] `.ifElse`: branch selection and condition failure.
