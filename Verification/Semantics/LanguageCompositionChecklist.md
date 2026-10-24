@@ -64,7 +64,7 @@ The inventory is taken from `SpecParser+SpecBuilder.swift`, `SpecParser.swift`,
 | Source / compiled case | Accepted route | Rule coverage |
 | --- | --- | --- |
 | `assign` | Direct `ActionExpr.assign`, `.becomes`, collection updates; scheduled `Assign` and control writes | Ordered root-`Int` `Do` slice only; other targets and expressions open |
-| `unchanged` | Direct `.stays`; generated frame and terminal actions | General frame/output rule open |
+| `unchanged` | Direct `.stays`; generated frame and terminal actions | Complete-state frame composition proved for an arbitrary partial continuation; full action-tree induction open |
 | `guard_` | Direct predicate or `.when`; Algorithm `When` and entry guards | General disabled/failure rule open |
 | `existsAction` | Direct `ActionExpr.exists`; Algorithm `With` and scheduled `Choose` | General domain, binding, and outcome rule open |
 | `ifElse` | Algorithm `If` | General branch and condition-failure rule open |
@@ -197,9 +197,15 @@ cannot establish source-order behavior.
   across nested compiled actions. The generated Swift verifier independently
   checks the compiled frame variable and prior-state read. The actual generated
   TLA+ action is checked against the compiled constructor structure and frame
-  names. Expression values, definedness/failure guards, and the compositional
-  theorem remain open; the TLA+ structure check uses the expression renderer
-  for its leaves.
+  names. `UnchangedConjunctionPreservesOutcome` proves that, for any complete
+  state, frame key, partial continuation write, and action label, the source,
+  compiled, and rendered relations have identical complete successors and
+  retain the continuation's failure set, including when its write conflicts
+  with the frame. This is conditional on equal continuation failures: it does
+  not prove the continuation's expression evaluation or the native kernel.
+  General expression values, definedness/failure guards, and the full
+  action-tree induction remain open; the TLA+ structure check uses the
+  expression renderer for its leaves.
 - [ ] `.guard_`: enabled/disabled/failure distinction.
 - [ ] `.existsAction`: all bindings, successors, and failures.
 - [ ] `.ifElse`: branch selection and condition failure.
