@@ -16,6 +16,17 @@ EmptyOrdered == [updates |-> <<>>, failure |-> NoFailure]
 BranchwiseContinuation(choices, continuation) ==
     [index \in 1..Len(choices) |-> continuation[choices[index]]]
 
+SingleCandidateLeft ==
+    {result \in OrderedOutcome :
+        Len(result.updates) <= 1 /\
+        (Len(result.updates) = 1 => result.failure = NoFailure)}
+
+ContinueBranch(left, continuation) ==
+    IF Len(left.updates) = 1 THEN continuation[left.updates[1]] ELSE left
+
+BranchwiseResults(lefts, continuation) ==
+    [index \in 1..Len(lefts) |-> ContinueBranch(lefts[index], continuation)]
+
 THEOREM OrderedCompositionIsClosed ==
     ASSUME NEW first \in OrderedOutcome,
            NEW second \in OrderedOutcome
@@ -77,6 +88,35 @@ THEOREM BranchwiseContinuationDistributesOverAlternatives ==
         <2>. QED BY <2>1, <2>2, SMT
     <1>. QED
         BY <1>2, <1>3, <1>4, SeqEqual, SMT DEF combined, before, after
+
+THEOREM BranchwiseResultsAreOrderedOutcomes ==
+    ASSUME NEW lefts \in Seq(SingleCandidateLeft),
+           NEW continuation \in [UpdateValues -> OrderedOutcome]
+    PROVE BranchwiseResults(lefts, continuation) \in Seq(OrderedOutcome)
+    PROOF
+    <1>1. \A index \in 1..Len(lefts) :
+              lefts[index] \in SingleCandidateLeft
+        BY ElementOfSeq, SMT
+    <1>2. \A index \in 1..Len(lefts) :
+              ContinueBranch(lefts[index], continuation) \in OrderedOutcome
+        <2>. SUFFICES ASSUME NEW index \in 1..Len(lefts)
+                     PROVE ContinueBranch(lefts[index], continuation) \in OrderedOutcome
+            BY SMT
+        <2>1. lefts[index] \in OrderedOutcome
+            BY <1>1, SMT DEF SingleCandidateLeft
+        <2>1a. lefts[index].updates \in Seq(UpdateValues)
+            BY <2>1, SMT DEF OrderedOutcome
+        <2>2. CASE Len(lefts[index].updates) = 1
+            <3>1. lefts[index].updates[1] \in UpdateValues
+                BY <2>1a, <2>2, ElementOfSeq, SMT
+            <3>2. continuation[lefts[index].updates[1]] \in OrderedOutcome
+                BY <3>1, SMT
+            <3>. QED BY <2>2, <3>2, SMT DEF ContinueBranch
+        <2>3. CASE Len(lefts[index].updates) # 1
+            BY <2>1, <2>3, SMT DEF ContinueBranch
+        <2>. QED BY <2>2, <2>3, SMT
+    <1>. QED
+        BY <1>2, IsASeq, SMT DEF BranchwiseResults
 
 THEOREM ReversingFailingAlternativesChangesFirstFailure ==
     ASSUME NEW first \in OrderedOutcome,
@@ -378,6 +418,64 @@ THEOREM OrderedAlternativeRetainsEveryEarlierUpdate ==
             BY <1>1, <1>3, <1>3a, <2>1, <2>2, SMT
     <1>. QED
         BY <1>4, <1>5, <1>6, SMT
+
+THEOREM OrderedAlternativeTraversalPreservesFirstFailure ==
+    ASSUME NEW results \in Seq(OrderedOutcome),
+           NEW history \in [0..Len(results) -> OrderedOutcome],
+           VisitedOrderedHistory(results, history)
+    PROVE \A index \in 0..Len(results) :
+              SourceFirstFailure(results, index, history[index].failure)
+    PROOF
+    <1>. DEFINE P(index) ==
+        index \in 0..Len(results) =>
+            SourceFirstFailure(results, index, history[index].failure)
+    <1>1. P(0)
+        BY SMT DEF P, VisitedOrderedHistory, SourceFirstFailure
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(results)
+                     PROVE SourceFirstFailure(results, index + 1,
+                               history[index + 1].failure)
+            BY SMT DEF P
+        <2>1. index \in 0..Len(results)
+            BY SMT DEF P
+        <2>2. SourceFirstFailure(results, index, history[index].failure)
+            BY <2>1, P(index), SMT DEF P
+        <2>3. history[index + 1].failure =
+                 IF history[index].failure # NoFailure
+                 THEN history[index].failure
+                 ELSE results[index + 1].failure
+            BY SMT DEF VisitedOrderedHistory
+        <2>4. CASE history[index].failure # NoFailure
+            BY <2>1, <2>2, <2>3, <2>4, SMT DEF SourceFirstFailure
+        <2>5. CASE history[index].failure = NoFailure
+            BY <2>1, <2>2, <2>3, <2>5, SMT DEF SourceFirstFailure
+        <2>. QED BY <2>4, <2>5, SMT
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED BY <1>3, SMT DEF P
+
+THEOREM BranchwiseConjunctionRetainsSuccessesAndFirstFailure ==
+    ASSUME NEW lefts \in Seq(SingleCandidateLeft),
+           NEW continuation \in [UpdateValues -> OrderedOutcome],
+           NEW history \in [0..Len(lefts) -> OrderedOutcome],
+           VisitedOrderedHistory(BranchwiseResults(lefts, continuation), history)
+    PROVE /\ SourceFirstFailure(BranchwiseResults(lefts, continuation),
+                  Len(lefts), history[Len(lefts)].failure)
+          /\ \A index \in 1..Len(lefts) :
+                 /\ Len(history[index].updates) =
+                        Len(history[index - 1].updates) +
+                            Len(ContinueBranch(lefts[index], continuation).updates)
+                 /\ \A earlier \in 1..Len(history[index - 1].updates) :
+                        history[index].updates[earlier] =
+                            history[index - 1].updates[earlier]
+                 /\ \A offset \in 1..Len(ContinueBranch(lefts[index], continuation).updates) :
+                        history[index].updates[Len(history[index - 1].updates) + offset] =
+                            ContinueBranch(lefts[index], continuation).updates[offset]
+    BY BranchwiseResultsAreOrderedOutcomes,
+       OrderedAlternativeTraversalPreservesFirstFailure,
+       OrderedAlternativeRetainsEveryEarlierUpdate, SMT
+       DEF BranchwiseResults
 
 THEOREM AlternativeTraversalPreservesSuccessfulUpdates ==
     ASSUME NEW results \in Seq(Outcome),

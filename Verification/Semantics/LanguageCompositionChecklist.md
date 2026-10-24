@@ -211,6 +211,18 @@ cannot establish source-order behavior.
 - [ ] `.ifElse`: branch selection and condition failure.
 - [ ] `.define`: binding scope, capture, and failure.
 - [ ] `.and`: ordered composition and first failure.
+  `BranchwiseConjunctionRetainsSuccessesAndFirstFailure` proves, for any finite
+  ordered list of left outcomes with at most one success and no simultaneous
+  left failure, that running each successful candidate's continuation retains
+  every update in order and selects the first resulting failure. The source
+  first-failure predicate is independent of the visitor's fold. The compiled
+  shape gate rejects an alternative-producing left conjunct; lowering moves
+  continuations inside `or` and `existsAction` branches, and focused generated-
+  machine tests exercise a success alongside a later failure. The general
+  source-to-branchwise-lowering proof, a proof that the shape gate discharges
+  the single-candidate premise for every accepted nested action, and both
+  arbitrary-expression output links remain open. The Swift visitor kernel and
+  structural output checker remain project-owned trusted boundaries.
 - [ ] `.or`: branch union, retaining success and failure together.
   For each of these eight source/compiled constructors, check complete frames,
   labels, binders, evaluation order, all successors, disabled branches, and
