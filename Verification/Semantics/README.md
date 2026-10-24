@@ -1526,12 +1526,13 @@ undefined initializer contributes none.
 `GuardedDeterministicInitialHistoriesExist` reuses the generic existence rule
 to construct a common history for that chain using an independent source
 equality-update rule, so equality is not conditional on histories that might
-not exist. `GuardedSequentialIntInitialSetsAgree` then lifts its final set
-through the hidden program counter, discharging the initial-set equality
-premise for this class of guarded deterministic initializers. These are
-general rules, not fixture-specific counts; their focused obligations pass
-locally, while hosted evidence for this addition remains pending.
-`OrderedSequentialIntProgramCompose` takes those complete
+not exist. `GuardedInitialHistoriesAgree` compares separate source and generated
+histories at every prefix. `OrderedSequentialIntProgramCompose` now derives
+initial-set equality from those histories before it adds the hidden program
+counter. It does not assume equal initial sets. These are general rules, not
+fixture-specific counts. All 1,931 obligations pass locally. Hosted evidence
+for this addition remains pending.
+`OrderedSequentialIntProgramCompose` takes the derived complete
 initial-state sets and selected initial-failure payloads into the same theorem
 as the labeled `Do` edges, ordered action failures, and terminal action. The
 output checkers enforce the compiled site order and operands against emitted
@@ -1549,13 +1550,12 @@ mutation is rejected. It is not yet a general source-to-both-outputs proof for
 fallible initialization or for other initializer expression forms.
 `OrderedSequentialIntProgramCompose` proves the independent complete initial,
 labeled-edge, and ordered-failure rules compose over any finite number of steps,
-including the terminal self-loop; its new focused TLAPS obligations pass
-locally. The complete proof file passed the hosted semantic-proof diagnostic
+including the terminal self-loop. The complete proof file passed the hosted semantic-proof diagnostic
 on `a22d49d7920a8f32ae12cb5e5708ba6332f949cf`; the dependent-initializer
-extension above remains unhosted. Nonliteral
-deterministic `Int` initial expressions and other accepted statement or
-expression forms remain outside this slice; they are not rejected by the DSL
-merely because this proof does not cover them. The output checkers' parsing,
+extension above remains unhosted. The current slice covers deterministic `Int`
+initializers built from literals, earlier root reads, and checked addition.
+Other accepted statement and expression forms remain outside this slice; the
+DSL does not reject them because this proof does not cover them. The output checkers' parsing,
 the remaining `#spec` syntax parser that constructs the source model, the project-owned
 update/visitor kernel, and documented Swift compiler/runtime behavior remain
 trusted boundaries. The theorem does not independently certify that the parser
