@@ -2944,7 +2944,13 @@ THEOREM OrderedSequentialIntProgramCompose ==
               /\ SourceHistory(before.data, steps[index], source[index])
               /\ ScheduledHistory(before.data, steps[index], scheduled[index])
             BY SMT
-        <2>2. /\ SourceCheckedSequentialEdges(entries[index], exits[index],
+        <2>2. /\ entries[index] \in ActionLabels
+              /\ exits[index] \in ActionLabels
+              /\ labels[index] \in ActionLabels
+              /\ steps[index] \in Seq(Instructions)
+              /\ before.data \in States
+            BY SMT DEF SequentialStates
+        <2>3. /\ SourceCheckedSequentialEdges(entries[index], exits[index],
                      labels[index], steps[index], guards[index])
                    = GeneratedCheckedSequentialEdges(entries[index], exits[index],
                        labels[index], steps[index], guards[index])
@@ -2954,8 +2960,8 @@ THEOREM OrderedSequentialIntProgramCompose ==
                    = GeneratedSequentialIntFailures(before, entries[index],
                        labels[index], steps[index], checks[index], operands[index],
                        before.data, scheduled[index])
-            BY <2>1, OrderedSequentialIntOutcomesCompose
-        <2>. QED BY <2>2
+            BY <2>1, <2>2, OrderedSequentialIntOutcomesCompose
+        <2>. QED BY <2>3
     <1>2. SourceSequentialTerminalEdges(done, terminalLabel)
             = GeneratedSequentialTerminalEdges(done, terminalLabel)
         BY SMT DEF SourceSequentialTerminalEdges,
