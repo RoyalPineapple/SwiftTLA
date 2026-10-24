@@ -523,6 +523,17 @@ enum StraightLineRenderedActionCheck {
                 actual: "the module or configuration omits or changes that selection",
                 nextSafeAction: "Regenerate the evaluation invariant and TLC configuration.")
         }
+        func alternativeFailure(_ node: CompiledActionExpr) throws -> String? {
+            guard case .or(let left, let right) = node else {
+                // shortcut: child failure predicates remain premises until their output rules are checked.
+                return try renderer.anyFailurePredicate(node)
+            }
+            switch (try alternativeFailure(left), try alternativeFailure(right)) {
+            case (nil, nil): return nil
+            case (let first?, nil), (nil, let first?): return first
+            case (let first?, let second?): return "(IF \(first) THEN TRUE ELSE \(second))"
+            }
+        }
         var references: [String] = []
         for index in behavior.enabledActionIndices {
             let prefix = "__SwiftTLAAnyEvaluationFailure\(index)"
@@ -535,10 +546,25 @@ enum StraightLineRenderedActionCheck {
                 let suffix = header.dropFirst(prefix.count).dropLast(parameterSuffix.count)
                 return suffix.allSatisfy { $0 == "_" }
             }
-            guard candidates.count <= 1 else { throw mismatch() }
+            let expectedAlternative: String?
+            let isAlternative: Bool
+            if case .or = action.body {
+                expectedAlternative = try alternativeFailure(action.body)
+                isAlternative = true
+            } else {
+                expectedAlternative = nil
+                isAlternative = false
+            }
+            guard candidates.count <= 1,
+                  !isAlternative || (expectedAlternative != nil) == !candidates.isEmpty else {
+                throw mismatch()
+            }
             guard let declaration = candidates.first else { continue }
             guard lines.filter({ $0 == declaration }).count == 1,
                   let header = declaration.components(separatedBy: " == ").first else { throw mismatch() }
+            if let expectedAlternative, declaration != "\(header) == \(expectedAlternative)" {
+                throw mismatch()
+            }
             let name = String(header.dropLast(parameterSuffix.count))
             guard !parameters.isEmpty else {
                 references.append(name)

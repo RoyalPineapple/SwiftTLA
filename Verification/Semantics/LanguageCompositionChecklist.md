@@ -229,6 +229,12 @@ cannot establish source-order behavior.
   arbitrary-expression output links remain open. The Swift visitor kernel and
   structural output checker remain project-owned trusted boundaries.
 - [ ] `.or`: branch union, retaining success and failure together.
+  For root and nested `or` trees, the actual TLA+ aggregate-failure
+  declaration is checked against independent left-to-right `IF` composition
+  of the two child predicates; changing the declaration to `TRUE` is rejected.
+  This is conditional on each non-`or` child's predicate being correct. It
+  does not yet check detailed failure kind/operands or an `or` nested under
+  another action constructor. Those output and source-semantic links remain open.
   For each of these eight source/compiled constructors, check complete frames,
   labels, binders, evaluation order, all successors, disabled branches, and
   failures where applicable.

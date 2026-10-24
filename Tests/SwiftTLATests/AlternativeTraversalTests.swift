@@ -211,6 +211,39 @@ struct AlternativeTraversalTests {
         }
     }
 
+    @Test("Generated TLA+ guards a later alternative failure after an earlier one")
+    func renderedAlternativeFailureOrder() throws {
+        let specification = TLASpec(name: "FallibleAlternatives", variables: [
+            .init(name: "divisor", initial: .int(0)),
+            .init(name: "value", initial: .int(0)),
+        ], actions: [.init(name: "pick", body: .or(
+            .assign(.named("value"), .divide(.int(1), .variable("divisor"))),
+            .assign(.named("value"), .add(.int(.max), .int(1)))))], invariants: [])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let output = try program.renderModule()
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+            module: output.renderedModuleSource,
+            failureDeclarations: output.evaluationFailureDeclarations,
+            evaluationInvariant: "__SwiftTLAEvaluationOK",
+            configuration: output.configuration, renderer: renderer)
+        let original = try #require(output.evaluationFailureDeclarations.first {
+            $0.hasPrefix("__SwiftTLAAnyEvaluationFailure0 == ")
+        })
+        let changed = "__SwiftTLAAnyEvaluationFailure0 == TRUE"
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+                module: output.renderedModuleSource.replacingOccurrences(of: original, with: changed),
+                failureDeclarations: output.evaluationFailureDeclarations.map { $0 == original ? changed : $0 },
+                evaluationInvariant: "__SwiftTLAEvaluationOK",
+                configuration: output.configuration, renderer: renderer)
+        }
+    }
+
     @Test("Nested alternatives retain source order after normalization")
     func nestedAlternativeOrder() {
         let leaves = (1...4).map { ActionExpr.assign(.named("value"), .int($0)) }
