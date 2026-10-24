@@ -340,7 +340,7 @@ struct AlgorithmPlusCalRendererTests {
     @Test("#spec preserves distinct authored binder locations")
     func macroPreservesDistinctAuthoredBinderLocations() throws {
         let spec = #spec("MacroBinderLocations") {
-            Algorithm("MacroBinderLocations") {
+            let algorithm = Algorithm(label: "MacroBinderLocations") {
                 Do(ProcessStep.done) { Stop() }
                 Invariant("Distinct") {
                     ForAll(Node.all) { first in
@@ -350,6 +350,7 @@ struct AlgorithmPlusCalRendererTests {
                     }
                 }
             }
+            algorithm
         }
 
         let rendered = try spec.compile().render().plusCalBundle().root.tla
