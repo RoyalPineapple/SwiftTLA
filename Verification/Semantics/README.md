@@ -1452,6 +1452,10 @@ The native visitor checker now derives the program-counter slot and location
 from the compiled layout and checks the actual emitted Swift guard and literal
 control write. Mutations to either are rejected even when the emitter's write
 metadata agrees with the bad output.
+The native routing check also pins both successor-list wrappers and public
+`send` to that checked visitor; dropping visited successors or reporting a
+transition without updating the machine is rejected. The Swift execution
+kernel and the output checker remain trusted.
 The source-to-lowered checker now checks the exact source variable inventory,
 initial control choice, and labeled step inventory for sequential algorithms.
 For each plain `Do` whose statements are root copies or literals, it also

@@ -213,6 +213,41 @@ import SwiftSyntax
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.candidateSource")
         }
+        let sendIndex = try #require(members.firstIndex {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "send"
+        })
+        let wrongSend = members[sendIndex].description.replacingOccurrences(
+            of: "_execution = next", with: "_execution = _execution")
+        #expect(wrongSend != members[sendIndex].description)
+        wrongMembers = members
+        wrongMembers[sendIndex] = try #require(Parser.parse(source: wrongSend)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated send returned a transition without applying its successor")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.send")
+        }
+        let successorIndex = try #require(members.firstIndex {
+            guard let method = $0.as(FunctionDeclSyntax.self) else { return false }
+            return method.name.text == "_successors"
+                && method.signature.parameterClause.parameters.first?.firstName.text == "for"
+                && method.signature.parameterClause.parameters.count == 2
+        })
+        let wrongSuccessors = members[successorIndex].description.replacingOccurrences(
+            of: "{ result.append($0) }", with: "{ _ in }")
+        #expect(wrongSuccessors != members[successorIndex].description)
+        wrongMembers = members
+        wrongMembers[successorIndex] = try #require(Parser.parse(source: wrongSuccessors)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionRoutingOutput(wrongMembers, routes: routes, allActions: allActions,
+                candidates: candidatePlans, configurationArguments: "")
+            Issue.record("Generated successors discarded the complete visited relation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.successorRoute")
+        }
     }
 
     @Test("Later reads observe earlier writes in one atomic transition")
