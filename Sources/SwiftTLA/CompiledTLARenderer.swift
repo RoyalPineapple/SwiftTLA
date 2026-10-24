@@ -851,7 +851,7 @@ struct CompiledTLARenderer {
     ) throws -> String? {
         let sites = try arithmeticSites(value, stateNames: stateNames)
         guard !sites.isEmpty else { return nil }
-        return sites.count == 1 ? sites[0].guard_ : "(\(sites.map(\.guard_).joined(separator: " /\\ ")))"
+        return sites.count == 1 ? sites[0].guard_ : preceded("TRUE", by: sites.map(\.guard_))
     }
 
     private func arithmeticSites(
