@@ -1010,6 +1010,8 @@ struct OrderedAssignmentLoweringTests {
             try emitter.verifyDeterministicIntInitialOutput(declaration)
         }
         try verify(declaration)
+        try verifyOrderedIntInitialExpression(declaration,
+            named: name, expression: resolvedExpression, slots: slots)
         let missingFailure = declaration.description.replacingOccurrences(
             of: "if firstFailure == nil { firstFailure = failure }", with: "")
         #expect(missingFailure != declaration.description)
@@ -1028,6 +1030,16 @@ struct OrderedAssignmentLoweringTests {
             Issue.record("A changed generated initializer operation was accepted")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native._initialStates.value.\(name)")
+        }
+        let wrongOrder = declaration.description.replacingOccurrences(
+            of: "_NativeMachineOperations.add(_arithmetic0, _arithmetic1)",
+            with: "_NativeMachineOperations.add(_arithmetic1, _arithmetic0)")
+        #expect(wrongOrder != declaration.description)
+        let wrongOrderDeclaration = try #require(Parser.parse(source: wrongOrder)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyOrderedIntInitialExpression(wrongOrderDeclaration,
+                named: name, expression: resolvedExpression, slots: slots)
         }
 
         let module = try program.renderModule().renderedModuleSource
