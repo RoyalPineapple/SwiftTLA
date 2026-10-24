@@ -622,6 +622,43 @@ enum StraightLineAssignmentCheck {
     static func verifyCompiled(_ action: NamedAction, bindings compiledBindings: [CompiledActionBinding],
                                body: CompiledActionExpr,
                                layout: CompiledLayout) throws {
+        let stateIDs = Dictionary(uniqueKeysWithValues: layout.variables.map {
+            ($0.declaration.name, $0.id)
+        })
+        func targetID(_ target: ActionTarget) -> VariableID? {
+            switch target {
+            case .named(let name): return stateIDs[name]
+            case .programCounter: return layout.programCounterID()
+            case .procedureStack: return layout.procedureStackID()
+            }
+        }
+        func frameMismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "actions.\(action.name).compiledFrames",
+                expected: "the source action structure and state-variable targets",
+                actual: "the compiled action changes a constructor or state-variable target",
+                nextSafeAction: "Report this action lowering failure.")
+        }
+        var actionPairs: [(ActionExpr, CompiledActionExpr)] = [(action.body, body)]
+        while let (source, compiled) = actionPairs.popLast() {
+            switch (source, compiled) {
+            case (.assign(let target, _), .assign(let id, _)),
+                 (.unchanged(let target), .unchanged(let id)):
+                guard targetID(target) == id else { throw frameMismatch() }
+            case (.guard_, .guard_): break
+            case (.existsAction(_, _, let child), .existsAction(_, _, let lowered)),
+                 (.define(_, _, let child), .define(_, _, let lowered)):
+                actionPairs.append((child, lowered))
+            case (.ifElse(_, let yes, let no), .ifElse(_, let loweredYes, let loweredNo)):
+                actionPairs.append((no, loweredNo))
+                actionPairs.append((yes, loweredYes))
+            case (.and(let left, let right), .and(let loweredLeft, let loweredRight)),
+                 (.or(let left, let right), .or(let loweredLeft, let loweredRight)):
+                actionPairs.append((right, loweredRight))
+                actionPairs.append((left, loweredLeft))
+            default: throw frameMismatch()
+            }
+        }
         guard action.bindings.allSatisfy({ binding in
             binding.literalMembers?.allSatisfy { member in
                 if case .int = member { return true }
@@ -629,9 +666,6 @@ enum StraightLineAssignmentCheck {
                 return false
             } == true
         }) else { return }
-        let stateIDs = Dictionary(uniqueKeysWithValues: layout.variables.map {
-            ($0.declaration.name, $0.id)
-        })
         let parameterNames = Set(action.bindings.map(\.name))
         var pendingSource = [action.body]
         var definedNames: Set<String> = []
