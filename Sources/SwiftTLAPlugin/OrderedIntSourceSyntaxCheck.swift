@@ -4,7 +4,7 @@ import SwiftTLA
 
 enum OrderedIntSourceSyntaxCheck {
     private enum Component {
-        case variable(root: String, initial: Int)
+        case variable(root: String, initialization: VariableInitialization)
         case step(label: String, assignments: [(root: String, value: StateExpr)])
     }
 
@@ -27,7 +27,7 @@ enum OrderedIntSourceSyntaxCheck {
             guard matches.count == 1, agrees(expected, with: matches[0].model) else {
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape,
                     stage: .validation, path: "algorithms.\(name).authoredSyntax",
-                    expected: "the literal Int initializers and ordered Do assignments in the authored #spec",
+                    expected: "the Int initializers and ordered Do assignments in the authored #spec",
                     actual: "the parsed source model changes an initial value, label, target, read, or addition",
                     nextSafeAction: "Report this #spec syntax-to-source-model translation failure.")
             }
@@ -53,11 +53,17 @@ enum OrderedIntSourceSyntaxCheck {
                member.declName.baseName.text == "sharedVar",
                initializer.arguments.allSatisfy({ $0.label?.text == "_name" || $0.label?.text == "initial" }),
                let initial = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
-               let value = integer(initial) {
+               let initialValue = value(initial, roots: roots) {
                 let root = initializer.arguments.first(where: { $0.label?.text == "_name" })?
                     .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? sourceName
                 guard roots.updateValue(root, forKey: sourceName) == nil else { return nil }
-                result.append(.variable(root: root, initial: value))
+                let initialization: VariableInitialization
+                if case .value(.int(let number)) = initialValue {
+                    initialization = .value(.int(number))
+                } else {
+                    initialization = .expression(initialValue)
+                }
+                result.append(.variable(root: root, initialization: initialization))
                 continue
             }
             guard case .expr(let expression) = item.item,
@@ -142,9 +148,13 @@ enum OrderedIntSourceSyntaxCheck {
         guard parsed.components.count == expected.count else { return false }
         for (source, actual) in zip(expected, parsed.components) {
             switch (source, actual) {
-            case (.variable(let root, let initial), .shared(let state)):
-                guard state.root == root, state.swiftTypeName == "Int",
-                      state.initialization == .value(.int(initial)) else { return false }
+            case (.variable(let root, let initialization), .shared(let state)):
+                guard state.root == root, state.initialization == initialization else { return false }
+                if case .value = initialization {
+                    guard state.swiftTypeName == "Int" else { return false }
+                } else {
+                    guard state.swiftTypeName == nil || state.swiftTypeName == "Int" else { return false }
+                }
             case (.step(let label, let assignments), .step(let step)):
                 guard step.label.name == label, step.loopCondition == nil,
                       step.statements.count == assignments.count else { return false }
