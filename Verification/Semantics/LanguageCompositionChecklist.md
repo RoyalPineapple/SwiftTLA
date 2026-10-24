@@ -78,6 +78,38 @@ matching compiled case, both actual outputs, and a rejecting mutation. Keep
 compiler-synthesized uses in the domain too: they affect accepted programs
 even when authors cannot spell the constructor directly.
 
+### Algorithm-statement domain
+
+`AlgorithmStatementModel` has the fifteen cases below. Authored statements
+enter through `AlgorithmBuilder` or `SpecParser+Algorithm`; scheduling can
+replace them before `AlgorithmLowering.lower` builds an `ActionExpr`. This map
+is based on those actual switches, not on named example models. A destination
+names a constructor reached during lowering; it is **not** a completed proof
+of the source statement or its generated outputs.
+
+| Statement case | Route into the compiled action/check | Rule still needed |
+| --- | --- | --- |
+| `rejected` | Diagnostic sentinel; lowering yields a false guard only if it reaches that phase | Prove rejection precedes usable output |
+| `when` | `guard_` combined with the remaining action by `and` | Disabled versus failed condition |
+| `assert` | Extracted assertion; leaves transition action unchanged | Assertion selection and failure |
+| `set` | Scheduled into `letBinding` plus a final `parallel` write | Ordered reads, captures, and writes |
+| `parallel` | Scheduler-owned final root assignments joined by `and` | Complete frames and last-write rule |
+| `letBinding` | `define` around the continuation | Lexical scope and failure |
+| `with` | `existsAction` over the bound domain | Every binding and domain failure |
+| `ifElse` | `ifElse` over both continuations | Selected branch and condition failure |
+| `either` | `or` over both continuations | Both branches' successors and failures |
+| `choose` | Scheduled into `with`, then `existsAction` | Choice domain and retained failures |
+| `goto` | Program-counter transfer through `assign` | Exact next control location |
+| `call` | Procedure entry, argument/local/stack writes | Call frame and argument order |
+| `return` | Procedure stack and program-counter transfer | Return frame and underflow |
+| `stop` | Transfer to the generated `Done` location | Terminal control and frame |
+| `skip` | Continuation unchanged | Identity step and control fallthrough |
+
+`set`, `choose`, and `parallel` do not all reach the same lowering switch:
+the scheduler must run exactly once before atomic lowering. That scheduling
+boundary needs its own general proof; a proof of the final `ActionExpr` alone
+cannot establish source-order behavior.
+
 ### 0. Fix the domain of the theorem
 
 - [ ] Enumerate all accepted `#spec` syntax after parsing, binding, type and
