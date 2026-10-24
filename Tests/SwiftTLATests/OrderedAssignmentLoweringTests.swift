@@ -978,8 +978,17 @@ struct OrderedAssignmentLoweringTests {
             try verifyGeneratedInitialBindings(declaration, expected: bindings,
                 expectedLoops: [:], expectedCandidateSources: [:],
                 expectedIntExpressions: [name: resolvedExpression], stateSlots: slots)
+            try emitter.verifyDeterministicIntInitialOutput(declaration)
         }
         try verify(declaration)
+        let missingFailure = declaration.description.replacingOccurrences(
+            of: "if firstFailure == nil { firstFailure = failure }", with: "")
+        #expect(missingFailure != declaration.description)
+        let missingFailureDeclaration = try #require(Parser.parse(source: missingFailure)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verify(missingFailureDeclaration)
+        }
         let wrongSwift = declaration.description.replacingOccurrences(
             of: "_NativeMachineOperations.add", with: "_NativeMachineOperations.subtract")
         #expect(wrongSwift != declaration.description)
@@ -1001,8 +1010,31 @@ struct OrderedAssignmentLoweringTests {
         }
         let expectedPredicate = try #require(StraightLineRenderedActionCheck.initialIntPredicate(
             resolvedExpression, named: "second", layout: program.layout))
+        let controls = program.behavior.initializations.compactMap {
+            initialization -> (String, String)? in
+            guard case .value(let expression) = initialization.initialization,
+                  case .controlLocation(let location) = expression.operation,
+                  let variable = program.layout.variables.first(where: { $0.id == initialization.variable }),
+                  let formal = program.layout.controlLocation(location)?.formalName else { return nil }
+            return (variable.declaration.name, formal)
+        }
+        let control = try #require(controls.first)
         try verifyRenderedInitialConjunction(module, predicates: predicates,
-            expectedIntPredicates: ["second": expectedPredicate])
+            expectedIntLiterals: ["first": 1],
+            expectedControlLocations: [control.0: control.1],
+            expectedIntPredicates: ["second": expectedPredicate],
+            requireCompleteSimpleInitials: true)
+        let completeInit = (["Init =="] + predicates.map { "  /\\ \($0)" }).joined(separator: "\n")
+        let extraModule = module.replacingOccurrences(of: completeInit,
+            with: completeInit + "\n  /\\ FALSE")
+        #expect(extraModule != module)
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyRenderedInitialConjunction(extraModule, predicates: predicates + ["FALSE"],
+                expectedIntLiterals: ["first": 1],
+                expectedControlLocations: [control.0: control.1],
+                expectedIntPredicates: ["second": expectedPredicate],
+                requireCompleteSimpleInitials: true)
+        }
         let wrongPredicate = expectedPredicate.replacingOccurrences(
             of: "second = (first + 2)", with: "second = (first + 3)")
         #expect(wrongPredicate != expectedPredicate)

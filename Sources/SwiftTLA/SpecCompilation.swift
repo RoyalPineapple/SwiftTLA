@@ -2816,7 +2816,8 @@ private extension CompiledModuleMetadata {
             expectedControlLocations: expectedControlLocations,
             expectedIntPredicates: expectedIntPredicates,
             requireCompleteSimpleInitials: behavior.initialInvariant == nil
-                && expectedIntLiterals.count + expectedControlLocations.count == layout.variables.count)
+                && expectedIntLiterals.count + expectedIntPredicates.count
+                    + expectedControlLocations.count == layout.variables.count)
         try verifyRenderedActionDeclarations(source, declarations: actionDeclarations)
         return (source, evaluationFailureDeclarations, evaluationInvariant)
     }
@@ -2895,7 +2896,8 @@ func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
     }
     guard actual == expected,
           (!requireCompleteSimpleInitials
-              || predicates.count == expectedIntLiterals.count + expectedControlLocations.count),
+              || predicates.count == expectedIntLiterals.count + expectedIntPredicates.count
+                  + expectedControlLocations.count),
           expectedIntLiterals.allSatisfy({ name, value in
               predicates.filter { $0 == "\(name) = \(TLAValue.int(value).description)" }.count == 1
           }),

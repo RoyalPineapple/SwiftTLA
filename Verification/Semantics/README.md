@@ -1472,17 +1472,18 @@ source and resolved initial `Int` literals and control location. The production
 Swift and TLA+ emitters check their actual initial bindings, action bodies,
 and selected addition-failure declarations. Wrong value, location, read order,
 termination body, and omitted-failure mutations are rejected by focused tests.
-For deterministic literal-`Int` and control initializers without parameters or
-an initial invariant, the generated-Swift check also compares the complete
+For deterministic `Int` literal, prior-read, checked-addition, and control
+initializers without parameters or an initial invariant, the generated-Swift
+check also compares the complete
 `_initialStates` function with an independently assembled template from the
-compiled plan. An inserted early return that discards the initial state is
-rejected even though the earlier binding and suffix checks accept it. Other
-initializer shapes remain accepted but are not covered by this whole-function
-certificate; the output checker and Swift execution kernel remain trusted.
-The corresponding TLA+ `Init` check requires exactly those literal and
-control clauses when they cover every initial variable; an added conjunct
-that removes the initial state is rejected even if the renderer lists it as
-an expected predicate.
+compiled plan. An inserted early return or removed first-failure callback is
+rejected even though the earlier binding checks accept it. Other initializer
+shapes remain accepted but are not covered by this whole-function certificate;
+the output checker and Swift execution kernel remain trusted. The corresponding
+TLA+ `Init` check requires exactly the literal, dependent `Int`, and control
+clauses when they cover every initial variable; an added conjunct that removes
+the initial state is rejected even if the renderer lists it as an expected
+predicate.
 For direct `let algorithm = Algorithm(scoped:)` declarations with `Int`
 `scope.sharedVar` initializers built from literals, earlier-variable reads, and
 addition, plus nonempty `Do` bodies of root `Assign`s, the
@@ -1495,12 +1496,14 @@ For that dependent-initializer form, the production lowerer now checks the
 literal, prior-state read, and addition tree against the source, and the
 resolver checks its typed `Int` tree without changing operand order. A real
 sequential `#spec` fixture and changed-tree mutations exercise those links.
-The production output checks also compare its actual generated Swift
-initializer and TLA+ `Init` clause with independent literal/read/add forms;
-operator and self-consistent wrong-`Init` mutations are rejected. Selected
-initial-failure outcomes and the general semantic composition for dependent
-initializers remain open; this does not enlarge the completed
-literal-initializer slice.
+The production output checks compare its actual generated Swift initializer
+and TLA+ `Init` clause with independent literal/read/add forms; operator,
+self-consistent wrong-`Init`, missing-failure, and extra-conjunct mutations are
+rejected. The parameterized `OrderedInitialGuardsPreserveFirstFailure` theorem
+proves that the checked prefix selects the same first failing initializer for
+any finite sequence of guards; its focused obligations pass locally. The
+complete dependent-initializer-to-step composition and hosted check remain
+open, so this does not yet enlarge the completed literal-initializer slice.
 The renderer now retains a later initializer's evaluation-failure relation
 when an earlier initializer has a checked definedness rule. It guards the
 earlier binding before evaluating that relation, so a failed prefix cannot

@@ -589,11 +589,14 @@ extension NativeSwiftEmitter {
     }
 
     func verifyDeterministicIntInitialOutput(_ declaration: DeclSyntax?) throws {
-        // shortcut: this exact template covers literal Int and control initializers; extend it with each proved initializer form.
+        // shortcut: this exact template covers ordered Int and control initializers; extend it with each proved initializer form.
         guard program.layout.parameters.isEmpty, program.behavior.initialInvariant == nil,
               !program.behavior.initializations.isEmpty,
               program.behavior.initializations.count == program.layout.variables.count else { return }
         var bindings: [(name: String, type: String, value: String)] = []
+        let slots = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
+            ($0.id, variable($0.id))
+        })
         for initialization in program.behavior.initializations {
             guard case .value(let expression) = initialization.initialization else { return }
             let value: String
@@ -605,6 +608,10 @@ extension NativeSwiftEmitter {
             case (.controlLocation(let location), .controlLocation):
                 type = "_ControlLocation"
                 value = "_ControlLocation.location\(location.ordinal)"
+            case (_, .int):
+                guard let checked = checkedIntInitialValue(expression, slots: slots) else { return }
+                type = "Int"
+                value = checked
             default: return
             }
             bindings.append((variable(initialization.variable), type, value))
