@@ -1476,9 +1476,12 @@ model's initial values, registered enum-label values, assignment targets,
 expression trees, and statement order. Syntax mutations to each are rejected.
 Other accepted spellings and constructs still compile but are not certified by
 this syntax check; its recognition and enum metadata remain trusted code.
-The added dependent-initializer recognition closes only syntax to parsed source:
-compiled initialization, both emitted expressions, and selected initial-failure
-outcomes remain open for those expressions.
+For that dependent-initializer form, the production lowerer now checks the
+literal, prior-state read, and addition tree against the source, and the
+resolver checks its typed `Int` tree without changing operand order. A real
+sequential `#spec` fixture and changed-tree mutations exercise those links.
+Both emitted initializer expressions and selected initial-failure outcomes
+remain open; this does not enlarge the completed literal-initializer slice.
 `OrderedSequentialIntProgramCompose` proves the independent initial, labeled
 edge, and ordered-failure rules compose over any finite number of steps,
 including the terminal self-loop; its new focused TLAPS obligations pass

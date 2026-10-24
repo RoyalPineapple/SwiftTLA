@@ -184,8 +184,17 @@ struct CompiledLowerer {
                 at: "\(path).initialization",
                 scope: rootScope
             )
-            try StraightLineAssignmentCheck.verifyInitialIntLiteral(
-                declaration.initialization, lowered: lowered, at: "\(path).initialization")
+            let checkIntInitializer: Bool
+            if case .value(.int) = declaration.initialization {
+                checkIntInitializer = true
+            } else {
+                checkIntInitializer = authoredAlgorithm != nil && layout.programCounterID() != nil
+            }
+            if checkIntInitializer {
+                try StraightLineAssignmentCheck.verifyInitialIntExpression(
+                    declaration.initialization, lowered: lowered, layout: layout,
+                    at: "\(path).initialization")
+            }
             try StraightLineAssignmentCheck.verifyInitialControlLocation(
                 declaration.initialization, lowered: lowered, layout: layout,
                 at: "\(path).initialization")

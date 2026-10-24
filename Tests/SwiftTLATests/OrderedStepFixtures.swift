@@ -44,6 +44,24 @@ struct SequentialCopyProofModel {
 }
 
 @TLAModel
+struct SequentialDependentIntInitialProofModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("SequentialDependentIntInitialProofModel") {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(initial: 1)
+                let second = scope.sharedVar(initial: first + 2)
+                Do(Step.advance) {
+                    Assign(first, to: second + 1)
+                }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
 struct OrderedCopyModel {
     enum Step: String, CaseIterable { case copy, repeatWrites }
 
