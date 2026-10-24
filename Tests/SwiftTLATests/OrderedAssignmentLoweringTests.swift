@@ -902,6 +902,29 @@ struct OrderedAssignmentLoweringTests {
                 $0.replacingOccurrences(of: initialClause, with: wrongClause)
             }, expectedControlLocations: [control.name: expectedFormalControl])
         }
+
+        let literals = ["first": 1, "second": 2]
+        try verifyRenderedInitialConjunction(module, predicates: predicates,
+            expectedIntLiterals: literals,
+            expectedControlLocations: [control.name: expectedFormalControl],
+            requireCompleteSimpleInitials: true)
+        let originalInit = (["Init =="] + predicates.map { "  /\\ \($0)" }).joined(separator: "\n")
+        let extraInit = originalInit + "\n  /\\ FALSE"
+        let extraModule = module.replacingOccurrences(of: originalInit, with: extraInit)
+        #expect(extraModule != module)
+        let extraPredicates = predicates + ["FALSE"]
+        try verifyRenderedInitialConjunction(extraModule, predicates: extraPredicates,
+            expectedIntLiterals: literals,
+            expectedControlLocations: [control.name: expectedFormalControl])
+        do {
+            try verifyRenderedInitialConjunction(extraModule, predicates: extraPredicates,
+                expectedIntLiterals: literals,
+                expectedControlLocations: [control.name: expectedFormalControl],
+                requireCompleteSimpleInitials: true)
+            Issue.record("An extra Init conjunct discarded the compiled initial state")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.Init")
+        }
     }
 
     @Test("Dependent Int initialization retains its ordered source expression through compilation")

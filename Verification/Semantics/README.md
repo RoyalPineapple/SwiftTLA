@@ -1475,6 +1475,10 @@ compiled plan. An inserted early return that discards the initial state is
 rejected even though the earlier binding and suffix checks accept it. Other
 initializer shapes remain accepted but are not covered by this whole-function
 certificate; the output checker and Swift execution kernel remain trusted.
+The corresponding TLA+ `Init` check requires exactly those literal and
+control clauses when they cover every initial variable; an added conjunct
+that removes the initial state is rejected even if the renderer lists it as
+an expected predicate.
 For direct `let algorithm = Algorithm(scoped:)` declarations with `Int`
 `scope.sharedVar` initializers built from literals, earlier-variable reads, and
 addition, plus nonempty `Do` bodies of root `Assign`s, the
