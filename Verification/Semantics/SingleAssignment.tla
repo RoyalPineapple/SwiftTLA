@@ -2892,6 +2892,98 @@ SourceGuardedInitialHistory(start, plans, history) ==
         history[index] = SourceGuardedInitialStates(
             history[index - 1], plans[index].key,
             plans[index].values, plans[index].defined)
+DeterministicInitialPath(plans, path, guards) ==
+    \A index \in 1..Len(plans) :
+        /\ guards[index] = plans[index].defined[path[index - 1]]
+        /\ path[index] = IF guards[index]
+            THEN [path[index - 1] EXCEPT
+                ![plans[index].key] = plans[index].values[path[index - 1]]]
+            ELSE path[index - 1]
+InitialPrefixDefined(guards, index) ==
+    \A earlier \in 1..index : guards[earlier]
+
+THEOREM GuardedSingletonInitialStep ==
+    ASSUME NEW prior \in States,
+           NEW plan \in DeterministicInitialPlans
+    PROVE SourceGuardedInitialStates({prior}, plan.key, plan.values, plan.defined)
+        = IF plan.defined[prior]
+          THEN {[prior EXCEPT ![plan.key] = plan.values[prior]]}
+          ELSE {}
+    BY SMT DEF SourceGuardedInitialStates, EqualityInitialStates,
+        DeterministicInitialPlans, States
+
+THEOREM DeterministicInitialFailureLeavesNoState ==
+    ASSUME NEW start \in States,
+           NEW plans \in Seq(DeterministicInitialPlans),
+           NEW path \in [0..Len(plans) -> States],
+           NEW guards \in Seq(BOOLEAN),
+           NEW history \in [0..Len(plans) -> SUBSET States],
+           Len(guards) = Len(plans),
+           path[0] = start,
+           DeterministicInitialPath(plans, path, guards),
+           SourceGuardedInitialHistory({start}, plans, history)
+    PROVE \A index \in 0..Len(plans) :
+        history[index] = IF InitialPrefixDefined(guards, index)
+            THEN {path[index]} ELSE {}
+    PROOF
+    <1>. DEFINE P(index) == index \in 0..Len(plans) =>
+        history[index] = IF InitialPrefixDefined(guards, index)
+            THEN {path[index]} ELSE {}
+    <1>1. P(0)
+        BY SMT DEF P, InitialPrefixDefined, SourceGuardedInitialHistory
+    <1>2. ASSUME NEW index \in Nat, P(index)
+          PROVE P(index + 1)
+        <2>. SUFFICES ASSUME index + 1 \in 0..Len(plans)
+                     PROVE history[index + 1] =
+                         IF InitialPrefixDefined(guards, index + 1)
+                         THEN {path[index + 1]} ELSE {}
+            BY SMT DEF P
+        <2>1. index \in 0..Len(plans)
+            BY SMT
+        <2>2. plans[index + 1] \in DeterministicInitialPlans
+            BY LenProperties, SMT
+        <2>3. history[index + 1] = SourceGuardedInitialStates(
+                history[index], plans[index + 1].key,
+                plans[index + 1].values, plans[index + 1].defined)
+            BY SMT DEF SourceGuardedInitialHistory
+        <2>4. history[index] = IF InitialPrefixDefined(guards, index)
+                THEN {path[index]} ELSE {}
+            BY <2>1, P(index), SMT DEF P
+        <2>5. InitialPrefixDefined(guards, index + 1)
+                <=> InitialPrefixDefined(guards, index) /\ guards[index + 1]
+            BY SMT DEF InitialPrefixDefined
+        <2>6. guards[index + 1] = plans[index + 1].defined[path[index]]
+            BY SMT DEF DeterministicInitialPath
+        <2>7. path[index + 1] = IF guards[index + 1]
+                THEN [path[index] EXCEPT
+                    ![plans[index + 1].key] = plans[index + 1].values[path[index]]]
+                ELSE path[index]
+            BY SMT DEF DeterministicInitialPath
+        <2>8. CASE ~InitialPrefixDefined(guards, index)
+            <3>1. history[index] = {}
+                BY <2>4, <2>8, SMT
+            <3>2. history[index + 1] = {}
+                BY <2>3, <3>1, SMT DEF SourceGuardedInitialStates
+            <3>. QED BY <2>5, <2>8, <3>2, SMT
+        <2>9. CASE InitialPrefixDefined(guards, index) /\ ~guards[index + 1]
+            <3>1. history[index] = {path[index]}
+                BY <2>4, <2>9, SMT
+            <3>2. history[index + 1] = {}
+                BY <2>2, <2>3, <2>6, <3>1,
+                    GuardedSingletonInitialStep, <2>9, SMT
+            <3>. QED BY <2>5, <2>9, <3>2, SMT
+        <2>10. CASE InitialPrefixDefined(guards, index) /\ guards[index + 1]
+            <3>1. history[index] = {path[index]}
+                BY <2>4, <2>10, SMT
+            <3>2. history[index + 1] = {path[index + 1]}
+                BY <2>2, <2>3, <2>6, <2>7, <3>1,
+                    GuardedSingletonInitialStep, <2>10, SMT
+            <3>. QED BY <2>5, <2>10, <3>2, SMT
+        <2>. QED BY <2>8, <2>9, <2>10, SMT
+    <1>3. \A index \in Nat : P(index)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED BY <1>3, SMT DEF P
+
 GeneratedGuardedInitialHistory(start, plans, history) ==
     /\ history[0] = start
     /\ \A index \in 1..Len(plans) :

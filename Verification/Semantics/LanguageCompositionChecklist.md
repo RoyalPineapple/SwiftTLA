@@ -412,6 +412,13 @@ initial state is rejected rather than certified. A module-level `ASSUME` in
 the graph check would make a failing initializer a false proof premise; a TLC
 `POSTCONDITION` runs after checking and does not establish evaluation-failure
 precedence over deadlock.
+
+`DeterministicInitialFailureLeavesNoState` proves for any finite sequence of
+deterministic initializer plans that a prefix has its single expected state
+exactly while every guard in that prefix succeeds; after a failed guard, it
+has no state. This is a source-rule theorem, not a check of the emitted TLA+
+failure verdict or payload.
+
 For recognized ordered-`Int` scenarios without a view or sampled initializer,
 the generated Swift validation methods now require the full initial outcome
 (states and first failure) to reach the shared checker. An output check rejects
@@ -469,6 +476,10 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   that result to prove equality after it adds the hidden program counter.
   The theorem does not assume equal initial sets. The actual Swift and TLA+
   output checks must still link each accepted initializer to its plan.
+- [x] Prove failed deterministic initialization removes the initial state
+  after any prefix, including dependent plans. The general source-rule theorem
+  and the full `SingleAssignment.tla` module pass locally; actual TLC verdict
+  and payload parity remain open.
 - [x] Check nested dependent `Int` addition's actual TLA+ initial-failure
   relations in source order. The emitted-output checker rejects swapped
   failure sites; this local regression does not establish every initializer
