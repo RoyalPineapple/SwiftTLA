@@ -791,7 +791,8 @@ extension NativeSwiftEmitter {
         """)
         try verifyGeneratedActionWriteOutput(declaration, action: action.body, program: program,
             stateFields: stateMemberNames, parts: parts.writes, conditions: parts.conditions,
-            requireScalarLeaves: isTotalScalarAssignment(action.body), externalBindings: action.bindings)
+            requireScalarLeaves: isTotalScalarAssignment(action.body)
+                || program.requiresOrderedIntOutput(action.id), externalBindings: action.bindings)
         return declaration
     }
 

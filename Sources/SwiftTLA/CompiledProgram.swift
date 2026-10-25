@@ -43,6 +43,10 @@ package struct CompiledProgram: Sendable {
     package subscript(_ id: ResolvedFunctionID) -> ResolvedFunction { functions[id.ordinal] }
     package subscript(_ id: ActionID) -> CompiledAction { behavior.actions[id.ordinal] }
 
+    package func requiresOrderedIntOutput(_ action: ActionID) -> Bool {
+        moduleMetadata.orderedIntProofActionNames.contains(layout.actions[action.ordinal].declaration.name)
+    }
+
     package func requireImmutableDomain(_ domain: CompiledExpression, path: String) throws {
         var pending = [domain]
         var visited: Set<CompiledExpression> = []
