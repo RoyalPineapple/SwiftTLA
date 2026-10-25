@@ -306,6 +306,74 @@ struct MachineValidationTests {
         #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("machine.bin.gz").path))
     }
 
+    @Test("native validation retains a valid initial state alongside its evaluation failure")
+    func retainsInitialFailureAndValidSibling() throws {
+        let scenario = try #require(InitialFailureWithSiblingModel.validationScenarios().first)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let report = try NativeValidationRunner.run(
+            scenario: scenario, caseID: "initial-sibling", maximumStates: 2, to: directory)
+        #expect(report.graphComplete)
+        #expect(report.initialStates == 1)
+        #expect(report.initialEvaluationFailure == .violated)
+        #expect(report.deadlock == .satisfied)
+        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("machine.bin.gz").path))
+    }
+
+    @Test("initial failure parity rejects an absent or stale TLC check")
+    func rejectsUnprovenInitialFailureVerdict() throws {
+        let scenario = try #require(InitialFailureWithSiblingModel.validationScenarios().first)
+        let caseID = "initial-sibling"
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        let native = root.appendingPathComponent("native")
+        _ = try NativeValidationRunner.run(
+            scenario: scenario, caseID: caseID, maximumStates: 2, to: native)
+        let oracle = root.appendingPathComponent("oracle")
+        let graph = oracle.appendingPathComponent("tlc-graph")
+        try FileManager.default.createDirectory(at: graph, withIntermediateDirectories: true)
+        let rendered = try scenario.render()
+        let graphBundle = try rendered.tlaBundle(checking: [], checkDeadlock: true)
+        let report = GeneratedTLCOracleReport(
+            schema: "swifttla.generated-tlc-oracle", caseID: caseID,
+            scenario: scenario.name, maximumStates: 2, graphComplete: true,
+            graphInputSHA256: "unused-before-receipt-check",
+            initialEvaluationFailure: .violated,
+            properties: [:], deadlock: .satisfied, deadlockSelected: true,
+            postconditionName: nil, postcondition: nil)
+        try JSONEncoder().encode(report).write(to: oracle.appendingPathComponent("oracle.json"))
+        let graphReceipt: [String: Any] = [
+            "caseID": caseID, "configuration": graphBundle.cfg,
+            "inputs": bundleInputJSON(graphBundle), "toolPin": ["tag": "test"]
+        ]
+        try JSONSerialization.data(withJSONObject: graphReceipt)
+            .write(to: graph.appendingPathComponent("tlc-process.json"))
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("missing initial failure TLC check")) {
+            try ScenarioEvidenceComparison.compare(scenario: scenario, caseID: caseID,
+                native: native, oracle: oracle, actions: rendered.actions,
+                to: root.appendingPathComponent("missing"))
+        }
+
+        let failure = oracle.appendingPathComponent("tlc-initial-failure")
+        try FileManager.default.createDirectory(at: failure, withIntermediateDirectories: false)
+        let failureBundle = try #require(try rendered.initialEvaluationFailureBundle())
+        let staleReceipt: [String: Any] = [
+            "caseID": caseID, "configuration": failureBundle.cfg,
+            "inputs": [["file": "stale.tla", "sha256": "stale"]],
+            "toolPin": ["tag": "test"],
+            "invocation": ["exitStatus": 10, "arguments": ["-workers", "1", "-fp", "1"]]
+        ]
+        try JSONSerialization.data(withJSONObject: staleReceipt)
+            .write(to: failure.appendingPathComponent("tlc-process.json"))
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence(
+            "initial failure TLC input or outcome")) {
+            try ScenarioEvidenceComparison.compare(scenario: scenario, caseID: caseID,
+                native: native, oracle: oracle, actions: rendered.actions,
+                to: root.appendingPathComponent("stale"))
+        }
+    }
+
     @Test("binary view evidence uses the same checking level as native state identity")
     func recordsCheckerLevelInViewEvidence() throws {
         let scenario = try #require(ReachabilityExportModel.validationScenarios().first)

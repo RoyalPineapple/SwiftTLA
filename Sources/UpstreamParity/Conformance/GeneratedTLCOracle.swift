@@ -8,6 +8,7 @@ package struct GeneratedTLCOracleReport: Codable, Sendable {
     package let maximumStates: Int
     package let graphComplete: Bool
     package let graphInputSHA256: String
+    package let initialEvaluationFailure: ValidationVerdict?
     package let properties: [String: ValidationVerdict]
     package let deadlock: ValidationVerdict?
     package let deadlockSelected: Bool
@@ -99,7 +100,7 @@ package enum GeneratedTLCOracle {
                 postcondition: name), pin: pin,
                 arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck)
         }
-        let identity: [String: Any] = [
+        var identity: [String: Any] = [
             "schema": "swifttla.oracle-cache-key-v4",
             "caseID": id,
             "scenario": scenario.name,
@@ -116,6 +117,10 @@ package enum GeneratedTLCOracle {
                 ["invocation": $0.sourceInvocationName, "rendered": $0.renderedName]
             }
         ]
+        if let bundle = try rendered.initialEvaluationFailureBundle() {
+            identity["initialFailureInput"] = try inputIdentity(bundle: bundle, pin: pin,
+                arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck)
+        }
         return SHA256.hex(try JSONSerialization.data(withJSONObject: identity, options: [.sortedKeys]))
     }
 
@@ -178,6 +183,7 @@ package enum GeneratedTLCOracle {
                 maximumStates: maximumStates, graphComplete: false,
                 graphInputSHA256: try inputIdentity(bundle: bundle, pin: pin,
                     arguments: arguments, invocation: .propertyCheck),
+                initialEvaluationFailure: nil,
                 properties: [name: verdict], deadlock: rendered.checksDeadlock ? .unavailable : nil,
                 deadlockSelected: rendered.checksDeadlock,
                 postconditionName: nil, postcondition: nil)
@@ -188,6 +194,11 @@ package enum GeneratedTLCOracle {
         }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        let work = directory.appendingPathComponent("work")
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: false)
+        let initialEvaluationFailure = try captureInitialEvaluationFailure(
+            rendered: rendered, id: id, maximumStates: maximumStates, timeout: timeout,
+            tools: tools, pin: pin, directory: directory, work: work, process: process)
         let graphChecks = selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
         let decisive = scenario.checkingMode == .decisiveCounterexample
         guard !decisive || (graphChecks.count == 1 && selected == graphChecks) else {
@@ -197,8 +208,6 @@ package enum GeneratedTLCOracle {
         let graphBundle = try rendered.tlaBundle(checking: graphChecks,
                                                  checkDeadlock: rendered.checksDeadlock)
         try retainGeneratedInputs(graphBundle, in: directory.appendingPathComponent("generated"))
-        let work = directory.appendingPathComponent("work")
-        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: false)
         let checkedRetained = directory.appendingPathComponent("tlc-check")
         let checkedOutcome = try run(bundle: graphBundle, id: id, maximumStates: maximumStates,
                                    timeout: timeout, tools: tools, pin: pin,
@@ -331,6 +340,7 @@ package enum GeneratedTLCOracle {
             schema: "swifttla.generated-tlc-oracle", caseID: id, scenario: scenario.name,
             maximumStates: maximumStates,
             graphComplete: !decisive, graphInputSHA256: graphIdentity,
+            initialEvaluationFailure: initialEvaluationFailure,
             properties: properties, deadlock: deadlock,
             deadlockSelected: rendered.checksDeadlock,
             postconditionName: rendered.postconditionName, postcondition: postcondition)
@@ -338,6 +348,31 @@ package enum GeneratedTLCOracle {
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("oracle.json"), options: .atomic)
         return report
+    }
+
+    private static func captureInitialEvaluationFailure(
+        rendered: RenderedSpecification, id: String, maximumStates: Int,
+        timeout: TimeInterval, tools: ResolvedTLCToolchain, pin: TLCReferencePin,
+        directory: URL, work: URL, process: TLCProcessAdapter
+    ) throws -> ValidationVerdict? {
+        guard let bundle = try rendered.initialEvaluationFailureBundle() else { return nil }
+        guard !rendered.tlaBundle.files.contains(where: { file in
+            file.tla.split(whereSeparator: \.isNewline).contains {
+                $0.trimmingCharacters(in: .whitespaces).hasPrefix("ASSUME ")
+            }
+        }) else {
+            throw Error.invalidOutcome("initial failure check has another assumption")
+        }
+        try retainGeneratedInputs(bundle, in: directory.appendingPathComponent("initial-failure-generated"))
+        let outcome = try run(bundle: bundle, id: id, maximumStates: maximumStates,
+            timeout: timeout, tools: tools, pin: pin, workRoot: work,
+            retained: directory.appendingPathComponent("tlc-initial-failure"),
+            invocation: .propertyCheck, renderedActions: [], process: process)
+        switch outcome {
+        case .completed: return .satisfied
+        case .assumptionViolation: return .violated
+        default: throw Error.invalidOutcome("initial failure check: \(outcome)")
+        }
     }
 
     package static func run(
