@@ -1002,6 +1002,14 @@ struct OrderedAssignmentLoweringTests {
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedExportDefaultDeadlock(decoyDeclaration, required: true)
         }
+        let changedReturn = export.description.replacingOccurrences(of: "return _rendered",
+            with: "return try _rendered.selectingChecks(ModelChecks<String>(properties: [], checkDeadlock: false), formalPropertyNames: [:])")
+        #expect(changedReturn != export.description)
+        let changedReturnDeclaration = try #require(Parser.parse(source: changedReturn)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedExportDefaultDeadlock(changedReturnDeclaration, required: true)
+        }
         #expect(try SequentialCopyProofModel.render().tlaBundle.cfg.contains("CHECK_DEADLOCK TRUE\n"))
 
         var flippedSource = specification
