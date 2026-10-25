@@ -417,7 +417,9 @@ the generated Swift validation methods now require the full initial outcome
 (states and first failure) to reach the shared checker. An output check rejects
 mutations that drop the failure at either handoff. This closes that narrow
 emission link locally; the checker kernel and exact TLC failure comparison
-remain separate trusted or open boundaries.
+remain separate trusted or open boundaries. A generated ordered-`Int` scenario
+also reports the exact overflow with zero valid initial states and no graph
+events; the parity runner still cannot admit that failure-only case.
 The actual checking paths differ: generated Swift evaluates an authored
 reachability predicate positively, while the TLA+ renderer negates it and
 selects that definition as a TLC invariant. Neither transformation is proved

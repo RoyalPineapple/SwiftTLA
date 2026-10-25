@@ -179,6 +179,19 @@ struct InitialBranchFailureTests {
         }
     }
 
+    @Test("Generated validation reports an initial overflow when no state exists")
+    func checksFailureOnlyInitialOutcome() throws {
+        let scenario = try #require(CheckedAdditionPrefixInitialModel.validationScenarios().first)
+        var emitted = false
+        let result = try scenario.runValidation(maximumStates: 4, checking: scenario.checking,
+            stopOnViolation: false, stopOnReachability: false) { _ in emitted = true }
+        #expect(!emitted)
+        #expect(result.initialStates == 0 && result.states == 0 && result.edges == 0)
+        #expect(result.firstEvaluationFailure == .integerOverflow(.addition, operands: [3, Int.max]))
+        #expect(result.completion == .evaluationFailure(.integerOverflow(.addition,
+            operands: [3, Int.max])))
+    }
+
     @Test("Initial failure has a separate checkable TLA+ output")
     func selectsInitialFailureWithoutChangingTheProofModule() throws {
         let compiled = try CheckedAdditionPrefixInitialModel.spec.compile().render()
