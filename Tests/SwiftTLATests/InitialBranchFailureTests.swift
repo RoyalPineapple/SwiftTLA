@@ -152,7 +152,17 @@ struct InitialBranchFailureTests {
         let operandsName = String(header[header.index(after: open)..<close])
         try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
             after: prefix, names: names,
-            emitted: [(checkedFailure, relation, operandsName)], layout: program.layout)
+            emitted: [(checkedFailure, relation, operandsName, predicates[1])], layout: program.layout)
+
+        #expect(predicates[1] != "FALSE")
+        do {
+            try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
+                after: prefix, names: names,
+                emitted: [(checkedFailure, relation, operandsName, "FALSE")], layout: program.layout)
+            Issue.record("A changed initial failure selection escaped the emitted-output check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.initialEvaluationFailures")
+        }
 
         let secondVariable = try #require(program.layout.variables.first {
             $0.declaration.name == "second"
@@ -172,7 +182,7 @@ struct InitialBranchFailureTests {
         do {
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                 after: prefix, names: names,
-                emitted: [(checkedFailure, wrong, operandsName)], layout: program.layout)
+                emitted: [(checkedFailure, wrong, operandsName, predicates[1])], layout: program.layout)
             Issue.record("A later initial failure escaped its checked prefix")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.initialEvaluationFailures")

@@ -423,6 +423,12 @@ initial-state equality, the symbolic ordered failure records, and the selected
 failure-existence rule for the ordered-`Int` addition plans and guard history.
 Its focused TLAPS obligations pass locally. It still assumes the real lowerer
 and output checks correctly link the emitted artifacts to those plans and records.
+For checked addition, the TLA+ output check now reconstructs each state-free
+initial-failure selection from the compiled addition tree and preceding
+initializer guards, separately from its parameterized failure relation. A
+wrong-selection mutation is rejected; the 10 initial-branch and 23
+ordered-assignment tests pass locally. This checks the emitted formula, not
+TLC's exact failure payload or the verifier's own correctness.
 
 For recognized ordered-`Int` scenarios without a view or sampled initializer,
 the generated Swift validation methods now require the full initial outcome
@@ -492,6 +498,10 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   relations in source order. The emitted-output checker rejects swapped
   failure sites; this local regression does not establish every initializer
   expression's Swift/TLA+ output link.
+- [x] Check each emitted checked-addition initial-failure selection against
+  the compiled expression and ordered prefix, not only against its aggregate.
+  The wrong-selection negative control passes locally; exact TLC payload
+  comparison remains open.
 - [x] Emit pure checked-arithmetic definedness as the ordered guard history
   used by `OrderedInitialGuardsPreserveFirstFailure`, so a later guard cannot
   evaluate an overflowing earlier result. The independent rendered-output

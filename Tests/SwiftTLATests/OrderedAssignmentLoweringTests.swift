@@ -1351,16 +1351,25 @@ struct OrderedAssignmentLoweringTests {
             actions: program.behavior.actions, functions: program.functions,
             enums: program.enums, parameterDomains: program.behavior.parameterDomains)
         let failures = try renderer.expressionEvaluationFailures(resolvedExpression, stateNames: names)
+        let failureAggregate = try #require(lines.first {
+            $0.hasPrefix("__SwiftTLAAnyInitialEvaluationFailure == ")
+        })
+        let selections = String(failureAggregate.dropFirst(
+            "__SwiftTLAAnyInitialEvaluationFailure == ".count))
+            .components(separatedBy: " \\/ ").map { String($0.dropFirst().dropLast()) }
         #expect(failures.count == 2)
         #expect(declarations.count == 2)
-        let emitted = try zip(failures, declarations).map { failure, declaration ->
-            (failure: RenderedEvaluationFailure, relation: String, operandsName: String?) in
+        #expect(selections.count == 2)
+        let emitted = try zip(zip(failures, declarations), selections).map { pair, selection ->
+            (failure: RenderedEvaluationFailure, relation: String,
+             operandsName: String?, selection: String) in
+            let (failure, declaration) = pair
             let separator = try #require(declaration.range(of: " == "))
             let header = String(declaration[..<separator.lowerBound])
             let open = try #require(header.firstIndex(of: "("))
             let close = try #require(header.lastIndex(of: ")"))
             return (failure, String(declaration[separator.upperBound...]),
-                String(header[header.index(after: open)..<close]))
+                String(header[header.index(after: open)..<close]), selection)
         }
         try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(resolvedExpression,
             after: prefix, names: names, emitted: emitted, layout: program.layout)
