@@ -252,6 +252,23 @@ enum StraightLineRenderedActionCheck {
                 == [expected] else { throw mismatch() }
     }
 
+    static func verifyInitialFailureCheckBundle(_ bundle: TLAModuleBundle,
+        base: TLAModuleBundle, aggregate: String, constants: [String]) throws {
+        let sourceLines = bundle.root.tla.split(separator: "\n").map(String.init)
+        let expected = ["---- MODULE \(bundle.root.name) ----", "EXTENDS \(base.root.name)",
+            "ASSUME ~\(aggregate)", "===="]
+        guard base.root.tla.split(separator: "\n").filter({ $0.hasPrefix("\(aggregate) == ") }).count == 1,
+              sourceLines == expected,
+              bundle.root.cfg?.split(separator: "\n").map(String.init) == constants,
+              bundle.imports.map(\.tla) == base.files.map(\.tla) else {
+            throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "tla.initialEvaluationSelection",
+                expected: "a state-free check of the generated initial failure predicate",
+                actual: "the emitted initial failure check differs",
+                nextSafeAction: "Regenerate the TLA+ initial failure check.")
+        }
+    }
+
     static func verify(_ action: CompiledActionExpr, rendered: String,
                        layout: CompiledLayout, binders: [BinderID: String],
                        required: Bool = false) throws {

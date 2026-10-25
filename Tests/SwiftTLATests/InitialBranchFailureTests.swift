@@ -179,6 +179,33 @@ struct InitialBranchFailureTests {
         }
     }
 
+    @Test("Initial failure has a separate checkable TLA+ output")
+    func selectsInitialFailureWithoutChangingTheProofModule() throws {
+        let compiled = try CheckedAdditionPrefixInitialModel.spec.compile().render()
+        let generated = try CheckedAdditionPrefixInitialModel.render()
+        let check = try #require(try generated.initialEvaluationFailureBundle())
+        let compiledCheck = try #require(try compiled.initialEvaluationFailureBundle())
+        #expect(check.root == compiledCheck.root)
+        #expect(check.imports == compiledCheck.imports)
+        #expect(!generated.tlaBundle.tla.contains("ASSUME ~__SwiftTLAAnyInitialEvaluationFailure"))
+        #expect(check.cfg.isEmpty)
+        #expect(check.imports.map(\.name).contains(generated.tlaBundle.root.name))
+
+        let aggregate = "__SwiftTLAAnyInitialEvaluationFailure"
+        let wrong = TLAModuleBundle(root: .init(name: check.root.name,
+            tla: check.tla.replacingOccurrences(of: "ASSUME ~\(aggregate)",
+                with: "ASSUME \(aggregate)"), cfg: check.root.cfg),
+            imports: check.imports, provenance: check.provenance)
+        #expect(wrong.tla != check.tla)
+        do {
+            try StraightLineRenderedActionCheck.verifyInitialFailureCheckBundle(wrong,
+                base: generated.tlaBundle, aggregate: aggregate, constants: [])
+            Issue.record("The wrong initial failure polarity escaped the output check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.initialEvaluationSelection")
+        }
+    }
+
     @Test("An invalid compiled value shape is not relabeled as a model failure")
     func rejectsUnmappedFailure() {
         #expect(throws: EvalError.expected(.integer, actual: [])) {

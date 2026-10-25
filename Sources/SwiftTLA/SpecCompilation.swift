@@ -121,6 +121,7 @@ package struct RenderedModule: Sendable, Equatable {
     package var dependencies: [TLAModuleBundle.ModuleDependency] = []
     package let renderedModuleSource: String
     let evaluationFailureDeclarations: [String]
+    package let initialEvaluationFailure: String?
     package let configuration: TLCConfiguration
     package let renderedActions: [RenderedAction]
     package let symbolicActions: [ActionID]
@@ -407,6 +408,7 @@ public struct CompiledSpecification: Sendable {
         return RenderedSpecification(
             tlaBundle: renderedBundle,
             configuration: rootModule.configuration,
+            initialEvaluationFailure: rootModule.initialEvaluationFailure,
             actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle.map { .success($0) },
             fairnessProfileOperators: Dictionary(uniqueKeysWithValues: module.semantics.behavior.fairnessProfiles.map {
                 ($0.name, $0.operatorName)
@@ -423,19 +425,22 @@ public struct CompiledSpecification: Sendable {
 public struct RenderedSpecification: Sendable {
     public let tlaBundle: TLAModuleBundle
     fileprivate let configuration: TLCConfiguration
+    private let initialEvaluationFailure: String?
     public let actions: [RenderedAction]
     fileprivate let renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?
     fileprivate let renderedPlusCalProfiles: [String: Result<TLAModuleBundle, CompilationDiagnostic>]
     fileprivate let fairnessProfileOperators: [String: String]
     package let temporalObligations: [String: [_RenderedTemporalObligation]]
 
-    init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration, actions: [RenderedAction],
+    init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration,
+        initialEvaluationFailure: String? = nil, actions: [RenderedAction],
         renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?,
         renderedPlusCalProfiles: [String: Result<TLAModuleBundle, CompilationDiagnostic>] = [:],
         fairnessProfileOperators: [String: String] = [:],
         temporalObligations: [String: [_RenderedTemporalObligation]] = [:]) {
         self.tlaBundle = tlaBundle
         self.configuration = configuration
+        self.initialEvaluationFailure = initialEvaluationFailure
         self.actions = actions
         self.renderedPlusCalModuleBundle = renderedPlusCalModuleBundle
         self.renderedPlusCalProfiles = renderedPlusCalProfiles
@@ -461,6 +466,7 @@ public struct RenderedSpecification: Sendable {
         _generatedImports: [(name: String, source: String, structuralPath: [String])] = [],
         _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = [],
         _generatedFairnessProfileOperators: [String: String] = [:],
+        _generatedInitialEvaluationFailure: String? = nil,
         _generatedTemporalObligations: [String: [_RenderedTemporalObligation]] = [:]) throws {
         guard _generatedIntegerBitWidth == Int.bitWidth else {
             throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
@@ -526,7 +532,9 @@ public struct RenderedSpecification: Sendable {
         }
         let plusCal = try _generatedPlusCal.map(configuredPlusCal)
         let plusCalProfiles = try _generatedPlusCalProfiles.mapValues(configuredPlusCal)
-        self.init(tlaBundle: bundle, configuration: configuration, actions: actions, renderedPlusCalModuleBundle: plusCal,
+        self.init(tlaBundle: bundle, configuration: configuration,
+            initialEvaluationFailure: _generatedInitialEvaluationFailure,
+            actions: actions, renderedPlusCalModuleBundle: plusCal,
             renderedPlusCalProfiles: plusCalProfiles,
             fairnessProfileOperators: _generatedFairnessProfileOperators,
             temporalObligations: _generatedTemporalObligations)
@@ -638,7 +646,8 @@ public struct RenderedSpecification: Sendable {
             case .failure(let diagnostic): return .failure(diagnostic)
             }
         }
-        return try Self(tlaBundle: linked(tlaBundle), configuration: selected, actions: actions,
+        return try Self(tlaBundle: linked(tlaBundle), configuration: selected,
+            initialEvaluationFailure: initialEvaluationFailure, actions: actions,
             renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map(linkedResult),
             renderedPlusCalProfiles: renderedPlusCalProfiles.mapValues(linkedResult),
             fairnessProfileOperators: fairnessProfileOperators, temporalObligations: temporalObligations)
@@ -669,6 +678,35 @@ public struct RenderedSpecification: Sendable {
     public var postconditionName: String? { configuration.postcondition }
     public var isAssumptionsOnly: Bool { configuration.assumptionsOnly }
     public var behavior: ModelBehavior { configuration.behavior }
+
+    /// A state-free TLC input for checking initial evaluation failure before graph exploration.
+    public func initialEvaluationFailureBundle() throws -> TLAModuleBundle? {
+        guard let initialEvaluationFailure else { return nil }
+        let base = tlaBundle.root.name
+        var name = base + "__InitialFailureCheck"
+        while tlaBundle.files.contains(where: { $0.name == name }) { name += "_" }
+        let source = "---- MODULE \(name) ----\nEXTENDS \(base)\nASSUME ~\(initialEvaluationFailure)\n====\n"
+        let constants = configuration.declarations.filter { $0.hasPrefix("CONSTANT ") }
+        let check = TLCConfiguration(assumptionsOnly: true,
+            declarations: constants, checkDeadlock: false,
+            invariants: [], properties: [], symmetry: [])
+        guard case .compiled(let identity, let ownership, let dependencies) = tlaBundle.provenance else {
+            throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "initial evaluation failure", expected: "compiled TLA+ provenance",
+                actual: "external TLA+ provenance", nextSafeAction: "Render the compiled model first.")
+        }
+        let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
+            cfg: check.render(usesSymmetryReduction: false)),
+            imports: tlaBundle.files.map { .init(name: $0.name, tla: $0.tla) },
+            provenance: .compiled(identity: identity,
+                ownership: ownership + [.init(moduleName: name, owningRoot: name, structuralPath: [])],
+                dependencies: dependencies + [.init(importingModule: name, importedModule: base,
+                    structuralPath: [])]))
+        try bundle.validateDeclaredClosure()
+        try StraightLineRenderedActionCheck.verifyInitialFailureCheckBundle(bundle,
+            base: tlaBundle, aggregate: initialEvaluationFailure, constants: constants)
+        return bundle
+    }
 
     public func temporalObligationBundles(checking name: String) throws -> [TLAModuleBundle]? {
         _ = try configuration.selecting([name], checkDeadlock: false)
@@ -2235,6 +2273,7 @@ private extension CompiledModuleMetadata {
         return RenderedModule(
             renderedModuleSource: directOutput.source,
             evaluationFailureDeclarations: directOutput.evaluationFailureDeclarations,
+            initialEvaluationFailure: directOutput.initialFailureAggregate,
             configuration: renderedConfiguration,
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             symbolicActions: behavior.actions.filter { $0.bindings.contains { $0.literalMembers == nil } }.map(\.id),
@@ -2268,7 +2307,8 @@ private extension CompiledModuleMetadata {
         requiredStandardModules: Set<StandardModule>,
         importedNames: [String],
         instancesAfterBehavior: Bool
-    ) throws -> (source: String, evaluationFailureDeclarations: [String], evaluationInvariant: String?) {
+    ) throws -> (source: String, evaluationFailureDeclarations: [String],
+        evaluationInvariant: String?, initialFailureAggregate: String?) {
         let varNames = layout.variables.map(\.declaration.name)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = varNames.isEmpty && renderedActions.isEmpty
@@ -2495,7 +2535,7 @@ private extension CompiledModuleMetadata {
             lines.append("====")
             let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
             try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
-            return (source, evaluationFailureDeclarations, evaluationInvariant)
+            return (source, evaluationFailureDeclarations, evaluationInvariant, nil)
         }
 
         let initializations = Dictionary(
@@ -2855,7 +2895,7 @@ private extension CompiledModuleMetadata {
                 && expectedIntLiterals.count + expectedIntPredicates.count
                     + expectedControlLocations.count == layout.variables.count)
         try verifyRenderedActionDeclarations(source, declarations: actionDeclarations)
-        return (source, evaluationFailureDeclarations, evaluationInvariant)
+        return (source, evaluationFailureDeclarations, evaluationInvariant, initialFailureAggregate)
     }
 
     func tlcConfiguration(behavior: CompiledBehavior, replacements: [TLCModuleReplacement],
