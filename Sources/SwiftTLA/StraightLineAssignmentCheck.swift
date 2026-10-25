@@ -455,19 +455,9 @@ enum StraightLineAssignmentCheck {
                   !action.isTermination && action.name == step.label.name
               }) else { throw mismatch() }
         let roots = Set(shared.map(\.root))
-        let orderedIntInitializers = shared.indices.allSatisfy { index in
-            let expression: StateExpr
-            switch shared[index].initialization {
-            case .value(.int(let value)): expression = .value(.int(value))
-            case .expression(let value): expression = value
-            default: return false
-            }
-            return orderedIntPlan(expression, reads: Set(shared.prefix(index).map(\.root))) != nil
-        }
         var orderedIntSteps = !enumerateInitialControl
             && steps.allSatisfy { $0.loopCondition == nil }
             && shared.allSatisfy { $0.swiftTypeName == "Int" }
-            && orderedIntInitializers
         for (index, step) in steps.enumerated() where step.loopCondition == nil {
             let entry = ControlLocationReference(owner: owner, sourceName: step.label.name)
             let next = steps.indices.contains(index + 1)
