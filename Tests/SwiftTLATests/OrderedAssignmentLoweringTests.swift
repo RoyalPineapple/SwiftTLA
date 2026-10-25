@@ -1417,6 +1417,49 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
+    @Test("Generated ordered Int validation forwards initial failures to the shared checker")
+    func orderedIntValidationKeepsInitialOutcomes() throws {
+        let specification = #spec("OrderedIntValidationOutput") {
+            let algorithm = Algorithm(scoped: { scope in
+                let value = scope.sharedVar(initial: 1)
+                Do(OrderedAssignmentStep.`switch`) { Assign(value, to: value + 1) }
+            })
+            algorithm
+            let validation = Validation(label: "Check") {}
+            validation
+        }
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        #expect(program.requiresSourceDefaultDeadlockOutput)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "OrderedIntValidationOutput", program: program))
+        let actual = try #require(try emitter.machineMembers().first {
+            $0.as(StructDeclSyntax.self)?.name.text == "ValidationScenario"
+        })
+        try verifyOrderedIntValidationOutput(actual, modelName: "OrderedIntValidationOutput", arguments: "")
+
+        let lostInitialFailure = actual.description.replacingOccurrences(
+            of: "return try OrderedIntValidationOutput.initialOutcomes()",
+            with: "return try .init(states: OrderedIntValidationOutput.initialMachines(), firstFailure: nil)")
+        #expect(lostInitialFailure != actual.description)
+        let wrongInitial = try #require(Parser.parse(source: lostInitialFailure)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyOrderedIntValidationOutput(wrongInitial,
+                modelName: "OrderedIntValidationOutput", arguments: "")
+        }
+
+        let lostCheckingFailure = actual.description.replacingOccurrences(
+            of: "initialOutcomes: initialOutcomes, maximumStates:",
+            with: "initialMachines: initialOutcomes.states, maximumStates:")
+        #expect(lostCheckingFailure != actual.description)
+        let wrongChecking = try #require(Parser.parse(source: lostCheckingFailure)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyOrderedIntValidationOutput(wrongChecking,
+                modelName: "OrderedIntValidationOutput", arguments: "")
+        }
+    }
+
     @Test("Sequential Do captures every ordered Int read and checked addition")
     func sequentialOrderedIntCapturesRejectStaleReads() throws {
         let specification = OrderedCopyModel.spec

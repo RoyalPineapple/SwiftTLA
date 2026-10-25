@@ -412,6 +412,12 @@ initial state is rejected rather than certified. A module-level `ASSUME` in
 the graph check would make a failing initializer a false proof premise; a TLC
 `POSTCONDITION` runs after checking and does not establish evaluation-failure
 precedence over deadlock.
+For recognized ordered-`Int` scenarios without a view or sampled initializer,
+the generated Swift validation methods now require the full initial outcome
+(states and first failure) to reach the shared checker. An output check rejects
+mutations that drop the failure at either handoff. This closes that narrow
+emission link locally; the checker kernel and exact TLC failure comparison
+remain separate trusted or open boundaries.
 The actual checking paths differ: generated Swift evaluates an authored
 reachability predicate positively, while the TLA+ renderer negates it and
 selects that definition as a TLC invariant. Neither transformation is proved
