@@ -11,12 +11,14 @@ ASSUME IntegerDomain ==
 InRange(value) == value \in Int /\ SwiftIntMin <= value /\ value <= SwiftIntMax
 Success(value) == [ok |-> TRUE, value |-> value,
                    failure |-> <<"none", 0, 0>>]
-Overflow(left, right) == [ok |-> FALSE, value |-> 0,
-                          failure |-> <<"overflow", left, right>>]
+SourceOverflow(left, right) == [ok |-> FALSE, value |-> 0,
+    failure |-> <<"integerOverflow", "addition", <<left, right>>>>]
+GeneratedOverflow(left, right) == [ok |-> FALSE, value |-> 0,
+    failure |-> <<"integerOverflow", "addition", <<left, right>>>>]
 
 SourceAdd(left, right) ==
     IF InRange(left + right) THEN Success(left + right)
-    ELSE Overflow(left, right)
+    ELSE SourceOverflow(left, right)
 
 SmallAddOperands(left, right) ==
     /\ -1000000000 <= left
@@ -32,7 +34,7 @@ GeneratedAddDefined(left, right) ==
     ELSE TRUE
 GeneratedAdd(left, right) ==
     IF GeneratedAddDefined(left, right) THEN Success(left + right)
-    ELSE Overflow(left, right)
+    ELSE GeneratedOverflow(left, right)
 
 THEOREM GeneratedAddGuardMatchesSource ==
     ASSUME NEW left \in Int, NEW right \in Int,
@@ -63,7 +65,7 @@ THEOREM CheckedAdditionRule ==
             SourceAdd(left, right) = GeneratedAdd(left, right)
     BY GeneratedAddGuardMatchesSource, SMT
         DEF SourceAdd, GeneratedAdd, GeneratedAddDefined,
-        InRange, Success, Overflow
+        InRange, Success, SourceOverflow, GeneratedOverflow
 
 ExpressionPlan(count, kinds, literals, reads, left, right, state) ==
     /\ count \in Nat \ {0}
@@ -106,7 +108,7 @@ THEOREM CombinedAdditionRule ==
             BY <2>1, CheckedAdditionRule, SMT DEF InRange
         <2>3. SourceAdd(first.value, second.value).ok =>
                 InRange(SourceAdd(first.value, second.value).value)
-            BY SMT DEF SourceAdd, Success, Overflow, InRange
+            BY SMT DEF SourceAdd, Success, SourceOverflow, InRange
         <2>. QED BY <1>3, <2>2, <2>3, SMT
             DEF SourceCombine, GeneratedCombine
     <1>. QED BY <1>1, <1>2, <1>3, SMT

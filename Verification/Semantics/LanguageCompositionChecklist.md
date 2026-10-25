@@ -184,10 +184,13 @@ reads, and checked `add` in its stated positions; every other case above
 remains open unless a separate complete rule is established.
 `OrderedIntExpressionRule.tla` proves that both evaluation histories exist
 for every finite topologically indexed expression graph of those three cases.
-They agree at every node on the value or the first left-to-right failure, including the
-overflow operands. Reversing generated child-failure priority makes the proof
-fail. The generated addition rule now includes the TLA+ emitter's actual
-small-operand fast path and exact fallback; the proof requires the standard
+They agree at every node on the value or the first left-to-right failure,
+including the `integerOverflow` kind, `addition` operation, and ordered
+operands. Source and generated overflow records are defined independently;
+changing the generated operation to `subtraction` or reversing its operands
+breaks the general theorem. Reversing generated child-failure priority also
+makes the proof fail. The generated addition rule includes the TLA+ emitter's
+actual small-operand fast path and exact fallback; the proof requires the standard
 Swift `Int` range to include ±2,000,000,000. Replacing that fast-path test
 with unconditional success breaks the theorem. This closes the arithmetic
 guard rule. `StraightLineRenderedActionCheck` reconstructs that exact guard
