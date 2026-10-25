@@ -296,7 +296,8 @@ struct TypedSelectionTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/MissingStringSelection.tla")
             .standardizedFileURL
-        #expect(actual == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(actual == expected)
     }
 
     @Test("A nested empty selection fails natively and emits a TLA failure check")
