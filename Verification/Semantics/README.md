@@ -698,8 +698,9 @@ complete `_visitUpdates0` function to
 previous renderer, which guarded only integer and Boolean choices.
 `MissingStringSelectionProof.tla` states source, compiled, and emitted initial
 states, complete labeled steps, no-match failure, and evaluation check, with a
-missing-check negative control. All 47 obligations passed locally; hosted
-evidence is pending. The interpretation of the emitted Swift `Result`, `choose`, and
+missing-check negative control. The proof passes locally against the emitted
+canonical String-choice action; hosted evidence for this revision is pending.
+The interpretation of the emitted Swift `Result`, `choose`, and
 update merge remains a trusted runtime boundary. The chosen general rule is a
 shared canonical order for every accepted selection type, emitted on both
 sides. It remains incomplete: outside supported numeric, Boolean, enum, and

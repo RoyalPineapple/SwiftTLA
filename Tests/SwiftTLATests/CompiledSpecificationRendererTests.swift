@@ -461,12 +461,23 @@ struct CompiledSpecificationRendererTests {
             actions: [], functions: [])
         let domain = CompiledExpression.value(.set([.integer(1)]))
         let yes = CompiledExpression.value(.boolean(true))
+        let candidates = try Regex(#"__LexicalScopes_choiceCandidates[0-9]+"#)
+        let other = try Regex(#"__LexicalScopes_choiceOther[0-9]+"#)
+        func normalizedChoiceNames(_ text: String) -> String {
+            text.replacing(candidates, with: "__CANDIDATES__")
+                .replacing(other, with: "__OTHER__")
+        }
         for operation in [CompiledOperation.forAll(binder), .exists(binder), .choose(binder), .letValue(binder)] {
             let expression = CompiledExpression(operation: operation, children: [domain, yes])
             let scoped = try renderer.state(expression)
             #expect(scoped.first == "(" && scoped.last == ")")
-            #expect(try renderer.state(.init(operation: .equal, children: [expression, expression]))
-                == "(\(scoped) = \(scoped))")
+            let siblings = try renderer.state(.init(operation: .equal, children: [expression, expression]))
+            #expect(normalizedChoiceNames(siblings)
+                == "(\(normalizedChoiceNames(scoped)) = \(normalizedChoiceNames(scoped)))")
+            if case .choose = operation {
+                #expect(Set(siblings.matches(of: candidates).map { String(siblings[$0.range]) }).count == 2)
+                #expect(Set(siblings.matches(of: other).map { String(siblings[$0.range]) }).count == 2)
+            }
         }
         let guardAction = CompiledActionExpr.guard_(yes)
         for action in [CompiledActionExpr.existsAction(binder, domain, guardAction),
