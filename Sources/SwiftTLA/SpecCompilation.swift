@@ -679,24 +679,35 @@ public struct RenderedSpecification: Sendable {
     public var isAssumptionsOnly: Bool { configuration.assumptionsOnly }
     public var behavior: ModelBehavior { configuration.behavior }
 
-    /// A state-free TLC input for checking initial evaluation failure before graph exploration.
+    /// A zero-state TLC input for checking initial evaluation failure before graph exploration.
     public func initialEvaluationFailureBundle() throws -> TLAModuleBundle? {
         guard let initialEvaluationFailure else { return nil }
         let base = tlaBundle.root.name
         var name = base + "__InitialFailureCheck"
         while tlaBundle.files.contains(where: { $0.name == name }) { name += "_" }
-        let source = "---- MODULE \(name) ----\nEXTENDS \(base)\nASSUME ~\(initialEvaluationFailure)\n====\n"
+        var probeInit = name + "__ProbeInit"
+        while tlaBundle.files.contains(where: { $0.tla.contains(probeInit) }) { probeInit += "_" }
+        var probeNext = name + "__ProbeNext"
+        while tlaBundle.files.contains(where: { $0.tla.contains(probeNext) }) { probeNext += "_" }
+        let source = """
+            ---- MODULE \(name) ----
+            EXTENDS \(base)
+            ASSUME ~\(initialEvaluationFailure)
+            \(probeInit) == FALSE
+            \(probeNext) == FALSE
+            ====
+
+            """
         let constants = configuration.declarations.filter { $0.hasPrefix("CONSTANT ") }
-        let check = TLCConfiguration(assumptionsOnly: true,
-            declarations: constants, checkDeadlock: false,
-            invariants: [], properties: [], symmetry: [])
+        let check = (["INIT \(probeInit)", "NEXT \(probeNext)", "CHECK_DEADLOCK FALSE"]
+            + constants).joined(separator: "\n") + "\n"
         guard case .compiled(let identity, let ownership, let dependencies) = tlaBundle.provenance else {
             throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                 path: "initial evaluation failure", expected: "compiled TLA+ provenance",
                 actual: "external TLA+ provenance", nextSafeAction: "Render the compiled model first.")
         }
         let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
-            cfg: check.render(usesSymmetryReduction: false)),
+            cfg: check),
             imports: tlaBundle.files.map { .init(name: $0.name, tla: $0.tla) },
             provenance: .compiled(identity: identity,
                 ownership: ownership + [.init(moduleName: name, owningRoot: name, structuralPath: [])],
