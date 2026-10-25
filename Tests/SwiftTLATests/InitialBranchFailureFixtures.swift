@@ -85,6 +85,8 @@ struct CheckedAdditionPrefixInitialModel {
                 Do(Step.stay) { Assign(last, to: last) }
             })
             algorithm
+            let validation = Validation(label: "Initial overflow") {}
+            validation
         }
     }
 }
