@@ -186,7 +186,15 @@ remains open unless a separate complete rule is established.
 for every finite topologically indexed expression graph of those three cases.
 They agree at every node on the value or the first left-to-right failure, including the
 overflow operands. Reversing generated child-failure priority makes the proof
-fail. For the recognized ordered-`Int` class, `StraightLineAssignmentCheck`
+fail. The generated addition rule now includes the TLA+ emitter's actual
+small-operand fast path and exact fallback; the proof requires the standard
+Swift `Int` range to include ±2,000,000,000. Replacing that fast-path test
+with unconditional success breaks the theorem. This closes the arithmetic
+guard rule. `StraightLineRenderedActionCheck` reconstructs that exact guard
+from the compiled tree, reads the actual TLA+ action, and rejects a changed
+fast-path bound. Its implementation remains a SwiftTLA-owned trust boundary;
+the Swift operation-kernel link is separate. For the recognized ordered-`Int`
+class, `StraightLineAssignmentCheck`
 now constructs postorder indexed plans independently from source and lowered
 initializer trees, and from source and captured `Do` assignment trees. It
 compares literal values, resolved root reads, ordered child indices, and
