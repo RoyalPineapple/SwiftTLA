@@ -367,7 +367,12 @@ writes, and control locations.
 The Swift output check reads the emitted initializer and rejects swapped
 addition operands, missing failure handling, and an early return. The TLA+
 output check reads `Init`, actions, and failure relations. It rejects changed
-values, changed control, and swapped failure sites.
+values, changed control, and swapped failure sites. Standalone `#spec`
+rendering now reconstructs the ordered-`Int` literal, dependent read/addition,
+and program-counter `Init` clauses even before expression result types are
+resolved; it requires the complete conjunction for this class. A focused
+regression failed before that check and passes after it, as does the related
+21-test ordered-assignment suite. This is local evidence, not a hosted result.
 
 The source parser, output checks, native update and visitor kernel, and TLA+
 renderer remain SwiftTLA-owned trust boundaries. Documented Swift behavior is

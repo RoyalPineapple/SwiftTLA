@@ -25,7 +25,18 @@ struct OrderedAssignmentLoweringTests {
             })
             algorithm
         }
-        _ = try spec.compile()
+        let compiled = try spec.compile()
+        let secondID = try #require(compiled.layout.variables.first { $0.declaration.name == "second" }).id
+        let secondInitial = try #require(compiled.semantics.behavior.initializations.first {
+            $0.variable == secondID
+        })
+        guard case .value(let secondExpression) = secondInitial.initialization else {
+            Issue.record("Expected the dependent Int initializer")
+            return
+        }
+        #expect(StraightLineRenderedActionCheck.initialIntPredicate(
+            secondExpression, named: "second", layout: compiled.layout) != nil)
+        _ = try compiled.render()
 
         let expected: [_OrderedIntSourceComponent] = [
             .variable(root: "first", initialization: .value(.int(1))),
