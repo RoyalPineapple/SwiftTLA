@@ -12,6 +12,22 @@ private enum OrderedAssignmentStep: String, CaseIterable, Sendable {
 
 @Suite("Ordered assignment lowering")
 struct OrderedAssignmentLoweringTests {
+    @Test("An accepted Int initializer outside the ordered rule is not marked proved")
+    func otherIntInitializerDoesNotClaimOrderedProof() throws {
+        let spec = #spec("OtherIntInitializer") {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(initial: 1)
+                let second = scope.sharedVar(initial: first * 2)
+                Do(OrderedAssignmentStep.`switch`) {
+                    Assign(first, to: second)
+                }
+            })
+            algorithm
+        }
+        #expect(try spec.loweredSourceModel().orderedIntProofActionNames.isEmpty)
+        _ = try spec.compile()
+    }
+
     @Test("A standalone #spec checks its actual ordered Int builder output")
     func orderedIntSpecChecksRuntimeModel() throws {
         let spec = #spec("OrderedAssignment") {
@@ -1175,8 +1191,8 @@ struct OrderedAssignmentLoweringTests {
         let specification = SequentialDependentIntInitialProofModel.spec
         let source = try #require(specification.sourceAlgorithms.first?.model)
         let lowered = try specification.loweredSourceModel()
-        _ = try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
-            enumerateInitialControl: false)
+        #expect(!(try StraightLineAssignmentCheck.verifySequential(source, lowered: lowered,
+            enumerateInitialControl: false)).isEmpty)
         let terminal = try #require(lowered.actions.last)
         var changed = 0
         func wrongGuard(_ action: ActionExpr) -> ActionExpr {
