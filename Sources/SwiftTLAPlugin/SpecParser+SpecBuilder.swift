@@ -8,6 +8,7 @@ extension ParserSession {
 
     func parseSpecClosure(named name: String, _ closure: ClosureExprSyntax) -> TLASpec {
         var components = TLASpec(name: name, variables: [], actions: [], invariants: [])
+        components.sourceSpecDefaultDeadlockWitness = true
         stateDeclarationOffsets = [:]
         actionDeclarationOffsets = [:]
         propertyDeclarationOffsets = [:]

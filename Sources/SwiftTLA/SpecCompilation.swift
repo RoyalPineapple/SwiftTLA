@@ -235,6 +235,7 @@ struct CompiledModuleMetadata: Sendable {
     let formalDefinitionCount: Int
     let recursiveFunctionCount: Int
     let orderedIntProofActionNames: Set<String>
+    let sourceSpecDefaultDeadlockWitness: Bool
 
     func constantDeclaration(including additionalNames: [String]) -> String? {
         let formalConstants = formalParameters.filter { $0.kind == .constant }.map(\.name)
@@ -253,6 +254,7 @@ struct CompiledModuleMetadata: Sendable {
         formalDefinitionCount = source.formalOperatorDefinitions.count
         recursiveFunctionCount = source.recursiveFuncs.count
         orderedIntProofActionNames = source.orderedIntProofActionNames
+        sourceSpecDefaultDeadlockWitness = source.sourceSpecDefaultDeadlockWitness
     }
 }
 
@@ -2222,6 +2224,9 @@ private extension CompiledModuleMetadata {
         try StraightLineRenderedActionCheck.verifyFiniteInvocations(behavior,
             layout: layout, binders: renderer.bindings.binders, module: directOutput.source)
         let renderedConfiguration = configuration.includingIntrinsicInvariant(directOutput.evaluationInvariant)
+        try StraightLineRenderedActionCheck.verifySourceDefaultDeadlock(renderedConfiguration,
+            rendered: renderedConfiguration.render(usesSymmetryReduction: false),
+            required: sourceSpecDefaultDeadlockWitness && !orderedIntProofActionNames.isEmpty)
         try StraightLineRenderedActionCheck.verifyEvaluationSelection(behavior,
             module: directOutput.source,
             failureDeclarations: directOutput.evaluationFailureDeclarations,

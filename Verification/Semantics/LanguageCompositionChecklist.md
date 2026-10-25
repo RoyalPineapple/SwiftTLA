@@ -364,22 +364,26 @@ checker resource-limit semantics remain open.
 The actual checking paths differ: generated Swift evaluates an authored
 reachability predicate positively, while the TLA+ renderer negates it and
 selects that definition as a TLC invariant. Neither transformation is proved
-for arbitrary accepted predicates. Both deadlock directives interpolate the
-compiled Boolean directly; checking those printed literals against that same
-Boolean would only duplicate the emitter, not independently prove source
-selection. The current first slice has no authored state predicate; its
-selected outcomes are the automatic evaluation-failure check and default
-deadlock, not general invariant or reachability predicates.
+for arbitrary accepted predicates. The ordered-Int source witness now carries
+the `#spec` default deadlock selection separately from compiled behavior.
+Production checks require the root TLA configuration, generated Swift
+`checksDeadlock`, and generated TLA export argument to retain that default.
+Those output checkers remain project-owned trusted code. The focused test and
+22 related ordered-assignment tests pass locally; hosted evidence is pending.
+The current first slice has no
+authored state predicate; its selected outcomes are the automatic
+evaluation-failure check and default deadlock, not general invariant or
+reachability predicates.
 Production source/lowering and actual-output checkers plus wrong-value,
 wrong-location, wrong-order, and omitted-failure mutations are described in
 `README.md`. This is **not** coverage of other accepted constructors.
 
-- [ ] Close the default-deadlock output link for this slice. Independently
-  establish the source default when no `Validation.checkingDeadlock` override
-  is authored; check the actual generated Swift `checksDeadlock` and rendered
-  `CHECK_DEADLOCK` directive against it. A flipped value in either output must
-  fail. Explicit validation overrides remain accepted but need their own
-  selection rule; do not reject them to make this default rule pass.
+- [ ] Validate the default-deadlock output link for this slice. The source
+  default, actual generated Swift declaration, generated export argument, and
+  rendered `CHECK_DEADLOCK` directive are checked; flipped-value and decoy
+  negative controls pass locally, while hosted admission remains pending. Explicit
+  `Validation.checkingDeadlock` overrides remain accepted and need their own
+  selection rule.
 - [x] Finish the full local proof for the current dependent-initializer
   and checking-outcome rules. TLAPS `--strict --nofp` proved the complete
   `SingleAssignment.tla` module; the ordered-assignment and
