@@ -265,15 +265,27 @@ enum StraightLineRenderedActionCheck {
     static func verifyInitialFailureCheckBundle(_ bundle: TLAModuleBundle,
         base: TLAModuleBundle, aggregate: String, constants: [String]) throws {
         let sourceLines = bundle.root.tla.split(separator: "\n").map(String.init)
+        let initName = sourceLines.indices.contains(3)
+            ? String(sourceLines[3].prefix(while: { $0 != " " })) : ""
+        let nextName = sourceLines.indices.contains(4)
+            ? String(sourceLines[4].prefix(while: { $0 != " " })) : ""
+        let initPrefix = bundle.root.name + "__ProbeInit"
+        let nextPrefix = bundle.root.name + "__ProbeNext"
         let expected = ["---- MODULE \(bundle.root.name) ----", "EXTENDS \(base.root.name)",
-            "ASSUME ~\(aggregate)", "===="]
+            "ASSUME ~\(aggregate)", "\(initName) == FALSE", "\(nextName) == FALSE", "===="]
         guard base.root.tla.split(separator: "\n").filter({ $0.hasPrefix("\(aggregate) == ") }).count == 1,
+              initName.hasPrefix(initPrefix),
+              initName.dropFirst(initPrefix.count).allSatisfy({ $0 == "_" }),
+              nextName.hasPrefix(nextPrefix),
+              nextName.dropFirst(nextPrefix.count).allSatisfy({ $0 == "_" }),
+              !base.files.contains(where: { $0.tla.contains(initName) || $0.tla.contains(nextName) }),
               sourceLines == expected,
-              bundle.root.cfg?.split(separator: "\n").map(String.init) == constants,
+              bundle.root.cfg?.split(separator: "\n").map(String.init)
+                == ["INIT \(initName)", "NEXT \(nextName)", "CHECK_DEADLOCK FALSE"] + constants,
               bundle.imports.map(\.tla) == base.files.map(\.tla) else {
             throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                 path: "tla.initialEvaluationSelection",
-                expected: "a state-free check of the generated initial failure predicate",
+                expected: "a zero-state check of the generated initial failure predicate",
                 actual: "the emitted initial failure check differs",
                 nextSafeAction: "Regenerate the TLA+ initial failure check.")
         }

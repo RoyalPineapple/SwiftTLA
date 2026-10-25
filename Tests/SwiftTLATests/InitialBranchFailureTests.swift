@@ -227,7 +227,9 @@ struct InitialBranchFailureTests {
         #expect(check.root == compiledCheck.root)
         #expect(check.imports == compiledCheck.imports)
         #expect(!generated.tlaBundle.tla.contains("ASSUME ~__SwiftTLAAnyInitialEvaluationFailure"))
-        #expect(check.cfg.isEmpty)
+        #expect(check.cfg.contains("INIT "))
+        #expect(check.cfg.contains("NEXT "))
+        #expect(check.cfg.contains("CHECK_DEADLOCK FALSE"))
         #expect(check.imports.map(\.name).contains(generated.tlaBundle.root.name))
 
         let aggregate = "__SwiftTLAAnyInitialEvaluationFailure"
@@ -242,6 +244,14 @@ struct InitialBranchFailureTests {
             Issue.record("The wrong initial failure polarity escaped the output check")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.initialEvaluationSelection")
+        }
+        let missingInit = TLAModuleBundle(root: .init(name: check.root.name,
+            tla: check.tla, cfg: check.cfg.split(separator: "\n")
+                .filter { !$0.hasPrefix("INIT ") }.joined(separator: "\n") + "\n"),
+            imports: check.imports, provenance: check.provenance)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyInitialFailureCheckBundle(missingInit,
+                base: generated.tlaBundle, aggregate: aggregate, constants: [])
         }
     }
 
