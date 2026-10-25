@@ -182,6 +182,14 @@ compiled-side obligations even though they have no same-named source case.
 The first ordered-`Int` slice covers only literal `value`, resolved prior-state
 reads, and checked `add` in its stated positions; every other case above
 remains open unless a separate complete rule is established.
+`OrderedIntExpressionRule.tla` proves that both evaluation histories exist
+for every finite topologically indexed expression graph of those three cases.
+They agree at every node on the value or the first left-to-right failure, including the
+overflow operands. Reversing generated child-failure priority makes the proof
+fail. A checked mapping from accepted source syntax to this indexed rule
+remains open. The real lowerer and output verifiers structurally check these
+trees, but their correctness remains a SwiftTLA-owned trust boundary; this
+theorem alone does not close an actual-output link.
 
 ### Algorithm-statement domain
 
