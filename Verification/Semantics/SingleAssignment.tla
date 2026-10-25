@@ -3299,6 +3299,47 @@ THEOREM ExactSequentialCheckingOutcomes ==
         SequentialNoDeadlockVerdict, SequentialValidRun, SequentialTraceStep,
         SequentialStates, SequentialEdges
 
+SequentialActionFailureReachable(initials, edges, failures) ==
+    \E run \in [Nat -> SequentialStates] :
+        /\ SequentialValidRun(initials, edges, run)
+        /\ \E index \in Nat, label \in ActionLabels,
+              operands \in (Int \X Int) :
+            <<run[index], label, "addition", operands>> \in failures
+
+SourceSequentialSelectedOutcome(initials, edges, initialFailures, actionFailures) ==
+    IF initialFailures # {}
+       \/ SequentialActionFailureReachable(initials, edges, actionFailures)
+    THEN "evaluationFailure"
+    ELSE IF SequentialNoDeadlockVerdict(initials, edges)
+         THEN "complete" ELSE "deadlock"
+
+GeneratedSequentialSelectedOutcome(initials, edges, initialFailures, actionFailures) ==
+    IF initialFailures = {}
+       /\ ~SequentialActionFailureReachable(initials, edges, actionFailures)
+    THEN IF SequentialNoDeadlockVerdict(initials, edges)
+         THEN "complete" ELSE "deadlock"
+    ELSE "evaluationFailure"
+
+THEOREM ExactSequentialSelectedOutcome ==
+    ASSUME NEW sourceInitials \in SUBSET SequentialStates,
+           NEW generatedInitials \in SUBSET SequentialStates,
+           NEW sourceEdges \in SUBSET SequentialEdges,
+           NEW generatedEdges \in SUBSET SequentialEdges,
+           NEW sourceInitialFailures, NEW generatedInitialFailures,
+           NEW sourceActionFailures, NEW generatedActionFailures,
+           sourceInitials = generatedInitials,
+           sourceEdges = generatedEdges,
+           sourceInitialFailures = generatedInitialFailures,
+           sourceActionFailures = generatedActionFailures
+    PROVE SourceSequentialSelectedOutcome(sourceInitials, sourceEdges,
+              sourceInitialFailures, sourceActionFailures)
+        = GeneratedSequentialSelectedOutcome(generatedInitials, generatedEdges,
+              generatedInitialFailures, generatedActionFailures)
+    BY SMT DEF SourceSequentialSelectedOutcome,
+        GeneratedSequentialSelectedOutcome,
+        SequentialActionFailureReachable, SequentialNoDeadlockVerdict,
+        SequentialValidRun, SequentialTraceStep
+
 GeneratedTwoWrites(state, firstKey, firstValue, secondKey, secondValue) ==
     LET firstUpdate ==
             GeneratedMerge(GeneratedEmptyUpdates(state), firstKey, firstValue)
