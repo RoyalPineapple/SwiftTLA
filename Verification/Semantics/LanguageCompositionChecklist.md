@@ -190,6 +190,14 @@ fail. A checked mapping from accepted source syntax to this indexed rule
 remains open. The real lowerer and output verifiers structurally check these
 trees, but their correctness remains a SwiftTLA-owned trust boundary; this
 theorem alone does not close an actual-output link.
+`OrderedIntExpressionPreservesAssignmentOutcome` composes that expression
+rule with an arbitrary root assignment: the separately defined source and
+generated updates have the same labeled Int-data-state edge, and a failed
+expression yields the same labeled failure without a successor. Replacing
+the generated failure relation with the empty set breaks the theorem. This
+discharges the expression-to-assignment rule, not the missing source-syntax
+mapping or either concrete emitter link. The program-counter update is
+composed separately in `SingleAssignment.tla`.
 
 ### Algorithm-statement domain
 
