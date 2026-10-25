@@ -446,4 +446,61 @@ THEOREM EveryOrderedIntExpressionPreservesOutcome ==
         BY <1>1, ExpressionHistoryPreservesValueAndFirstFailure
     <1>. QED BY <1>1, <1>2, SMT
 
+SourceAssignmentEdges(state, root, label, outcome) ==
+    IF outcome.ok THEN
+        {<<state, label, [state EXCEPT ![root] = outcome.value]>>}
+    ELSE {}
+
+GeneratedAssignmentEdges(state, root, label, outcome) ==
+    IF outcome.ok THEN
+        {<<state, label,
+           [key \in Keys |-> IF key = root THEN outcome.value ELSE state[key]]>>}
+    ELSE {}
+
+SourceAssignmentFailures(state, label, outcome) ==
+    IF outcome.ok THEN {} ELSE {<<state, label, outcome.failure>>}
+
+GeneratedAssignmentFailures(state, label, outcome) ==
+    IF ~outcome.ok THEN {<<state, label, outcome.failure>>} ELSE {}
+
+THEOREM AssignmentUpdateFormsAgree ==
+    ASSUME NEW state \in [Keys -> SwiftIntMin..SwiftIntMax],
+           NEW root \in Keys, NEW value
+    PROVE [state EXCEPT ![root] = value]
+        = [key \in Keys |-> IF key = root THEN value ELSE state[key]]
+    BY SMT
+
+THEOREM OrderedIntExpressionPreservesAssignmentOutcome ==
+    ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
+           NEW state,
+           ExpressionPlan(count, kinds, literals, reads, left, right, state),
+           NEW root \in Keys, NEW label
+    PROVE \E source, generated :
+        /\ SourceExpressionHistory(count, kinds, literals, reads, left,
+               right, state, source)
+        /\ GeneratedExpressionHistory(count, kinds, literals, reads, left,
+               right, state, generated)
+        /\ SourceAssignmentEdges(state, root, label, source[count])
+             = GeneratedAssignmentEdges(state, root, label, generated[count])
+        /\ SourceAssignmentFailures(state, label, source[count])
+             = GeneratedAssignmentFailures(state, label, generated[count])
+    PROOF
+    <1>1. PICK source, generated :
+            /\ SourceExpressionHistory(count, kinds, literals, reads,
+                   left, right, state, source)
+            /\ GeneratedExpressionHistory(count, kinds, literals, reads,
+                   left, right, state, generated)
+            /\ \A index \in 0..count :
+                   OutcomeAgrees(source, generated, index)
+        BY EveryOrderedIntExpressionPreservesOutcome
+    <1>2. source[count] = generated[count]
+        BY <1>1, SMT DEF ExpressionPlan, OutcomeAgrees
+    <1>3. [state EXCEPT ![root] = source[count].value]
+            = [key \in Keys |-> IF key = root THEN generated[count].value
+                ELSE state[key]]
+        BY <1>2, AssignmentUpdateFormsAgree, SMT DEF ExpressionPlan
+    <1>. QED BY <1>1, <1>2, <1>3, SMT
+        DEF SourceAssignmentEdges, GeneratedAssignmentEdges,
+            SourceAssignmentFailures, GeneratedAssignmentFailures
+
 =============================================================================
