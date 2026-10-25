@@ -1,7 +1,10 @@
 import Foundation
 import Testing
+import SwiftParser
+import SwiftSyntax
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
+import UpstreamParity
 
 private enum InvalidInitialFailureShape: Error { case unexpected }
 
@@ -92,6 +95,13 @@ struct InitialBranchFailureTests {
             operands: [3, Int.max]))
 
         let rendered = try CheckedAdditionPrefixInitialModel.render().tlaBundle.root.tla
+        let selectedRecordName = "__SwiftTLASelectedInitialFailureRecord"
+        let selectedRecord = try #require(rendered.split(separator: "\n").first {
+            $0.hasPrefix("\(selectedRecordName) == ")
+        })
+        #expect(selectedRecord.contains("site |-> 3"))
+        #expect(selectedRecord.contains("kind |-> \"integerOverflow.addition\""))
+        #expect(selectedRecord.contains("operands |-> <<"))
         let aggregateName = "__SwiftTLAAnyInitialEvaluationFailure"
         let aggregate = try #require(rendered.split(separator: "\n").first {
             $0.hasPrefix("\(aggregateName) == ")
@@ -102,6 +112,13 @@ struct InitialBranchFailureTests {
         #expect(!rendered.contains("ASSUME ~\(aggregateName)"))
         try StraightLineRenderedActionCheck.verifyInitialFailureAggregate(rendered,
             predicates: predicates, name: aggregateName)
+        let wrongRecord = rendered.replacingOccurrences(of: "site |-> 3",
+            with: "site |-> 2")
+        #expect(wrongRecord != rendered)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyInitialFailureRecord(wrongRecord,
+                declaration: String(selectedRecord))
+        }
         let missingFailure = rendered.replacingOccurrences(of: String(aggregate),
             with: "\(aggregateName) == \(predicates[0])")
         do {
@@ -121,6 +138,28 @@ struct InitialBranchFailureTests {
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
             in: CheckedAdditionPrefixInitialModel.spec.compile()))
         let last = try #require(program.layout.variables.first { $0.declaration.name == "last" })
+        #expect(generated.firstFailureInitializerOrdinal == last.id.ordinal)
+        let compiledOutcome = try CompiledRuntime(program: program).initialOutcomes()
+        #expect(compiledOutcome.firstFailureInitializerOrdinal == last.id.ordinal)
+        #expect(compiledOutcome.firstFailure == generated.firstFailure)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "CheckedAdditionPrefixInitialModel", program: program))
+        let swiftOutput = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        try emitter.verifyDeterministicIntInitialOutput(swiftOutput)
+        let siteAssignment = "evaluatingInitializerOrdinal = \(last.id.ordinal)"
+        let wrongSwift = swiftOutput.description.replacingOccurrences(of: siteAssignment,
+            with: "evaluatingInitializerOrdinal = \(last.id.ordinal - 1)")
+        #expect(wrongSwift != swiftOutput.description)
+        let wrongSwiftOutput = try #require(Parser.parse(source: wrongSwift)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try emitter.verifyDeterministicIntInitialOutput(wrongSwiftOutput)
+            Issue.record("A wrong generated Swift failure site escaped the output check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+        }
         guard let index = program.behavior.initializations.firstIndex(where: {
             $0.variable == last.id
         }) else {
@@ -224,6 +263,8 @@ struct InitialBranchFailureTests {
         let generated = try CheckedAdditionPrefixInitialModel.render()
         let check = try #require(try generated.initialEvaluationFailureBundle())
         let compiledCheck = try #require(try compiled.initialEvaluationFailureBundle())
+        let recordedCheck = try #require(try generated.initialEvaluationFailureBundle(capturingRecord: true))
+        #expect(recordedCheck.tla.contains("PrintT(__SwiftTLASelectedInitialFailureRecord)"))
         #expect(check.root == compiledCheck.root)
         #expect(check.imports == compiledCheck.imports)
         #expect(!generated.tlaBundle.tla.contains("ASSUME ~__SwiftTLAAnyInitialEvaluationFailure"))

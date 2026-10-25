@@ -189,9 +189,59 @@ jobs:
           path: .build/temporal-symmetry-conformance
           if-no-files-found: error
 
+  initial-failure-contract:
+    name: Ordered Int initial failure payload
+    needs: prepare
+    if: ${{ needs.prepare.result == 'success' && (github.event_name != 'workflow_dispatch' || (inputs.case_id == '' && inputs.case_ids == '' && inputs.replay_run_id == '')) }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          fetch-depth: 0
+          submodules: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+      - uses: actions/download-artifact@v5
+        with:
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
+          path: .build/release
+      - name: Capture and compare selected initial failure
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          test -x .build/release/tlc-validate
+          ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT" >/dev/null
+          mkdir -p .build/initial-failure-artifacts
+          .build/release/tlc-validate initial-failure run \
+            --output .build/initial-failure-artifacts/case
+          jq -e --arg sha "$SWIFT_TLA_SHA" '
+            .schema == "swifttla.initial-failure-evidence-v1"
+            and .sourceSHA == $sha and .result == "exact" and .graphCompared == false
+            and .site == 3 and .kind == "integerOverflow.addition"
+          ' .build/initial-failure-artifacts/case/comparison.json
+          python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin)["operands"] == [3, 2**63 - 1] else 1)' \
+            < .build/initial-failure-artifacts/case/comparison.json
+          test -s .build/initial-failure-artifacts/case/native-initial-failure.json
+          test -s .build/initial-failure-artifacts/case/tlc/tlc-evaluation.bin
+      - name: Retain source revision
+        if: always()
+        run: |
+          mkdir -p .build/initial-failure-artifacts
+          printf '%s\n' "$SWIFT_TLA_SHA" > .build/initial-failure-artifacts/source-sha.txt
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: initial-failure-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/initial-failure-artifacts
+          if-no-files-found: error
+
   validation-pipeline:
     name: ${{ github.event_name == 'workflow_dispatch' && (inputs.case_id != '' || inputs.case_ids != '') && 'Independent validation diagnostic' || 'Independent validation admission' }}
-    needs: [prepare, case-validation, temporal-symmetry-parity]
+    needs: [prepare, case-validation, temporal-symmetry-parity, initial-failure-contract]
     if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.replay_run_id == '') }}
     runs-on: ubuntu-latest
     steps:
@@ -200,6 +250,7 @@ jobs:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           CASE_RESULT: ${{ needs.case-validation.result }}
           TEMPORAL_RESULT: ${{ needs.temporal-symmetry-parity.result }}
+          INITIAL_FAILURE_RESULT: ${{ needs.initial-failure-contract.result }}
           FOCUSED_CASE: ${{ inputs.case_id }}
           BATCH_CASES: ${{ inputs.case_ids }}
         run: |
@@ -207,8 +258,10 @@ jobs:
           test "$CASE_RESULT" = success
           if [ -n "$BATCH_CASES" ] || [ -n "$FOCUSED_CASE" ]; then
             test "$TEMPORAL_RESULT" = skipped
+            test "$INITIAL_FAILURE_RESULT" = skipped
           else
             test "$TEMPORAL_RESULT" = success
+            test "$INITIAL_FAILURE_RESULT" = success
           fi
 
   comparison-replay:
