@@ -259,6 +259,10 @@ package enum ScenarioEvidenceComparison {
               graphPin.isEqual(initialPin),
               let invocation = process["invocation"] as? [String: Any],
               invocation["exitStatus"] as? Int == (verdict == .satisfied ? 0 : 10),
+              (try? GeneratedTLCOracle.initialFailureVerdict(
+                  outcome: verdict == .satisfied ? .completed : .assumptionViolation,
+                  retained: oracle.appendingPathComponent("tlc-initial-failure"),
+                  module: bundle.root.name)) == verdict,
               let arguments = invocation["arguments"] as? [String],
               arguments.contains("-workers"), arguments.contains("-fp"),
               !arguments.contains("-simulate") else {
