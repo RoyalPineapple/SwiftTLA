@@ -141,6 +141,7 @@ extension NativeSwiftEmitter {
                 _generatedFairnessProfileOperators: \(program.behavior.fairnessProfiles.isEmpty ? "[:]" : "[" + program.behavior.fairnessProfiles.map {
                     "\(String(reflecting: $0.name)): \(String(reflecting: $0.operatorName))"
                 }.joined(separator: ", ") + "]"),
+                _generatedInitialEvaluationFailure: \(module.initialEvaluationFailure.map { String(reflecting: $0) } ?? "nil"),
                 _generatedTemporalObligations: _obligations)
             \(generatedLinks.joined(separator: "\n"))
             return _rendered
