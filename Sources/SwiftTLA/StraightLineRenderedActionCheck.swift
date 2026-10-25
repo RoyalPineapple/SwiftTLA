@@ -169,7 +169,7 @@ enum StraightLineRenderedActionCheck {
         after prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>,
         names: [VariableID: String],
         emitted: [(failure: RenderedEvaluationFailure, relation: String,
-                   operandsName: String?, selection: String)],
+                   operandsName: String?, selection: String, operationDeclaration: String?)],
         layout: CompiledLayout
     ) throws {
         guard let tree = addition(expression, variables: names, binders: [:]) else { return }
@@ -209,6 +209,11 @@ enum StraightLineRenderedActionCheck {
         for (site, output) in zip(tree.sites, emitted) {
             guard case .overflow(.addition) = output.failure.kind,
                   let operandsName = output.operandsName,
+                  let operation = output.operationDeclaration?.components(separatedBy: " == "),
+                  operation.count == 2,
+                  operation[0].hasPrefix("__SwiftTLA"),
+                  operation[0].contains("OverflowOperation"),
+                  operation[1] == "\"addition\"",
                   output.failure.operands == site.operands else { throw mismatch() }
             let predicate = preceding.reversed().reduce("~(\(site.guardText))") { value, guard_ in
                 "(IF \(guard_) THEN \(value) ELSE FALSE)"

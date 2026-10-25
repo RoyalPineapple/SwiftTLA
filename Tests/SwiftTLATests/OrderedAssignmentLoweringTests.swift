@@ -1357,19 +1357,24 @@ struct OrderedAssignmentLoweringTests {
         let selections = String(failureAggregate.dropFirst(
             "__SwiftTLAAnyInitialEvaluationFailure == ".count))
             .components(separatedBy: " \\/ ").map { String($0.dropFirst().dropLast()) }
+        let operationDeclarations = lines.filter {
+            $0.hasPrefix("__SwiftTLAInitialOverflowOperation\(variable.id.ordinal)")
+        }
         #expect(failures.count == 2)
         #expect(declarations.count == 2)
         #expect(selections.count == 2)
-        let emitted = try zip(zip(failures, declarations), selections).map { pair, selection ->
+        #expect(operationDeclarations.count == 2)
+        let emitted = try zip(zip(zip(failures, declarations), selections),
+            operationDeclarations).map { pair, operationDeclaration ->
             (failure: RenderedEvaluationFailure, relation: String,
-             operandsName: String?, selection: String) in
-            let (failure, declaration) = pair
+             operandsName: String?, selection: String, operationDeclaration: String?) in
+            let ((failure, declaration), selection) = pair
             let separator = try #require(declaration.range(of: " == "))
             let header = String(declaration[..<separator.lowerBound])
             let open = try #require(header.firstIndex(of: "("))
             let close = try #require(header.lastIndex(of: ")"))
             return (failure, String(declaration[separator.upperBound...]),
-                String(header[header.index(after: open)..<close]), selection)
+                String(header[header.index(after: open)..<close]), selection, operationDeclaration)
         }
         try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(resolvedExpression,
             after: prefix, names: names, emitted: emitted, layout: program.layout)

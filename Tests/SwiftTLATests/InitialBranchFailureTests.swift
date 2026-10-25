@@ -150,16 +150,31 @@ struct InitialBranchFailureTests {
         let open = try #require(header.firstIndex(of: "("))
         let close = try #require(header.lastIndex(of: ")"))
         let operandsName = String(header[header.index(after: open)..<close])
+        let operationDeclaration = try #require(rendered.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAInitialOverflowOperation3 == ")
+        }).description
         try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
             after: prefix, names: names,
-            emitted: [(checkedFailure, relation, operandsName, predicates[1])], layout: program.layout)
+            emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration)],
+            layout: program.layout)
 
         #expect(predicates[1] != "FALSE")
         do {
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                 after: prefix, names: names,
-                emitted: [(checkedFailure, relation, operandsName, "FALSE")], layout: program.layout)
+                emitted: [(checkedFailure, relation, operandsName, "FALSE", operationDeclaration)],
+                layout: program.layout)
             Issue.record("A changed initial failure selection escaped the emitted-output check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.initialEvaluationFailures")
+        }
+        do {
+            try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
+                after: prefix, names: names,
+                emitted: [(checkedFailure, relation, operandsName, predicates[1],
+                    operationDeclaration.replacingOccurrences(of: "\"addition\"", with: "\"subtraction\""))],
+                layout: program.layout)
+            Issue.record("A changed initial overflow kind escaped the emitted-output check")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.initialEvaluationFailures")
         }
@@ -182,7 +197,8 @@ struct InitialBranchFailureTests {
         do {
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                 after: prefix, names: names,
-                emitted: [(checkedFailure, wrong, operandsName, predicates[1])], layout: program.layout)
+                emitted: [(checkedFailure, wrong, operandsName, predicates[1], operationDeclaration)],
+                layout: program.layout)
             Issue.record("A later initial failure escaped its checked prefix")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.initialEvaluationFailures")
