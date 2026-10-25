@@ -186,10 +186,14 @@ remains open unless a separate complete rule is established.
 for every finite topologically indexed expression graph of those three cases.
 They agree at every node on the value or the first left-to-right failure, including the
 overflow operands. Reversing generated child-failure priority makes the proof
-fail. A checked mapping from accepted source syntax to this indexed rule
-remains open. The real lowerer and output verifiers structurally check these
-trees, but their correctness remains a SwiftTLA-owned trust boundary; this
-theorem alone does not close an actual-output link.
+fail. For the recognized ordered-`Int` class, `StraightLineAssignmentCheck`
+now constructs postorder indexed plans independently from source and lowered
+initializer trees, and from source and captured `Do` assignment trees. It
+compares literal values, resolved root reads, ordered child indices, and
+operations; the existing wrong-value and wrong-order controls pass. The
+checker and its plan construction remain SwiftTLA-owned trust boundaries,
+not a TLAPS proof of the compiler implementation. This does not extend the
+mapping to other accepted expressions or close either actual-output link.
 `OrderedIntExpressionPreservesAssignmentOutcome` composes that expression
 rule with an arbitrary root assignment: the separately defined source and
 generated updates have the same labeled Int-data-state edge, and a failed
