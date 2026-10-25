@@ -392,6 +392,15 @@ pointwise-equal selected state predicates. This is a graph-to-verdict rule:
 it does not establish that an arbitrary authored predicate is lowered and
 emitted identically. That property-output link, assumptions, fairness, and
 checker resource-limit semantics remain open.
+`ExactSequentialSelectedOutcome` adds the ordered-`Int` checking decision:
+equal initial states, labeled edges, initial failure records, and reachable
+action failure records imply the same selected result, with an evaluation
+failure taking precedence over deadlock. Reversing that priority in the
+generated rule breaks the theorem. This is conditional on all four evidence
+sets agreeing; it does not prove that the actual TLA+ checker selects every
+emitted initial-failure declaration. The renderer currently selects action
+failures in its intrinsic invariant but only declares initial failures, so
+the initial-failure checking-output link remains open.
 The actual checking paths differ: generated Swift evaluates an authored
 reachability predicate positively, while the TLA+ renderer negates it and
 selects that definition as a TLC invariant. Neither transformation is proved
@@ -417,6 +426,10 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   pending. Explicit
   `Validation.checkingDeadlock` overrides remain accepted and need their own
   selection rule.
+- [ ] Connect emitted initial-failure declarations to the actual TLA+
+  checking outcome, including an initializer that fails before any complete
+  initial state exists. Do not count declaration presence or the conditional
+  selected-outcome theorem as that output link.
 - [x] Finish the full local proof for the current dependent-initializer
   and checking-outcome rules. TLAPS `--strict --nofp` proved the complete
   `SingleAssignment.tla` module; the ordered-assignment and
