@@ -12,8 +12,8 @@ private enum OrderedAssignmentStep: String, CaseIterable, Sendable {
 
 @Suite("Ordered assignment lowering")
 struct OrderedAssignmentLoweringTests {
-    @Test("An accepted Int initializer outside the ordered rule is not marked proved")
-    func otherIntInitializerDoesNotClaimOrderedProof() throws {
+    @Test("An unrelated initializer preserves an ordered action output check")
+    func otherIntInitializerRetainsActionCheck() throws {
         let spec = #spec("OtherIntInitializer") {
             let algorithm = Algorithm(scoped: { scope in
                 let first = scope.sharedVar(initial: 1)
@@ -24,8 +24,12 @@ struct OrderedAssignmentLoweringTests {
             })
             algorithm
         }
-        #expect(try spec.loweredSourceModel().orderedIntProofActionNames.isEmpty)
-        _ = try spec.compile()
+        let compiled = try spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        #expect(program.requiresOrderedIntOutput(action.id))
+        #expect(!program.requiresSourceDefaultDeadlockOutput)
+        _ = try compiled.render()
     }
 
     @Test("A standalone #spec checks its actual ordered Int builder output")

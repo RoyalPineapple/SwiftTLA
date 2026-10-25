@@ -386,11 +386,13 @@ ordered root `Int` assignments from literals, prior-state reads and checked addi
 deterministic `Int` initializers of those forms, and the hidden program
 counter. `SingleAssignment.tla` has a general composition theorem for complete
 initial sets, labeled steps, ordered action/initial failures, and termination.
-The compiler issues this slice's proof marker only when each shared initializer
-is a literal or a read/addition tree over earlier shared roots. An accepted
-initializer outside that rule, such as multiplication, still compiles but is
-not marked proved; a focused negative control failed before this eligibility
-check and passes locally after it. This does not prove the excluded forms.
+The compiler marks an ordered-Int action for strict output checking independently
+of its initializers. The whole-program source witness is issued only when the
+authored initializers and steps match this slice's syntax. An accepted initializer
+outside that rule, such as multiplication, still compiles and retains its action
+output check, but does not receive the whole-program witness or default-deadlock
+claim. A focused negative control guards this distinction. This does not prove
+the excluded initializer.
 `ExactSequentialCheckingOutcomes` derives invariant, reachability, and
 deadlock verdict agreement from equal complete initial/edge sets and
 pointwise-equal selected state predicates. This is a graph-to-verdict rule:
