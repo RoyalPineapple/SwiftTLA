@@ -38,10 +38,10 @@ struct TLCConfigurationSelectionTests {
             #expect(bundle.imports == rendered.tlaBundle.imports)
             #expect(bundle.provenance == rendered.tlaBundle.provenance)
         }
-        #expect(complete.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\n")
-        #expect(invariant.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK TRUE\nINVARIANT Nonnegative\n")
-        #expect(temporal.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\nPROPERTY Progress\n")
-        #expect(initialAndNext.cfg == "INIT Init\nNEXT Next\nCHECK_DEADLOCK TRUE\nINVARIANT Nonnegative\n")
+        #expect(complete.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\nINVARIANT __SwiftTLAEvaluationOK\n")
+        #expect(invariant.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK TRUE\nINVARIANT __SwiftTLAEvaluationOK\nINVARIANT Nonnegative\n")
+        #expect(temporal.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\nINVARIANT __SwiftTLAEvaluationOK\nPROPERTY Progress\n")
+        #expect(initialAndNext.cfg == "INIT Init\nNEXT Next\nCHECK_DEADLOCK TRUE\nINVARIANT __SwiftTLAEvaluationOK\nINVARIANT Nonnegative\n")
         #expect(rendered.tlaBundle.cfg.contains("INVARIANT Nonnegative\nPROPERTY Progress\n"))
         #expect(throws: CompilationDiagnostic.self) {
             try rendered.tlaBundle(checking: ["Advance"], checkDeadlock: false)

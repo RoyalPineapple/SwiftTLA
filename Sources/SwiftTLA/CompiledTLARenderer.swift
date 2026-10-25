@@ -546,13 +546,12 @@ struct CompiledTLARenderer {
         selected: String,
         otherwise: String
     ) throws -> String {
-        guard case .set(let memberType) = domain.resultType,
-              let failure = anyFailure else {
+        guard let failure = anyFailure else {
             throw CompilationDiagnostic(code: .unsupportedCanonicalCandidateOrder, stage: .rendering,
                 path: "actions.with[\(binder.ordinal)].domain",
-                expected: "a set domain and an identified branch failure",
-                actual: "the candidate failure order cannot be established",
-                nextSafeAction: "Use a set domain whose candidate order the TLA+ renderer can reproduce.")
+                expected: "an aggregate branch-failure predicate",
+                actual: "the branch has no aggregate failure predicate",
+                nextSafeAction: "Report the missing compiled failure predicate for this With branch.")
         }
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
             .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
@@ -567,7 +566,8 @@ struct CompiledTLARenderer {
         let first = names[1]
         let earlier = names[2]
         let ordered: String
-        if let typedOrder = try canonicalLeastPredicate(memberType, first, earlier) {
+        if case .set(let memberType) = domain.resultType,
+           let typedOrder = try canonicalLeastPredicate(memberType, first, earlier) {
             ordered = typedOrder
         } else if let members = closedChoiceMembers(domain) ?? parameterChoiceMembers(domain) {
             ordered = try rankedLeastPredicate(members, first, earlier)
@@ -1353,7 +1353,7 @@ struct CompiledTLARenderer {
         default:
             return nil
         }
-        guard members.count > 1, members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }
+        guard !members.isEmpty, members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }
         return Array(Set(members)).sorted()
     }
 
