@@ -429,6 +429,10 @@ initializer guards, separately from its parameterized failure relation. A
 wrong-selection mutation is rejected; the 10 initial-branch and 23
 ordered-assignment tests pass locally. This checks the emitted formula, not
 TLC's exact failure payload or the verifier's own correctness.
+The same output link now checks each emitted checked-addition overflow
+operation declaration against the compiled failure kind; a wrong-kind
+mutation is a focused negative control. This checks the rendered kind
+declaration, not TLC's extraction of the exact failure record.
 The generated-TLC initial-failure probe now permits the model's original
 assumptions but accepts a false assumption as its verdict only when TLC
 attributes it to the probe module; retained-evidence comparison repeats
