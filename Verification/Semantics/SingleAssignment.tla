@@ -3040,6 +3040,46 @@ THEOREM GuardedInitialHistoriesAgree ==
         BY <1>1, <1>2, NatInduction
     <1>. QED BY <1>3, SMT DEF P
 
+THEOREM DeterministicAdditionInitialOutcomeComposition ==
+    ASSUME NEW start \in States,
+           NEW plans \in Seq(DeterministicInitialPlans),
+           NEW path \in [0..Len(plans) -> States],
+           NEW guards \in Seq(BOOLEAN),
+           NEW defined \in [0..Len(plans) -> BOOLEAN],
+           NEW operands \in [1..Len(plans) -> (Int \X Int)],
+           NEW source \in [0..Len(plans) -> SUBSET States],
+           NEW generated \in [0..Len(plans) -> SUBSET States],
+           Len(guards) = Len(plans),
+           path[0] = start,
+           DeterministicInitialPath(plans, path, guards),
+           SourceGuardedInitialHistory({start}, plans, source),
+           GeneratedGuardedInitialHistory({start}, plans, generated),
+           InitialGuardHistory(guards, defined)
+    PROVE /\ source[Len(plans)] = generated[Len(plans)]
+          /\ generated[Len(plans)] =
+              IF InitialPrefixDefined(guards, Len(plans))
+              THEN {path[Len(plans)]} ELSE {}
+          /\ SourceInitialFailureRecords(guards, operands)
+              = RenderedInitialFailureRecords(guards, defined, operands)
+          /\ ((SourceInitialFailureRecords(guards, operands) = {})
+              <=> ~RenderedAnyInitialFailure(guards, defined))
+    PROOF
+    <1>1. {start} \in SUBSET States
+        BY SMT
+    <1>2. source[Len(plans)] = generated[Len(plans)]
+        BY <1>1, GuardedInitialHistoriesAgree, SMT
+    <1>3. source[Len(plans)] =
+            IF InitialPrefixDefined(guards, Len(plans))
+            THEN {path[Len(plans)]} ELSE {}
+        BY DeterministicInitialFailureLeavesNoState, SMT
+    <1>4. (SourceInitialFailureRecords(guards, operands) = {})
+            <=> ~RenderedAnyInitialFailure(guards, defined)
+        BY SelectedInitialFailureMatchesSourceRecords, SMT
+    <1>5. SourceInitialFailureRecords(guards, operands)
+            = RenderedInitialFailureRecords(guards, defined, operands)
+        BY OrderedInitialFailurePayloadsAgree, SMT
+    <1>. QED BY <1>2, <1>3, <1>4, <1>5, SMT
+
 THEOREM GuardedSequentialIntInitialSetsAgree ==
     ASSUME NEW start \in SUBSET States,
            NEW plans \in Seq(DeterministicInitialPlans),

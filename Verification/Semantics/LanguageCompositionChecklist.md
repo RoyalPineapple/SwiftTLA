@@ -418,6 +418,11 @@ deterministic initializer plans that a prefix has its single expected state
 exactly while every guard in that prefix succeeds; after a failed guard, it
 has no state. This is a source-rule theorem, not a check of the emitted TLA+
 failure verdict or payload.
+`DeterministicAdditionInitialOutcomeComposition` combines that rule with generated
+initial-state equality, the symbolic ordered failure records, and the selected
+failure-existence rule for the ordered-`Int` addition plans and guard history.
+Its focused TLAPS obligations pass locally. It still assumes the real lowerer
+and output checks correctly link the emitted artifacts to those plans and records.
 
 For recognized ordered-`Int` scenarios without a view or sampled initializer,
 the generated Swift validation methods now require the full initial outcome
@@ -480,6 +485,9 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   after any prefix, including dependent plans. The general source-rule theorem
   and the full `SingleAssignment.tla` module pass locally; actual TLC verdict
   and payload parity remain open.
+- [x] Compose deterministic initial state and symbolic failure rules over the
+  same arbitrary-length plan. Focused TLAPS obligations pass locally; the
+  emitted-artifact links and TLC failure payload remain separate boundaries.
 - [x] Check nested dependent `Int` addition's actual TLA+ initial-failure
   relations in source order. The emitted-output checker rejects swapped
   failure sites; this local regression does not establish every initializer
