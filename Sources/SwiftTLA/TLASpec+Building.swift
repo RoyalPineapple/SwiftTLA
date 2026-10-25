@@ -17,6 +17,7 @@ extension TLASpec {
       ))
       return checked
     }
+    checked.sourceSpecDefaultDeadlockWitness = true
     return checked
   }
 
@@ -250,6 +251,7 @@ extension TLASpec {
     lowered.initialInvariantSelections = initialInvariantSelections
     lowered.algorithmPhase = .lowered
     lowered.orderedIntProofActionNames = orderedIntProofActionNames
+    lowered.sourceSpecDefaultDeadlockWitness = sourceSpecDefaultDeadlockWitness
     return lowered
   }
 

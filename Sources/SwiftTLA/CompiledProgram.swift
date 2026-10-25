@@ -47,6 +47,11 @@ package struct CompiledProgram: Sendable {
         moduleMetadata.orderedIntProofActionNames.contains(layout.actions[action.ordinal].declaration.name)
     }
 
+    package var requiresSourceDefaultDeadlockOutput: Bool {
+        moduleMetadata.sourceSpecDefaultDeadlockWitness
+            && !moduleMetadata.orderedIntProofActionNames.isEmpty
+    }
+
     package func requireImmutableDomain(_ domain: CompiledExpression, path: String) throws {
         var pending = [domain]
         var visited: Set<CompiledExpression> = []

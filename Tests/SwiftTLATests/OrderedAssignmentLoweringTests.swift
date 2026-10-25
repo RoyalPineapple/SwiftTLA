@@ -962,6 +962,63 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
+    @Test("An ordered Int #spec retains default deadlock checking in both outputs")
+    func orderedIntSourceRetainsDefaultDeadlockChecking() throws {
+        let specification = SequentialCopyProofModel.spec
+        let compiled = try specification.compile()
+        let cfg = try compiled.render().tlaBundle.cfg
+        #expect(cfg.contains("CHECK_DEADLOCK TRUE\n"))
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "SequentialCopyProofModel", program: program))
+        let declarations = try emitter.propertyDeclarations(configurationParameters: "")
+        let deadlock = try #require(declarations.first {
+            $0.as(VariableDeclSyntax.self)?.bindings.first?.pattern
+                .as(IdentifierPatternSyntax.self)?.identifier.text == "checksDeadlock"
+        })
+        try verifyGeneratedSourceDefaultDeadlock(deadlock, required: true)
+        let flippedSwift = deadlock.description.replacingOccurrences(of: "true", with: "false")
+        #expect(flippedSwift != deadlock.description)
+        let flippedDeclaration = try #require(Parser.parse(source: flippedSwift)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedSourceDefaultDeadlock(flippedDeclaration, required: true)
+        }
+        let export = try #require(try emitter.exportDeclarations().first)
+        try verifyGeneratedExportDefaultDeadlock(export, required: true)
+        let flippedExport = export.description.replacingOccurrences(
+            of: "checkDeadlock: true", with: "checkDeadlock: false")
+        #expect(flippedExport != export.description)
+        let flippedExportDeclaration = try #require(Parser.parse(source: flippedExport)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedExportDefaultDeadlock(flippedExportDeclaration, required: true)
+        }
+        let decoyExport = flippedExport.replacingOccurrences(of: "return _rendered",
+            with: "_ = decoy(checkDeadlock: true)\nreturn _rendered")
+        let decoyDeclaration = try #require(Parser.parse(source: decoyExport)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedExportDefaultDeadlock(decoyDeclaration, required: true)
+        }
+        #expect(try SequentialCopyProofModel.render().tlaBundle.cfg.contains("CHECK_DEADLOCK TRUE\n"))
+
+        var flippedSource = specification
+        flippedSource.checkDeadlock = false
+        #expect(throws: CompilationDiagnostic.self) {
+            try flippedSource.compile().render()
+        }
+        let configuration = try program.renderModule().configuration
+        let flippedCFG = cfg.replacingOccurrences(
+            of: "CHECK_DEADLOCK TRUE", with: "CHECK_DEADLOCK FALSE")
+        #expect(flippedCFG != cfg)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifySourceDefaultDeadlock(configuration,
+                rendered: flippedCFG, required: true)
+        }
+    }
+
     @Test("Authored data and control initializers retain their identities through compilation")
     func authoredInitializersRetainCompiledValues() throws {
         let sourceModel = try SequentialCopyProofModel.spec.loweredSourceModel()

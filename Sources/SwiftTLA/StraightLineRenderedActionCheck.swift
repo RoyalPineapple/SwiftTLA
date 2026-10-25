@@ -534,6 +534,19 @@ enum StraightLineRenderedActionCheck {
         }
     }
 
+    static func verifySourceDefaultDeadlock(_ configuration: TLCConfiguration,
+                                            rendered: String, required: Bool) throws {
+        guard required else { return }
+        let directives = rendered.split(separator: "\n").filter { $0.hasPrefix("CHECK_DEADLOCK ") }
+        guard configuration.checkDeadlock, directives == ["CHECK_DEADLOCK TRUE"] else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "tla.checking.defaultDeadlock",
+                expected: "the authored #spec default CHECK_DEADLOCK TRUE",
+                actual: "the emitted configuration changes the default deadlock check",
+                nextSafeAction: "Report this TLA+ configuration emission failure.")
+        }
+    }
+
     static func verifyEvaluationSelection(_ behavior: CompiledBehavior, module: String,
                                           failureDeclarations: [String],
                                           evaluationInvariant: String?,

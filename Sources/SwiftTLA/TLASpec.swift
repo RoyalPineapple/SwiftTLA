@@ -299,6 +299,7 @@ public struct TLASpec: Sendable {
   var authoredPlusCalAlgorithmPlan: AuthoredPlusCalAlgorithmPlan?
   package var algorithmPhase: AlgorithmPhase
   var orderedIntProofActionNames: Set<String> = []
+  package var sourceSpecDefaultDeadlockWitness = false
   package var diagnostics: [SourceParseDiagnostic] = []
 
   package init(

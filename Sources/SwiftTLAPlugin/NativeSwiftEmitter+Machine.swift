@@ -1069,7 +1069,10 @@ extension NativeSwiftEmitter {
         let arguments = machineArguments.isEmpty ? "" : ", " + machineArguments
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
-        declarations += try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")
+        let deadlock = try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")
+        try verifyGeneratedSourceDefaultDeadlock(deadlock.first,
+            required: program.requiresSourceDefaultDeadlockOutput)
+        declarations += deadlock
         declarations += try nativeDeclarations("public static var hasActionConstraint: Bool { \(program.behavior.actionConstraint != nil) }")
         if let constraint = program.behavior.constraint {
             declarations += try nativeDeclarations("""
@@ -1790,6 +1793,21 @@ func verifyGeneratedUpdateApplyOutput(
             actual: "the generated apply method differs from the checked rule",
             nextSafeAction: "Report this native code generation failure."
         )
+    }
+}
+
+func verifyGeneratedSourceDefaultDeadlock(_ declaration: DeclSyntax?, required: Bool) throws {
+    guard required else { return }
+    let expected = Parser.parse(source: "public static var checksDeadlock: Bool { true }")
+        .statements.first?.item.as(VariableDeclSyntax.self)
+    guard let actual = declaration?.as(VariableDeclSyntax.self), let expected,
+          Array(actual.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(expected.tokens(viewMode: .sourceAccurate)).map(\.text) else {
+        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.checking.defaultDeadlock",
+            expected: "the authored #spec default checksDeadlock true",
+            actual: "the generated Swift checking default differs from the checked rule",
+            nextSafeAction: "Report this native checking generation failure.")
     }
 }
 
