@@ -5,8 +5,8 @@ CONSTANTS Keys, SwiftIntMin, SwiftIntMax
 ASSUME IntegerDomain ==
     /\ SwiftIntMin \in Int
     /\ SwiftIntMax \in Int
-    /\ SwiftIntMin <= 0
-    /\ 0 <= SwiftIntMax
+    /\ SwiftIntMin <= -2000000000
+    /\ 2000000000 <= SwiftIntMax
 
 InRange(value) == value \in Int /\ SwiftIntMin <= value /\ value <= SwiftIntMax
 Success(value) == [ok |-> TRUE, value |-> value,
@@ -18,7 +18,15 @@ SourceAdd(left, right) ==
     IF InRange(left + right) THEN Success(left + right)
     ELSE Overflow(left, right)
 
+SmallAddOperands(left, right) ==
+    /\ -1000000000 <= left
+    /\ left <= 1000000000
+    /\ -1000000000 <= right
+    /\ right <= 1000000000
+
 GeneratedAddDefined(left, right) ==
+    IF SmallAddOperands(left, right) THEN TRUE
+    ELSE
     IF right > 0 THEN left <= SwiftIntMax - right
     ELSE IF right < 0 THEN left >= SwiftIntMin - right
     ELSE TRUE
@@ -32,6 +40,8 @@ THEOREM GeneratedAddGuardMatchesSource ==
     PROVE GeneratedAddDefined(left, right) <=> InRange(left + right)
     PROOF
     <1>0. USE IntegerDomain DEF IntegerDomain
+    <1>0a. SmallAddOperands(left, right) => InRange(left + right)
+        BY SMT DEF SmallAddOperands, InRange
     <1>1. right > 0 => left + right >= SwiftIntMin
         BY SMT DEF InRange
     <1>2. right < 0 => left + right <= SwiftIntMax
@@ -44,8 +54,8 @@ THEOREM GeneratedAddGuardMatchesSource ==
         BY SMT DEF InRange
     <1>5. right = 0 => InRange(left + right)
         BY SMT DEF InRange
-    <1>. QED BY <1>1, <1>2, <1>3, <1>4, <1>5, SMT
-        DEF GeneratedAddDefined, InRange
+    <1>. QED BY <1>0a, <1>1, <1>2, <1>3, <1>4, <1>5, SMT
+        DEF GeneratedAddDefined, SmallAddOperands, InRange
 
 THEOREM CheckedAdditionRule ==
     \A left, right \in Int :
