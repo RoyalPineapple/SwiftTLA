@@ -352,9 +352,14 @@ class, expansion now independently checks that the rewrite adds only the
 binding identities and preserves the complete initializer and step syntax,
 including registration; altered identities, reads, targets, and registration
 are negative controls. This closes the syntax-to-expanded-Swift link for that
-class, not the expanded-Swift-to-runtime-`AlgorithmModel` link. The latter
-builder rule remains SwiftTLA-owned and unproved for standalone `#spec`, so the
-route must not inherit the hosted model-macro claim by analogy.
+class, but does not by itself check the runtime `AlgorithmModel`. That link
+now has a structural source witness emitted by the actual `#spec` macro.
+For each registered algorithm in the recognized class, the runtime builder
+must produce the same ordered declarations and statements before compilation;
+changed initial values, labels, targets, reads, and write order are rejected.
+The witness extractor and structural checker remain SwiftTLA-owned trust
+boundaries, not a TLAPS proof of the Swift builder implementation. Other
+accepted standalone `#spec` forms do not inherit this checked link by analogy.
 
 `StraightLineAssignmentCheck` checks the lowerer and rejects changed operands,
 writes, and control locations.

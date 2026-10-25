@@ -242,6 +242,38 @@ package struct AlgorithmModel: Sendable {
     }
 }
 
+/// The structural source witness emitted by `#spec` for straight-line Int algorithms.
+public enum _OrderedIntSourceComponent: Sendable {
+    case variable(root: String, initialization: VariableInitialization)
+    case step(label: String, assignments: [(root: String, value: StateExpr)])
+}
+
+extension AlgorithmModel {
+    package func matchesOrderedIntSource(_ expected: [_OrderedIntSourceComponent]) -> Bool {
+        guard components.count == expected.count else { return false }
+        for (source, actual) in zip(expected, components) {
+            switch (source, actual) {
+            case (.variable(let root, let initialization), .shared(let state)):
+                guard state.root == root, state.initialization == initialization else { return false }
+                if case .value = initialization {
+                    guard state.swiftTypeName == "Int" else { return false }
+                } else {
+                    guard state.swiftTypeName == nil || state.swiftTypeName == "Int" else { return false }
+                }
+            case (.step(let label, let assignments), .step(let step)):
+                guard step.label.name == label, step.loopCondition == nil,
+                      step.statements.count == assignments.count else { return false }
+                for (source, actual) in zip(assignments, step.statements) {
+                    guard case .set(.root(let root), let value) = actual,
+                          root == source.root, value == source.value else { return false }
+                }
+            default: return false
+            }
+        }
+        return true
+    }
+}
+
 internal struct AuthoredPlusCalAlgorithmPlan: Sendable {
     let name: String
     let renderedName: String

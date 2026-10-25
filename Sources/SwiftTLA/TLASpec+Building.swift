@@ -1,4 +1,25 @@
 extension TLASpec {
+  /// Checks the real builder output against the structural witness emitted by `#spec`.
+  public func _checkingOrderedIntSource(
+    algorithm name: String, components: [_OrderedIntSourceComponent]
+  ) -> TLASpec {
+    var checked = self
+    guard sourceAlgorithms.count == 1,
+      sourceAlgorithms[0].model.name == name,
+      sourceAlgorithms[0].model.matchesOrderedIntSource(components)
+    else {
+      checked.diagnostics.append(.init(
+        message: "The expanded #spec changed an ordered Int algorithm.",
+        source: name,
+        expected: "the authored initial values, labels, targets, reads, and assignment order",
+        actual: "the runtime Algorithm builder produced a different source model",
+        nextSafeAction: "Report this #spec builder translation failure."
+      ))
+      return checked
+    }
+    return checked
+  }
+
   public init(
     _ name: String,
     @SpecBuilder _ builder: () -> [SpecComponent]
