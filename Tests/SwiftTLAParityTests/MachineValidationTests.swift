@@ -372,6 +372,25 @@ struct MachineValidationTests {
                 native: native, oracle: oracle, actions: rendered.actions,
                 to: root.appendingPathComponent("stale"))
         }
+
+        let unrelatedReceipt: [String: Any] = [
+            "caseID": caseID, "configuration": failureBundle.cfg,
+            "inputs": bundleInputJSON(failureBundle),
+            "toolPin": ["tag": "test"],
+            "invocation": ["exitStatus": 10, "arguments": ["-workers", "1", "-fp", "1"]]
+        ]
+        try JSONSerialization.data(withJSONObject: unrelatedReceipt)
+            .write(to: failure.appendingPathComponent("tlc-process.json"))
+        let logs = failure.appendingPathComponent("logs")
+        try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: false)
+        try Data("Error: Assumption line 3 of module Base is false.\n".utf8)
+            .write(to: logs.appendingPathComponent("tlc.stdout.log"))
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence(
+            "initial failure TLC input or outcome")) {
+            try ScenarioEvidenceComparison.compare(scenario: scenario, caseID: caseID,
+                native: native, oracle: oracle, actions: rendered.actions,
+                to: root.appendingPathComponent("unrelated"))
+        }
     }
 
     @Test("binary view evidence uses the same checking level as native state identity")

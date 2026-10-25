@@ -356,21 +356,30 @@ package enum GeneratedTLCOracle {
         directory: URL, work: URL, process: TLCProcessAdapter
     ) throws -> ValidationVerdict? {
         guard let bundle = try rendered.initialEvaluationFailureBundle() else { return nil }
-        guard !rendered.tlaBundle.files.contains(where: { file in
-            file.tla.split(whereSeparator: \.isNewline).contains {
-                $0.trimmingCharacters(in: .whitespaces).hasPrefix("ASSUME ")
-            }
-        }) else {
-            throw Error.invalidOutcome("initial failure check has another assumption")
-        }
         try retainGeneratedInputs(bundle, in: directory.appendingPathComponent("initial-failure-generated"))
+        let retained = directory.appendingPathComponent("tlc-initial-failure")
         let outcome = try run(bundle: bundle, id: id, maximumStates: maximumStates,
             timeout: timeout, tools: tools, pin: pin, workRoot: work,
-            retained: directory.appendingPathComponent("tlc-initial-failure"),
+            retained: retained,
             invocation: .propertyCheck, renderedActions: [], process: process)
+        return try initialFailureVerdict(outcome: outcome, retained: retained, module: bundle.root.name)
+    }
+
+    package static func initialFailureVerdict(
+        outcome: TLCExecutionOutcome, retained: URL, module: String
+    ) throws -> ValidationVerdict {
         switch outcome {
         case .completed: return .satisfied
-        case .assumptionViolation: return .violated
+        case .assumptionViolation:
+            let stdout = try String(contentsOf: retained.appendingPathComponent("logs/tlc.stdout.log"),
+                encoding: .utf8)
+            let errors = stdout.split(whereSeparator: \.isNewline).filter { $0.hasPrefix("Error:") }
+            guard errors.count == 1,
+                  errors[0].hasPrefix("Error: Assumption "),
+                  errors[0].hasSuffix(" of module \(module) is false.") else {
+                throw Error.invalidOutcome("initial failure check: unrelated assumption violation")
+            }
+            return .violated
         default: throw Error.invalidOutcome("initial failure check: \(outcome)")
         }
     }

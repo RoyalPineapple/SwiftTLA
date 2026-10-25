@@ -429,6 +429,13 @@ initializer guards, separately from its parameterized failure relation. A
 wrong-selection mutation is rejected; the 10 initial-branch and 23
 ordered-assignment tests pass locally. This checks the emitted formula, not
 TLC's exact failure payload or the verifier's own correctness.
+The generated-TLC initial-failure probe now permits the model's original
+assumptions but accepts a false assumption as its verdict only when TLC
+attributes it to the probe module; retained-evidence comparison repeats
+that check. This avoids conflating a false model assumption with an initial
+evaluation failure. It is validation-infrastructure evidence, not a proof
+of the emitted failure payload. The seven oracle and 21 native-evidence
+regressions pass locally; hosted evidence for this revision is pending.
 
 For recognized ordered-`Int` scenarios without a view or sampled initializer,
 the generated Swift validation methods now require the full initial outcome
