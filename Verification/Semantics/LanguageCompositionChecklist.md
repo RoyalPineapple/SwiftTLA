@@ -402,10 +402,16 @@ emitted initial-failure declaration. The renderer selects action failures in
 its intrinsic invariant. It now also emits and checks a pure constant-level
 disjunction of all declared initial-failure predicates; the missing-site
 mutation and eight related initial-failure tests pass locally. That operator
-is not yet selected by TLC, so the initial-failure checking-output link
-remains open. A module-level `ASSUME` would make a failing initializer a false
-proof premise; a TLC `POSTCONDITION` runs after checking and does not establish
-evaluation-failure precedence over deadlock.
+is now selected by a separate, state-free TLC run before graph exploration;
+the retained input and outcome are checked against the generated-TLA oracle.
+Native validation retains successful initial states alongside a failure.
+These changes pass focused local tests, but are not hosted evidence. The
+initial-failure output link remains open: the separate run compares only the
+existence of a failure, not its kind or operands, and a failure with no valid
+initial state is rejected rather than certified. A module-level `ASSUME` in
+the graph check would make a failing initializer a false proof premise; a TLC
+`POSTCONDITION` runs after checking and does not establish evaluation-failure
+precedence over deadlock.
 The actual checking paths differ: generated Swift evaluates an authored
 reachability predicate positively, while the TLA+ renderer negates it and
 selects that definition as a TLC invariant. Neither transformation is proved
@@ -431,10 +437,11 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   pending. Explicit
   `Validation.checkingDeadlock` overrides remain accepted and need their own
   selection rule.
-- [ ] Connect emitted initial-failure declarations to the actual TLA+
-  checking outcome, including an initializer that fails before any complete
-  initial state exists. Do not count declaration presence or the conditional
-  selected-outcome theorem as that output link.
+- [ ] Complete the actual TLA+ initial-failure checking output link. The
+  separate TLC check now retains and verifies an existence verdict, but exact
+  failure records and the failure-only case remain open. Do not count
+  declaration presence, the existence verdict, or the conditional
+  selected-outcome theorem as complete failure parity.
 - [x] Finish the full local proof for the current dependent-initializer
   and checking-outcome rules. TLAPS `--strict --nofp` proved the complete
   `SingleAssignment.tla` module; the ordered-assignment and

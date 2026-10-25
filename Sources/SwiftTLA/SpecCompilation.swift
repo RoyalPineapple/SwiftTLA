@@ -788,7 +788,8 @@ public struct RenderedSpecification: Sendable {
         } else {
             selectedPlusCal = renderedPlusCalModuleBundle.map { $0.map { bundle($0, using: selected) } }
         }
-        return .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected, actions: actions,
+        return .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected,
+            initialEvaluationFailure: initialEvaluationFailure, actions: actions,
             renderedPlusCalModuleBundle: selectedPlusCal,
             renderedPlusCalProfiles: renderedPlusCalProfiles,
             fairnessProfileOperators: fairnessProfileOperators,
