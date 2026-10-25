@@ -1,4 +1,69 @@
 enum StraightLineAssignmentCheck {
+    private enum OrderedIntNode: Equatable {
+        case literal(Int)
+        case read(String)
+        case add(Int, Int)
+    }
+
+    private static func orderedIntPlan(_ root: StateExpr, reads: Set<String>,
+                                       renaming: [String: String] = [:]) -> [OrderedIntNode]? {
+        var pending = [(root, false)]
+        var indices: [Int] = []
+        var nodes: [OrderedIntNode] = []
+        while let (expression, expanded) = pending.popLast() {
+            switch expression {
+            case .value(.int(let value)):
+                nodes.append(.literal(value))
+            case .variable(let name) where reads.contains(name):
+                nodes.append(.read(renaming[name] ?? name))
+            case .add(let left, let right):
+                if !expanded {
+                    pending.append((expression, true))
+                    pending.append((right, false))
+                    pending.append((left, false))
+                    continue
+                }
+                guard indices.count >= 2 else { return nil }
+                let rightIndex = indices.removeLast()
+                let leftIndex = indices.removeLast()
+                nodes.append(.add(leftIndex, rightIndex))
+            default: return nil
+            }
+            indices.append(nodes.count)
+        }
+        return indices.count == 1 ? nodes : nil
+    }
+
+    private static func orderedIntPlan(_ root: CompiledExpression,
+                                       names: [VariableID: String]) -> [OrderedIntNode]? {
+        var pending = [(root, false)]
+        var indices: [Int] = []
+        var nodes: [OrderedIntNode] = []
+        while let (expression, expanded) = pending.popLast() {
+            switch expression.operation {
+            case .value(.integer(let value)) where expression.children.isEmpty:
+                nodes.append(.literal(value))
+            case .stateVariable(let id) where expression.children.isEmpty:
+                guard let name = names[id] else { return nil }
+                nodes.append(.read(name))
+            case .add where expression.children.count == 2:
+                if !expanded {
+                    pending.append((expression, true))
+                    pending.append((expression.children[1], false))
+                    pending.append((expression.children[0], false))
+                    continue
+                }
+                guard indices.count >= 2 else { return nil }
+                let rightIndex = indices.removeLast()
+                let leftIndex = indices.removeLast()
+                nodes.append(.add(leftIndex, rightIndex))
+            default: return nil
+            }
+            indices.append(nodes.count)
+        }
+        return indices.count == 1 ? nodes : nil
+    }
+
     static func verifyInitialIntExpression(_ source: VariableInitialization,
                                            lowered: CompiledVariableInitialization,
                                            layout: CompiledLayout, at path: String) throws {
@@ -8,38 +73,14 @@ enum StraightLineAssignmentCheck {
         case .expression(let expression): value = expression
         default: return
         }
-        let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
-            ($0.declaration.name, $0.id)
+        let names = Dictionary(uniqueKeysWithValues: layout.variables.map {
+            ($0.id, $0.declaration.name)
         })
-        var supported = [value]
-        while let node = supported.popLast() {
-            switch node {
-            case .value(.int): break
-            case .variable(let name):
-                guard variables[name] != nil else { return }
-            case .add(let left, let right): supported.append(right); supported.append(left)
-            default: return
-            }
-        }
+        guard Set(names.values).count == names.count else { throw initialIntMismatch(at: path) }
+        guard let sourcePlan = orderedIntPlan(value, reads: Set(names.values)) else { return }
         guard case .value(let expression) = lowered else { throw initialIntMismatch(at: path) }
-        var pending = [(value, expression)]
-        while let (source, compiled) = pending.popLast() {
-            switch source {
-            case .value(.int(let integer)):
-                guard compiled.operation == .value(.integer(integer)), compiled.children.isEmpty else {
-                    throw initialIntMismatch(at: path)
-                }
-            case .variable(let name):
-                guard let id = variables[name], compiled.operation == .stateVariable(id),
-                      compiled.children.isEmpty else { throw initialIntMismatch(at: path) }
-            case .add(let left, let right):
-                guard compiled.operation == .add, compiled.children.count == 2 else {
-                    throw initialIntMismatch(at: path)
-                }
-                pending.append((right, compiled.children[1]))
-                pending.append((left, compiled.children[0]))
-            default: return
-            }
+        guard orderedIntPlan(expression, names: names) == sourcePlan else {
+            throw initialIntMismatch(at: path)
         }
     }
 
@@ -572,16 +613,8 @@ enum StraightLineAssignmentCheck {
         var source: [(root: String, expression: StateExpr)] = []
         for statement in step.model.statements {
             guard case .set(.root(let root), let expression) = statement,
-                  stateRoots.contains(root) else { return false }
-            var pending = [expression]
-            while let value = pending.popLast() {
-                switch value {
-                case .variable(let name): guard stateRoots.contains(name) else { return false }
-                case .value(.int): break
-                case .add(let lhs, let rhs): pending.append(rhs); pending.append(lhs)
-                default: return false
-                }
-            }
+                  stateRoots.contains(root),
+                  orderedIntPlan(expression, reads: stateRoots) != nil else { return false }
             source.append((root, expression))
         }
         func mismatch() -> CompilationDiagnostic {
@@ -594,20 +627,13 @@ enum StraightLineAssignmentCheck {
         guard let lowered, let control else { throw mismatch() }
         var current = Dictionary(uniqueKeysWithValues: stateRoots.map { ($0, $0) })
         func matches(_ authored: StateExpr, _ actual: StateExpr) -> Bool {
-            var pending = [(authored, actual)]
-            while let (authored, actual) = pending.popLast() {
-                switch (authored, actual) {
-                case (.variable(let root), .variable(let name)):
-                    guard current[root] == name else { return false }
-                case (.value(.int(let expected)), .value(.int(let found))):
-                    guard expected == found else { return false }
-                case (.add(let left, let right), .add(let actualLeft, let actualRight)):
-                    pending.append((right, actualRight))
-                    pending.append((left, actualLeft))
-                default: return false
-                }
-            }
-            return true
+            guard Set(current.values).count == current.count else { return false }
+            let roots = Set(current.keys)
+            let inverse = Dictionary(uniqueKeysWithValues: current.map { ($0.value, $0.key) })
+            guard let sourcePlan = orderedIntPlan(authored, reads: roots),
+                  let loweredPlan = orderedIntPlan(actual, reads: Set(inverse.keys),
+                                                   renaming: inverse) else { return false }
+            return sourcePlan == loweredPlan
         }
         var captured = 0
         var captureNames: Set<String> = []
