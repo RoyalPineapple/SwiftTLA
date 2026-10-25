@@ -2799,14 +2799,14 @@ private extension CompiledModuleMetadata {
             variable -> (String, Int)? in
             guard case .value(let expression)? = initializations[variable.id],
                   case .value(.integer(let value)) = expression.operation,
-                  expression.resultType == .int else { return nil }
+                  expression.children.isEmpty else { return nil }
             return (variable.declaration.name, value)
         })
         let expectedControlLocations = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
             variable -> (String, String)? in
             guard case .value(let expression)? = initializations[variable.id],
                   case .controlLocation(let id) = expression.operation,
-                  expression.resultType == .controlLocation,
+                  expression.children.isEmpty,
                   let location = layout.controlLocation(id) else { return nil }
             return (variable.declaration.name, location.formalName)
         })

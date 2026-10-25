@@ -147,7 +147,10 @@ enum StraightLineRenderedActionCheck {
 
     static func initialIntPredicate(_ expression: CompiledExpression, named name: String,
                                     layout: CompiledLayout) -> String? {
-        guard expression.resultType == .int else { return nil }
+        guard expression.resultType == .int ||
+                (expression.resultType == .unknown && layout.variables.contains {
+                    $0.declaration.name == name && $0.generatedSwiftType == "Int"
+                }) else { return nil }
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
             ($0.id, $0.declaration.name)
         })
