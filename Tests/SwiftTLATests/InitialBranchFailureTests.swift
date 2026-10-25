@@ -92,6 +92,25 @@ struct InitialBranchFailureTests {
             operands: [3, Int.max]))
 
         let rendered = try CheckedAdditionPrefixInitialModel.render().tlaBundle.root.tla
+        let aggregateName = "__SwiftTLAAnyInitialEvaluationFailure"
+        let aggregate = try #require(rendered.split(separator: "\n").first {
+            $0.hasPrefix("\(aggregateName) == ")
+        })
+        let predicates = String(aggregate.dropFirst("\(aggregateName) == ".count))
+            .components(separatedBy: " \\/ ").map { String($0.dropFirst().dropLast()) }
+        guard predicates.count == 2 else { throw InvalidInitialFailureShape.unexpected }
+        #expect(!rendered.contains("ASSUME ~\(aggregateName)"))
+        try StraightLineRenderedActionCheck.verifyInitialFailureAggregate(rendered,
+            predicates: predicates, name: aggregateName)
+        let missingFailure = rendered.replacingOccurrences(of: String(aggregate),
+            with: "\(aggregateName) == \(predicates[0])")
+        do {
+            try StraightLineRenderedActionCheck.verifyInitialFailureAggregate(missingFailure,
+                predicates: predicates, name: aggregateName)
+            Issue.record("A missing initial failure escaped the emitted-output check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.initialEvaluationAggregate")
+        }
         let failures = rendered.split(separator: "\n").filter {
             $0.hasPrefix("__SwiftTLAInitialOverflowFailure3(")
         }

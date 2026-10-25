@@ -2631,6 +2631,7 @@ private extension CompiledModuleMetadata {
             lines.append("\(name)(\(failedCount)) == \(relation)")
         }
         var initialFailureDeclarations: [String] = []
+        var initialFailurePredicates: [String] = []
         func appendInitialEvaluationFailures(
             _ expression: CompiledExpression,
             after prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>,
@@ -2696,6 +2697,7 @@ private extension CompiledModuleMetadata {
                     operandsName = nil
                 }
                 var relation = failure.predicate
+                var selection = failure.predicate
                 if let operandsName, let operands = failure.operands {
                     relation = "(IF \(failure.predicate) THEN \(operandsName) = \(operands) ELSE FALSE)"
                 }
@@ -2703,15 +2705,26 @@ private extension CompiledModuleMetadata {
                     let binder = prefixNames[prior.variable]!
                     switch prior.initialization {
                     case .value(let expression):
-                        let bound = "(LET \(binder) == \(try renderer.state(expression, stateNames: prefixNames)) IN \(relation))"
-                        relation = try renderer.evaluationDefined(expression, stateNames: prefixNames)
+                        let value = try renderer.state(expression, stateNames: prefixNames)
+                        let bound = "(LET \(binder) == \(value) IN \(relation))"
+                        let selected = "(LET \(binder) == \(value) IN \(selection))"
+                        let defined = try renderer.evaluationDefined(expression, stateNames: prefixNames)
+                        relation = defined
                             .map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
+                        selection = defined
+                            .map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
                     case .memberOf(let expression):
-                        let bound = "(\\E \(binder) \\in \(try renderer.state(expression, stateNames: prefixNames)): \(relation))"
-                        relation = try renderer.evaluationDefined(expression, stateNames: prefixNames)
+                        let domain = try renderer.state(expression, stateNames: prefixNames)
+                        let bound = "(\\E \(binder) \\in \(domain): \(relation))"
+                        let selected = "(\\E \(binder) \\in \(domain): \(selection))"
+                        let defined = try renderer.evaluationDefined(expression, stateNames: prefixNames)
+                        relation = defined
                             .map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
+                        selection = defined
+                            .map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
                     }
                 }
+                initialFailurePredicates.append(selection)
                 let parameters = operandsName.map { "(\($0))" } ?? ""
                 let declaration = "\(name)\(parameters) == \(relation)"
                 lines.append(declaration)
@@ -2738,6 +2751,16 @@ private extension CompiledModuleMetadata {
         if let selectedInitialInvariant {
             try appendInitialEvaluationFailures(selectedInitialInvariant.predicate.expression,
                 after: behavior.initializations[...], namePrefix: "SelectedInitial", indexSuffix: "")
+        }
+        let initialFailureAggregate: String?
+        if initialFailurePredicates.isEmpty {
+            initialFailureAggregate = nil
+        } else {
+            var name = "__SwiftTLAAnyInitialEvaluationFailure"
+            while occupied.contains(name) { name += "_" }
+            occupied.insert(name)
+            lines.append("\(name) == " + initialFailurePredicates.map { "(\($0))" }.joined(separator: " \\/ "))
+            initialFailureAggregate = name
         }
         if lines.last != "" { lines.append("") }
 
@@ -2799,6 +2822,8 @@ private extension CompiledModuleMetadata {
                     nextSafeAction: "Regenerate the TLA+ initial failure declarations.")
             }
         }
+        try StraightLineRenderedActionCheck.verifyInitialFailureAggregate(source,
+            predicates: initialFailurePredicates, name: initialFailureAggregate)
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
         let expectedIntLiterals = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
             variable -> (String, Int)? in

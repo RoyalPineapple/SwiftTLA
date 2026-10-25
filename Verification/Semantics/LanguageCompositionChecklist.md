@@ -398,9 +398,14 @@ action failure records imply the same selected result, with an evaluation
 failure taking precedence over deadlock. Reversing that priority in the
 generated rule breaks the theorem. This is conditional on all four evidence
 sets agreeing; it does not prove that the actual TLA+ checker selects every
-emitted initial-failure declaration. The renderer currently selects action
-failures in its intrinsic invariant but only declares initial failures, so
-the initial-failure checking-output link remains open.
+emitted initial-failure declaration. The renderer selects action failures in
+its intrinsic invariant. It now also emits and checks a pure constant-level
+disjunction of all declared initial-failure predicates; the missing-site
+mutation and eight related initial-failure tests pass locally. That operator
+is not yet selected by TLC, so the initial-failure checking-output link
+remains open. A module-level `ASSUME` would make a failing initializer a false
+proof premise; a TLC `POSTCONDITION` runs after checking and does not establish
+evaluation-failure precedence over deadlock.
 The actual checking paths differ: generated Swift evaluates an authored
 reachability predicate positively, while the TLA+ renderer negates it and
 selects that definition as a TLC invariant. Neither transformation is proved
