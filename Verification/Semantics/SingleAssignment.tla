@@ -1040,6 +1040,20 @@ THEOREM OrderedInitialFailurePayloadsAgree ==
     BY OrderedInitialGuardsPreserveFirstFailure, SMT
        DEF SourceInitialFailureRecords, RenderedInitialFailureRecords
 
+RenderedAnyInitialFailure(guards, defined) ==
+    \E index \in 1..Len(guards) :
+        RenderedInitialFailureAt(guards, defined, index)
+
+THEOREM SelectedInitialFailureMatchesSourceRecords ==
+    ASSUME NEW guards \in Seq(BOOLEAN),
+           NEW defined \in [0..Len(guards) -> BOOLEAN],
+           NEW operands \in [1..Len(guards) -> (Int \X Int)],
+           InitialGuardHistory(guards, defined)
+    PROVE (SourceInitialFailureRecords(guards, operands) = {})
+        <=> ~RenderedAnyInitialFailure(guards, defined)
+    BY OrderedInitialGuardsPreserveFirstFailure, SMT
+       DEF SourceInitialFailureRecords, RenderedAnyInitialFailure
+
 THEOREM InitialMembershipComposesAcrossPriorChoices ==
     \A key \in Vars, priorStates \in SUBSET States :
         \A candidates \in [States -> Seq(Values)] :
@@ -3147,6 +3161,9 @@ THEOREM OrderedSequentialIntProgramCompose ==
                  sourceInitialOperands)
                  = RenderedInitialFailureRecords(initialGuards,
                      initialDefined, generatedInitialOperands)
+          /\ (SourceInitialFailureRecords(initialGuards,
+                 sourceInitialOperands) = {})
+                 <=> ~RenderedAnyInitialFailure(initialGuards, initialDefined)
           /\ SourceSequentialIntProgramEdges(count, entries, exits, labels,
                  steps, guards, done, terminalLabel)
                  = GeneratedSequentialIntProgramEdges(count, entries, exits,
@@ -3245,7 +3262,11 @@ THEOREM OrderedSequentialIntProgramCompose ==
             = RenderedInitialFailureRecords(initialGuards, initialDefined,
                 generatedInitialOperands)
         BY OrderedInitialFailurePayloadsAgree
-    <1>. QED BY <1>3, <1>4, <1>5, <1>6
+    <1>7. (SourceInitialFailureRecords(initialGuards,
+               sourceInitialOperands) = {})
+            <=> ~RenderedAnyInitialFailure(initialGuards, initialDefined)
+        BY SelectedInitialFailureMatchesSourceRecords
+    <1>. QED BY <1>3, <1>4, <1>5, <1>6, <1>7
 
 SequentialTraceStep(edges, before, after) ==
     before = after
