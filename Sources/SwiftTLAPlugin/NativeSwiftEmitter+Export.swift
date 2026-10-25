@@ -179,13 +179,17 @@ func verifyGeneratedExportDefaultDeadlock(_ declaration: DeclSyntax?, required: 
         return attempt.expression.as(FunctionCallExprSyntax.self)
     } ?? []
     let selections = calls.first?.arguments.filter { $0.label?.text == "checkDeadlock" } ?? []
+    let returned = function?.body?.statements.compactMap { $0.item.as(ReturnStmtSyntax.self) } ?? []
     guard function?.name.text == "render", calls.count == 1,
           calls[0].calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "RenderedSpecification",
           selections.count == 1,
-          selections[0].expression.as(BooleanLiteralExprSyntax.self)?.literal.text == "true" else {
+          selections[0].expression.as(BooleanLiteralExprSyntax.self)?.literal.text == "true",
+          returned.count == 1,
+          function?.body?.statements.last?.item.as(ReturnStmtSyntax.self)?
+            .expression?.as(DeclReferenceExprSyntax.self)?.baseName.text == "_rendered" else {
         throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
             path: "native.export.defaultDeadlock",
-            expected: "one authored #spec default checkDeadlock: true argument in the generated TLA export",
+            expected: "one authored #spec default checkDeadlock: true argument returned by the generated TLA export",
             actual: "the generated TLA export changes or omits the default deadlock check",
             nextSafeAction: "Report this generated TLA export failure.")
     }
