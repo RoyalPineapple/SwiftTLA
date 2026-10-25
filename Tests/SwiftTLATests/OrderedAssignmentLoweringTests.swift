@@ -37,6 +37,24 @@ struct OrderedAssignmentLoweringTests {
         #expect(StraightLineRenderedActionCheck.initialIntPredicate(
             secondExpression, named: "second", layout: compiled.layout) != nil)
         _ = try compiled.render()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let action = try #require(program.behavior.actions.first)
+        var changedCapture = false
+        let uncheckable = action.map { expression in
+            guard !changedCapture, expression.resultType == .int else { return expression }
+            changedCapture = true
+            return CompiledExpression(operation: .value(.string("wrong")),
+                resultType: .string, children: [])
+        }
+        #expect(changedCapture)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "OrderedAssignment", program: program))
+        do {
+            _ = try emitter.updateFunction(uncheckable, configurationParameters: "")
+            Issue.record("A standalone #spec action bypassed its strict Swift output check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
 
         let expected: [_OrderedIntSourceComponent] = [
             .variable(root: "first", initialization: .value(.int(1))),
@@ -804,6 +822,21 @@ struct OrderedAssignmentLoweringTests {
         let parts = try emitter.actionFunctions(action.body)
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: parts.writes)
+        #expect(program.requiresOrderedIntOutput(action.id))
+        var changedCapture = false
+        let uncheckable = action.map { expression in
+            guard !changedCapture, expression.resultType == .int else { return expression }
+            changedCapture = true
+            return CompiledExpression(operation: .value(.string("wrong")),
+                resultType: .string, children: [])
+        }
+        #expect(changedCapture)
+        do {
+            _ = try emitter.updateFunction(uncheckable, configurationParameters: "")
+            Issue.record("An uncheckable ordered Int capture passed native output verification")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
         let wrongSwiftGuard = visitor.description.replacingOccurrences(
             of: " == _ControlLocation.", with: " != _ControlLocation.")
         #expect(wrongSwiftGuard != visitor.description)

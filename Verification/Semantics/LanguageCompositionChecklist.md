@@ -78,6 +78,80 @@ matching compiled case, both actual outputs, and a rejecting mutation. Keep
 compiler-synthesized uses in the domain too: they affect accepted programs
 even when authors cannot spell the constructor directly.
 
+`While` is an accepted step form, not an `AlgorithmStatementModel` case.
+`SpecParser+Algorithm.parseEachComponent` records its condition in
+`AlgorithmStepModel.loopCondition`; `CompiledLowerer` and `CompiledTypeChecker`
+carry and type-check it. Sequential and process `AlgorithmLowering` each
+lower it to an `ifElse`: true runs the body and returns to the step's control
+location; false transfers to the following location. The condition also
+guards generated assertion checks. This source-to-control rule, including
+condition evaluation failures and the actual Swift/TLA+ output links, needs
+its own proof row; proving the fifteen statement cases does not cover it.
+
+The parser's `AlgorithmSourceConstruct` also has accepted forms **outside**
+the statement enum. This is a dispatcher inventory, not an assertion that
+every spelling and placement passes the parser's later checks:
+
+| Source constructs | Boundary to prove |
+| --- | --- |
+| `scopedState(.shared/.local)` | Initial values and member-choice domains; local-state ownership |
+| `formalDefinition`, `macro` | Expansion, binding, and capture before expression/action lowering |
+| `procedure`, `each` | Parameter/process domains, control ownership, and procedure stack |
+| `doStep`, `whileStep` | Step labels and fallthrough; `Do(when:)` becomes `when`, while the `While` condition remains on the step |
+| `invariant`, `reachable`, `leadsTo`, `eventually`, `always`, `alwaysEventually`, `eventuallyAlways` | Selected state and temporal checking outcomes |
+| `fairness`, `assume`, `stateConstraint`, `actionConstraint` | Configuration, fairness obligations, and constrained exploration; generic fairness and assumptions are invalid inside an `Algorithm` body |
+| `whenCondition`, `assert`, `assign`, `goto`, `call`, `return`, `stop`, `skip`, `ifElse`, `either`, `choose`, `with`, `letBinding` | The corresponding statement cases below; `parallel` and `rejected` are compiler-synthesized |
+
+Each group still needs a spelling/placement acceptance audit. In particular,
+an exhaustive switch over `AlgorithmStatementModel` would miss the step
+envelope, definitions, initializers, and checking configuration.
+
+Fairness is not one semantic constructor. The outer `#spec` parser accepts the
+following distinct forms; `Algorithm` bodies reject generic fairness. Each
+form still needs source, lowering, both output, and selected-checking links:
+
+| Accepted fairness form | Distinct obligation |
+| --- | --- |
+| `WeakFairness(action)` / `StrongFairness(action)`, optionally `on: projection` | Weak versus strong fairness of one bound action or `Do` step, using the selected fairness projection |
+| `WeakFairness(anyOf: steps)` / `StrongFairness(anyOf: steps)` | One obligation over the disjunction of a nonempty list of distinct bound `Do` steps |
+| `WeakFairness(eachOf: steps)` / `StrongFairness(eachOf: steps)` | One process-member obligation over that disjunction for each member; lowering requires one shared immutable process population |
+| `WeakFairness(each: step)` / `StrongFairness(each: step)` | One obligation for each finite invocation of the bound step; lowering requires an immutable domain |
+| `WeakFairnessNext()` / `StrongFairnessNext()`, optionally `on: projection` | Weak versus strong fairness of `Next`, with the selected state projection |
+
+The compiled `FairnessCondition` also has concrete action-call cases. Track
+those as lowering-produced forms, not extra `#spec` spellings. A proof of
+`anyOf` cannot stand in for `eachOf`, and neither establishes per-invocation
+fairness.
+
+### Validation and checking-selection domain
+
+`SpecParser+Validation.parseValidation` accepts an immutable bound
+`Validation { Bind(parameter, to: value) }` and the modifiers below. This is
+part of accepted `#spec` syntax even though it does not add an action to the
+model. Each selection needs a source rule and links to the actual native check
+and rendered TLA+/configuration; a matching finite graph alone does not prove
+the selected verdict. The parser also registers bound `FairnessProfile` and
+`Symmetry` declarations used by these selections.
+
+| Accepted form | Separate rule still needed |
+| --- | --- |
+| `Bind(parameter, to: value)` | Typed parameter substitution and the resulting complete initial and step relations |
+| `.checking(only: properties)` / `.expect(property, outcome)` | Selected property set and expected `.satisfied` or `.violated` verdict |
+| `.checkingDeadlock(flag)` / `.expectDeadlock(outcome)` | Deadlock selection and expected verdict, including disabled checking |
+| `.behavior(.specification / .initialAndNext)` | Which behavior specification is checked |
+| `.checkingMode(.exhaustive / .decisiveCounterexample)` | Exhaustive completion versus a decisive early result; never equate partial graphs |
+| `.simulating(traces: count, maximumDepth: limit)` | Sampled-trace outcome and positive bounds, distinct from exhaustive checking |
+| `.usingFairness(profile)` with `FairnessProfile(excluding: labels)` | Selected fairness obligations after the declared step exclusions |
+| `.usingSymmetry(symmetry)` with `Symmetry(domain)` | Finite or typed-parameter symmetry domain and checking quotient, without changing model transitions |
+| `.viewing(expression)` | Selected checking view; preserve complete machine states outside that explicit view |
+| `.postcondition(expression, name:, expecting:)` | After-check summary predicate, optional name, and expected outcome; state-level reads are rejected |
+
+The parser records modifier selections in source order. The acceptance audit
+must also check how compilation handles repeated or conflicting selections;
+the table does not assume that a repeated modifier is valid. `Symmetry` takes
+a finite domain or typed set parameter; `FairnessProfile` takes registered
+step labels. Neither declaration is a new transition rule.
+
 ### Expression-constructor domain
 
 These are the exact outer cases in `StateExpr` and `CompiledOperation` at this
@@ -300,6 +374,12 @@ Production source/lowering and actual-output checkers plus wrong-value,
 wrong-location, wrong-order, and omitted-failure mutations are described in
 `README.md`. This is **not** coverage of other accepted constructors.
 
+- [ ] Close the default-deadlock output link for this slice. Independently
+  establish the source default when no `Validation.checkingDeadlock` override
+  is authored; check the actual generated Swift `checksDeadlock` and rendered
+  `CHECK_DEADLOCK` directive against it. A flipped value in either output must
+  fail. Explicit validation overrides remain accepted but need their own
+  selection rule; do not reject them to make this default rule pass.
 - [x] Finish the full local proof for the current dependent-initializer
   and checking-outcome rules. TLAPS `--strict --nofp` proved the complete
   `SingleAssignment.tla` module; the ordered-assignment and
@@ -373,6 +453,16 @@ and program-counter `Init` clauses even before expression result types are
 resolved; it requires the complete conjunction for this class. A focused
 regression failed before that check and passes after it, as does the related
 21-test ordered-assignment suite. This is local evidence, not a hosted result.
+For an action marked by the source-to-lowered ordered-`Int` check, native
+emission now requires the Swift-output verifier to decode every scalar leaf;
+an unrecognized compiled value cannot use the opaque fallback. The focused
+mutation replaces one captured `Int` value with an uncheckable `String`: the
+old verifier accepted it, the strict verifier rejects it, and the related
+36-test ordered-assignment/native-output suites pass locally. The standalone
+`#spec` builder path also rejects this mutation; its 21-test ordered-assignment
+suite passes locally. The verifier
+and native operation kernel remain trusted, and hosted evidence for this
+change is still pending.
 
 The source parser, output checks, native update and visitor kernel, and TLA+
 renderer remain SwiftTLA-owned trust boundaries. Documented Swift behavior is
