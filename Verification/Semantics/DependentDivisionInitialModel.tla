@@ -16,6 +16,7 @@ Init ==
 __SwiftTLAInitialDivisionByZeroFailure2(__SwiftTLAInitialFailedOperands2) == (LET __SwiftTLAInitialValue0 == "stay" IN (\E __SwiftTLAInitialValue1 \in {0, 1}: (IF ~(__SwiftTLAInitialValue1 # 0) THEN __SwiftTLAInitialFailedOperands2 = __SwiftTLAInitialValue1 ELSE FALSE)))
 __SwiftTLAInitialOverflowFailure2(__SwiftTLAInitialFailedOperands2_) == (LET __SwiftTLAInitialValue0 == "stay" IN (\E __SwiftTLAInitialValue1 \in {0, 1}: (IF (IF __SwiftTLAInitialValue1 # 0 THEN ~((IF __SwiftTLAInitialValue1 # -1 THEN TRUE ELSE 1 # ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808))) ELSE FALSE) THEN __SwiftTLAInitialFailedOperands2_ = <<1, __SwiftTLAInitialValue1>> ELSE FALSE)))
 __SwiftTLAInitialOverflowOperation2 == "division"
+__SwiftTLAAnyInitialEvaluationFailure == ((LET __SwiftTLAInitialValue0 == "stay" IN (\E __SwiftTLAInitialValue1 \in {0, 1}: ~(__SwiftTLAInitialValue1 # 0)))) \/ ((LET __SwiftTLAInitialValue0 == "stay" IN (\E __SwiftTLAInitialValue1 \in {0, 1}: (IF __SwiftTLAInitialValue1 # 0 THEN ~((IF __SwiftTLAInitialValue1 # -1 THEN TRUE ELSE 1 # ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808))) ELSE FALSE))))
 
 Next ==
   \/ stay

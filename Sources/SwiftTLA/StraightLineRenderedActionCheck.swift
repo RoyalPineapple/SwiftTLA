@@ -230,6 +230,28 @@ enum StraightLineRenderedActionCheck {
         }
     }
 
+    static func verifyInitialFailureAggregate(_ module: String, predicates: [String],
+                                              name: String?) throws {
+        func mismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "tla.initialEvaluationAggregate",
+                expected: "the complete constant-level initial failure predicate",
+                actual: "the emitted initial failure predicate is absent or differs",
+                nextSafeAction: "Regenerate the TLA+ initial failure predicate.")
+        }
+        guard let name else {
+            guard predicates.isEmpty else { throw mismatch() }
+            return
+        }
+        guard name.hasPrefix("__SwiftTLAAnyInitialEvaluationFailure"),
+              name.dropFirst("__SwiftTLAAnyInitialEvaluationFailure".count)
+                .allSatisfy({ $0 == "_" }),
+              !predicates.isEmpty else { throw mismatch() }
+        let expected = "\(name) == " + predicates.map { "(\($0))" }.joined(separator: " \\/ ")
+        guard module.components(separatedBy: "\n").filter({ $0.hasPrefix("\(name) == ") })
+                == [expected] else { throw mismatch() }
+    }
+
     static func verify(_ action: CompiledActionExpr, rendered: String,
                        layout: CompiledLayout, binders: [BinderID: String],
                        required: Bool = false) throws {
