@@ -68,7 +68,8 @@ public struct SpecExpressionMacro: ExpressionMacro {
         let rewriter = DSLRewriter(context: context, parameterScope: parameterScope)
         let rewritten = rewriter.rewrite(closure).as(ClosureExprSyntax.self) ?? closure
         try OrderedIntSourceSyntaxCheck.verifyRewrite(closure, rewritten: rewritten)
-        return specCall(named: name, body: rewritten)
+        return try OrderedIntSourceSyntaxCheck.checkingBuilderOutput(closure,
+            built: specCall(named: name, body: rewritten))
     }
 
     private static func specCall(

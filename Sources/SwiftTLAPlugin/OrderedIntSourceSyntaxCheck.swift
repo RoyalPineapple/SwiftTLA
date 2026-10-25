@@ -1,12 +1,10 @@
 import Foundation
 import SwiftSyntax
+import SwiftSyntaxBuilder
 import SwiftTLA
 
 enum OrderedIntSourceSyntaxCheck {
-    private enum Component {
-        case variable(root: String, initialization: VariableInitialization)
-        case step(label: String, assignments: [(root: String, value: StateExpr)])
-    }
+    private typealias Component = _OrderedIntSourceComponent
 
     static func verify(_ syntax: ClosureExprSyntax, parsed: TLASpec, enums: [SourceEnum]) throws {
         let registered = Set(syntax.statements.compactMap { item -> String? in
@@ -24,7 +22,7 @@ enum OrderedIntSourceSyntaxCheck {
                   call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm",
                   let expected = components(of: call, enums: enums) else { continue }
             let matches = parsed.sourceAlgorithms.filter { $0.model.name == name }
-            guard matches.count == 1, agrees(expected, with: matches[0].model) else {
+            guard matches.count == 1, matches[0].model.matchesOrderedIntSource(expected) else {
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape,
                     stage: .validation, path: "algorithms.\(name).authoredSyntax",
                     expected: "the Int initializers and ordered Do assignments in the authored #spec",
@@ -106,6 +104,59 @@ enum OrderedIntSourceSyntaxCheck {
                 else { continue }
                 guard tokens(sourceItem) == tokens(outputItem) else { throw drift(name) }
             }
+        }
+    }
+
+    static func checkingBuilderOutput(_ source: ClosureExprSyntax, built: ExprSyntax) throws -> ExprSyntax {
+        let registered = Set(source.statements.compactMap { item -> String? in
+            guard case .expr(let expression) = item.item else { return nil }
+            return expression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
+        })
+        var witnessCalls: [String] = []
+        for item in source.statements {
+            guard case .decl(let declaration) = item.item,
+                  let variable = declaration.as(VariableDeclSyntax.self),
+                  variable.bindingSpecifier.text == "let", variable.bindings.count == 1,
+                  let binding = variable.bindings.first,
+                  let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
+                  registered.contains(name),
+                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm",
+                  let expected = components(of: call, enums: nil) else { continue }
+            let rendered = try expected.map(render).joined(separator: ", ")
+            witnessCalls.append("._checkingOrderedIntSource(algorithm: \(String(reflecting: name)), components: [\(rendered)])")
+        }
+        guard !witnessCalls.isEmpty else { return built }
+        return ExprSyntax(stringLiteral: built.trimmedDescription + witnessCalls.joined())
+    }
+
+    private static func render(_ component: Component) throws -> String {
+        switch component {
+        case .variable(let root, let initialization):
+            let value: String
+            switch initialization {
+            case .value(.int(let number)): value = ".value(.int(\(number)))"
+            case .expression(let expression): value = ".expression(\(try render(expression)))"
+            default: throw drift(root)
+            }
+            return ".variable(root: \(String(reflecting: root)), initialization: \(value))"
+        case .step(let label, let assignments):
+            let identifiers = label.split(separator: ".", omittingEmptySubsequences: false)
+            guard identifiers.count == 2 else { throw drift(label) }
+            let qualifiedLabel = identifiers.map { "`\($0)`" }.joined(separator: ".")
+            let writes = try assignments.map { assignment in
+                "(root: \(String(reflecting: assignment.root)), value: \(try render(assignment.value)))"
+            }.joined(separator: ", ")
+            return ".step(label: \(qualifiedLabel).rawValue, assignments: [\(writes)])"
+        }
+    }
+
+    private static func render(_ expression: StateExpr) throws -> String {
+        switch expression {
+        case .value(.int(let number)): return ".value(.int(\(number)))"
+        case .variable(let root): return ".variable(\(String(reflecting: root)))"
+        case .add(let lhs, let rhs): return ".add(\(try render(lhs)), \(try render(rhs)))"
+        default: throw drift("ordered Int expression")
         }
     }
 
@@ -237,29 +288,5 @@ enum OrderedIntSourceSyntaxCheck {
             return result
         }
         return nil
-    }
-
-    private static func agrees(_ expected: [Component], with parsed: AlgorithmModel) -> Bool {
-        guard parsed.components.count == expected.count else { return false }
-        for (source, actual) in zip(expected, parsed.components) {
-            switch (source, actual) {
-            case (.variable(let root, let initialization), .shared(let state)):
-                guard state.root == root, state.initialization == initialization else { return false }
-                if case .value = initialization {
-                    guard state.swiftTypeName == "Int" else { return false }
-                } else {
-                    guard state.swiftTypeName == nil || state.swiftTypeName == "Int" else { return false }
-                }
-            case (.step(let label, let assignments), .step(let step)):
-                guard step.label.name == label, step.loopCondition == nil,
-                      step.statements.count == assignments.count else { return false }
-                for (source, actual) in zip(assignments, step.statements) {
-                    guard case .set(.root(let root), let value) = actual,
-                          root == source.root, value == source.value else { return false }
-                }
-            default: return false
-            }
-        }
-        return true
     }
 }

@@ -2,11 +2,90 @@ import Foundation
 import Testing
 import SwiftParser
 import SwiftSyntax
+import SwiftTLAMacros
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
+private enum OrderedAssignmentStep: String, CaseIterable, Sendable {
+    case `switch`
+}
+
 @Suite("Ordered assignment lowering")
 struct OrderedAssignmentLoweringTests {
+    @Test("A standalone #spec checks its actual ordered Int builder output")
+    func orderedIntSpecChecksRuntimeModel() throws {
+        let spec = #spec("OrderedAssignment") {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(initial: 1)
+                let second: SharedVariable<Int> = scope.sharedVar(initial: first + 2)
+                Do(OrderedAssignmentStep.`switch`) {
+                    Assign(first, to: second + 1)
+                    Assign(second, to: first)
+                }
+            })
+            algorithm
+        }
+        _ = try spec.compile()
+
+        let expected: [_OrderedIntSourceComponent] = [
+            .variable(root: "first", initialization: .value(.int(1))),
+            .variable(root: "second", initialization: .expression(.add(.variable("first"), .value(.int(2))))),
+            .step(label: "switch", assignments: [
+                (root: "first", value: .add(.variable("second"), .value(.int(1)))),
+                (root: "second", value: .variable("first")),
+            ]),
+        ]
+        for changed in [
+            [expected[0], .variable(root: "second", initialization: .value(.int(3))), expected[2]],
+            [expected[0], expected[1], .step(label: "other", assignments: [
+                (root: "first", value: .add(.variable("second"), .value(.int(1)))),
+                (root: "second", value: .variable("first")),
+            ])],
+            [expected[0], expected[1], .step(label: "switch", assignments: [
+                (root: "second", value: .add(.variable("second"), .value(.int(1)))),
+                (root: "second", value: .variable("first")),
+            ])],
+            [expected[0], expected[1], .step(label: "switch", assignments: [
+                (root: "first", value: .add(.variable("first"), .value(.int(1)))),
+                (root: "second", value: .variable("first")),
+            ])],
+            [expected[0], expected[1], .step(label: "switch", assignments: [
+                (root: "second", value: .variable("first")),
+                (root: "first", value: .add(.variable("second"), .value(.int(1)))),
+            ])],
+        ] {
+            #expect(throws: SourceParseDiagnostic.self) {
+                _ = try spec._checkingOrderedIntSource(algorithm: "algorithm", components: changed).compile()
+            }
+        }
+    }
+
+    @Test("The actual #spec witness rejects a builder that changes an initial value")
+    func orderedIntSpecRejectsChangedBuilderOutput() {
+        func Algorithm(
+            _name name: String = "algorithm",
+            @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement]
+        ) -> SwiftTLA.Algorithm {
+            SwiftTLA.Algorithm(_name: name, scoped: { scope in
+                let value = scope.sharedVar(_name: "value", initial: 2)
+                Do(OrderedAssignmentStep.`switch`) {
+                    Assign(value, to: value + 1)
+                }
+            })
+        }
+
+        let spec = #spec("ChangedBuilder") {
+            let algorithm = Algorithm(scoped: { scope in
+                let value = scope.sharedVar(initial: 1)
+                Do(OrderedAssignmentStep.`switch`) {
+                    Assign(value, to: value + 1)
+                }
+            })
+            algorithm
+        }
+        #expect(throws: SourceParseDiagnostic.self) { _ = try spec.compile() }
+    }
+
     @Test("The #spec rewrite preserves every ordered Int initializer and step")
     func orderedIntSpecRewriteRejectsDrift() throws {
         let source = """
