@@ -262,8 +262,38 @@ enum StraightLineRenderedActionCheck {
                 == [expected] else { throw mismatch() }
     }
 
+    static func verifyInitialFailureRecord(_ module: String, name: String?,
+                                           predicates: [String], records: [String]) throws {
+        guard let name else { return }
+        let selected = Array(zip(predicates, records)).reversed().reduce("FALSE") { rest, entry in
+            "(IF \(entry.0) THEN \(entry.1) ELSE \(rest))"
+        }
+        let expected = "\(name) == \(selected)"
+        guard !records.isEmpty, predicates.count == records.count else {
+            throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "tla.initialEvaluationFailureRecord",
+                expected: "the selected initial failure site, kind, and operands",
+                actual: "the emitted selected initial failure record differs",
+                nextSafeAction: "Regenerate the TLA+ initial failure record.")
+        }
+        try verifyInitialFailureRecord(module, declaration: expected)
+    }
+
+    static func verifyInitialFailureRecord(_ module: String, declaration: String) throws {
+        let name = String(declaration.prefix(while: { $0 != " " }))
+        guard module.split(separator: "\n").filter({ $0.hasPrefix("\(name) == ") })
+                == [Substring(declaration)] else {
+            throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "tla.initialEvaluationFailureRecord",
+                expected: "the selected initial failure site, kind, and operands",
+                actual: "the emitted selected initial failure record differs",
+                nextSafeAction: "Regenerate the TLA+ initial failure record.")
+        }
+    }
+
     static func verifyInitialFailureCheckBundle(_ bundle: TLAModuleBundle,
-        base: TLAModuleBundle, aggregate: String, constants: [String]) throws {
+        base: TLAModuleBundle, aggregate: String, constants: [String],
+        record: String? = nil) throws {
         let sourceLines = bundle.root.tla.split(separator: "\n").map(String.init)
         let initName = sourceLines.indices.contains(3)
             ? String(sourceLines[3].prefix(while: { $0 != " " })) : ""
@@ -271,9 +301,15 @@ enum StraightLineRenderedActionCheck {
             ? String(sourceLines[4].prefix(while: { $0 != " " })) : ""
         let initPrefix = bundle.root.name + "__ProbeInit"
         let nextPrefix = bundle.root.name + "__ProbeNext"
-        let expected = ["---- MODULE \(bundle.root.name) ----", "EXTENDS \(base.root.name)",
-            "ASSUME ~\(aggregate)", "\(initName) == FALSE", "\(nextName) == FALSE", "===="]
+        let expected = ["---- MODULE \(bundle.root.name) ----",
+            "EXTENDS \(base.root.name)\(record == nil ? "" : ", TLC")",
+            "ASSUME \(record.map { "PrintT(\($0)) /\\ " } ?? "")~\(aggregate)",
+            "\(initName) == FALSE", "\(nextName) == FALSE", "===="]
+        let recordDeclarationPresent = record.map { name in
+            base.root.tla.split(separator: "\n").filter { $0.hasPrefix("\(name) == ") }.count == 1
+        } ?? true
         guard base.root.tla.split(separator: "\n").filter({ $0.hasPrefix("\(aggregate) == ") }).count == 1,
+              recordDeclarationPresent,
               initName.hasPrefix(initPrefix),
               initName.dropFirst(initPrefix.count).allSatisfy({ $0 == "_" }),
               nextName.hasPrefix(nextPrefix),

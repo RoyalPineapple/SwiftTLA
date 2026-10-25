@@ -34,6 +34,7 @@ struct CompiledRuntime {
         var pending: [(Int, [VariableID: CompiledValue])] = [(0, [:])]
         var states: [CompiledState] = []
         var firstFailure: NativeMachineEvaluationError?
+        var firstFailureInitializerOrdinal: Int?
         let initializations = behavior.initializations
         let selectedInvariant = behavior.initialInvariant.map { selected in
             guard let invariant = behavior.invariants.first(where: { $0.id == selected }) else {
@@ -107,10 +108,16 @@ struct CompiledRuntime {
                     }
                 }
             } onEvaluationFailure: { failure in
-                if firstFailure == nil { firstFailure = failure }
+                if firstFailure == nil {
+                    firstFailure = failure
+                    if index < initializations.count {
+                        firstFailureInitializerOrdinal = initializations[index].0.ordinal
+                    }
+                }
             }
         }
-        return .init(states: states, firstFailure: firstFailure)
+        return .init(states: states, firstFailure: firstFailure,
+            firstFailureInitializerOrdinal: firstFailureInitializerOrdinal)
     }
 
     func successors(from state: CompiledState) throws -> [CompiledSuccessor] {

@@ -1040,6 +1040,32 @@ THEOREM OrderedInitialFailurePayloadsAgree ==
     BY OrderedInitialGuardsPreserveFirstFailure, SMT
        DEF SourceInitialFailureRecords, RenderedInitialFailureRecords
 
+SourceInitialFailureSiteRecords(guards, sites, operands) ==
+    {[site |-> sites[index], kind |-> "integerOverflow.addition", operands |-> operands[index]] :
+        index \in {position \in 1..Len(guards) :
+            SourceInitialFailureAt(guards, position)}}
+RenderedInitialFailureSiteRecords(guards, defined, sites, operands) ==
+    {[site |-> sites[index], kind |-> "integerOverflow.addition", operands |-> operands[index]] :
+        index \in {position \in 1..Len(guards) :
+            RenderedInitialFailureAt(guards, defined, position)}}
+
+THEOREM DeterministicInitialFailureSitePayloadsAgree ==
+    ASSUME NEW guards \in Seq(BOOLEAN),
+           NEW defined \in [0..Len(guards) -> BOOLEAN],
+           NEW sourceSites \in [1..Len(guards) -> Int],
+           NEW renderedSites \in [1..Len(guards) -> Int],
+           NEW sourceOperands \in [1..Len(guards) -> (Int \X Int)],
+           NEW renderedOperands \in [1..Len(guards) -> (Int \X Int)],
+           InitialGuardHistory(guards, defined),
+           \A index \in 1..Len(guards) :
+               /\ sourceSites[index] = renderedSites[index]
+               /\ sourceOperands[index] = renderedOperands[index]
+    PROVE SourceInitialFailureSiteRecords(guards, sourceSites, sourceOperands)
+        = RenderedInitialFailureSiteRecords(guards, defined,
+            renderedSites, renderedOperands)
+    BY OrderedInitialGuardsPreserveFirstFailure, SMT
+       DEF SourceInitialFailureSiteRecords, RenderedInitialFailureSiteRecords
+
 RenderedAnyInitialFailure(guards, defined) ==
     \E index \in 1..Len(guards) :
         RenderedInitialFailureAt(guards, defined, index)

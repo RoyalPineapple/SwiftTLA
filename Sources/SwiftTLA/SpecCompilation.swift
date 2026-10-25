@@ -122,6 +122,7 @@ package struct RenderedModule: Sendable, Equatable {
     package let renderedModuleSource: String
     let evaluationFailureDeclarations: [String]
     package let initialEvaluationFailure: String?
+    package let initialEvaluationFailureRecord: String?
     package let configuration: TLCConfiguration
     package let renderedActions: [RenderedAction]
     package let symbolicActions: [ActionID]
@@ -409,6 +410,7 @@ public struct CompiledSpecification: Sendable {
             tlaBundle: renderedBundle,
             configuration: rootModule.configuration,
             initialEvaluationFailure: rootModule.initialEvaluationFailure,
+            initialEvaluationFailureRecord: rootModule.initialEvaluationFailureRecord,
             actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle.map { .success($0) },
             fairnessProfileOperators: Dictionary(uniqueKeysWithValues: module.semantics.behavior.fairnessProfiles.map {
                 ($0.name, $0.operatorName)
@@ -426,6 +428,7 @@ public struct RenderedSpecification: Sendable {
     public let tlaBundle: TLAModuleBundle
     fileprivate let configuration: TLCConfiguration
     private let initialEvaluationFailure: String?
+    private let initialEvaluationFailureRecord: String?
     public let actions: [RenderedAction]
     fileprivate let renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?
     fileprivate let renderedPlusCalProfiles: [String: Result<TLAModuleBundle, CompilationDiagnostic>]
@@ -433,7 +436,8 @@ public struct RenderedSpecification: Sendable {
     package let temporalObligations: [String: [_RenderedTemporalObligation]]
 
     init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration,
-        initialEvaluationFailure: String? = nil, actions: [RenderedAction],
+        initialEvaluationFailure: String? = nil, initialEvaluationFailureRecord: String? = nil,
+        actions: [RenderedAction],
         renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?,
         renderedPlusCalProfiles: [String: Result<TLAModuleBundle, CompilationDiagnostic>] = [:],
         fairnessProfileOperators: [String: String] = [:],
@@ -441,6 +445,7 @@ public struct RenderedSpecification: Sendable {
         self.tlaBundle = tlaBundle
         self.configuration = configuration
         self.initialEvaluationFailure = initialEvaluationFailure
+        self.initialEvaluationFailureRecord = initialEvaluationFailureRecord
         self.actions = actions
         self.renderedPlusCalModuleBundle = renderedPlusCalModuleBundle
         self.renderedPlusCalProfiles = renderedPlusCalProfiles
@@ -467,6 +472,7 @@ public struct RenderedSpecification: Sendable {
         _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = [],
         _generatedFairnessProfileOperators: [String: String] = [:],
         _generatedInitialEvaluationFailure: String? = nil,
+        _generatedInitialEvaluationFailureRecord: String? = nil,
         _generatedTemporalObligations: [String: [_RenderedTemporalObligation]] = [:]) throws {
         guard _generatedIntegerBitWidth == Int.bitWidth else {
             throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
@@ -534,6 +540,7 @@ public struct RenderedSpecification: Sendable {
         let plusCalProfiles = try _generatedPlusCalProfiles.mapValues(configuredPlusCal)
         self.init(tlaBundle: bundle, configuration: configuration,
             initialEvaluationFailure: _generatedInitialEvaluationFailure,
+            initialEvaluationFailureRecord: _generatedInitialEvaluationFailureRecord,
             actions: actions, renderedPlusCalModuleBundle: plusCal,
             renderedPlusCalProfiles: plusCalProfiles,
             fairnessProfileOperators: _generatedFairnessProfileOperators,
@@ -647,7 +654,8 @@ public struct RenderedSpecification: Sendable {
             }
         }
         return try Self(tlaBundle: linked(tlaBundle), configuration: selected,
-            initialEvaluationFailure: initialEvaluationFailure, actions: actions,
+            initialEvaluationFailure: initialEvaluationFailure,
+            initialEvaluationFailureRecord: initialEvaluationFailureRecord, actions: actions,
             renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map(linkedResult),
             renderedPlusCalProfiles: renderedPlusCalProfiles.mapValues(linkedResult),
             fairnessProfileOperators: fairnessProfileOperators, temporalObligations: temporalObligations)
@@ -680,8 +688,9 @@ public struct RenderedSpecification: Sendable {
     public var behavior: ModelBehavior { configuration.behavior }
 
     /// A zero-state TLC input for checking initial evaluation failure before graph exploration.
-    public func initialEvaluationFailureBundle() throws -> TLAModuleBundle? {
+    public func initialEvaluationFailureBundle(capturingRecord: Bool = false) throws -> TLAModuleBundle? {
         guard let initialEvaluationFailure else { return nil }
+        guard !capturingRecord || initialEvaluationFailureRecord != nil else { return nil }
         let base = tlaBundle.root.name
         var name = base + "__InitialFailureCheck"
         while tlaBundle.files.contains(where: { $0.name == name }) { name += "_" }
@@ -689,10 +698,13 @@ public struct RenderedSpecification: Sendable {
         while tlaBundle.files.contains(where: { $0.tla.contains(probeInit) }) { probeInit += "_" }
         var probeNext = name + "__ProbeNext"
         while tlaBundle.files.contains(where: { $0.tla.contains(probeNext) }) { probeNext += "_" }
+        let record = capturingRecord
+            ? (initialEvaluationFailureRecord.map { "PrintT(\($0)) /\\ " } ?? "")
+            : ""
         let source = """
             ---- MODULE \(name) ----
-            EXTENDS \(base)
-            ASSUME ~\(initialEvaluationFailure)
+            EXTENDS \(base)\(capturingRecord ? ", TLC" : "")
+            ASSUME \(record)~\(initialEvaluationFailure)
             \(probeInit) == FALSE
             \(probeNext) == FALSE
             ====
@@ -715,7 +727,8 @@ public struct RenderedSpecification: Sendable {
                     structuralPath: [])]))
         try bundle.validateDeclaredClosure()
         try StraightLineRenderedActionCheck.verifyInitialFailureCheckBundle(bundle,
-            base: tlaBundle, aggregate: initialEvaluationFailure, constants: constants)
+            base: tlaBundle, aggregate: initialEvaluationFailure, constants: constants,
+            record: capturingRecord ? initialEvaluationFailureRecord : nil)
         return bundle
     }
 
@@ -800,7 +813,8 @@ public struct RenderedSpecification: Sendable {
             selectedPlusCal = renderedPlusCalModuleBundle.map { $0.map { bundle($0, using: selected) } }
         }
         return .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected,
-            initialEvaluationFailure: initialEvaluationFailure, actions: actions,
+            initialEvaluationFailure: initialEvaluationFailure,
+            initialEvaluationFailureRecord: initialEvaluationFailureRecord, actions: actions,
             renderedPlusCalModuleBundle: selectedPlusCal,
             renderedPlusCalProfiles: renderedPlusCalProfiles,
             fairnessProfileOperators: fairnessProfileOperators,
@@ -2286,6 +2300,7 @@ private extension CompiledModuleMetadata {
             renderedModuleSource: directOutput.source,
             evaluationFailureDeclarations: directOutput.evaluationFailureDeclarations,
             initialEvaluationFailure: directOutput.initialFailureAggregate,
+            initialEvaluationFailureRecord: directOutput.initialFailureRecord,
             configuration: renderedConfiguration,
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             symbolicActions: behavior.actions.filter { $0.bindings.contains { $0.literalMembers == nil } }.map(\.id),
@@ -2320,7 +2335,7 @@ private extension CompiledModuleMetadata {
         importedNames: [String],
         instancesAfterBehavior: Bool
     ) throws -> (source: String, evaluationFailureDeclarations: [String],
-        evaluationInvariant: String?, initialFailureAggregate: String?) {
+        evaluationInvariant: String?, initialFailureAggregate: String?, initialFailureRecord: String?) {
         let varNames = layout.variables.map(\.declaration.name)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = varNames.isEmpty && renderedActions.isEmpty
@@ -2547,7 +2562,7 @@ private extension CompiledModuleMetadata {
             lines.append("====")
             let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
             try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
-            return (source, evaluationFailureDeclarations, evaluationInvariant, nil)
+            return (source, evaluationFailureDeclarations, evaluationInvariant, nil, nil)
         }
 
         let initializations = Dictionary(
@@ -2684,11 +2699,14 @@ private extension CompiledModuleMetadata {
         }
         var initialFailureDeclarations: [String] = []
         var initialFailurePredicates: [String] = []
+        var initialFailureRecordExpressions: [String] = []
+        var initialFailureRecordEligible = selectedInitialInvariant == nil
         func appendInitialEvaluationFailures(
             _ expression: CompiledExpression,
             after prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>,
             namePrefix: String,
-            indexSuffix: String
+            indexSuffix: String,
+            siteOrdinal: Int?
         ) throws {
             for prior in prefix {
                 let expression: CompiledExpression = switch prior.initialization {
@@ -2752,6 +2770,13 @@ private extension CompiledModuleMetadata {
                 }
                 var relation = failure.predicate
                 var selection = failure.predicate
+                var record: String?
+                if case .overflow(.addition) = failure.kind,
+                   let siteOrdinal, let operands = failure.operands {
+                    record = "(IF \(failure.predicate) THEN [site |-> \(siteOrdinal), kind |-> \"integerOverflow.addition\", operands |-> \(operands)] ELSE FALSE)"
+                } else {
+                    initialFailureRecordEligible = false
+                }
                 if let operandsName, let operands = failure.operands {
                     relation = "(IF \(failure.predicate) THEN \(operandsName) = \(operands) ELSE FALSE)"
                 }
@@ -2762,12 +2787,15 @@ private extension CompiledModuleMetadata {
                         let value = try renderer.state(expression, stateNames: prefixNames)
                         let bound = "(LET \(binder) == \(value) IN \(relation))"
                         let selected = "(LET \(binder) == \(value) IN \(selection))"
+                        record = record.map { "(LET \(binder) == \(value) IN \($0))" }
                         let defined = try renderer.evaluationDefined(expression, stateNames: prefixNames)
                         relation = defined
                             .map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
                         selection = defined
                             .map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
+                        if let defined { record = record.map { "(IF \(defined) THEN \($0) ELSE FALSE)" } }
                     case .memberOf(let expression):
+                        initialFailureRecordEligible = false
                         let domain = try renderer.state(expression, stateNames: prefixNames)
                         let bound = "(\\E \(binder) \\in \(domain): \(relation))"
                         let selected = "(\\E \(binder) \\in \(domain): \(selection))"
@@ -2779,6 +2807,7 @@ private extension CompiledModuleMetadata {
                     }
                 }
                 initialFailurePredicates.append(selection)
+                if let record { initialFailureRecordExpressions.append(record) }
                 let parameters = operandsName.map { "(\($0))" } ?? ""
                 let declaration = "\(name)\(parameters) == \(relation)"
                 lines.append(declaration)
@@ -2802,11 +2831,13 @@ private extension CompiledModuleMetadata {
             guard case .value(let expression) = initialization.initialization else { continue }
             try appendInitialEvaluationFailures(expression,
                 after: behavior.initializations.prefix(index), namePrefix: "Initial",
-                indexSuffix: "\(initialization.variable.ordinal)")
+                indexSuffix: "\(initialization.variable.ordinal)",
+                siteOrdinal: initialization.variable.ordinal)
         }
         if let selectedInitialInvariant {
             try appendInitialEvaluationFailures(selectedInitialInvariant.predicate.expression,
-                after: behavior.initializations[...], namePrefix: "SelectedInitial", indexSuffix: "")
+                after: behavior.initializations[...], namePrefix: "SelectedInitial", indexSuffix: "",
+                siteOrdinal: nil)
         }
         let initialFailureAggregate: String?
         if initialFailurePredicates.isEmpty {
@@ -2817,6 +2848,22 @@ private extension CompiledModuleMetadata {
             occupied.insert(name)
             lines.append("\(name) == " + initialFailurePredicates.map { "(\($0))" }.joined(separator: " \\/ "))
             initialFailureAggregate = name
+        }
+        let initialFailureRecord: String?
+        if initialFailureRecordEligible, !initialFailureRecordExpressions.isEmpty,
+           initialFailureRecordExpressions.count == initialFailurePredicates.count,
+           behavior.initializations.allSatisfy({ if case .value = $0.initialization { true } else { false } }) {
+            var name = "__SwiftTLASelectedInitialFailureRecord"
+            while occupied.contains(name) { name += "_" }
+            occupied.insert(name)
+            let selected = Array(zip(initialFailurePredicates, initialFailureRecordExpressions)).reversed()
+                .reduce("FALSE") { rest, entry in
+                    "(IF \(entry.0) THEN \(entry.1) ELSE \(rest))"
+                }
+            lines.append("\(name) == \(selected)")
+            initialFailureRecord = name
+        } else {
+            initialFailureRecord = nil
         }
         if lines.last != "" { lines.append("") }
 
@@ -2880,6 +2927,9 @@ private extension CompiledModuleMetadata {
         }
         try StraightLineRenderedActionCheck.verifyInitialFailureAggregate(source,
             predicates: initialFailurePredicates, name: initialFailureAggregate)
+        try StraightLineRenderedActionCheck.verifyInitialFailureRecord(source,
+            name: initialFailureRecord, predicates: initialFailurePredicates,
+            records: initialFailureRecordExpressions)
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
         let expectedIntLiterals = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
             variable -> (String, Int)? in
@@ -2911,7 +2961,8 @@ private extension CompiledModuleMetadata {
                 && expectedIntLiterals.count + expectedIntPredicates.count
                     + expectedControlLocations.count == layout.variables.count)
         try verifyRenderedActionDeclarations(source, declarations: actionDeclarations)
-        return (source, evaluationFailureDeclarations, evaluationInvariant, initialFailureAggregate)
+        return (source, evaluationFailureDeclarations, evaluationInvariant,
+            initialFailureAggregate, initialFailureRecord)
     }
 
     func tlcConfiguration(behavior: CompiledBehavior, replacements: [TLCModuleReplacement],
