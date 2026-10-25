@@ -2695,7 +2695,8 @@ private extension CompiledModuleMetadata {
             }
             var occurrences: [String: Int] = [:]
             let failures = try renderer.expressionEvaluationFailures(expression, stateNames: prefixNames)
-            var emitted: [(failure: RenderedEvaluationFailure, relation: String, operandsName: String?)] = []
+            var emitted: [(failure: RenderedEvaluationFailure, relation: String,
+                           operandsName: String?, selection: String)] = []
             for failure in failures {
                 let stem: String
                 let operation: String?
@@ -2770,7 +2771,7 @@ private extension CompiledModuleMetadata {
                 let declaration = "\(name)\(parameters) == \(relation)"
                 lines.append(declaration)
                 initialFailureDeclarations.append(declaration)
-                emitted.append((failure, relation, operandsName))
+                emitted.append((failure, relation, operandsName, selection))
                 if let operation {
                     var operationName = "__SwiftTLA\(namePrefix)OverflowOperation\(suffix)"
                     while occupied.contains(operationName) { operationName += "_" }

@@ -168,7 +168,8 @@ enum StraightLineRenderedActionCheck {
         _ expression: CompiledExpression,
         after prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>,
         names: [VariableID: String],
-        emitted: [(failure: RenderedEvaluationFailure, relation: String, operandsName: String?)],
+        emitted: [(failure: RenderedEvaluationFailure, relation: String,
+                   operandsName: String?, selection: String)],
         layout: CompiledLayout
     ) throws {
         guard let tree = addition(expression, variables: names, binders: [:]) else { return }
@@ -213,17 +214,21 @@ enum StraightLineRenderedActionCheck {
                 "(IF \(guard_) THEN \(value) ELSE FALSE)"
             }
             var relation = "(IF \(predicate) THEN \(operandsName) = \(site.operands) ELSE FALSE)"
+            var selection = predicate
             for prior in earlier.reversed() {
                 relation = "(LET \(prior.name) == \(prior.value) IN \(relation))"
+                selection = "(LET \(prior.name) == \(prior.value) IN \(selection))"
                 if let defined = prior.defined {
                     relation = "(IF \(defined) THEN \(relation) ELSE FALSE)"
+                    selection = "(IF \(defined) THEN \(selection) ELSE FALSE)"
                 }
             }
             guard output.failure.predicate == predicate,
-                  output.relation == relation else {
+                  output.relation == relation, output.selection == selection else {
                 throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                     path: "tla.initialEvaluationFailures",
-                    expected: relation, actual: output.relation,
+                    expected: "\(relation) and \(selection)",
+                    actual: "\(output.relation) and \(output.selection)",
                     nextSafeAction: "Regenerate the TLA+ initial failure declarations.")
             }
             preceding.append(site.guardText)
