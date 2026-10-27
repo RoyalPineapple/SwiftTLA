@@ -1276,7 +1276,7 @@ struct OrderedAssignmentLoweringTests {
         try verifyOrderedIntInitialExpression(declaration,
             named: name, expression: resolvedExpression, slots: slots)
         let missingFailure = declaration.description.replacingOccurrences(
-            of: "if firstFailure == nil { firstFailure = failure }", with: "")
+            of: "firstFailure = failure", with: "")
         #expect(missingFailure != declaration.description)
         let missingFailureDeclaration = try #require(Parser.parse(source: missingFailure)
             .statements.first?.item.as(DeclSyntax.self))

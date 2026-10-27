@@ -1344,12 +1344,17 @@ THEOREM GuardedDeterministicInitialHistoriesExist ==
         <2>1. /\ plans[index] \in DeterministicInitialPlans
               /\ history[index - 1] \in SUBSET States
             BY <1>3, SMT
+        <2>Mapped. mapped[index] = AsDeterministicInitialPlan(plans[index])
+            BY <1>4, SMT DEF mapped
+        <2>History. history[index] = ExtendEnumeratedInitialStates(
+                history[index - 1], mapped[index].key,
+                mapped[index].candidates)
+            BY <1>3, <1>4, SMT DEF EnumeratedInitialHistory
         <2>2. history[index] = GeneratedGuardedInitialStates(
                 history[index - 1], plans[index].key,
                 plans[index].values, plans[index].defined)
-            BY <1>3, <1>4, SMT
-               DEF EnumeratedInitialHistory, mapped,
-                   AsDeterministicInitialPlan,
+            BY <2>Mapped, <2>History, SMT
+               DEF AsDeterministicInitialPlan,
                    GeneratedGuardedInitialStates
         <2>3. SourceGuardedInitialStates(history[index - 1],
                 plans[index].key, plans[index].values, plans[index].defined)
@@ -4654,13 +4659,18 @@ THEOREM EmittedIntegerChoiceAtTwo ==
     PROOF
     <1>1. {member \in {1, 2, 3} : member > 2} = {3}
         BY SMT
-    <1>2. {3} \in SUBSET Int /\ 3 \in {3}
-        /\ (\A other \in {3} : 3 <= other) /\ (\E member \in {1, 2, 3} : member > 2)
+    <1>2. {3} \in SUBSET Int
         BY SMT
-    <1>3. (CHOOSE member \in {3} :
+    <1>3. 3 \in {3}
+        BY SMT
+    <1>4. \A other \in {3} : 3 <= other
+        BY SMT
+    <1>5. \E member \in {1, 2, 3} : member > 2
+        BY SMT
+    <1>6. (CHOOSE member \in {3} :
               \A other \in {3} : member <= other) = 3
-        BY <1>2, UniqueMinimumIntegerChoice, SMT
-    <1>. QED BY <1>1, <1>2, <1>3, SMT DEF IntegerChoice!advance
+        BY <1>2, <1>3, <1>4, UniqueMinimumIntegerChoice, SMT
+    <1>. QED BY <1>1, <1>5, <1>6, SMT DEF IntegerChoice!advance
 
 THEOREM EmittedIntegerChoiceMatchesSourceWhenDefined ==
     choiceSelected \in 0..2 =>
