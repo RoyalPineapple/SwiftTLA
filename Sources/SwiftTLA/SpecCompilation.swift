@@ -705,7 +705,7 @@ public struct RenderedSpecification: Sendable {
             ---- MODULE \(name) ----
             EXTENDS \(base)\(capturingRecord ? ", TLC" : "")
             ASSUME \(record)~\(initialEvaluationFailure)
-            \(probeInit) == FALSE
+            \(probeInit) == FALSE /\\ Init
             \(probeNext) == FALSE
             ====
 

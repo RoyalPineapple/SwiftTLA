@@ -304,11 +304,12 @@ enum StraightLineRenderedActionCheck {
         let expected = ["---- MODULE \(bundle.root.name) ----",
             "EXTENDS \(base.root.name)\(record == nil ? "" : ", TLC")",
             "ASSUME \(record.map { "PrintT(\($0)) /\\ " } ?? "")~\(aggregate)",
-            "\(initName) == FALSE", "\(nextName) == FALSE", "===="]
+            "\(initName) == FALSE /\\ Init", "\(nextName) == FALSE", "===="]
         let recordDeclarationPresent = record.map { name in
             base.root.tla.split(separator: "\n").filter { $0.hasPrefix("\(name) == ") }.count == 1
         } ?? true
-        guard base.root.tla.split(separator: "\n").filter({ $0.hasPrefix("\(aggregate) == ") }).count == 1,
+        guard base.root.tla.split(separator: "\n").filter({ $0 == "Init ==" || $0.hasPrefix("Init == ") }).count == 1,
+              base.root.tla.split(separator: "\n").filter({ $0.hasPrefix("\(aggregate) == ") }).count == 1,
               recordDeclarationPresent,
               initName.hasPrefix(initPrefix),
               initName.dropFirst(initPrefix.count).allSatisfy({ $0 == "_" }),
