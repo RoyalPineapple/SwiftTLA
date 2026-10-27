@@ -265,6 +265,8 @@ struct InitialBranchFailureTests {
         let compiledCheck = try #require(try compiled.initialEvaluationFailureBundle())
         let recordedCheck = try #require(try generated.initialEvaluationFailureBundle(capturingRecord: true))
         #expect(recordedCheck.tla.contains("PrintT(__SwiftTLASelectedInitialFailureRecord)"))
+        #expect(recordedCheck.tla.contains(
+            #"\#(recordedCheck.root.name)__ProbeInit == FALSE /\ Init"#))
         #expect(check.root == compiledCheck.root)
         #expect(check.imports == compiledCheck.imports)
         #expect(!generated.tlaBundle.tla.contains("ASSUME ~__SwiftTLAAnyInitialEvaluationFailure"))

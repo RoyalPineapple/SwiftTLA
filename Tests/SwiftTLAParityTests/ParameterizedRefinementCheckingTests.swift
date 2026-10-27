@@ -25,4 +25,16 @@ struct ParameterizedRefinementCheckingTests {
             #expect(graph.refinementFailures.isEmpty)
         }
     }
+
+    @Test("both configured refinements keep the no-failure probe state-level and graph-free")
+    func checksInitialFailureProbeForBothLimits() throws {
+        for scenario in try ParameterizedRefinementCounter.validationScenarios() {
+            let rendered = try scenario.render()
+            let probe = try #require(try rendered.initialEvaluationFailureBundle())
+            let initName = probe.root.name + "__ProbeInit"
+            #expect(probe.tla.contains(#"\#(initName) == FALSE /\ Init"#))
+            #expect(probe.cfg.contains("INIT \(initName)"))
+            #expect(probe.tla.contains("ASSUME ~__SwiftTLAAnyInitialEvaluationFailure"))
+        }
+    }
 }
