@@ -140,11 +140,11 @@ the selected verdict. The parser also registers bound `FairnessProfile` and
 | `.checkingDeadlock(flag)` / `.expectDeadlock(outcome)` | Deadlock selection and expected verdict, including disabled checking |
 | `.behavior(.specification / .initialAndNext)` | Which behavior specification is checked |
 | `.checkingMode(.exhaustive / .decisiveCounterexample)` | Exhaustive completion versus a decisive early result; never equate partial graphs |
-| `.simulating(traces: count, maximumDepth: limit)` | Sampled-trace outcome and positive bounds, distinct from exhaustive checking |
+| `.simulating(traces: count, maximumDepth: limit)` or `.simulating(traces: count)` | Sampled-trace outcome and positive bounds, with omitted depth defaulting to 100; distinct from exhaustive checking |
 | `.usingFairness(profile)` with `FairnessProfile(excluding: labels)` | Selected fairness obligations after the declared step exclusions |
 | `.usingSymmetry(symmetry)` with `Symmetry(domain)` | Finite or typed-parameter symmetry domain and checking quotient, without changing model transitions |
 | `.viewing(expression)` | Selected checking view; preserve complete machine states outside that explicit view |
-| `.postcondition(expression, name:, expecting:)` | After-check summary predicate, optional name, and expected outcome; state-level reads are rejected |
+| `.postcondition(expression, name:, expecting:)` | After-check summary predicate; name is optional and omitted expectation defaults to `.satisfied`; state-level reads are rejected |
 
 The parser records modifier selections in source order. The acceptance audit
 must also check how compilation handles repeated or conflicting selections;
