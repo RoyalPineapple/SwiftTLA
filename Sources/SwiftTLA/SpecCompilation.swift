@@ -2237,11 +2237,14 @@ private extension CompiledModuleMetadata {
                 )
             }
             let renderedBody = try renderer.action(compiled.body)
-            try StraightLineRenderedActionCheck.verifyStructure(compiled.body,
-                rendered: renderedBody, renderer: renderer)
+            let requiresIndependentCheck = orderedIntProofActionNames.contains(declaration.declaration.name)
+            if !requiresIndependentCheck {
+                try StraightLineRenderedActionCheck.verifyStructure(compiled.body,
+                    rendered: renderedBody, renderer: renderer)
+            }
             try StraightLineRenderedActionCheck.verify(compiled.body, rendered: renderedBody,
                 layout: layout, binders: renderer.bindings.binders,
-                required: orderedIntProofActionNames.contains(declaration.declaration.name))
+                required: requiresIndependentCheck)
             return DirectModuleAction(
                 sourceName: declaration.declaration.name,
                 renderedName: renderedName,
