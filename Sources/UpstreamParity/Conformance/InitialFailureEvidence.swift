@@ -13,6 +13,9 @@ package struct InitialFailureEvidenceReport: Codable, Sendable {
     package let sourceSHA: String
     package let module: String
     package let moduleSHA256: String
+    package let checkModule: String
+    package let checkModuleSHA256: String
+    package let checkConfigurationSHA256: String
     package let proofSHA256: String
     package let nativeSHA256: String
     package let graphCompared: Bool
@@ -44,7 +47,7 @@ package enum InitialFailureEvidence {
             throw InitialFailureEvidenceError.unsupportedNativeOutcome
         }
         let rendered = try CheckedAdditionPrefixInitialModel.render()
-        guard try rendered.initialEvaluationFailureBundle(capturingRecord: true) != nil else {
+        guard let check = try rendered.initialEvaluationFailureBundle(capturingRecord: true) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let module = rendered.tlaBundle.root
@@ -52,7 +55,7 @@ package enum InitialFailureEvidence {
             site: site, operands: operands)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let generated = directory.appendingPathComponent("generated-tla")
-        try GeneratedTLCOracle.retainGeneratedInputs(rendered.tlaBundle, in: generated)
+        try GeneratedTLCOracle.retainGeneratedInputs(check, in: generated)
         let nativeURL = directory.appendingPathComponent("native-initial-failure.json")
         let proofURL = generated.appendingPathComponent("\(proofModule).tla")
         let encoder = JSONEncoder()
@@ -63,8 +66,11 @@ package enum InitialFailureEvidence {
         let proofBytes = Data(proof.utf8)
         try proofBytes.write(to: proofURL, options: .atomic)
         let report = InitialFailureEvidenceReport(
-            schema: "swifttla.initial-failure-proof-v1", sourceSHA: sourceSHA,
+            schema: "swifttla.initial-failure-proof-v2", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
+            checkModule: check.root.name,
+            checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
+            checkConfigurationSHA256: SHA256.hex(Data(check.cfg.utf8)),
             proofSHA256: SHA256.hex(proofBytes), nativeSHA256: SHA256.hex(nativeBytes),
             graphCompared: false, result: "prepared", site: site,
             kind: failureKind, operands: operands)

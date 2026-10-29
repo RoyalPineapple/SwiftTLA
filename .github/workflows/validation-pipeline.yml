@@ -225,7 +225,7 @@ jobs:
           report = json.loads((case / "preparation.json").read_text())
           native = json.loads((case / "native-initial-failure.json").read_text())
           expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
-          assert report["schema"] == "swifttla.initial-failure-proof-v1"
+          assert report["schema"] == "swifttla.initial-failure-proof-v2"
           assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
           assert report["result"] == "prepared" and report["graphCompared"] is False
           assert (report["site"], report["kind"], report["operands"]) == expected
@@ -233,6 +233,8 @@ jobs:
           assert (native["site"], native["kind"], native["operands"]) == expected
           files = {
               "moduleSHA256": case / "generated-tla" / (report["module"] + ".tla"),
+              "checkModuleSHA256": case / "generated-tla" / (report["checkModule"] + ".tla"),
+              "checkConfigurationSHA256": case / "generated-tla" / (report["checkModule"] + ".cfg"),
               "proofSHA256": case / "generated-tla" / "SwiftTLAInitialFailureProof.tla",
               "nativeSHA256": case / "native-initial-failure.json",
           }
