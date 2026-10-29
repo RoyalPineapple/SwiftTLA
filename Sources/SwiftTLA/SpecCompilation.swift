@@ -2832,7 +2832,8 @@ private extension CompiledModuleMetadata {
             }
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                 after: prefix, names: prefixNames, emitted: emitted,
-                siteOrdinal: siteOrdinal, layout: layout)
+                siteOrdinal: siteOrdinal, layout: layout,
+                binders: renderer.bindings.binders)
         }
         for (index, initialization) in behavior.initializations.enumerated() {
             guard case .value(let expression) = initialization.initialization else { continue }
