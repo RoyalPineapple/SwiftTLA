@@ -21,7 +21,7 @@ default:
       upstream trace-reference --output <directory>
       upstream shiviz-reference --output <directory>
       temporal-symmetry run --output <directory>
-      initial-failure run --output <directory>
+      initial-failure prepare --output <directory>
     """, stderr)
     exit(1)
 }
@@ -143,32 +143,17 @@ private func failTemporalSymmetry(_ error: Error) -> Never {
 }
 
 private func runInitialFailure(arguments: [String]) -> Never {
-    guard arguments.count == 3, arguments[0] == "run",
+    guard arguments.count == 3, arguments[0] == "prepare",
           arguments[1] == "--output", !arguments[2].isEmpty else {
-        fputs("initial-failure: expected run --output <directory>\n", stderr)
+        fputs("initial-failure: expected prepare --output <directory>\n", stderr)
         exit(2)
     }
     do {
-        let root = try RetainedFiles.projectRoot(
-            URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
         let environment = ProcessInfo.processInfo.environment
-        guard let toolPath = environment["FINITE_GRAPH_TOOL_ROOT"],
-              let sourceSHA = environment["SWIFT_TLA_SHA"] else {
-            throw ValidationCLIError.invalidManifest("missing pinned tool root or source SHA")
+        guard let sourceSHA = environment["SWIFT_TLA_SHA"] else {
+            throw ValidationCLIError.invalidManifest("missing source SHA")
         }
-        let toolRoot = URL(fileURLWithPath: toolPath)
-        let lock = try decode(PinnedTLCToolchain.self,
-            at: root.appendingPathComponent("Verification/FiniteGraph/toolchain.json"))
-        guard lock.schema == "TLCReferencePin" else {
-            throw ValidationCLIError.invalidManifest("unsupported toolchain schema")
-        }
-        let architecture = try normalizedArchitecture()
-        guard let javaArchive = lock.java.archives[architecture] else {
-            throw ValidationCLIError.invalidManifest("no locked archive for \(architecture)")
-        }
-        let report = try InitialFailureEvidence.run(toolRoot: toolRoot, projectRoot: root,
-            pin: referencePin(from: lock, javaArchive: javaArchive, toolRoot: toolRoot),
-            sourceSHA: sourceSHA,
+        let report = try InitialFailureEvidence.prepare(sourceSHA: sourceSHA,
             to: URL(fileURLWithPath: arguments[2]).standardizedFileURL)
         print("initial-failure: \(report.result), site \(report.site), no graph")
         exit(0)
