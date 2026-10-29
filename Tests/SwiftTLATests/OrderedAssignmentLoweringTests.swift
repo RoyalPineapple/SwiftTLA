@@ -1255,6 +1255,15 @@ struct OrderedAssignmentLoweringTests {
             try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
                 resolved: wrongResolved, at: path)
         }
+        let mistypedChild = CompiledExpression(
+            operation: resolvedExpression.children[0].operation, resultType: .bool,
+            children: resolvedExpression.children[0].children)
+        let mistypedResolved = CompiledVariableInitialization.value(.init(operation: .add,
+            resultType: .int, children: [mistypedChild, resolvedExpression.children[1]]))
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
+                resolved: mistypedResolved, at: path)
+        }
 
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "SequentialDependentIntInitialProofModel", program: program))

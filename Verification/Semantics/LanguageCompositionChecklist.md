@@ -421,13 +421,15 @@ mutation and eight related initial-failure tests pass locally. That operator
 is now selected by a separate, state-free TLC run before graph exploration;
 the retained input and outcome are checked against the generated-TLA oracle.
 Native validation retains successful initial states alongside a failure.
-The initial-failure output link remains open: the separate TLC run compares
-only failure existence. On frozen SHA `622ccd90`, both parameterized-refinement
-probes completed without an initial failure, but the failure-only case could
-not produce an exact TLC payload because pinned TLC cannot evaluate the
-generated `Int.max` expression. A local candidate retains actual TLA+ and
-native failure for a TLAPS payload proof; that is a proof-backed regression,
-not TLC parity or a general emitted-output theorem. A module-level `ASSUME` in
+The general initial-failure output link remains open: the separate TLC run
+compares only failure existence. On frozen SHA `7d121d6b`, both
+parameterized-refinement probes completed without an initial failure using
+generated-input/tool-keyed TLC evidence. A separate hosted TLAPS job proved
+the actual emitted TLA+ selected record has site `3`, kind
+`integerOverflow.addition`, operands `[3, Int.max]`, and no successful `Init`;
+the generated Swift machine reported the same failure with zero initial states,
+and the wrong-operand proof failed. This is a named proof-backed regression,
+not TLC payload parity or a general emitted-output theorem. A module-level `ASSUME` in
 the graph check would make a failing initializer a false proof premise; a TLC
 `POSTCONDITION` runs after checking and does not establish evaluation-failure
 precedence over deadlock.
@@ -445,8 +447,8 @@ and output checks correctly link the emitted artifacts to those plans and record
 For checked addition, the TLA+ output check now reconstructs each state-free
 initial-failure selection from the compiled addition tree and preceding
 initializer guards, separately from its parameterized failure relation. A
-wrong-selection mutation is rejected; the 10 initial-branch and 23
-ordered-assignment tests pass locally. This checks the emitted formula, not
+wrong-selection mutation is rejected; the related initial-branch and
+ordered-assignment suites pass locally. This checks the emitted formula, not
 TLC's exact failure payload or the verifier's own correctness.
 The same output link now checks each emitted checked-addition overflow
 operation declaration against the compiled failure kind; a wrong-kind
@@ -459,15 +461,16 @@ the latter can no longer silently bypass this check. This remains a
 SwiftTLA-owned verifier boundary, not proof that TLC can evaluate a 64-bit
 failure operand. The proof preparation independently encodes native operands
 in binary-radix chunks and checks the generated TLA+ selected record and
-`~Init`; its wrong-operand mutation must fail TLAPS. Hosted evidence is
-pending for this candidate.
+`~Init`; its wrong-operand mutation failed in the hosted proof job on
+`7d121d6b`. Full unfiltered validation is a separate admission gate.
 The generated-TLC initial-failure probe now permits the model's original
 assumptions but accepts a false assumption as its verdict only when TLC
 attributes it to the probe module; retained-evidence comparison repeats
 that check. This avoids conflating a false model assumption with an initial
 evaluation failure. It is validation-infrastructure evidence, not a proof
-of the emitted failure payload. The seven oracle and 21 native-evidence
-regressions pass locally; hosted evidence for this revision is pending.
+of the emitted failure payload. The related oracle and native-evidence
+regressions pass locally; the two parameterized probes also passed on
+`7d121d6b`. Full unfiltered admission remains separate.
 
 For recognized ordered-`Int` scenarios without a view or sampled initializer,
 the generated Swift validation methods now require the full initial outcome
@@ -485,8 +488,8 @@ the `#spec` default deadlock selection separately from compiled behavior.
 Production checks require the root TLA configuration and generated Swift
 `checksDeadlock` to retain that default. The generated TLA export checker
 requires the checked constructor argument and a final return of that value.
-Those output checkers remain project-owned trusted code. The focused test and
-22 related ordered-assignment tests pass locally; hosted evidence is pending.
+Those output checkers remain project-owned trusted code. The focused and
+related ordered-assignment tests pass locally; full hosted admission is pending.
 The current first slice has no
 authored state predicate; its selected outcomes are the automatic
 evaluation-failure check and default deadlock, not general invariant or
@@ -504,10 +507,11 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   selection rule.
 - [ ] Complete the actual TLA+ initial-failure checking output link. TLC
   verifies existence but cannot evaluate this `Int.max` failure payload.
-  The prepared TLAPS proof checks one failure-only emitted output against
-  independently encoded native operands, without a graph; hosted evidence and
-  a rule for all accepted initializers remain open. Do not count this named
-  regression or the conditional selected-outcome theorem as language coverage.
+  A hosted TLAPS job on `7d121d6b` checked one failure-only emitted output
+  against independently encoded native operands, without a graph; full hosted
+  admission and a rule for all accepted initializers remain open. Do not count
+  this named regression or the conditional selected-outcome theorem as
+  language coverage.
 - [x] Finish the full local proof for the current dependent-initializer
   and checking-outcome rules. TLAPS `--strict --nofp` proved the complete
   `SingleAssignment.tla` module; the ordered-assignment and
