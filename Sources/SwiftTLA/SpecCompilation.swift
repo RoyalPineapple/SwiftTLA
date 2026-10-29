@@ -698,15 +698,18 @@ public struct RenderedSpecification: Sendable {
         while tlaBundle.files.contains(where: { $0.tla.contains(probeInit) }) { probeInit += "_" }
         var probeNext = name + "__ProbeNext"
         while tlaBundle.files.contains(where: { $0.tla.contains(probeNext) }) { probeNext += "_" }
+        var probeState = name + "__ProbeState"
+        while tlaBundle.files.contains(where: { $0.tla.contains(probeState) }) { probeState += "_" }
         let record = capturingRecord
             ? (initialEvaluationFailureRecord.map { "PrintT(\($0)) /\\ " } ?? "")
             : ""
         let source = """
             ---- MODULE \(name) ----
             EXTENDS \(base)\(capturingRecord ? ", TLC" : "")
+            VARIABLE \(probeState)
             ASSUME \(record)~\(initialEvaluationFailure)
-            \(probeInit) == FALSE /\\ Init
-            \(probeNext) == FALSE
+            \(probeInit) == FALSE /\\ Init /\\ \(probeState) = 0
+            \(probeNext) == FALSE /\\ \(probeState)' = \(probeState)
             ====
 
             """

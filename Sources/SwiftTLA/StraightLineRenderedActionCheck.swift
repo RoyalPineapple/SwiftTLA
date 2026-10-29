@@ -295,27 +295,36 @@ enum StraightLineRenderedActionCheck {
         base: TLAModuleBundle, aggregate: String, constants: [String],
         record: String? = nil) throws {
         let sourceLines = bundle.root.tla.split(separator: "\n").map(String.init)
-        let initName = sourceLines.indices.contains(3)
-            ? String(sourceLines[3].prefix(while: { $0 != " " })) : ""
-        let nextName = sourceLines.indices.contains(4)
+        let stateName = sourceLines.indices.contains(2)
+            ? String(sourceLines[2].dropFirst("VARIABLE ".count)) : ""
+        let initName = sourceLines.indices.contains(4)
             ? String(sourceLines[4].prefix(while: { $0 != " " })) : ""
+        let nextName = sourceLines.indices.contains(5)
+            ? String(sourceLines[5].prefix(while: { $0 != " " })) : ""
+        let statePrefix = bundle.root.name + "__ProbeState"
         let initPrefix = bundle.root.name + "__ProbeInit"
         let nextPrefix = bundle.root.name + "__ProbeNext"
         let expected = ["---- MODULE \(bundle.root.name) ----",
             "EXTENDS \(base.root.name)\(record == nil ? "" : ", TLC")",
+            "VARIABLE \(stateName)",
             "ASSUME \(record.map { "PrintT(\($0)) /\\ " } ?? "")~\(aggregate)",
-            "\(initName) == FALSE /\\ Init", "\(nextName) == FALSE", "===="]
+            "\(initName) == FALSE /\\ Init /\\ \(stateName) = 0",
+            "\(nextName) == FALSE /\\ \(stateName)' = \(stateName)", "===="]
         let recordDeclarationPresent = record.map { name in
             base.root.tla.split(separator: "\n").filter { $0.hasPrefix("\(name) == ") }.count == 1
         } ?? true
         guard base.root.tla.split(separator: "\n").filter({ $0 == "Init ==" || $0.hasPrefix("Init == ") }).count == 1,
               base.root.tla.split(separator: "\n").filter({ $0.hasPrefix("\(aggregate) == ") }).count == 1,
               recordDeclarationPresent,
+              stateName.hasPrefix(statePrefix),
+              stateName.dropFirst(statePrefix.count).allSatisfy({ $0 == "_" }),
               initName.hasPrefix(initPrefix),
               initName.dropFirst(initPrefix.count).allSatisfy({ $0 == "_" }),
               nextName.hasPrefix(nextPrefix),
               nextName.dropFirst(nextPrefix.count).allSatisfy({ $0 == "_" }),
-              !base.files.contains(where: { $0.tla.contains(initName) || $0.tla.contains(nextName) }),
+              !base.files.contains(where: {
+                  $0.tla.contains(stateName) || $0.tla.contains(initName) || $0.tla.contains(nextName)
+              }),
               sourceLines == expected,
               bundle.root.cfg?.split(separator: "\n").map(String.init)
                 == ["INIT \(initName)", "NEXT \(nextName)", "CHECK_DEADLOCK FALSE"] + constants,
