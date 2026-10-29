@@ -32,6 +32,20 @@ enum StraightLineRenderedActionCheck {
     private static let tokenPattern = try? NSRegularExpression(
         pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}+*<>-]|="#)
 
+    private static func checkedIntegerLiteral(_ value: Int) -> String {
+        let radix = 1_000_000_000
+        guard value.magnitude > UInt(radix) else { return String(value) }
+        let digits = Array(String(value.magnitude))
+        let firstCount = (digits.count - 1) % 9 + 1
+        let negative = value < 0
+        var result = (negative ? "-" : "") + String(digits[..<firstCount])
+        for start in stride(from: firstCount, to: digits.count, by: 9) {
+            let remainder = Int(String(digits[start..<(start + 9)]))!
+            result = "(\(result) * \(radix) \(negative ? "-" : "+") \(remainder))"
+        }
+        return result
+    }
+
     static func verifyStructure(_ action: CompiledActionExpr, rendered: String,
                                 renderer: CompiledTLARenderer) throws {
         let names = Dictionary(uniqueKeysWithValues: renderer.layout.variables.map {
@@ -104,8 +118,8 @@ enum StraightLineRenderedActionCheck {
     private static func addition(_ expression: CompiledExpression,
                                  variables: [VariableID: String],
                                  binders: [BinderID: String]) -> AdditionTree? {
-        let swiftIntMinimum = TLAValue.int(.min).description
-        let swiftIntMaximum = TLAValue.int(.max).description
+        let swiftIntMinimum = checkedIntegerLiteral(.min)
+        let swiftIntMaximum = checkedIntegerLiteral(.max)
         var pending = [(expression, false)]
         var values: [String] = []
         var sites: [AdditionSite] = []
@@ -137,7 +151,7 @@ enum StraightLineRenderedActionCheck {
                 values.append(name)
             case .value(.integer(let value)):
                 guard node.children.isEmpty else { return nil }
-                values.append(TLAValue.int(value).description)
+                values.append(checkedIntegerLiteral(value))
             default: return nil
             }
         }
@@ -194,7 +208,7 @@ enum StraightLineRenderedActionCheck {
             case .stateVariable(let id):
                 return names[id].map { ($0, nil) }
             case .value(.integer(let value)):
-                return (TLAValue.int(value).description, nil)
+                return (checkedIntegerLiteral(value), nil)
             case .controlLocation(let id):
                 return layout.controlLocation(id).map {
                     (TLAValue.string($0.formalName).description, nil)
@@ -559,7 +573,7 @@ enum StraightLineRenderedActionCheck {
             switch expression.operation {
             case .stateVariable(let id): return variables[id]
             case .boundValue(let id): return binders[id]
-            case .value(.integer(let value)): return TLAValue.int(value).description
+            case .value(.integer(let value)): return checkedIntegerLiteral(value)
             default: return nil
             }
         }
