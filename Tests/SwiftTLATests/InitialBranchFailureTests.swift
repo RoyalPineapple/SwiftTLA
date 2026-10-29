@@ -192,16 +192,33 @@ struct InitialBranchFailureTests {
         let operationDeclaration = try #require(rendered.split(separator: "\n").first {
             $0.hasPrefix("__SwiftTLAInitialOverflowOperation3 == ")
         }).description
+        let operands = try #require(checkedFailure.operands)
+        let relationOperands = "\(operandsName) = \(operands)"
+        #expect(relation.contains(relationOperands))
+        let record = relation.replacingOccurrences(of: relationOperands,
+            with: "[site |-> 3, kind |-> \"integerOverflow.addition\", operands |-> \(operands)]")
         try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
             after: prefix, names: names,
-            emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration)],
-            layout: program.layout)
+            emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration, record)],
+            siteOrdinal: 3, layout: program.layout)
+
+        do {
+            try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
+                after: prefix, names: names,
+                emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration,
+                    record.replacingOccurrences(of: "site |-> 3", with: "site |-> 2"))],
+                siteOrdinal: 3, layout: program.layout)
+            Issue.record("A changed initial failure site escaped the emitted-output check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.initialEvaluationFailures")
+        }
 
         #expect(predicates[1] != "FALSE")
         do {
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                 after: prefix, names: names,
-                emitted: [(checkedFailure, relation, operandsName, "FALSE", operationDeclaration)],
+                emitted: [(checkedFailure, relation, operandsName, "FALSE", operationDeclaration, record)],
+                siteOrdinal: 3,
                 layout: program.layout)
             Issue.record("A changed initial failure selection escaped the emitted-output check")
         } catch let diagnostic as CompilationDiagnostic {
@@ -211,7 +228,8 @@ struct InitialBranchFailureTests {
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                 after: prefix, names: names,
                 emitted: [(checkedFailure, relation, operandsName, predicates[1],
-                    operationDeclaration.replacingOccurrences(of: "\"addition\"", with: "\"subtraction\""))],
+                    operationDeclaration.replacingOccurrences(of: "\"addition\"", with: "\"subtraction\""), record)],
+                siteOrdinal: 3,
                 layout: program.layout)
             Issue.record("A changed initial overflow kind escaped the emitted-output check")
         } catch let diagnostic as CompilationDiagnostic {
@@ -236,7 +254,8 @@ struct InitialBranchFailureTests {
         do {
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                 after: prefix, names: names,
-                emitted: [(checkedFailure, wrong, operandsName, predicates[1], operationDeclaration)],
+                emitted: [(checkedFailure, wrong, operandsName, predicates[1], operationDeclaration, record)],
+                siteOrdinal: 3,
                 layout: program.layout)
             Issue.record("A later initial failure escaped its checked prefix")
         } catch let diagnostic as CompilationDiagnostic {
