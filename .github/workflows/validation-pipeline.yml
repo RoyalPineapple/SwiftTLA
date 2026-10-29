@@ -190,13 +190,11 @@ jobs:
           if-no-files-found: error
 
   initial-failure-contract:
-    name: Ordered Int initial failure payload
+    name: Ordered Int initial failure output proof
     needs: prepare
     if: ${{ needs.prepare.result == 'success' && (github.event_name != 'workflow_dispatch' || (inputs.case_id == '' && inputs.case_ids == '' && inputs.replay_run_id == '')) }}
     runs-on: macos-15
     timeout-minutes: 45
-    env:
-      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
     steps:
       - uses: actions/checkout@v5
         with:
@@ -209,25 +207,93 @@ jobs:
         with:
           name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
           path: .build/release
-      - name: Capture and compare selected initial failure
-        env:
-          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+      - name: Retain generated outputs and native failure
         run: |
+          set -euo pipefail
           chmod +x .build/release/tlc-validate
           test -x .build/release/tlc-validate
-          ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT" >/dev/null
           mkdir -p .build/initial-failure-artifacts
-          .build/release/tlc-validate initial-failure run \
+          .build/release/tlc-validate initial-failure prepare \
             --output .build/initial-failure-artifacts/case
-          jq -e --arg sha "$SWIFT_TLA_SHA" '
-            .schema == "swifttla.initial-failure-evidence-v1"
-            and .sourceSHA == $sha and .result == "exact" and .graphCompared == false
-            and .site == 3 and .kind == "integerOverflow.addition"
-          ' .build/initial-failure-artifacts/case/comparison.json
-          python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin)["operands"] == [3, 2**63 - 1] else 1)' \
-            < .build/initial-failure-artifacts/case/comparison.json
-          test -s .build/initial-failure-artifacts/case/native-initial-failure.json
-          test -s .build/initial-failure-artifacts/case/tlc/tlc-evaluation.bin
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          case = Path(".build/initial-failure-artifacts/case")
+          report = json.loads((case / "preparation.json").read_text())
+          native = json.loads((case / "native-initial-failure.json").read_text())
+          expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
+          assert report["schema"] == "swifttla.initial-failure-proof-v1"
+          assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
+          assert report["result"] == "prepared" and report["graphCompared"] is False
+          assert (report["site"], report["kind"], report["operands"]) == expected
+          assert native["successfulInitialStates"] == 0
+          assert (native["site"], native["kind"], native["operands"]) == expected
+          files = {
+              "moduleSHA256": case / "generated-tla" / (report["module"] + ".tla"),
+              "proofSHA256": case / "generated-tla" / "SwiftTLAInitialFailureProof.tla",
+              "nativeSHA256": case / "native-initial-failure.json",
+          }
+          assert all(
+              path.is_file() and path.stat().st_size
+              and hashlib.sha256(path.read_bytes()).hexdigest() == report[key]
+              for key, path in files.items()
+          )
+          PY
+      - name: Prove selected payload in actual generated TLA
+        run: |
+          set -euo pipefail
+          # Pinned TLC cannot evaluate Int.max; TLAPS proves this emitted TLA+ result.
+          proof_tool_dir="$(mktemp -d)"
+          curl -fsSL \
+            https://github.com/tlaplus/tlapm/releases/download/1.6.0-pre/tlapm-1.6.0-pre-arm64-darwin.tar.gz \
+            -o "$proof_tool_dir/tlapm.tar.gz"
+          echo '0bfcaf9d4156c068fd00ef71cb94d59039835330791fe8e55fe63e985ca5b59f  '"$proof_tool_dir/tlapm.tar.gz" \
+            | shasum -a 256 -c -
+          shasum -a 256 "$proof_tool_dir/tlapm.tar.gz" > .build/initial-failure-artifacts/tlapm-archive.sha256
+          tar -xzf "$proof_tool_dir/tlapm.tar.gz" -C "$proof_tool_dir"
+          curl -fsSL \
+            https://github.com/Z3Prover/z3/releases/download/z3-4.15.4/z3-4.15.4-arm64-osx-13.7.6.zip \
+            -o "$proof_tool_dir/z3.zip"
+          echo '8bb3439772cafd75240d61abf255e89122850bab93563d1283b048359ab4e88f  '"$proof_tool_dir/z3.zip" \
+            | shasum -a 256 -c -
+          shasum -a 256 "$proof_tool_dir/z3.zip" > .build/initial-failure-artifacts/z3-archive.sha256
+          unzip -p "$proof_tool_dir/z3.zip" z3-4.15.4-arm64-osx-13.7.6/bin/z3 \
+            > "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3"
+          chmod +x "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3"
+          "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/initial-failure-artifacts/tlapm-version.txt
+          grep -Fx '941f894' .build/initial-failure-artifacts/tlapm-version.txt
+          "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version > .build/initial-failure-artifacts/z3-version.txt
+          "$proof_tool_dir/tlapm/bin/tlapm" --nofp \
+            .build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla \
+            2>&1 | tee .build/initial-failure-artifacts/proof.log
+          grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \
+            .build/initial-failure-artifacts/proof.log
+          ! grep -q '^\[ERROR\]' .build/initial-failure-artifacts/proof.log
+          source_proof=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla
+          wrong_proof=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongPayload.tla
+          test "$(grep -c '^ExpectedOperand1 ==' "$source_proof")" -eq 1
+          sed -e 's/MODULE SwiftTLAInitialFailureProof/MODULE SwiftTLAInitialFailureWrongPayload/' \
+              -e 's/^ExpectedOperand1 == .*/ExpectedOperand1 == 0/' \
+              "$source_proof" > "$wrong_proof"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "$wrong_proof" \
+              > .build/initial-failure-artifacts/wrong-payload.log 2>&1; then
+            echo 'wrong-payload proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-payload.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path(".build/initial-failure-artifacts")
+          result = json.loads((root / "case" / "preparation.json").read_text())
+          result.update(result="proved", proofMethod="TLAPS", wrongPayloadRejected=True)
+          (root / "proof-result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+          PY
       - name: Retain source revision
         if: always()
         run: |

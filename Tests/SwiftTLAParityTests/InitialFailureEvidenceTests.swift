@@ -1,37 +1,46 @@
+import Foundation
 import Testing
-import SwiftTLA
 @testable import UpstreamParity
 
 @Suite("Selected initial failure evidence")
 struct InitialFailureEvidenceTests {
-    @Test("A failure-only initializer compares the exact selected payload without a graph")
-    func comparesSelectedFailure() throws {
-        let native = try CheckedAdditionPrefixInitialModel.initialOutcomes()
-        #expect(native.states.isEmpty)
-        let expected = CanonicalValue.record([
-            "site": .integer(3), "kind": .string("integerOverflow.addition"),
-            "operands": .tuple([.integer(3), .integer(Int.max)])
-        ])
-        let selected = try InitialFailureEvidence.compare(
-            site: native.firstFailureInitializerOrdinal, reason: native.firstFailure,
-            successfulInitialStates: native.states.count, verdict: .violated,
-            printed: [expected])
-        #expect(selected.site == 3)
-        #expect(selected.operands == [3, Int.max])
+    @Test("A failure-only initializer retains native and actual TLA output for a proof without a graph")
+    func preparesSelectedFailureProof() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swifttla-initial-failure-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sha = String(repeating: "a", count: 40)
+        let report = try InitialFailureEvidence.prepare(sourceSHA: sha, to: directory)
+        #expect(report.schema == "swifttla.initial-failure-proof-v1")
+        #expect(report.result == "prepared")
+        #expect(report.sourceSHA == sha)
+        #expect(!report.graphCompared)
+        #expect(report.site == 3)
+        #expect(report.kind == "integerOverflow.addition")
+        #expect(report.operands == [3, Int.max])
 
-        let wrong = CanonicalValue.record([
-            "site": .integer(3), "kind": .string("integerOverflow.addition"),
-            "operands": .tuple([.integer(3), .integer(Int.max - 1)])
-        ])
-        #expect(throws: InitialFailureEvidenceError.payloadMismatch) {
-            try InitialFailureEvidence.compare(site: native.firstFailureInitializerOrdinal,
-                reason: native.firstFailure, successfulInitialStates: 0,
-                verdict: .violated, printed: [wrong])
+        let native = try Data(contentsOf: directory.appendingPathComponent("native-initial-failure.json"))
+        let generated = directory.appendingPathComponent("generated-tla")
+        let module = try Data(contentsOf: generated.appendingPathComponent("\(report.module).tla"))
+        let proof = try Data(contentsOf: generated.appendingPathComponent("SwiftTLAInitialFailureProof.tla"))
+        #expect(report.nativeSHA256 == SHA256.hex(native))
+        #expect(report.moduleSHA256 == SHA256.hex(module))
+        #expect(report.proofSHA256 == SHA256.hex(proof))
+        #expect(try JSONDecoder().decode(InitialFailureEvidenceReport.self,
+            from: Data(contentsOf: directory.appendingPathComponent("preparation.json"))).result == "prepared")
+        let proofText = try String(contentsOf: generated.appendingPathComponent("SwiftTLAInitialFailureProof.tla"),
+            encoding: .utf8)
+        #expect(proofText.contains("InitialFailurePrecedesGraph"))
+        #expect(proofText.contains("1073741824"))
+    }
+
+    @Test("Invalid source provenance is refused before output")
+    func rejectsInvalidRevision() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swifttla-invalid-revision-\(UUID().uuidString)")
+        #expect(throws: InitialFailureEvidenceError.invalidSourceSHA) {
+            try InitialFailureEvidence.prepare(sourceSHA: "not-a-revision", to: directory)
         }
-        #expect(throws: InitialFailureEvidenceError.unsupportedNativeOutcome) {
-            try InitialFailureEvidence.compare(site: native.firstFailureInitializerOrdinal,
-                reason: native.firstFailure, successfulInitialStates: 1,
-                verdict: .violated, printed: [expected])
-        }
+        #expect(!FileManager.default.fileExists(atPath: directory.path))
     }
 }
