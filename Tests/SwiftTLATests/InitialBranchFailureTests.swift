@@ -119,6 +119,12 @@ struct InitialBranchFailureTests {
             try StraightLineRenderedActionCheck.verifyInitialFailureRecord(wrongRecord,
                 declaration: String(selectedRecord))
         }
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyInitialFailureRecord(rendered,
+                name: nil, predicates: predicates,
+                records: Array(repeating: String(selectedRecord), count: predicates.count),
+                required: true)
+        }
         let missingFailure = rendered.replacingOccurrences(of: String(aggregate),
             with: "\(aggregateName) == \(predicates[0])")
         do {
