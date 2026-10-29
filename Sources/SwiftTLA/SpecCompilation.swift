@@ -2857,9 +2857,11 @@ private extension CompiledModuleMetadata {
             initialFailureAggregate = name
         }
         let initialFailureRecord: String?
-        if initialFailureRecordEligible, !initialFailureRecordExpressions.isEmpty,
-           initialFailureRecordExpressions.count == initialFailurePredicates.count,
-           behavior.initializations.allSatisfy({ if case .value = $0.initialization { true } else { false } }) {
+        let requiresInitialFailureRecord = initialFailureRecordEligible
+            && !initialFailureRecordExpressions.isEmpty
+            && initialFailureRecordExpressions.count == initialFailurePredicates.count
+            && behavior.initializations.allSatisfy({ if case .value = $0.initialization { true } else { false } })
+        if requiresInitialFailureRecord {
             var name = "__SwiftTLASelectedInitialFailureRecord"
             while occupied.contains(name) { name += "_" }
             occupied.insert(name)
@@ -2936,7 +2938,7 @@ private extension CompiledModuleMetadata {
             predicates: initialFailurePredicates, name: initialFailureAggregate)
         try StraightLineRenderedActionCheck.verifyInitialFailureRecord(source,
             name: initialFailureRecord, predicates: initialFailurePredicates,
-            records: initialFailureRecordExpressions)
+            records: initialFailureRecordExpressions, required: requiresInitialFailureRecord)
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
         let expectedIntLiterals = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
             variable -> (String, Int)? in

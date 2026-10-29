@@ -288,20 +288,28 @@ enum StraightLineRenderedActionCheck {
     }
 
     static func verifyInitialFailureRecord(_ module: String, name: String?,
-                                           predicates: [String], records: [String]) throws {
-        guard let name else { return }
+                                           predicates: [String], records: [String],
+                                           required: Bool) throws {
+        guard let name else {
+            guard !required else { throw initialFailureRecordMismatch() }
+            return
+        }
         let selected = Array(zip(predicates, records)).reversed().reduce("FALSE") { rest, entry in
             "(IF \(entry.0) THEN \(entry.1) ELSE \(rest))"
         }
         let expected = "\(name) == \(selected)"
         guard !records.isEmpty, predicates.count == records.count else {
-            throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
-                path: "tla.initialEvaluationFailureRecord",
-                expected: "the selected initial failure site, kind, and operands",
-                actual: "the emitted selected initial failure record differs",
-                nextSafeAction: "Regenerate the TLA+ initial failure record.")
+            throw initialFailureRecordMismatch()
         }
         try verifyInitialFailureRecord(module, declaration: expected)
+    }
+
+    private static func initialFailureRecordMismatch() -> CompilationDiagnostic {
+        CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+            path: "tla.initialEvaluationFailureRecord",
+            expected: "the selected initial failure site, kind, and operands",
+            actual: "the emitted selected initial failure record is absent or differs",
+            nextSafeAction: "Regenerate the TLA+ initial failure record.")
     }
 
     static func verifyInitialFailureRecord(_ module: String, declaration: String) throws {
