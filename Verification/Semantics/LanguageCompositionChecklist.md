@@ -463,6 +463,9 @@ failure operand. The proof preparation independently encodes native operands
 in binary-radix chunks and checks the generated TLA+ selected record and
 `~Init`; its wrong-operand mutation failed in the hosted proof job on
 `7d121d6b`. Full unfiltered validation is a separate admission gate.
+The proof artifact also retains and hashes the rendered initial-failure check
+module and configuration; the project-owned output verifier checks their
+selection shape, but its correctness remains trusted.
 The generated-TLC initial-failure probe now permits the model's original
 assumptions but accepts a false assumption as its verdict only when TLC
 attributes it to the probe module; retained-evidence comparison repeats
