@@ -213,6 +213,7 @@ jobs:
         env:
           FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
         run: |
+          chmod +x .build/release/tlc-validate
           test -x .build/release/tlc-validate
           ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT" >/dev/null
           mkdir -p .build/initial-failure-artifacts
