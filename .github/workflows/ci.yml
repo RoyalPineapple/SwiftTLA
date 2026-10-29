@@ -107,7 +107,7 @@ jobs:
             https://github.com/tlaplus/tlapm/releases/download/1.6.0-pre/tlapm-1.6.0-pre-x86_64-linux-gnu.tar.gz \
             -o "$proof_tool_dir/tlapm.tar.gz"
           sha256sum "$proof_tool_dir/tlapm.tar.gz" | tee .build/semantic-proof-evidence/tlapm-archive.sha256
-          echo '0d1b393a1042aa08961bb024c784a80a25009a5874258c0ddbbfd95b92e80fe5  '"$proof_tool_dir/tlapm.tar.gz" \
+          echo '666099f0440aebdb7a20fec91ccd812e0f53b7aa61a112462a591216ce2691b1  '"$proof_tool_dir/tlapm.tar.gz" \
             | sha256sum --check -
           tar -xzf "$proof_tool_dir/tlapm.tar.gz" -C "$proof_tool_dir"
           curl -fsSL \
