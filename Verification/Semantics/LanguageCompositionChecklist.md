@@ -391,7 +391,7 @@ cannot establish source-order behavior.
 
 The first slice is arbitrary-length sequential `Do` programs with nonempty,
 ordered root `Int` assignments from literals, prior-state reads and checked addition,
-deterministic `Int` initializers of those forms, and the hidden program
+parameter-free deterministic `Int` initializers of those forms, and the hidden program
 counter. `SingleAssignment.tla` has a general composition theorem for complete
 initial sets, labeled steps, ordered action/initial failures, and termination.
 The compiler marks an ordered-Int action for strict output checking independently
@@ -400,7 +400,8 @@ authored initializers and steps match this slice's syntax. An accepted initializ
 outside that rule, such as multiplication, still compiles and retains its action
 output check, but does not receive the whole-program witness or default-deadlock
 claim. A focused negative control guards this distinction. This does not prove
-the excluded initializer.
+the excluded initializer. Parameter-bound initializers remain accepted but
+uncovered by this whole-program source-to-output claim.
 `ExactSequentialCheckingOutcomes` derives invariant, reachability, and
 deadlock verdict agreement from equal complete initial/edge sets and
 pointwise-equal selected state predicates. This is a graph-to-verdict rule:
