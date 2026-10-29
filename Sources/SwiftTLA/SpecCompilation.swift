@@ -2938,7 +2938,9 @@ private extension CompiledModuleMetadata {
             predicates: initialFailurePredicates, name: initialFailureAggregate)
         try StraightLineRenderedActionCheck.verifyInitialFailureRecord(source,
             name: initialFailureRecord, predicates: initialFailurePredicates,
-            records: initialFailureRecordExpressions, required: requiresInitialFailureRecord)
+            records: initialFailureRecordExpressions,
+            required: StraightLineRenderedActionCheck.requiresInitialIntFailureRecord(
+                behavior, layout: layout))
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
         let expectedIntLiterals = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
             variable -> (String, Int)? in

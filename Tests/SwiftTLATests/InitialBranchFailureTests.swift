@@ -119,11 +119,15 @@ struct InitialBranchFailureTests {
             try StraightLineRenderedActionCheck.verifyInitialFailureRecord(wrongRecord,
                 declaration: String(selectedRecord))
         }
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: CheckedAdditionPrefixInitialModel.spec.compile()))
+        let requiresRecord = StraightLineRenderedActionCheck.requiresInitialIntFailureRecord(
+            program.behavior, layout: program.layout)
+        #expect(requiresRecord)
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineRenderedActionCheck.verifyInitialFailureRecord(rendered,
                 name: nil, predicates: predicates,
-                records: Array(repeating: String(selectedRecord), count: predicates.count),
-                required: true)
+                records: [], required: requiresRecord)
         }
         let missingFailure = rendered.replacingOccurrences(of: String(aggregate),
             with: "\(aggregateName) == \(predicates[0])")
@@ -141,8 +145,6 @@ struct InitialBranchFailureTests {
         #expect(failure.contains("THEN (LET __SwiftTLAInitialValue2 =="))
         #expect(rendered.contains("__SwiftTLAInitialOverflowOperation3 == \"addition\""))
 
-        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
-            in: CheckedAdditionPrefixInitialModel.spec.compile()))
         let last = try #require(program.layout.variables.first { $0.declaration.name == "last" })
         #expect(generated.firstFailureInitializerOrdinal == last.id.ordinal)
         let compiledOutcome = try CompiledRuntime(program: program).initialOutcomes()

@@ -178,6 +178,35 @@ enum StraightLineRenderedActionCheck {
         }
     }
 
+    static func requiresInitialIntFailureRecord(_ behavior: CompiledBehavior,
+                                                layout: CompiledLayout) -> Bool {
+        guard layout.parameters.isEmpty, behavior.initialInvariant == nil,
+              !behavior.initializations.isEmpty,
+              behavior.initializations.count == layout.variables.count else { return false }
+        let variables = Dictionary(uniqueKeysWithValues: layout.variables.map { ($0.id, $0) })
+        var hasAddition = false
+        for initialization in behavior.initializations {
+            guard let variable = variables[initialization.variable],
+                  case .value(let expression) = initialization.initialization else { return false }
+            switch expression.operation {
+            case .value(.integer):
+                guard variable.generatedSwiftType == "Int", expression.resultType == .int,
+                      expression.children.isEmpty else { return false }
+            case .controlLocation(let id):
+                guard variable.declaration.origin == .programCounter,
+                      expression.resultType == .controlLocation,
+                      expression.children.isEmpty, layout.controlLocation(id) != nil else { return false }
+            case .stateVariable, .add:
+                guard variable.generatedSwiftType == "Int", expression.resultType == .int,
+                      initialIntPredicate(expression, named: variable.declaration.name,
+                        layout: layout) != nil else { return false }
+                if case .add = expression.operation { hasAddition = true }
+            default: return false
+            }
+        }
+        return hasAddition
+    }
+
     static func verifyInitialAdditionFailures(
         _ expression: CompiledExpression,
         after prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>,
