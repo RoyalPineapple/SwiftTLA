@@ -1387,23 +1387,25 @@ struct OrderedAssignmentLoweringTests {
         let emitted = try zip(zip(zip(failures, declarations), selections),
             operationDeclarations).map { pair, operationDeclaration ->
             (failure: RenderedEvaluationFailure, relation: String,
-             operandsName: String?, selection: String, operationDeclaration: String?) in
+             operandsName: String?, selection: String,
+             operationDeclaration: String?, record: String?) in
             let ((failure, declaration), selection) = pair
             let separator = try #require(declaration.range(of: " == "))
             let header = String(declaration[..<separator.lowerBound])
             let open = try #require(header.firstIndex(of: "("))
             let close = try #require(header.lastIndex(of: ")"))
             return (failure, String(declaration[separator.upperBound...]),
-                String(header[header.index(after: open)..<close]), selection, operationDeclaration)
+                String(header[header.index(after: open)..<close]), selection, operationDeclaration, nil)
         }
         try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(resolvedExpression,
-            after: prefix, names: names, emitted: emitted, layout: program.layout)
+            after: prefix, names: names, emitted: emitted, siteOrdinal: nil, layout: program.layout)
         var reversedRelations = emitted
         reversedRelations[0].relation = emitted[1].relation
         reversedRelations[1].relation = emitted[0].relation
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(resolvedExpression,
-                after: prefix, names: names, emitted: reversedRelations, layout: program.layout)
+                after: prefix, names: names, emitted: reversedRelations,
+                siteOrdinal: nil, layout: program.layout)
         }
     }
 

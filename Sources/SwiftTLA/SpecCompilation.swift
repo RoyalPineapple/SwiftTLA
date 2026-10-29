@@ -2732,7 +2732,7 @@ private extension CompiledModuleMetadata {
             let failures = try renderer.expressionEvaluationFailures(expression, stateNames: prefixNames)
             var emitted: [(failure: RenderedEvaluationFailure, relation: String,
                            operandsName: String?, selection: String,
-                           operationDeclaration: String?)] = []
+                           operationDeclaration: String?, record: String?)] = []
             for failure in failures {
                 let stem: String
                 let operation: String?
@@ -2828,10 +2828,11 @@ private extension CompiledModuleMetadata {
                     initialFailureDeclarations.append(declaration)
                     operationDeclaration = declaration
                 }
-                emitted.append((failure, relation, operandsName, selection, operationDeclaration))
+                emitted.append((failure, relation, operandsName, selection, operationDeclaration, record))
             }
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
-                after: prefix, names: prefixNames, emitted: emitted, layout: layout)
+                after: prefix, names: prefixNames, emitted: emitted,
+                siteOrdinal: siteOrdinal, layout: layout)
         }
         for (index, initialization) in behavior.initializations.enumerated() {
             guard case .value(let expression) = initialization.initialization else { continue }
