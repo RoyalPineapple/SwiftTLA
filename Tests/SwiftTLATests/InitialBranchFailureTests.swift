@@ -315,6 +315,20 @@ struct InitialBranchFailureTests {
         #expect(check.imports.map(\.name).contains(generated.tlaBundle.root.name))
 
         let aggregate = "__SwiftTLAAnyInitialEvaluationFailure"
+        let wrongRecordCapture = TLAModuleBundle(root: .init(name: recordedCheck.root.name,
+            tla: recordedCheck.tla.replacingOccurrences(
+                of: "PrintT(__SwiftTLASelectedInitialFailureRecord)", with: "PrintT(FALSE)"),
+            cfg: recordedCheck.root.cfg), imports: recordedCheck.imports,
+            provenance: recordedCheck.provenance)
+        #expect(wrongRecordCapture.tla != recordedCheck.tla)
+        do {
+            try StraightLineRenderedActionCheck.verifyInitialFailureCheckBundle(wrongRecordCapture,
+                base: generated.tlaBundle, aggregate: aggregate, constants: [],
+                record: "__SwiftTLASelectedInitialFailureRecord")
+            Issue.record("The wrong initial failure record capture escaped the output check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.initialEvaluationSelection")
+        }
         let wrong = TLAModuleBundle(root: .init(name: check.root.name,
             tla: check.tla.replacingOccurrences(of: "ASSUME ~\(aggregate)",
                 with: "ASSUME \(aggregate)"), cfg: check.root.cfg),
