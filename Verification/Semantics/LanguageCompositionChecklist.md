@@ -182,6 +182,14 @@ compiled-side obligations even though they have no same-named source case.
 The first ordered-`Int` slice covers only literal `value`, resolved prior-state
 reads, and checked `add` in its stated positions; every other case above
 remains open unless a separate complete rule is established.
+`SignedIntegerLiteralRule.tla` proves that an arbitrary finite history of
+signed billion-radix chunks has the same integer value as the corresponding
+unsigned decimal groups with one final sign. The ordered-`Int` TLA+ output
+checker now derives those groups from Swift's decimal `Int.magnitude` text,
+independently of `TLAValue`'s quotient/remainder renderer; the negative-sign
+mutation breaks the theorem. The checker implementation and Swift's documented
+decimal conversion remain trusted, and this rule does not make TLC evaluate
+64-bit integers.
 `OrderedIntExpressionRule.tla` proves that both evaluation histories exist
 for every finite topologically indexed expression graph of those three cases.
 They agree at every node on the value or the first left-to-right failure,
