@@ -202,6 +202,18 @@ struct InitialBranchFailureTests {
             emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration, record)],
             siteOrdinal: 3, layout: program.layout)
 
+        let missingOperand = CompiledExpression(operation: .add, resultType: .int,
+            children: Array(expression.children.prefix(1)))
+        do {
+            try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(missingOperand,
+                after: prefix, names: names,
+                emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration, record)],
+                siteOrdinal: 3, layout: program.layout)
+            Issue.record("A malformed compiled addition escaped the emitted-output check")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.initialEvaluationFailures")
+        }
+
         do {
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                 after: prefix, names: names,

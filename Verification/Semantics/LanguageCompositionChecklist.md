@@ -440,6 +440,12 @@ The same output link now checks each emitted checked-addition overflow
 operation declaration against the compiled failure kind; a wrong-kind
 mutation is a focused negative control. This checks the rendered kind
 declaration, not TLC's extraction of the exact failure record.
+For recognized deterministic ordered-`Int` additions, it also reconstructs
+each emitted record's site, kind, ordered operands, and preceding guards from
+the compiled tree. Wrong-site and malformed-addition mutations are rejected;
+the latter can no longer silently bypass this check. This remains a
+SwiftTLA-owned verifier boundary, not proof that TLC can evaluate a 64-bit
+failure operand.
 The generated-TLC initial-failure probe now permits the model's original
 assumptions but accepts a false assumption as its verdict only when TLC
 attributes it to the probe module; retained-evidence comparison repeats

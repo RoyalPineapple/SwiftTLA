@@ -174,13 +174,16 @@ enum StraightLineRenderedActionCheck {
         siteOrdinal: Int?,
         layout: CompiledLayout
     ) throws {
-        guard let tree = addition(expression, variables: names, binders: [:]) else { return }
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                 path: "tla.initialEvaluationFailures",
                 expected: "the checked additions' ordered initial failure relations",
                 actual: "an initial failure, operand, or prefix guard differs from its compiled expression",
                 nextSafeAction: "Regenerate the TLA+ initial failure declarations.")
+        }
+        guard let tree = addition(expression, variables: names, binders: [:]) else {
+            if case .add = expression.operation { throw mismatch() }
+            return
         }
         func initialValue(_ expression: CompiledExpression) -> (value: String, defined: String?)? {
             guard expression.children.isEmpty else {
