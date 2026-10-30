@@ -275,6 +275,43 @@ struct AlternativeTraversalTests {
         }
     }
 
+    @Test("Generated TLA+ retains ordered addition failure payloads across alternatives")
+    func renderedAlternativeAdditionPayloads() throws {
+        let specification = TLASpec(name: "AdditionAlternatives", variables: [
+            .init(name: "value", initial: .int(0))
+        ], actions: [.init(name: "pick", body: .or(
+            .assign(.named("value"), .add(.variable("value"), .int(1))),
+            .assign(.named("value"), .add(.variable("value"), .int(2)))))], invariants: [])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let output = try program.renderModule()
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        func verify(_ module: String, _ declarations: [String]) throws {
+            try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+                module: module, failureDeclarations: declarations,
+                evaluationInvariant: "__SwiftTLAEvaluationOK",
+                configuration: output.configuration, renderer: renderer)
+        }
+        try verify(output.renderedModuleSource, output.evaluationFailureDeclarations)
+        for (prefix, wrongValue) in [
+            ("__SwiftTLAOverflowFailure0_1", "TRUE"),
+            ("__SwiftTLAOverflowOperands0", "<<0, 0>>"),
+            ("__SwiftTLAOverflowOperation0_1", "\"subtraction\""),
+        ] {
+            let original = try #require(output.evaluationFailureDeclarations.first {
+                $0.hasPrefix("\(prefix) == ")
+            })
+            let changed = "\(prefix) == \(wrongValue)"
+            #expect(throws: CompilationDiagnostic.self) {
+                try verify(output.renderedModuleSource.replacingOccurrences(of: original, with: changed),
+                    output.evaluationFailureDeclarations.map { $0 == original ? changed : $0 })
+            }
+        }
+    }
+
     @Test("Nested alternatives retain source order after normalization")
     func nestedAlternativeOrder() {
         let leaves = (1...4).map { ActionExpr.assign(.named("value"), .int($0)) }

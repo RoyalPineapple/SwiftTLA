@@ -361,8 +361,13 @@ cannot establish source-order behavior.
   declaration is checked against independent left-to-right `IF` composition
   of the two child predicates; changing the declaration to `TRUE` is rejected.
   This is conditional on each non-`or` child's predicate being correct. It
-  does not yet check detailed failure kind/operands or an `or` nested under
-  another action constructor. Those output and source-semantic links remain open.
+  also checks the actual ordered failure predicates, operand pairs, and
+  operation declarations for root `or` trees whose leaves are direct scalar
+  checked-addition assignments, including nested alternatives. This is a
+  conditional output link for that stated class, not a general action rule.
+  Detailed payloads for division, modulo, mixed-action leaves, or an `or`
+  nested under another action constructor, and their source-semantic links,
+  remain open.
   For each of these eight source/compiled constructors, check complete frames,
   labels, binders, evaluation order, all successors, disabled branches, and
   failures where applicable.
