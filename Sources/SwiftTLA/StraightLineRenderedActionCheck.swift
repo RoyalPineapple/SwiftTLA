@@ -730,50 +730,48 @@ enum StraightLineRenderedActionCheck {
                 actual: "the module or configuration omits or changes that selection",
                 nextSafeAction: "Regenerate the evaluation invariant and TLC configuration.")
         }
-        func alternativeFailure(_ node: CompiledActionExpr) throws -> String? {
-            guard case .or(let left, let right) = node else {
-                // shortcut: child failure predicates remain premises until their output rules are checked.
-                return try renderer.anyFailurePredicate(node)
+        func alternativeOutcome(_ node: CompiledActionExpr) throws ->
+            (failure: String?, sites: [RenderedEvaluationFailure]) {
+            if case .or(let left, let right) = node {
+                let first = try alternativeOutcome(left)
+                let second = try alternativeOutcome(right)
+                let later = second.sites.map { site in
+                    RenderedEvaluationFailure(
+                        predicate: first.failure.map { "(IF \($0) THEN FALSE ELSE \(site.predicate))" }
+                            ?? site.predicate,
+                        operands: site.operands, kind: site.kind)
+                }
+                let failure: String?
+                switch (first.failure, second.failure) {
+                case (nil, nil): failure = nil
+                case (let first?, nil), (nil, let first?): failure = first
+                case (let first?, let second?): failure = "(IF \(first) THEN TRUE ELSE \(second))"
+                }
+                return (failure, first.sites + later)
             }
-            switch (try alternativeFailure(left), try alternativeFailure(right)) {
-            case (nil, nil): return nil
-            case (let first?, nil), (nil, let first?): return first
-            case (let first?, let second?): return "(IF \(first) THEN TRUE ELSE \(second))"
-            }
-        }
-        func additionAlternatives(_ node: CompiledActionExpr) ->
-            (failure: String, sites: [(predicate: String, operands: String)])? {
-            switch node {
-            case .assign(_, let value):
+            if case .assign(_, let value) = node {
                 let names = Dictionary(uniqueKeysWithValues: renderer.layout.variables.map {
                     ($0.id, $0.declaration.name)
                 })
-                guard let tree = addition(value, variables: names, binders: renderer.bindings.binders) else {
-                    return nil
-                }
-                var preceding: [String] = []
-                let sites = tree.sites.map { site -> (predicate: String, operands: String) in
-                    let predicate = preceding.reversed().reduce("~(\(site.guardText))") { result, guard_ in
-                        "(IF \(guard_) THEN \(result) ELSE FALSE)"
+                if let tree = addition(value, variables: names, binders: renderer.bindings.binders) {
+                    var preceding: [String] = []
+                    let sites = tree.sites.map { site -> RenderedEvaluationFailure in
+                        let predicate = preceding.reversed().reduce("~(\(site.guardText))") { result, guard_ in
+                            "(IF \(guard_) THEN \(result) ELSE FALSE)"
+                        }
+                        preceding.append(site.guardText)
+                        return .init(predicate: predicate, operands: site.operands,
+                            kind: .overflow(.addition))
                     }
-                    preceding.append(site.guardText)
-                    return (predicate, site.operands)
+                    return ("~(\(tree.defined))", sites)
                 }
-                return ("~(\(tree.defined))", sites)
-            case .or(let left, let right):
-                guard let first = additionAlternatives(left),
-                      let second = additionAlternatives(right) else { return nil }
-                let later = second.sites.map {
-                    (predicate: "(IF \(first.failure) THEN FALSE ELSE \($0.predicate))",
-                     operands: $0.operands)
-                }
-                return ("(IF \(first.failure) THEN TRUE ELSE \(second.failure))", first.sites + later)
-            default: return nil
             }
+            // shortcut: non-addition child rules remain premises until their output checks are independent.
+            return (try renderer.anyFailurePredicate(node), try renderer.evaluationFailures(node))
         }
-        func verifyAlternativeAdditionPayloads(_ action: CompiledAction, parameters: [String]) throws -> String? {
-            guard case .or = action.body,
-                  let expected = additionAlternatives(action.body) else { return nil }
+        func verifyAlternativePayloads(_ action: CompiledAction, parameters: [String]) throws -> String? {
+            guard case .or = action.body else { return nil }
+            let expected = try alternativeOutcome(action.body)
             let suffix = parameters.isEmpty ? "" : "(\(parameters.joined(separator: ", ")))"
             func check(_ base: String, _ value: String) throws {
                 let candidates = failureDeclarations.filter { declaration in
@@ -789,11 +787,42 @@ enum StraightLineRenderedActionCheck {
                     throw mismatch()
                 }
             }
-            for (occurrence, site) in expected.sites.enumerated() {
+            var occurrences: [String: Int] = [:]
+            for site in expected.sites {
+                let failurePrefix: String
+                let operandsPrefix: String?
+                let operation: String?
+                switch site.kind {
+                case .noMatchingCase:
+                    (failurePrefix, operandsPrefix, operation) = ("__SwiftTLANoMatchingCaseFailure", nil, nil)
+                case .overflow(let kind):
+                    (failurePrefix, operandsPrefix, operation) =
+                        ("__SwiftTLAOverflowFailure", "__SwiftTLAOverflowOperands", kind.rawValue)
+                case .divisionByZero:
+                    (failurePrefix, operandsPrefix, operation) =
+                        ("__SwiftTLADivisionByZeroFailure", "__SwiftTLADivisionByZeroDivisor", nil)
+                case .negativeModuloDivisor:
+                    (failurePrefix, operandsPrefix, operation) =
+                        ("__SwiftTLANegativeModuloDivisorFailure", "__SwiftTLANegativeModuloDivisorValue", nil)
+                case .functionArgumentOutsideDomain:
+                    (failurePrefix, operandsPrefix, operation) =
+                        ("__SwiftTLAFunctionArgumentOutsideDomainFailure", nil, nil)
+                case .sequenceIndexOutOfBounds:
+                    (failurePrefix, operandsPrefix, operation) =
+                        ("__SwiftTLASequenceIndexOutOfBoundsFailure", "__SwiftTLASequenceIndexOutOfBoundsOperands", nil)
+                case .emptySequence:
+                    (failurePrefix, operandsPrefix, operation) = ("__SwiftTLAEmptySequenceFailure", nil, nil)
+                }
+                let occurrence = occurrences[failurePrefix, default: 0]
+                occurrences[failurePrefix] = occurrence + 1
                 let siteSuffix = occurrence == 0 ? "\(action.id.ordinal)" : "\(action.id.ordinal)_\(occurrence)"
-                try check("__SwiftTLAOverflowFailure\(siteSuffix)", site.predicate)
-                try check("__SwiftTLAOverflowOperands\(siteSuffix)", site.operands)
-                try check("__SwiftTLAOverflowOperation\(siteSuffix)", "\"addition\"")
+                try check("\(failurePrefix)\(siteSuffix)", site.predicate)
+                if let operandsPrefix, let operands = site.operands {
+                    try check("\(operandsPrefix)\(siteSuffix)", operands)
+                } else if operandsPrefix != nil { throw mismatch() }
+                if let operation {
+                    try check("__SwiftTLAOverflowOperation\(siteSuffix)", "\"\(operation)\"")
+                }
             }
             return expected.failure
         }
@@ -802,7 +831,7 @@ enum StraightLineRenderedActionCheck {
             let prefix = "__SwiftTLAAnyEvaluationFailure\(index)"
             let action = behavior.actions[index]
             let parameters = try action.bindings.map { try renderer.binderName($0.binder) }
-            let checkedAlternative = try verifyAlternativeAdditionPayloads(action, parameters: parameters)
+            let checkedAlternative = try verifyAlternativePayloads(action, parameters: parameters)
             let parameterSuffix = parameters.isEmpty ? "" : "(\(parameters.joined(separator: ", ")))"
             let candidates = failureDeclarations.filter { declaration in
                 guard let header = declaration.components(separatedBy: " == ").first else { return false }
@@ -813,7 +842,7 @@ enum StraightLineRenderedActionCheck {
             let expectedAlternative: String?
             let isAlternative: Bool
             if case .or = action.body {
-                expectedAlternative = try checkedAlternative ?? alternativeFailure(action.body)
+                expectedAlternative = checkedAlternative
                 isAlternative = true
             } else {
                 expectedAlternative = nil

@@ -273,6 +273,23 @@ struct AlternativeTraversalTests {
                 evaluationInvariant: "__SwiftTLAEvaluationOK",
                 configuration: output.configuration, renderer: renderer)
         }
+        for (prefix, wrongValue) in [
+            ("__SwiftTLADivisionByZeroDivisor0", "2"),
+            ("__SwiftTLAOverflowOperands0_1", "<<0, 0>>"),
+            ("__SwiftTLAOverflowOperation0_1", "\"subtraction\""),
+        ] {
+            let original = try #require(output.evaluationFailureDeclarations.first {
+                $0.hasPrefix("\(prefix) == ")
+            })
+            let changed = "\(prefix) == \(wrongValue)"
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+                    module: output.renderedModuleSource.replacingOccurrences(of: original, with: changed),
+                    failureDeclarations: output.evaluationFailureDeclarations.map { $0 == original ? changed : $0 },
+                    evaluationInvariant: "__SwiftTLAEvaluationOK",
+                    configuration: output.configuration, renderer: renderer)
+            }
+        }
     }
 
     @Test("Generated TLA+ retains ordered addition failure payloads across alternatives")
