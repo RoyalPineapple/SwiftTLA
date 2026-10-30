@@ -352,6 +352,11 @@ cannot establish source-order behavior.
   arbitrary-expression output links remain open. The Swift visitor kernel and
   structural output checker remain project-owned trusted boundaries.
 - [ ] `.or`: branch union, retaining success and failure together.
+  For scalar action trees within the existing lowerer-check domain, division
+  and modulo children now retain their operation and ordered operands through
+  compilation and type resolution; operation-change mutations are rejected.
+  This closes that lowering link only, not the division/modulo failure payload
+  in either emitted output.
   For root and nested `or` trees, the actual TLA+ aggregate-failure
   declaration is checked against independent left-to-right `IF` composition
   of the two child predicates; changing the declaration to `TRUE` is rejected.
