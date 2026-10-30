@@ -741,11 +741,68 @@ enum StraightLineRenderedActionCheck {
             case (let first?, let second?): return "(IF \(first) THEN TRUE ELSE \(second))"
             }
         }
+        func additionAlternatives(_ node: CompiledActionExpr) ->
+            (failure: String, sites: [(predicate: String, operands: String)])? {
+            switch node {
+            case .assign(_, let value):
+                let names = Dictionary(uniqueKeysWithValues: renderer.layout.variables.map {
+                    ($0.id, $0.declaration.name)
+                })
+                guard let tree = addition(value, variables: names, binders: renderer.bindings.binders) else {
+                    return nil
+                }
+                var preceding: [String] = []
+                let sites = tree.sites.map { site -> (predicate: String, operands: String) in
+                    let predicate = preceding.reversed().reduce("~(\(site.guardText))") { result, guard_ in
+                        "(IF \(guard_) THEN \(result) ELSE FALSE)"
+                    }
+                    preceding.append(site.guardText)
+                    return (predicate, site.operands)
+                }
+                return ("~(\(tree.defined))", sites)
+            case .or(let left, let right):
+                guard let first = additionAlternatives(left),
+                      let second = additionAlternatives(right) else { return nil }
+                let later = second.sites.map {
+                    (predicate: "(IF \(first.failure) THEN FALSE ELSE \($0.predicate))",
+                     operands: $0.operands)
+                }
+                return ("(IF \(first.failure) THEN TRUE ELSE \(second.failure))", first.sites + later)
+            default: return nil
+            }
+        }
+        func verifyAlternativeAdditionPayloads(_ action: CompiledAction, parameters: [String]) throws -> String? {
+            guard case .or = action.body,
+                  let expected = additionAlternatives(action.body) else { return nil }
+            let suffix = parameters.isEmpty ? "" : "(\(parameters.joined(separator: ", ")))"
+            func check(_ base: String, _ value: String) throws {
+                let candidates = failureDeclarations.filter { declaration in
+                    guard let header = declaration.components(separatedBy: " == ").first,
+                          header.hasSuffix(suffix) else { return false }
+                    let name = String(header.dropLast(suffix.count))
+                    return name.hasPrefix(base) && name.dropFirst(base.count).allSatisfy { $0 == "_" }
+                }
+                guard candidates.count == 1,
+                      let header = candidates[0].components(separatedBy: " == ").first,
+                      candidates[0] == "\(header) == \(value)",
+                      lines.filter({ $0.hasPrefix("\(header) == ") }) == candidates else {
+                    throw mismatch()
+                }
+            }
+            for (occurrence, site) in expected.sites.enumerated() {
+                let siteSuffix = occurrence == 0 ? "\(action.id.ordinal)" : "\(action.id.ordinal)_\(occurrence)"
+                try check("__SwiftTLAOverflowFailure\(siteSuffix)", site.predicate)
+                try check("__SwiftTLAOverflowOperands\(siteSuffix)", site.operands)
+                try check("__SwiftTLAOverflowOperation\(siteSuffix)", "\"addition\"")
+            }
+            return expected.failure
+        }
         var references: [String] = []
         for index in behavior.enabledActionIndices {
             let prefix = "__SwiftTLAAnyEvaluationFailure\(index)"
             let action = behavior.actions[index]
             let parameters = try action.bindings.map { try renderer.binderName($0.binder) }
+            let checkedAlternative = try verifyAlternativeAdditionPayloads(action, parameters: parameters)
             let parameterSuffix = parameters.isEmpty ? "" : "(\(parameters.joined(separator: ", ")))"
             let candidates = failureDeclarations.filter { declaration in
                 guard let header = declaration.components(separatedBy: " == ").first else { return false }
@@ -756,7 +813,7 @@ enum StraightLineRenderedActionCheck {
             let expectedAlternative: String?
             let isAlternative: Bool
             if case .or = action.body {
-                expectedAlternative = try alternativeFailure(action.body)
+                expectedAlternative = try checkedAlternative ?? alternativeFailure(action.body)
                 isAlternative = true
             } else {
                 expectedAlternative = nil
