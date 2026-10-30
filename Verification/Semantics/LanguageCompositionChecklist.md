@@ -355,19 +355,17 @@ cannot establish source-order behavior.
   For scalar action trees within the existing lowerer-check domain, division
   and modulo children now retain their operation and ordered operands through
   compilation and type resolution; operation-change mutations are rejected.
-  This closes that lowering link only, not the division/modulo failure payload
-  in either emitted output.
-  For root and nested `or` trees, the actual TLA+ aggregate-failure
-  declaration is checked against independent left-to-right `IF` composition
-  of the two child predicates; changing the declaration to `TRUE` is rejected.
-  This is conditional on each non-`or` child's predicate being correct. It
-  also checks the actual ordered failure predicates, operand pairs, and
-  operation declarations for root `or` trees whose leaves are direct scalar
-  checked-addition assignments, including nested alternatives. This is a
-  conditional output link for that stated class, not a general action rule.
-  Detailed payloads for division, modulo, mixed-action leaves, or an `or`
-  nested under another action constructor, and their source-semantic links,
-  remain open.
+  This closes that lowering link only, not the independent division/modulo
+  leaf-failure payload link in either emitted output.
+  For root and nested `or` trees, the actual TLA+ aggregate-failure and each
+  detailed failure declaration are checked against independent left-to-right
+  composition of the child failures. This verifies the `or` wrapper's ordered
+  predicates, retained kind, and operands; mixed division/addition mutations
+  are rejected. Each non-`or` child's failure relation remains a premise.
+  Direct scalar checked-addition leaves have an independent TLA+ output rule;
+  other child rules, an `or` nested under another action constructor, and the
+  source-to-branchwise-lowering link remain open. The structural verifier is
+  still a SwiftTLA-owned trusted boundary, not a universal action theorem.
   For each of these eight source/compiled constructors, check complete frames,
   labels, binders, evaluation order, all successors, disabled branches, and
   failures where applicable.
