@@ -6,5 +6,7 @@ AlternativeTraversalRule
 ConditionalActionRule
 AlternativeActionRule
 BranchwiseConjunctionRule
+GuardActionRule
+FrameActionRule
 # Arbitrary finite nesting, checked after every rule module.
 ActionTreeOutcomeComposition

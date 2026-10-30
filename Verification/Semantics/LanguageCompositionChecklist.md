@@ -47,7 +47,7 @@ acceptance-rule decision.
 
 ### Current action-composition batch
 
-`action-composition.batch` checks `ifElse`, branchwise `and`, and `or` as
+`action-composition.batch` checks `ifElse`, branchwise `and`, `or`, and `guard_` as
 separate rule modules, then checks their composition. `ActionOutcomeInterface`
 owns only neutral outcome and observation definitions. It retains ordered
 pending updates and the complete selected failure payload. Its observation
@@ -77,6 +77,8 @@ every accepted action, nor does it establish the expression leaves.
 | `ifElse` | Constructor, ordered children, scalar condition identities; binder-free continuation distribution | Selected child, compiled scalar predicate, inherited updates, failure routing | Action structure; condition failures before the selected branch; detailed payload and aggregate selection for pure conditions or conditions with a definedness rule |
 | `and` | Ordered constructors, binder-free branch words and complete frames; branchwise shape gate | Every left update reaches the right child before emission | Action structure; right failures require an enabled left; fallible guard failures precede guarded body failures |
 | `or` | Both ordered alternatives survive normalization and scalar lowering | Both branches use the ordered visitor and preserve emitted updates before forwarding the first failure | Both actions and ordered child failure selection, retaining operation and operand payloads |
+| `guard_` | Guard constructor and supported scalar predicate identities survive lowering | Compiled predicates gate unchanged pending updates, including checked overflow | Definedness gates the action. Guard failures precede body failures and retain the declared payload |
+| `unchanged` | Frame targets retain their source variable identities | The visitor reads the same prior-state field and uses compatible merge | The action retains the same `UNCHANGED` variable identity |
 
 These are conditional implementation links, not completed language rows.
 `StraightLineAssignmentCheck`, the Swift output checker, and
@@ -106,14 +108,58 @@ bash scripts/check-language-proof-batch.sh /absolute/path/to/tlapm \
   Verification/Semantics/action-composition.batch /absolute/path/to/new-evidence
 ```
 
-The runner requires TLAPS revision `941f894` and Z3 `4.15.4`. CI verifies their
-archive digests before invoking it. It retains exact binary, runner, manifest,
+The runner requires TLAPS source revision `941f894` and Z3 `4.15.4`.
+CI checks the source, packaging patch, and backend pins before invoking it.
+The runner retains exact binary, runner, manifest,
 and proof-source hashes, source snapshots, tool configuration, one log per
 module, and a result table. Any unproved or unchecked module fails the batch.
 The harness negative control used an intentionally false theorem: TLAPS
 rejected `FALSE`, the runner recorded `failed`, and returned failure. The
 temporary module was then removed. Local diagnostics do not qualify a SHA;
 the hosted batch and regression evidence must still be reconciled together.
+
+### Guard and frame extension
+
+`GuardActionRule` defines source and generated rules separately.
+An enabled guard emits its inherited pending update without changes.
+A false guard emits no update and reports no failure.
+A failing guard emits no update and retains its complete selected failure.
+The parameterized theorem assumes agreement of the child condition outcomes.
+It does not prove the child expression rule.
+
+The finite-tree theorem now includes guard nodes at arbitrary positions.
+Each guard also satisfies the single-candidate premise for a left conjunction child.
+Its wrong-payload theorem distinguishes the source failure from an altered generated failure.
+
+`FrameActionRule` reuses the general frame and delta lemmas from `SingleAssignment`.
+Those lemmas now have one owner. `SingleAssignment` imports them through `EXTENDS`.
+The frame module does not import named-model proofs or unrelated arithmetic assumptions.
+It compares independently defined source, compiled, and rendered frame relations.
+The new observation theorem preserves complete states, labels, successors, and disabled behavior.
+A conflicting frame disables a candidate. It does not invent an evaluation failure.
+The wrong-rule theorem shows that omission of a conflicting frame changes the relation.
+
+The frame theorem remains separate from the indexed tree of pending outcomes.
+It does not discharge frame leaves for every tree or prove the concrete Swift merge kernel.
+That connection remains open. No language row becomes complete through this extension.
+
+Existing regression owners cover the implementation links without new named models.
+`ActionFrameConditionTests` rejects changed lowering targets and emitted TLA+ frames.
+`GeneratedSkipFrameTests` rejects changed Swift reads, including matching false emitter metadata.
+`GuardedStepExecutionTests` checks successful and overflowing generated guard behavior.
+Its overflow mutation must now fail the actual Swift artifact checker, not only a snapshot comparison.
+`AlternativeTraversalTests` and `ConjunctionFailureSelectionTests` cover guard lowering and selected TLA+ failure declarations.
+
+The source recognizer, artifact checkers, expression child rules, native merge, and complete-state materialization remain project-owned trust boundaries.
+Initialization and selected temporal outcomes remain outside these rules.
+Local proof and regression results require hosted evidence on one frozen revision before admission.
+
+The isolated rule batch passed with the pinned TLAPS and Z3 versions.
+Focused range checks also proved the existing Skip and frame-outcome callers after the lemma move.
+Empty single-line selections are not proof evidence.
+The focused guard test, nine related suites (100 tests), and static validation passed.
+The full `SingleAssignment` regression remains part of hosted CI, separate from the small rule batch.
+An interrupted local run of that full regression is not passing evidence.
 
 ### Action-constructor domain
 
@@ -134,8 +180,8 @@ The inventory is taken from `SpecParser+SpecBuilder.swift`, `SpecParser.swift`,
 | Source / compiled case | Accepted route | Rule coverage |
 | --- | --- | --- |
 | `assign` | Direct `ActionExpr.assign`, `.becomes`, collection updates; scheduled `Assign` and control writes | Ordered root-`Int` `Do` slice only; other targets and expressions open |
-| `unchanged` | Direct `.stays`; generated frame and terminal actions | Complete-state frame composition proved for an arbitrary partial continuation; full action-tree induction open |
-| `guard_` | Direct predicate or `.when`; Algorithm `When` and entry guards | General disabled/failure rule open |
+| `unchanged` | Direct `.stays`; generated frame and terminal actions | General complete-state frame relation and labeled observation proved; pending-outcome tree link and concrete merge kernel open |
+| `guard_` | Direct predicate or `.when`; Algorithm `When` and entry guards | General disabled/failure rule and finite-tree composition proved under child-condition agreement; expression leaves and full implementation soundness open |
 | `existsAction` | Direct `ActionExpr.exists`; Algorithm `With` and scheduled `Choose` | General domain, binding, and outcome rule open |
 | `ifElse` | Algorithm `If` | General branch and condition-failure rule open |
 | `define` | Algorithm `Let` and scheduled write captures | General lexical binding and failure rule open |

@@ -1,6 +1,6 @@
 ----------------------- MODULE SingleAssignment -----------------------
 EXTENDS TLAPS, NaturalsInduction, SequenceTheorems, GeneratedAtomicCopyProofModel,
-        Integers
+        Integers, FrameActionRule
 VARIABLE skipFrameValue
 GeneratedSkipFrame == INSTANCE GeneratedSkipFrameModel WITH value <- skipFrameValue
 VARIABLE choiceSelected
@@ -9,7 +9,7 @@ IntegerChoice == INSTANCE IncreasingSelection WITH position <- choiceSelected
 VARIABLES dependentPC, dependentSeed, dependentChoice
 DependentInit == INSTANCE DependentInitializationOutputProofModel
     WITH pc <- dependentPC, seed <- dependentSeed, choice <- dependentChoice
-CONSTANTS Vars, Values, Key, ActionLabels, SwiftIntMin, SwiftIntMax
+CONSTANTS Key, SwiftIntMin, SwiftIntMax
 ASSUME KeyIsVariable == Key \in Vars
 ASSUME SwiftIntBounds ==
     /\ SwiftIntMin \in Int
@@ -20,9 +20,6 @@ ASSUME SwiftIntBounds ==
 THEOREM SmallAdditionFitsSwiftInt ==
     \A value \in Int : value <= 1000000000 => value <= SwiftIntMax - 1
     BY SwiftIntBounds, SMT DEF SwiftIntBounds
-
-States == [Vars -> Values]
-LabeledEdges == States \X ActionLabels \X States
 
 ChoiceEdges(domain, branches) == UNION {branches[value] : value \in domain}
 GuardEdges(enabled, edges) == IF enabled THEN edges ELSE {}
@@ -827,20 +824,6 @@ THEOREM ConditionalEnabledness ==
                 <=> (IF selector[state] THEN EnabledIn(yes, state, action)
                      ELSE EnabledIn(no, state, action))
     BY SMT DEF ConditionalEdges, EnabledIn, LabeledEdges, States
-
-ApplyDelta(s, keys, delta) ==
-    [key \in Vars |-> IF key \in keys THEN delta[key] ELSE s[key]]
-
-RenderedDelta(s, t, keys, delta) ==
-    /\ \A key \in keys : t[key] = delta[key]
-    /\ \A key \in Vars \ keys : t[key] = s[key]
-
-THEOREM CompleteDeltaUpdate ==
-    \A keys \in SUBSET Vars :
-        \A s, t \in States :
-            \A delta \in [keys -> Values] :
-                (t = ApplyDelta(s, keys, delta)) <=> RenderedDelta(s, t, keys, delta)
-    BY SMT DEF ApplyDelta, RenderedDelta, States
 
 SourceSkip(source, target) == target = source
 CompiledSkip(source, target) == target = ApplyDelta(source, Vars, source)
@@ -2183,39 +2166,6 @@ THEOREM ConjunctionSuccessorsAgree ==
                     <=> RenderedConjunction(s, t, firstKeys, first, secondKeys, second)
     BY CompatibleConjunction, ConflictingConjunctionHasNoSuccessor,
         SMT DEF ExecutableConjunction
-
-SourceFramedDelta(s, t, frame, keys, delta) ==
-    /\ t[frame] = s[frame]
-    /\ \A key \in keys : t[key] = delta[key]
-    /\ \A key \in Vars \ keys : t[key] = s[key]
-
-CompiledFramedDelta(s, t, frame, keys, delta) ==
-    /\ (frame \in keys => delta[frame] = s[frame])
-    /\ t = ApplyDelta(s, keys, delta)
-
-RenderedFramedDelta(s, t, frame, keys, delta) ==
-    /\ t[frame] = s[frame]
-    /\ RenderedDelta(s, t, keys, delta)
-
-THEOREM UnchangedConjunctionPreservesCompleteState ==
-    ASSUME NEW frame \in Vars,
-           NEW keys \in SUBSET Vars,
-           NEW s \in States,
-           NEW t \in States,
-           NEW delta \in [keys -> Values]
-    PROVE /\ (SourceFramedDelta(s, t, frame, keys, delta)
-                <=> CompiledFramedDelta(s, t, frame, keys, delta))
-          /\ (CompiledFramedDelta(s, t, frame, keys, delta)
-                <=> RenderedFramedDelta(s, t, frame, keys, delta))
-    PROOF
-    <1>1. SourceFramedDelta(s, t, frame, keys, delta)
-            <=> RenderedFramedDelta(s, t, frame, keys, delta)
-        BY SMT DEF SourceFramedDelta, RenderedFramedDelta, RenderedDelta
-    <1>2. CompiledFramedDelta(s, t, frame, keys, delta)
-            <=> SourceFramedDelta(s, t, frame, keys, delta)
-        BY CompleteDeltaUpdate, SMT
-            DEF CompiledFramedDelta, SourceFramedDelta, RenderedDelta, States
-    <1>. QED BY <1>1, <1>2, SMT
 
 SourceFramedOutcome(s, label, frame, keys, delta, failures) ==
     [edges |-> {edge \in LabeledEdges : edge[1] = s /\ edge[2] = label /\

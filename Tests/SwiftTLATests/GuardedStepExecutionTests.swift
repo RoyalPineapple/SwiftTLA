@@ -100,9 +100,13 @@ struct GuardedStepExecutionTests {
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "CheckedGuardOverflow", program: program))
+        let compiledAction = try #require(program.behavior.actions.first)
         let action = try #require(try emitter.machineMembers().first {
             $0.description.contains("private static func _visitUpdates0(")
         })
+        let parts = try emitter.actionFunctions(compiledAction.body)
+        try verifyGeneratedActionWriteOutput(action, action: compiledAction.body, program: program,
+            stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
         let swiftWitness = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/CheckedGuardOverflowSwiftWitness.txt")
@@ -112,7 +116,11 @@ struct GuardedStepExecutionTests {
         #expect(Array(action.tokens(viewMode: .sourceAccurate)).map(\.text).filter { !$0.isEmpty } == expected)
         let invertedGuard = action.description.replacingOccurrences(of: "> 0) else", with: "< 0) else")
         #expect(invertedGuard != action.description)
-        #expect(Array(Parser.parse(source: invertedGuard).tokens(viewMode: .sourceAccurate))
-            .map(\.text).filter { !$0.isEmpty } != expected)
+        let changed = try #require(Parser.parse(source: invertedGuard)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionWriteOutput(changed, action: compiledAction.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
+        }
     }
 }
