@@ -1066,6 +1066,34 @@ THEOREM DeterministicInitialFailureSitePayloadsAgree ==
     BY OrderedInitialGuardsPreserveFirstFailure, SMT
        DEF SourceInitialFailureSiteRecords, RenderedInitialFailureSiteRecords
 
+THEOREM DeterministicInitialFailureHasOneSelectedPayload ==
+    ASSUME NEW guards \in Seq(BOOLEAN),
+           NEW sites \in [1..Len(guards) -> Int],
+           NEW operands \in [1..Len(guards) -> (Int \X Int)]
+    PROVE \A index \in 1..Len(guards) :
+        SourceInitialFailureAt(guards, index) =>
+            SourceInitialFailureSiteRecords(guards, sites, operands)
+                = {[site |-> sites[index],
+                    kind |-> "integerOverflow.addition",
+                    operands |-> operands[index]]}
+    BY SMT DEF SourceInitialFailureAt, SourceInitialFailureSiteRecords
+
+THEOREM RenderedInitialFailureHasOneSelectedPayload ==
+    ASSUME NEW guards \in Seq(BOOLEAN),
+           NEW defined \in [0..Len(guards) -> BOOLEAN],
+           NEW sites \in [1..Len(guards) -> Int],
+           NEW operands \in [1..Len(guards) -> (Int \X Int)],
+           InitialGuardHistory(guards, defined)
+    PROVE \A index \in 1..Len(guards) :
+        RenderedInitialFailureAt(guards, defined, index) =>
+            RenderedInitialFailureSiteRecords(guards, defined, sites, operands)
+                = {[site |-> sites[index],
+                    kind |-> "integerOverflow.addition",
+                    operands |-> operands[index]]}
+    BY OrderedInitialGuardsPreserveFirstFailure,
+       DeterministicInitialFailureHasOneSelectedPayload, SMT
+       DEF RenderedInitialFailureSiteRecords, SourceInitialFailureSiteRecords
+
 RenderedAnyInitialFailure(guards, defined) ==
     \E index \in 1..Len(guards) :
         RenderedInitialFailureAt(guards, defined, index)
@@ -3077,6 +3105,7 @@ THEOREM DeterministicAdditionInitialOutcomeComposition ==
            NEW path \in [0..Len(plans) -> States],
            NEW guards \in Seq(BOOLEAN),
            NEW defined \in [0..Len(plans) -> BOOLEAN],
+           NEW sites \in [1..Len(plans) -> Int],
            NEW operands \in [1..Len(plans) -> (Int \X Int)],
            NEW source \in [0..Len(plans) -> SUBSET States],
            NEW generated \in [0..Len(plans) -> SUBSET States],
@@ -3092,6 +3121,8 @@ THEOREM DeterministicAdditionInitialOutcomeComposition ==
               THEN {path[Len(plans)]} ELSE {}
           /\ SourceInitialFailureRecords(guards, operands)
               = RenderedInitialFailureRecords(guards, defined, operands)
+          /\ SourceInitialFailureSiteRecords(guards, sites, operands)
+              = RenderedInitialFailureSiteRecords(guards, defined, sites, operands)
           /\ ((SourceInitialFailureRecords(guards, operands) = {})
               <=> ~RenderedAnyInitialFailure(guards, defined))
     PROOF
@@ -3109,7 +3140,10 @@ THEOREM DeterministicAdditionInitialOutcomeComposition ==
     <1>5. SourceInitialFailureRecords(guards, operands)
             = RenderedInitialFailureRecords(guards, defined, operands)
         BY OrderedInitialFailurePayloadsAgree, SMT
-    <1>. QED BY <1>2, <1>3, <1>4, <1>5, SMT
+    <1>6. SourceInitialFailureSiteRecords(guards, sites, operands)
+            = RenderedInitialFailureSiteRecords(guards, defined, sites, operands)
+        BY DeterministicInitialFailureSitePayloadsAgree, SMT
+    <1>. QED BY <1>2, <1>3, <1>4, <1>5, <1>6, SMT
 
 THEOREM GuardedSequentialIntInitialSetsAgree ==
     ASSUME NEW start \in SUBSET States,
