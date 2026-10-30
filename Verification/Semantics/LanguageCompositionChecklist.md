@@ -440,9 +440,14 @@ exactly while every guard in that prefix succeeds; after a failed guard, it
 has no state. This is a source-rule theorem, not a check of the emitted TLA+
 failure verdict or payload.
 `DeterministicAdditionInitialOutcomeComposition` combines that rule with generated
-initial-state equality, the symbolic ordered failure records, and the selected
-failure-existence rule for the ordered-`Int` addition plans and guard history.
-Its focused TLAPS obligations pass locally. It still assumes the real lowerer
+initial-state equality, the symbolic ordered failure records including site,
+kind and operands, and the selected failure-existence rule for the ordered-`Int`
+addition plans and guard history.
+`DeterministicInitialFailureHasOneSelectedPayload` and
+`RenderedInitialFailureHasOneSelectedPayload` also prove that a deterministic
+first failure has one site/kind/ordered-operands record. Thus the selected
+record has no competing true branch in this class. Their focused TLAPS
+obligations pass locally. These rules still assume the real lowerer
 and output checks correctly link the emitted artifacts to those plans and records.
 For checked addition, the TLA+ output check now reconstructs each state-free
 initial-failure selection from the compiled addition tree and preceding
@@ -501,11 +506,11 @@ Production source/lowering and actual-output checkers plus wrong-value,
 wrong-location, wrong-order, and omitted-failure mutations are described in
 `README.md`. This is **not** coverage of other accepted constructors.
 
-- [ ] Validate the default-deadlock output link for this slice. The source
+- [x] Validate the default-deadlock output link for this slice. The source
   default, actual generated Swift declaration, generated export argument, and
   rendered `CHECK_DEADLOCK` directive are checked; flipped-value, decoy, and
-  changed-return negative controls pass locally, while hosted admission remains
-  pending. Explicit
+  changed-return negative controls pass locally; ordinary CI and full validation
+  passed on frozen SHA `098ce263`. Explicit
   `Validation.checkingDeadlock` overrides remain accepted and need their own
   selection rule.
 - [ ] Complete the actual TLA+ initial-failure checking output link. TLC
@@ -524,8 +529,8 @@ wrong-location, wrong-order, and omitted-failure mutations are described in
   diagnostic, and full validation passed on frozen PR #397 revision
   `318e81f4b88acdcab0fe92224fee95a4d5c9e5b4`. The dependent-initializer
   extension in this worktree is not included in that evidence.
-- [ ] Obtain the same hosted evidence for the dependent-initializer extension
-  after its full local proof and related regressions pass.
+- [x] Obtain the same hosted evidence for the dependent-initializer extension:
+  ordinary CI and full validation passed on frozen SHA `098ce263`.
 - [x] Record the proof boundary below. The output checks do not prove their
   own correctness, and the local proof does not qualify a hosted revision.
 - [x] Derive the sequential program's complete initial-set equality from
