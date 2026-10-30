@@ -212,6 +212,12 @@ enum StraightLineAssignmentCheck {
         case action(ActionExpr)
         case conjunction
         case alternative
+        case conditional(StateExpr)
+    }
+
+    private enum BranchStep: Equatable {
+        case action(ActionExpr)
+        case conditional(StateExpr, Bool)
     }
 
     private enum Visit {
@@ -334,15 +340,15 @@ enum StraightLineAssignmentCheck {
     private static func verifyOrderedBranchNormalization(
         _ source: ActionExpr, normalized: ActionExpr, stateRoots: Set<String>, at path: String
     ) throws {
-        func words(_ action: ActionExpr) -> [[ActionExpr]]? {
+        func words(_ action: ActionExpr) -> [[BranchStep]]? {
             var pending: [BranchVisit] = [.action(action)]
-            var results: [[[ActionExpr]]] = []
+            var results: [[[BranchStep]]] = []
             while let task = pending.popLast() {
                 switch task {
                 case .action(let node):
                     switch node {
                     case .assign, .unchanged, .guard_:
-                        results.append([[node]])
+                        results.append([[.action(node)]])
                     case .and(let left, let right):
                         pending.append(.conjunction)
                         pending.append(.action(right))
@@ -351,21 +357,30 @@ enum StraightLineAssignmentCheck {
                         pending.append(.alternative)
                         pending.append(.action(right))
                         pending.append(.action(left))
-                    case .existsAction, .ifElse, .define:
-                        // shortcut: binder and conditional trees need their own proved branch rules.
+                    case .ifElse(let condition, let yes, let no):
+                        pending.append(.conditional(condition))
+                        pending.append(.action(no))
+                        pending.append(.action(yes))
+                    case .existsAction, .define:
+                        // shortcut: binder trees need their own proved branch rules.
                         return nil
                     }
                 case .conjunction:
                     let right = results.removeLast()
                     let left = results.removeLast()
                     results.append(left.flatMap { prefix in
-                        if prefix.last == .guard_(.value(.bool(false))) { return [prefix] }
+                        if prefix.last == .action(.guard_(.value(.bool(false)))) { return [prefix] }
                         return right.map { prefix + $0 }
                     })
                 case .alternative:
                     let right = results.removeLast()
                     let left = results.removeLast()
                     results.append(left + right)
+                case .conditional(let condition):
+                    let no = results.removeLast()
+                    let yes = results.removeLast()
+                    results.append(yes.map { [.conditional(condition, true)] + $0 } +
+                        no.map { [.conditional(condition, false)] + $0 })
                 }
             }
             return results.count == 1 ? results[0] : nil
@@ -393,10 +408,10 @@ enum StraightLineAssignmentCheck {
             var explicitlyUnchanged: Set<String> = []
             for action in sourceBranch {
                 switch action {
-                case .assign(let target, _):
+                case .action(.assign(let target, _)):
                     guard stateRoots.contains(root(target)) else { return }
                     defined.insert(root(target))
-                case .unchanged(let target):
+                case .action(.unchanged(let target)):
                     guard stateRoots.contains(root(target)) else { return }
                     defined.insert(root(target))
                     explicitlyUnchanged.insert(root(target))
@@ -406,10 +421,10 @@ enum StraightLineAssignmentCheck {
             let missing = stateRoots.subtracting(defined)
             let suffix = normalizedBranch.dropFirst(sourceBranch.count)
             let frames = suffix.compactMap { action -> String? in
-                if case .unchanged(let target) = action { return root(target) }
+                if case .action(.unchanged(let target)) = action { return root(target) }
                 return nil
             }
-            let disabled = sourceBranch.last == .guard_(.value(.bool(false)))
+            let disabled = sourceBranch.last == .action(.guard_(.value(.bool(false))))
             guard (disabled && suffix.isEmpty) || (!disabled && frames.count == suffix.count &&
                   missing.isSubset(of: Set(frames)) &&
                   Set(frames).subtracting(missing).isSubset(of: explicitlyUnchanged)) else { throw mismatch() }
