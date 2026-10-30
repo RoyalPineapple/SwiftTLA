@@ -354,11 +354,16 @@ cannot establish source-order behavior.
   root compiled `and` whose left child is not a guard, the actual TLA+ failure
   declarations now check that right-side failure records are gated by
   `ENABLED(left)` while left failures remain selected, preserving kind and
-  operands. For `guard && body` with a Boolean leaf or equality of pure leaves,
-  the actual TLA+ failure declarations now check that the guard selects each
-  body failure and its aggregate only when true. These checks are conditional
-  on the child failure and expression output rules. Guards whose expressions
-  can fail, nested conjunctions under other constructors, and general
+  operands. `PureGuardedConjunctionComposes` proves that, for any ordered body
+  outcome whose source and compiled forms agree, a pure guard preserves every
+  update and the complete first-failure value when true, and yields neither
+  when false. The generated Swift visitor's ordered child calls and update
+  merge are structurally checked; the project-owned merge kernel remains
+  trusted. For `guard && body` with a Boolean leaf or equality of pure leaves,
+  the actual TLA+ failure declarations check that the guard selects each body
+  failure and its aggregate only when true. The output links are conditional
+  on child failure and expression rules. Guards whose expressions can fail,
+  nested conjunctions under unverified constructors, and general
   source-to-branchwise lowering remain open.
 - [ ] `.or`: branch union, retaining success and failure together.
   For scalar action trees within the existing lowerer-check domain, division

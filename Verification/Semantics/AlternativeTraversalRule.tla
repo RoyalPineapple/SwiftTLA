@@ -13,6 +13,25 @@ CombineOrdered(first, second) ==
 
 EmptyOrdered == [updates |-> <<>>, failure |-> NoFailure]
 
+SourceGuardedOutcome(enabled, body) ==
+    IF enabled THEN body ELSE EmptyOrdered
+EmittedGuardedOutcome(enabled, body) ==
+    [updates |-> IF enabled THEN body.updates ELSE <<>>,
+     failure |-> IF enabled THEN body.failure ELSE NoFailure]
+
+THEOREM PureGuardedConjunctionComposes ==
+    ASSUME NEW enabled \in BOOLEAN,
+           NEW source \in OrderedOutcome,
+           NEW compiled \in OrderedOutcome,
+           source = compiled
+    PROVE /\ SourceGuardedOutcome(enabled, source) =
+                 EmittedGuardedOutcome(enabled, compiled)
+          /\ EmittedGuardedOutcome(enabled, compiled) \in OrderedOutcome
+          /\ (EmittedGuardedOutcome(enabled, compiled).failure # NoFailure
+              <=> enabled /\ source.failure # NoFailure)
+    BY SMT DEF SourceGuardedOutcome, EmittedGuardedOutcome,
+        EmptyOrdered, OrderedOutcome
+
 BranchwiseContinuation(choices, continuation) ==
     [index \in 1..Len(choices) |-> continuation[choices[index]]]
 
