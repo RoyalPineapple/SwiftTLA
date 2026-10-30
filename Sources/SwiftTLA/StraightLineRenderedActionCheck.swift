@@ -743,8 +743,39 @@ enum StraightLineRenderedActionCheck {
             guard case .equal = condition.operation, condition.children.count == 2 else { return false }
             return condition.children.allSatisfy(leaf)
         }
+        func checkableCondition(_ condition: CompiledExpression) throws -> Bool {
+            if pureGuard(condition) { return true }
+            return try renderer.evaluationDefined(condition) != nil
+        }
         func composedOutcome(_ node: CompiledActionExpr) throws ->
             (failure: String?, sites: [RenderedEvaluationFailure]) {
+            if case .ifElse(let condition, let yes, let no) = node,
+               try checkableCondition(condition) {
+                // Expression results are child-rule premises; only the conditional wrapper is checked here.
+                let conditionFailure = try renderer.anyFailurePredicate(.guard_(condition))
+                let conditionSites = try renderer.expressionEvaluationFailures(condition)
+                let defined = try renderer.evaluationDefined(condition)
+                let selected = try composedOutcome(yes)
+                let unselected = try composedOutcome(no)
+                let predicate = try renderer.state(condition)
+                let sites = conditionSites + selected.sites.map { site in
+                    let failure = "(IF \(predicate) THEN \(site.predicate) ELSE FALSE)"
+                    return RenderedEvaluationFailure(
+                        predicate: defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
+                        operands: site.operands, kind: site.kind)
+                } + unselected.sites.map { site in
+                    let failure = "(IF \(predicate) THEN FALSE ELSE \(site.predicate))"
+                    return RenderedEvaluationFailure(
+                        predicate: defined.map { "(IF \($0) THEN \(failure) ELSE FALSE)" } ?? failure,
+                        operands: site.operands, kind: site.kind)
+                }
+                guard selected.failure != nil || unselected.failure != nil else {
+                    return (conditionFailure, sites)
+                }
+                let branch = "(IF \(predicate) THEN \(selected.failure ?? "FALSE") ELSE \(unselected.failure ?? "FALSE"))"
+                let guarded = defined.map { "(IF \($0) THEN \(branch) ELSE FALSE)" } ?? branch
+                return (conditionFailure.map { "(\($0) \\/ \(guarded))" } ?? guarded, sites)
+            }
             if case .or(let left, let right) = node {
                 let first = try composedOutcome(left)
                 let second = try composedOutcome(right)
@@ -763,17 +794,23 @@ enum StraightLineRenderedActionCheck {
                 return (failure, first.sites + later)
             }
             switch node {
-            case .and(.guard_(let condition), let body) where pureGuard(condition):
+            case .and(.guard_(let condition), let body):
+                guard try checkableCondition(condition) else { break }
+                let conditionFailure = try renderer.anyFailurePredicate(.guard_(condition))
+                let conditionSites = try renderer.expressionEvaluationFailures(condition)
+                let defined = try renderer.evaluationDefined(condition)
                 let second = try composedOutcome(body)
-                guard let bodyFailure = second.failure else { return (nil, []) }
+                guard let bodyFailure = second.failure else { return (conditionFailure, conditionSites) }
                 let predicate = try renderer.state(condition)
-                let failure = "(IF \(predicate) THEN \(bodyFailure) ELSE FALSE)"
-                let sites = second.sites.map { site in
-                    RenderedEvaluationFailure(predicate: "((\(predicate)) = TRUE /\\ \(site.predicate))",
+                let selected = "(IF \(predicate) THEN \(bodyFailure) ELSE FALSE)"
+                let failure = defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
+                let sites = conditionSites + second.sites.map { site in
+                    let selected = "((\(predicate)) = TRUE /\\ \(site.predicate))"
+                    return RenderedEvaluationFailure(
+                        predicate: defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected,
                         operands: site.operands, kind: site.kind)
                 }
-                return (failure, sites)
-            case .and(.guard_(_), _): break
+                return (conditionFailure.map { "(\($0) \\/ \(failure))" } ?? failure, sites)
             case .and(let left, let right):
                 let first = try composedOutcome(left)
                 let second = try composedOutcome(right)
@@ -872,7 +909,8 @@ enum StraightLineRenderedActionCheck {
             let checksComposition: Bool
             switch action.body {
             case .or: checksComposition = true
-            case .and(.guard_(let condition), _): checksComposition = pureGuard(condition)
+            case .ifElse(let condition, _, _): checksComposition = try checkableCondition(condition)
+            case .and(.guard_(let condition), _): checksComposition = try checkableCondition(condition)
             case .and: checksComposition = true
             default: checksComposition = false
             }

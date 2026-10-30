@@ -47,12 +47,15 @@ struct ConjunctionFailureSelectionTests {
         }
     }
 
-    @Test("Generated TLA+ selects a guarded action's failure only when its guard holds")
-    func guardedFailureSelection() throws {
+    @Test("Generated TLA+ selects guard and body failures in evaluation order", arguments: [false, true])
+    func guardedFailureSelection(fallibleGuard: Bool) throws {
+        let condition: StateExpr = fallibleGuard
+            ? .equal(.add(.variable("value"), .int(1)), .int(0))
+            : .equal(.variable("value"), .int(0))
         let specification = TLASpec(name: "GuardedFailure", variables: [
             .init(name: "value", initial: .int(0)),
         ], actions: [.init(name: "step", body: .and(
-            .guard_(.equal(.variable("value"), .int(0))),
+            .guard_(condition),
             .assign(.named("value"), .add(.int(.max), .int(1)))))], invariants: [])
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
         guard case .and(.guard_(_), _) = try #require(program.behavior.actions.first).body else {
@@ -72,9 +75,10 @@ struct ConjunctionFailureSelectionTests {
                 configuration: output.configuration, renderer: renderer)
         }
         try verify(output.renderedModuleSource, output.evaluationFailureDeclarations)
+        let bodySite = fallibleGuard ? "0_1" : "0"
         for (prefix, wrongValue) in [
             ("__SwiftTLAOverflowFailure0", "TRUE"),
-            ("__SwiftTLAOverflowOperands0", "<<0, 0>>"),
+            ("__SwiftTLAOverflowOperands\(bodySite)", "<<0, 0>>"),
             ("__SwiftTLAAnyEvaluationFailure0", "TRUE"),
         ] {
             let original = try #require(output.evaluationFailureDeclarations.first {
