@@ -354,9 +354,12 @@ cannot establish source-order behavior.
   root compiled `and` whose left child is not a guard, the actual TLA+ failure
   declarations now check that right-side failure records are gated by
   `ENABLED(left)` while left failures remain selected, preserving kind and
-  operands. This is conditional on the child failure and left-action output
-  rules; the special `guard && body` rule, nested conjunctions under other
-  constructors, and source-to-branchwise lowering remain open.
+  operands. For `guard && body` with a Boolean leaf or equality of pure leaves,
+  the actual TLA+ failure declarations now check that the guard selects each
+  body failure and its aggregate only when true. These checks are conditional
+  on the child failure and expression output rules. Guards whose expressions
+  can fail, nested conjunctions under other constructors, and general
+  source-to-branchwise lowering remain open.
 - [ ] `.or`: branch union, retaining success and failure together.
   For scalar action trees within the existing lowerer-check domain, division
   and modulo children now retain their operation and ordered operands through

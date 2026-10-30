@@ -46,4 +46,45 @@ struct ConjunctionFailureSelectionTests {
             }
         }
     }
+
+    @Test("Generated TLA+ selects a guarded action's failure only when its guard holds")
+    func guardedFailureSelection() throws {
+        let specification = TLASpec(name: "GuardedFailure", variables: [
+            .init(name: "value", initial: .int(0)),
+        ], actions: [.init(name: "step", body: .and(
+            .guard_(.equal(.variable("value"), .int(0))),
+            .assign(.named("value"), .add(.int(.max), .int(1)))))], invariants: [])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        guard case .and(.guard_(_), _) = try #require(program.behavior.actions.first).body else {
+            Issue.record("The compiled action did not retain the guarded conjunction")
+            return
+        }
+        let output = try program.renderModule()
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        func verify(_ module: String, _ declarations: [String]) throws {
+            try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+                module: module, failureDeclarations: declarations,
+                evaluationInvariant: "__SwiftTLAEvaluationOK",
+                configuration: output.configuration, renderer: renderer)
+        }
+        try verify(output.renderedModuleSource, output.evaluationFailureDeclarations)
+        for (prefix, wrongValue) in [
+            ("__SwiftTLAOverflowFailure0", "TRUE"),
+            ("__SwiftTLAOverflowOperands0", "<<0, 0>>"),
+            ("__SwiftTLAAnyEvaluationFailure0", "TRUE"),
+        ] {
+            let original = try #require(output.evaluationFailureDeclarations.first {
+                $0.hasPrefix("\(prefix) == ")
+            })
+            let changed = "\(prefix) == \(wrongValue)"
+            #expect(throws: CompilationDiagnostic.self) {
+                try verify(output.renderedModuleSource.replacingOccurrences(of: original, with: changed),
+                    output.evaluationFailureDeclarations.map { $0 == original ? changed : $0 })
+            }
+        }
+    }
 }
