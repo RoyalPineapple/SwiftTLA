@@ -730,6 +730,19 @@ enum StraightLineRenderedActionCheck {
                 actual: "the module or configuration omits or changes that selection",
                 nextSafeAction: "Regenerate the evaluation invariant and TLC configuration.")
         }
+        func pureGuard(_ condition: CompiledExpression) -> Bool {
+            func leaf(_ expression: CompiledExpression) -> Bool {
+                guard expression.children.isEmpty else { return false }
+                switch expression.operation {
+                case .stateVariable, .boundValue, .controlLocation, .value: return true
+                default: return false
+                }
+            }
+            guard condition.resultType == .bool else { return false }
+            if leaf(condition) { return true }
+            guard case .equal = condition.operation, condition.children.count == 2 else { return false }
+            return condition.children.allSatisfy(leaf)
+        }
         func composedOutcome(_ node: CompiledActionExpr) throws ->
             (failure: String?, sites: [RenderedEvaluationFailure]) {
             if case .or(let left, let right) = node {
@@ -750,6 +763,16 @@ enum StraightLineRenderedActionCheck {
                 return (failure, first.sites + later)
             }
             switch node {
+            case .and(.guard_(let condition), let body) where pureGuard(condition):
+                let second = try composedOutcome(body)
+                guard let bodyFailure = second.failure else { return (nil, []) }
+                let predicate = try renderer.state(condition)
+                let failure = "(IF \(predicate) THEN \(bodyFailure) ELSE FALSE)"
+                let sites = second.sites.map { site in
+                    RenderedEvaluationFailure(predicate: "((\(predicate)) = TRUE /\\ \(site.predicate))",
+                        operands: site.operands, kind: site.kind)
+                }
+                return (failure, sites)
             case .and(.guard_(_), _): break
             case .and(let left, let right):
                 let first = try composedOutcome(left)
@@ -849,7 +872,7 @@ enum StraightLineRenderedActionCheck {
             let checksComposition: Bool
             switch action.body {
             case .or: checksComposition = true
-            case .and(.guard_(_), _): checksComposition = false
+            case .and(.guard_(let condition), _): checksComposition = pureGuard(condition)
             case .and: checksComposition = true
             default: checksComposition = false
             }
