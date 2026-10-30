@@ -730,11 +730,11 @@ enum StraightLineRenderedActionCheck {
                 actual: "the module or configuration omits or changes that selection",
                 nextSafeAction: "Regenerate the evaluation invariant and TLC configuration.")
         }
-        func alternativeOutcome(_ node: CompiledActionExpr) throws ->
+        func composedOutcome(_ node: CompiledActionExpr) throws ->
             (failure: String?, sites: [RenderedEvaluationFailure]) {
             if case .or(let left, let right) = node {
-                let first = try alternativeOutcome(left)
-                let second = try alternativeOutcome(right)
+                let first = try composedOutcome(left)
+                let second = try composedOutcome(right)
                 let later = second.sites.map { site in
                     RenderedEvaluationFailure(
                         predicate: first.failure.map { "(IF \($0) THEN FALSE ELSE \(site.predicate))" }
@@ -748,6 +748,22 @@ enum StraightLineRenderedActionCheck {
                 case (let first?, let second?): failure = "(IF \(first) THEN TRUE ELSE \(second))"
                 }
                 return (failure, first.sites + later)
+            }
+            switch node {
+            case .and(.guard_(_), _): break
+            case .and(let left, let right):
+                let first = try composedOutcome(left)
+                let second = try composedOutcome(right)
+                guard let rightFailure = second.failure else { return first }
+                let enabled = "(ENABLED (\(try renderer.action(left))))"
+                let reachedRight = "(\(enabled) /\\ \(rightFailure))"
+                let failure = first.failure.map { "(\($0) \\/ \(reachedRight))" } ?? reachedRight
+                let later = second.sites.map { site in
+                    RenderedEvaluationFailure(predicate: "(\(enabled) /\\ \(site.predicate))",
+                        operands: site.operands, kind: site.kind)
+                }
+                return (failure, first.sites + later)
+            default: break
             }
             if case .assign(_, let value) = node {
                 let names = Dictionary(uniqueKeysWithValues: renderer.layout.variables.map {
@@ -769,9 +785,8 @@ enum StraightLineRenderedActionCheck {
             // shortcut: non-addition child rules remain premises until their output checks are independent.
             return (try renderer.anyFailurePredicate(node), try renderer.evaluationFailures(node))
         }
-        func verifyAlternativePayloads(_ action: CompiledAction, parameters: [String]) throws -> String? {
-            guard case .or = action.body else { return nil }
-            let expected = try alternativeOutcome(action.body)
+        func verifyComposedPayloads(_ action: CompiledAction, parameters: [String]) throws -> String? {
+            let expected = try composedOutcome(action.body)
             let suffix = parameters.isEmpty ? "" : "(\(parameters.joined(separator: ", ")))"
             func check(_ base: String, _ value: String) throws {
                 let candidates = failureDeclarations.filter { declaration in
@@ -831,7 +846,15 @@ enum StraightLineRenderedActionCheck {
             let prefix = "__SwiftTLAAnyEvaluationFailure\(index)"
             let action = behavior.actions[index]
             let parameters = try action.bindings.map { try renderer.binderName($0.binder) }
-            let checkedAlternative = try verifyAlternativePayloads(action, parameters: parameters)
+            let checksComposition: Bool
+            switch action.body {
+            case .or: checksComposition = true
+            case .and(.guard_(_), _): checksComposition = false
+            case .and: checksComposition = true
+            default: checksComposition = false
+            }
+            let checkedComposition = checksComposition
+                ? try verifyComposedPayloads(action, parameters: parameters) : nil
             let parameterSuffix = parameters.isEmpty ? "" : "(\(parameters.joined(separator: ", ")))"
             let candidates = failureDeclarations.filter { declaration in
                 guard let header = declaration.components(separatedBy: " == ").first else { return false }
@@ -839,23 +862,14 @@ enum StraightLineRenderedActionCheck {
                 let suffix = header.dropFirst(prefix.count).dropLast(parameterSuffix.count)
                 return suffix.allSatisfy { $0 == "_" }
             }
-            let expectedAlternative: String?
-            let isAlternative: Bool
-            if case .or = action.body {
-                expectedAlternative = checkedAlternative
-                isAlternative = true
-            } else {
-                expectedAlternative = nil
-                isAlternative = false
-            }
             guard candidates.count <= 1,
-                  !isAlternative || (expectedAlternative != nil) == !candidates.isEmpty else {
+                  !checksComposition || (checkedComposition != nil) == !candidates.isEmpty else {
                 throw mismatch()
             }
             guard let declaration = candidates.first else { continue }
             guard lines.filter({ $0 == declaration }).count == 1,
                   let header = declaration.components(separatedBy: " == ").first else { throw mismatch() }
-            if let expectedAlternative, declaration != "\(header) == \(expectedAlternative)" {
+            if let checkedComposition, declaration != "\(header) == \(checkedComposition)" {
                 throw mismatch()
             }
             let name = String(header.dropLast(parameterSuffix.count))

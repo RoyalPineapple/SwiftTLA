@@ -350,7 +350,13 @@ cannot establish source-order behavior.
   action semantics. A proof that the shape gate discharges
   the single-candidate premise for every accepted nested action, and both
   arbitrary-expression output links remain open. The Swift visitor kernel and
-  structural output checker remain project-owned trusted boundaries.
+  structural output checker remain project-owned trusted boundaries. For a
+  root compiled `and` whose left child is not a guard, the actual TLA+ failure
+  declarations now check that right-side failure records are gated by
+  `ENABLED(left)` while left failures remain selected, preserving kind and
+  operands. This is conditional on the child failure and left-action output
+  rules; the special `guard && body` rule, nested conjunctions under other
+  constructors, and source-to-branchwise lowering remain open.
 - [ ] `.or`: branch union, retaining success and failure together.
   For scalar action trees within the existing lowerer-check domain, division
   and modulo children now retain their operation and ordered operands through
