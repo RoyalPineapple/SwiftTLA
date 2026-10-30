@@ -840,6 +840,14 @@ enum StraightLineAssignmentCheck {
                     guard compiled.operation == .add, compiled.children.count == 2 else { return false }
                     pending.append((right, compiled.children[1]))
                     pending.append((left, compiled.children[0]))
+                case .divide(let left, let right), .modulo(let left, let right):
+                    let operation: CompiledOperation = switch source {
+                    case .divide: .divide
+                    default: .modulo
+                    }
+                    guard compiled.operation == operation, compiled.children.count == 2 else { return false }
+                    pending.append((right, compiled.children[1]))
+                    pending.append((left, compiled.children[0]))
                 case .equal(let left, let right):
                     guard compiled.operation == .equal, compiled.children.count == 2 else { return false }
                     pending.append((right, compiled.children[1]))
@@ -933,7 +941,8 @@ enum StraightLineAssignmentCheck {
             switch node {
             case .variable(let name): reads.insert(name)
             case .value: break
-            case .add(let left, let right):
+            case .add(let left, let right), .divide(let left, let right),
+                 .modulo(let left, let right):
                 pending.append(right)
                 pending.append(left)
             case .equal(let left, let right):
@@ -976,7 +985,7 @@ enum StraightLineAssignmentCheck {
         func nodeType(_ expression: CompiledExpression,
                       bindings: [BinderID: CompiledValueType]) -> CompiledValueType? {
             switch expression.operation {
-            case .add: return expression.children.count == 2 ? .int : nil
+            case .add, .divide, .modulo: return expression.children.count == 2 ? .int : nil
             case .stateVariable(let id):
                 guard expression.children.isEmpty else { return nil }
                 guard let type = variableTypes[id] else { return nil }
@@ -995,7 +1004,7 @@ enum StraightLineAssignmentCheck {
             while let (node, expected) = pending.popLast() {
                 guard nodeType(node, bindings: bindings) == expected else { return nil }
                 if case .stateVariable(let id) = node.operation { reads.insert(id) }
-                if case .add = node.operation {
+                if node.operation == .add || node.operation == .divide || node.operation == .modulo {
                     pending.append((node.children[1], .int))
                     pending.append((node.children[0], .int))
                 }

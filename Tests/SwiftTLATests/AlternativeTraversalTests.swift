@@ -147,14 +147,45 @@ struct AlternativeTraversalTests {
     func fallibleBranchwiseNormalization() throws {
         let variables = ["divisor", "x", "y"].map { NamedVar(name: $0, initial: .int(0)) }
         let first = ActionExpr.assign(.named("x"), .divide(.int(1), .variable("divisor")))
-        let second = ActionExpr.assign(.named("x"), .int(2))
+        let second = ActionExpr.assign(.named("x"), .modulo(.int(1), .variable("divisor")))
         let continuation = ActionExpr.assign(.named("y"), .add(.variable("x"), .int(1)))
         let source = ActionExpr.and(.or(first, second), continuation)
         let normalized = ActionNormalization.complete(source, variables: variables)
         try StraightLineAssignmentCheck.verifyNormalization(source, normalized: normalized,
             stateRoots: ["divisor", "x", "y"], at: "actions.pick.normalization")
-        _ = try TLASpec(name: "FallibleBranchwiseNormalization", variables: variables,
-            actions: [.init(name: "pick", body: source)], invariants: []).compile()
+        let specification = TLASpec(name: "FallibleBranchwiseNormalization", variables: variables,
+            actions: [.init(name: "pick", body: source)], invariants: [])
+        let compilation = try specification.compile()
+        let sourceAction = try #require(specification.loweredSourceModel().actions.first)
+        let action = try #require(compilation.semantics.behavior.actions.first)
+        let inputs = try SourceTypeResolver().resolve(in: compilation)
+        let program = try CompiledProgram(inputs: inputs)
+        let resolved = try #require(program.behavior.actions.first)
+        for operation: CompiledOperation in [.divide, .modulo] {
+            var changed = 0
+            let wrong = action.body.map { expression in
+                guard expression.operation == operation else { return expression }
+                changed += 1
+                return CompiledExpression(operation: .add, resultType: expression.resultType,
+                    children: expression.children)
+            }
+            #expect(changed == 1)
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+                    bindings: action.bindings, body: wrong, layout: compilation.layout)
+            }
+            let wrongResolved = resolved.body.map { expression in
+                guard expression.operation == operation else { return expression }
+                return CompiledExpression(operation: .add, resultType: expression.resultType,
+                    children: expression.children)
+            }
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineAssignmentCheck.verifyResolved(action,
+                    resolved: .init(id: resolved.id, bindings: resolved.bindings, body: wrongResolved),
+                    variableTypes: inputs.variableTypes, resolvedVariableTypes: program.variableTypes,
+                    resolvedBindingTypes: program.bindingTypes)
+            }
+        }
 
         let reordered = ActionNormalization.complete(.and(.or(second, first), continuation),
             variables: variables)
