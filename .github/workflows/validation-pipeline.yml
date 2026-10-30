@@ -194,7 +194,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.result == 'success' && (github.event_name != 'workflow_dispatch' || (inputs.case_id == '' && inputs.case_ids == '' && inputs.replay_run_id == '')) }}
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
         with:
@@ -244,29 +244,17 @@ jobs:
               for key, path in files.items()
           )
           PY
+      - uses: ./.github/actions/setup-pinned-tlaps
+        id: proof-tool
+        with:
+          evidence: .build/initial-failure-artifacts/toolchain
       - name: Prove selected payload in actual generated TLA
         run: |
           set -euo pipefail
           # Pinned TLC cannot evaluate Int.max; TLAPS proves this emitted TLA+ result.
-          proof_tool_dir="$(mktemp -d)"
-          curl -fsSL \
-            https://github.com/tlaplus/tlapm/releases/download/1.6.0-pre/tlapm-1.6.0-pre-arm64-darwin.tar.gz \
-            -o "$proof_tool_dir/tlapm.tar.gz"
-          echo '0bfcaf9d4156c068fd00ef71cb94d59039835330791fe8e55fe63e985ca5b59f  '"$proof_tool_dir/tlapm.tar.gz" \
-            | shasum -a 256 -c -
-          shasum -a 256 "$proof_tool_dir/tlapm.tar.gz" > .build/initial-failure-artifacts/tlapm-archive.sha256
-          tar -xzf "$proof_tool_dir/tlapm.tar.gz" -C "$proof_tool_dir"
-          curl -fsSL \
-            https://github.com/Z3Prover/z3/releases/download/z3-4.15.4/z3-4.15.4-arm64-osx-13.7.6.zip \
-            -o "$proof_tool_dir/z3.zip"
-          echo '8bb3439772cafd75240d61abf255e89122850bab93563d1283b048359ab4e88f  '"$proof_tool_dir/z3.zip" \
-            | shasum -a 256 -c -
-          shasum -a 256 "$proof_tool_dir/z3.zip" > .build/initial-failure-artifacts/z3-archive.sha256
-          unzip -p "$proof_tool_dir/z3.zip" z3-4.15.4-arm64-osx-13.7.6/bin/z3 \
-            > "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3"
-          chmod +x "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3"
+          proof_tool_dir='${{ steps.proof-tool.outputs.directory }}'
           "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/initial-failure-artifacts/tlapm-version.txt
-          grep -Fx '941f894' .build/initial-failure-artifacts/tlapm-version.txt
+          grep -Eq '^941f894(-dirty)?$' .build/initial-failure-artifacts/tlapm-version.txt
           "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version > .build/initial-failure-artifacts/z3-version.txt
           "$proof_tool_dir/tlapm/bin/tlapm" --nofp \
             .build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla \

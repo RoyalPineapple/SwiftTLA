@@ -88,11 +88,16 @@ jobs:
 
   semantic-proof-diagnostic:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.SWIFT_TLA_SHA }}
+
+      - uses: ./.github/actions/setup-pinned-tlaps
+        id: proof-tool
+        with:
+          evidence: .build/semantic-proof-evidence/toolchain
 
       - name: Check pinned TLAPS proof
         run: |
@@ -102,27 +107,11 @@ jobs:
           git rev-parse HEAD > .build/semantic-proof-evidence/source-sha.txt
           sha256sum Verification/Semantics/*.tla Verification/Semantics/*.txt \
             > .build/semantic-proof-evidence/proof-inputs.sha256
-          proof_tool_dir="$(mktemp -d)"
-          curl -fsSL \
-            https://github.com/tlaplus/tlapm/releases/download/1.6.0-pre/tlapm-1.6.0-pre-x86_64-linux-gnu.tar.gz \
-            -o "$proof_tool_dir/tlapm.tar.gz"
-          sha256sum "$proof_tool_dir/tlapm.tar.gz" | tee .build/semantic-proof-evidence/tlapm-archive.sha256
-          echo 'd1f0c863d3e64a4cf731f953367e5055f39fab7417c2c7097fd53a0ef288a50a  '"$proof_tool_dir/tlapm.tar.gz" \
-            | sha256sum --check -
-          tar -xzf "$proof_tool_dir/tlapm.tar.gz" -C "$proof_tool_dir"
-          curl -fsSL \
-            https://github.com/Z3Prover/z3/releases/download/z3-4.15.4/z3-4.15.4-x64-glibc-2.39.zip \
-            -o "$proof_tool_dir/z3.zip"
-          echo 'a41b690e89c343931471506cdc6d957b6044a200fd2d240cc017432afdff7d3e  '"$proof_tool_dir/z3.zip" \
-            | sha256sum --check -
-          sha256sum "$proof_tool_dir/z3.zip" > .build/semantic-proof-evidence/z3-archive.sha256
-          unzip -p "$proof_tool_dir/z3.zip" z3-4.15.4-x64-glibc-2.39/bin/z3 \
-            > "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3"
-          chmod +x "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3"
+          proof_tool_dir='${{ steps.proof-tool.outputs.directory }}'
           "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version \
             > .build/semantic-proof-evidence/z3-version.txt
           "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/semantic-proof-evidence/tlapm-version.txt
-          grep -Fx '941f894' .build/semantic-proof-evidence/tlapm-version.txt
+          grep -Eq '^941f894(-dirty)?$' .build/semantic-proof-evidence/tlapm-version.txt
           "$proof_tool_dir/tlapm/bin/tlapm" --config > .build/semantic-proof-evidence/tlapm-config.txt
           proof_failure=0
           proof_count=0

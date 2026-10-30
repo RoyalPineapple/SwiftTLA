@@ -17,3 +17,5 @@ Verification/FiniteGraph/fixtures/ewd840/SequencesExt.tla whitespace=-blank-at-e
 Verification/FiniteGraph/fixtures/ewd998/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/missionaries-and-cannibals/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/echo/* whitespace=-blank-at-eol,-blank-at-eof
+# Diff context is pinned data, not source whitespace to normalize.
+Tools/TLAPS/packaging.patch whitespace=-blank-at-eol,-space-before-tab

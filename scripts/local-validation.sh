@@ -167,7 +167,9 @@ run_guarded() {
         git diff --check
         ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }' \
             .github/workflows/ci.yml .github/workflows/validation-pipeline.yml \
-            .github/workflows/validation-case.yml
+            .github/workflows/validation-case.yml .github/actions/setup-pinned-tlaps/action.yml
+        bash -n scripts/build-pinned-tlaps.sh scripts/check-language-proof-batch.sh
+        python3 Tests/Fixtures/TLAPSBootstrap/assert_inputs.py
         "$(dirname "$0")/setup-finite-graph-tools.sh" --verify-bridge-sources
         bash "$(dirname "$0")/verify-finite-graph-input-pins.sh"
         return

@@ -12,7 +12,7 @@ evidence="$3"
 [[ ! -e "$evidence" && ! -L "$evidence" ]] || { echo 'proof batch evidence already exists' >&2; exit 64; }
 mkdir -p "$evidence/sources"
 "$proof_tool" --version > "$evidence/tlapm-version.txt"
-grep -Fxq '941f894' "$evidence/tlapm-version.txt"
+grep -Eq '^941f894(-dirty)?$' "$evidence/tlapm-version.txt"
 "$proof_tool" --config > "$evidence/tlapm-config.txt" 2>&1
 proof_z3="$(dirname "$proof_tool")/../lib/tlapm/backends/bin/z3"
 "$proof_z3" --version > "$evidence/z3-version.txt"
