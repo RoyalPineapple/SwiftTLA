@@ -126,7 +126,17 @@ jobs:
           "$proof_tool_dir/tlapm/bin/tlapm" --config > .build/semantic-proof-evidence/tlapm-config.txt
           proof_failure=0
           proof_count=0
+          if ! bash scripts/check-language-proof-batch.sh "$proof_tool_dir/tlapm/bin/tlapm" \
+              Verification/Semantics/action-composition.batch \
+              .build/semantic-proof-evidence/action-composition; then
+            proof_failure=1
+          fi
           for source in Verification/Semantics/*.tla; do
+            proof="${source##*/}"
+            proof="${proof%.tla}"
+            if grep -Fxq "$proof" Verification/Semantics/action-composition.batch; then
+              continue
+            fi
             if grep -Eq '^[[:space:]]*THEOREM([[:space:]]|$)' "$source"; then
               :
             else
@@ -135,8 +145,6 @@ jobs:
               continue
             fi
             proof_count=$((proof_count + 1))
-            proof="${source##*/}"
-            proof="${proof%.tla}"
             if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "$source" \
                 2>&1 | tee ".build/semantic-proof-evidence/$proof.log" \
               && grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \

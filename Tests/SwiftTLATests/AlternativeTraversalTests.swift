@@ -324,6 +324,74 @@ struct AlternativeTraversalTests {
         }
     }
 
+    @Test("Conditional failure declarations retain the condition and selected branch", arguments: [false, true])
+    func renderedConditionalFailureSelection(fallibleCondition: Bool) throws {
+        let condition: StateExpr = fallibleCondition
+            ? .equal(.add(.variable("value"), .int(1)), .int(0)) : .variable("enabled")
+        let specification = TLASpec(name: "ConditionalFailures", variables: [
+            .init(name: "enabled", initial: .bool(false)),
+            .init(name: "value", initial: .int(0)),
+        ], actions: [.init(name: "pick", body: .ifElse(condition,
+            .assign(.named("value"), .add(.variable("value"), .int(1))),
+            .assign(.named("value"), .add(.variable("value"), .int(2)))))], invariants: [])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let action = try #require(program.behavior.actions.first)
+        let sourceAction = try #require(specification.loweredSourceModel().actions.first)
+        try StraightLineAssignmentCheck.verifyCompiled(sourceAction, bindings: action.bindings,
+            body: action.body, layout: program.layout)
+        guard case .ifElse(let predicate, let yes, let no) = action.body else {
+            Issue.record("The compiled action lost its conditional")
+            return
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyCompiled(sourceAction, bindings: action.bindings,
+                body: .ifElse(predicate, no, yes), layout: program.layout)
+        }
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "ConditionalFailures", program: program))
+        let visitor = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let parts = try emitter.actionFunctions(action.body)
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
+            stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
+        let emittedCondition = try #require(parts.conditions.first)
+        let wrongSwift = visitor.description.replacingOccurrences(
+            of: "visitConditional({ \(emittedCondition.value) }", with: "visitConditional({ false }")
+        #expect(wrongSwift != visitor.description)
+        let wrongVisitor = try #require(Parser.parse(source: wrongSwift).statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionWriteOutput(wrongVisitor, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: parts.writes,
+                conditions: parts.conditions.map { (id: $0.id, value: "false") })
+        }
+        let output = try program.renderModule()
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        func verify(_ module: String, _ declarations: [String]) throws {
+            try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+                module: module, failureDeclarations: declarations,
+                evaluationInvariant: "__SwiftTLAEvaluationOK",
+                configuration: output.configuration, renderer: renderer)
+        }
+        try verify(output.renderedModuleSource, output.evaluationFailureDeclarations)
+        let lastSite = fallibleCondition ? "0_2" : "0_1"
+        for prefix in ["__SwiftTLAOverflowFailure0", "__SwiftTLAOverflowFailure\(lastSite)",
+                       "__SwiftTLAAnyEvaluationFailure0"] {
+            let original = try #require(output.evaluationFailureDeclarations.first {
+                $0.hasPrefix("\(prefix) == ")
+            })
+            let changed = "\(prefix) == TRUE"
+            #expect(throws: CompilationDiagnostic.self) {
+                try verify(output.renderedModuleSource.replacingOccurrences(of: original, with: changed),
+                    output.evaluationFailureDeclarations.map { $0 == original ? changed : $0 })
+            }
+        }
+    }
+
     @Test("Generated TLA+ retains ordered addition failure payloads across alternatives")
     func renderedAlternativeAdditionPayloads() throws {
         let specification = TLASpec(name: "AdditionAlternatives", variables: [

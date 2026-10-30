@@ -45,6 +45,76 @@ acceptance-rule decision.
 
 ## Inventory and proof work
 
+### Current action-composition batch
+
+`action-composition.batch` checks `ifElse`, branchwise `and`, and `or` as
+separate rule modules, then checks their composition. `ActionOutcomeInterface`
+owns only neutral outcome and observation definitions. It retains ordered
+pending updates and the complete selected failure payload. Its observation
+keeps the complete source state, action identity, complete successor set, and
+disabled status. A failure with no successor is not a disabled action.
+
+`ConditionalActionRule`, `BranchwiseConjunctionRule`, and `AlternativeActionRule`
+define source rules separately from the generated visitor rules. Each proves
+parent agreement from explicit child agreement. Their negative theorems show
+that selecting the wrong branch, omitting a continuation, and choosing a later
+failure change the result under stated distinguishing premises.
+
+`ActionTreeOutcomeComposition` follows the finite postorder and indexed-history
+patterns in `BooleanTreeOutcomeComposition` and `SingleAssignment`. Source and
+generated histories have separate node evaluators. The neutral
+`IndexedHistoryRules` proves history existence and prefix induction.
+`EXTENDS` reuses the checked constructor lemmas and `AlternativeTraversalRule`.
+The resulting theorem covers arbitrary finite nesting of these constructors
+**under the visible child premises**. Leaves and condition outcomes must agree;
+each conjunction's left child must produce at most one successful candidate
+and no simultaneous failure. Its continuation must include the compatible
+write merge. This does not prove the normalizer discharges those premises for
+every accepted action, nor does it establish the expression leaves.
+
+| Rule | Real lowering check | Actual generated Swift check | Actual generated TLA+ check |
+| --- | --- | --- | --- |
+| `ifElse` | Constructor, ordered children, scalar condition identities; binder-free continuation distribution | Selected child, compiled scalar predicate, inherited updates, failure routing | Action structure; condition failures before the selected branch; detailed payload and aggregate selection for pure conditions or conditions with a definedness rule |
+| `and` | Ordered constructors, binder-free branch words and complete frames; branchwise shape gate | Every left update reaches the right child before emission | Action structure; right failures require an enabled left; fallible guard failures precede guarded body failures |
+| `or` | Both ordered alternatives survive normalization and scalar lowering | Both branches use the ordered visitor and preserve emitted updates before forwarding the first failure | Both actions and ordered child failure selection, retaining operation and operand payloads |
+
+These are conditional implementation links, not completed language rows.
+`StraightLineAssignmentCheck`, the Swift output checker, and
+`StraightLineRenderedActionCheck` are project-owned trusted checkers. The
+native update merge, alternative/conditional kernels, complete-state
+materialization, and action dispatch remain trusted or separately tested.
+TLA+ expression values, definedness, and failure sites outside independently
+checked addition leaves remain child premises. Unchecked binder shapes,
+other action constructors, initialization, and checking/temporal semantics
+remain outside this composition theorem. Multi-branch failure sets are not
+claimed: this interface preserves all successors and the selected first
+failure's entire abstract payload. Connecting that payload's site, kind, and
+operands to each engine's concrete error representation remains a child-output
+premise.
+
+Primary regression owners are `AlternativeTraversalTests`,
+`ConjunctionFailureSelectionTests`, `GeneratedAtomicUpdateProofTests`,
+`ChoiceEvaluationFailureTests`, `NativeExecutionBoundaryTests`, and
+`OrderedAssignmentLoweringTests`. Their mutations target changed constructors,
+branch order, compiled predicates, update channels, and actual emitted failure
+declarations. Regression fixtures do not add language-proof coverage.
+
+Run a batch with the already-authorized pinned TLAPS binary:
+
+```sh
+bash scripts/check-language-proof-batch.sh /absolute/path/to/tlapm \
+  Verification/Semantics/action-composition.batch /absolute/path/to/new-evidence
+```
+
+The runner requires TLAPS revision `941f894` and Z3 `4.15.4`. CI verifies their
+archive digests before invoking it. It retains exact binary, runner, manifest,
+and proof-source hashes, source snapshots, tool configuration, one log per
+module, and a result table. Any unproved or unchecked module fails the batch.
+The harness negative control used an intentionally false theorem: TLAPS
+rejected `FALSE`, the runner recorded `failed`, and returned failure. The
+temporary module was then removed. Local diagnostics do not qualify a SHA;
+the hosted batch and regression evidence must still be reconciled together.
+
 ### Action-constructor domain
 
 `ActionExpr` and `CompiledActionExpr` each have the eight cases below. The
@@ -342,7 +412,12 @@ cannot establish source-order behavior.
   into two separately evaluated guards are rejected. This checks the real
   normalizer's structure; condition-expression evaluation, binder trees, the
   shape-gate premise for all nested actions, and both arbitrary-expression
-  emitted-output links remain open.
+  emitted-output links remain open. The current batch independently checks
+  the actual TLA+ conditional failure wrapper for pure conditions and conditions
+  with an emitted definedness rule, retaining condition failures before the
+  selected branch and preserving each payload. Changed branch, aggregate, and
+  condition failure predicates are rejected. Expression results remain child
+  premises; this does not close the arbitrary-expression output link.
 - [ ] `.define`: binding scope, capture, and failure.
 - [ ] `.and`: ordered composition and first failure.
   `BranchwiseConjunctionRetainsSuccessesAndFirstFailure` proves, for any finite
@@ -373,9 +448,10 @@ cannot establish source-order behavior.
   trusted. For `guard && body` with a Boolean leaf or equality of pure leaves,
   the actual TLA+ failure declarations check that the guard selects each body
   failure and its aggregate only when true. The output links are conditional
-  on child failure and expression rules. Guards whose expressions can fail,
-  nested conjunctions under unverified constructors, and general
-  source-to-branchwise lowering remain open.
+  on child failure and expression rules. The current batch also checks
+  condition-before-body failure selection for guards with an emitted
+  definedness rule. Their expression rules, nested conjunctions under
+  unverified constructors, and general source-to-branchwise lowering remain open.
 - [ ] `.or`: branch union, retaining success and failure together.
   For scalar action trees within the existing lowerer-check domain, division
   and modulo children now retain their operation and ordered operands through
@@ -388,7 +464,7 @@ cannot establish source-order behavior.
   predicates, retained kind, and operands; mixed division/addition mutations
   are rejected. Each non-`or` child's failure relation remains a premise.
   Direct scalar checked-addition leaves have an independent TLA+ output rule;
-  other child rules, an `or` nested under another action constructor, and the
+  other child rules, `or` under binders or other unchecked constructors, and the
   source-to-branchwise-lowering link remain open. The structural verifier is
   still a SwiftTLA-owned trusted boundary, not a universal action theorem.
   For each of these eight source/compiled constructors, check complete frames,

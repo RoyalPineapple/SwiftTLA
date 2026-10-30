@@ -1,17 +1,10 @@
 -------------------- MODULE AlternativeTraversalRule --------------------
-EXTENDS TLAPS, NaturalsInduction, SequenceTheorems_proofs
-
-CONSTANTS UpdateValues, FailureValues, NoFailure
-
-Outcome == [updates: SUBSET UpdateValues, failure: FailureValues \cup {NoFailure}]
-OrderedOutcome == [updates: Seq(UpdateValues), failure: FailureValues \cup {NoFailure}]
+EXTENDS ActionOutcomeInterface
 
 CombineOrdered(first, second) ==
     [updates |-> first.updates \o second.updates,
      failure |-> IF first.failure # NoFailure
                 THEN first.failure ELSE second.failure]
-
-EmptyOrdered == [updates |-> <<>>, failure |-> NoFailure]
 
 SourceGuardedOutcome(enabled, body) ==
     IF enabled THEN body ELSE EmptyOrdered
@@ -35,15 +28,8 @@ THEOREM PureGuardedConjunctionComposes ==
 BranchwiseContinuation(choices, continuation) ==
     [index \in 1..Len(choices) |-> continuation[choices[index]]]
 
-SingleCandidateLeft ==
-    {result \in OrderedOutcome :
-        Len(result.updates) <= 1 /\
-        (Len(result.updates) = 1 => result.failure = NoFailure)}
-
 ContinueBranch(left, continuation) ==
     IF Len(left.updates) = 1 THEN continuation[left.updates[1]] ELSE left
-
-ConditionOutcome == [enabled: BOOLEAN, failure: FailureValues \cup {NoFailure}]
 
 SourceConditionalContinuation(condition, yes, no, continuation) ==
     IF condition.failure # NoFailure
