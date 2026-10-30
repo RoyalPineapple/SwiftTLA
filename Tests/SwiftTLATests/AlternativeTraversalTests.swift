@@ -195,6 +195,38 @@ struct AlternativeTraversalTests {
         }
     }
 
+    @Test("Fallible conditional continuations retain both branches during normalization")
+    func fallibleConditionalContinuationNormalization() throws {
+        let variables = ["divisor", "x", "y"].map { NamedVar(name: $0, initial: .int(0)) }
+        let condition = StateExpr.equal(.divide(.int(1), .variable("divisor")), .int(0))
+        let choose = ActionExpr.ifElse(condition,
+            .assign(.named("x"), .int(1)), .assign(.named("x"), .int(2)))
+        let continuation = ActionExpr.assign(.named("y"), .int(3))
+        let source = ActionExpr.and(choose, continuation)
+        let normalized = ActionNormalization.complete(source, variables: variables)
+        try StraightLineAssignmentCheck.verifyNormalization(source, normalized: normalized,
+            stateRoots: ["divisor", "x", "y"], at: "actions.pick.normalization")
+
+        let missingElseContinuation = ActionNormalization.complete(.ifElse(condition,
+            .and(.assign(.named("x"), .int(1)), continuation),
+            .assign(.named("x"), .int(2))), variables: variables)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyNormalization(source,
+                normalized: missingElseContinuation,
+                stateRoots: ["divisor", "x", "y"], at: "actions.pick.normalization")
+        }
+
+        let duplicatedCondition = ActionNormalization.complete(.or(
+            .and(.guard_(condition), .and(.assign(.named("x"), .int(1)), continuation)),
+            .and(.guard_(.not(condition)), .and(.assign(.named("x"), .int(2)), continuation))),
+            variables: variables)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineAssignmentCheck.verifyNormalization(source,
+                normalized: duplicatedCondition,
+                stateRoots: ["divisor", "x", "y"], at: "actions.pick.normalization")
+        }
+    }
+
     @Test("Scalar alternatives retain both branches through compilation and TLA+ emission")
     func renderedAlternativesKeepBothBranches() throws {
         let specification = TLASpec(name: "ScalarAlternatives", variables: [

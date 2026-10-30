@@ -332,6 +332,17 @@ cannot establish source-order behavior.
 - [ ] `.guard_`: enabled/disabled/failure distinction.
 - [ ] `.existsAction`: all bindings, successors, and failures.
 - [ ] `.ifElse`: branch selection and condition failure.
+  `ConditionalContinuationDistributesWithoutDuplicatingConditionFailure` proves
+  continuation distribution for any single-candidate branch outcomes, given
+  equal source/lowered children; a failing condition produces no successor and
+  retains its failure. The production normalization check now preserves
+  distinct true/false conditional markers, ordered continuation steps, and
+  complete frames for binder-free action trees even when the condition can
+  fail. Focused mutations that drop one arm's continuation or rewrite `ifElse`
+  into two separately evaluated guards are rejected. This checks the real
+  normalizer's structure; condition-expression evaluation, binder trees, the
+  shape-gate premise for all nested actions, and both arbitrary-expression
+  emitted-output links remain open.
 - [ ] `.define`: binding scope, capture, and failure.
 - [ ] `.and`: ordered composition and first failure.
   `BranchwiseConjunctionRetainsSuccessesAndFirstFailure` proves, for any finite

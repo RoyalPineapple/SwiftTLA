@@ -43,6 +43,41 @@ SingleCandidateLeft ==
 ContinueBranch(left, continuation) ==
     IF Len(left.updates) = 1 THEN continuation[left.updates[1]] ELSE left
 
+ConditionOutcome == [enabled: BOOLEAN, failure: FailureValues \cup {NoFailure}]
+
+SourceConditionalContinuation(condition, yes, no, continuation) ==
+    IF condition.failure # NoFailure
+    THEN [updates |-> <<>>, failure |-> condition.failure]
+    ELSE ContinueBranch(IF condition.enabled THEN yes ELSE no, continuation)
+
+LoweredConditionalContinuation(condition, yes, no, continuation) ==
+    IF condition.failure # NoFailure
+    THEN [updates |-> <<>>, failure |-> condition.failure]
+    ELSE IF condition.enabled
+         THEN ContinueBranch(yes, continuation)
+         ELSE ContinueBranch(no, continuation)
+
+THEOREM ConditionalContinuationDistributesWithoutDuplicatingConditionFailure ==
+    ASSUME NEW condition \in ConditionOutcome,
+           NEW sourceYes \in SingleCandidateLeft,
+           NEW sourceNo \in SingleCandidateLeft,
+           NEW loweredYes \in SingleCandidateLeft,
+           NEW loweredNo \in SingleCandidateLeft,
+           NEW continuation \in [UpdateValues -> OrderedOutcome],
+           sourceYes = loweredYes,
+           sourceNo = loweredNo
+    PROVE /\ SourceConditionalContinuation(condition, sourceYes, sourceNo,
+                 continuation) =
+                 LoweredConditionalContinuation(condition, loweredYes, loweredNo,
+                     continuation)
+          /\ (condition.failure # NoFailure =>
+                 /\ SourceConditionalContinuation(condition, sourceYes, sourceNo,
+                          continuation).updates = <<>>
+                 /\ SourceConditionalContinuation(condition, sourceYes, sourceNo,
+                          continuation).failure = condition.failure)
+    BY SMT DEF SourceConditionalContinuation, LoweredConditionalContinuation,
+        ContinueBranch
+
 BranchwiseResults(lefts, continuation) ==
     [index \in 1..Len(lefts) |-> ContinueBranch(lefts[index], continuation)]
 
