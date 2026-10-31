@@ -863,10 +863,23 @@ enum StraightLineAssignmentCheck {
                     guard compiled.operation == operation, compiled.children.count == 2 else { return false }
                     pending.append((right, compiled.children[1]))
                     pending.append((left, compiled.children[0]))
-                case .equal(let left, let right):
-                    guard compiled.operation == .equal, compiled.children.count == 2 else { return false }
+                case .equal(let left, let right), .and(let left, let right), .or(let left, let right):
+                    let operation: CompiledOperation = switch source {
+                    case .and: .and
+                    case .or: .or
+                    default: .equal
+                    }
+                    guard compiled.operation == operation, compiled.children.count == 2 else { return false }
                     pending.append((right, compiled.children[1]))
                     pending.append((left, compiled.children[0]))
+                case .not(let child):
+                    guard compiled.operation == .not, compiled.children.count == 1 else { return false }
+                    pending.append((child, compiled.children[0]))
+                case .ifThenElse(let condition, let yes, let no):
+                    guard compiled.operation == .ifThenElse, compiled.children.count == 3 else { return false }
+                    pending.append((no, compiled.children[2]))
+                    pending.append((yes, compiled.children[1]))
+                    pending.append((condition, compiled.children[0]))
                 case .programCounter:
                     guard compiled.children.isEmpty, let id = layout.programCounterID(),
                           compiled.operation == .stateVariable(id) else { return false }
@@ -960,9 +973,15 @@ enum StraightLineAssignmentCheck {
                  .modulo(let left, let right):
                 pending.append(right)
                 pending.append(left)
-            case .equal(let left, let right):
+            case .equal(let left, let right), .and(let left, let right), .or(let left, let right):
                 pending.append(right)
                 pending.append(left)
+            case .not(let child):
+                pending.append(child)
+            case .ifThenElse(let condition, let yes, let no):
+                pending.append(no)
+                pending.append(yes)
+                pending.append(condition)
             case .programCounter, .controlLocation: break
             default: return false
             }

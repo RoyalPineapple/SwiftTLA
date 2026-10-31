@@ -3,6 +3,8 @@
 This lane starts at admitted commit `d0419d84501e7043b1f67a184740d81ceb2ee3c6`.
 The selected constructors are existing Boolean `not`, `and`, `or`, and `ifThenElse` expressions.
 This lane adds no authoring syntax or model fixtures.
+The normalized-source link is a dependent follow-on to family revision `a1c999d82387192c0f3eb6f2a26cdbcc55aefc48`.
+It does not establish a new independently admitted family.
 
 ## Semantic contract
 
@@ -37,6 +39,7 @@ Leaf agreement remains an explicit premise for each context.
 | Boundary | Production owner | Evidence owner |
 | --- | --- | --- |
 | Source constructor and ordered children | `CompiledLowerer.scheduleBooleanBranch` and `BooleanBranchLoweringContract` | `BooleanBranchLoweringContractTests` and existing source compilation in `ShortCircuitFailureProofTests` |
+| Normalized source to untyped compiled constructors, operands, and identities | `StraightLineAssignmentCheck.verifyCompiled`, called by `CompiledLowerer` | `ShortCircuitFailureProofTests.normalizedBooleanOperands` |
 | Actual native Swift output | `NativeSwiftEmitter+Boolean` and `verifyGeneratedActionWriteOutput` | Existing native mutations in `ShortCircuitFailureProofTests` |
 | Actual TLA value and definedness | `StraightLineRenderedActionCheck.verify` | `ShortCircuitFailureProofTests.renderedBooleanOutcomes` |
 | Actual TLA failure predicates, order, and operands | `StraightLineRenderedActionCheck.verifyEvaluationSelection` | `ShortCircuitFailureProofTests.renderedBooleanOutcomes` |
@@ -52,9 +55,28 @@ The mutations change branch selection, Boolean operators, negation, definedness,
 The existing native tests reject changed helper calls, conditions, and leaf operations.
 The focused filters are `ShortCircuitFailureProofTests|BooleanBranchLoweringContractTests`.
 
+## Normalized-source correspondence
+
+The existing mandatory source checker compares the normalized source action with its untyped compiled action.
+Its paired traversal checks the four Boolean constructors, their arity, and their ordered operands.
+The traversal uses existing source-name mappings to check state-variable IDs and current fresh binder associations.
+It does not derive its expected operands from the lowerer's scheduled child array.
+
+The existing finite scalar binding and fresh-definition gates remain unchanged.
+Unsupported expressions and action scopes retain their existing acceptance path and remain explicit premises.
+This follow-on adds no model, checker hook, proof module, or binding mechanism.
+
+The regression uses the actual normalized source and compiled output of three existing fixtures.
+It changes one expression occurrence while preserving action wrappers, targets, and unaffected operands.
+The controls omit operands or constructors, change operators, reverse operands, swap conditional arms, and replace state or capture reads.
+Each rejection must use the source-correspondence diagnostic, not an unrelated frame error.
+
 ## Remaining premises and limits
 
-- Source child scheduling must associate each operand with the correct source occurrence and lexical environment.
+- Source normalization and capture substitution must preserve the original source semantics.
+- Boolean type resolution must preserve the checked untyped expression structure and identities.
+- Layout name-to-ID tables and unsupported source scopes remain separate obligations.
+- The source link does not establish general shadowing, process-local, `Each`, or `LET` correspondence.
 - Leaf semantic agreement must retain the value and complete failure payload for every context.
 - Arithmetic leaf semantics, including modulo, remain separate obligations despite the independent output syntax check.
 - Native helper semantics and the Swift compiler remain trusted implementation boundaries outside these TLA rules.
@@ -82,7 +104,18 @@ The admitted checker rejected the new test's valid actual output at `tla.action.
 That baseline demonstrates missing output support, not rejection of each subsequent mutation.
 After exact checker restoration, all 36 focused and related local tests passed.
 The related owners are `ConjunctionFailureSelectionTests` and `OrderedAssignmentLoweringTests`.
-A hosted proof result for the revised proof body remains pending.
+[Hosted family diagnostic 41221018586](https://github.com/RoyalPineapple/SwiftTLA/actions/runs/41221018586)
+passed both required jobs at `a1c999d82387192c0f3eb6f2a26cdbcc55aefc48`.
+The coordinator reconciled its retained tools, input hashes, and artifacts.
+
+The normalized-source regression first ran against the unchanged admitted source checker.
+Its one executed test reported exactly 25 accepted mutation controls, with no compilation or fixture failures.
+After the constructor-matching extension, the unchanged focused test passed.
+All 79 tests across the seven related owners also passed locally.
+Those owners are `ShortCircuitFailureProofTests`, `BooleanBranchLoweringContractTests`, `OrderedAssignmentLoweringTests`,
+`AlternativeTraversalTests`, `ActionFrameConditionTests`, `NativeExecutionBoundaryTests`, and `TypedActionParameterTests`.
+The retained baseline and fixed logs are in `/tmp/swifttla-boolean-source-link.tDcB8a`.
+The dependent source-link change has no hosted admission result yet.
 
 The shared definition-root prerequisite remains outside this branch.
 Later integration must retain its unconditional definition-root payload gate.

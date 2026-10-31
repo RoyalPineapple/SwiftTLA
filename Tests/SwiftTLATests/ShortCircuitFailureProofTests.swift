@@ -7,6 +7,100 @@ import Testing
 
 @Suite("Short-circuit failure preservation")
 struct ShortCircuitFailureProofTests {
+    @Test("Normalized Boolean operands retain their source order and bound identities")
+    func normalizedBooleanOperands() throws {
+        var covered: Set<CompiledOperation> = []
+        var checkedStateRead = false
+        var checkedCapture = false
+        for specification in [ShortCircuitFailureModel.spec, BranchingBooleanFailureModel.spec,
+                              ConditionalBooleanAssignmentModel.spec] {
+            let normalized = try specification.loweredSourceModel()
+            let compiled = try specification.compile()
+            let actions = compiled.semantics.behavior.actions
+            try #require(normalized.actions.count == actions.count)
+            let enabled = try #require(compiled.layout.variables.first {
+                $0.declaration.name == "enabled"
+            }?.id)
+            for (source, action) in zip(normalized.actions, actions) {
+                try #require(compiled.layout.actions[action.id.ordinal].declaration.name == source.name)
+                func verify(_ body: CompiledActionExpr) throws {
+                    try StraightLineAssignmentCheck.verifyCompiled(source, bindings: action.bindings,
+                        body: body, layout: compiled.layout)
+                }
+                try verify(action.body)
+                var expressions: [CompiledExpression] = []
+                _ = action.body.map { root in
+                    var pending = [root]
+                    while let node = pending.popLast() {
+                        expressions.append(node)
+                        pending.append(contentsOf: node.children.reversed())
+                    }
+                    return root
+                }
+                func reject(_ mutation: String, replacing target: CompiledExpression,
+                            with replacement: CompiledExpression) throws {
+                    var changed = 0
+                    func replace(_ node: CompiledExpression) -> CompiledExpression {
+                        if node.hasSameOccurrence(as: target) {
+                            changed += 1
+                            return replacement
+                        }
+                        let children = node.children.map(replace)
+                        if zip(children, node.children).allSatisfy({ $0.hasSameOccurrence(as: $1) }) {
+                            return node
+                        }
+                        return .init(operation: node.operation, resultType: node.resultType, children: children)
+                    }
+                    let mutant = action.body.map(replace)
+                    try #require(changed == 1)
+                    do {
+                        try verify(mutant)
+                        Issue.record("\(source.name): \(mutation) escaped normalized-source verification")
+                    } catch let diagnostic as CompilationDiagnostic {
+                        #expect(diagnostic.path == "actions.\(source.name).compiledAssignments")
+                    }
+                }
+                for operation in [CompiledOperation.not, .and, .or, .ifThenElse] {
+                    guard let node = expressions.first(where: { $0.operation == operation }) else { continue }
+                    covered.insert(operation)
+                    try reject("\(operation.diagnosticName) missing operand", replacing: node, with: .init(operation: operation,
+                        resultType: node.resultType, children: Array(node.children.dropLast())))
+                    switch operation {
+                    case .not:
+                        try reject("not omitted", replacing: node, with: node.children[0])
+                    case .and, .or:
+                        try reject("\(operation.diagnosticName) changed operator", replacing: node,
+                            with: .init(operation: operation == .and ? .or : .and,
+                            resultType: node.resultType, children: node.children))
+                        try reject("\(operation.diagnosticName) reversed operands", replacing: node, with: .init(operation: operation,
+                            resultType: node.resultType, children: Array(node.children.reversed())))
+                    case .ifThenElse:
+                        try reject("conditional omitted", replacing: node, with: node.children[0])
+                        try reject("conditional arms swapped", replacing: node, with: .init(operation: operation,
+                            resultType: node.resultType,
+                            children: [node.children[0], node.children[2], node.children[1]]))
+                    default: break
+                    }
+                }
+                if let ready = compiled.layout.variables.first(where: { $0.declaration.name == "ready" })?.id {
+                    let read = try #require(expressions.first { $0.operation == .stateVariable(enabled) })
+                    try reject("enabled state read replaced with ready", replacing: read, with: .init(operation: .stateVariable(ready),
+                        resultType: read.resultType, children: []))
+                    checkedStateRead = true
+                }
+                if case .define(_, .ifThenElse, _) = source.body,
+                   case .define(let binder, _, _) = action.body {
+                    let read = try #require(expressions.first { $0.operation == .boundValue(binder) })
+                    try reject("fresh Boolean capture reread enabled state", replacing: read, with: .init(operation: .stateVariable(enabled),
+                        resultType: read.resultType, children: []))
+                    checkedCapture = true
+                }
+            }
+        }
+        #expect(covered == Set([.not, .and, .or, .ifThenElse]))
+        #expect(checkedStateRead && checkedCapture)
+    }
+
     @Test("Actual Boolean TLA output rejects changed selection, definedness, and failure payloads")
     func renderedBooleanOutcomes() throws {
         for specification in [ShortCircuitFailureModel.spec, BranchingBooleanFailureModel.spec,
