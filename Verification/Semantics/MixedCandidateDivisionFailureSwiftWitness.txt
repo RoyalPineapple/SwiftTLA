@@ -1,7 +1,7 @@
 private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
                                    _ emit: (_Updates) throws -> Void) throws {
     func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-        try _NativeMachineOperations.visitAlternatives((try _NativeMachineOperations.integerRange(0, 1)).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
+        try SwiftTLA._NativeMachineOperations.visitAlternatives((try SwiftTLA._NativeMachineOperations.integerRange(0, 1)).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
             return lhs < rhs
         }), emit: emit) { ___atomic_0_0, branchEmit in
             try _actionPart1(___atomic_0_0, updates, branchEmit)
@@ -11,7 +11,7 @@ private static func _visitUpdates0(from state: Snapshot, checking context: inout
         let ___atomic_1_1 = (try { () throws -> Int in
             let _arithmetic0: Int = ___atomic_0_0
             let _arithmetic1: Int = 1
-            let _arithmetic2: Int = try _NativeMachineOperations.divide(_arithmetic1, _arithmetic0)
+            let _arithmetic2: Int = try SwiftTLA._NativeMachineOperations.divide(_arithmetic1, _arithmetic0)
             return _arithmetic2
         }())
         try _actionPart2(___atomic_0_0, ___atomic_1_1, updates, emit)

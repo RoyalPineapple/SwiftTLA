@@ -8,7 +8,7 @@ func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws
 try emit(updates)
 }
 func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-    try _NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
+    try SwiftTLA._NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
     if second { try _actionPart3(updates, branchEmit) }
 else { try _actionPart4(updates, branchEmit) }
 }
@@ -16,7 +16,7 @@ else { try _actionPart4(updates, branchEmit) }
 func _actionPart4(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
     let ___atomic_0_0 = (try { () throws -> Bool in
         func _predicate1() throws -> Bool {
-            return try _NativeMachineOperations.booleanNot { try _predicate0() }
+            return try SwiftTLA._NativeMachineOperations.booleanNot { try _predicate0() }
         }
         func _predicate0() throws -> Bool { return state.state.chooseFirst }
         return try _predicate1()
@@ -58,7 +58,7 @@ func _actionPart13(_ ___atomic_0_0: Bool, _ ___atomic_1_1: Int, _ updates: _Upda
 func _actionPart3(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
     let ___atomic_0_2 = (try { () throws -> Bool in
         func _predicate3() throws -> Bool {
-            return try _NativeMachineOperations.booleanNot { try _predicate2() }
+            return try SwiftTLA._NativeMachineOperations.booleanNot { try _predicate2() }
         }
         func _predicate2() throws -> Bool { return state.state.chooseFirst }
         return try _predicate3()
@@ -71,7 +71,7 @@ func _actionPart15(_ ___atomic_0_2: Bool, _ updates: _Updates, _ emit: (_Updates
 func _actionPart17(_ ___atomic_0_2: Bool, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
     guard (try { () throws -> Bool in
         func _predicate5() throws -> Bool {
-            return try _NativeMachineOperations.booleanNot { try _predicate4() }
+            return try SwiftTLA._NativeMachineOperations.booleanNot { try _predicate4() }
         }
         func _predicate4() throws -> Bool { return ___atomic_0_2 }
         return try _predicate5()

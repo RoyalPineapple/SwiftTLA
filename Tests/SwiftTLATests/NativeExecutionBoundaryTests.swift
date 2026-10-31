@@ -442,6 +442,18 @@ private struct ReachableInvariantFailure {
         let emittedWrites = try emitter.actionFunctions(generatedAction.body).writes
         try verifyGeneratedActionWriteOutput(emittedUpdate, action: generatedAction.body,
             program: program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
+        let unqualified = swiftAction.replacingOccurrences(
+            of: "SwiftTLA._NativeMachineOperations.add", with: "_NativeMachineOperations.add")
+        #expect(unqualified != swiftAction)
+        let unqualifiedUpdate = try #require(Parser.parse(source: unqualified)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(unqualifiedUpdate, action: generatedAction.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
+            Issue.record("A generated addition can bind a model's helper instead of the library")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.binding.1")
+        }
         let wrongOperation = swiftAction.replacingOccurrences(
             of: "_NativeMachineOperations.add(_arithmetic0, _arithmetic1)",
             with: "_NativeMachineOperations.subtract(_arithmetic0, _arithmetic1)")

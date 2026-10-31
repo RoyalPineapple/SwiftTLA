@@ -249,7 +249,7 @@ extension NativeSwiftEmitter {
         let fields = try program.layout.variables.map { "var \(variable($0.id)): \(try swiftType(program.variableTypes[$0.id]!))? = nil" }.joined(separator: "\n")
         let merges = program.layout.variables.map { slot in
             let name = variable(slot.id)
-            return "guard _NativeMachineOperations.mergeUpdate(&result.\(name), other.\(name)) else { return nil }"
+            return "guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.\(name), other.\(name)) else { return nil }"
         }.joined(separator: "\n")
         let updated = executionState { "\(variable($0)) ?? \(stateValue($0))" }
         let declarations = try nativeDeclarations("""
@@ -280,7 +280,7 @@ extension NativeSwiftEmitter {
 
     mutating func initialDeclarations(parameters: String, arguments: String) throws -> [DeclSyntax] {
         let hasRandomSubset = hasRandomSubsetInitializer
-        var code = "var result: [Snapshot] = []\nvar firstFailure: NativeMachineEvaluationError?\nvar firstFailureInitializerOrdinal: Int?\nvar evaluatingInitializerOrdinal: Int?\ntry _NativeMachineOperations.visitInitialBranch({\n"
+        var code = "var result: [Snapshot] = []\nvar firstFailure: NativeMachineEvaluationError?\nvar firstFailureInitializerOrdinal: Int?\nvar evaluatingInitializerOrdinal: Int?\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
         var closing = ""
         var expectedLoops: [String: String] = [:]
         var expectedCandidateSources: [String: String] = [:]
@@ -307,7 +307,7 @@ extension NativeSwiftEmitter {
                 }
                 if let operands = randomSubsetOperands {
                     code += "let \(name)_sampleLimit = \(try self.expression(operands.count, state: ""))\n"
-                    code += "try _NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)\n"
+                    code += "try SwiftTLA._NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)\n"
                 }
                 let candidateSource: String
                 if let operands = randomSubsetOperands {
@@ -318,11 +318,11 @@ extension NativeSwiftEmitter {
                        case .set(.dictionary) = expression.computation.resultType {
                         let from = try self.expression(operands.domain.children[0], state: "")
                         let to = try self.expression(operands.domain.children[1], state: "")
-                        sample = "try _NativeMachineOperations.randomFunctionSubset(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
-                        exhaustive = "try _NativeMachineOperations.randomFunctionInitialSupport(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
+                        sample = "try SwiftTLA._NativeMachineOperations.randomFunctionSubset(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
+                        exhaustive = "try SwiftTLA._NativeMachineOperations.randomFunctionInitialSupport(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
                     } else {
-                        sample = "try _NativeMachineOperations.randomSubset(upTo: \(name)_sampleLimit, from: \(domain))"
-                        exhaustive = "try _NativeMachineOperations.randomSubsetInitialSupport(upTo: \(name)_sampleLimit, from: \(domain))"
+                        sample = "try SwiftTLA._NativeMachineOperations.randomSubset(upTo: \(name)_sampleLimit, from: \(domain))"
+                        exhaustive = "try SwiftTLA._NativeMachineOperations.randomSubsetInitialSupport(upTo: \(name)_sampleLimit, from: \(domain))"
                     }
                     candidateSource = "(_sampleRandomSubset ? (\(sample)) : (\(exhaustive))).sorted(by: \(try ordering(type)))"
                 } else {
@@ -342,7 +342,7 @@ extension NativeSwiftEmitter {
                     expectedCandidateSources["\(name)Candidates"] = candidateSource
                     expectedMembershipSources[name] = membershipSource
                     code += """
-                    let \(name)Candidates: [\(try swiftType(type))] = try _NativeMachineOperations.initialCandidates(
+                    let \(name)Candidates: [\(try swiftType(type))] = try SwiftTLA._NativeMachineOperations.initialCandidates(
                         selecting: _selectedInitial.map(\\.\(field)),
                         enumerate: { \(candidateSource) },
                         contains: { \(name) in
@@ -352,12 +352,12 @@ extension NativeSwiftEmitter {
                     )
                     for \(name) in \(name)Candidates {
                     evaluatingInitializerOrdinal = nil
-                    try _NativeMachineOperations.visitInitialBranch({
+                    try SwiftTLA._NativeMachineOperations.visitInitialBranch({
 
                     """
                 } else {
                     expectedLoops[name] = candidateSource
-                    code += "for \(name) in \(candidateSource) {\nevaluatingInitializerOrdinal = nil\ntry _NativeMachineOperations.visitInitialBranch({\n"
+                    code += "for \(name) in \(candidateSource) {\nevaluatingInitializerOrdinal = nil\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
                 }
                 closing = """
                 }, onEvaluationFailure: { failure in
@@ -513,7 +513,7 @@ extension NativeSwiftEmitter {
                 }
                 let type = program.variableTypes[initialization.variable]!
                 required = [
-                    "let \(name)Candidates: [\(try swiftType(type))] = try _NativeMachineOperations.initialCandidates(",
+                    "let \(name)Candidates: [\(try swiftType(type))] = try SwiftTLA._NativeMachineOperations.initialCandidates(",
                     "selecting: _selectedInitial.map(\\.\(field))",
                     "contains: { \(name) in",
                     "return \(eligible)",
@@ -646,7 +646,7 @@ extension NativeSwiftEmitter {
             ", \(variable($0.id)): \(variable($0.id))"
         }.joined()
         var body = "var result: [Snapshot] = []\nvar firstFailure: NativeMachineEvaluationError?\nvar firstFailureInitializerOrdinal: Int?\nvar evaluatingInitializerOrdinal: Int?\n"
-        body += "try _NativeMachineOperations.visitInitialBranch({\n"
+        body += "try SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
         for (initialization, binding) in zip(program.behavior.initializations, bindings) {
             body += "evaluatingInitializerOrdinal = \(initialization.variable.ordinal)\n"
             body += "let \(binding.name): \(binding.type) = \(binding.value)\n"
@@ -763,7 +763,7 @@ extension NativeSwiftEmitter {
                 let element = program.bindingTypes[binding]!
                 let domain = try expression(domainExpression)
                 body = """
-                try _NativeMachineOperations.visitAlternatives(\(domain).sorted(by: \(try ordering(element))), emit: emit) { \(binder(binding)), branchEmit in
+                try SwiftTLA._NativeMachineOperations.visitAlternatives(\(domain).sorted(by: \(try ordering(element))), emit: emit) { \(binder(binding)), branchEmit in
                     \(childCall(child, binding: binding, emit: "branchEmit"))
                 }
                 """
@@ -772,7 +772,7 @@ extension NativeSwiftEmitter {
             case .ifElse(let condition, let yes, let no):
                 let value = try expression(condition)
                 body = """
-                try _NativeMachineOperations.visitConditional({ \(value) },
+                try SwiftTLA._NativeMachineOperations.visitConditional({ \(value) },
                     ifTrue: { \(childCall(yes)) },
                     ifFalse: { \(childCall(no)) })
                 """
@@ -782,7 +782,7 @@ extension NativeSwiftEmitter {
                 body = childCall(lhs, emit: "{ candidate in \(right) }")
             case .or(let lhs, let rhs):
                 body = """
-                try _NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
+                try SwiftTLA._NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
                     if second { \(childCall(rhs, emit: "branchEmit")) }
                     else { \(childCall(lhs, emit: "branchEmit")) }
                 }
@@ -1377,9 +1377,9 @@ func verifyRandomSubsetInitialSupport(_ declaration: DeclSyntax?, expected: [(St
         let sample = functionDomain ? "randomFunctionSubset" : "randomSubset"
         let exhaustive = functionDomain ? "randomFunctionInitialSupport" : "randomSubsetInitialSupport"
         let required = [
-            "try _NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)",
-            "try _NativeMachineOperations.\(sample)(upTo: \(name)_sampleLimit",
-            "try _NativeMachineOperations.\(exhaustive)(upTo: \(name)_sampleLimit",
+            "try SwiftTLA._NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)",
+            "try SwiftTLA._NativeMachineOperations.\(sample)(upTo: \(name)_sampleLimit",
+            "try SwiftTLA._NativeMachineOperations.\(exhaustive)(upTo: \(name)_sampleLimit",
         ]
         guard required.allSatisfy({ occurrences($0) == 1 }) else {
             throw CompilationDiagnostic(
@@ -1475,7 +1475,7 @@ private func checkedIntInitialValue(_ root: CompiledExpression,
             guard values.count >= 2 else { return nil }
             let rhs = values.removeLast()
             let lhs = values.removeLast()
-            value = "try _NativeMachineOperations.add(\(lhs), \(rhs))"
+            value = "try SwiftTLA._NativeMachineOperations.add(\(lhs), \(rhs))"
         case .stateVariable(let id):
             guard node.children.isEmpty, let slot = slots[id] else { return nil }
             value = slot
@@ -1563,7 +1563,7 @@ func verifyOrderedIntInitialExpression(_ declaration: DeclSyntax?, named name: S
         return index
     }
     func readStep(available: Int) -> Step? {
-        if take(["try", "_NativeMachineOperations", ".", "add", "("]) {
+        if take(["try", "SwiftTLA", ".", "_NativeMachineOperations", ".", "add", "("]) {
             guard let left = arithmeticIndex(), take([","]), let right = arithmeticIndex(),
                   take([")"]), left < available, right < available else { return nil }
             return .add(left, right)
@@ -1776,7 +1776,7 @@ func verifyGeneratedUpdateMergeOutput(_ declaration: DeclSyntax?, slots: [String
     var expected = ["func", "merging", "(", "_", "other", ":", "Self", ")", "->", "Self", "?", "{",
                     "var", "result", "=", "self"]
     for slot in slots {
-        expected += ["guard", "_NativeMachineOperations", ".", "mergeUpdate", "(", "&", "result", ".",
+        expected += ["guard", "SwiftTLA", ".", "_NativeMachineOperations", ".", "mergeUpdate", "(", "&", "result", ".",
                      slot, ",", "other", ".", slot, ")", "else", "{", "return", "nil", "}"]
     }
     expected += ["return", "result", "}"]
@@ -2518,7 +2518,7 @@ func verifyGeneratedActionWriteOutput(
                 let operands = Array(values.suffix(operation.arity))
                 values.removeLast(operation.arity)
                 let arguments = operation.rightFirst ? Array(operands.reversed()) : operands
-                value = ["try", "_NativeMachineOperations", ".", operation.name, "("] +
+                value = ["try", "SwiftTLA", ".", "_NativeMachineOperations", ".", operation.name, "("] +
                     arguments.enumerated().flatMap { index, argument in
                         index == 0 ? [argument] : [",", argument]
                     } + [")"]
@@ -2663,15 +2663,15 @@ func verifyGeneratedActionWriteOutput(
                 let left = identifiers[node.children[0]]!
                 let right = identifiers[node.children[1]]!
                 let operation: String = if case .and = node.operation { "booleanAnd" } else { "booleanOr" }
-                body = "return try _NativeMachineOperations.\(operation)({ try _predicate\(left)() }, { try _predicate\(right)() })"
+                body = "return try SwiftTLA._NativeMachineOperations.\(operation)({ try _predicate\(left)() }, { try _predicate\(right)() })"
             case .ifThenElse:
                 let condition = identifiers[node.children[0]]!
                 let yes = identifiers[node.children[1]]!
                 let no = identifiers[node.children[2]]!
-                body = "return try _NativeMachineOperations.booleanIf({ try _predicate\(condition)() }, ifTrue: { try _predicate\(yes)() }, ifFalse: { try _predicate\(no)() })"
+                body = "return try SwiftTLA._NativeMachineOperations.booleanIf({ try _predicate\(condition)() }, ifTrue: { try _predicate\(yes)() }, ifFalse: { try _predicate\(no)() })"
             case .not:
                 let child = identifiers[node.children[0]]!
-                body = "return try _NativeMachineOperations.booleanNot { try _predicate\(child)() }"
+                body = "return try SwiftTLA._NativeMachineOperations.booleanNot { try _predicate\(child)() }"
             default:
                 // Preserve literal spelling; joining token text would split a String literal.
                 if let source = stringComparisonSource(node, parameters: parameters) {
@@ -2818,7 +2818,7 @@ func verifyGeneratedActionWriteOutput(
                 (try { () throws -> [\(typeName)] in
                     let _sequenceValue = \(sequence)
                     let _prefixLength = \(length.joined(separator: " "))
-                    return try _NativeMachineOperations.sequencePrefix(_sequenceValue, length: _prefixLength)
+                    return try SwiftTLA._NativeMachineOperations.sequencePrefix(_sequenceValue, length: _prefixLength)
                 }())
                 """
             case .tupleRemoving:
@@ -2832,7 +2832,7 @@ func verifyGeneratedActionWriteOutput(
                 (try { () throws -> [\(typeName)] in
                     let _sequenceValue = \(sequence)
                     let _sequenceIndex = \(index.joined(separator: " "))
-                    return try _NativeMachineOperations.sequenceRemoving(_sequenceValue, at: _sequenceIndex)
+                    return try SwiftTLA._NativeMachineOperations.sequenceRemoving(_sequenceValue, at: _sequenceIndex)
                 }())
                 """
             case .tupleConcatenate:
@@ -2846,7 +2846,7 @@ func verifyGeneratedActionWriteOutput(
                     let _rightValue: [\(typeName)] = \(right)
                     let _rightElements = _rightValue
                     let _leftElements = _leftValue
-                    return _NativeMachineOperations.sequenceConcatenate(_leftElements, _rightElements)
+                    return SwiftTLA._NativeMachineOperations.sequenceConcatenate(_leftElements, _rightElements)
                 }())
                 """
             case .tupleAppend:
@@ -2861,7 +2861,7 @@ func verifyGeneratedActionWriteOutput(
                 (try { () throws -> [\(typeName)] in
                     let _sequenceValue: [\(typeName)] = \(sequence)
                     let _appendedValue: \(typeName) = \(appended.joined(separator: " "))
-                    return _NativeMachineOperations.sequenceAppend(_sequenceValue, _appendedValue)
+                    return SwiftTLA._NativeMachineOperations.sequenceAppend(_sequenceValue, _appendedValue)
                 }())
                 """
             default:
@@ -2881,12 +2881,12 @@ func verifyGeneratedActionWriteOutput(
         if expression.operation == .tupleHead,
            expression.children.count == 1,
            let sequence = checkedSequenceSource(expression.children[0]) {
-            return (tokens("(try _NativeMachineOperations.sequenceHead(\(sequence)))"), actual)
+            return (tokens("(try SwiftTLA._NativeMachineOperations.sequenceHead(\(sequence)))"), actual)
         }
         if expression.operation == .tupleTail,
            expression.children.count == 1,
            let sequence = checkedSequenceSource(expression.children[0]) {
-            return (tokens("(try _NativeMachineOperations.sequenceTail(\(sequence)))"), actual)
+            return (tokens("(try SwiftTLA._NativeMachineOperations.sequenceTail(\(sequence)))"), actual)
         }
         if expression.operation == .tupleDynamicAccess,
            expression.children.count == 2,
@@ -2900,7 +2900,7 @@ func verifyGeneratedActionWriteOutput(
             (try { () throws -> \(typeName) in
                 let _sequenceValue = \(sequence)
                 let _sequenceIndex = \(index.joined(separator: " "))
-                return try _NativeMachineOperations.sequenceElement(_sequenceValue, at: _sequenceIndex)
+                return try SwiftTLA._NativeMachineOperations.sequenceElement(_sequenceValue, at: _sequenceIndex)
             }())
             """
             return (tokens(source), actual)
@@ -3050,7 +3050,7 @@ func verifyGeneratedActionWriteOutput(
             throw invalid("native.action.alternative.\(id)",
                 "both branches receive the same bindings, updates, and branch emitter", "invalid child calls")
         }
-        let expected = ["try", "_NativeMachineOperations", ".", "visitAlternatives", "(",
+        let expected = ["try", "SwiftTLA", ".", "_NativeMachineOperations", ".", "visitAlternatives", "(",
                         "[", "false", ",", "true", "]", ",", "emit", ":", "emit", ")", "{",
                         "second", ",", "branchEmit", "in", "if", "second", "{"] + right +
             ["}", "else", "{"] + left + ["}", "}"]
@@ -3110,7 +3110,7 @@ func verifyGeneratedActionWriteOutput(
         }
         let expected = Parser.parse(source: """
         func proof() {
-            try _NativeMachineOperations.visitConditional({ \(checkedPredicate) },
+            try SwiftTLA._NativeMachineOperations.visitConditional({ \(checkedPredicate) },
                 ifTrue: { \(yes.joined(separator: " ")) },
                 ifFalse: { \(no.joined(separator: " ")) })
         }

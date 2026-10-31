@@ -11,7 +11,7 @@ private static func _visitUpdates0(from state: Snapshot, checking context: inout
         let ___atomic_0_0 = (try { () throws -> Int in
             let _arithmetic0: Int = state.state.x
             let _arithmetic1: Int = 1
-            let _arithmetic2: Int = try _NativeMachineOperations.add(_arithmetic0, _arithmetic1)
+            let _arithmetic2: Int = try SwiftTLA._NativeMachineOperations.add(_arithmetic0, _arithmetic1)
             return _arithmetic2
         }())
         try _actionPart3(___atomic_0_0, updates, emit)
@@ -70,7 +70,7 @@ private static func _visitUpdates1(from state: Snapshot, checking context: inout
         let ___atomic_2_2 = (try { () throws -> Int in
             let _arithmetic0: Int = state.state.x
             let _arithmetic1: Int = 1
-            let _arithmetic2: Int = try _NativeMachineOperations.add(_arithmetic0, _arithmetic1)
+            let _arithmetic2: Int = try SwiftTLA._NativeMachineOperations.add(_arithmetic0, _arithmetic1)
             return _arithmetic2
         }())
         try _actionPart3(___atomic_2_2, updates, emit)
@@ -79,7 +79,7 @@ private static func _visitUpdates1(from state: Snapshot, checking context: inout
         let ___atomic_3_3 = (try { () throws -> Int in
             let _arithmetic0: Int = ___atomic_2_2
             let _arithmetic1: Int = 1
-            let _arithmetic2: Int = try _NativeMachineOperations.add(_arithmetic0, _arithmetic1)
+            let _arithmetic2: Int = try SwiftTLA._NativeMachineOperations.add(_arithmetic0, _arithmetic1)
             return _arithmetic2
         }())
         try _actionPart4(___atomic_2_2, ___atomic_3_3, updates, emit)
