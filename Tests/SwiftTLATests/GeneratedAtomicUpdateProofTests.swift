@@ -1134,7 +1134,7 @@ struct GeneratedAtomicUpdateProofTests {
         \s* var \s+ firstFailure: \s* NativeMachineEvaluationError\?
         \s* var \s+ firstFailureInitializerOrdinal: \s* Int\?
         \s* var \s+ evaluatingInitializerOrdinal: \s* Int\?
-        \s* try \s+ _NativeMachineOperations\.visitInitialBranch \s* \( \s* \{
+        \s* try \s+ SwiftTLA\._NativeMachineOperations\.visitInitialBranch \s* \( \s* \{
         \s* evaluatingInitializerOrdinal \s* = \s* 0
         \s* let \s+ _value_first_0: \s* Int \s* = \s* (-?[0-9]+)
         \s* evaluatingInitializerOrdinal \s* = \s* nil

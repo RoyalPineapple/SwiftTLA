@@ -67,7 +67,7 @@ extension NativeSwiftEmitter {
                 }.joined(separator: ", ")
                 let state = try refinement.state.map { binding in
                     let value = try expression(binding.value.expression)
-                    return "\(binding.fieldName): \(binding.projected ? "try _NativeMachineOperations.checkedProjection(\(value))" : value)"
+                    return "\(binding.fieldName): \(binding.projected ? "try SwiftTLA._NativeMachineOperations.checkedProjection(\(value))" : value)"
                 }.joined(separator: ", ")
                 let property = propertyCases[refinement.id]!
                 checks.append("""

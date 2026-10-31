@@ -45,6 +45,22 @@ acceptance-rule decision.
 
 ## Inventory and proof work
 
+### Generated runtime-helper binding
+
+An accepted model can declare its own `_NativeMachineOperations` helper.
+The generated machine previously called that helper instead of the library helper.
+The runtime regression reproduced a wrong successor from checked addition.
+The emitter now qualifies its runtime-helper references as `SwiftTLA._NativeMachineOperations`.
+The independent output checks require that qualification too.
+An action-output mutation that removes the qualification must fail its check.
+The runtime regression covers dependent initialization, a successful step, and an overflow payload without a committed state change.
+
+This repair does not reject the authored helper or change the accepted DSL.
+The regression is not a language proof.
+General name resolution, including the `SwiftTLA` module qualifier and other generated support types, remains an open boundary.
+The source recognizers, artifact checkers, native kernel, dispatch, and concrete error encoding retain their stated trust assumptions.
+Hosted qualification for this repair remains pending.
+
 ### Current action-composition batch
 
 `action-composition.batch` checks `ifElse`, branchwise `and`, `or`, and `guard_` as

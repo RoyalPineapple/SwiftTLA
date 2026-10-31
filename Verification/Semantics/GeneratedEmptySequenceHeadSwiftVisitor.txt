@@ -1,7 +1,7 @@
 private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
                                            _ emit: (_Updates) throws -> Void) throws {
     func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-    let ___atomic_0_0 = (try _NativeMachineOperations.sequenceHead(state.state.sequence))
+    let ___atomic_0_0 = (try SwiftTLA._NativeMachineOperations.sequenceHead(state.state.sequence))
 try _actionPart1(___atomic_0_0, updates, emit)
 }
 func _actionPart1(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {

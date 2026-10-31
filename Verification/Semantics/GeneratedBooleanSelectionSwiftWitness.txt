@@ -1,4 +1,4 @@
-private static let _closedChoice0: Result<Bool, any Error> = Result { (try _NativeMachineOperations.choose(Set<Bool>([true, false]).sorted(by: { (lhs: Bool, rhs: Bool) -> Bool in
+private static let _closedChoice0: Result<Bool, any Error> = Result { (try SwiftTLA._NativeMachineOperations.choose(Set<Bool>([true, false]).sorted(by: { (lhs: Bool, rhs: Bool) -> Bool in
 return !lhs && rhs
 })) { __PROOF_MEMBER__ in true }) }
 private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,

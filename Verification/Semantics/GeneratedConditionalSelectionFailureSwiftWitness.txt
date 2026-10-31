@@ -1,4 +1,4 @@
-private static let _closedChoice0: Result<Int, any Error> = Result { (try _NativeMachineOperations.choose(Set<Int>([1]).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
+private static let _closedChoice0: Result<Int, any Error> = Result { (try SwiftTLA._NativeMachineOperations.choose(Set<Int>([1]).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
 return lhs < rhs
 })) { __PROOF_MEMBER__ in false }) }
 private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
@@ -11,7 +11,7 @@ private static func _visitUpdates0(from state: Snapshot, checking context: inout
         try emit(updates)
     }
     func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-        try _NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
+        try SwiftTLA._NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
             if second { try _actionPart3(updates, branchEmit) }
             else { try _actionPart4(updates, branchEmit) }
         }
@@ -54,7 +54,7 @@ private static func _visitUpdates0(from state: Snapshot, checking context: inout
     func _actionPart15(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
         guard (try { () throws -> Bool in
             func _predicate1() throws -> Bool {
-                return try _NativeMachineOperations.booleanNot { try _predicate0() }
+                return try SwiftTLA._NativeMachineOperations.booleanNot { try _predicate0() }
             }
             func _predicate0() throws -> Bool { return state.state.attempt }
             return try _predicate1()

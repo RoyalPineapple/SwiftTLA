@@ -4,8 +4,8 @@ private struct _Updates: Sendable {
 
     func merging(_ other: Self) -> Self? {
         var result = self
-        guard _NativeMachineOperations.mergeUpdate(&result.__PROOF_FIRST_SLOT__, other.__PROOF_FIRST_SLOT__) else { return nil }
-        guard _NativeMachineOperations.mergeUpdate(&result.__PROOF_SECOND_SLOT__, other.__PROOF_SECOND_SLOT__) else { return nil }
+        guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.__PROOF_FIRST_SLOT__, other.__PROOF_FIRST_SLOT__) else { return nil }
+        guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.__PROOF_SECOND_SLOT__, other.__PROOF_SECOND_SLOT__) else { return nil }
         return result
     }
 

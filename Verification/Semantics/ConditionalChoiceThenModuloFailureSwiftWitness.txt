@@ -1,7 +1,7 @@
 private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
                                            _ emit: (_Updates) throws -> Void) throws {
     func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-    try _NativeMachineOperations.visitConditional({ (try _NativeMachineOperations.choose(Set<Bool>([true]).sorted(by: { (lhs: Bool, rhs: Bool) -> Bool in
+    try SwiftTLA._NativeMachineOperations.visitConditional({ (try SwiftTLA._NativeMachineOperations.choose(Set<Bool>([true]).sorted(by: { (lhs: Bool, rhs: Bool) -> Bool in
 return !lhs && rhs
 })) { __PROOF_MEMBER__ in (state.state.selector == 1) }) },
         ifTrue: { try _actionPart1(updates, emit) },
@@ -36,7 +36,7 @@ func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws
     let ___atomic_0_1 = (try { () throws -> Int in
     let _arithmetic0: Int = state.state.divisor
 let _arithmetic1: Int = 1
-let _arithmetic2: Int = try _NativeMachineOperations.modulo(_arithmetic1, _arithmetic0)
+let _arithmetic2: Int = try SwiftTLA._NativeMachineOperations.modulo(_arithmetic1, _arithmetic0)
     return _arithmetic2
 }())
 try _actionPart10(___atomic_0_1, updates, emit)

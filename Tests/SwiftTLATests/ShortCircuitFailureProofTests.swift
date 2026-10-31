@@ -64,7 +64,7 @@ struct ShortCircuitFailureProofTests {
         let pattern = #"booleanIf\(\{ try (_predicate[0-9]+\(\)) \},"#
         let changed = visitor.description.replacingOccurrences(
             of: pattern,
-            with: "booleanIf({ try _NativeMachineOperations.booleanNot { try $1 } },",
+            with: "booleanIf({ try SwiftTLA._NativeMachineOperations.booleanNot { try $1 } },",
             options: .regularExpression)
         #expect(changed != visitor.description)
         let wrongVisitor = try #require(Parser.parse(source: changed)
@@ -123,7 +123,7 @@ struct ShortCircuitFailureProofTests {
             parts: parts.writes, conditions: parts.conditions)
         let changed = visitor.description.replacingOccurrences(
             of: #"booleanIf\(\{ try (_predicate[0-9]+\(\)) \},"#,
-            with: "booleanIf({ try _NativeMachineOperations.booleanNot { try $1 } },",
+            with: "booleanIf({ try SwiftTLA._NativeMachineOperations.booleanNot { try $1 } },",
             options: .regularExpression)
         #expect(changed != visitor.description)
         let wrongVisitor = try #require(Parser.parse(source: changed)
@@ -137,7 +137,7 @@ struct ShortCircuitFailureProofTests {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }
         let missingNegation = visitor.description.replacingOccurrences(
-            of: #"return try _NativeMachineOperations\.booleanNot \{ try (_predicate[0-9]+\(\)) \}"#,
+            of: #"return try SwiftTLA\._NativeMachineOperations\.booleanNot \{ try (_predicate[0-9]+\(\)) \}"#,
             with: "return try $1", options: .regularExpression)
         #expect(missingNegation != visitor.description)
         let wrongNegation = try #require(Parser.parse(source: missingNegation)
@@ -215,7 +215,7 @@ struct ShortCircuitFailureProofTests {
             parts: parts.writes, conditions: parts.conditions)
         let changed = visitor.description.replacingOccurrences(
             of: #"booleanIf\(\{ try (_predicate[0-9]+\(\)) \},"#,
-            with: "booleanIf({ try _NativeMachineOperations.booleanNot { try $1 } },",
+            with: "booleanIf({ try SwiftTLA._NativeMachineOperations.booleanNot { try $1 } },",
             options: .regularExpression)
         #expect(changed != visitor.description)
         let wrongVisitor = try #require(Parser.parse(source: changed)

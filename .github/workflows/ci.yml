@@ -106,6 +106,8 @@ jobs:
           mkdir -p .build/semantic-proof-evidence
           git rev-parse HEAD > .build/semantic-proof-evidence/source-sha.txt
           sha256sum Verification/Semantics/*.tla Verification/Semantics/*.txt \
+            Sources/SwiftTLAPlugin/NativeSwiftEmitter{,+Machine,+Boolean,+Refinement}.swift \
+            Tests/SwiftTLATests/NativeSupportBinding{Fixtures,Tests}.swift \
             > .build/semantic-proof-evidence/proof-inputs.sha256
           proof_tool_dir='${{ steps.proof-tool.outputs.directory }}'
           "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version \

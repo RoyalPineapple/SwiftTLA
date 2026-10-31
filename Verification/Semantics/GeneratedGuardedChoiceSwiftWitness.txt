@@ -8,7 +8,7 @@ private static func _visitUpdates0(from state: Snapshot, checking context: inout
         try emit(updates)
     }
     func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-        try _NativeMachineOperations.visitAlternatives((try _NativeMachineOperations.integerRange(1, 2)).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
+        try SwiftTLA._NativeMachineOperations.visitAlternatives((try SwiftTLA._NativeMachineOperations.integerRange(1, 2)).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
             return lhs < rhs
         }), emit: emit) { ___atomic_0_0, branchEmit in
             try _actionPart3(___atomic_0_0, updates, branchEmit)
