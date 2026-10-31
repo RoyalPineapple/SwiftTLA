@@ -11,17 +11,97 @@ on:
         description: Run ordinary, upstream, consumer, and export diagnostics only (not admission)
         type: boolean
         default: false
+      proof_family:
+        description: Focused language-family diagnostic only (not admission)
+        type: choice
+        default: none
+        options: [none, scoped-action-binding, boolean-expression]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.proof_family != '' && inputs.proof_family != 'none' && format('{0}-family-{1}-{2}-{3}', github.workflow, inputs.proof_family, github.sha, github.run_id) || format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' || !inputs.proof_family || inputs.proof_family == 'none' }}
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
   SWIFT_TLA_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  proof-family:
+    name: Family diagnostic / ${{ inputs.proof_family }} / ${{ matrix.check }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.proof_family != '' && inputs.proof_family != 'none' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - check: proofs
+            runner: ubuntu-24.04
+          - check: implementation-and-mutations
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      PROOF_FAMILY: ${{ inputs.proof_family }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+
+      - name: Select focused family inputs
+        id: family
+        run: bash scripts/proof-family-inputs.sh "$PROOF_FAMILY" >> "$GITHUB_OUTPUT"
+
+      - name: Record frozen diagnostic inputs
+        env:
+          CHECK: ${{ matrix.check }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          test '${{ inputs.contracts_only }}' != true
+          mkdir -p .build/proof-family-evidence
+          printf '%s\n' "$SWIFT_TLA_SHA" > .build/proof-family-evidence/source-sha.txt
+          printf '%s\n' "family=$PROOF_FAMILY" "check=$CHECK" \
+            "run=$GITHUB_RUN_ID" "attempt=$GITHUB_RUN_ATTEMPT" \
+            'claim=focused-diagnostic-not-admission' > .build/proof-family-evidence/context.txt
+          git ls-files -z -- .github scripts Sources Tests Verification Tools Package.swift Package.resolved \
+            | xargs -0 shasum -a 256 > .build/proof-family-evidence/source-inputs.sha256
+
+      - uses: ./.github/actions/setup-pinned-tlaps
+        if: matrix.check == 'proofs'
+        id: proof-tool
+        with:
+          evidence: .build/proof-family-evidence/toolchain
+
+      - name: Run separate rules then composition
+        if: matrix.check == 'proofs'
+        env:
+          BATCH: ${{ steps.family.outputs.batch }}
+          PROOF_TOOL_DIR: ${{ steps.proof-tool.outputs.directory }}
+        run: bash scripts/check-language-proof-batch.sh "$PROOF_TOOL_DIR/tlapm/bin/tlapm" "$BATCH" .build/proof-family-evidence/proofs
+
+      - name: Run real implementation and rejecting mutations
+        if: matrix.check == 'implementation-and-mutations'
+        env:
+          TEST_FILTER: ${{ steps.family.outputs.tests }}
+        run: |
+          set -euo pipefail
+          swift --version > .build/proof-family-evidence/swift-version.txt
+          xcodebuild -version > .build/proof-family-evidence/xcode-version.txt
+          xcrun --sdk macosx --show-sdk-build-version > .build/proof-family-evidence/sdk-build-version.txt
+          swift test -Xswiftc -warnings-as-errors -j 1 --no-parallel --filter "$TEST_FILTER" \
+            2>&1 | tee .build/proof-family-evidence/implementation-and-mutations.log
+          grep -Eq 'Test run with [1-9][0-9]* tests? passed' .build/proof-family-evidence/implementation-and-mutations.log
+
+      - name: Retain focused family diagnostic
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: proof-family-${{ inputs.proof_family }}-${{ matrix.check }}-${{ env.SWIFT_TLA_SHA }}-${{ github.run_attempt }}
+          path: .build/proof-family-evidence
+          if-no-files-found: error
+          retention-days: 14
+
   swift-test-suites:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.proof_family || inputs.proof_family == 'none' }}
     strategy:
       fail-fast: false
       matrix:
@@ -77,7 +157,7 @@ jobs:
   swift-tests:
     name: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_only && 'Selected Swift contracts (diagnostic)' || 'swift-tests' }}
     needs: swift-test-suites
-    if: ${{ always() }}
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || !inputs.proof_family || inputs.proof_family == 'none') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
@@ -87,6 +167,7 @@ jobs:
         run: test "$SWIFT_TEST_RESULT" = success
 
   semantic-proof-diagnostic:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.proof_family || inputs.proof_family == 'none' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -158,6 +239,7 @@ jobs:
           retention-days: 14
 
   apple-platform-examples:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.proof_family || inputs.proof_family == 'none' }}
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -242,6 +324,7 @@ jobs:
           retention-days: 14
 
   canonical-corpus-export:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.proof_family || inputs.proof_family == 'none' }}
     runs-on: macos-15
     timeout-minutes: 15
     steps:
