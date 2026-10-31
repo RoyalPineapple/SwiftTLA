@@ -10,6 +10,7 @@ Family diagnostics give early feedback. They do not replace integrated admission
 | Integration | `codex/proof-integration-lane`, worktree `proof-integration-lane/SwiftTLA` | CI routing, shared prerequisites, integrated revision, admission evidence |
 | Critical connections | `codex/ordered-capture-rule`, worktree `ordered-initial-failure-record/SwiftTLA` | Ordered capture and binding connections, new mixed scoped-Int composition, `LexicalBindingTests.swift` |
 | Independent Boolean family | `codex/proof-boolean-family`, worktree `proof-boolean-family/SwiftTLA` | Boolean expression rules and composition, `StraightLineRenderedActionCheck.swift`, `ShortCircuitFailureProofTests.swift` |
+| Independent sequence family | `codex/proof-sequence-family`, worktree `proof-sequence-family/SwiftTLA` | Sequence rules, composition, checker extension, and existing lowerer/output test owners |
 
 Worktree names refer to directories under `/Users/alex/.codex/worktrees/`.
 The integration lane owns shared manifests and workflow files. Family branches own separate focused batch manifests and scope records.
@@ -36,6 +37,8 @@ These SHA-256 values identify the admitted definitions:
 
 The prepared critical stack adds general functional-history lemmas without changing the outcome schema.
 The Boolean family must not depend on those unpublished additions.
+The sequence branch also starts from the admitted base, not from either unpublished family.
+The integration lane owns shared checker hooks and diagnostic routing for the sequence branch.
 If incompatible shared changes are necessary, treat them as dependencies. Integrate and admit the shared prerequisite first.
 
 ## Family deliverable
@@ -58,6 +61,7 @@ The existing `ci.yml` has a manual `proof_family` input:
 | --- | --- | --- |
 | `scoped-action-binding` | `scoped-action-binding.batch` | `LexicalBindingTests` |
 | `boolean-expression` | `boolean-expression.batch` | `ShortCircuitFailureProofTests`, `BooleanBranchLoweringContractTests` |
+| `sequence-expression` | `sequence-expression.batch` | `SequenceExpressionLoweringContractTests`, `GeneratedAtomicUpdateProofTests`, `CollectionCheckingTests` |
 
 The routing script accepts only these family names.
 Each family dispatch runs pinned proofs and implementation checks as separate jobs.

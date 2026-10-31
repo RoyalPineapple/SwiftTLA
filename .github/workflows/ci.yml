@@ -15,7 +15,7 @@ on:
         description: Focused language-family diagnostic only (not admission)
         type: choice
         default: none
-        options: [none, scoped-action-binding, boolean-expression]
+        options: [none, scoped-action-binding, boolean-expression, sequence-expression]
 
 concurrency:
   group: ${{ github.event_name == 'workflow_dispatch' && inputs.proof_family != '' && inputs.proof_family != 'none' && format('{0}-family-{1}-{2}-{3}', github.workflow, inputs.proof_family, github.sha, github.run_id) || format('{0}-{1}', github.workflow, github.ref) }}

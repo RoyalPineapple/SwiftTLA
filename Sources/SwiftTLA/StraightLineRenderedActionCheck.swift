@@ -30,7 +30,7 @@ enum StraightLineRenderedActionCheck {
     }
 
     private static let tokenPattern = try? NSRegularExpression(
-        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}+*<>-]|="#)
+        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|\\o|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}+*<>-]|="#)
 
     private static func checkedIntegerLiteral(_ value: Int) -> String {
         let radix = 1_000_000_000
@@ -441,6 +441,11 @@ enum StraightLineRenderedActionCheck {
             switch task {
             case .token(let token): expected.append(token)
             case .value(let expression):
+                if let value = sequenceValue(expression, variables: variables, binders: binders) {
+                    guard let rendered = tokens(value) else { try unsupported(); return }
+                    expected.append(contentsOf: rendered)
+                    continue
+                }
                 if controlledEquality(expression) {
                     schedule([.token("("), .value(expression.children[0]), .token("="),
                         .value(expression.children[1]), .token(")")])
