@@ -69,10 +69,20 @@ ran revision `6eceaf567fe20f43897eb5c6877234c84135ab65` and failed.
 The implementation job stopped because the optional getter inferred an optional string accumulator.
 The proof job failed at the combined history-existence conclusion.
 
-A local pinned batch reproduced the source-history witness failure after the first proof decomposition.
-The next diagnostic revision gives the accumulator an explicit `String` type and exposes separate local step functions for the history witnesses.
-These fixes await new proof and implementation results.
-The executed baseline regression and focused local Swift diagnostics remain pending a serialized validation slot.
+[Hosted diagnostic 41215348460](https://github.com/RoyalPineapple/SwiftTLA/actions/runs/41215348460)
+ran revision `555a832d0cac5a00561c5de8489b5d919118641f` and failed at the source-history witness.
+Its implementation job passed the 10 focused family tests.
+
+The current proof body isolates each step-function type fact and expands only `IndexedHistory` at each history-existence step.
+A complete local `--nofp` batch passed with proof manager `941f894` and Z3 `4.15.4`.
+The retained proof-source hashes match the local inputs.
+This proof-body change does not change theorem statements, premises, shared definitions, or tool limits.
+
+The admitted checker rejected the new test's valid actual output at `tla.action.scalarAssignments`.
+That baseline demonstrates missing output support, not rejection of each subsequent mutation.
+After exact checker restoration, all 36 focused and related local tests passed.
+The related owners are `ConjunctionFailureSelectionTests` and `OrderedAssignmentLoweringTests`.
+A hosted proof result for the revised proof body remains pending.
 
 The shared definition-root prerequisite remains outside this branch.
 Later integration must retain its unconditional definition-root payload gate.
