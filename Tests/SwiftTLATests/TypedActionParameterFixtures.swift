@@ -16,6 +16,22 @@ struct TypedParameterSelection {
 }
 
 @TLAModel
+struct BoundOrderedAssignment {
+    enum Step: String, CaseIterable { case select }
+
+    static var spec: TLASpec {
+        #spec { scope in
+            let value = scope.sharedVar(initial: 0)
+            let copied = scope.sharedVar(initial: 0)
+            Do(Step.select, over: Set<Int>([1, 2])) { member in
+                Assign(value, to: member)
+                Assign(copied, to: value)
+            }
+        }
+    }
+}
+
+@TLAModel
 struct CollectionParameterUpdates {
     enum Key: String, CaseIterable, FiniteTLAValueDomain {
         case first, second

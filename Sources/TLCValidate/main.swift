@@ -9,6 +9,7 @@ case "oracle": runOracle(arguments: Array(args.dropFirst()))
 case "compare": runCompare(arguments: Array(args.dropFirst()))
 case "upstream": runUpstream(arguments: Array(args.dropFirst()))
 case "temporal-symmetry": runTemporalSymmetry(arguments: Array(args.dropFirst()))
+case "initial-failure": runInitialFailure(arguments: Array(args.dropFirst()))
 default:
     fputs("""
     Usage: tlc-validate <command>
@@ -20,6 +21,7 @@ default:
       upstream trace-reference --output <directory>
       upstream shiviz-reference --output <directory>
       temporal-symmetry run --output <directory>
+      initial-failure prepare --output <directory>
     """, stderr)
     exit(1)
 }
@@ -138,4 +140,25 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
 private func failTemporalSymmetry(_ error: Error) -> Never {
     fputs("temporal-symmetry: \(error)\n", stderr)
     exit(2)
+}
+
+private func runInitialFailure(arguments: [String]) -> Never {
+    guard arguments.count == 3, arguments[0] == "prepare",
+          arguments[1] == "--output", !arguments[2].isEmpty else {
+        fputs("initial-failure: expected prepare --output <directory>\n", stderr)
+        exit(2)
+    }
+    do {
+        let environment = ProcessInfo.processInfo.environment
+        guard let sourceSHA = environment["SWIFT_TLA_SHA"] else {
+            throw ValidationCLIError.invalidManifest("missing source SHA")
+        }
+        let report = try InitialFailureEvidence.prepare(sourceSHA: sourceSHA,
+            to: URL(fileURLWithPath: arguments[2]).standardizedFileURL)
+        print("initial-failure: \(report.result), site \(report.site), no graph")
+        exit(0)
+    } catch {
+        fputs("initial-failure: \(error)\n", stderr)
+        exit(2)
+    }
 }

@@ -69,6 +69,9 @@ extension NativeSwiftEmitter {
         try verifyGeneratedSnapshotOutput(machineDeclarations.first {
             $0.as(StructDeclSyntax.self)?.name.text == "Snapshot"
         }, hiddenFields: hiddenFields)
+        try verifyGeneratedValidationDelegationOutput(machineDeclarations.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "visitValidationOutcomes"
+        })
         declarations += machineDeclarations
         declarations += try nativeDeclarations("""
         private init(execution: Snapshot\(appendedParameters)) {
@@ -246,7 +249,7 @@ extension NativeSwiftEmitter {
         let fields = try program.layout.variables.map { "var \(variable($0.id)): \(try swiftType(program.variableTypes[$0.id]!))? = nil" }.joined(separator: "\n")
         let merges = program.layout.variables.map { slot in
             let name = variable(slot.id)
-            return "guard _NativeMachineOperations.mergeUpdate(&result.\(name), other.\(name)) else { return nil }"
+            return "guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.\(name), other.\(name)) else { return nil }"
         }.joined(separator: "\n")
         let updated = executionState { "\(variable($0)) ?? \(stateValue($0))" }
         let declarations = try nativeDeclarations("""
@@ -277,7 +280,7 @@ extension NativeSwiftEmitter {
 
     mutating func initialDeclarations(parameters: String, arguments: String) throws -> [DeclSyntax] {
         let hasRandomSubset = hasRandomSubsetInitializer
-        var code = "var result: [Snapshot] = []\nvar firstFailure: NativeMachineEvaluationError?\ntry _NativeMachineOperations.visitInitialBranch({\n"
+        var code = "var result: [Snapshot] = []\nvar firstFailure: NativeMachineEvaluationError?\nvar firstFailureInitializerOrdinal: Int?\nvar evaluatingInitializerOrdinal: Int?\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
         var closing = ""
         var expectedLoops: [String: String] = [:]
         var expectedCandidateSources: [String: String] = [:]
@@ -287,12 +290,15 @@ extension NativeSwiftEmitter {
             let name = variable(initialization.variable)
             switch initialization.initialization {
             case .value(let expression):
+                code += "evaluatingInitializerOrdinal = \(initialization.variable.ordinal)\n"
                 code += "let \(name): \(try swiftType(type)) = \(try self.expression(expression, state: ""))\n"
+                code += "evaluatingInitializerOrdinal = nil\n"
                 if let field = stateMemberNames[initialization.variable] {
                     code += "if _selectedInitial == nil || _selectedInitial!.\(field) == \(name) {\n"
                     closing = "}\n" + closing
                 }
             case .memberOf(let expression):
+                code += "evaluatingInitializerOrdinal = \(initialization.variable.ordinal)\n"
                 let randomSubsetOperands: (count: CompiledExpression, domain: CompiledExpression)?
                 if case .randomSubset = expression.computation.operation {
                     randomSubsetOperands = (expression.computation.children[0], expression.computation.children[1])
@@ -301,7 +307,7 @@ extension NativeSwiftEmitter {
                 }
                 if let operands = randomSubsetOperands {
                     code += "let \(name)_sampleLimit = \(try self.expression(operands.count, state: ""))\n"
-                    code += "try _NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)\n"
+                    code += "try SwiftTLA._NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)\n"
                 }
                 let candidateSource: String
                 if let operands = randomSubsetOperands {
@@ -312,11 +318,11 @@ extension NativeSwiftEmitter {
                        case .set(.dictionary) = expression.computation.resultType {
                         let from = try self.expression(operands.domain.children[0], state: "")
                         let to = try self.expression(operands.domain.children[1], state: "")
-                        sample = "try _NativeMachineOperations.randomFunctionSubset(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
-                        exhaustive = "try _NativeMachineOperations.randomFunctionInitialSupport(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
+                        sample = "try SwiftTLA._NativeMachineOperations.randomFunctionSubset(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
+                        exhaustive = "try SwiftTLA._NativeMachineOperations.randomFunctionInitialSupport(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
                     } else {
-                        sample = "try _NativeMachineOperations.randomSubset(upTo: \(name)_sampleLimit, from: \(domain))"
-                        exhaustive = "try _NativeMachineOperations.randomSubsetInitialSupport(upTo: \(name)_sampleLimit, from: \(domain))"
+                        sample = "try SwiftTLA._NativeMachineOperations.randomSubset(upTo: \(name)_sampleLimit, from: \(domain))"
+                        exhaustive = "try SwiftTLA._NativeMachineOperations.randomSubsetInitialSupport(upTo: \(name)_sampleLimit, from: \(domain))"
                     }
                     candidateSource = "(_sampleRandomSubset ? (\(sample)) : (\(exhaustive))).sorted(by: \(try ordering(type)))"
                 } else {
@@ -336,7 +342,7 @@ extension NativeSwiftEmitter {
                     expectedCandidateSources["\(name)Candidates"] = candidateSource
                     expectedMembershipSources[name] = membershipSource
                     code += """
-                    let \(name)Candidates: [\(try swiftType(type))] = try _NativeMachineOperations.initialCandidates(
+                    let \(name)Candidates: [\(try swiftType(type))] = try SwiftTLA._NativeMachineOperations.initialCandidates(
                         selecting: _selectedInitial.map(\\.\(field)),
                         enumerate: { \(candidateSource) },
                         contains: { \(name) in
@@ -345,16 +351,20 @@ extension NativeSwiftEmitter {
                         }
                     )
                     for \(name) in \(name)Candidates {
-                    try _NativeMachineOperations.visitInitialBranch({
+                    evaluatingInitializerOrdinal = nil
+                    try SwiftTLA._NativeMachineOperations.visitInitialBranch({
 
                     """
                 } else {
                     expectedLoops[name] = candidateSource
-                    code += "for \(name) in \(candidateSource) {\ntry _NativeMachineOperations.visitInitialBranch({\n"
+                    code += "for \(name) in \(candidateSource) {\nevaluatingInitializerOrdinal = nil\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
                 }
                 closing = """
                 }, onEvaluationFailure: { failure in
-                    if firstFailure == nil { firstFailure = failure }
+                    if firstFailure == nil {
+                        firstFailure = failure
+                        firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
+                    }
                 })
                 }
                 """ + closing
@@ -370,9 +380,13 @@ extension NativeSwiftEmitter {
         code += closing
         code += """
         }, onEvaluationFailure: { failure in
-            if firstFailure == nil { firstFailure = failure }
+            if firstFailure == nil {
+                firstFailure = failure
+                firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
+            }
         })
-        return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure)
+        return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure,
+            firstFailureInitializerOrdinal: firstFailureInitializerOrdinal)
         """
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
         let appendedArguments = arguments.isEmpty ? "" : ", " + arguments
@@ -390,7 +404,9 @@ extension NativeSwiftEmitter {
         }
         public static func initialOutcomes(\(parameters)) throws -> InitialEvaluationOutcomes<Self> {
             let outcome = try _initialStates(\(arguments))
-            return InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) }, firstFailure: outcome.firstFailure)
+            return InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) },
+                firstFailure: outcome.firstFailure,
+                firstFailureInitializerOrdinal: outcome.firstFailureInitializerOrdinal)
         }
         public static func initialMachines(\(parameters)) throws -> [Self] {
             try _completedInitialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }
@@ -415,6 +431,9 @@ extension NativeSwiftEmitter {
             }
             """)
         }
+        let initialSlots = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
+            ($0.id, variable($0.id))
+        })
         try verifyGeneratedInitialBindings(
             declarations.first { $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates" },
             expected: program.behavior.initializations.map { initialization in
@@ -423,7 +442,30 @@ extension NativeSwiftEmitter {
                 case .value: return "let \(name)"
                 case .memberOf: return "for \(name)"
                 }
-            }, expectedLoops: expectedLoops, expectedCandidateSources: expectedCandidateSources)
+            }, expectedLoops: expectedLoops, expectedCandidateSources: expectedCandidateSources,
+            expectedIntLiterals: Dictionary(uniqueKeysWithValues:
+                program.behavior.initializations.compactMap { initialization -> (String, Int)? in
+                    guard case .value(let expression) = initialization.initialization,
+                          case .value(.integer(let value)) = expression.operation,
+                          expression.resultType == .int else { return nil }
+                    return (variable(initialization.variable), value)
+                }),
+            expectedControlLocations: Dictionary(uniqueKeysWithValues:
+                program.behavior.initializations.compactMap { initialization -> (String, Int)? in
+                    guard case .value(let expression) = initialization.initialization,
+                          case .controlLocation(let id) = expression.operation,
+                          expression.resultType == .controlLocation else { return nil }
+                    return (variable(initialization.variable), id.ordinal)
+                }),
+            expectedIntExpressions: Dictionary(uniqueKeysWithValues:
+                program.behavior.initializations.compactMap { initialization -> (String, CompiledExpression)? in
+                    guard case .value(let expression) = initialization.initialization,
+                          expression.resultType == .int,
+                          checkedIntInitialValue(expression, slots: initialSlots) != nil else { return nil }
+                    if case .value(.integer) = expression.operation { return nil }
+                    return (variable(initialization.variable), expression)
+                }),
+            stateSlots: initialSlots)
         try verifyRandomSubsetInitialSupport(declarations.first,
             expected: program.behavior.initializations.compactMap { initialization -> (String, Bool)? in
                 guard case .memberOf(let expression) = initialization.initialization,
@@ -434,6 +476,7 @@ extension NativeSwiftEmitter {
             })
         try verifyInitialSelection(declarations.first, expectedMembershipSources: expectedMembershipSources)
         try verifyInitialStateAssembly(declarations.first)
+        try verifyDeterministicIntInitialOutput(declarations.first)
         try verifyGeneratedInitialConstruction(declarations, configured: !program.layout.parameters.isEmpty,
             sampled: hasRandomSubset)
         if hasRandomSubset {
@@ -470,7 +513,7 @@ extension NativeSwiftEmitter {
                 }
                 let type = program.variableTypes[initialization.variable]!
                 required = [
-                    "let \(name)Candidates: [\(try swiftType(type))] = try _NativeMachineOperations.initialCandidates(",
+                    "let \(name)Candidates: [\(try swiftType(type))] = try SwiftTLA._NativeMachineOperations.initialCandidates(",
                     "selecting: _selectedInitial.map(\\.\(field))",
                     "contains: { \(name) in",
                     "return \(eligible)",
@@ -528,7 +571,10 @@ extension NativeSwiftEmitter {
             case .memberOf:
                 return """
                 }, onEvaluationFailure: { failure in
-                    if firstFailure == nil { firstFailure = failure }
+                    if firstFailure == nil {
+                        firstFailure = failure
+                        firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
+                    }
                 })
                 }
 
@@ -539,9 +585,13 @@ extension NativeSwiftEmitter {
         }.joined()
         let suffix = append + "\n" + closing + """
         }, onEvaluationFailure: { failure in
-            if firstFailure == nil { firstFailure = failure }
+            if firstFailure == nil {
+                firstFailure = failure
+                firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
+            }
         })
-        return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure)
+        return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure,
+            firstFailureInitializerOrdinal: firstFailureInitializerOrdinal)
         }
         """
         let expected = Array(Parser.parse(source: suffix).tokens(viewMode: .sourceAccurate))
@@ -555,6 +605,90 @@ extension NativeSwiftEmitter {
                 actual: "the generated initial-state suffix differs from the checked assembly rule",
                 nextSafeAction: "Report this native code generation failure."
             )
+        }
+    }
+
+    func verifyDeterministicIntInitialOutput(_ declaration: DeclSyntax?) throws {
+        // shortcut: this exact template covers ordered Int and control initializers; extend it with each proved initializer form.
+        guard program.layout.parameters.isEmpty, program.behavior.initialInvariant == nil,
+              !program.behavior.initializations.isEmpty,
+              program.behavior.initializations.count == program.layout.variables.count else { return }
+        var bindings: [(name: String, type: String, value: String)] = []
+        let slots = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
+            ($0.id, variable($0.id))
+        })
+        for initialization in program.behavior.initializations {
+            guard case .value(let expression) = initialization.initialization else { return }
+            let value: String
+            let type: String
+            switch (expression.operation, expression.resultType) {
+            case (.value(.integer(let integer)), .int):
+                type = "Int"
+                value = integer == Int.min ? "Int.min" : String(integer)
+            case (.controlLocation(let location), .controlLocation):
+                type = "_ControlLocation"
+                value = "_ControlLocation.location\(location.ordinal)"
+            case (_, .int):
+                guard let checked = checkedIntInitialValue(expression, slots: slots) else { return }
+                type = "Int"
+                value = checked
+            default: return
+            }
+            bindings.append((variable(initialization.variable), type, value))
+        }
+        let visible = Dictionary(uniqueKeysWithValues: model.api.variables.map {
+            ($0.id, $0.swiftIdentifier)
+        })
+        let publicFields = model.api.variables.map {
+            "\($0.argumentLabel): \(variable($0.id))"
+        }.joined(separator: ", ")
+        let hiddenFields = program.layout.variables.filter { visible[$0.id] == nil }.map {
+            ", \(variable($0.id)): \(variable($0.id))"
+        }.joined()
+        var body = "var result: [Snapshot] = []\nvar firstFailure: NativeMachineEvaluationError?\nvar firstFailureInitializerOrdinal: Int?\nvar evaluatingInitializerOrdinal: Int?\n"
+        body += "try SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
+        for (initialization, binding) in zip(program.behavior.initializations, bindings) {
+            body += "evaluatingInitializerOrdinal = \(initialization.variable.ordinal)\n"
+            body += "let \(binding.name): \(binding.type) = \(binding.value)\n"
+            body += "evaluatingInitializerOrdinal = nil\n"
+            if let field = visible[initialization.variable] {
+                body += "if _selectedInitial == nil || _selectedInitial!.\(field) == \(binding.name) {\n"
+            }
+        }
+        body += "result.append(Snapshot(state: State(\(publicFields))\(hiddenFields)))\n"
+        for initialization in program.behavior.initializations.reversed()
+            where visible[initialization.variable] != nil {
+            body += "}\n"
+        }
+        body += """
+        }, onEvaluationFailure: { failure in
+            if firstFailure == nil {
+                firstFailure = failure
+                firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
+            }
+        })
+        return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure,
+            firstFailureInitializerOrdinal: firstFailureInitializerOrdinal)
+        """
+        let expected = Parser.parse(source: """
+        private static func _initialStates(_selectedInitial: State? = nil) throws -> InitialEvaluationOutcomes<Snapshot> {
+            \(body)
+        }
+        """).statements.first?.item.as(FunctionDeclSyntax.self)
+        let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+        let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+        guard expectedTokens != nil, actualTokens == expectedTokens else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native._initialStates.completeIntOutput",
+                expected: "the complete ordered Int initial-state and failure template",
+                actual: "the generated initial function contains an unrecognized statement or changed value",
+                nextSafeAction: "Report this native initialization generation failure.")
+        }
+        for initialization in program.behavior.initializations {
+            guard case .value(let expression) = initialization.initialization,
+                  expression.resultType == .int else { continue }
+            try verifyOrderedIntInitialExpression(declaration,
+                named: variable(initialization.variable), expression: expression, slots: slots)
         }
     }
 
@@ -629,7 +763,7 @@ extension NativeSwiftEmitter {
                 let element = program.bindingTypes[binding]!
                 let domain = try expression(domainExpression)
                 body = """
-                try _NativeMachineOperations.visitAlternatives(\(domain).sorted(by: \(try ordering(element))), emit: emit) { \(binder(binding)), branchEmit in
+                try SwiftTLA._NativeMachineOperations.visitAlternatives(\(domain).sorted(by: \(try ordering(element))), emit: emit) { \(binder(binding)), branchEmit in
                     \(childCall(child, binding: binding, emit: "branchEmit"))
                 }
                 """
@@ -638,7 +772,7 @@ extension NativeSwiftEmitter {
             case .ifElse(let condition, let yes, let no):
                 let value = try expression(condition)
                 body = """
-                try _NativeMachineOperations.visitConditional({ \(value) },
+                try SwiftTLA._NativeMachineOperations.visitConditional({ \(value) },
                     ifTrue: { \(childCall(yes)) },
                     ifFalse: { \(childCall(no)) })
                 """
@@ -648,7 +782,7 @@ extension NativeSwiftEmitter {
                 body = childCall(lhs, emit: "{ candidate in \(right) }")
             case .or(let lhs, let rhs):
                 body = """
-                try _NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
+                try SwiftTLA._NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
                     if second { \(childCall(rhs, emit: "branchEmit")) }
                     else { \(childCall(lhs, emit: "branchEmit")) }
                 }
@@ -682,7 +816,9 @@ extension NativeSwiftEmitter {
         }
         """)
         try verifyGeneratedActionWriteOutput(declaration, action: action.body, program: program,
-            stateFields: stateMemberNames, parts: parts.writes, conditions: parts.conditions)
+            stateFields: stateMemberNames, parts: parts.writes, conditions: parts.conditions,
+            requireScalarLeaves: isTotalScalarAssignment(action.body)
+                || program.requiresOrderedIntOutput(action.id), externalBindings: action.bindings)
         return declaration
     }
 
@@ -732,7 +868,7 @@ extension NativeSwiftEmitter {
             "\(binder(binding.binder)): \(try swiftType(program.bindingTypes[binding.binder]!))"
         }.joined(separator: ", ")
         let arguments = action.bindings.map { "\(binder($0.binder)): \(binder($0.binder))" }.joined(separator: ", ")
-        return DeclSyntax(stringLiteral: """
+        let declaration = DeclSyntax(stringLiteral: """
         private static func _visitSuccessors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
                                                       _ visit: (Snapshot) throws -> Void) throws {
             var emitted: [Snapshot] = []
@@ -745,6 +881,11 @@ extension NativeSwiftEmitter {
             }
         }
         """)
+        try verifyGeneratedSuccessorOutput(declaration, actionID: action.id.ordinal,
+            parameters: parameters, arguments: arguments,
+            configurationParameters: configurationParameters,
+            configurationArguments: configurationArguments)
+        return declaration
     }
 
     mutating func dispatchDeclarations(configurationArguments: String) throws -> [DeclSyntax] {
@@ -764,8 +905,7 @@ extension NativeSwiftEmitter {
         }
         var visitorCases: [String] = []
         var formalCases: [String] = []
-        var enumeration: [String] = []
-        var visitorEnumeration: [String] = []
+        var candidateEnumeration: [String] = []
         for api in model.api.actions {
             let action = program[api.compiledAction]
             var pattern: [String] = []
@@ -811,10 +951,9 @@ extension NativeSwiftEmitter {
                 try Self._visitSuccessors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(configurationArguments), checking: &context, visit)
             """)
             let actionValue = ".\(api.swiftIdentifier)" + (actionArguments.isEmpty ? "" : "(\(actionArguments.joined(separator: ", ")))")
-            enumeration.append("do {\n" + loops + "result.append(\(actionValue))\n" + closing + "}\n")
-            visitorEnumeration.append("do {\n" + loops + "try _visitAction(\(actionValue))\n" + closing + "}\n")
+            candidateEnumeration.append("do {\n" + loops + "try visit(\(actionValue))\n" + closing + "}\n")
         }
-        return try nativeDeclarations("""
+        let declarations = try nativeDeclarations("""
         public func visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>,
                                     _ visit: (Self) throws -> Bool) throws -> Bool {
             var run: CheckingContext<CheckingRegisters>? = context
@@ -859,9 +998,12 @@ extension NativeSwiftEmitter {
                 return Self(execution: execution\(configurationArguments))
             }
         }
+        private func _visitActionCandidates(_ visit: (Action) throws -> Void) throws {
+            \(candidateEnumeration.joined(separator: "\n"))
+        }
         private func _actions() throws -> [Action] {
             var result: [Action] = []
-            \(enumeration.joined(separator: "\n"))
+            try _visitActionCandidates { result.append($0) }
             return result
         }
         public func actionCandidates() throws -> [Action] { try _actions() }
@@ -910,7 +1052,7 @@ extension NativeSwiftEmitter {
                         throw error
                     }
                 }
-                \(visitorEnumeration.joined(separator: "\n"))
+                try _visitActionCandidates(_visitAction)
             } catch is _StopSuccessorTraversal {
             }
             return found
@@ -928,13 +1070,35 @@ extension NativeSwiftEmitter {
             return Transition(action: action, before: before, after: state)
         }
         """)
+        let directRoutes = model.api.actions.compactMap { api -> (name: String, id: Int, formalName: String)? in
+            let action = program[api.compiledAction]
+            guard api.bindings.isEmpty, action.bindings.isEmpty else { return nil }
+            return (api.swiftIdentifier, action.id.ordinal,
+                program.layout.actions[action.id.ordinal].renderedName)
+        }
+        try verifyGeneratedActionRoutingOutput(declarations, routes: directRoutes,
+            allActions: model.api.actions.map { api in
+                (name: api.swiftIdentifier, id: api.compiledAction.ordinal,
+                    formalName: program.layout.actions[api.compiledAction.ordinal].renderedName,
+                    publicBindings: api.bindings.filter(\.isPublic).count)
+            },
+            candidates: model.api.actions.map { api in
+                (name: api.swiftIdentifier,
+                    labels: api.bindings.filter(\.isPublic).map(\.swiftIdentifier))
+            },
+            configurationArguments: configurationArguments,
+            boundRoutes: scalarBoundRoutes(program: program, actions: model.api.actions))
+        return declarations
     }
 
     mutating func propertyDeclarations(configurationParameters: String) throws -> [DeclSyntax] {
         let arguments = machineArguments.isEmpty ? "" : ", " + machineArguments
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
-        declarations += try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")
+        let deadlock = try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")
+        try verifyGeneratedSourceDefaultDeadlock(deadlock.first,
+            required: program.requiresSourceDefaultDeadlockOutput)
+        declarations += deadlock
         declarations += try nativeDeclarations("public static var hasActionConstraint: Bool { \(program.behavior.actionConstraint != nil) }")
         if let constraint = program.behavior.constraint {
             declarations += try nativeDeclarations("""
@@ -1213,9 +1377,9 @@ func verifyRandomSubsetInitialSupport(_ declaration: DeclSyntax?, expected: [(St
         let sample = functionDomain ? "randomFunctionSubset" : "randomSubset"
         let exhaustive = functionDomain ? "randomFunctionInitialSupport" : "randomSubsetInitialSupport"
         let required = [
-            "try _NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)",
-            "try _NativeMachineOperations.\(sample)(upTo: \(name)_sampleLimit",
-            "try _NativeMachineOperations.\(exhaustive)(upTo: \(name)_sampleLimit",
+            "try SwiftTLA._NativeMachineOperations.validateRandomSubsetCount(\(name)_sampleLimit)",
+            "try SwiftTLA._NativeMachineOperations.\(sample)(upTo: \(name)_sampleLimit",
+            "try SwiftTLA._NativeMachineOperations.\(exhaustive)(upTo: \(name)_sampleLimit",
         ]
         guard required.allSatisfy({ occurrences($0) == 1 }) else {
             throw CompilationDiagnostic(
@@ -1243,7 +1407,9 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
     }
     public static func initialOutcomes(\(parameters)) throws -> InitialEvaluationOutcomes<Self> {
         let outcome = try _initialStates(\(arguments))
-        return InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) }, firstFailure: outcome.firstFailure)
+        return InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) },
+            firstFailure: outcome.firstFailure,
+            firstFailureInitializerOrdinal: outcome.firstFailureInitializerOrdinal)
     }
     public static func initialMachines(\(parameters)) throws -> [Self] {
         try _completedInitialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }
@@ -1287,9 +1453,158 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
     }
 }
 
+private func checkedIntInitialValue(_ root: CompiledExpression,
+                                    slots: [VariableID: String]) -> String? {
+    let arithmetic: Bool
+    if case .add = root.operation { arithmetic = true } else { arithmetic = false }
+    var pending = [(root, false)]
+    var values: [String] = []
+    var statements: [String] = []
+    while let (node, expanded) = pending.popLast() {
+        guard node.resultType == .int else { return nil }
+        let value: String
+        switch node.operation {
+        case .add:
+            guard node.children.count == 2 else { return nil }
+            if !expanded {
+                pending.append((node, true))
+                pending.append((node.children[1], false))
+                pending.append((node.children[0], false))
+                continue
+            }
+            guard values.count >= 2 else { return nil }
+            let rhs = values.removeLast()
+            let lhs = values.removeLast()
+            value = "try SwiftTLA._NativeMachineOperations.add(\(lhs), \(rhs))"
+        case .stateVariable(let id):
+            guard node.children.isEmpty, let slot = slots[id] else { return nil }
+            value = slot
+        case .value(.integer(let integer)):
+            guard node.children.isEmpty else { return nil }
+            value = integer == Int.min ? "Int.min" : String(integer)
+        default: return nil
+        }
+        if arithmetic {
+            let name = "_arithmetic\(statements.count)"
+            statements.append("let \(name): Int = \(value)")
+            values.append(name)
+        } else {
+            values.append(value)
+        }
+    }
+    guard values.count == 1, let value = values.first else { return nil }
+    if !arithmetic { return value }
+    return "(try { () throws -> Int in\n\(statements.joined(separator: "\n"))\nreturn \(value)\n}())"
+}
+
+func verifyOrderedIntInitialExpression(_ declaration: DeclSyntax?, named name: String,
+                                       expression: CompiledExpression,
+                                       slots: [VariableID: String]) throws {
+    enum Step: Equatable {
+        case integer(Int)
+        case slot(String)
+        case add(Int, Int)
+    }
+    func invalid() -> CompilationDiagnostic {
+        CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native._initialStates.expression.\(name)",
+            expected: "the compiled Int expression's ordered reads and checked additions",
+            actual: "the generated Swift initializer has another value or evaluation order",
+            nextSafeAction: "Report this native initialization generation failure.")
+    }
+    var expected: [Step] = []
+    var values: [Int] = []
+    var pending = [(expression, false)]
+    while let (node, expanded) = pending.popLast() {
+        guard node.resultType == .int else { throw invalid() }
+        let step: Step
+        switch node.operation {
+        case .add:
+            guard node.children.count == 2 else { throw invalid() }
+            if !expanded {
+                pending.append((node, true))
+                pending.append((node.children[1], false))
+                pending.append((node.children[0], false))
+                continue
+            }
+            guard values.count >= 2 else { throw invalid() }
+            let right = values.removeLast()
+            step = .add(values.removeLast(), right)
+        case .stateVariable(let id):
+            guard node.children.isEmpty, let slot = slots[id] else { throw invalid() }
+            step = .slot(slot)
+        case .value(.integer(let integer)):
+            guard node.children.isEmpty else { throw invalid() }
+            step = .integer(integer)
+        default: throw invalid()
+        }
+        values.append(expected.count)
+        expected.append(step)
+    }
+    guard values == [expected.count - 1] else { throw invalid() }
+    let tokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) } ?? []
+    let binding = ["let", name, ":", "Int", "="]
+    let starts = tokens.indices.filter { index in
+        index + binding.count <= tokens.count &&
+            Array(tokens[index..<(index + binding.count)]) == binding
+    }
+    guard starts.count == 1, let start = starts.first else { throw invalid() }
+    var cursor = start + binding.count
+    func take(_ pattern: [String]) -> Bool {
+        guard cursor + pattern.count <= tokens.count,
+              Array(tokens[cursor..<(cursor + pattern.count)]) == pattern else { return false }
+        cursor += pattern.count
+        return true
+    }
+    func arithmeticIndex() -> Int? {
+        guard cursor < tokens.count, tokens[cursor].hasPrefix("_arithmetic"),
+              let index = Int(tokens[cursor].dropFirst("_arithmetic".count)) else { return nil }
+        cursor += 1
+        return index
+    }
+    func readStep(available: Int) -> Step? {
+        if take(["try", "SwiftTLA", ".", "_NativeMachineOperations", ".", "add", "("]) {
+            guard let left = arithmeticIndex(), take([","]), let right = arithmeticIndex(),
+                  take([")"]), left < available, right < available else { return nil }
+            return .add(left, right)
+        }
+        guard cursor < tokens.count else { return nil }
+        if take(["Int", ".", "min"]) { return .integer(Int.min) }
+        let negative = take(["-"])
+        if cursor < tokens.count, let integer = Int((negative ? "-" : "") + tokens[cursor]) {
+            cursor += 1
+            return .integer(integer)
+        }
+        if !negative, cursor < tokens.count, slots.values.contains(tokens[cursor]) {
+            let slot = tokens[cursor]
+            cursor += 1
+            return .slot(slot)
+        }
+        return nil
+    }
+    if case .add = expression.operation {
+        guard take(["(", "try", "{", "(", ")", "throws", "->", "Int", "in"]) else { throw invalid() }
+        for (index, step) in expected.enumerated() {
+            guard take(["let", "_arithmetic\(index)", ":", "Int", "="]),
+                  readStep(available: index) == step else { throw invalid() }
+        }
+        guard take(["return", "_arithmetic\(expected.count - 1)", "}", "(", ")", ")"]) else {
+            throw invalid()
+        }
+    } else {
+        guard expected.count == 1, readStep(available: 0) == expected[0] else { throw invalid() }
+    }
+    guard cursor < tokens.count, ["if", "let", "result", "}", "evaluatingInitializerOrdinal"].contains(tokens[cursor]) else {
+        throw invalid()
+    }
+}
+
 func verifyGeneratedInitialBindings(
     _ declaration: DeclSyntax?, expected: [String], expectedLoops: [String: String],
-    expectedCandidateSources: [String: String]
+    expectedCandidateSources: [String: String], expectedIntLiterals: [String: Int] = [:],
+    expectedControlLocations: [String: Int] = [:],
+    expectedIntExpressions: [String: CompiledExpression] = [:],
+    stateSlots: [VariableID: String] = [:]
 ) throws {
     guard let initialStates = declaration?.as(FunctionDeclSyntax.self) else {
         throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -1314,6 +1629,38 @@ func verifyGeneratedInitialBindings(
     }
     func expectedTokens(_ source: String) -> [String] {
         Array(Parser.parse(source: source).tokens(viewMode: .sourceAccurate)).map(\.text).filter { !$0.isEmpty }
+    }
+    func verifyInitializer(_ name: String, type: String, value: String) throws {
+        let required = ["let", name, ":", type, "="] + expectedTokens(value)
+        let positions = tokens.indices.filter { index in
+            index + 1 < tokens.count && tokens[index] == "let" && tokens[index + 1] == name
+        }
+        guard positions.count == 1, let start = positions.first,
+              start + required.count < tokens.count,
+              Array(tokens[start..<(start + required.count)]) == required,
+              ["if", "let", "for", "result", "}", "evaluatingInitializerOrdinal"].contains(tokens[start + required.count]) else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native._initialStates.value.\(name)",
+                expected: "the compiled \(type) initializer \(value)",
+                actual: "the emitted initializer differs from its compiled value",
+                nextSafeAction: "Report this native initialization generation failure.")
+        }
+    }
+    for (name, value) in expectedIntLiterals {
+        try verifyInitializer(name, type: "Int", value: value == Int.min ? "Int.min" : String(value))
+    }
+    for (name, expression) in expectedIntExpressions {
+        guard let expected = checkedIntInitialValue(expression, slots: stateSlots) else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native._initialStates.expression.\(name)",
+                expected: "a checked Int literal, prior-state read, or addition",
+                actual: "the compiled initializer has another expression form",
+                nextSafeAction: "Report this native initialization checking failure.")
+        }
+        try verifyInitializer(name, type: "Int", value: expected)
+    }
+    for (name, id) in expectedControlLocations {
+        try verifyInitializer(name, type: "_ControlLocation", value: "_ControlLocation.location\(id)")
     }
     for (name, sequence) in expectedLoops {
         var positions: [Int] = []
@@ -1429,7 +1776,7 @@ func verifyGeneratedUpdateMergeOutput(_ declaration: DeclSyntax?, slots: [String
     var expected = ["func", "merging", "(", "_", "other", ":", "Self", ")", "->", "Self", "?", "{",
                     "var", "result", "=", "self"]
     for slot in slots {
-        expected += ["guard", "_NativeMachineOperations", ".", "mergeUpdate", "(", "&", "result", ".",
+        expected += ["guard", "SwiftTLA", ".", "_NativeMachineOperations", ".", "mergeUpdate", "(", "&", "result", ".",
                      slot, ",", "other", ".", slot, ")", "else", "{", "return", "nil", "}"]
     }
     expected += ["return", "result", "}"]
@@ -1477,11 +1824,409 @@ func verifyGeneratedUpdateApplyOutput(
     }
 }
 
+func verifyGeneratedSourceDefaultDeadlock(_ declaration: DeclSyntax?, required: Bool) throws {
+    guard required else { return }
+    let expected = Parser.parse(source: "public static var checksDeadlock: Bool { true }")
+        .statements.first?.item.as(VariableDeclSyntax.self)
+    guard let actual = declaration?.as(VariableDeclSyntax.self), let expected,
+          Array(actual.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(expected.tokens(viewMode: .sourceAccurate)).map(\.text) else {
+        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.checking.defaultDeadlock",
+            expected: "the authored #spec default checksDeadlock true",
+            actual: "the generated Swift checking default differs from the checked rule",
+            nextSafeAction: "Report this native checking generation failure.")
+    }
+}
+
+func verifyGeneratedValidationDelegationOutput(_ declaration: DeclSyntax?) throws {
+    let expected = Parser.parse(source: """
+    public func visitValidationOutcomes(checking context: inout CheckingContext<CheckingRegisters>,
+                                        _ visit: (Action, Self) throws -> Bool,
+                                        onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool) throws -> Bool {
+        var run: CheckingContext<CheckingRegisters>? = context
+        defer { context = run! }
+        return try _visitSuccessors(checking: &run, visit, onEvaluationFailure: onEvaluationFailure)
+    }
+    """).statements.first?.item.as(FunctionDeclSyntax.self)
+    guard let actual = declaration?.as(FunctionDeclSyntax.self), let expected,
+          Array(actual.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(expected.tokens(viewMode: .sourceAccurate)).map(\.text) else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.validation.delegation",
+            expected: "forward every successor and exact action failure through the generated checking entry point",
+            actual: "the emitted validation entry point differs from the checked rule",
+            nextSafeAction: "Report this native validation generation failure."
+        )
+    }
+}
+
+func verifyGeneratedSuccessorOutput(
+    _ declaration: DeclSyntax?, actionID: Int, parameters: String, arguments: String,
+    configurationParameters: String, configurationArguments: String
+) throws {
+    let expected = Parser.parse(source: """
+    private static func _visitSuccessors\(actionID)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
+                                                  _ visit: (Snapshot) throws -> Void) throws {
+        var emitted: [Snapshot] = []
+        try _visitUpdates\(actionID)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(configurationArguments), checking: &context) { updates in
+            let candidate = updates.applying(to: state)
+            if !emitted.contains(candidate) {
+                emitted.append(candidate)
+                try visit(candidate)
+            }
+        }
+    }
+    """).statements.first?.item.as(FunctionDeclSyntax.self)
+    guard let actual = declaration?.as(FunctionDeclSyntax.self), let expected,
+          Array(actual.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(expected.tokens(viewMode: .sourceAccurate)).map(\.text) else {
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.action.successor.\(actionID)",
+            expected: "apply every complete compiled update and visit each resulting snapshot once",
+            actual: "the emitted successor wrapper differs from the checked rule",
+            nextSafeAction: "Report this native successor generation failure."
+        )
+    }
+}
+
+struct ScalarBoundRoute {
+    struct Binding {
+        let label: String
+        let name: String
+        let type: CompiledValueType
+        let members: [CompiledValue]
+    }
+    let name: String
+    let id: Int
+    let formalName: String
+    let bindings: [Binding]
+}
+
+func scalarBoundRoutes(program: CompiledProgram, actions: [GeneratedMachineAPI.Action]) -> [ScalarBoundRoute] {
+    actions.compactMap { api in
+        let action = program[api.compiledAction]
+        guard !action.bindings.isEmpty, isTotalScalarAssignment(action.body),
+              action.bindings.count == api.bindings.count,
+              api.bindings.allSatisfy(\.isPublic) else { return nil }
+        var bindings: [ScalarBoundRoute.Binding] = []
+        for (binding, exposed) in zip(action.bindings, api.bindings) {
+            guard let type = program.bindingTypes[binding.binder], type == .int || type == .bool,
+                  let members = binding.literalMembers, members.count > 1,
+                  members.allSatisfy({ member in
+                      switch (member, type) {
+                      case (.integer, .int), (.boolean, .bool): true
+                      default: false
+                      }
+                  }), let sourceName = program.binderNames[binding.binder] else { return nil }
+            bindings.append(.init(label: exposed.swiftIdentifier,
+                name: "_\(sourceName)_\(binding.binder.ordinal)", type: type, members: members))
+        }
+        return ScalarBoundRoute(name: api.swiftIdentifier, id: action.id.ordinal,
+            formalName: program.layout.actions[action.id.ordinal].renderedName, bindings: bindings)
+    }
+}
+
+func verifyGeneratedActionRoutingOutput(
+    _ declarations: [DeclSyntax], routes: [(name: String, id: Int, formalName: String)],
+    allActions: [(name: String, id: Int, formalName: String, publicBindings: Int)],
+    candidates candidatePlans: [(name: String, labels: [String])], configurationArguments: String,
+    boundRoutes: [ScalarBoundRoute] = []
+) throws {
+    func invalid(_ path: String, _ expected: String) -> CompilationDiagnostic {
+        CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation, path: path,
+            expected: expected, actual: "the emitted action route or label differs",
+            nextSafeAction: "Report this native action routing failure."
+        )
+    }
+    func cases(of name: String) throws -> [String: (pattern: [String], body: CodeBlockItemListSyntax)] {
+        let methods = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }.filter {
+            $0.name.text == name && $0.signature.parameterClause.parameters.first?.firstName.text == "for"
+        }
+        guard methods.count == 1, let method = methods.first else {
+            throw invalid("native.action.routing.method", "one generated \(name)(for action:) method")
+        }
+        guard method.body?.statements.count == 1,
+              let statement = method.body?.statements.first else {
+            throw invalid("native.action.routing.switch", "one direct switch over the selected action")
+        }
+        let expression: ExprSyntax?
+        if case .expr(let value) = statement.item {
+            expression = value
+        } else {
+            expression = statement.item.as(ExpressionStmtSyntax.self)?.expression
+        }
+        guard let choice = expression?.as(SwitchExprSyntax.self),
+              choice.subject.as(DeclReferenceExprSyntax.self)?.baseName.text == "action" else {
+            throw invalid("native.action.routing.switch", "one direct switch over the selected action")
+        }
+        var result: [String: (pattern: [String], body: CodeBlockItemListSyntax)] = [:]
+        for element in choice.cases {
+            guard let branch = element.as(SwitchCaseSyntax.self),
+                  let label = branch.label.as(SwitchCaseLabelSyntax.self),
+                  label.caseItems.count == 1, let item = label.caseItems.first,
+                  item.whereClause == nil else {
+                throw invalid("native.action.routing.switch", "one unconditional case per action")
+            }
+            let pattern = Array(item.pattern.tokens(viewMode: .sourceAccurate))
+            guard pattern.count >= 2, pattern[0].text == "." else {
+                throw invalid("native.action.routing.switch", "one named case per action")
+            }
+            let identifier = pattern[1].sourceIdentifierName
+            guard result[identifier] == nil else {
+                throw invalid("native.action.routing", "one case per action identity")
+            }
+            result[identifier] = (pattern.map(\.text), branch.statements)
+        }
+        return result
+    }
+    func tokens(_ source: String) -> [String] {
+        Array(Parser.parse(source: source).tokens(viewMode: .sourceAccurate))
+            .filter { $0.tokenKind != .endOfFile }.map(\.text)
+    }
+    func scalarDomain(_ binding: ScalarBoundRoute.Binding) -> String {
+        let values = binding.members.map { member in
+            switch member {
+            case .integer(let value): value == Int.min ? "Int.min" : String(value)
+            case .boolean(let value): String(value)
+            default: ""
+            }
+        }.joined(separator: ", ")
+        return "[\(values)]"
+    }
+    let dispatched = try cases(of: "_visitSuccessors")
+    let labeled = try cases(of: "formalCall")
+    let expectedNames = Set(allActions.map { $0.name.filter { $0 != "`" } })
+    guard Set(dispatched.keys) == expectedNames, Set(labeled.keys) == expectedNames else {
+        throw invalid("native.action.routing", "exactly the compiled action cases")
+    }
+    for route in routes {
+        let name = route.name.filter { $0 != "`" }
+        let expectedDispatch = tokens("try Self._visitSuccessors\(route.id)(from: _execution\(configurationArguments), checking: &context, visit)")
+        guard dispatched[name].map({ Array($0.body.tokens(viewMode: .sourceAccurate)).map(\.text) }) == expectedDispatch else {
+            throw invalid("native.action.route.\(name)", "the complete successor route for compiled action \(route.id)")
+        }
+        let expectedLabel = tokens("return FormalActionCall(name: \(String(reflecting: route.formalName)), arguments: [])")
+        guard labeled[name].map({ Array($0.body.tokens(viewMode: .sourceAccurate)).map(\.text) }) == expectedLabel else {
+            throw invalid("native.action.label.\(name)", "the compiled formal action label \(route.formalName)")
+        }
+    }
+    let directNames = Set(routes.map { $0.name })
+    for route in allActions where !directNames.contains(route.name) {
+        let name = route.name.filter { $0 != "`" }
+        guard let branch = dispatched[name]?.body, branch.count == route.publicBindings + 1,
+              Array(branch.dropLast()).allSatisfy({ $0.item.as(GuardStmtSyntax.self) != nil }),
+              let call = branch.last,
+              Array(call.tokens(viewMode: .sourceAccurate)).map(\.text).starts(with:
+                tokens("try Self._visitSuccessors\(route.id)(from: _execution")) else {
+            throw invalid("native.action.route.\(name)", "the selected action reaches compiled successor \(route.id)")
+        }
+        guard let label = labeled[name]?.body, label.count == 1, let statement = label.first,
+              Array(statement.tokens(viewMode: .sourceAccurate)).map(\.text).starts(with:
+                tokens("return FormalActionCall(name: \(String(reflecting: route.formalName)), arguments:")) else {
+            throw invalid("native.action.label.\(name)", "the compiled formal action label \(route.formalName)")
+        }
+    }
+    for route in boundRoutes {
+        let name = route.name.filter { $0 != "`" }
+        let pattern = ".\(route.name)(" + route.bindings.map { "\($0.label): let \($0.name)" }.joined(separator: ", ") + ")"
+        let guards = route.bindings.map { binding in
+            "guard \(scalarDomain(binding)).contains(\(binding.name)) else { return }"
+        }.joined(separator: "\n")
+        let arguments = route.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
+        let dispatch = "\(guards)\ntry Self._visitSuccessors\(route.id)(from: _execution, \(arguments)\(configurationArguments), checking: &context, visit)"
+        guard dispatched[name]?.pattern == tokens(pattern),
+              dispatched[name].map({ Array($0.body.tokens(viewMode: .sourceAccurate)).map(\.text) }) == tokens(dispatch) else {
+            throw invalid("native.action.route.\(name)", "the complete bound successor route for compiled action \(route.id)")
+        }
+        let values = route.bindings.map { binding in
+            "TLAValue.\(binding.type == .int ? "int" : "bool")(\(binding.name))"
+        }.joined(separator: ", ")
+        let formal = "return FormalActionCall(name: \(String(reflecting: route.formalName)), arguments: [\(values)])"
+        guard labeled[name]?.pattern == tokens(pattern),
+              labeled[name].map({ Array($0.body.tokens(viewMode: .sourceAccurate)).map(\.text) }) == tokens(formal) else {
+            throw invalid("native.action.label.\(name)", "the complete bound formal call for \(route.formalName)")
+        }
+    }
+    let methods = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }
+    let successorWrappers = methods.filter {
+        $0.name.text == "_successors"
+            && $0.signature.parameterClause.parameters.first?.firstName.text == "for"
+    }
+    let expectedSuccessorWrappers = [
+        """
+        private func _successors(for action: Action) throws -> [Snapshot] {
+            var context: CheckingContext<CheckingRegisters>?
+            return try _successors(for: action, checking: &context)
+        }
+        """,
+        """
+        private func _successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
+            var result: [Snapshot] = []
+            try _visitSuccessors(for: action, checking: &context) { result.append($0) }
+            return result
+        }
+        """,
+    ]
+    guard successorWrappers.count == expectedSuccessorWrappers.count,
+          expectedSuccessorWrappers.allSatisfy({ expected in
+              successorWrappers.filter {
+                  Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) == tokens(expected)
+              }.count == 1
+          }) else {
+        throw invalid("native.action.successorRoute", "both wrappers preserve the complete successor list")
+    }
+    let send = methods.filter { $0.name.text == "send" }
+    let expectedSend = tokens("""
+        public mutating func send(_ action: Action) throws -> Transition {
+            var candidates = try _successors(for: action)[...]
+            guard let next = candidates.popFirst() else { throw GeneratedMachineError.noMatchingSuccessor }
+            guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousAction }
+            let before = state
+            _execution = next
+            return Transition(action: action, before: before, after: state)
+        }
+        """)
+    guard send.count == 1,
+          Array(send[0].tokens(viewMode: .sourceAccurate)).map(\.text) == expectedSend else {
+        throw invalid("native.action.send", "the public send applies exactly one selected successor")
+    }
+    let candidates = methods.filter { $0.name.text == "_actions" }
+    let expectedCandidates = """
+        var result: [Action] = []
+        try _visitActionCandidates { result.append($0) }
+        return result
+        """
+    guard candidates.count == 1, let candidateBody = candidates.first?.body?.statements,
+          Array(candidateBody.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == tokens(expectedCandidates) else {
+        throw invalid("native.action.candidates", "the public action list delegates to the candidate visitor")
+    }
+    let visitors = methods.filter {
+        $0.name.text == "_visitSuccessors"
+            && $0.signature.parameterClause.parameters.last?.firstName.text == "onEvaluationFailure"
+    }
+    let failureVisitor = Parser.parse(source: """
+    private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
+                                  _ visit: (Action, Self) throws -> Bool,
+                                  onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool) throws -> Bool {
+        var found = false
+        do {
+            func _visitAction(_ action: Action) throws {
+                var callbackFailed = false
+                do {
+                    try _visitSuccessors(for: action, checking: &context) { execution in
+                        found = true
+                        do {
+                            if try !visit(action, Self(execution: execution\(configurationArguments))) {
+                                throw _StopSuccessorTraversal()
+                            }
+                        } catch {
+                            callbackFailed = true
+                            throw error
+                        }
+                    }
+                } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+                    if try !onEvaluationFailure(action, reason) {
+                        throw _StopSuccessorTraversal()
+                    }
+                } catch {
+                    throw error
+                }
+            }
+            try _visitActionCandidates(_visitAction)
+        } catch is _StopSuccessorTraversal {
+        }
+        return found
+    }
+    """).statements.first?.item.as(FunctionDeclSyntax.self)
+    guard visitors.count == 1, let visitor = visitors.first, let failureVisitor,
+          Array(visitor.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(failureVisitor.tokens(viewMode: .sourceAccurate)).map(\.text) else {
+        throw invalid("native.action.failureRouting",
+            "preserve every successor and forward its exact action and evaluation failure")
+    }
+    let sources = methods.filter { $0.name.text == "_visitActionCandidates" }
+    guard sources.count == 1, let body = sources.first?.body?.statements,
+          body.count == candidatePlans.count else {
+        throw invalid("native.action.candidateSource", "one candidate block per compiled action")
+    }
+    for (statement, plan) in zip(body, candidatePlans) {
+        let bound = boundRoutes.first { $0.name == plan.name }
+        guard bound == nil || bound?.bindings.count == plan.labels.count else {
+            throw invalid("native.action.candidateSource", "every checked domain binds one candidate argument")
+        }
+        guard let action = statement.item.as(DoStmtSyntax.self), action.catchClauses.isEmpty else {
+            throw invalid("native.action.candidateSource", "one unguarded candidate block for \(plan.name)")
+        }
+        var statements = action.body.statements
+        var boundNames: [String] = []
+        for index in plan.labels.indices {
+            guard statements.count == 1,
+                  let loop = statements.first?.item.as(ForStmtSyntax.self),
+                  let name = loop.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+                  loop.whereClause == nil, loop.tryKeyword == nil, loop.awaitKeyword == nil else {
+                throw invalid("native.action.candidateSource", "one ordered binding loop for \(plan.name)")
+            }
+            if let binding = bound?.bindings[index],
+               name != binding.name ||
+               Array(loop.sequence.tokens(viewMode: .sourceAccurate)).map(\.text) != tokens(scalarDomain(binding)) {
+                throw invalid("native.action.candidateSource", "the compiled literal domain binds \(binding.name)")
+            }
+            boundNames.append(name)
+            statements = loop.body.statements
+        }
+        let arguments = zip(plan.labels, boundNames).map { "\($0.0): \($0.1)" }.joined(separator: ", ")
+        let candidate = ".\(plan.name)" + (arguments.isEmpty ? "" : "(\(arguments))")
+        guard statements.count == 1, let call = statements.first,
+              Array(call.tokens(viewMode: .sourceAccurate)).map(\.text)
+                == tokens("try visit(\(candidate))") else {
+            throw invalid("native.action.candidateSource", "the bound values reach \(plan.name) exactly once")
+        }
+    }
+}
+
+private func isTotalScalarAssignment(_ root: CompiledActionExpr) -> Bool {
+    func scalar(_ expression: CompiledExpression) -> Bool {
+        guard expression.children.isEmpty else { return false }
+        switch expression.operation {
+        case .stateVariable, .boundValue:
+            return expression.resultType == .int || expression.resultType == .bool
+        case .value(.integer): return expression.resultType == .int
+        case .value(.boolean): return expression.resultType == .bool
+        default: return false
+        }
+    }
+    var pending = [root]
+    while let node = pending.popLast() {
+        switch node {
+        case .define(_, let value, let body):
+            guard scalar(value) else { return false }
+            pending.append(body)
+        case .and(let left, let right):
+            pending.append(right)
+            pending.append(left)
+        case .assign(_, let value):
+            guard scalar(value) else { return false }
+        case .unchanged: break
+        case .guard_(let value):
+            guard value.operation == .value(.boolean(true)), value.resultType == .bool,
+                  value.children.isEmpty else { return false }
+        default: return false
+        }
+    }
+    return true
+}
+
 func verifyGeneratedActionWriteOutput(
     _ declaration: DeclSyntax?, action: CompiledActionExpr, program: CompiledProgram,
     stateFields: [VariableID: String],
     parts: [(id: Int, slot: String, value: String)],
-    conditions: [(id: Int, value: String)] = []
+    conditions: [(id: Int, value: String)] = [], requireScalarLeaves: Bool = false,
+    externalBindings: [CompiledActionBinding] = []
 ) throws {
     guard let visitor = declaration?.as(FunctionDeclSyntax.self),
           visitor.body != nil else {
@@ -1497,6 +2242,24 @@ func verifyGeneratedActionWriteOutput(
             expected: expected, actual: actual,
             nextSafeAction: "Report this native code generation failure."
         )
+    }
+    var externalScalarNames: Set<String> = []
+    for binding in externalBindings {
+        let type = program.bindingTypes[binding.binder]
+        // shortcut: only scalar outer binders have an independent leaf rule; extend this when other value encodings are checked.
+        guard type == .int || type == .bool else { continue }
+        guard let sourceName = program.binderNames[binding.binder] else {
+            throw invalid("native.action.parameter", "a compiled scalar binder name", "missing binder")
+        }
+        let name = "_\(sourceName)_\(binding.binder.ordinal)"
+        let matches = visitor.signature.parameterClause.parameters.filter {
+            $0.firstName.text == name &&
+                Array($0.type.tokens(viewMode: .sourceAccurate)).map(\.text) == [type == .int ? "Int" : "Bool"]
+        }
+        guard matches.count == 1 else {
+            throw invalid("native.action.parameter", "one typed outer parameter for \(name)", "missing or wrong type")
+        }
+        externalScalarNames.insert(name)
     }
     let visitorTokens = Array(visitor.tokens(viewMode: .sourceAccurate)).map(\.text)
     var tokenDepths: [Int] = []
@@ -1573,18 +2336,20 @@ func verifyGeneratedActionWriteOutput(
     var conditionalPredicates: [Int: CompiledExpression] = [:]
     var guards: [(id: Int, predicate: CompiledExpression)] = []
     var definitions: [(id: Int, child: Int, value: CompiledExpression)] = []
-    var assignments: [Int: CompiledExpression] = [:]
+    var assignments: [Int: (variable: VariableID, value: CompiledExpression)] = [:]
+    var frames: [Int: VariableID] = [:]
     var nextID = 1
     var expectedWriteCount = 0
     while let (id, node) = pending.popLast() {
         switch node {
-        case .assign(_, let value):
+        case .assign(let variable, let value):
             expectedWriteCount += 1
             expectedChildren[id] = []
-            assignments[id] = value
-        case .unchanged:
+            assignments[id] = (variable, value)
+        case .unchanged(let variable):
             expectedWriteCount += 1
             expectedChildren[id] = []
+            frames[id] = variable
         case .guard_(let predicate):
             expectedChildren[id] = []
             guards.append((id, predicate))
@@ -1661,6 +2426,42 @@ func verifyGeneratedActionWriteOutput(
               let right = operand(expression.children[1]) else { return nil }
         return "(\(left) \(symbol) \(right))"
     }
+    func slotName(_ id: VariableID) -> String? {
+        guard let declaration = program.layout.variables.first(where: { $0.id == id })?.declaration else {
+            return nil
+        }
+        let name = String(declaration.name.unicodeScalars.map { scalar -> Character in
+            switch scalar.value {
+            case 65...90, 97...122, 48...57, 95: Character(String(scalar))
+            default: "_"
+            }
+        })
+        return "_value_\(name)_\(id.ordinal)"
+    }
+    func controlComparisonSource(_ expression: CompiledExpression) -> String? {
+        guard expression.resultType == .bool, expression.children.count == 2,
+              expression.children.allSatisfy({ $0.resultType == .controlLocation }) else { return nil }
+        let symbol: String
+        switch expression.operation {
+        case .equal: symbol = "=="
+        case .notEqual: symbol = "!="
+        default: return nil
+        }
+        func operand(_ node: CompiledExpression) -> String? {
+            switch node.operation {
+            case .stateVariable(let id) where program.layout.variables.contains(where: {
+                $0.id == id && $0.declaration.origin == .programCounter
+            }):
+                return slotName(id).map { "state.\($0)" }
+            case .controlLocation(let id) where program.layout.controlLocations.contains(where: { $0.id == id }):
+                return "_ControlLocation.location\(id.ordinal)"
+            default: return nil
+            }
+        }
+        guard let left = operand(expression.children[0]),
+              let right = operand(expression.children[1]) else { return nil }
+        return "(\(left) \(symbol) \(right))"
+    }
     func directScalarTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
         guard expression.resultType == .int || expression.resultType == .bool else { return nil }
         switch expression.operation {
@@ -1674,7 +2475,7 @@ func verifyGeneratedActionWriteOutput(
             return ["(", "state", ".", "state", ".", field, ".", "count", ")"]
         case .boundValue(let binding) where program.bindingTypes[binding] == expression.resultType:
             guard let name = program.binderNames[binding].map({ "_\($0)_\(binding.ordinal)" }),
-                  parameters.contains(name) else { return nil }
+                  parameters.contains(name) || externalScalarNames.contains(name) else { return nil }
             return [name]
         case .value(.integer(let integer)) where expression.resultType == .int:
             if integer == Int.min { return ["Int", ".", "min"] }
@@ -1717,7 +2518,7 @@ func verifyGeneratedActionWriteOutput(
                 let operands = Array(values.suffix(operation.arity))
                 values.removeLast(operation.arity)
                 let arguments = operation.rightFirst ? Array(operands.reversed()) : operands
-                value = ["try", "_NativeMachineOperations", ".", operation.name, "("] +
+                value = ["try", "SwiftTLA", ".", "_NativeMachineOperations", ".", operation.name, "("] +
                     arguments.enumerated().flatMap { index, argument in
                         index == 0 ? [argument] : [",", argument]
                     } + [")"]
@@ -1735,6 +2536,10 @@ func verifyGeneratedActionWriteOutput(
             ["return", result, "}", "(", ")", ")"]
     }
     func scalarPredicateTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
+        if let source = controlComparisonSource(expression) {
+            return Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                .map(\.text).filter { !$0.isEmpty }
+        }
         if let source = stringComparisonSource(expression, parameters: parameters) {
             return Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
                 .map(\.text).filter { !$0.isEmpty }
@@ -1858,15 +2663,15 @@ func verifyGeneratedActionWriteOutput(
                 let left = identifiers[node.children[0]]!
                 let right = identifiers[node.children[1]]!
                 let operation: String = if case .and = node.operation { "booleanAnd" } else { "booleanOr" }
-                body = "return try _NativeMachineOperations.\(operation)({ try _predicate\(left)() }, { try _predicate\(right)() })"
+                body = "return try SwiftTLA._NativeMachineOperations.\(operation)({ try _predicate\(left)() }, { try _predicate\(right)() })"
             case .ifThenElse:
                 let condition = identifiers[node.children[0]]!
                 let yes = identifiers[node.children[1]]!
                 let no = identifiers[node.children[2]]!
-                body = "return try _NativeMachineOperations.booleanIf({ try _predicate\(condition)() }, ifTrue: { try _predicate\(yes)() }, ifFalse: { try _predicate\(no)() })"
+                body = "return try SwiftTLA._NativeMachineOperations.booleanIf({ try _predicate\(condition)() }, ifTrue: { try _predicate\(yes)() }, ifFalse: { try _predicate\(no)() })"
             case .not:
                 let child = identifiers[node.children[0]]!
-                body = "return try _NativeMachineOperations.booleanNot { try _predicate\(child)() }"
+                body = "return try SwiftTLA._NativeMachineOperations.booleanNot { try _predicate\(child)() }"
             default:
                 // Preserve literal spelling; joining token text would split a String literal.
                 if let source = stringComparisonSource(node, parameters: parameters) {
@@ -1969,6 +2774,28 @@ func verifyGeneratedActionWriteOutput(
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
                 .map(\.text).filter { !$0.isEmpty }
         }
+        if case .controlLocation(let id) = expression.operation,
+           expression.resultType == .controlLocation, expression.children.isEmpty,
+           program.layout.controlLocations.contains(where: { $0.id == id }) {
+            return (tokens("_ControlLocation.location\(id.ordinal)"), actual)
+        }
+        if case .value(.set(let members)) = expression.operation,
+           case .set(let element) = expression.resultType,
+           expression.children.isEmpty, element == .int || element == .bool {
+            let values = members.sorted().compactMap { member -> String? in
+                switch (member, element) {
+                case (.integer(let value), .int):
+                    return value == Int.min ? "Int.min" : String(value)
+                case (.boolean(let value), .bool):
+                    return value ? "true" : "false"
+                default:
+                    return nil
+                }
+            }
+            guard values.count == members.count else { return nil }
+            let type = element == .int ? "Int" : "Bool"
+            return (tokens("Set<\(type)>([\(values.joined(separator: ", "))])"), actual)
+        }
         func checkedSequenceSource(_ node: CompiledExpression) -> String? {
             guard case .array(let element) = node.resultType,
                   element == .int || element == .bool else { return nil }
@@ -1991,7 +2818,7 @@ func verifyGeneratedActionWriteOutput(
                 (try { () throws -> [\(typeName)] in
                     let _sequenceValue = \(sequence)
                     let _prefixLength = \(length.joined(separator: " "))
-                    return try _NativeMachineOperations.sequencePrefix(_sequenceValue, length: _prefixLength)
+                    return try SwiftTLA._NativeMachineOperations.sequencePrefix(_sequenceValue, length: _prefixLength)
                 }())
                 """
             case .tupleRemoving:
@@ -2005,7 +2832,7 @@ func verifyGeneratedActionWriteOutput(
                 (try { () throws -> [\(typeName)] in
                     let _sequenceValue = \(sequence)
                     let _sequenceIndex = \(index.joined(separator: " "))
-                    return try _NativeMachineOperations.sequenceRemoving(_sequenceValue, at: _sequenceIndex)
+                    return try SwiftTLA._NativeMachineOperations.sequenceRemoving(_sequenceValue, at: _sequenceIndex)
                 }())
                 """
             case .tupleConcatenate:
@@ -2019,7 +2846,7 @@ func verifyGeneratedActionWriteOutput(
                     let _rightValue: [\(typeName)] = \(right)
                     let _rightElements = _rightValue
                     let _leftElements = _leftValue
-                    return _NativeMachineOperations.sequenceConcatenate(_leftElements, _rightElements)
+                    return SwiftTLA._NativeMachineOperations.sequenceConcatenate(_leftElements, _rightElements)
                 }())
                 """
             case .tupleAppend:
@@ -2034,7 +2861,7 @@ func verifyGeneratedActionWriteOutput(
                 (try { () throws -> [\(typeName)] in
                     let _sequenceValue: [\(typeName)] = \(sequence)
                     let _appendedValue: \(typeName) = \(appended.joined(separator: " "))
-                    return _NativeMachineOperations.sequenceAppend(_sequenceValue, _appendedValue)
+                    return SwiftTLA._NativeMachineOperations.sequenceAppend(_sequenceValue, _appendedValue)
                 }())
                 """
             default:
@@ -2054,12 +2881,12 @@ func verifyGeneratedActionWriteOutput(
         if expression.operation == .tupleHead,
            expression.children.count == 1,
            let sequence = checkedSequenceSource(expression.children[0]) {
-            return (tokens("(try _NativeMachineOperations.sequenceHead(\(sequence)))"), actual)
+            return (tokens("(try SwiftTLA._NativeMachineOperations.sequenceHead(\(sequence)))"), actual)
         }
         if expression.operation == .tupleTail,
            expression.children.count == 1,
            let sequence = checkedSequenceSource(expression.children[0]) {
-            return (tokens("(try _NativeMachineOperations.sequenceTail(\(sequence)))"), actual)
+            return (tokens("(try SwiftTLA._NativeMachineOperations.sequenceTail(\(sequence)))"), actual)
         }
         if expression.operation == .tupleDynamicAccess,
            expression.children.count == 2,
@@ -2073,7 +2900,7 @@ func verifyGeneratedActionWriteOutput(
             (try { () throws -> \(typeName) in
                 let _sequenceValue = \(sequence)
                 let _sequenceIndex = \(index.joined(separator: " "))
-                return try _NativeMachineOperations.sequenceElement(_sequenceValue, at: _sequenceIndex)
+                return try SwiftTLA._NativeMachineOperations.sequenceElement(_sequenceValue, at: _sequenceIndex)
             }())
             """
             return (tokens(source), actual)
@@ -2165,9 +2992,9 @@ func verifyGeneratedActionWriteOutput(
         }
         let initializer = Array(tokens[3..<(tokens.count - expectedCall.count)])
         let checkedInitializer = checkedValueTokens(value, parameters: parent, actual: initializer)
-        if checkedInitializer == nil, booleanPredicateNodes(value) != nil {
+        if checkedInitializer == nil, requireScalarLeaves || booleanPredicateNodes(value) != nil {
             throw invalid("native.action.binding.\(id)",
-                "a complete generated Boolean branch tree", "unreadable predicate functions")
+                "a complete generated scalar value or Boolean branch tree", "unreadable value expression")
         }
         if let checkedInitializer,
            canonicalPredicateNames(checkedInitializer.actual) !=
@@ -2223,7 +3050,7 @@ func verifyGeneratedActionWriteOutput(
             throw invalid("native.action.alternative.\(id)",
                 "both branches receive the same bindings, updates, and branch emitter", "invalid child calls")
         }
-        let expected = ["try", "_NativeMachineOperations", ".", "visitAlternatives", "(",
+        let expected = ["try", "SwiftTLA", ".", "_NativeMachineOperations", ".", "visitAlternatives", "(",
                         "[", "false", ",", "true", "]", ",", "emit", ":", "emit", ")", "{",
                         "second", ",", "branchEmit", "in", "if", "second", "{"] + right +
             ["}", "else", "{"] + left + ["}", "}"]
@@ -2283,7 +3110,7 @@ func verifyGeneratedActionWriteOutput(
         }
         let expected = Parser.parse(source: """
         func proof() {
-            try _NativeMachineOperations.visitConditional({ \(checkedPredicate) },
+            try SwiftTLA._NativeMachineOperations.visitConditional({ \(checkedPredicate) },
                 ifTrue: { \(yes.joined(separator: " ")) },
                 ifFalse: { \(no.joined(separator: " ")) })
         }
@@ -2295,7 +3122,8 @@ func verifyGeneratedActionWriteOutput(
                 "generated conditional body differs from the checked rule")
         }
     }
-    guard parts.count == expectedWriteCount, Set(parts.map { $0.id }).count == parts.count else {
+    guard parts.count == expectedWriteCount,
+          Set(parts.map(\.id)) == Set(assignments.keys).union(frames.keys) else {
         throw CompilationDiagnostic(
             code: .unsupportedGeneratedValueShape, stage: .validation,
             path: "native.action.write", expected: "one unique generated write per compiled assignment or frame",
@@ -2304,6 +3132,14 @@ func verifyGeneratedActionWriteOutput(
         )
     }
     for part in parts {
+        if let variable = frames[part.id] {
+            guard let slot = slotName(variable), part.slot == slot,
+                  part.value == (stateFields[variable].map { "state.state.\($0)" } ?? "state.\(slot)") else {
+                throw invalid("native.action.write.\(part.id)",
+                    "the compiled frame variable and its prior-state value",
+                    "a different generated frame write")
+            }
+        }
         let name = "_actionPart\(part.id)"
         let expected = Parser.parse(source: """
         func proof() {
@@ -2324,10 +3160,20 @@ func verifyGeneratedActionWriteOutput(
             )
         }
         if let assignment = assignments[part.id], let bindings = parameters[part.id] {
-            let checkedValue = checkedValueTokens(assignment, parameters: bindings, actual: actualBody)
-            if checkedValue == nil, booleanPredicateNodes(assignment) != nil {
+            guard part.slot == slotName(assignment.variable) else {
                 throw invalid("native.action.write.\(part.id)",
-                    "a complete generated Boolean branch tree", "unreadable predicate functions")
+                    "the compiled assignment target", "a different generated state slot")
+            }
+            let checkedValue = checkedValueTokens(assignment.value, parameters: bindings, actual: actualBody)
+            let controlLiteral: Bool = if case .controlLocation = assignment.value.operation { true } else { false }
+            let scalarSetLiteral: Bool = if case .value(.set) = assignment.value.operation,
+                case .set(let element) = assignment.value.resultType {
+                element == .int || element == .bool
+            } else { false }
+            if checkedValue == nil, requireScalarLeaves || controlLiteral ||
+                scalarSetLiteral || booleanPredicateNodes(assignment.value) != nil {
+                throw invalid("native.action.write.\(part.id)",
+                    "a complete generated scalar value or Boolean branch tree", "unreadable value expression")
             }
             guard let checkedValue else { continue }
             let compiled = Parser.parse(source: """

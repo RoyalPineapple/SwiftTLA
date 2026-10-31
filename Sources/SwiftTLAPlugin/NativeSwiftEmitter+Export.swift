@@ -141,6 +141,8 @@ extension NativeSwiftEmitter {
                 _generatedFairnessProfileOperators: \(program.behavior.fairnessProfiles.isEmpty ? "[:]" : "[" + program.behavior.fairnessProfiles.map {
                     "\(String(reflecting: $0.name)): \(String(reflecting: $0.operatorName))"
                 }.joined(separator: ", ") + "]"),
+                _generatedInitialEvaluationFailure: \(module.initialEvaluationFailure.map { String(reflecting: $0) } ?? "nil"),
+                _generatedInitialEvaluationFailureRecord: \(module.initialEvaluationFailureRecord.map { String(reflecting: $0) } ?? "nil"),
                 _generatedTemporalObligations: _obligations)
             \(generatedLinks.joined(separator: "\n"))
             return _rendered
@@ -150,11 +152,14 @@ extension NativeSwiftEmitter {
             throw \(exportDiagnostic(diagnostic))
             """
         }
-        return try nativeDeclarations("""
+        let declarations = try nativeDeclarations("""
         public static func render(\(parameters)) throws -> RenderedSpecification {
             \(body)
         }
         """)
+        try verifyGeneratedExportDefaultDeadlock(declarations.first,
+            required: program.requiresSourceDefaultDeadlockOutput)
+        return declarations
     }
 
     private func exportDiagnostic(_ diagnostic: CompilationDiagnostic) -> String {
@@ -163,5 +168,31 @@ extension NativeSwiftEmitter {
             path: \(String(reflecting: diagnostic.path)), expected: \(String(reflecting: diagnostic.expected)),
             actual: \(String(reflecting: diagnostic.actual)), nextSafeAction: \(String(reflecting: diagnostic.nextSafeAction)))
         """
+    }
+}
+
+func verifyGeneratedExportDefaultDeadlock(_ declaration: DeclSyntax?, required: Bool) throws {
+    guard required else { return }
+    let function = declaration?.as(FunctionDeclSyntax.self)
+    let calls = function?.body?.statements.compactMap { statement -> FunctionCallExprSyntax? in
+        guard let binding = statement.item.as(VariableDeclSyntax.self)?.bindings.first,
+              binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "_rendered",
+              let attempt = binding.initializer?.value.as(TryExprSyntax.self) else { return nil }
+        return attempt.expression.as(FunctionCallExprSyntax.self)
+    } ?? []
+    let selections = calls.first?.arguments.filter { $0.label?.text == "checkDeadlock" } ?? []
+    let returned = function?.body?.statements.compactMap { $0.item.as(ReturnStmtSyntax.self) } ?? []
+    guard function?.name.text == "render", calls.count == 1,
+          calls[0].calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "RenderedSpecification",
+          selections.count == 1,
+          selections[0].expression.as(BooleanLiteralExprSyntax.self)?.literal.text == "true",
+          returned.count == 1,
+          function?.body?.statements.last?.item.as(ReturnStmtSyntax.self)?
+            .expression?.as(DeclReferenceExprSyntax.self)?.baseName.text == "_rendered" else {
+        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.export.defaultDeadlock",
+            expected: "one authored #spec default checkDeadlock: true argument returned by the generated TLA export",
+            actual: "the generated TLA export changes or omits the default deadlock check",
+            nextSafeAction: "Report this generated TLA export failure.")
     }
 }

@@ -189,9 +189,116 @@ jobs:
           path: .build/temporal-symmetry-conformance
           if-no-files-found: error
 
+  initial-failure-contract:
+    name: Ordered Int initial failure output proof
+    needs: prepare
+    if: ${{ needs.prepare.result == 'success' && (github.event_name != 'workflow_dispatch' || (inputs.case_id == '' && inputs.case_ids == '' && inputs.replay_run_id == '')) }}
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          fetch-depth: 0
+          submodules: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+      - uses: actions/download-artifact@v5
+        with:
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
+          path: .build/release
+      - name: Retain generated outputs and native failure
+        run: |
+          set -euo pipefail
+          chmod +x .build/release/tlc-validate
+          test -x .build/release/tlc-validate
+          mkdir -p .build/initial-failure-artifacts
+          .build/release/tlc-validate initial-failure prepare \
+            --output .build/initial-failure-artifacts/case
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          case = Path(".build/initial-failure-artifacts/case")
+          report = json.loads((case / "preparation.json").read_text())
+          native = json.loads((case / "native-initial-failure.json").read_text())
+          expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
+          assert report["schema"] == "swifttla.initial-failure-proof-v2"
+          assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
+          assert report["result"] == "prepared" and report["graphCompared"] is False
+          assert (report["site"], report["kind"], report["operands"]) == expected
+          assert native["successfulInitialStates"] == 0
+          assert (native["site"], native["kind"], native["operands"]) == expected
+          files = {
+              "moduleSHA256": case / "generated-tla" / (report["module"] + ".tla"),
+              "checkModuleSHA256": case / "generated-tla" / (report["checkModule"] + ".tla"),
+              "checkConfigurationSHA256": case / "generated-tla" / (report["checkModule"] + ".cfg"),
+              "proofSHA256": case / "generated-tla" / "SwiftTLAInitialFailureProof.tla",
+              "nativeSHA256": case / "native-initial-failure.json",
+          }
+          assert all(
+              path.is_file() and path.stat().st_size
+              and hashlib.sha256(path.read_bytes()).hexdigest() == report[key]
+              for key, path in files.items()
+          )
+          PY
+      - uses: ./.github/actions/setup-pinned-tlaps
+        id: proof-tool
+        with:
+          evidence: .build/initial-failure-artifacts/toolchain
+      - name: Prove selected payload in actual generated TLA
+        run: |
+          set -euo pipefail
+          # Pinned TLC cannot evaluate Int.max; TLAPS proves this emitted TLA+ result.
+          proof_tool_dir='${{ steps.proof-tool.outputs.directory }}'
+          "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/initial-failure-artifacts/tlapm-version.txt
+          grep -Eq '^941f894(-dirty)?$' .build/initial-failure-artifacts/tlapm-version.txt
+          "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version > .build/initial-failure-artifacts/z3-version.txt
+          "$proof_tool_dir/tlapm/bin/tlapm" --nofp \
+            .build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla \
+            2>&1 | tee .build/initial-failure-artifacts/proof.log
+          grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \
+            .build/initial-failure-artifacts/proof.log
+          ! grep -q '^\[ERROR\]' .build/initial-failure-artifacts/proof.log
+          source_proof=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla
+          wrong_proof=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongPayload.tla
+          test "$(grep -c '^ExpectedOperand1 ==' "$source_proof")" -eq 1
+          sed -e 's/MODULE SwiftTLAInitialFailureProof/MODULE SwiftTLAInitialFailureWrongPayload/' \
+              -e 's/^ExpectedOperand1 == .*/ExpectedOperand1 == 0/' \
+              "$source_proof" > "$wrong_proof"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "$wrong_proof" \
+              > .build/initial-failure-artifacts/wrong-payload.log 2>&1; then
+            echo 'wrong-payload proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-payload.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path(".build/initial-failure-artifacts")
+          result = json.loads((root / "case" / "preparation.json").read_text())
+          result.update(result="proved", proofMethod="TLAPS", wrongPayloadRejected=True)
+          (root / "proof-result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+          PY
+      - name: Retain source revision
+        if: always()
+        run: |
+          mkdir -p .build/initial-failure-artifacts
+          printf '%s\n' "$SWIFT_TLA_SHA" > .build/initial-failure-artifacts/source-sha.txt
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: initial-failure-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/initial-failure-artifacts
+          if-no-files-found: error
+
   validation-pipeline:
     name: ${{ github.event_name == 'workflow_dispatch' && (inputs.case_id != '' || inputs.case_ids != '') && 'Independent validation diagnostic' || 'Independent validation admission' }}
-    needs: [prepare, case-validation, temporal-symmetry-parity]
+    needs: [prepare, case-validation, temporal-symmetry-parity, initial-failure-contract]
     if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.replay_run_id == '') }}
     runs-on: ubuntu-latest
     steps:
@@ -200,6 +307,7 @@ jobs:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           CASE_RESULT: ${{ needs.case-validation.result }}
           TEMPORAL_RESULT: ${{ needs.temporal-symmetry-parity.result }}
+          INITIAL_FAILURE_RESULT: ${{ needs.initial-failure-contract.result }}
           FOCUSED_CASE: ${{ inputs.case_id }}
           BATCH_CASES: ${{ inputs.case_ids }}
         run: |
@@ -207,8 +315,10 @@ jobs:
           test "$CASE_RESULT" = success
           if [ -n "$BATCH_CASES" ] || [ -n "$FOCUSED_CASE" ]; then
             test "$TEMPORAL_RESULT" = skipped
+            test "$INITIAL_FAILURE_RESULT" = skipped
           else
             test "$TEMPORAL_RESULT" = success
+            test "$INITIAL_FAILURE_RESULT" = success
           fi
 
   comparison-replay:

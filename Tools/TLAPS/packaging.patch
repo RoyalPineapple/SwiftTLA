@@ -1,0 +1,74 @@
+diff --git a/deps/ls4/Makefile b/deps/ls4/Makefile
+index 6c40935..ce0311b 100644
+--- a/deps/ls4/Makefile
++++ b/deps/ls4/Makefile
+@@ -1,7 +1,9 @@
+ OS_TYPE=$(patsubst CYGWIN%,Cygwin,$(shell uname))
+ 
+ LS4_VERS=1.0
+-LS4_URL_PREFIX=https://github.com/quickbeam123/ls4/archive
++LS4_COMMIT=f7383bd5d3f1c1e9399a23a16e7f12f8153d41e5
++LS4_URL=https://codeload.github.com/quickbeam123/ls4/zip/$(LS4_COMMIT)
++LS4_SHA256=08673e8720d8d59171a8fe5f86e37687a9c492c0d59b01971a1a90e5c4050b9a
+ LS4_BASE_NAME=ls4-$(LS4_VERS)
+ 
+ ifeq ($(OS_TYPE),Linux)
+@@ -17,11 +19,13 @@ endif
+ all: ls4
+ 
+ v$(LS4_VERS).zip:
+-	wget --progress=dot:giga $(LS4_URL_PREFIX)/$@
++	wget --progress=dot:giga $(LS4_URL) -O $@
++	echo '$(LS4_SHA256)  $@' | shasum -a 256 -c -
+ 
+ $(LS4_BASE_NAME): v$(LS4_VERS).zip
+ 	rm -rf $@
+ 	unzip $<
++	mv ls4-$(LS4_COMMIT) $@
+ 	touch $@ # To avoid rebuilds.
+ 	( set -x && patch -p0 <ls4.patch )
+ 	cd $(LS4_BASE_NAME)/core && cc -c aiger.c
+diff --git a/deps/z3/Makefile b/deps/z3/Makefile
+index fe68ce1..aba251c 100644
+--- a/deps/z3/Makefile
++++ b/deps/z3/Makefile
+@@ -1,14 +1,16 @@
+ OS_TYPE=$(patsubst CYGWIN%,Cygwin,$(shell uname))
+ 
+-Z3_VERS=4.8.9
++Z3_VERS=4.15.4
+ Z3_URL_PREFIX=https://github.com/Z3Prover/z3/releases/download/z3-$(Z3_VERS)
+ 
+ ifeq ($(OS_TYPE),Linux)
+-    Z3_BASE_NAME=z3-${Z3_VERS}-x64-ubuntu-16.04
++    Z3_BASE_NAME=z3-${Z3_VERS}-x64-glibc-2.39
++	Z3_SHA256=a41b690e89c343931471506cdc6d957b6044a200fd2d240cc017432afdff7d3e
+ 	Z3_EXEC=z3
+ endif
+ ifeq ($(OS_TYPE),Darwin)
+-    Z3_BASE_NAME=z3-${Z3_VERS}-x64-osx-10.14.6
++    Z3_BASE_NAME=z3-${Z3_VERS}-arm64-osx-13.7.6
++	Z3_SHA256=8bb3439772cafd75240d61abf255e89122850bab93563d1283b048359ab4e88f
+ 	Z3_EXEC=z3
+ endif
+ ifeq ($(OS_TYPE),Cygwin)
+@@ -20,6 +22,7 @@ all: z3
+ 
+ $(Z3_BASE_NAME).zip:
+ 	wget --progress=dot:giga $(Z3_URL_PREFIX)/$@
++	echo '$(Z3_SHA256)  $@' | shasum -a 256 -c -
+ 
+ $(Z3_BASE_NAME): $(Z3_BASE_NAME).zip
+ 	rm -rf $@
+diff --git a/library/dune b/library/dune
+index c52b4ac..3fc1a9b 100644
+--- a/library/dune
++++ b/library/dune
+@@ -1,6 +1,6 @@
+ (rule
+  (targets CommunityModules.jar)
+- (action (run "wget" "https://github.com/tlaplus/CommunityModules/releases/latest/download/CommunityModules.jar")))
++ (action (run "sh" "-ec" "curl -fsSL https://github.com/tlaplus/CommunityModules/releases/download/202609120237/CommunityModules-deps-202609120237.jar -o CommunityModules.jar; echo '3d9a282c360e90d55e9bbe99caa2987d508fef1556d652760b4af4455e283733  CommunityModules.jar' | shasum -a 256 -c -")))
+ (rule
+   (deps "CommunityModules.jar")
+   (targets Functions.tla Folds.tla FunctionTheorems.tla)

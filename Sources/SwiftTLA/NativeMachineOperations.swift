@@ -79,10 +79,13 @@ public struct MachineActionEvaluationFailure<Action: Hashable & Sendable>: Error
 public struct InitialEvaluationOutcomes<State: Sendable>: Sendable {
     public let states: [State]
     public let firstFailure: NativeMachineEvaluationError?
+    public let firstFailureInitializerOrdinal: Int?
 
-    public init(states: [State], firstFailure: NativeMachineEvaluationError?) {
+    public init(states: [State], firstFailure: NativeMachineEvaluationError?,
+                firstFailureInitializerOrdinal: Int? = nil) {
         self.states = states
         self.firstFailure = firstFailure
+        self.firstFailureInitializerOrdinal = firstFailureInitializerOrdinal
     }
 }
 

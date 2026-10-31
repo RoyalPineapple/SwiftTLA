@@ -1,4 +1,4 @@
-private static let _closedChoice0: Result<Mode, any Error> = Result { (try _NativeMachineOperations.choose(Set<Mode>([Mode.`alpha`, Mode.`zed`]).sorted(by: { (lhs: Mode, rhs: Mode) -> Bool in
+private static let _closedChoice0: Result<Mode, any Error> = Result { (try SwiftTLA._NativeMachineOperations.choose(Set<Mode>([Mode.`alpha`, Mode.`zed`]).sorted(by: { (lhs: Mode, rhs: Mode) -> Bool in
 func rank(_ value: Mode) -> Int { switch value { case .`alpha`: return 0
 case .`zed`: return 1 } }; return rank(lhs) < rank(rhs)
 })) { __PROOF_MEMBER__ in true }) }

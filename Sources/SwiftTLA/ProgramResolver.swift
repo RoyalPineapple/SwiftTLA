@@ -3,6 +3,32 @@ extension CompiledProgram {
         var checker = try CompiledTypeChecker(inputs: inputs)
         self = try ProgramResolver(checked: checker.checkProgram(), types: inputs.types,
             nextBinder: (inputs.bindings.binders.keys.map(\.ordinal).max() ?? -1) + 1).resolve()
+        let resolvedInitializations = Dictionary(uniqueKeysWithValues: behavior.initializations.map {
+            ($0.variable, $0.initialization)
+        })
+        for original in inputs.semantics.behavior.initializations {
+            let name = inputs.layout.variables[original.variable.ordinal].declaration.name
+            let path = "variables.\(name).initialization"
+            let isLiteralInt: Bool
+            if case .value(let expression) = original.initialization,
+               case .value(.integer) = expression.operation, expression.children.isEmpty {
+                isLiteralInt = true
+            } else {
+                isLiteralInt = false
+            }
+            if variableTypes[original.variable] == .int &&
+                (inputs.authoredAlgorithm != nil || isLiteralInt) {
+                try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(
+                    original.initialization, resolved: resolvedInitializations[original.variable], at: path)
+            }
+            try StraightLineAssignmentCheck.verifyResolvedInitialControlLocation(
+                original.initialization, resolved: resolvedInitializations[original.variable], at: path)
+        }
+        for action in inputs.semantics.behavior.actions {
+            try StraightLineAssignmentCheck.verifyResolved(action,
+                resolved: behavior.actions.first { $0.id == action.id }, variableTypes: inputs.variableTypes,
+                resolvedVariableTypes: variableTypes, resolvedBindingTypes: bindingTypes)
+        }
     }
 }
 

@@ -1,3 +1,4 @@
+import SwiftParser
 import SwiftSyntax
 import SwiftTLA
 
@@ -118,7 +119,7 @@ extension NativeSwiftEmitter {
         }
         let arguments = hasConfiguration ? "configuration: configuration" : ""
         let hasRandomSubset = hasRandomSubsetInitializer
-        return try nativeDeclarations("""
+        let declarations = try nativeDeclarations("""
         public struct ValidationScenario: ModelValidationScenario {
             public typealias Machine = \(model.typeName)
             public typealias Property = \(model.typeName).Property
@@ -209,5 +210,53 @@ extension NativeSwiftEmitter {
             [\(scenarios.joined(separator: ",\n"))]
         }
         """)
+        if program.requiresSourceDefaultDeadlockOutput && viewRuns.isEmpty && !hasRandomSubset {
+            try verifyOrderedIntValidationOutput(declarations.first {
+                $0.as(StructDeclSyntax.self)?.name.text == "ValidationScenario"
+            }, modelName: model.typeName, arguments: arguments)
+        }
+        return declarations
     }
+}
+
+func verifyOrderedIntValidationOutput(_ declaration: DeclSyntax?, modelName: String,
+                                      arguments: String) throws {
+    func mismatch() -> CompilationDiagnostic {
+        CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.validation.initialOutcome",
+            expected: "the ordered Int initial outcomes and failures reach the shared checker",
+            actual: "the generated validation scenario changes or discards an initial outcome",
+            nextSafeAction: "Report this generated validation translation failure.")
+    }
+    guard let members = declaration?.as(StructDeclSyntax.self)?.memberBlock.members else {
+        throw mismatch()
+    }
+    func actual(_ name: String, firstParameter: String? = nil) -> FunctionDeclSyntax? {
+        members.compactMap { $0.decl.as(FunctionDeclSyntax.self) }.first {
+            $0.name.text == name && $0.signature.parameterClause.parameters.first?.firstName.text == firstParameter
+        }
+    }
+    func matches(_ declaration: FunctionDeclSyntax?, expected source: String) -> Bool {
+        guard let expected = Parser.parse(source: source).statements.first?.item.as(FunctionDeclSyntax.self),
+              let declaration else { return false }
+        return Array(declaration.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(expected.tokens(viewMode: .sourceAccurate)).map(\.text)
+    }
+    guard matches(actual("initialOutcomes"), expected: """
+        public func initialOutcomes() throws -> InitialEvaluationOutcomes<Machine> {
+            return try \(modelName).initialOutcomes(\(arguments))
+        }
+        """), matches(actual("runValidation", firstParameter: "initialOutcomes"), expected: """
+        public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: Int,
+            checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
+            emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+            switch selectedView {
+            case nil:
+                return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
+                    checking: checking, stopOnViolation: stopOnViolation,
+                    stopOnReachability: stopOnReachability, emit: emit)
+            default: throw ExplorationError.configurationMismatch
+            }
+        }
+        """) else { throw mismatch() }
 }

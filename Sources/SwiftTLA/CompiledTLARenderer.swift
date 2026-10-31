@@ -3,7 +3,7 @@ private enum StateRenderingTask {
     case setMember(CompiledExpression)
     case finishSetMember(start: Int)
     case finishSet(start: Int)
-    case checkedView(FormalValueShape, start: Int)
+    case checkedView(FormalValueShape, sourceType: CompiledValueType, start: Int)
     case formalArgument(CompiledFormalCallArgument)
     case formalOperator(CompiledFormalOperator)
     case localOperator(CompiledOperatorDefinition)
@@ -17,6 +17,7 @@ private enum ActionRenderingTask {
 
 private enum OrderedEvaluationSite {
     case choice(guard_: String)
+    case noMatchingCase(guard_: String)
     case arithmetic(operation: NativeMachineEvaluationError.IntegerOperation, guard_: String, operands: String)
     case divisionByZero(guard_: String, divisor: String)
     case negativeModuloDivisor(guard_: String, divisor: String)
@@ -26,7 +27,7 @@ private enum OrderedEvaluationSite {
 
     var guard_: String {
         switch self {
-        case .choice(let guard_), .arithmetic(_, let guard_, _),
+        case .choice(let guard_), .noMatchingCase(let guard_), .arithmetic(_, let guard_, _),
              .divisionByZero(let guard_, _), .negativeModuloDivisor(let guard_, _),
              .functionArgumentOutsideDomain(let guard_),
              .sequenceIndexOutOfBounds(let guard_, _),
@@ -40,6 +41,7 @@ private enum OrderedEvaluationSite {
             : "(IF \(predicate) THEN TRUE ELSE \(guard_))"
         switch self {
         case .choice: return .choice(guard_: guarded)
+        case .noMatchingCase: return .noMatchingCase(guard_: guarded)
         case .arithmetic(let operation, _, let operands):
             return .arithmetic(operation: operation, guard_: guarded, operands: operands)
         case .divisionByZero(_, let divisor):
@@ -57,6 +59,7 @@ private enum OrderedEvaluationSite {
 }
 
 enum RenderedEvaluationFailureKind {
+    case noMatchingCase
     case overflow(NativeMachineEvaluationError.IntegerOperation)
     case divisionByZero
     case negativeModuloDivisor
@@ -543,13 +546,12 @@ struct CompiledTLARenderer {
         selected: String,
         otherwise: String
     ) throws -> String {
-        guard case .set(let memberType) = domain.resultType,
-              let failure = anyFailure else {
+        guard let failure = anyFailure else {
             throw CompilationDiagnostic(code: .unsupportedCanonicalCandidateOrder, stage: .rendering,
                 path: "actions.with[\(binder.ordinal)].domain",
-                expected: "a set domain and an identified branch failure",
-                actual: "the candidate failure order cannot be established",
-                nextSafeAction: "Use a set domain whose candidate order the TLA+ renderer can reproduce.")
+                expected: "an aggregate branch-failure predicate",
+                actual: "the branch has no aggregate failure predicate",
+                nextSafeAction: "Report the missing compiled failure predicate for this With branch.")
         }
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
             .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
@@ -564,7 +566,8 @@ struct CompiledTLARenderer {
         let first = names[1]
         let earlier = names[2]
         let ordered: String
-        if let typedOrder = try canonicalLeastPredicate(memberType, first, earlier) {
+        if case .set(let memberType) = domain.resultType,
+           let typedOrder = try canonicalLeastPredicate(memberType, first, earlier) {
             ordered = typedOrder
         } else if let members = closedChoiceMembers(domain) ?? parameterChoiceMembers(domain) {
             ordered = try rankedLeastPredicate(members, first, earlier)
@@ -587,6 +590,13 @@ struct CompiledTLARenderer {
         return (try state(condition), defined)
     }
 
+    private func checkedShapePredicate(_ shape: FormalValueShape, value: String,
+                                       sourceType: CompiledValueType) throws -> String {
+        try shape.predicate(for: value, sourceType: sourceType,
+            namedMembers: { enums.domains[$0]?.sorted() },
+            renderFinite: { try $0.rendered(using: layout).description })
+    }
+
     func expressionEvaluationFailures(
         _ value: CompiledExpression, stateNames: [VariableID: String] = [:]
     ) throws -> [RenderedEvaluationFailure] {
@@ -596,6 +606,9 @@ struct CompiledTLARenderer {
             for site in sites {
                 switch site {
                 case .choice: break
+                case .noMatchingCase(let guard_):
+                    failures.append(.init(predicate: preceded("~(\(guard_))", by: preceding),
+                        operands: nil, kind: .noMatchingCase))
                 case .arithmetic(let operation, let guard_, let operands):
                     failures.append(.init(predicate: preceded("~(\(guard_))", by: preceding),
                         operands: operands, kind: .overflow(operation)))
@@ -621,9 +634,7 @@ struct CompiledTLARenderer {
             var precedingGuards: [String] = []
             for site in try arithmeticSites(value, stateNames: stateNames) {
                 let failure = "~(\(site.guard_))"
-                let predicate = precedingGuards.isEmpty
-                    ? failure
-                    : "(\(precedingGuards.joined(separator: " /\\ ")) /\\ \(failure))"
+                let predicate = preceded(failure, by: precedingGuards)
                 failures.append(.init(predicate: predicate, operands: site.operands,
                     kind: .overflow(site.operation)))
                 precedingGuards.append(site.guard_)
@@ -660,6 +671,15 @@ struct CompiledTLARenderer {
             case .convert:
                 guard value.children.count == 1 else { return nil }
                 return try collect(value.children[0])
+            case .recordAccess, .tupleAccess:
+                guard value.children.count == 1 else { return nil }
+                return try collect(value.children[0])
+            case .assertView(let shape):
+                guard value.children.count == 1,
+                      let preceding = try collect(value.children[0]) else { return nil }
+                let operand = try state(value.children[0], stateNames: stateNames)
+                return preceding + [.noMatchingCase(guard_: try checkedShapePredicate(shape,
+                    value: operand, sourceType: value.children[0].resultType))]
             case .ifThenElse:
                 guard value.children.count == 3,
                       let condition = try collect(value.children[0]),
@@ -763,7 +783,8 @@ struct CompiledTLARenderer {
                         guard_: site.guard_, operands: site.operands)]
                 }
             case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
-                 .in, .setLiteral, .tupleLiteral, .tupleAppend, .tupleConcatenate, .tupleLength:
+                 .in, .setLiteral, .tupleLiteral, .tupleAppend, .tupleConcatenate, .tupleLength,
+                 .cardinality:
                 var preceding: [OrderedEvaluationSite] = []
                 let children = value.operation.evaluatesRightOperandFirst
                     ? Array(value.children.reversed()) : value.children
@@ -779,7 +800,7 @@ struct CompiledTLARenderer {
         guard let sites = try collect(expression) else { return nil }
         let hasSpecialFailure = sites.contains {
             switch $0 {
-            case .divisionByZero, .negativeModuloDivisor, .functionArgumentOutsideDomain,
+            case .noMatchingCase, .divisionByZero, .negativeModuloDivisor, .functionArgumentOutsideDomain,
                  .sequenceIndexOutOfBounds, .emptySequence: true
             case .arithmetic(operation: .summation, guard_: _, operands: _): true
             default: false
@@ -830,7 +851,7 @@ struct CompiledTLARenderer {
     ) throws -> String? {
         let sites = try arithmeticSites(value, stateNames: stateNames)
         guard !sites.isEmpty else { return nil }
-        return sites.count == 1 ? sites[0].guard_ : "(\(sites.map(\.guard_).joined(separator: " /\\ ")))"
+        return sites.count == 1 ? sites[0].guard_ : preceded("TRUE", by: sites.map(\.guard_))
     }
 
     private func arithmeticSites(
@@ -888,7 +909,7 @@ struct CompiledTLARenderer {
     private func arithmeticTreeIsRepeatable(_ expression: CompiledExpression) -> Bool {
         switch expression.operation {
         case .add, .subtract, .multiply, .negate:
-            return expression.resultType == .int
+            return (expression.resultType == .int || expression.resultType == .unknown)
                 && expression.children.count == (expression.operation == .negate ? 1 : 2)
                 && expression.children.allSatisfy(arithmeticTreeIsRepeatable)
         case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
@@ -1118,13 +1139,14 @@ struct CompiledTLARenderer {
                     parts.append("\(name)\(parameters.isEmpty ? "" : "(\(parameters))") == ")
                     tasks.append(.expression(operation.body))
                 }
-            case .checkedView(let shape, let start):
+            case .checkedView(let shape, let sourceType, let start):
                 let operand = parts[start...].joined()
                 parts.removeSubrange(start...)
                 var name = "_checkedValue"
                 let shapeNames = String(describing: shape)
                 while operand.contains(name) || shapeNames.contains(name) { name += "_" }
-                parts.append("(LET \(name) == \(operand) IN CASE \(shape.predicate(for: name)) -> \(name))")
+                let predicate = try checkedShapePredicate(shape, value: name, sourceType: sourceType)
+                parts.append("(LET \(name) == \(operand) IN CASE \(predicate) -> \(name))")
             case .expression(let expression):
                 switch expression.operation {
                 case .setMap, .unionAll:
@@ -1146,7 +1168,7 @@ struct CompiledTLARenderer {
                 case .assertView(let shape):
                     let value = expression.children[0]
 
-                    tasks.append(.checkedView(shape, start: parts.count))
+                    tasks.append(.checkedView(shape, sourceType: value.resultType, start: parts.count))
                     tasks.append(.expression(value))
                 case .nextState, .stutteringStep:
                     try schedule(expression.operation, expression.children)
@@ -1331,7 +1353,7 @@ struct CompiledTLARenderer {
         default:
             return nil
         }
-        guard members.count > 1, members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }
+        guard !members.isEmpty, members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }
         return Array(Set(members)).sorted()
     }
 

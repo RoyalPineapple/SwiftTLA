@@ -4,8 +4,8 @@ private struct _Updates: Sendable {
 
     func merging(_ other: Self) -> Self? {
         var result = self
-        guard _NativeMachineOperations.mergeUpdate(&result.__PROOF_FIRST_SLOT__, other.__PROOF_FIRST_SLOT__) else { return nil }
-        guard _NativeMachineOperations.mergeUpdate(&result.__PROOF_SECOND_SLOT__, other.__PROOF_SECOND_SLOT__) else { return nil }
+        guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.__PROOF_FIRST_SLOT__, other.__PROOF_FIRST_SLOT__) else { return nil }
+        guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.__PROOF_SECOND_SLOT__, other.__PROOF_SECOND_SLOT__) else { return nil }
         return result
     }
 
@@ -91,6 +91,12 @@ private func _visitSuccessors(checking context: inout CheckingContext<CheckingRe
     })
 }
 
+private func _visitActionCandidates(_ visit: (Action) throws -> Void) throws {
+    do {
+        try visit(.__PROOF_ACTION__)
+    }
+}
+
 private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
                               _ visit: (Action, Self) throws -> Bool,
                               onEvaluationFailure: (Action, NativeMachineEvaluationError) throws -> Bool) throws -> Bool {
@@ -118,9 +124,7 @@ private func _visitSuccessors(checking context: inout CheckingContext<CheckingRe
                 throw error
             }
         }
-        do {
-            try _visitAction(.__PROOF_ACTION__)
-        }
+        try _visitActionCandidates(_visitAction)
     } catch is _StopSuccessorTraversal {
     }
     return found

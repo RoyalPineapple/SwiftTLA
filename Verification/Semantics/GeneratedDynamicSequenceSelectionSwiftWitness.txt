@@ -8,7 +8,7 @@ func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws
 try emit(updates)
 }
 func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
-    let ___atomic_0_0 = (try _NativeMachineOperations.choose(state.state.candidates.sorted(by: { (lhs: [Int], rhs: [Int]) -> Bool in
+    let ___atomic_0_0 = (try SwiftTLA._NativeMachineOperations.choose(state.state.candidates.sorted(by: { (lhs: [Int], rhs: [Int]) -> Bool in
 return lhs.lexicographicallyPrecedes(rhs, by: { (lhs: Int, rhs: Int) -> Bool in
 return lhs < rhs
 })

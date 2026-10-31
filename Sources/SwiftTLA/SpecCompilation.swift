@@ -121,6 +121,8 @@ package struct RenderedModule: Sendable, Equatable {
     package var dependencies: [TLAModuleBundle.ModuleDependency] = []
     package let renderedModuleSource: String
     let evaluationFailureDeclarations: [String]
+    package let initialEvaluationFailure: String?
+    package let initialEvaluationFailureRecord: String?
     package let configuration: TLCConfiguration
     package let renderedActions: [RenderedAction]
     package let symbolicActions: [ActionID]
@@ -234,6 +236,8 @@ struct CompiledModuleMetadata: Sendable {
     let symmetrySets: [SymmetrySet]
     let formalDefinitionCount: Int
     let recursiveFunctionCount: Int
+    let orderedIntProofActionNames: Set<String>
+    let sourceSpecDefaultDeadlockWitness: Bool
 
     func constantDeclaration(including additionalNames: [String]) -> String? {
         let formalConstants = formalParameters.filter { $0.kind == .constant }.map(\.name)
@@ -251,6 +255,8 @@ struct CompiledModuleMetadata: Sendable {
         symmetrySets = source.symmetrySets
         formalDefinitionCount = source.formalOperatorDefinitions.count
         recursiveFunctionCount = source.recursiveFuncs.count
+        orderedIntProofActionNames = source.orderedIntProofActionNames
+        sourceSpecDefaultDeadlockWitness = source.sourceSpecDefaultDeadlockWitness
     }
 }
 
@@ -403,6 +409,8 @@ public struct CompiledSpecification: Sendable {
         return RenderedSpecification(
             tlaBundle: renderedBundle,
             configuration: rootModule.configuration,
+            initialEvaluationFailure: rootModule.initialEvaluationFailure,
+            initialEvaluationFailureRecord: rootModule.initialEvaluationFailureRecord,
             actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle.map { .success($0) },
             fairnessProfileOperators: Dictionary(uniqueKeysWithValues: module.semantics.behavior.fairnessProfiles.map {
                 ($0.name, $0.operatorName)
@@ -419,19 +427,25 @@ public struct CompiledSpecification: Sendable {
 public struct RenderedSpecification: Sendable {
     public let tlaBundle: TLAModuleBundle
     fileprivate let configuration: TLCConfiguration
+    private let initialEvaluationFailure: String?
+    private let initialEvaluationFailureRecord: String?
     public let actions: [RenderedAction]
     fileprivate let renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?
     fileprivate let renderedPlusCalProfiles: [String: Result<TLAModuleBundle, CompilationDiagnostic>]
     fileprivate let fairnessProfileOperators: [String: String]
     package let temporalObligations: [String: [_RenderedTemporalObligation]]
 
-    init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration, actions: [RenderedAction],
+    init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration,
+        initialEvaluationFailure: String? = nil, initialEvaluationFailureRecord: String? = nil,
+        actions: [RenderedAction],
         renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?,
         renderedPlusCalProfiles: [String: Result<TLAModuleBundle, CompilationDiagnostic>] = [:],
         fairnessProfileOperators: [String: String] = [:],
         temporalObligations: [String: [_RenderedTemporalObligation]] = [:]) {
         self.tlaBundle = tlaBundle
         self.configuration = configuration
+        self.initialEvaluationFailure = initialEvaluationFailure
+        self.initialEvaluationFailureRecord = initialEvaluationFailureRecord
         self.actions = actions
         self.renderedPlusCalModuleBundle = renderedPlusCalModuleBundle
         self.renderedPlusCalProfiles = renderedPlusCalProfiles
@@ -457,6 +471,8 @@ public struct RenderedSpecification: Sendable {
         _generatedImports: [(name: String, source: String, structuralPath: [String])] = [],
         _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = [],
         _generatedFairnessProfileOperators: [String: String] = [:],
+        _generatedInitialEvaluationFailure: String? = nil,
+        _generatedInitialEvaluationFailureRecord: String? = nil,
         _generatedTemporalObligations: [String: [_RenderedTemporalObligation]] = [:]) throws {
         guard _generatedIntegerBitWidth == Int.bitWidth else {
             throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
@@ -522,7 +538,10 @@ public struct RenderedSpecification: Sendable {
         }
         let plusCal = try _generatedPlusCal.map(configuredPlusCal)
         let plusCalProfiles = try _generatedPlusCalProfiles.mapValues(configuredPlusCal)
-        self.init(tlaBundle: bundle, configuration: configuration, actions: actions, renderedPlusCalModuleBundle: plusCal,
+        self.init(tlaBundle: bundle, configuration: configuration,
+            initialEvaluationFailure: _generatedInitialEvaluationFailure,
+            initialEvaluationFailureRecord: _generatedInitialEvaluationFailureRecord,
+            actions: actions, renderedPlusCalModuleBundle: plusCal,
             renderedPlusCalProfiles: plusCalProfiles,
             fairnessProfileOperators: _generatedFairnessProfileOperators,
             temporalObligations: _generatedTemporalObligations)
@@ -634,7 +653,9 @@ public struct RenderedSpecification: Sendable {
             case .failure(let diagnostic): return .failure(diagnostic)
             }
         }
-        return try Self(tlaBundle: linked(tlaBundle), configuration: selected, actions: actions,
+        return try Self(tlaBundle: linked(tlaBundle), configuration: selected,
+            initialEvaluationFailure: initialEvaluationFailure,
+            initialEvaluationFailureRecord: initialEvaluationFailureRecord, actions: actions,
             renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map(linkedResult),
             renderedPlusCalProfiles: renderedPlusCalProfiles.mapValues(linkedResult),
             fairnessProfileOperators: fairnessProfileOperators, temporalObligations: temporalObligations)
@@ -665,6 +686,54 @@ public struct RenderedSpecification: Sendable {
     public var postconditionName: String? { configuration.postcondition }
     public var isAssumptionsOnly: Bool { configuration.assumptionsOnly }
     public var behavior: ModelBehavior { configuration.behavior }
+
+    /// A zero-state TLC input for checking initial evaluation failure before graph exploration.
+    public func initialEvaluationFailureBundle(capturingRecord: Bool = false) throws -> TLAModuleBundle? {
+        guard let initialEvaluationFailure else { return nil }
+        guard !capturingRecord || initialEvaluationFailureRecord != nil else { return nil }
+        let base = tlaBundle.root.name
+        var name = base + "__InitialFailureCheck"
+        while tlaBundle.files.contains(where: { $0.name == name }) { name += "_" }
+        var probeInit = name + "__ProbeInit"
+        while tlaBundle.files.contains(where: { $0.tla.contains(probeInit) }) { probeInit += "_" }
+        var probeNext = name + "__ProbeNext"
+        while tlaBundle.files.contains(where: { $0.tla.contains(probeNext) }) { probeNext += "_" }
+        var probeState = name + "__ProbeState"
+        while tlaBundle.files.contains(where: { $0.tla.contains(probeState) }) { probeState += "_" }
+        let record = capturingRecord
+            ? (initialEvaluationFailureRecord.map { "PrintT(\($0)) /\\ " } ?? "")
+            : ""
+        let source = """
+            ---- MODULE \(name) ----
+            EXTENDS \(base)\(capturingRecord ? ", TLC" : "")
+            VARIABLE \(probeState)
+            ASSUME \(record)~\(initialEvaluationFailure)
+            \(probeInit) == FALSE /\\ Init /\\ \(probeState) = 0
+            \(probeNext) == FALSE /\\ \(probeState)' = \(probeState)
+            ====
+
+            """
+        let constants = configuration.declarations.filter { $0.hasPrefix("CONSTANT ") }
+        let check = (["INIT \(probeInit)", "NEXT \(probeNext)", "CHECK_DEADLOCK FALSE"]
+            + constants).joined(separator: "\n") + "\n"
+        guard case .compiled(let identity, let ownership, let dependencies) = tlaBundle.provenance else {
+            throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "initial evaluation failure", expected: "compiled TLA+ provenance",
+                actual: "external TLA+ provenance", nextSafeAction: "Render the compiled model first.")
+        }
+        let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
+            cfg: check),
+            imports: tlaBundle.files.map { .init(name: $0.name, tla: $0.tla) },
+            provenance: .compiled(identity: identity,
+                ownership: ownership + [.init(moduleName: name, owningRoot: name, structuralPath: [])],
+                dependencies: dependencies + [.init(importingModule: name, importedModule: base,
+                    structuralPath: [])]))
+        try bundle.validateDeclaredClosure()
+        try StraightLineRenderedActionCheck.verifyInitialFailureCheckBundle(bundle,
+            base: tlaBundle, aggregate: initialEvaluationFailure, constants: constants,
+            record: capturingRecord ? initialEvaluationFailureRecord : nil)
+        return bundle
+    }
 
     public func temporalObligationBundles(checking name: String) throws -> [TLAModuleBundle]? {
         _ = try configuration.selecting([name], checkDeadlock: false)
@@ -746,7 +815,9 @@ public struct RenderedSpecification: Sendable {
         } else {
             selectedPlusCal = renderedPlusCalModuleBundle.map { $0.map { bundle($0, using: selected) } }
         }
-        return .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected, actions: actions,
+        return .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected,
+            initialEvaluationFailure: initialEvaluationFailure,
+            initialEvaluationFailureRecord: initialEvaluationFailureRecord, actions: actions,
             renderedPlusCalModuleBundle: selectedPlusCal,
             renderedPlusCalProfiles: renderedPlusCalProfiles,
             fairnessProfileOperators: fairnessProfileOperators,
@@ -2165,11 +2236,20 @@ private extension CompiledModuleMetadata {
                     nextSafeAction: "Compile the source model again."
                 )
             }
+            let renderedBody = try renderer.action(compiled.body)
+            let requiresIndependentCheck = orderedIntProofActionNames.contains(declaration.declaration.name)
+            if !requiresIndependentCheck {
+                try StraightLineRenderedActionCheck.verifyStructure(compiled.body,
+                    rendered: renderedBody, renderer: renderer)
+            }
+            try StraightLineRenderedActionCheck.verify(compiled.body, rendered: renderedBody,
+                layout: layout, binders: renderer.bindings.binders,
+                required: requiresIndependentCheck)
             return DirectModuleAction(
                 sourceName: declaration.declaration.name,
                 renderedName: renderedName,
                 renderedParameters: try compiled.bindings.map { try renderer.binderName($0.binder) },
-                renderedBody: try renderer.action(compiled.body),
+                renderedBody: renderedBody,
                 calls: try callsByAction[compiled.id, default: []].map { emitted in
                     RenderedAction(
                         sourceName: declaration.declaration.name,
@@ -2202,10 +2282,32 @@ private extension CompiledModuleMetadata {
             importedNames: importedNames,
             instancesAfterBehavior: instancesAfterBehavior
         )
+        for index in behavior.enabledActionIndices {
+            let rendered = directModuleActions[index]
+            guard !rendered.sourceName.isEmpty else { continue }
+            try StraightLineRenderedActionCheck.verifyDeclaration(behavior.actions[index],
+                named: rendered.renderedName, body: rendered.renderedBody,
+                module: directOutput.source, layout: layout, binders: renderer.bindings.binders,
+                failureDeclarations: directOutput.evaluationFailureDeclarations,
+                required: orderedIntProofActionNames.contains(rendered.sourceName))
+        }
+        try StraightLineRenderedActionCheck.verifyFiniteInvocations(behavior,
+            layout: layout, binders: renderer.bindings.binders, module: directOutput.source)
+        let renderedConfiguration = configuration.includingIntrinsicInvariant(directOutput.evaluationInvariant)
+        try StraightLineRenderedActionCheck.verifySourceDefaultDeadlock(renderedConfiguration,
+            rendered: renderedConfiguration.render(usesSymmetryReduction: false),
+            required: sourceSpecDefaultDeadlockWitness && !orderedIntProofActionNames.isEmpty)
+        try StraightLineRenderedActionCheck.verifyEvaluationSelection(behavior,
+            module: directOutput.source,
+            failureDeclarations: directOutput.evaluationFailureDeclarations,
+            evaluationInvariant: directOutput.evaluationInvariant,
+            configuration: renderedConfiguration, renderer: renderer)
         return RenderedModule(
             renderedModuleSource: directOutput.source,
             evaluationFailureDeclarations: directOutput.evaluationFailureDeclarations,
-            configuration: configuration.includingIntrinsicInvariant(directOutput.evaluationInvariant),
+            initialEvaluationFailure: directOutput.initialFailureAggregate,
+            initialEvaluationFailureRecord: directOutput.initialFailureRecord,
+            configuration: renderedConfiguration,
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             symbolicActions: behavior.actions.filter { $0.bindings.contains { $0.literalMembers == nil } }.map(\.id),
             definitions: definitions, instances: instances, refinements: renderedRefinements,
@@ -2238,7 +2340,8 @@ private extension CompiledModuleMetadata {
         requiredStandardModules: Set<StandardModule>,
         importedNames: [String],
         instancesAfterBehavior: Bool
-    ) throws -> (source: String, evaluationFailureDeclarations: [String], evaluationInvariant: String?) {
+    ) throws -> (source: String, evaluationFailureDeclarations: [String],
+        evaluationInvariant: String?, initialFailureAggregate: String?, initialFailureRecord: String?) {
         let varNames = layout.variables.map(\.declaration.name)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = varNames.isEmpty && renderedActions.isEmpty
@@ -2339,12 +2442,19 @@ private extension CompiledModuleMetadata {
             var functionDomainOccurrence = 0
             var sequenceIndexOccurrence = 0
             var emptySequenceOccurrence = 0
+            var noMatchingCaseOccurrence = 0
             for failure in try renderer.evaluationFailures(behavior.actions[index].body) {
                 let occurrence: Int
                 let failurePrefix: String
                 let operandsPrefix: String?
                 let operation: String?
                 switch failure.kind {
+                case .noMatchingCase:
+                    occurrence = noMatchingCaseOccurrence
+                    noMatchingCaseOccurrence += 1
+                    failurePrefix = "__SwiftTLANoMatchingCaseFailure"
+                    operandsPrefix = nil
+                    operation = nil
                 case .overflow(let name):
                     occurrence = overflowOccurrence
                     overflowOccurrence += 1
@@ -2458,7 +2568,7 @@ private extension CompiledModuleMetadata {
             lines.append("====")
             let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
             try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
-            return (source, evaluationFailureDeclarations, evaluationInvariant)
+            return (source, evaluationFailureDeclarations, evaluationInvariant, nil, nil)
         }
 
         let initializations = Dictionary(
@@ -2544,7 +2654,7 @@ private extension CompiledModuleMetadata {
         }
         lines.append("")
 
-        // shortcut: only total prefixes receive this relation; other initial failures still need outcome lowering.
+        // shortcut: prefixes without a definedness rule still need outcome lowering.
         func isTotalInitialExpression(_ expression: CompiledExpression) -> Bool {
             switch expression.operation {
             case .value, .stateVariable, .controlLocation:
@@ -2593,18 +2703,24 @@ private extension CompiledModuleMetadata {
             }
             lines.append("\(name)(\(failedCount)) == \(relation)")
         }
+        var initialFailureDeclarations: [String] = []
+        var initialFailurePredicates: [String] = []
+        var initialFailureRecordExpressions: [String] = []
+        var initialFailureRecordEligible = selectedInitialInvariant == nil
         func appendInitialEvaluationFailures(
             _ expression: CompiledExpression,
             after prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>,
             namePrefix: String,
-            indexSuffix: String
+            indexSuffix: String,
+            siteOrdinal: Int?
         ) throws {
-            guard prefix.allSatisfy({ prior in
-                switch prior.initialization {
-                case .value(let expression), .memberOf(let expression):
-                    return isTotalInitialExpression(expression)
+            for prior in prefix {
+                let expression: CompiledExpression = switch prior.initialization {
+                case .value(let expression), .memberOf(let expression): expression
                 }
-            }) else { return }
+                let defined = try renderer.evaluationDefined(expression)
+                guard isTotalInitialExpression(expression) || defined != nil else { return }
+            }
             var prefixNames: [VariableID: String] = [:]
             for prior in prefix {
                 var binder = "__SwiftTLAInitialValue\(prior.variable.ordinal)"
@@ -2613,10 +2729,17 @@ private extension CompiledModuleMetadata {
                 prefixNames[prior.variable] = binder
             }
             var occurrences: [String: Int] = [:]
-            for failure in try renderer.expressionEvaluationFailures(expression, stateNames: prefixNames) {
+            let failures = try renderer.expressionEvaluationFailures(expression, stateNames: prefixNames)
+            var emitted: [(failure: RenderedEvaluationFailure, relation: String,
+                           operandsName: String?, selection: String,
+                           operationDeclaration: String?, record: String?)] = []
+            for failure in failures {
                 let stem: String
                 let operation: String?
                 switch failure.kind {
+                case .noMatchingCase:
+                    stem = "NoMatchingCase"
+                    operation = nil
                 case .overflow(let kind):
                     stem = "Overflow"
                     operation = kind.rawValue
@@ -2652,6 +2775,14 @@ private extension CompiledModuleMetadata {
                     operandsName = nil
                 }
                 var relation = failure.predicate
+                var selection = failure.predicate
+                var record: String?
+                if case .overflow(.addition) = failure.kind,
+                   let siteOrdinal, let operands = failure.operands {
+                    record = "(IF \(failure.predicate) THEN [site |-> \(siteOrdinal), kind |-> \"integerOverflow.addition\", operands |-> \(operands)] ELSE FALSE)"
+                } else {
+                    initialFailureRecordEligible = false
+                }
                 if let operandsName, let operands = failure.operands {
                     relation = "(IF \(failure.predicate) THEN \(operandsName) = \(operands) ELSE FALSE)"
                 }
@@ -2659,30 +2790,90 @@ private extension CompiledModuleMetadata {
                     let binder = prefixNames[prior.variable]!
                     switch prior.initialization {
                     case .value(let expression):
-                        relation = "(LET \(binder) == \(try renderer.state(expression, stateNames: prefixNames)) IN \(relation))"
+                        let value = try renderer.state(expression, stateNames: prefixNames)
+                        let bound = "(LET \(binder) == \(value) IN \(relation))"
+                        let selected = "(LET \(binder) == \(value) IN \(selection))"
+                        record = record.map { "(LET \(binder) == \(value) IN \($0))" }
+                        let defined = try renderer.evaluationDefined(expression, stateNames: prefixNames)
+                        relation = defined
+                            .map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
+                        selection = defined
+                            .map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
+                        if let defined { record = record.map { "(IF \(defined) THEN \($0) ELSE FALSE)" } }
                     case .memberOf(let expression):
-                        relation = "(\\E \(binder) \\in \(try renderer.state(expression, stateNames: prefixNames)): \(relation))"
+                        initialFailureRecordEligible = false
+                        let domain = try renderer.state(expression, stateNames: prefixNames)
+                        let bound = "(\\E \(binder) \\in \(domain): \(relation))"
+                        let selected = "(\\E \(binder) \\in \(domain): \(selection))"
+                        let defined = try renderer.evaluationDefined(expression, stateNames: prefixNames)
+                        relation = defined
+                            .map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
+                        selection = defined
+                            .map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
                     }
                 }
+                initialFailurePredicates.append(selection)
+                if let record { initialFailureRecordExpressions.append(record) }
                 let parameters = operandsName.map { "(\($0))" } ?? ""
-                lines.append("\(name)\(parameters) == \(relation)")
+                let declaration = "\(name)\(parameters) == \(relation)"
+                lines.append(declaration)
+                initialFailureDeclarations.append(declaration)
+                var operationDeclaration: String?
                 if let operation {
                     var operationName = "__SwiftTLA\(namePrefix)OverflowOperation\(suffix)"
                     while occupied.contains(operationName) { operationName += "_" }
                     occupied.insert(operationName)
-                    lines.append("\(operationName) == \"\(operation)\"")
+                    let declaration = "\(operationName) == \"\(operation)\""
+                    lines.append(declaration)
+                    initialFailureDeclarations.append(declaration)
+                    operationDeclaration = declaration
                 }
+                emitted.append((failure, relation, operandsName, selection, operationDeclaration, record))
             }
+            try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
+                after: prefix, names: prefixNames, emitted: emitted,
+                siteOrdinal: siteOrdinal, layout: layout,
+                binders: renderer.bindings.binders)
         }
         for (index, initialization) in behavior.initializations.enumerated() {
             guard case .value(let expression) = initialization.initialization else { continue }
             try appendInitialEvaluationFailures(expression,
                 after: behavior.initializations.prefix(index), namePrefix: "Initial",
-                indexSuffix: "\(initialization.variable.ordinal)")
+                indexSuffix: "\(initialization.variable.ordinal)",
+                siteOrdinal: initialization.variable.ordinal)
         }
         if let selectedInitialInvariant {
             try appendInitialEvaluationFailures(selectedInitialInvariant.predicate.expression,
-                after: behavior.initializations[...], namePrefix: "SelectedInitial", indexSuffix: "")
+                after: behavior.initializations[...], namePrefix: "SelectedInitial", indexSuffix: "",
+                siteOrdinal: nil)
+        }
+        let initialFailureAggregate: String?
+        if initialFailurePredicates.isEmpty {
+            initialFailureAggregate = nil
+        } else {
+            var name = "__SwiftTLAAnyInitialEvaluationFailure"
+            while occupied.contains(name) { name += "_" }
+            occupied.insert(name)
+            lines.append("\(name) == " + initialFailurePredicates.map { "(\($0))" }.joined(separator: " \\/ "))
+            initialFailureAggregate = name
+        }
+        let initialFailureRecord: String?
+        let requiresInitialFailureRecord = initialFailureRecordEligible
+            && !initialFailureRecordExpressions.isEmpty
+            && initialFailureRecordExpressions.count == initialFailurePredicates.count
+            && behavior.initializations.allSatisfy({ if case .value = $0.initialization { true } else { false } })
+        if requiresInitialFailureRecord {
+            var name = "__SwiftTLASelectedInitialFailureRecord"
+            while occupied.contains(name) { name += "_" }
+            occupied.insert(name)
+            let selected = Array(zip(initialFailurePredicates, initialFailureRecordExpressions)).reversed()
+                .reduce("FALSE") { rest, entry in
+                    "(IF \(entry.0) THEN \(entry.1) ELSE \(rest))"
+                }
+            lines.append("\(name) == \(selected)")
+            initialFailureRecord = name
+        } else {
+            initialFailureRecord = nil
         }
         if lines.last != "" { lines.append("") }
 
@@ -2733,10 +2924,57 @@ private extension CompiledModuleMetadata {
         if instancesAfterBehavior { lines += instanceDeclarations }
         lines.append("====")
         let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
+        for declaration in initialFailureDeclarations {
+            guard let first = source.range(of: declaration),
+                  source.range(of: declaration,
+                    range: first.upperBound..<source.endIndex) == nil else {
+                throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                    path: "tla.initialEvaluationFailures",
+                    expected: "each checked initial failure declaration in the emitted module",
+                    actual: "an initial failure declaration is missing or duplicated",
+                    nextSafeAction: "Regenerate the TLA+ initial failure declarations.")
+            }
+        }
+        try StraightLineRenderedActionCheck.verifyInitialFailureAggregate(source,
+            predicates: initialFailurePredicates, name: initialFailureAggregate)
+        try StraightLineRenderedActionCheck.verifyInitialFailureRecord(source,
+            name: initialFailureRecord, predicates: initialFailurePredicates,
+            records: initialFailureRecordExpressions,
+            required: StraightLineRenderedActionCheck.requiresInitialIntFailureRecord(
+                behavior, layout: layout))
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
-        try verifyRenderedInitialConjunction(source, predicates: initialPredicates)
+        let expectedIntLiterals = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
+            variable -> (String, Int)? in
+            guard case .value(let expression)? = initializations[variable.id],
+                  case .value(.integer(let value)) = expression.operation,
+                  expression.children.isEmpty else { return nil }
+            return (variable.declaration.name, value)
+        })
+        let expectedControlLocations = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
+            variable -> (String, String)? in
+            guard case .value(let expression)? = initializations[variable.id],
+                  case .controlLocation(let id) = expression.operation,
+                  expression.children.isEmpty,
+                  let location = layout.controlLocation(id) else { return nil }
+            return (variable.declaration.name, location.formalName)
+        })
+        let expectedIntPredicates = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
+            variable -> (String, String)? in
+            guard case .value(let expression)? = initializations[variable.id],
+                  let predicate = StraightLineRenderedActionCheck.initialIntPredicate(
+                    expression, named: variable.declaration.name, layout: layout) else { return nil }
+            return (variable.declaration.name, predicate)
+        })
+        try verifyRenderedInitialConjunction(source, predicates: initialPredicates,
+            expectedIntLiterals: expectedIntLiterals,
+            expectedControlLocations: expectedControlLocations,
+            expectedIntPredicates: expectedIntPredicates,
+            requireCompleteSimpleInitials: behavior.initialInvariant == nil
+                && expectedIntLiterals.count + expectedIntPredicates.count
+                    + expectedControlLocations.count == layout.variables.count)
         try verifyRenderedActionDeclarations(source, declarations: actionDeclarations)
-        return (source, evaluationFailureDeclarations, evaluationInvariant)
+        return (source, evaluationFailureDeclarations, evaluationInvariant,
+            initialFailureAggregate, initialFailureRecord)
     }
 
     func tlcConfiguration(behavior: CompiledBehavior, replacements: [TLCModuleReplacement],
@@ -2791,7 +3029,11 @@ func verifyRenderedVariableDeclaration(_ source: String, names: [String]) throws
     }
 }
 
-func verifyRenderedInitialConjunction(_ source: String, predicates: [String]) throws {
+func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
+                                      expectedIntLiterals: [String: Int] = [:],
+                                      expectedControlLocations: [String: String] = [:],
+                                      expectedIntPredicates: [String: String] = [:],
+                                      requireCompleteSimpleInitials: Bool = false) throws {
     let lines = source.components(separatedBy: "\n")
     let starts = lines.indices.filter { lines[$0] == "Init ==" || lines[$0].hasPrefix("Init == ") }
     let expected = predicates.isEmpty
@@ -2807,7 +3049,19 @@ func verifyRenderedInitialConjunction(_ source: String, predicates: [String]) th
     } else {
         actual = "\(starts.count) Init declarations"
     }
-    guard actual == expected else {
+    guard actual == expected,
+          (!requireCompleteSimpleInitials
+              || predicates.count == expectedIntLiterals.count + expectedIntPredicates.count
+                  + expectedControlLocations.count),
+          expectedIntLiterals.allSatisfy({ name, value in
+              predicates.filter { $0 == "\(name) = \(TLAValue.int(value).description)" }.count == 1
+          }),
+          expectedControlLocations.allSatisfy({ name, location in
+              predicates.filter { $0 == "\(name) = \(TLAValue.string(location).description)" }.count == 1
+          }),
+          expectedIntPredicates.values.allSatisfy({ predicate in
+              predicates.filter { $0 == predicate }.count == 1
+          }) else {
         throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
             path: "tla.Init", expected: expected, actual: actual,
             nextSafeAction: "Regenerate the TLA+ module from the compiled initializations.")

@@ -991,7 +991,8 @@ import SwiftTLAMacros
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "ThreeWith")
         let rendered = try specification.compile().render().tlaBundle.tla
-        #expect(rendered.components(separatedBy: "\\E ").count == 4)
+        let choose = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("choose ==") })
+        #expect(choose.components(separatedBy: "\\E ").count == 4)
     }
 
     @Test("parser preserves a bounded statement macro through compilation")

@@ -1,4 +1,4 @@
-private static let _closedChoice0: Result<[Int], any Error> = Result { (try _NativeMachineOperations.choose(Set<[Int]>([[2], [1, 0], [1]]).sorted(by: { (lhs: [Int], rhs: [Int]) -> Bool in
+private static let _closedChoice0: Result<[Int], any Error> = Result { (try SwiftTLA._NativeMachineOperations.choose(Set<[Int]>([[2], [1, 0], [1]]).sorted(by: { (lhs: [Int], rhs: [Int]) -> Bool in
 return lhs.lexicographicallyPrecedes(rhs, by: { (lhs: Int, rhs: Int) -> Bool in
 return lhs < rhs
 })

@@ -298,6 +298,8 @@ public struct TLASpec: Sendable {
   package var sourceAtomicSteps: [AtomicStep] = []
   var authoredPlusCalAlgorithmPlan: AuthoredPlusCalAlgorithmPlan?
   package var algorithmPhase: AlgorithmPhase
+  var orderedIntProofActionNames: Set<String> = []
+  package var sourceSpecDefaultDeadlockWitness = false
   package var diagnostics: [SourceParseDiagnostic] = []
 
   package init(

@@ -9,6 +9,7 @@ package struct ValidationEvidenceComparisonReport: Codable, Sendable {
     package let result: String
     package let graphCompared: Bool
     package let difference: String?
+    package let initialEvaluationFailure: ValidationVerdict?
     package let properties: [String: ValidationVerdict]
     package let deadlock: ValidationVerdict?
     package let deadlockSelected: Bool
@@ -115,6 +116,8 @@ package enum ValidationEvidenceComparison {
         var difference: String?
         if swift.graphComplete != tlc.graphComplete {
             difference = "exploration completion"
+        } else if swift.initialEvaluationFailure != tlc.initialEvaluationFailure {
+            difference = "initial evaluation failure verdict"
         } else if swift.properties != tlc.properties || swift.deadlock != tlc.deadlock
                     || swift.postcondition != tlc.postcondition {
             difference = "selected property, deadlock, or postcondition verdict"
@@ -171,10 +174,15 @@ package enum ValidationEvidenceComparison {
                 }
             }
         }
+        if difference == nil && swift.initialEvaluationFailure == .violated {
+            // shortcut: existence is not an exact failure record; compare kind and operands before admitting parity.
+            throw ValidationEvidenceComparisonError.invalidEvidence("initial failure payload is not compared")
+        }
         let report = ValidationEvidenceComparisonReport(
             schema: "swifttla.validation-evidence-comparison", caseID: caseID,
             result: difference == nil ? "exact" : "different", graphCompared: compareGraph,
-            difference: difference, properties: swift.properties, deadlock: swift.deadlock,
+            difference: difference, initialEvaluationFailure: swift.initialEvaluationFailure,
+            properties: swift.properties, deadlock: swift.deadlock,
             deadlockSelected: swift.deadlockSelected,
             postconditionName: swift.postconditionName, postcondition: swift.postcondition)
         let encoder = JSONEncoder()
