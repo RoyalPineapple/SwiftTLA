@@ -8,5 +8,7 @@ AlternativeActionRule
 BranchwiseConjunctionRule
 GuardActionRule
 FrameActionRule
+PendingFrameOutcomeRule
 # Arbitrary finite nesting, checked after every rule module.
 ActionTreeOutcomeComposition
+FramedActionTreeComposition

@@ -139,9 +139,24 @@ The new observation theorem preserves complete states, labels, successors, and d
 A conflicting frame disables a candidate. It does not invent an evaluation failure.
 The wrong-rule theorem shows that omission of a conflicting frame changes the relation.
 
-The frame theorem remains separate from the indexed tree of pending outcomes.
-It does not discharge frame leaves for every tree or prove the concrete Swift merge kernel.
-That connection remains open. No language row becomes complete through this extension.
+`PendingFrameOutcomeRule` connects the complete-state frame relations to pending outcomes.
+Its independent source rule retains existing constraints and adds the prior-state frame.
+Its generated rule checks compatibility, then writes the incoming frame slot.
+Both rules disable conflicting candidates without an evaluation failure.
+Materialization retains every state field, including hidden control fields.
+The complete labeled observations equal the independent source and rendered frame relations.
+
+`FramedActionTreeComposition` instantiates the existing finite-tree theorem with partial state maps.
+It discharges frame-leaf agreement and the single-candidate premise for frame children.
+Guard children retain their existing shape proof.
+Other leaves, conditions, and conjunction shapes remain explicit premises.
+Thus frames compose at arbitrary finite positions with the covered constructors.
+Ordered successor candidates and selected failure payloads remain part of the outcome interface.
+
+The negative rules distinguish an accepted conflicting frame and a forgotten frame constraint.
+The latter preserves the immediate complete state but can admit a later conflicting write.
+This distinction prevents an observation-only proof from discarding a necessary pending constraint.
+The concrete Swift merge kernel remains trusted. No complete language row follows from this connection.
 
 Existing regression owners cover the implementation links without new named models.
 `ActionFrameConditionTests` rejects changed lowering targets and emitted TLA+ frames.
@@ -154,12 +169,11 @@ The source recognizer, artifact checkers, expression child rules, native merge, 
 Initialization and selected temporal outcomes remain outside these rules.
 Local proof and regression results require hosted evidence on one frozen revision before admission.
 
-The isolated rule batch passed with the pinned TLAPS and Z3 versions.
-Focused range checks also proved the existing Skip and frame-outcome callers after the lemma move.
-Empty single-line selections are not proof evidence.
-The focused guard test, nine related suites (100 tests), and static validation passed.
-The full `SingleAssignment` regression remains part of hosted CI, separate from the small rule batch.
-An interrupted local run of that full regression is not passing evidence.
+The guard/frame extraction at `10274fd3` passed ordinary CI and full validation.
+That evidence includes the full `SingleAssignment` regression and the rule-then-composition batch.
+The moving-cat infrastructure retry retained the same source revision and passed exact comparison.
+The pending-frame connection requires fresh hosted evidence on its own frozen revision.
+Empty selections and interrupted proof runs are not passing evidence.
 
 ### Action-constructor domain
 
