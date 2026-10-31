@@ -106,9 +106,25 @@ THEOREM EveryFiniteActionTreeHasIndependentHistories ==
         BY <1>1, FiniteIndexedHistoryExists, SMT DEF IndexedHistory, sourceStep, generatedStep
     <1>3. \E generated \in [1..count -> ActionSemantics] : IndexedHistory(generatedStep, generated, count)
         BY <1>1, FiniteIndexedHistoryExists, SMT DEF IndexedHistory, sourceStep, generatedStep
-    <1>. QED BY <1>2, <1>3, SMT
-        DEF IndexedHistory, SourceActionHistory, GeneratedActionHistory,
-            sourceStep, generatedStep, HistoryPrefix
+    <1>4. \E source \in [1..count -> ActionSemantics] : SourceActionHistory(nodes, source, count)
+        <2>1. PICK source \in [1..count -> ActionSemantics] : IndexedHistory(sourceStep, source, count)
+            BY <1>2
+        <2>2. \A index \in 1..count :
+                  HistoryPrefix(source, index - 1) \in [1..(index - 1) -> ActionSemantics]
+            BY <2>1, SMT DEF HistoryPrefix
+        <2>3. SourceActionHistory(nodes, source, count)
+            BY <2>1, <2>2, SMT DEF IndexedHistory, SourceActionHistory, sourceStep
+        <2>. QED BY <2>1, <2>3, SMT
+    <1>5. \E generated \in [1..count -> ActionSemantics] : GeneratedActionHistory(nodes, generated, count)
+        <2>1. PICK generated \in [1..count -> ActionSemantics] : IndexedHistory(generatedStep, generated, count)
+            BY <1>3
+        <2>2. \A index \in 1..count :
+                  HistoryPrefix(generated, index - 1) \in [1..(index - 1) -> ActionSemantics]
+            BY <2>1, SMT DEF HistoryPrefix
+        <2>3. GeneratedActionHistory(nodes, generated, count)
+            BY <2>1, <2>2, SMT DEF IndexedHistory, GeneratedActionHistory, generatedStep
+        <2>. QED BY <2>1, <2>3, SMT
+    <1>. QED BY <1>4, <1>5
 
 THEOREM ActionNodeRuleComposes ==
     ASSUME NEW count \in Nat, NEW nodes \in [1..count -> ActionNodes],
