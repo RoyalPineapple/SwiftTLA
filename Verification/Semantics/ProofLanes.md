@@ -18,6 +18,11 @@ The uncommitted user edit in `LanguageCompositionChecklist.md` remains separate 
 The critical lane owns `ScopedActionBindingComposition.tla`, `scoped-action-binding.batch`, and `ScopedActionBindingScope.md` for this batch.
 The Boolean lane owns `BooleanExpressionConstructorRules.tla`, `BooleanExpressionComposition.tla`, `boolean-expression.batch`, and `BooleanExpressionFamily.md`.
 
+The mixed-binding regression exposed a shared prerequisite: definition-root actions bypassed the existing failure-payload check.
+The integration lane owns that repair on `codex/definition-payload-prerequisite` before either family is adopted.
+The repair keeps the shared outcome schema unchanged. Family diagnostics can continue while the prerequisite checks run.
+The regression remains in `LexicalBindingTests.swift`. Preserve one copy when the critical family is integrated.
+
 ## Stable base and interfaces
 
 The admitted base for both families is `d0419d84501e7043b1f67a184740d81ceb2ee3c6`.

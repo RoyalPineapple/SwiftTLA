@@ -908,7 +908,7 @@ enum StraightLineRenderedActionCheck {
             let parameters = try action.bindings.map { try renderer.binderName($0.binder) }
             let checksComposition: Bool
             switch action.body {
-            case .or: checksComposition = true
+            case .define, .or: checksComposition = true
             case .ifElse(let condition, _, _): checksComposition = try checkableCondition(condition)
             case .and(.guard_(let condition), _): checksComposition = try checkableCondition(condition)
             case .and: checksComposition = true
