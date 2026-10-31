@@ -114,15 +114,37 @@ THEOREM EveryFiniteExpressionTreeHasIndependentHistories ==
           /\ \E tla \in [1..count -> ExpressionSemantics] :
                  IndexedHistory(TLASteps(nodes, count), tla, count)
     PROOF
+    <1>. DEFINE sourceStep == [index \in 1..count |->
+                    [prefix \in [1..(index - 1) -> ExpressionSemantics] |->
+                        SourceExpressionNode(nodes, prefix, index)]]
+                nativeStep == [index \in 1..count |->
+                    [prefix \in [1..(index - 1) -> ExpressionSemantics] |->
+                        NativeExpressionNode(nodes, prefix, index)]]
+                tlaStep == [index \in 1..count |->
+                    [prefix \in [1..(index - 1) -> ExpressionSemantics] |->
+                        TLAExpressionNode(nodes, prefix, index)]]
     <1>1. \A index \in 1..count :
-              /\ SourceSteps(nodes, count)[index] \in
+              /\ sourceStep[index] \in
                     [[1..(index - 1) -> ExpressionSemantics] -> ExpressionSemantics]
-              /\ NativeSteps(nodes, count)[index] \in
+              /\ nativeStep[index] \in
                     [[1..(index - 1) -> ExpressionSemantics] -> ExpressionSemantics]
-              /\ TLASteps(nodes, count)[index] \in
+              /\ tlaStep[index] \in
                     [[1..(index - 1) -> ExpressionSemantics] -> ExpressionSemantics]
-        BY ExpressionNodeOutcomesAreClosed, SMT DEF SourceSteps, NativeSteps, TLASteps
-    <1>. QED BY <1>1, FiniteIndexedHistoryExists, SMT
+        BY ExpressionNodeOutcomesAreClosed, SMT DEF sourceStep, nativeStep, tlaStep
+    <1>2. PICK source \in [1..count -> ExpressionSemantics] :
+              IndexedHistory(sourceStep, source, count)
+        BY <1>1, FiniteIndexedHistoryExists, SMT DEF IndexedHistory, sourceStep, nativeStep, tlaStep
+    <1>3. PICK native \in [1..count -> ExpressionSemantics] :
+              IndexedHistory(nativeStep, native, count)
+        BY <1>1, FiniteIndexedHistoryExists, SMT DEF IndexedHistory, sourceStep, nativeStep, tlaStep
+    <1>4. PICK tla \in [1..count -> ExpressionSemantics] :
+              IndexedHistory(tlaStep, tla, count)
+        BY <1>1, FiniteIndexedHistoryExists, SMT DEF IndexedHistory, sourceStep, nativeStep, tlaStep
+    <1>5. /\ sourceStep = SourceSteps(nodes, count)
+          /\ nativeStep = NativeSteps(nodes, count)
+          /\ tlaStep = TLASteps(nodes, count)
+        BY SMT DEF sourceStep, nativeStep, tlaStep, SourceSteps, NativeSteps, TLASteps
+    <1>. QED BY <1>2, <1>3, <1>4, <1>5, SMT
 
 THEOREM EqualChildrenDischargeTheParentRule ==
     ASSUME NEW count \in Nat, NEW nodes \in [1..count -> ExpressionNodes],

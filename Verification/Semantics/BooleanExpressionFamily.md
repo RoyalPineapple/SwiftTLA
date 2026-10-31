@@ -64,6 +64,17 @@ The focused filters are `ShortCircuitFailureProofTests|BooleanBranchLoweringCont
 ## Evidence state
 
 The proof batch is `Verification/Semantics/boolean-expression.batch`.
-Local proof and focused Swift diagnostics are pending a serialized validation slot.
+[Hosted diagnostic 41211433970](https://github.com/RoyalPineapple/SwiftTLA/actions/runs/41211433970)
+ran revision `6eceaf567fe20f43897eb5c6877234c84135ab65` and failed.
+The implementation job stopped because the optional getter inferred an optional string accumulator.
+The proof job failed at the combined history-existence conclusion.
+
+A local pinned batch reproduced the source-history witness failure after the first proof decomposition.
+The next diagnostic revision gives the accumulator an explicit `String` type and exposes separate local step functions for the history witnesses.
+These fixes await new proof and implementation results.
+The executed baseline regression and focused local Swift diagnostics remain pending a serialized validation slot.
+
+The shared definition-root prerequisite remains outside this branch.
+Later integration must retain its unconditional definition-root payload gate.
 Hosted checks remain the admission authority for an exact commit.
 This document makes no universal compiler fidelity or release-readiness claim.

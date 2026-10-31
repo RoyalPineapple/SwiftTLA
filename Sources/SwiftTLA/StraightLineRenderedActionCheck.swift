@@ -41,9 +41,10 @@ enum StraightLineRenderedActionCheck {
 
         var defined: String? {
             guard !sites.isEmpty else { return nil }
-            return sites.reversed().reduce("TRUE") { result, site in
+            let defined: String = sites.reversed().reduce("TRUE") { result, site in
                 "(IF \(site.guardText) THEN \(result) ELSE FALSE)"
             }
+            return defined
         }
 
         var failures: [RenderedEvaluationFailure] {
