@@ -29,8 +29,113 @@ enum StraightLineRenderedActionCheck {
         }
     }
 
+    private struct BooleanSite {
+        let guardText: String
+        let operands: String
+        let kind: RenderedEvaluationFailureKind
+    }
+
+    private struct BooleanTree {
+        let value: String
+        let sites: [BooleanSite]
+
+        var defined: String? {
+            guard !sites.isEmpty else { return nil }
+            return sites.reversed().reduce("TRUE") { result, site in
+                "(IF \(site.guardText) THEN \(result) ELSE FALSE)"
+            }
+        }
+
+        var failures: [RenderedEvaluationFailure] {
+            var preceding: [String] = []
+            return sites.map { site in
+                let predicate = preceding.reversed().reduce("~(\(site.guardText))") { result, guard_ in
+                    "(IF \(guard_) THEN \(result) ELSE FALSE)"
+                }
+                preceding.append(site.guardText)
+                return .init(predicate: predicate, operands: site.operands, kind: site.kind)
+            }
+        }
+    }
+
+    // Leaves outside scalar equality/modulo remain child-rule premises.
+    private static func booleanTree(_ expression: CompiledExpression,
+                                    variables: [VariableID: String],
+                                    binders: [BinderID: String]) -> BooleanTree? {
+        var pending = [(expression, false)]
+        var results: [BooleanTree] = []
+        while let (node, expanded) = pending.popLast() {
+            if !expanded {
+                let arity: Int
+                switch node.operation {
+                case .not: arity = 1
+                case .and, .or, .equal, .modulo: arity = 2
+                case .ifThenElse: arity = 3
+                case .stateVariable(let id):
+                    guard node.children.isEmpty, let value = variables[id] else { return nil }
+                    results.append(.init(value: value, sites: [])); continue
+                case .boundValue(let id):
+                    guard node.children.isEmpty, let value = binders[id] else { return nil }
+                    results.append(.init(value: value, sites: [])); continue
+                case .value(.boolean(let value)):
+                    guard node.children.isEmpty else { return nil }
+                    results.append(.init(value: value ? "TRUE" : "FALSE", sites: [])); continue
+                case .value(.integer(let value)):
+                    guard node.children.isEmpty else { return nil }
+                    results.append(.init(value: checkedIntegerLiteral(value), sites: [])); continue
+                default: return nil
+                }
+                guard node.children.count == arity else { return nil }
+                pending.append((node, true))
+                pending.append(contentsOf: node.children.reversed().map { ($0, false) })
+                continue
+            }
+            let children = Array(results.suffix(node.children.count))
+            guard children.count == node.children.count else { return nil }
+            results.removeLast(children.count)
+            let first = children[0]
+            func selected(_ tree: BooleanTree, whenTrue: Bool) -> [BooleanSite] {
+                tree.sites.map { site in
+                    .init(guardText: whenTrue
+                        ? "(IF \(first.value) THEN \(site.guardText) ELSE TRUE)"
+                        : "(IF \(first.value) THEN TRUE ELSE \(site.guardText))",
+                        operands: site.operands, kind: site.kind)
+                }
+            }
+            let value: String
+            let sites: [BooleanSite]
+            switch node.operation {
+            case .not:
+                value = "(~\(first.value))"; sites = first.sites
+            case .and:
+                value = "(IF \(first.value) THEN \(children[1].value) ELSE FALSE)"
+                sites = first.sites + selected(children[1], whenTrue: true)
+            case .or:
+                value = "(IF \(first.value) THEN TRUE ELSE \(children[1].value))"
+                sites = first.sites + selected(children[1], whenTrue: false)
+            case .ifThenElse:
+                value = "(IF \(first.value) THEN \(children[1].value) ELSE \(children[2].value))"
+                sites = first.sites + selected(children[1], whenTrue: true)
+                    + selected(children[2], whenTrue: false)
+            case .equal:
+                value = "(\(first.value) = \(children[1].value))"
+                sites = first.sites + children[1].sites
+            case .modulo:
+                let divisor = children[1].value
+                value = "(\(first.value) % \(divisor))"
+                sites = children[1].sites + first.sites + [
+                    .init(guardText: "\(divisor) # 0", operands: divisor, kind: .divisionByZero),
+                    .init(guardText: "\(divisor) > 0", operands: divisor, kind: .negativeModuloDivisor)
+                ]
+            default: return nil
+            }
+            results.append(.init(value: value, sites: sites))
+        }
+        return results.count == 1 ? results[0] : nil
+    }
+
     private static let tokenPattern = try? NSRegularExpression(
-        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}+*<>-]|="#)
+        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}+*<>%~#-]|="#)
 
     private static func checkedIntegerLiteral(_ value: Int) -> String {
         let radix = 1_000_000_000
@@ -431,11 +536,23 @@ enum StraightLineRenderedActionCheck {
         }
         func directBoolean(_ expression: CompiledExpression) -> Bool {
             if controlledEquality(expression) { return true }
+            switch expression.operation {
+            case .not, .and, .or, .ifThenElse, .equal:
+                return booleanTree(expression, variables: variables, binders: binders) != nil
+            default: break
+            }
             guard expression.children.isEmpty else { return false }
             switch expression.operation {
             case .stateVariable, .boundValue, .value(.boolean): return true
             default: return false
             }
+        }
+        func guarded(_ tasks: [Task], by expression: CompiledExpression) throws -> [Task] {
+            guard let tree = booleanTree(expression, variables: variables, binders: binders),
+                  let defined = tree.defined else { return tasks }
+            guard let guardTokens = tokens(defined) else { throw mismatch() }
+            return [.token("("), .token("IF")] + guardTokens.map(Task.token)
+                + [.token("THEN")] + tasks + [.token("ELSE"), .token("FALSE"), .token(")")]
         }
         while let task = pending.popLast() {
             switch task {
@@ -444,6 +561,11 @@ enum StraightLineRenderedActionCheck {
                 if controlledEquality(expression) {
                     schedule([.token("("), .value(expression.children[0]), .token("="),
                         .value(expression.children[1]), .token(")")])
+                    continue
+                }
+                if let tree = booleanTree(expression, variables: variables, binders: binders) {
+                    guard let rendered = tokens(tree.value) else { throw mismatch() }
+                    expected.append(contentsOf: rendered)
                     continue
                 }
                 if case .add = expression.operation {
@@ -484,7 +606,7 @@ enum StraightLineRenderedActionCheck {
                         schedule([.token("("), .token("IF")] + guardTokens.map(Task.token)
                             + [.token("THEN")] + assignment
                             + [.token("ELSE"), .token("FALSE"), .token(")")])
-                    } else { schedule(assignment) }
+                    } else { schedule(try guarded(assignment, by: value)) }
                 case .unchanged(let id):
                     guard let name = variables[id] else { throw mismatch() }
                     schedule([.token("UNCHANGED"), .token(name)])
@@ -493,8 +615,8 @@ enum StraightLineRenderedActionCheck {
                     if case .value(.boolean) = value.operation {
                         schedule([.value(value)])
                     } else {
-                        schedule([.token("("), .value(value), .token(")"),
-                            .token("="), .token("TRUE")])
+                        schedule(try guarded([.token("("), .value(value), .token(")"),
+                            .token("="), .token("TRUE")], by: value))
                     }
                 case .define(let id, let value, let body):
                     guard let name = binders[id], isFormalIdentifier(name),
@@ -508,16 +630,16 @@ enum StraightLineRenderedActionCheck {
                         schedule([.token("("), .token("IF")] + guardTokens.map(Task.token)
                             + [.token("THEN")] + definition
                             + [.token("ELSE"), .token("FALSE"), .token(")")])
-                    } else { schedule(definition) }
+                    } else { schedule(try guarded(definition, by: value)) }
                 case .and(let left, let right):
                     schedule([.token("("), .action(left), .token("/\\"), .action(right), .token(")")])
                 case .or(let left, let right):
                     schedule([.token("("), .action(left), .token("\\/"), .action(right), .token(")")])
                 case .ifElse(let condition, let yes, let no):
                     guard directBoolean(condition) else { try unsupported(); return }
-                    schedule([.token("("), .token("IF"), .value(condition), .token("THEN"),
+                    schedule(try guarded([.token("("), .token("IF"), .value(condition), .token("THEN"),
                         .token("("), .action(yes), .token(")"), .token("ELSE"),
-                        .token("("), .action(no), .token(")"), .token(")")])
+                        .token("("), .action(no), .token(")"), .token(")")], by: condition))
                 default: try unsupported(); return
                 }
             }
@@ -723,6 +845,21 @@ enum StraightLineRenderedActionCheck {
                                           configuration: TLCConfiguration,
                                           renderer: CompiledTLARenderer) throws {
         let lines = module.components(separatedBy: "\n")
+        let variables = Dictionary(uniqueKeysWithValues: renderer.layout.variables.map {
+            ($0.id, $0.declaration.name)
+        })
+        func checkedExpression(_ value: CompiledExpression) -> BooleanTree? {
+            booleanTree(value, variables: variables, binders: renderer.bindings.binders)
+        }
+        func expressionFacts(_ value: CompiledExpression) throws ->
+            (value: String, defined: String?, failure: String?, sites: [RenderedEvaluationFailure]) {
+            if let tree = checkedExpression(value) {
+                return (tree.value, tree.defined, tree.defined.map { "~(\($0))" }, tree.failures)
+            }
+            // Unsupported leaf semantics remain explicit premises of the action rule.
+            return (try renderer.state(value), try renderer.evaluationDefined(value),
+                try renderer.anyFailurePredicate(.guard_(value)), try renderer.expressionEvaluationFailures(value))
+        }
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                 path: "tla.evaluationSelection",
@@ -744,20 +881,20 @@ enum StraightLineRenderedActionCheck {
             return condition.children.allSatisfy(leaf)
         }
         func checkableCondition(_ condition: CompiledExpression) throws -> Bool {
-            if pureGuard(condition) { return true }
+            if checkedExpression(condition) != nil || pureGuard(condition) { return true }
             return try renderer.evaluationDefined(condition) != nil
         }
         func composedOutcome(_ node: CompiledActionExpr) throws ->
             (failure: String?, sites: [RenderedEvaluationFailure]) {
             if case .ifElse(let condition, let yes, let no) = node,
                try checkableCondition(condition) {
-                // Expression results are child-rule premises; only the conditional wrapper is checked here.
-                let conditionFailure = try renderer.anyFailurePredicate(.guard_(condition))
-                let conditionSites = try renderer.expressionEvaluationFailures(condition)
-                let defined = try renderer.evaluationDefined(condition)
+                let facts = try expressionFacts(condition)
+                let conditionFailure = facts.failure
+                let conditionSites = facts.sites
+                let defined = facts.defined
                 let selected = try composedOutcome(yes)
                 let unselected = try composedOutcome(no)
-                let predicate = try renderer.state(condition)
+                let predicate = facts.value
                 let sites = conditionSites + selected.sites.map { site in
                     let failure = "(IF \(predicate) THEN \(site.predicate) ELSE FALSE)"
                     return RenderedEvaluationFailure(
@@ -794,14 +931,33 @@ enum StraightLineRenderedActionCheck {
                 return (failure, first.sites + later)
             }
             switch node {
+            case .define(let binder, let value, let body) where checkedExpression(value) != nil:
+                guard let name = renderer.bindings.binders[binder] else { throw mismatch() }
+                let facts = try expressionFacts(value)
+                let continuation = try composedOutcome(body)
+                let sites = facts.sites + continuation.sites.map { site in
+                    let selected = "(LET \(name) == \(facts.value) IN \(site.predicate))"
+                    return RenderedEvaluationFailure(
+                        predicate: facts.defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected,
+                        operands: site.operands.map { "(LET \(name) == \(facts.value) IN \($0))" },
+                        kind: site.kind)
+                }
+                guard let later = continuation.failure else { return (facts.failure, sites) }
+                let bound = "(LET \(name) == \(facts.value) IN \(later))"
+                let guarded = facts.defined.map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
+                return (facts.failure.map { "(\($0) \\/ \(guarded))" } ?? guarded, sites)
+            case .guard_(let condition) where checkedExpression(condition) != nil:
+                let facts = try expressionFacts(condition)
+                return (facts.failure, facts.sites)
             case .and(.guard_(let condition), let body):
                 guard try checkableCondition(condition) else { break }
-                let conditionFailure = try renderer.anyFailurePredicate(.guard_(condition))
-                let conditionSites = try renderer.expressionEvaluationFailures(condition)
-                let defined = try renderer.evaluationDefined(condition)
+                let facts = try expressionFacts(condition)
+                let conditionFailure = facts.failure
+                let conditionSites = facts.sites
+                let defined = facts.defined
                 let second = try composedOutcome(body)
                 guard let bodyFailure = second.failure else { return (conditionFailure, conditionSites) }
-                let predicate = try renderer.state(condition)
+                let predicate = facts.value
                 let selected = "(IF \(predicate) THEN \(bodyFailure) ELSE FALSE)"
                 let failure = defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
                 let sites = conditionSites + second.sites.map { site in
@@ -826,6 +982,9 @@ enum StraightLineRenderedActionCheck {
             default: break
             }
             if case .assign(_, let value) = node {
+                if let tree = checkedExpression(value) {
+                    return (tree.defined.map { "~(\($0))" }, tree.failures)
+                }
                 let names = Dictionary(uniqueKeysWithValues: renderer.layout.variables.map {
                     ($0.id, $0.declaration.name)
                 })
@@ -908,6 +1067,9 @@ enum StraightLineRenderedActionCheck {
             let parameters = try action.bindings.map { try renderer.binderName($0.binder) }
             let checksComposition: Bool
             switch action.body {
+            case .define(_, let value, _): checksComposition = checkedExpression(value) != nil
+            case .guard_(let condition): checksComposition = checkedExpression(condition) != nil
+            case .assign(_, let value): checksComposition = checkedExpression(value) != nil
             case .or: checksComposition = true
             case .ifElse(let condition, _, _): checksComposition = try checkableCondition(condition)
             case .and(.guard_(let condition), _): checksComposition = try checkableCondition(condition)

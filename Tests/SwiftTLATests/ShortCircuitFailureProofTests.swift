@@ -7,6 +7,64 @@ import Testing
 
 @Suite("Short-circuit failure preservation")
 struct ShortCircuitFailureProofTests {
+    @Test("Actual Boolean TLA output rejects changed selection, definedness, and failure payloads")
+    func renderedBooleanOutcomes() throws {
+        for specification in [ShortCircuitFailureModel.spec, BranchingBooleanFailureModel.spec,
+                              ConditionalBooleanAssignmentModel.spec] {
+            let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+            let output = try program.renderModule()
+            let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+                reservedNames: [], layout: program.layout,
+                bindings: .init(binders: program.binderNames), operators: .init(),
+                actions: program.behavior.actions, functions: program.functions,
+                enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+            for action in program.behavior.actions {
+                let actual = try renderer.action(action.body)
+                func verify(_ body: String) throws {
+                    try StraightLineRenderedActionCheck.verify(action.body, rendered: body,
+                        layout: program.layout, binders: program.binderNames, required: true)
+                }
+                try verify(actual)
+                let reversedCondition = actual.replacingOccurrences(
+                    of: "IF enabled THEN", with: "IF (~enabled) THEN")
+                #expect(reversedCondition != actual)
+                #expect(throws: CompilationDiagnostic.self) { try verify(reversedCondition) }
+
+                let mutations = [
+                    ("THEN ((1 % divisor) = 0) ELSE FALSE", "THEN TRUE ELSE ((1 % divisor) = 0)"),
+                    ("THEN TRUE ELSE ((1 % divisor) = 0)", "THEN ((1 % divisor) = 0) ELSE FALSE"),
+                    ("(~ready)", "ready"),
+                    ("(~(IF ready THEN TRUE ELSE FALSE))", "(IF ready THEN TRUE ELSE FALSE)"),
+                    ("divisor # 0", "divisor # 1")
+                ]
+                for (before, after) in mutations where actual.contains(before) {
+                    let mutant = actual.replacingOccurrences(of: before, with: after)
+                    #expect(throws: CompilationDiagnostic.self) { try verify(mutant) }
+                }
+            }
+            func verifyFailures(_ source: String, _ declarations: [String]) throws {
+                try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+                    module: source, failureDeclarations: declarations,
+                    evaluationInvariant: "__SwiftTLAEvaluationOK",
+                    configuration: output.configuration, renderer: renderer)
+            }
+            try verifyFailures(output.renderedModuleSource, output.evaluationFailureDeclarations)
+            for prefix in ["__SwiftTLADivisionByZeroFailure0", "__SwiftTLADivisionByZeroDivisor0",
+                           "__SwiftTLANegativeModuloDivisorFailure0", "__SwiftTLANegativeModuloDivisorValue0",
+                           "__SwiftTLAAnyEvaluationFailure0"] {
+                let original = try #require(output.evaluationFailureDeclarations.first {
+                    $0.hasPrefix("\(prefix) == ")
+                })
+                let changed = "\(prefix) == \(prefix.contains("Failure") ? "TRUE" : "0")"
+                #expect(changed != original)
+                #expect(throws: CompilationDiagnostic.self) {
+                    try verifyFailures(output.renderedModuleSource.replacingOccurrences(of: original, with: changed),
+                        output.evaluationFailureDeclarations.map { $0 == original ? changed : $0 })
+                }
+            }
+        }
+    }
+
     @Test("Boolean assignment output rejects a reversed selected branch")
     func nestedConditionalAssignment() throws {
         let machines = try ConditionalBooleanAssignmentModel.initialMachines()
