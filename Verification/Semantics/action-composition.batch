@@ -9,6 +9,8 @@ BranchwiseConjunctionRule
 GuardActionRule
 FrameActionRule
 PendingFrameOutcomeRule
+BooleanExpressionConstructorRules
 # Arbitrary finite nesting, checked after every rule module.
 ActionTreeOutcomeComposition
 FramedActionTreeComposition
+BooleanExpressionComposition

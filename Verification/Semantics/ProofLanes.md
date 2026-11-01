@@ -19,7 +19,7 @@ The critical lane owns `ScopedActionBindingComposition.tla`, `scoped-action-bind
 The Boolean lane owns `BooleanExpressionConstructorRules.tla`, `BooleanExpressionComposition.tla`, `boolean-expression.batch`, and `BooleanExpressionFamily.md`.
 
 The mixed-binding regression exposed a shared prerequisite: definition-root actions bypassed the existing failure-payload check.
-The integration lane owns that repair on `codex/definition-payload-prerequisite` before either family is adopted.
+The integration lane admitted that repair and the pinned-download prerequisite at `ecf3a762533134872baf1feea2e2622f84d537e2` before adopting either family.
 The repair keeps the shared outcome schema unchanged. Family diagnostics can continue while the prerequisite checks run.
 The regression remains in `LexicalBindingTests.swift`. Preserve one copy when the critical family is integrated.
 
@@ -29,6 +29,8 @@ The admitted base for both families is `d0419d84501e7043b1f67a184740d81ceb2ee3c6
 The Boolean branch starts directly at that base. The critical branch retains dependent preparation from that same base.
 The unpublished critical stack is not an admitted base for the independent family.
 The integration lane must preserve the separate native-helper binding repair before the next admission candidate.
+The current Boolean integration transports the independently audited `20b20c31` source/output family onto ecf3 and retains all three shared repairs.
+It requires new integrated admission; the focused family diagnostic is not a substitute.
 
 The shared outcome schema remains frozen during each family batch.
 These SHA-256 values identify the admitted definitions:
