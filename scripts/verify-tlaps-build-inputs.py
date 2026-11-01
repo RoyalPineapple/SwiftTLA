@@ -23,7 +23,7 @@ def verified_inputs(lock_path, patch_path):
     if hashlib.sha256(patch).hexdigest() != pin.get("packagingPatchSHA256"):
         raise ValueError("proof packaging patch does not match its pin")
     paths = re.findall(r"^diff --git a/(\S+) b/(\S+)$", patch.decode(), re.MULTILINE)
-    expected = {"library/dune", "deps/z3/Makefile", "deps/ls4/Makefile"}
+    expected = {"library/dune", "deps/z3/Makefile", "deps/ls4/Makefile", "deps/isabelle/dune.mk"}
     if len(paths) != len(expected) or {a for a, b in paths if a == b} != expected:
         raise ValueError("proof packaging may only change dependency downloads")
     return pin

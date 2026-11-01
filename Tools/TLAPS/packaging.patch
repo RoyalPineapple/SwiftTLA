@@ -1,3 +1,22 @@
+diff --git a/deps/isabelle/dune.mk b/deps/isabelle/dune.mk
+--- a/deps/isabelle/dune.mk
++++ b/deps/isabelle/dune.mk
+@@ -40,8 +40,13 @@ all: $(ISABELLE_DIR) $(ISABELLE_DIR)/src/TLA+ $(ISABELLE_TEST) Isabelle-install
+ $(CACHE_DIR)/$(ISABELLE_ARCHIVE):
+ 	mkdir -p $(CACHE_DIR)
+ 	(echo "$(ISABELLE_SHA256) *$@" | shasum -a 256 -c -) || ( \
+-		(rm -f $@) && \
+-		(wget --progress=dot:giga --directory-prefix=$(CACHE_DIR) $(ISABELLE_URL)) && \
++		for attempt in 1 2 3; do \
++			rm -f "$@" || exit 1; \
++			wget --tries=1 --timeout=60 --progress=dot:giga \
++				--directory-prefix="$(CACHE_DIR)" "$(ISABELLE_URL)" && break; \
++			test $$attempt -lt 3 || exit 1; \
++			sleep $$((attempt * 5)); \
++		done && \
+ 		(echo "$(ISABELLE_SHA256) *$@" | shasum -a 256 -c -) \
+ 	)
+ .PHONY: $(CACHE_DIR)/$(ISABELLE_ARCHIVE) # Have to double-check the checksum.
 diff --git a/deps/ls4/Makefile b/deps/ls4/Makefile
 index 6c40935..ce0311b 100644
 --- a/deps/ls4/Makefile
