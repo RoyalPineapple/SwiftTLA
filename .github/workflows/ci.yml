@@ -175,6 +175,9 @@ jobs:
         with:
           ref: ${{ env.SWIFT_TLA_SHA }}
 
+      - name: Validate pinned bootstrap and download contracts
+        run: python3 Tests/Fixtures/TLAPSBootstrap/assert_inputs.py
+
       - uses: ./.github/actions/setup-pinned-tlaps
         id: proof-tool
         with:
