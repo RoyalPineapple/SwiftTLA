@@ -937,7 +937,7 @@ struct CompiledTLARenderer {
         switch expression.operation {
         case .value, .stateVariable, .boundValue, .controlLocation,
              .setLiteral, .tupleLiteral, .equal, .notEqual, .lessThan, .lessOrEqual,
-             .greaterThan, .greaterOrEqual, .and, .or, .not, .in:
+             .greaterThan, .greaterOrEqual, .and, .or, .not, .in, .ifThenElse:
             return expression.children.allSatisfy(repeatable)
         default:
             return false
