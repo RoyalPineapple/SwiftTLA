@@ -211,16 +211,15 @@ extension NativeSwiftEmitter {
         }
         """)
         if program.requiresSourceDefaultDeadlockOutput && viewRuns.isEmpty && !hasRandomSubset {
-            try verifyOrderedIntValidationOutput(declarations.first {
-                $0.as(StructDeclSyntax.self)?.name.text == "ValidationScenario"
-            }, modelName: model.typeName, arguments: arguments)
+            try verifyOrderedIntValidationOutput(declarations, model: model, arguments: arguments)
         }
         return declarations
     }
 }
 
-func verifyOrderedIntValidationOutput(_ declaration: DeclSyntax?, modelName: String,
+func verifyOrderedIntValidationOutput(_ declarations: [DeclSyntax], model: MacroCompilation,
                                       arguments: String) throws {
+    let modelName = model.typeName
     func mismatch() -> CompilationDiagnostic {
         CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
             path: "native.validation.initialOutcome",
@@ -228,7 +227,9 @@ func verifyOrderedIntValidationOutput(_ declaration: DeclSyntax?, modelName: Str
             actual: "the generated validation scenario changes or discards an initial outcome",
             nextSafeAction: "Report this generated validation translation failure.")
     }
-    guard let members = declaration?.as(StructDeclSyntax.self)?.memberBlock.members else {
+    let structures = declarations.compactMap { $0.as(StructDeclSyntax.self) }
+        .filter { $0.name.text == "ValidationScenario" }
+    guard structures.count == 1, let members = structures.first?.memberBlock.members else {
         throw mismatch()
     }
     func actual(_ name: String, firstParameter: String? = nil) -> FunctionDeclSyntax? {
@@ -259,4 +260,67 @@ func verifyOrderedIntValidationOutput(_ declaration: DeclSyntax?, modelName: Str
             }
         }
         """) else { throw mismatch() }
+
+    func selectionMismatch() -> CompilationDiagnostic {
+        CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.validation.checkingSelection",
+            expected: "the compiled scenario's selected properties and deadlock setting in both output routes",
+            actual: "the generated scenario changes a check selection or its formal projection",
+            nextSafeAction: "Report this generated validation translation failure.")
+    }
+    guard matches(actual("render"), expected: """
+        public func render() throws -> RenderedSpecification {
+            try \(modelName).render(\(arguments)).selectingChecks(checking,
+                formalPropertyNames: Machine.formalPropertyNames, behavior: behavior,
+                symmetry: selectedSymmetry, fairnessProfile: selectedFairnessProfileName,
+                view: selectedView.map { "__SwiftTLAView\\($0)" },
+                postcondition: postconditionName)
+        }
+        """) else { throw selectionMismatch() }
+
+    let constructors = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }
+        .filter { $0.name.text == "validationScenarios" }
+    guard constructors.count == 1, let body = constructors.first?.body,
+          body.statements.count == 1, let statement = body.statements.first,
+          let values = (statement.item.as(ExprSyntax.self)
+              ?? statement.item.as(ReturnStmtSyntax.self)?.expression)?.as(ArrayExprSyntax.self),
+          values.elements.count == model.program.behavior.validationScenarios.count else {
+        throw selectionMismatch()
+    }
+    let properties = model.program.layout.properties
+    let identifiers = GeneratedMachineAPI.generatedIdentifiers(
+        properties.map { $0.declaration.name }, fallback: "property").map {
+            $0.hasPrefix("`") ? String($0.dropFirst().dropLast()) : $0
+        }
+    let names = Dictionary(uniqueKeysWithValues: zip(properties.map(\.id), identifiers))
+    for (element, scenario) in zip(values.elements, model.program.behavior.validationScenarios) {
+        guard let constructor = element.expression.as(FunctionCallExprSyntax.self),
+              constructor.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ValidationScenario"
+        else { throw selectionMismatch() }
+        let selections = constructor.arguments.filter { $0.label?.text == "checking" }
+        guard selections.count == 1,
+              let call = selections.first?.expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModelChecks",
+              call.arguments.count == 2,
+              let propertyList = call.arguments.first(where: { $0.label?.text == "properties" })?
+                .expression.as(ArrayExprSyntax.self),
+              let deadlock = call.arguments.first(where: { $0.label?.text == "checkDeadlock" })?
+                .expression.as(BooleanLiteralExprSyntax.self),
+              deadlock.literal.text == (scenario.checkDeadlock ? "true" : "false") else {
+            throw selectionMismatch()
+        }
+        var selected: Set<String> = []
+        for property in propertyList.elements {
+            guard let member = property.expression.as(MemberAccessExprSyntax.self), member.base == nil else {
+                throw selectionMismatch()
+            }
+            selected.insert(member.declName.baseName.sourceIdentifierName)
+        }
+        var expected: Set<String> = []
+        for property in scenario.checks {
+            guard let name = names[property] else { throw selectionMismatch() }
+            expected.insert(name)
+        }
+        guard selected == expected else { throw selectionMismatch() }
+    }
 }

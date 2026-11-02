@@ -37,14 +37,18 @@ It transports only the sequence scope from `c7742346` to `d559041f`, then extend
 The extension preserves all Boolean cases and their identity checks.
 The original Boolean and sequence family revisions remain frozen.
 The sequence integration is admitted at `c582b81468a14f9678a43424385b59d09ccf420d` within the hosted regression/proof boundary.
-The pending ordered-Int assignment extension uses that revision as its dependency.
+The ordered-Int assignment extension uses that revision as its dependency.
 It transports only the earlier assignment/expression rules, preserves current production checkers, and reuses the canonical output owners.
 Its additive prefix-induction lemma is checked in the shared history module before constructor and composition users.
 Its scope and remaining premises are recorded in `OrderedIntAssignmentFamily.md`.
+It is admitted at `2d59884f3f31ca8e3c73dc5e2efdd0da06deb3a0` within the hosted regression/proof boundary.
+The checking-selection follow-on uses that admitted dependency in the same integration lane.
+Its source rules, conditional observation composition and actual-output boundaries are recorded in `CheckingSelectionFamily.md`.
+It reuses the existing validation and CFG checkers and canonical test owners; its own admission is still pending.
 It adds no new family-dispatch name. A new integrated candidate requires ordinary CI and full unfiltered admission; historical family diagnostics cannot substitute for them.
 
 The shared outcome schema remains frozen during each family batch.
-These SHA-256 values identify the definitions at admitted c582, before the pending additive history lemma:
+These SHA-256 values identify the definitions at admitted c582, before the additive history lemma admitted at 2d59:
 
 | File | SHA-256 |
 | --- | --- |

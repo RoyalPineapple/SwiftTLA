@@ -832,15 +832,36 @@ enum StraightLineRenderedActionCheck {
         }
     }
 
-    static func verifySourceDefaultDeadlock(_ configuration: TLCConfiguration,
-                                            rendered: String, required: Bool) throws {
-        guard required else { return }
-        let directives = rendered.split(separator: "\n").filter { $0.hasPrefix("CHECK_DEADLOCK ") }
-        guard configuration.checkDeadlock, directives == ["CHECK_DEADLOCK TRUE"] else {
+    static func verifyCheckingConfiguration(_ configuration: TLCConfiguration,
+                                            rendered: String, requiringSourceDefaultDeadlock: Bool) throws {
+        let lines = rendered.split(separator: "\n").map { $0.split(whereSeparator: \.isWhitespace) }
+        let deadlock = lines.filter { $0.first?.hasPrefix("CHECK_DEADLOCK") == true }
+        if requiringSourceDefaultDeadlock,
+           !configuration.checkDeadlock || deadlock != [["CHECK_DEADLOCK", "TRUE"]] {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
                 path: "tla.checking.defaultDeadlock",
                 expected: "the authored #spec default CHECK_DEADLOCK TRUE",
                 actual: "the emitted configuration changes the default deadlock check",
+                nextSafeAction: "Report this TLA+ configuration emission failure.")
+        }
+        let invariants = lines.filter { $0.first?.hasPrefix("INVARIANT") == true }
+        let properties = lines.filter { $0.first?.hasPrefix("PROPERT") == true }
+        let expectedInvariants = configuration.assumptionsOnly ? []
+            : configuration.intrinsicInvariants + configuration.invariants + configuration.reachabilityProperties
+        let expectedProperties = configuration.assumptionsOnly ? []
+            : configuration.properties + configuration.refinements
+        let expectedDeadlock: [[Substring]] = configuration.assumptionsOnly ? []
+            : [["CHECK_DEADLOCK", configuration.checkDeadlock ? "TRUE" : "FALSE"]]
+        // shortcut: generated CFG directives are canonical single lines; use a CFG parser if authored directives are retained.
+        guard deadlock == expectedDeadlock,
+              invariants.allSatisfy({ $0.count == 2 && $0.first == "INVARIANT" }),
+              properties.allSatisfy({ $0.count == 2 && $0.first == "PROPERTY" }),
+              invariants.map({ String($0[1]) }) == expectedInvariants,
+              properties.map({ String($0[1]) }) == expectedProperties else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "tla.checking.selection",
+                expected: "the selected check kinds, declaration order, intrinsic invariants and deadlock setting",
+                actual: "the emitted configuration changes a check selection",
                 nextSafeAction: "Report this TLA+ configuration emission failure.")
         }
     }
@@ -1145,12 +1166,12 @@ enum StraightLineRenderedActionCheck {
               !references.isEmpty else { throw mismatch() }
         let expected = "\(evaluationInvariant) == "
             + references.map { "~(\($0))" }.joined(separator: " /\\ ")
+        let configurationText = try configuration.render(usesSymmetryReduction: false)
         guard lines.filter({ $0.hasPrefix("\(evaluationInvariant) == ") }) == [expected],
               failureDeclarations.filter({ $0.hasPrefix("\(evaluationInvariant) == ") }) == [expected],
               configuration.intrinsicInvariants.filter({ $0 == evaluationInvariant }).count == 1,
               configuration.assumptionsOnly
-                || configuration.render(usesSymmetryReduction: false)
-                    .components(separatedBy: "\n").contains("INVARIANT \(evaluationInvariant)")
+                || configurationText.components(separatedBy: "\n").contains("INVARIANT \(evaluationInvariant)")
         else { throw mismatch() }
     }
 

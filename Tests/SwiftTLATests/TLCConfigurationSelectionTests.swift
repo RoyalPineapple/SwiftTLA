@@ -103,7 +103,7 @@ struct TLCConfigurationSelectionTests {
             invariants: ["TypeOK"], properties: ["Progress"], symmetry: ["Nodes"])
         let temporal = try configuration.selecting(["Progress"], checkDeadlock: true)
         #expect(temporal.behavior == .initialAndNext)
-        #expect(temporal.render(usesSymmetryReduction: true) == """
+        #expect(try temporal.render(usesSymmetryReduction: true) == """
         INIT Init
         NEXT Next
         CHECK_DEADLOCK TRUE
@@ -113,7 +113,7 @@ struct TLCConfigurationSelectionTests {
 
         """)
         let specification = try temporal.selecting(["Progress"], checkDeadlock: true, behavior: .specification)
-        #expect(specification.render(usesSymmetryReduction: false).hasPrefix("SPECIFICATION Spec\n"))
+        #expect(try specification.render(usesSymmetryReduction: false).hasPrefix("SPECIFICATION Spec\n"))
         #expect(configuration.behavior == .initialAndNext)
     }
 
@@ -123,7 +123,7 @@ struct TLCConfigurationSelectionTests {
             declarations: ["CONSTANT N = 3", "CONSTRAINT Bound"], checkDeadlock: true,
             invariants: ["Second", "First"], properties: ["Progress"], symmetry: ["Nodes"])
         let selected = try configuration.selecting(["First", "Second"], checkDeadlock: false)
-        #expect(selected.render(usesSymmetryReduction: false) == """
+        #expect(try selected.render(usesSymmetryReduction: false) == """
         SPECIFICATION Spec
         CHECK_DEADLOCK FALSE
         CONSTANT N = 3
@@ -132,8 +132,8 @@ struct TLCConfigurationSelectionTests {
         INVARIANT First
 
         """)
-        #expect(!configuration.render(usesSymmetryReduction: true).contains("SYMMETRY"))
-        #expect(configuration.render(usesSymmetryReduction: true).contains("PROPERTY Progress\n"))
-        #expect(selected.render(usesSymmetryReduction: true).hasSuffix("SYMMETRY Nodes\n"))
+        #expect(try !configuration.render(usesSymmetryReduction: true).contains("SYMMETRY"))
+        #expect(try configuration.render(usesSymmetryReduction: true).contains("PROPERTY Progress\n"))
+        #expect(try selected.render(usesSymmetryReduction: true).hasSuffix("SYMMETRY Nodes\n"))
     }
 }

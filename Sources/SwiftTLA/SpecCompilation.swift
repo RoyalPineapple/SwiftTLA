@@ -376,7 +376,7 @@ public struct CompiledSpecification: Sendable {
                 nextSafeAction: "Export through the generated model with its typed configuration.")
         }
         let renderedBundle = TLAModuleBundle(
-            root: .init(name: metadata.name, tla: rootModule.renderedModuleSource, cfg: rootModule.configuration.render(usesSymmetryReduction: false)),
+            root: .init(name: metadata.name, tla: rootModule.renderedModuleSource, cfg: try rootModule.configuration.render(usesSymmetryReduction: false)),
             imports: try imports.map { imported in
                 let plan = try imported.metadata.renderModule(imported)
                 return .init(name: imported.metadata.name, tla: plan.renderedModuleSource, cfg: nil)
@@ -517,7 +517,7 @@ public struct RenderedSpecification: Sendable {
             symmetry: symmetry, viewOperators: viewOperators,
             postconditionOperators: postconditionOperators)
         let bundle = TLAModuleBundle(root: .init(name: name, tla: try configuredSource(source),
-            cfg: configuration.render(usesSymmetryReduction: false)),
+            cfg: try configuration.render(usesSymmetryReduction: false)),
             imports: _generatedImports.map { .init(name: $0.name, tla: $0.source) }, provenance: .compiled(
                 identity: .init(value: compilationIdentity),
                 ownership: [.init(moduleName: name, owningRoot: name, structuralPath: [])]
@@ -641,7 +641,7 @@ public struct RenderedSpecification: Sendable {
                         structuralPath: path + $0.structuralPath)
                 }
             let bundle = TLAModuleBundle(root: .init(name: source.root.name, tla: sourceText,
-                cfg: selected.render(usesSymmetryReduction: false)), imports: imports,
+                cfg: try selected.render(usesSymmetryReduction: false)), imports: imports,
                 provenance: .compiled(identity: identity, ownership: ownership, dependencies: dependencies))
             try bundle.validateDeclaredClosure()
             return bundle
@@ -669,7 +669,7 @@ public struct RenderedSpecification: Sendable {
             root: .init(
                 name: tlaBundle.root.name,
                 tla: tlaBundle.root.tla,
-                cfg: configuration.render(usesSymmetryReduction: usesSymmetryReduction)
+                cfg: try configuration.render(usesSymmetryReduction: usesSymmetryReduction)
             ),
             imports: tlaBundle.imports,
             provenance: tlaBundle.provenance
@@ -795,16 +795,23 @@ public struct RenderedSpecification: Sendable {
         let selected = try configuration.selecting(names, checkDeadlock: checks.checkDeadlock,
                 behavior: behavior, specificationName: profileOperator)
             .selectingSymmetry(symmetry).selectingView(view).selectingPostcondition(postcondition)
-        func bundle(_ original: TLAModuleBundle, using configuration: TLCConfiguration) -> TLAModuleBundle {
+        func bundle(_ original: TLAModuleBundle, using configuration: TLCConfiguration) throws -> TLAModuleBundle {
             .init(root: .init(name: original.root.name, tla: original.root.tla,
-                cfg: configuration.render(usesSymmetryReduction: symmetry != nil)), imports: original.imports, provenance: original.provenance)
+                cfg: try configuration.render(usesSymmetryReduction: symmetry != nil)), imports: original.imports, provenance: original.provenance)
+        }
+        func selectedBundle(_ original: Result<TLAModuleBundle, CompilationDiagnostic>,
+            using configuration: TLCConfiguration) throws -> Result<TLAModuleBundle, CompilationDiagnostic> {
+            switch original {
+            case .success(let value): return .success(try bundle(value, using: configuration))
+            case .failure: return original
+            }
         }
         let selectedPlusCal: Result<TLAModuleBundle, CompilationDiagnostic>?
         if let fairnessProfile {
             let profileConfiguration = try selected.selecting(names, checkDeadlock: checks.checkDeadlock,
                 specificationName: "Spec")
             if let profile = renderedPlusCalProfiles[fairnessProfile] {
-                selectedPlusCal = profile.map { bundle($0, using: profileConfiguration) }
+                selectedPlusCal = try selectedBundle(profile, using: profileConfiguration)
             } else if renderedPlusCalModuleBundle != nil {
                 selectedPlusCal = .failure(.init(code: .unsupportedFairnessProfile, stage: .rendering,
                     path: "plusCal.fairnessProfile", expected: "a compiled profile-specific PlusCal bundle",
@@ -813,9 +820,9 @@ public struct RenderedSpecification: Sendable {
                 selectedPlusCal = nil
             }
         } else {
-            selectedPlusCal = renderedPlusCalModuleBundle.map { $0.map { bundle($0, using: selected) } }
+            selectedPlusCal = try renderedPlusCalModuleBundle.map { try selectedBundle($0, using: selected) }
         }
-        return .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected,
+        return try .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected,
             initialEvaluationFailure: initialEvaluationFailure,
             initialEvaluationFailureRecord: initialEvaluationFailureRecord, actions: actions,
             renderedPlusCalModuleBundle: selectedPlusCal,
@@ -834,7 +841,7 @@ public struct RenderedSpecification: Sendable {
         let usesSymmetryReduction = try selected.usesSupportedSymmetryReduction(symmetryReduction)
         return TLAModuleBundle(
             root: .init(name: tlaBundle.root.name, tla: tlaBundle.root.tla,
-                cfg: selected.render(usesSymmetryReduction: usesSymmetryReduction)),
+                cfg: try selected.render(usesSymmetryReduction: usesSymmetryReduction)),
             imports: tlaBundle.imports, provenance: tlaBundle.provenance
         )
     }
@@ -2294,9 +2301,9 @@ private extension CompiledModuleMetadata {
         try StraightLineRenderedActionCheck.verifyFiniteInvocations(behavior,
             layout: layout, binders: renderer.bindings.binders, module: directOutput.source)
         let renderedConfiguration = configuration.includingIntrinsicInvariant(directOutput.evaluationInvariant)
-        try StraightLineRenderedActionCheck.verifySourceDefaultDeadlock(renderedConfiguration,
+        try StraightLineRenderedActionCheck.verifyCheckingConfiguration(renderedConfiguration,
             rendered: renderedConfiguration.render(usesSymmetryReduction: false),
-            required: sourceSpecDefaultDeadlockWitness && !orderedIntProofActionNames.isEmpty)
+            requiringSourceDefaultDeadlock: sourceSpecDefaultDeadlockWitness && !orderedIntProofActionNames.isEmpty)
         try StraightLineRenderedActionCheck.verifyEvaluationSelection(behavior,
             module: directOutput.source,
             failureDeclarations: directOutput.evaluationFailureDeclarations,

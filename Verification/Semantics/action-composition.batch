@@ -14,6 +14,7 @@ OrderedIntExpressionRule
 AssignmentActionRule
 BooleanExpressionConstructorRules
 SequenceExpressionConstructorRules
+CheckingSelectionRule
 # Arbitrary finite nesting, checked after every rule module.
 ActionTreeOutcomeComposition
 FramedActionTreeComposition
@@ -21,3 +22,4 @@ AssignmentTreeOutcomeComposition
 OrderedIntAssignmentComposition
 BooleanExpressionComposition
 SequenceExpressionComposition
+CheckingSelectionComposition
