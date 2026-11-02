@@ -1042,8 +1042,8 @@ struct OrderedAssignmentLoweringTests {
             of: "CHECK_DEADLOCK TRUE", with: "CHECK_DEADLOCK FALSE")
         #expect(flippedCFG != cfg)
         #expect(throws: CompilationDiagnostic.self) {
-            try StraightLineRenderedActionCheck.verifySourceDefaultDeadlock(configuration,
-                rendered: flippedCFG, required: true)
+            try StraightLineRenderedActionCheck.verifyCheckingConfiguration(configuration,
+                rendered: flippedCFG, requiringSourceDefaultDeadlock: true)
         }
     }
 
@@ -1462,25 +1462,41 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
-    @Test("Generated ordered Int validation forwards initial failures to the shared checker")
+    @Test("Generated ordered Int validation retains initial failures and selected checks")
     func orderedIntValidationKeepsInitialOutcomes() throws {
         let specification = #spec("OrderedIntValidationOutput") {
+            let selected = Invariant()
+            let omitted = Invariant()
             let algorithm = Algorithm(scoped: { scope in
                 let value = scope.sharedVar(initial: 1)
                 Do(OrderedAssignmentStep.`switch`) { Assign(value, to: value + 1) }
             })
             algorithm
+            selected { true }
+            omitted { false }
             let validation = Validation(label: "Check") {}
+                .checking(only: [selected]).checkingDeadlock(false)
             validation
+            let all = Validation(label: "All") {}.expect(omitted, .violated)
+            all
+            let none = Validation(label: "None") {}.checking(only: []).checkingDeadlock(false)
+            none
         }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
-        #expect(program.requiresSourceDefaultDeadlockOutput)
+        try #require(program.requiresSourceDefaultDeadlockOutput)
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "OrderedIntValidationOutput", program: program))
-        let actual = try #require(try emitter.machineMembers().first {
+        let declarations = try emitter.machineMembers()
+        let actual = try #require(declarations.first {
             $0.as(StructDeclSyntax.self)?.name.text == "ValidationScenario"
         })
-        try verifyOrderedIntValidationOutput(actual, modelName: "OrderedIntValidationOutput", arguments: "")
+        try verifyOrderedIntValidationOutput(declarations, model: emitter.model, arguments: "")
+
+        func replacingScenario(with changed: DeclSyntax) -> [DeclSyntax] {
+            declarations.map {
+                $0.as(StructDeclSyntax.self)?.name.text == "ValidationScenario" ? changed : $0
+            }
+        }
 
         let lostInitialFailure = actual.description.replacingOccurrences(
             of: "return try OrderedIntValidationOutput.initialOutcomes()",
@@ -1489,8 +1505,8 @@ struct OrderedAssignmentLoweringTests {
         let wrongInitial = try #require(Parser.parse(source: lostInitialFailure)
             .statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
-            try verifyOrderedIntValidationOutput(wrongInitial,
-                modelName: "OrderedIntValidationOutput", arguments: "")
+            try verifyOrderedIntValidationOutput(replacingScenario(with: wrongInitial),
+                model: emitter.model, arguments: "")
         }
 
         let lostCheckingFailure = actual.description.replacingOccurrences(
@@ -1500,8 +1516,103 @@ struct OrderedAssignmentLoweringTests {
         let wrongChecking = try #require(Parser.parse(source: lostCheckingFailure)
             .statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
-            try verifyOrderedIntValidationOutput(wrongChecking,
-                modelName: "OrderedIntValidationOutput", arguments: "")
+            try verifyOrderedIntValidationOutput(replacingScenario(with: wrongChecking),
+                model: emitter.model, arguments: "")
+        }
+
+        let scenarios = try #require(declarations.first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "validationScenarios"
+        })
+        let selection = "checking: ModelChecks(properties: [.selected], checkDeadlock: false)"
+        try #require(scenarios.description.components(separatedBy: selection).count == 2)
+        for (label, replacement) in [
+            ("removed selected property", "checking: ModelChecks(properties: [], checkDeadlock: false)"),
+            ("added omitted property", "checking: ModelChecks(properties: [.selected, .omitted], checkDeadlock: false)"),
+            ("changed selected property", "checking: ModelChecks(properties: [.omitted], checkDeadlock: false)"),
+            ("flipped scenario deadlock", "checking: ModelChecks(properties: [.selected], checkDeadlock: true)"),
+        ] {
+            let changed = scenarios.description.replacingOccurrences(of: selection, with: replacement)
+            #expect(changed != scenarios.description)
+            let emitted = declarations.map {
+                $0.as(FunctionDeclSyntax.self)?.name.text == "validationScenarios" ? changed : $0.description
+            }.joined(separator: "\n")
+            let altered = Parser.parse(source: emitted).statements.compactMap { $0.item.as(DeclSyntax.self) }
+            do {
+                try verifyOrderedIntValidationOutput(altered, model: emitter.model, arguments: "")
+                Issue.record("Accepted checking corruption: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native.validation.checkingSelection")
+            }
+        }
+        for (label, checking) in [
+            ("discarded formal property selection", "ModelChecks<Property>(properties: [], checkDeadlock: checking.checkDeadlock)"),
+            ("flipped formal deadlock", "ModelChecks<Property>(properties: checking.properties, checkDeadlock: !checking.checkDeadlock)"),
+        ] {
+            try #require(actual.description.components(separatedBy: ".selectingChecks(checking,").count == 2)
+            let changed = actual.description.replacingOccurrences(of: ".selectingChecks(checking,",
+                with: ".selectingChecks(\(checking),")
+            #expect(changed != actual.description)
+            let altered = try #require(Parser.parse(source: changed).statements.first?.item.as(DeclSyntax.self))
+            do {
+                try verifyOrderedIntValidationOutput(replacingScenario(with: altered),
+                    model: emitter.model, arguments: "")
+                Issue.record("Accepted checking corruption: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native.validation.checkingSelection")
+            }
+        }
+
+        let rendered = try specification.compile().render()
+        let configuration = try program.renderModule().configuration
+        let cfg = rendered.tlaBundle.cfg
+        try StraightLineRenderedActionCheck.verifyCheckingConfiguration(configuration,
+            rendered: cfg, requiringSourceDefaultDeadlock: true)
+        for (label, original, replacement) in [
+            ("removed source property", "INVARIANT selected\n", ""),
+            ("substituted source property", "INVARIANT selected\n", "INVARIANT omitted\n"),
+            ("changed property category", "INVARIANT selected\n", "PROPERTY selected\n"),
+            ("removed intrinsic evaluation check", "INVARIANT __SwiftTLAEvaluationOK\n", ""),
+        ] {
+            try #require(cfg.components(separatedBy: original).count == 2)
+            let changed = cfg.replacingOccurrences(of: original, with: replacement)
+            #expect(changed != cfg)
+            do {
+                try StraightLineRenderedActionCheck.verifyCheckingConfiguration(configuration,
+                    rendered: changed, requiringSourceDefaultDeadlock: true)
+                Issue.record("Accepted CFG checking corruption: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "tla.checking.selection")
+            }
+        }
+
+        let selectedOutput = try rendered.selectingChecks(
+            ModelChecks<String>(properties: ["selected"], checkDeadlock: false),
+            formalPropertyNames: ["selected": "selected"])
+        #expect(selectedOutput.invariantNames == ["selected"])
+        #expect(selectedOutput.intrinsicInvariantNames == ["__SwiftTLAEvaluationOK"])
+        #expect(!selectedOutput.checksDeadlock)
+        let emptyOutput = try rendered.selectingChecks(
+            ModelChecks<String>(properties: [], checkDeadlock: false), formalPropertyNames: [:])
+        #expect(emptyOutput.invariantNames.isEmpty)
+        #expect(emptyOutput.intrinsicInvariantNames == ["__SwiftTLAEvaluationOK"])
+        #expect(!emptyOutput.checksDeadlock)
+        let selectedCFG = selectedOutput.tlaBundle.cfg
+        let expectedSelection = TLCConfiguration(declarations: [], checkDeadlock: false,
+            intrinsicInvariants: ["__SwiftTLAEvaluationOK"], invariants: ["selected"], properties: [], symmetry: [])
+        for (label, original, replacement) in [
+            ("extra scenario property", "INVARIANT selected\n", "INVARIANT selected\nINVARIANT omitted\n"),
+            ("flipped scenario CFG deadlock", "CHECK_DEADLOCK FALSE\n", "CHECK_DEADLOCK TRUE\n"),
+        ] {
+            try #require(selectedCFG.components(separatedBy: original).count == 2)
+            let changed = selectedCFG.replacingOccurrences(of: original, with: replacement)
+            #expect(changed != selectedCFG)
+            do {
+                try StraightLineRenderedActionCheck.verifyCheckingConfiguration(expectedSelection,
+                    rendered: changed, requiringSourceDefaultDeadlock: false)
+                Issue.record("Accepted scenario CFG checking corruption: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "tla.checking.selection")
+            }
         }
     }
 

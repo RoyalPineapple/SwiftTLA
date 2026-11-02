@@ -193,6 +193,9 @@ jobs:
             Sources/SwiftTLAPlugin/NativeSwiftEmitter{,+Machine,+Boolean,+Refinement}.swift \
             Tests/SwiftTLATests/NativeSupportBinding{Fixtures,Tests}.swift \
             Sources/SwiftTLA/StraightLineRenderedActionCheck.swift \
+            Sources/SwiftTLA/TLCConfiguration.swift \
+            Sources/SwiftTLA/SpecCompilation.swift \
+            Sources/SwiftTLAPlugin/NativeSwiftEmitter+Validation.swift \
             Tests/SwiftTLATests/LexicalBindingTests.swift \
             Sources/SwiftTLA/StraightLineAssignmentCheck.swift \
             Tests/SwiftTLATests/ShortCircuitFailureProofTests.swift \
@@ -201,6 +204,7 @@ jobs:
             Tests/SwiftTLATests/GeneratedAtomicUpdateProofTests.swift \
             Tests/SwiftTLATests/ConjunctionFailureSelectionTests.swift \
             Tests/SwiftTLATests/OrderedAssignmentLoweringTests.swift \
+            Tests/SwiftTLATests/TLCConfigurationSelectionTests.swift \
             Tests/SwiftTLATests/NativeExecutionBoundaryTests.swift \
             > .build/semantic-proof-evidence/proof-inputs.sha256
           proof_tool_dir='${{ steps.proof-tool.outputs.directory }}'

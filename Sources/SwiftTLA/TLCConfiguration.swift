@@ -171,8 +171,15 @@ package struct TLCConfiguration: Equatable, Sendable {
             postconditionOperators: postconditionOperators, postcondition: postcondition)
     }
 
-    func render(usesSymmetryReduction: Bool) -> String {
-        if assumptionsOnly { return declarations.joined(separator: "\n") + (declarations.isEmpty ? "" : "\n") }
+    func render(usesSymmetryReduction: Bool) throws -> String {
+        func checked(_ text: String) throws -> String {
+            try StraightLineRenderedActionCheck.verifyCheckingConfiguration(self,
+                rendered: text, requiringSourceDefaultDeadlock: false)
+            return text
+        }
+        if assumptionsOnly {
+            return try checked(declarations.joined(separator: "\n") + (declarations.isEmpty ? "" : "\n"))
+        }
         let header = behavior.directives(specificationName: specificationName)
             + [checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
         let checks = (intrinsicInvariants + invariants + reachabilityProperties).map { "INVARIANT \($0)" }
@@ -185,6 +192,6 @@ package struct TLCConfiguration: Equatable, Sendable {
         lines.append(contentsOf: reduction)
         if let view { lines.append("VIEW \(view)") }
         if let postcondition { lines.append("POSTCONDITION \(postcondition)") }
-        return lines.joined(separator: "\n") + "\n"
+        return try checked(lines.joined(separator: "\n") + "\n")
     }
 }
