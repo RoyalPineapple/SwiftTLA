@@ -8,11 +8,16 @@ AlternativeActionRule
 BranchwiseConjunctionRule
 GuardActionRule
 FrameActionRule
+PendingWriteOutcomeRule
 PendingFrameOutcomeRule
+OrderedIntExpressionRule
+AssignmentActionRule
 BooleanExpressionConstructorRules
 SequenceExpressionConstructorRules
 # Arbitrary finite nesting, checked after every rule module.
 ActionTreeOutcomeComposition
 FramedActionTreeComposition
+AssignmentTreeOutcomeComposition
+OrderedIntAssignmentComposition
 BooleanExpressionComposition
 SequenceExpressionComposition

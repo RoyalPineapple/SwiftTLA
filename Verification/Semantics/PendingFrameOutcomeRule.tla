@@ -1,35 +1,13 @@
 -------------------- MODULE PendingFrameOutcomeRule --------------------
-EXTENDS FrameActionRule, Sequences
-
-CONSTANTS FailureValues, NoFailure
-
-PendingUpdates == UNION {[keys -> Values] : keys \in SUBSET Vars}
-Outcomes == INSTANCE ActionOutcomeInterface WITH UpdateValues <- PendingUpdates
-
-Materialize(prior) ==
-    [pending \in PendingUpdates |-> ApplyDelta(prior, DOMAIN pending, pending)]
+EXTENDS PendingWriteOutcomeRule
 
 \* The source retains every existing constraint and adds the prior-state frame.
 SourcePendingFrame(prior, pending, frame) ==
-    IF frame \in DOMAIN pending /\ pending[frame] # prior[frame]
-    THEN Outcomes!EmptyOrdered
-    ELSE [updates |-> <<[key \in DOMAIN pending \cup {frame} |->
-                IF key \in DOMAIN pending THEN pending[key] ELSE prior[frame]]>>,
-          failure |-> NoFailure]
+    SourcePendingWrite(pending, frame, prior[frame])
 
 \* Generated merging tests compatibility, then writes the incoming frame slot.
 GeneratedPendingFrame(prior, pending, frame) ==
-    IF frame \notin DOMAIN pending \/ pending[frame] = prior[frame]
-    THEN [updates |-> <<[key \in DOMAIN pending \cup {frame} |->
-                IF key = frame THEN prior[frame] ELSE pending[key]]>>,
-          failure |-> NoFailure]
-    ELSE Outcomes!EmptyOrdered
-
-THEOREM PendingUpdatesHaveTypedDomains ==
-    \A pending \in PendingUpdates :
-        /\ DOMAIN pending \in SUBSET Vars
-        /\ pending \in [DOMAIN pending -> Values]
-    BY SMT DEF PendingUpdates
+    GeneratedPendingWrite(pending, frame, prior[frame])
 
 THEOREM PendingFrameRuleComposes ==
     ASSUME NEW prior \in States, NEW pending \in PendingUpdates,
@@ -37,26 +15,7 @@ THEOREM PendingFrameRuleComposes ==
     PROVE /\ SourcePendingFrame(prior, pending, frame) =
                  GeneratedPendingFrame(prior, pending, frame)
           /\ SourcePendingFrame(prior, pending, frame) \in Outcomes!SingleCandidateLeft
-    PROOF
-    <1>1. DOMAIN pending \in SUBSET Vars /\ pending \in [DOMAIN pending -> Values]
-        BY PendingUpdatesHaveTypedDomains, SMT
-    <1>2. [key \in DOMAIN pending \cup {frame} |->
-                IF key \in DOMAIN pending THEN pending[key] ELSE prior[frame]] \in PendingUpdates
-        BY <1>1, SMT DEF PendingUpdates, States
-    <1>3. (frame \notin DOMAIN pending \/ pending[frame] = prior[frame]) =>
-              [key \in DOMAIN pending \cup {frame} |->
-                  IF key \in DOMAIN pending THEN pending[key] ELSE prior[frame]] =
-              [key \in DOMAIN pending \cup {frame} |->
-                  IF key = frame THEN prior[frame] ELSE pending[key]]
-        BY SMT
-    <1>. QED BY <1>2, <1>3, SMT
-        DEF SourcePendingFrame, GeneratedPendingFrame, Outcomes!EmptyOrdered,
-            Outcomes!SingleCandidateLeft, Outcomes!OrderedOutcome
-
-THEOREM MaterializationIsComplete ==
-    ASSUME NEW prior \in States
-    PROVE Materialize(prior) \in [PendingUpdates -> States]
-    BY PendingUpdatesHaveTypedDomains, SMT DEF Materialize, ApplyDelta, States
+    BY PendingWriteRuleComposes, SMT DEF SourcePendingFrame, GeneratedPendingFrame, States
 
 THEOREM PendingFramesPreserveCompleteLabeledOutcomes ==
     ASSUME NEW prior \in States, NEW pending \in PendingUpdates,
@@ -79,7 +38,7 @@ THEOREM PendingFramesPreserveCompleteLabeledOutcomes ==
               SourcePendingFrame(prior, pending, frame)) =
               SourceFrameObservation(prior, label, frame, DOMAIN pending, pending, NoFailure)
         BY <1>1, CompleteDeltaUpdate, SMT
-            DEF SourcePendingFrame, Materialize, PendingUpdates, ApplyDelta, States,
+            DEF SourcePendingFrame, SourcePendingWrite, Materialize, PendingUpdates, ApplyDelta, States,
                 SourceFrameObservation, FrameObservation, SourceFramedDelta,
                 RenderedDelta, Outcomes!CompleteLabeledOutcome, Outcomes!EmptyOrdered
     <1>. QED BY <1>2, <1>3, <1>4, SMT
@@ -93,13 +52,13 @@ THEOREM ForgettingAFrameLosesTheLaterWriteConstraint ==
                     [updates |-> <<pending>>, failure |-> NoFailure]
              /\ frame \in DOMAIN recorded /\ recorded[frame] # incoming
              /\ frame \notin DOMAIN pending
-    BY SMT DEF SourcePendingFrame
+    BY SMT DEF SourcePendingFrame, SourcePendingWrite
 
 THEOREM AcceptingAConflictingFrameChangesTheOutcome ==
     ASSUME NEW prior \in States, NEW pending \in PendingUpdates,
            NEW frame \in DOMAIN pending, pending[frame] # prior[frame]
     PROVE SourcePendingFrame(prior, pending, frame) #
               [updates |-> <<pending>>, failure |-> NoFailure]
-    BY SMT DEF SourcePendingFrame, Outcomes!EmptyOrdered
+    BY SMT DEF SourcePendingFrame, SourcePendingWrite, Outcomes!EmptyOrdered
 
 =============================================================================
