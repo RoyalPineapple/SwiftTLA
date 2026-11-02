@@ -8,6 +8,28 @@ IndexedHistory(steps, history, count) ==
     \A index \in 1..count :
         history[index] = steps[index][HistoryPrefix(history, index - 1)]
 
+THEOREM FiniteIndexedPrefixProperty ==
+    ASSUME NEW count \in Nat, NEW property(_),
+           property(0),
+           \A index \in 1..count :
+               ((\A child \in 0..(index - 1) : property(child)) => property(index))
+    PROVE \A index \in 0..count : property(index)
+    PROOF
+    <1>. DEFINE P(length) ==
+        \A index \in 0..count : index <= length => property(index)
+    <1>1. P(0) BY SMT DEF P
+    <1>2. ASSUME NEW length \in Nat, P(length)
+          PROVE P(length + 1)
+        <2>. SUFFICES ASSUME length + 1 \in 1..count
+                     PROVE property(length + 1)
+            BY P(length), SMT DEF P
+        <2>1. \A child \in 0..length : property(child)
+            BY P(length), SMT DEF P
+        <2>. QED BY <2>1, SMT
+    <1>3. \A length \in Nat : P(length)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED BY <1>3, SMT DEF P
+
 THEOREM FiniteIndexedHistoryExists ==
     ASSUME NEW count \in Nat, NEW results, NEW steps,
            \A index \in 1..count : steps[index] \in [[1..(index - 1) -> results] -> results]

@@ -1,5 +1,5 @@
 -------------------- MODULE OrderedIntExpressionRule --------------------
-EXTENDS TLAPS, Integers, NaturalsInduction
+EXTENDS TLAPS, Integers, NaturalsInduction, IndexedHistoryRules
 
 CONSTANTS Keys, SwiftIntMin, SwiftIntMax
 ASSUME IntegerDomain ==
@@ -15,6 +15,13 @@ SourceOverflow(left, right) == [ok |-> FALSE, value |-> 0,
     failure |-> <<"integerOverflow", "addition", <<left, right>>>>]
 GeneratedOverflow(left, right) == [ok |-> FALSE, value |-> 0,
     failure |-> <<"integerOverflow", "addition", <<left, right>>>>]
+
+ArithmeticFailures ==
+    {"integerOverflow"} \X {"addition"} \X
+        ((SwiftIntMin..SwiftIntMax) \X (SwiftIntMin..SwiftIntMax))
+ExpressionOutcomes ==
+    [ok: {TRUE}, value: SwiftIntMin..SwiftIntMax, failure: {<<"none", 0, 0>>}] \cup
+    [ok: {FALSE}, value: {0}, failure: ArithmeticFailures]
 
 SourceAdd(left, right) ==
     IF InRange(left + right) THEN Success(left + right)
@@ -179,41 +186,6 @@ OutcomeAgrees(source, generated, index) ==
     /\ source[index] = generated[index]
     /\ (source[index].ok => InRange(source[index].value))
 
-THEOREM IndexedOutcomeInduction ==
-    ASSUME NEW count \in Nat, NEW source, NEW generated,
-           OutcomeAgrees(source, generated, 0),
-           \A index \in 1..count :
-               (\A prior \in 0..(index - 1) :
-                   OutcomeAgrees(source, generated, prior))
-               => OutcomeAgrees(source, generated, index)
-    PROVE \A index \in 0..count : OutcomeAgrees(source, generated, index)
-    PROOF
-    <1>. DEFINE P(index) ==
-        index \in 0..count =>
-            \A prior \in 0..index : OutcomeAgrees(source, generated, prior)
-    <1>1. P(0)
-        BY SMT DEF P
-    <1>2. ASSUME NEW index \in Nat, P(index)
-          PROVE P(index + 1)
-        <2>. SUFFICES ASSUME index + 1 \in 0..count
-                     PROVE \A prior \in 0..(index + 1) :
-                         OutcomeAgrees(source, generated, prior)
-            BY SMT DEF P
-        <2>1. index \in 0..count
-            BY SMT
-        <2>2. \A prior \in 0..index :
-                OutcomeAgrees(source, generated, prior)
-            BY <2>1, P(index), SMT DEF P
-        <2>3. index + 1 \in 1..count
-            BY SMT
-        <2>4. OutcomeAgrees(source, generated, index + 1)
-            BY <2>2, <2>3, SMT
-        <2>. QED BY <2>2, <2>4, SMT
-    <1>3. HIDE DEF P
-    <1>4. \A index \in Nat : P(index)
-        BY <1>1, <1>2, NatInduction
-    <1>. QED BY <1>4, SMT DEF P
-
 THEOREM ExpressionHistoryPreservesValueAndFirstFailure ==
     ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
            NEW state, NEW source, NEW generated,
@@ -224,6 +196,7 @@ THEOREM ExpressionHistoryPreservesValueAndFirstFailure ==
                state, generated)
     PROVE \A index \in 0..count : OutcomeAgrees(source, generated, index)
     PROOF
+    <1>. DEFINE agrees(index) == OutcomeAgrees(source, generated, index)
     <1>1. count \in Nat
         BY SMT DEF ExpressionPlan
     <1>2. OutcomeAgrees(source, generated, 0)
@@ -248,7 +221,13 @@ THEOREM ExpressionHistoryPreservesValueAndFirstFailure ==
             BY SMT DEF GeneratedExpressionHistory
         <2>. QED BY <2>1, <2>2, ExpressionNodeRule, SMT
             DEF OutcomeAgrees
-    <1>. QED BY <1>1, <1>2, <1>3, IndexedOutcomeInduction
+    <1>4. agrees(0) /\
+              \A index \in 1..count :
+                  ((\A child \in 0..(index - 1) : agrees(child)) => agrees(index))
+        BY <1>2, <1>3 DEF agrees
+    <1>5. \A index \in 0..count : agrees(index)
+        BY <1>1, <1>4, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>5 DEF agrees
 
 ExpressionNode(generated, index, kinds, literals, reads, left, right,
                state, history) ==
@@ -481,6 +460,88 @@ THEOREM AssignmentUpdateFormsAgree ==
     PROVE [state EXCEPT ![root] = value]
         = [key \in Keys |-> IF key = root THEN value ELSE state[key]]
     BY SMT
+
+THEOREM AdditionOutcomesAreTyped ==
+    ASSUME NEW first \in ExpressionOutcomes, NEW second \in ExpressionOutcomes
+    PROVE /\ SourceCombine(first, second) \in ExpressionOutcomes
+          /\ GeneratedCombine(first, second) \in ExpressionOutcomes
+    PROOF
+    <1>1. first.ok \in BOOLEAN /\ second.ok \in BOOLEAN
+        BY SMT DEF ExpressionOutcomes
+    <1>2. SourceCombine(first, second) \in ExpressionOutcomes
+        <2>1. CASE ~first.ok
+            BY <2>1, SMT DEF SourceCombine
+        <2>2. CASE first.ok /\ ~second.ok
+            BY <2>2, SMT DEF SourceCombine
+        <2>3. CASE first.ok /\ second.ok
+            <3>1. first.value \in SwiftIntMin..SwiftIntMax /\ second.value \in SwiftIntMin..SwiftIntMax
+                BY <2>3, SMT DEF ExpressionOutcomes
+            <3>2. <<"integerOverflow", "addition", <<first.value, second.value>>>> \in ArithmeticFailures
+                BY <3>1, SMT DEF ArithmeticFailures
+            <3>3. SourceOverflow(first.value, second.value) \in ExpressionOutcomes
+                BY <3>2, SMT DEF SourceOverflow, ExpressionOutcomes
+            <3>4. InRange(first.value + second.value) =>
+                      Success(first.value + second.value) \in ExpressionOutcomes
+                BY SMT DEF InRange, Success, ExpressionOutcomes
+            <3>. QED BY <2>3, <3>3, <3>4, SMT DEF SourceCombine, SourceAdd
+        <2>. QED BY <1>1, <2>1, <2>2, <2>3, SMT
+    <1>3. (first.ok => InRange(first.value)) /\ (second.ok => InRange(second.value))
+        BY SMT DEF ExpressionOutcomes, InRange
+    <1>. QED BY <1>2, <1>3, CombinedAdditionRule, SMT
+
+THEOREM ExpressionNodeOutcomesAreTyped ==
+    ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
+           NEW state, NEW history,
+           ExpressionPlan(count, kinds, literals, reads, left, right, state),
+           NEW index \in 1..count,
+           \A position \in 0..(index - 1) : history[position] \in ExpressionOutcomes
+    PROVE /\ SourceNode(index, kinds, literals, reads, left, right, state, history) \in ExpressionOutcomes
+          /\ GeneratedNode(index, kinds, literals, reads, left, right, state, history) \in ExpressionOutcomes
+    PROOF
+    <1>1. CASE kinds[index] = "literal"
+        BY <1>1, SMT DEF SourceNode, GeneratedNode, ExpressionPlan, Success, ExpressionOutcomes
+    <1>2. CASE kinds[index] = "read"
+        BY <1>2, SMT DEF SourceNode, GeneratedNode, ExpressionPlan, Success, ExpressionOutcomes
+    <1>3. CASE kinds[index] = "add"
+        <2>1. history[left[index]] \in ExpressionOutcomes /\ history[right[index]] \in ExpressionOutcomes
+            BY <1>3, SMT DEF ExpressionPlan
+        <2>. QED BY <1>3, <2>1, AdditionOutcomesAreTyped, SMT DEF SourceNode, GeneratedNode
+    <1>. QED BY <1>1, <1>2, <1>3, SMT DEF ExpressionPlan
+
+THEOREM ExpressionHistoriesHaveTypedOutcomes ==
+    ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
+           NEW state, NEW source, NEW generated,
+           ExpressionPlan(count, kinds, literals, reads, left, right, state),
+           SourceExpressionHistory(count, kinds, literals, reads, left, right, state, source),
+           GeneratedExpressionHistory(count, kinds, literals, reads, left, right, state, generated)
+    PROVE \A index \in 0..count :
+              source[index] \in ExpressionOutcomes /\ generated[index] \in ExpressionOutcomes
+    PROOF
+    <1>. DEFINE typed(index) == source[index] \in ExpressionOutcomes /\ generated[index] \in ExpressionOutcomes
+    <1>1. typed(0)
+        BY IntegerDomain, SMT
+            DEF typed, SourceExpressionHistory, GeneratedExpressionHistory,
+                Success, ExpressionOutcomes, IntegerDomain
+    <1>2. \A index \in 1..count :
+              ((\A child \in 0..(index - 1) : typed(child)) => typed(index))
+        <2>. SUFFICES ASSUME NEW index \in 1..count,
+                             \A child \in 0..(index - 1) : typed(child)
+                     PROVE typed(index)
+            BY SMT
+        <2>1. \A child \in 0..(index - 1) : source[child] \in ExpressionOutcomes
+            BY SMT DEF typed
+        <2>2. \A child \in 0..(index - 1) : generated[child] \in ExpressionOutcomes
+            BY SMT DEF typed
+        <2>3. SourceNode(index, kinds, literals, reads, left, right, state, source) \in ExpressionOutcomes
+            BY <2>1, ExpressionNodeOutcomesAreTyped
+        <2>4. GeneratedNode(index, kinds, literals, reads, left, right, state, generated) \in ExpressionOutcomes
+            BY <2>2, ExpressionNodeOutcomesAreTyped
+        <2>. QED BY <2>3, <2>4, SMT DEF typed, SourceExpressionHistory, GeneratedExpressionHistory
+    <1>3. count \in Nat
+        BY SMT DEF ExpressionPlan
+    <1>4. \A index \in 0..count : typed(index)
+        BY <1>1, <1>2, <1>3, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>4 DEF typed
 
 THEOREM OrderedIntExpressionPreservesAssignmentOutcome ==
     ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,

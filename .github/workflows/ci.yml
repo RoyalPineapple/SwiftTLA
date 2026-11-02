@@ -199,6 +199,9 @@ jobs:
             Sources/SwiftTLA/StraightLineRenderedActionCheck+Sequence.swift \
             Tests/SwiftTLATests/SequenceExpressionLoweringContractTests.swift \
             Tests/SwiftTLATests/GeneratedAtomicUpdateProofTests.swift \
+            Tests/SwiftTLATests/ConjunctionFailureSelectionTests.swift \
+            Tests/SwiftTLATests/OrderedAssignmentLoweringTests.swift \
+            Tests/SwiftTLATests/NativeExecutionBoundaryTests.swift \
             > .build/semantic-proof-evidence/proof-inputs.sha256
           proof_tool_dir='${{ steps.proof-tool.outputs.directory }}'
           "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version \

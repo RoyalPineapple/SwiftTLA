@@ -1,20 +1,23 @@
 import Testing
+import SwiftParser
+import SwiftSyntax
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
 @Suite("Conjunction failure selection")
 struct ConjunctionFailureSelectionTests {
-    @Test("Generated TLA+ reports a right failure only after an enabled left action")
-    func emittedFailureOrder() throws {
+    @Test("Generated outputs evaluate writes before merge and select failures in order", arguments: [false, true])
+    func emittedFailureOrder(overlappingTarget: Bool) throws {
         let specification = TLASpec(name: "FallibleConjunction", variables: [
             .init(name: "divisor", initial: .int(1)),
             .init(name: "left", initial: .int(0)),
             .init(name: "right", initial: .int(0)),
         ], actions: [.init(name: "step", body: .and(
-            .assign(.named("left"), .divide(.int(1), .variable("divisor"))),
+            .assign(.named(overlappingTarget ? "right" : "left"), .divide(.int(1), .variable("divisor"))),
             .assign(.named("right"), .add(.int(.max), .int(1)))))], invariants: [])
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
-        guard case .and(_, _) = try #require(program.behavior.actions.first).body else {
+        let action = try #require(program.behavior.actions.first)
+        guard case .and(_, _) = action.body else {
             Issue.record("The compiled action lost its conjunction")
             return
         }
@@ -44,6 +47,29 @@ struct ConjunctionFailureSelectionTests {
                 try verify(output.renderedModuleSource.replacingOccurrences(of: original, with: changed),
                     output.evaluationFailureDeclarations.map { $0 == original ? changed : $0 })
             }
+        }
+
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "FallibleConjunction", program: program))
+        let visitor = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
+        })
+        let writes = try emitter.actionFunctions(action.body).writes
+        try verifyGeneratedActionWriteOutput(visitor, action: action.body,
+            program: program, stateFields: emitter.stateMemberNames, parts: writes)
+        let fallible = try #require(writes.last { $0.value.contains("try ") })
+        let merge = "if let merged = updates.merging(_Updates(\(fallible.slot): \(fallible.value))) { try emit(merged) }"
+        let skippedFailure = visitor.description.replacingOccurrences(of: merge,
+            with: "if updates.\(fallible.slot) != nil { return }\n\(merge)")
+        #expect(skippedFailure != visitor.description)
+        let changed = try #require(Parser.parse(source: skippedFailure)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(changed, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A pending write suppressed a fallible assignment before evaluation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.write.\(fallible.id)")
         }
     }
 
