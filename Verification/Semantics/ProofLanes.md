@@ -10,6 +10,7 @@ Family diagnostics give early feedback. They do not replace integrated admission
 | Integration | `codex/proof-integration-lane`, worktree `proof-integration-lane/SwiftTLA` | CI routing, shared prerequisites, integrated revision, admission evidence |
 | Critical connections | `codex/ordered-capture-rule`, worktree `ordered-initial-failure-record/SwiftTLA` | Ordered capture and binding connections, new mixed scoped-Int composition, `LexicalBindingTests.swift` |
 | Independent Boolean family | `codex/proof-boolean-family`, worktree `proof-boolean-family/SwiftTLA` | Boolean expression rules and composition, `StraightLineRenderedActionCheck.swift`, `ShortCircuitFailureProofTests.swift` |
+| Independent sequence family | `codex/proof-sequence-family`, worktree `proof-sequence-family/SwiftTLA` | Sequence rules, composition, checker extension, and existing lowerer/output test owners |
 
 Worktree names refer to directories under `/Users/alex/.codex/worktrees/`.
 The integration lane owns shared manifests and workflow files. Family branches own separate focused batch manifests and scope records.
@@ -29,8 +30,13 @@ The admitted base for both families is `d0419d84501e7043b1f67a184740d81ceb2ee3c6
 The Boolean branch starts directly at that base. The critical branch retains dependent preparation from that same base.
 The unpublished critical stack is not an admitted base for the independent family.
 The integration lane must preserve the separate native-helper binding repair before the next admission candidate.
-The current Boolean integration transports the independently audited `20b20c31` source/output family onto ecf3 and retains all three shared repairs.
-It requires new integrated admission; the focused family diagnostic is not a substitute.
+The Boolean source/output family from `20b20c31` is integrated and admitted at `c12091f70c025aa6050155439bd167e914a8711a`.
+That revision also preserves the definition-stack and renderer repairs, native-helper repair, and pinned-download prerequisite.
+The sequence integration uses this admitted revision as its dependency.
+It transports only the sequence scope from `c7742346` to `d559041f`, then extends the existing source checker after an executed mutation baseline.
+The extension preserves all Boolean cases and their identity checks.
+The original Boolean and sequence family revisions remain frozen.
+The new integrated candidate requires ordinary CI and full unfiltered admission; historical family diagnostics cannot substitute for them.
 
 The shared outcome schema remains frozen during each family batch.
 These SHA-256 values identify the admitted definitions:
@@ -43,6 +49,9 @@ These SHA-256 values identify the admitted definitions:
 
 The prepared critical stack adds general functional-history lemmas without changing the outcome schema.
 The Boolean family must not depend on those unpublished additions.
+The sequence branch also starts from the admitted base, not from either unpublished family.
+The integration lane owns shared checker hooks and diagnostic routing for the sequence branch.
+The sequence source-link repair depends on the Boolean source checker admitted at c120; it is not an independent shared-checker change.
 If incompatible shared changes are necessary, treat them as dependencies. Integrate and admit the shared prerequisite first.
 
 ## Family deliverable
@@ -65,6 +74,7 @@ The existing `ci.yml` has a manual `proof_family` input:
 | --- | --- | --- |
 | `scoped-action-binding` | `scoped-action-binding.batch` | `LexicalBindingTests` |
 | `boolean-expression` | `boolean-expression.batch` | `ShortCircuitFailureProofTests`, `BooleanBranchLoweringContractTests` |
+| `sequence-expression` | `sequence-expression.batch` | `SequenceExpressionLoweringContractTests`, `GeneratedAtomicUpdateProofTests`, `CollectionCheckingTests` |
 
 The routing script accepts only these family names.
 Each family dispatch runs pinned proofs and implementation checks as separate jobs.

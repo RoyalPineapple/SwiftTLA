@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import SwiftParser
 import SwiftSyntax
+import SwiftTLAMacros
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
@@ -713,13 +714,66 @@ struct GeneratedAtomicUpdateProofTests {
         }
     }
 
-    @Test("A generated concatenation retains its operand order")
+    @Test("Pure sequence append and concatenation retain their actual Swift and TLA operands")
     func sequenceConcatenationRetainsOrder() throws {
-        let compiled = try SequenceConcatenationMachine.spec.compile()
+        let specification = #spec("SequenceExpressionOutput") { scope in
+            let front = scope.sharedVar(initial: [Int]([1]))
+            let back = scope.sharedVar(initial: [Int]([2, 2]))
+            Do(SequenceConcatenationMachine.Step.combine) {
+                Assign(front, to: front.appending(3).concatenating(back))
+            }
+        }
+        let compiled = try specification.compile()
+        let sourceAction = try #require(try specification.loweredSourceModel().actions.first)
+        let untypedAction = try #require(compiled.semantics.behavior.actions.first)
+        try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+            bindings: untypedAction.bindings, body: untypedAction.body, layout: compiled.layout)
+        for mutation in ["append read", "concatenation read", "concatenation order",
+                         "appended element", "omitted append", "changed constructor"] {
+            var changed = 0
+            let body = untypedAction.body.map { expression in
+                guard expression.operation == .tupleConcatenate,
+                      expression.children.count == 2 else { return expression }
+                let append = expression.children[0]
+                guard append.operation == .tupleAppend, append.children.count == 2 else {
+                    return expression
+                }
+                let sequence = append.children[0]
+                let element = append.children[1]
+                let right = expression.children[1]
+                let operands: [CompiledExpression]
+                switch mutation {
+                case "append read":
+                    operands = [.init(operation: .tupleAppend, resultType: append.resultType,
+                        children: [right, element]), right]
+                case "concatenation read": operands = [append, sequence]
+                case "concatenation order": operands = [right, append]
+                case "appended element":
+                    operands = [.init(operation: .tupleAppend, resultType: append.resultType,
+                        children: [sequence, .init(operation: .value(.integer(4)),
+                            resultType: element.resultType, children: [])]), right]
+                case "omitted append": operands = [sequence, right]
+                default:
+                    changed += 1
+                    return append
+                }
+                changed += 1
+                return .init(operation: expression.operation, resultType: expression.resultType,
+                    children: operands)
+            }
+            try #require(changed == 1)
+            do {
+                try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+                    bindings: untypedAction.bindings, body: body, layout: compiled.layout)
+                Issue.record("Sequence \(mutation) escaped normalized-source verification")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "actions.\(sourceAction.name).compiledAssignments")
+            }
+        }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         let action = try #require(program.behavior.actions.first)
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
-            typeName: "SequenceConcatenationMachine", program: program))
+            typeName: "SequenceExpressionOutput", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
         let writes = try emitter.actionFunctions(action.body).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
@@ -736,6 +790,45 @@ struct GeneratedAtomicUpdateProofTests {
             Issue.record("A generated concatenation accepted reversed operands")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+        let changedAppend = visitor.description.replacingOccurrences(
+            of: "sequenceAppend(_sequenceValue, _appendedValue)",
+            with: "sequenceAppend(_sequenceValue, 4)")
+        #expect(changedAppend != visitor.description)
+        let wrongElement = try #require(Parser.parse(source: changedAppend)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongElement, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A nested append accepted a changed element")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+
+        let output = try program.renderModule()
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        let rendered = try renderer.action(action.body)
+        #expect(output.renderedModuleSource.contains(rendered))
+        try StraightLineRenderedActionCheck.verify(action.body, rendered: rendered,
+            layout: program.layout, binders: program.binderNames, required: true)
+        for (original, replacement) in [
+            ("(Append(front, 3) \\o back)", "(back \\o Append(front, 3))"),
+            ("Append(front, 3)", "Append(back, 3)"),
+            ("Append(front, 3)", "Append(front, 4)"),
+        ] {
+            let changed = rendered.replacingOccurrences(of: original, with: replacement)
+            #expect(changed != rendered)
+            do {
+                try StraightLineRenderedActionCheck.verify(action.body, rendered: changed,
+                    layout: program.layout, binders: program.binderNames, required: true)
+                Issue.record("The actual TLA sequence output accepted a changed operand")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "tla.action.scalarAssignments")
+            }
         }
     }
 

@@ -863,10 +863,13 @@ enum StraightLineAssignmentCheck {
                     guard compiled.operation == operation, compiled.children.count == 2 else { return false }
                     pending.append((right, compiled.children[1]))
                     pending.append((left, compiled.children[0]))
-                case .equal(let left, let right), .and(let left, let right), .or(let left, let right):
+                case .equal(let left, let right), .and(let left, let right), .or(let left, let right),
+                     .tupleAppend(let left, let right), .tupleConcatenate(let left, let right):
                     let operation: CompiledOperation = switch source {
                     case .and: .and
                     case .or: .or
+                    case .tupleAppend: .tupleAppend
+                    case .tupleConcatenate: .tupleConcatenate
                     default: .equal
                     }
                     guard compiled.operation == operation, compiled.children.count == 2 else { return false }
@@ -973,7 +976,8 @@ enum StraightLineAssignmentCheck {
                  .modulo(let left, let right):
                 pending.append(right)
                 pending.append(left)
-            case .equal(let left, let right), .and(let left, let right), .or(let left, let right):
+            case .equal(let left, let right), .and(let left, let right), .or(let left, let right),
+                 .tupleAppend(let left, let right), .tupleConcatenate(let left, let right):
                 pending.append(right)
                 pending.append(left)
             case .not(let child):

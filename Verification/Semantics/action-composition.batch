@@ -10,7 +10,9 @@ GuardActionRule
 FrameActionRule
 PendingFrameOutcomeRule
 BooleanExpressionConstructorRules
+SequenceExpressionConstructorRules
 # Arbitrary finite nesting, checked after every rule module.
 ActionTreeOutcomeComposition
 FramedActionTreeComposition
 BooleanExpressionComposition
+SequenceExpressionComposition
