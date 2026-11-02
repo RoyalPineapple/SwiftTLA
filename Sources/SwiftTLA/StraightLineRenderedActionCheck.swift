@@ -861,11 +861,13 @@ enum StraightLineRenderedActionCheck {
             return (try renderer.state(value), try renderer.evaluationDefined(value),
                 try renderer.anyFailurePredicate(.guard_(value)), try renderer.expressionEvaluationFailures(value))
         }
-        func mismatch() -> CompilationDiagnostic {
+        func mismatch(
+            expected: String = "all emitted action failures selected by the TLC evaluation invariant",
+            actual: String = "the module or configuration omits or changes that selection"
+        ) -> CompilationDiagnostic {
             CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                 path: "tla.evaluationSelection",
-                expected: "all emitted action failures selected by the TLC evaluation invariant",
-                actual: "the module or configuration omits or changes that selection",
+                expected: expected, actual: actual,
                 nextSafeAction: "Regenerate the evaluation invariant and TLC configuration.")
         }
         func pureGuard(_ condition: CompiledExpression) -> Bool {
@@ -932,21 +934,36 @@ enum StraightLineRenderedActionCheck {
                 return (failure, first.sites + later)
             }
             switch node {
-            case .define(let binder, let value, let body) where checkedExpression(value) != nil:
-                guard let name = renderer.bindings.binders[binder] else { throw mismatch() }
-                let facts = try expressionFacts(value)
-                let continuation = try composedOutcome(body)
-                let sites = facts.sites + continuation.sites.map { site in
-                    let selected = "(LET \(name) == \(facts.value) IN \(site.predicate))"
-                    return RenderedEvaluationFailure(
-                        predicate: facts.defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected,
-                        operands: site.operands.map { "(LET \(name) == \(facts.value) IN \($0))" },
-                        kind: site.kind)
+            case .define(_, let value, _) where checkedExpression(value) != nil:
+                // shortcut: mixed action trees still recurse; extend the stack when mixed-depth owners require it.
+                var definitions: [(name: String, value: String, defined: String?, failure: String?,
+                    sites: [RenderedEvaluationFailure])] = []
+                var remaining = node
+                while case .define(let binder, let value, let body) = remaining,
+                      checkedExpression(value) != nil {
+                    guard let name = renderer.bindings.binders[binder] else { throw mismatch() }
+                    let facts = try expressionFacts(value)
+                    definitions.append((name, facts.value, facts.defined, facts.failure, facts.sites))
+                    remaining = body
                 }
-                guard let later = continuation.failure else { return (facts.failure, sites) }
-                let bound = "(LET \(name) == \(facts.value) IN \(later))"
-                let guarded = facts.defined.map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
-                return (facts.failure.map { "(\($0) \\/ \(guarded))" } ?? guarded, sites)
+                var continuation = try composedOutcome(remaining)
+                for facts in definitions.reversed() {
+                    let sites = facts.sites + continuation.sites.map { site in
+                        let selected = "(LET \(facts.name) == \(facts.value) IN \(site.predicate))"
+                        return RenderedEvaluationFailure(
+                            predicate: facts.defined.map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected,
+                            operands: site.operands.map { "(LET \(facts.name) == \(facts.value) IN \($0))" },
+                            kind: site.kind)
+                    }
+                    guard let later = continuation.failure else {
+                        continuation = (facts.failure, sites)
+                        continue
+                    }
+                    let bound = "(LET \(facts.name) == \(facts.value) IN \(later))"
+                    let guarded = facts.defined.map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
+                    continuation = (facts.failure.map { "(\($0) \\/ \(guarded))" } ?? guarded, sites)
+                }
+                return continuation
             case .guard_(let condition) where checkedExpression(condition) != nil:
                 let facts = try expressionFacts(condition)
                 return (facts.failure, facts.sites)
@@ -1019,7 +1036,8 @@ enum StraightLineRenderedActionCheck {
                       let header = candidates[0].components(separatedBy: " == ").first,
                       candidates[0] == "\(header) == \(value)",
                       lines.filter({ $0.hasPrefix("\(header) == ") }) == candidates else {
-                    throw mismatch()
+                    throw mismatch(expected: "\(base)\(suffix) == \(value)",
+                        actual: candidates.joined(separator: "\n"))
                 }
             }
             var occurrences: [String: Int] = [:]
@@ -1093,7 +1111,7 @@ enum StraightLineRenderedActionCheck {
             guard lines.filter({ $0 == declaration }).count == 1,
                   let header = declaration.components(separatedBy: " == ").first else { throw mismatch() }
             if let checkedComposition, declaration != "\(header) == \(checkedComposition)" {
-                throw mismatch()
+                throw mismatch(expected: "\(header) == \(checkedComposition)", actual: declaration)
             }
             let name = String(header.dropLast(parameterSuffix.count))
             guard !parameters.isEmpty else {
