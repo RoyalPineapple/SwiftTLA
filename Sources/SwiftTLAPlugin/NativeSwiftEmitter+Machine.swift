@@ -476,7 +476,7 @@ extension NativeSwiftEmitter {
             })
         try verifyInitialSelection(declarations.first, expectedMembershipSources: expectedMembershipSources)
         try verifyInitialStateAssembly(declarations.first)
-        try verifyDeterministicIntInitialOutput(declarations.first)
+        try verifyIntInitialOutput(declarations.first)
         try verifyGeneratedInitialConstruction(declarations, configured: !program.layout.parameters.isEmpty,
             sampled: hasRandomSubset)
         if hasRandomSubset {
@@ -608,8 +608,8 @@ extension NativeSwiftEmitter {
         }
     }
 
-    func verifyDeterministicIntInitialOutput(_ declaration: DeclSyntax?) throws {
-        // shortcut: this exact template covers ordered Int and control initializers; extend it with each proved initializer form.
+    func verifyIntInitialOutput(_ declaration: DeclSyntax?) throws {
+        // shortcut: other domain/child operations, configuration and invariant selection need their own rules.
         guard program.layout.parameters.isEmpty, program.behavior.initialInvariant == nil,
               !program.behavior.initializations.isEmpty,
               program.behavior.initializations.count == program.layout.variables.count else { return }
@@ -618,24 +618,51 @@ extension NativeSwiftEmitter {
             ($0.id, variable($0.id))
         })
         for initialization in program.behavior.initializations {
-            guard case .value(let expression) = initialization.initialization else { return }
             let value: String
             let type: String
-            switch (expression.operation, expression.resultType) {
-            case (.value(.integer(let integer)), .int):
-                type = "Int"
-                value = integer == Int.min ? "Int.min" : String(integer)
-            case (.controlLocation(let location), .controlLocation):
-                type = "_ControlLocation"
-                value = "_ControlLocation.location\(location.ordinal)"
-            case (_, .int):
-                guard let checked = checkedIntInitialValue(expression, slots: slots) else { return }
+            switch initialization.initialization {
+            case .value(let expression):
+                switch (expression.operation, expression.resultType) {
+                case (.value(.integer(let integer)), .int):
+                    type = "Int"
+                    value = integer == Int.min ? "Int.min" : String(integer)
+                case (.controlLocation(let location), .controlLocation):
+                    type = "_ControlLocation"
+                    value = "_ControlLocation.location\(location.ordinal)"
+                case (_, .int):
+                    guard let checked = checkedIntInitialValue(expression, slots: slots) else { return }
+                    type = "Int"
+                    value = checked
+                default: return
+                }
+            case .memberOf(let domain):
+                guard program.variableTypes[initialization.variable] == .int,
+                      domain.resultType == .set(.int),
+                      let checked = checkedIntInitialDomainValue(domain, slots: slots) else { return }
                 type = "Int"
                 value = checked
-            default: return
             }
             bindings.append((variable(initialization.variable), type, value))
         }
+        func mismatch() -> CompilationDiagnostic {
+            CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native._initialStates.completeIntOutput",
+                expected: "the complete ordered Int initial-state and failure template",
+                actual: "the generated initial function contains an unrecognized statement or changed value",
+                nextSafeAction: "Report this native initialization generation failure.")
+        }
+        let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) } ?? []
+        let predicatePrefix = "_membershipPredicate"
+        let predicateNames = actualTokens.indices.compactMap { index -> String? in
+            guard actualTokens[index] == "func", index + 1 < actualTokens.count,
+                  actualTokens[index + 1].hasPrefix(predicatePrefix) else { return nil }
+            return actualTokens[index + 1]
+        }
+        guard Set(predicateNames).count == predicateNames.count,
+              predicateNames.allSatisfy({ name in
+                  Int(name.dropFirst(predicatePrefix.count)).map { $0 >= 0 } == true
+              }) else { throw mismatch() }
+        var nextPredicate = 0
         let visible = Dictionary(uniqueKeysWithValues: model.api.variables.map {
             ($0.id, $0.swiftIdentifier)
         })
@@ -647,19 +674,53 @@ extension NativeSwiftEmitter {
         }.joined()
         var body = "var result: [Snapshot] = []\nvar firstFailure: NativeMachineEvaluationError?\nvar firstFailureInitializerOrdinal: Int?\nvar evaluatingInitializerOrdinal: Int?\n"
         body += "try SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
+        var closing = ""
         for (initialization, binding) in zip(program.behavior.initializations, bindings) {
             body += "evaluatingInitializerOrdinal = \(initialization.variable.ordinal)\n"
-            body += "let \(binding.name): \(binding.type) = \(binding.value)\n"
-            body += "evaluatingInitializerOrdinal = nil\n"
-            if let field = visible[initialization.variable] {
-                body += "if _selectedInitial == nil || _selectedInitial!.\(field) == \(binding.name) {\n"
+            switch initialization.initialization {
+            case .value:
+                body += "let \(binding.name): \(binding.type) = \(binding.value)\n"
+                body += "evaluatingInitializerOrdinal = nil\n"
+                if let field = visible[initialization.variable] {
+                    body += "if _selectedInitial == nil || _selectedInitial!.\(field) == \(binding.name) {\n"
+                    closing = "}\n" + closing
+                }
+            case .memberOf(let domain):
+                let ordered = "\(binding.value).sorted(by: { (lhs: Int, rhs: Int) -> Bool in\nreturn lhs < rhs\n})"
+                if let field = visible[initialization.variable] {
+                    guard let membership = checkedIntInitialDomainMembership(domain, candidate: binding.name,
+                        slots: slots, predicateNames: predicateNames, nextPredicate: &nextPredicate) else {
+                        throw mismatch()
+                    }
+                    body += """
+                    let \(binding.name)Candidates: [Int] = try SwiftTLA._NativeMachineOperations.initialCandidates(
+                        selecting: _selectedInitial.map(\\.\(field)),
+                        enumerate: { \(ordered) },
+                        contains: { \(binding.name) in
+                        let \(binding.name)_isMember = \(membership)
+                        return \(binding.name)_isMember
+                        }
+                    )
+                    for \(binding.name) in \(binding.name)Candidates {
+
+                    """
+                } else {
+                    body += "for \(binding.name) in \(ordered) {\n"
+                }
+                body += "evaluatingInitializerOrdinal = nil\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
+                closing = """
+                }, onEvaluationFailure: { failure in
+                    if firstFailure == nil {
+                        firstFailure = failure
+                        firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
+                    }
+                })
+                }
+
+                """ + closing
             }
         }
-        body += "result.append(Snapshot(state: State(\(publicFields))\(hiddenFields)))\n"
-        for initialization in program.behavior.initializations.reversed()
-            where visible[initialization.variable] != nil {
-            body += "}\n"
-        }
+        body += "result.append(Snapshot(state: State(\(publicFields))\(hiddenFields)))\n" + closing
         body += """
         }, onEvaluationFailure: { failure in
             if firstFailure == nil {
@@ -676,14 +737,8 @@ extension NativeSwiftEmitter {
         }
         """).statements.first?.item.as(FunctionDeclSyntax.self)
         let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
-        let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
-        guard expectedTokens != nil, actualTokens == expectedTokens else {
-            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
-                path: "native._initialStates.completeIntOutput",
-                expected: "the complete ordered Int initial-state and failure template",
-                actual: "the generated initial function contains an unrecognized statement or changed value",
-                nextSafeAction: "Report this native initialization generation failure.")
-        }
+        guard nextPredicate == predicateNames.count, let expectedTokens,
+              actualTokens == expectedTokens else { throw mismatch() }
         for initialization in program.behavior.initializations {
             guard case .value(let expression) = initialization.initialization,
                   expression.resultType == .int else { continue }
@@ -1451,6 +1506,114 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
             nextSafeAction: "Report this native code generation failure."
         )
     }
+}
+
+private func checkedIntInitialDomainValue(_ root: CompiledExpression,
+                                          slots: [VariableID: String]) -> String? {
+    var pending = [(root, false)]
+    var values: [String] = []
+    while let (node, expanded) = pending.popLast() {
+        if node.resultType == .int {
+            guard let value = checkedIntInitialValue(node, slots: slots) else { return nil }
+            values.append(value)
+            continue
+        }
+        let types: [CompiledValueType]
+        switch (node.operation, node.resultType) {
+        case (.equal, .bool) where node.children.count == 2: types = [.int, .int]
+        case (.integerRange, .set(.int)) where node.children.count == 2: types = [.int, .int]
+        case (.setLiteral, .set(.int)): types = node.children.map { _ in .int }
+        case (.ifThenElse, .set(.int)) where node.children.count == 3:
+            types = [.bool, .set(.int), .set(.int)]
+        default: return nil
+        }
+        guard zip(node.children, types).allSatisfy({ $0.0.resultType == $0.1 }) else { return nil }
+        if !expanded {
+            pending.append((node, true))
+            pending.append(contentsOf: node.children.reversed().map { ($0, false) })
+            continue
+        }
+        guard values.count >= types.count else { return nil }
+        let children = Array(values.suffix(types.count))
+        values.removeLast(types.count)
+        let value: String
+        switch node.operation {
+        case .equal: value = "(\(children[0]) == \(children[1]))"
+        case .integerRange:
+            value = "(try SwiftTLA._NativeMachineOperations.integerRange(\(children[0]), \(children[1])))"
+        case .setLiteral: value = "Set<Int>([\(children.joined(separator: ", "))])"
+        case .ifThenElse: value = "(\(children[0]) ? \(children[1]) : \(children[2]))"
+        default: return nil
+        }
+        values.append(value)
+    }
+    return values.count == 1 ? values[0] : nil
+}
+
+private func checkedIntInitialDomainMembership(_ root: CompiledExpression, candidate: String,
+                                               slots: [VariableID: String], predicateNames: [String],
+                                               nextPredicate: inout Int) -> String? {
+    var nodes = [root]
+    var symbolic = false
+    while let node = nodes.popLast() {
+        if case .integerRange = node.operation { symbolic = true; break }
+        nodes.append(contentsOf: node.children)
+    }
+    if !symbolic {
+        return checkedIntInitialDomainValue(root, slots: slots).map { "(\($0).contains(\(candidate)))" }
+    }
+    var pending: [(CompiledExpression, String?)] = [(root, nil)]
+    var values: [(declaration: String, call: String)] = []
+    while let (node, assignedName) = pending.popLast() {
+        guard let name = assignedName else {
+            guard nextPredicate < predicateNames.count else { return nil }
+            let name = predicateNames[nextPredicate]
+            nextPredicate += 1
+            pending.append((node, name))
+            if case .ifThenElse = node.operation {
+                guard node.children.count == 3 else { return nil }
+                pending.append((node.children[2], nil))
+                pending.append((node.children[1], nil))
+            }
+            continue
+        }
+        let body: String
+        switch node.operation {
+        case .integerRange:
+            guard node.children.count == 2,
+                  let lower = checkedIntInitialDomainValue(node.children[0], slots: slots),
+                  let upper = checkedIntInitialDomainValue(node.children[1], slots: slots) else { return nil }
+            body = """
+            let bounds = try SwiftTLA._NativeMachineOperations.integerRangeBounds(\(lower), \(upper))
+            return { candidate in bounds?.contains(candidate) ?? false }
+            """
+        case .setLiteral:
+            guard let members = checkedIntInitialDomainValue(node, slots: slots) else { return nil }
+            body = "let members = \(members)\nreturn { members.contains($0) }"
+        case .ifThenElse:
+            guard node.children.count == 3, values.count >= 2,
+                  let condition = checkedIntInitialDomainValue(node.children[0], slots: slots) else { return nil }
+            let second = values.removeLast()
+            let first = values.removeLast()
+            body = """
+            \(first.declaration)
+            \(second.declaration)
+            if \(condition) { return \(first.call) }
+            return \(second.call)
+            """
+        default: return nil
+        }
+        values.append(("func \(name)() throws -> ((Int) -> Bool) {\n\(body)\n}", "try \(name)()"))
+    }
+    guard values.count == 1, let predicate = values.first else { return nil }
+    return """
+    (try { () throws -> Bool in
+        \(predicate.declaration)
+        let contains = \(predicate.call)
+        let candidate = \(candidate)
+        return contains(candidate)
+    }())
+    """
 }
 
 private func checkedIntInitialValue(_ root: CompiledExpression,

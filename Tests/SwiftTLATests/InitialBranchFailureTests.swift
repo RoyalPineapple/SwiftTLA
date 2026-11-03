@@ -155,7 +155,7 @@ struct InitialBranchFailureTests {
         let swiftOutput = try #require(try emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
         })
-        try emitter.verifyDeterministicIntInitialOutput(swiftOutput)
+        try emitter.verifyIntInitialOutput(swiftOutput)
         let siteAssignment = "evaluatingInitializerOrdinal = \(last.id.ordinal)"
         let wrongSwift = swiftOutput.description.replacingOccurrences(of: siteAssignment,
             with: "evaluatingInitializerOrdinal = \(last.id.ordinal - 1)")
@@ -163,7 +163,7 @@ struct InitialBranchFailureTests {
         let wrongSwiftOutput = try #require(Parser.parse(source: wrongSwift)
             .statements.first?.item.as(DeclSyntax.self))
         do {
-            try emitter.verifyDeterministicIntInitialOutput(wrongSwiftOutput)
+            try emitter.verifyIntInitialOutput(wrongSwiftOutput)
             Issue.record("A wrong generated Swift failure site escaped the output check")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native._initialStates.completeIntOutput")
