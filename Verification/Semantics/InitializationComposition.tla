@@ -1,6 +1,8 @@
 -------------------- MODULE InitializationComposition --------------------
 EXTENDS InitializationOutcomeRules, IndexedHistoryRules
 
+Finite == INSTANCE FiniteSetTheorems
+
 PartialBindings == UNION {[bound -> Values] : bound \in SUBSET Keys}
 InitialFailureEvents ==
     [before: PartialBindings, site: Keys \cup {NoInitialSite}, payload: FailureValues]
@@ -23,11 +25,375 @@ GeneratedAdvance(previous, key, evaluate) ==
                            prior \in previous.states}) \cup previous.failures]
 
 PrefixKeys(order, count) == {order[index] : index \in 1..count}
+THEOREM PrefixKeysGrowByOne ==
+    ASSUME NEW count \in Nat, NEW order \in [1..count -> Keys], NEW step \in 1..count
+    PROVE PrefixKeys(order, step) = PrefixKeys(order, step - 1) \cup {order[step]}
+    BY SMT DEF PrefixKeys
+
 InitializationOrder(count, order) ==
     /\ count \in Nat
     /\ order \in [1..count -> Keys]
     /\ \A first, second \in 1..count : order[first] = order[second] => first = second
     /\ PrefixKeys(order, count) = Keys
+SourceReadyKeys(dependencies, bound) ==
+    {key \in Keys \ bound : dependencies[key] \subseteq bound}
+GeneratedReadyKeys(dependencies, remaining) ==
+    {key \in remaining : dependencies[key] \cap remaining = {}}
+FirstReadyDeclaration(count, declarations, ready, index) ==
+    /\ index \in 1..count
+    /\ declarations[index] \in ready
+    /\ \A earlier \in 1..(index - 1) : declarations[earlier] \notin ready
+
+THEOREM UnboundDependenciesAreExactlyTheRemainingDependencies ==
+    ASSUME NEW dependencies \in [Keys -> SUBSET Keys], NEW bound \in SUBSET Keys
+    PROVE SourceReadyKeys(dependencies, bound)
+        = GeneratedReadyKeys(dependencies, Keys \ bound)
+    BY SMT DEF SourceReadyKeys, GeneratedReadyKeys
+
+THEOREM AvailableKeyWithCertifiedEarlierReadsIsFirstReady ==
+    ASSUME NEW count, NEW declarations, InitializationOrder(count, declarations),
+           NEW dependencies \in [Keys -> SUBSET Keys], NEW bound \in SUBSET Keys,
+           NEW certified \in SUBSET Keys, NEW index \in 1..count,
+           declarations[index] \in SourceReadyKeys(dependencies, bound),
+           \A earlier \in 1..(index - 1) :
+               /\ (declarations[earlier] \notin bound => declarations[earlier] \in certified)
+               /\ (declarations[earlier] \in certified =>
+                   declarations[earlier] \notin GeneratedReadyKeys(dependencies, Keys \ bound))
+    PROVE FirstReadyDeclaration(count, declarations, SourceReadyKeys(dependencies, bound), index)
+    BY UnboundDependenciesAreExactlyTheRemainingDependencies, SMT
+        DEF FirstReadyDeclaration, SourceReadyKeys
+
+THEOREM AReadyDeclarationHasAUniqueFirstPosition ==
+    ASSUME NEW count, NEW declarations, InitializationOrder(count, declarations),
+           NEW ready \in SUBSET Keys, ready # {}
+    PROVE \E index \in 1..count :
+        /\ FirstReadyDeclaration(count, declarations, ready, index)
+        /\ \A other : FirstReadyDeclaration(count, declarations, ready, other) => other = index
+    PROOF
+    <1>. DEFINE P(index) == index \in 1..count /\ declarations[index] \in ready
+    <1>1. \E index \in Nat : P(index)
+        BY SMT DEF P, InitializationOrder, PrefixKeys
+    <1>1a. PICK candidate \in Nat : P(candidate) BY <1>1
+    <1>1b. HIDE DEF P
+    <1>2. \E index \in Nat : P(index) /\ \A earlier \in 0..(index - 1) : ~P(earlier)
+        BY <1>1a, SmallestNatural
+    <1>3. PICK index \in Nat : P(index) /\ \A earlier \in 0..(index - 1) : ~P(earlier)
+        BY <1>2
+    <1>4. FirstReadyDeclaration(count, declarations, ready, index)
+        BY <1>3, SMT DEF P, FirstReadyDeclaration, InitializationOrder
+    <1>5. \A other : FirstReadyDeclaration(count, declarations, ready, other) => other = index
+        BY <1>4, SMT DEF FirstReadyDeclaration
+    <1>. QED BY <1>3, <1>4, <1>5, SMT DEF P
+
+SourceDependencyOrder(count, declarations, dependencies, order) ==
+    /\ InitializationOrder(count, order)
+    /\ \A step \in 1..count : \E index \in 1..count :
+        /\ FirstReadyDeclaration(count, declarations,
+            SourceReadyKeys(dependencies, PrefixKeys(order, step - 1)), index)
+        /\ order[step] = declarations[index]
+GeneratedDependencyOrder(count, declarations, dependencies, order) ==
+    /\ InitializationOrder(count, order)
+    /\ \A step \in 1..count : \E index \in 1..count :
+        /\ FirstReadyDeclaration(count, declarations,
+            GeneratedReadyKeys(dependencies, Keys \ PrefixKeys(order, step - 1)), index)
+        /\ order[step] = declarations[index]
+
+THEOREM SourceAndGeneratedDependencyOrderRulesAgree ==
+    ASSUME NEW count, NEW declarations, InitializationOrder(count, declarations),
+           NEW dependencies \in [Keys -> SUBSET Keys],
+           NEW order, InitializationOrder(count, order)
+    PROVE SourceDependencyOrder(count, declarations, dependencies, order)
+        <=> GeneratedDependencyOrder(count, declarations, dependencies, order)
+    PROOF
+    <1>1. \A step \in 1..count : PrefixKeys(order, step - 1) \subseteq Keys
+        BY SMT DEF InitializationOrder, PrefixKeys
+    <1>2. \A step \in 1..count :
+        SourceReadyKeys(dependencies, PrefixKeys(order, step - 1))
+        = GeneratedReadyKeys(dependencies, Keys \ PrefixKeys(order, step - 1))
+        BY <1>1, UnboundDependenciesAreExactlyTheRemainingDependencies, SMT
+    <1>. QED BY <1>2, SMT DEF SourceDependencyOrder, GeneratedDependencyOrder
+
+THEOREM StableDependencyOrdersHaveTheSamePrefixes ==
+    ASSUME NEW count, NEW declarations, InitializationOrder(count, declarations),
+           NEW dependencies \in [Keys -> SUBSET Keys], NEW source, NEW generated,
+           SourceDependencyOrder(count, declarations, dependencies, source),
+           GeneratedDependencyOrder(count, declarations, dependencies, generated)
+    PROVE source = generated
+    PROOF
+    <1>1. InitializationOrder(count, source) /\ InitializationOrder(count, generated)
+        BY SMT DEF SourceDependencyOrder, GeneratedDependencyOrder
+    <1>2. SourceDependencyOrder(count, declarations, dependencies, generated)
+        BY <1>1, SourceAndGeneratedDependencyOrderRulesAgree
+    <1>. DEFINE P(length) == \A index \in 1..length : source[index] = generated[index]
+    <1>3. P(0) BY SMT DEF P
+    <1>4. \A step \in 1..count :
+        ((\A prior \in 0..(step - 1) : P(prior)) => P(step))
+        <2>. SUFFICES ASSUME NEW step \in 1..count,
+                             \A prior \in 0..(step - 1) : P(prior)
+                     PROVE P(step)
+            BY SMT
+        <2>1. P(step - 1) BY SMT
+        <2>2. PrefixKeys(source, step - 1) = PrefixKeys(generated, step - 1)
+            BY <2>1, SMT DEF P, PrefixKeys
+        <2>3. PICK first \in 1..count :
+            /\ FirstReadyDeclaration(count, declarations,
+                SourceReadyKeys(dependencies, PrefixKeys(source, step - 1)), first)
+            /\ source[step] = declarations[first]
+            BY SMT DEF SourceDependencyOrder
+        <2>4. PICK second \in 1..count :
+            /\ FirstReadyDeclaration(count, declarations,
+                SourceReadyKeys(dependencies, PrefixKeys(generated, step - 1)), second)
+            /\ generated[step] = declarations[second]
+            BY <1>2, SMT DEF SourceDependencyOrder
+        <2>5. first = second
+            BY <2>2, <2>3, <2>4, SMT DEF FirstReadyDeclaration
+        <2>. QED BY <2>1, <2>3, <2>4, <2>5, SMT DEF P
+    <1>5. count \in Nat BY SMT DEF InitializationOrder
+    <1>5a. HIDE DEF P
+    <1>6. \A step \in 0..count : P(step)
+        BY <1>3, <1>4, <1>5, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>1, <1>5, <1>6, SMT DEF P, InitializationOrder
+
+THEOREM DependencyOrderBindsEveryReadBeforeEvaluation ==
+    ASSUME NEW count, NEW declarations, NEW dependencies, NEW order,
+           SourceDependencyOrder(count, declarations, dependencies, order)
+    PROVE \A step \in 1..count : dependencies[order[step]] \subseteq PrefixKeys(order, step - 1)
+    BY SMT DEF SourceDependencyOrder, FirstReadyDeclaration, SourceReadyKeys
+
+THEOREM RankedDependenciesAlwaysProvideAReadyKey ==
+    ASSUME NEW dependencies \in [Keys -> SUBSET Keys],
+           NEW rank \in [Keys -> Nat], NEW remaining \in SUBSET Keys, remaining # {},
+           \A key \in Keys : \A dependency \in dependencies[key] : rank[dependency] < rank[key]
+    PROVE GeneratedReadyKeys(dependencies, remaining) # {}
+    PROOF
+    <1>. DEFINE P(value) == \E key \in remaining : rank[key] = value
+    <1>1. PICK key \in remaining : TRUE BY SMT
+    <1>2. rank[key] \in Nat /\ P(rank[key]) BY <1>1, SMT DEF P
+    <1>3. HIDE DEF P
+    <1>4. PICK least \in Nat : P(least) /\ \A earlier \in 0..(least - 1) : ~P(earlier)
+        BY <1>2, SmallestNatural
+    <1>5. PICK ready \in remaining : rank[ready] = least BY <1>4 DEF P
+    <1>6. \A dependency \in dependencies[ready] \cap remaining :
+        rank[dependency] \in 0..(least - 1) /\ P(rank[dependency])
+        BY <1>5, SMT DEF P
+    <1>7. dependencies[ready] \cap remaining = {}
+        BY <1>4, <1>6, SMT
+    <1>. QED BY <1>5, <1>7, SMT DEF GeneratedReadyKeys
+
+THEOREM RemovingAReadyKeyAdvancesTheBoundPrefix ==
+    ASSUME NEW remaining \in SUBSET Keys,
+           NEW dependencies, NEW key \in GeneratedReadyKeys(dependencies, remaining)
+    PROVE /\ remaining \ {key} \subseteq remaining
+          /\ remaining \ {key} # remaining
+          /\ Keys \ (remaining \ {key}) = (Keys \ remaining) \cup {key}
+    BY SMT DEF GeneratedReadyKeys
+
+THEOREM OmittingAReadCanFalselyDeclareAnInitializerReady ==
+    ASSUME NEW target \in Keys, NEW dependency \in Keys,
+           NEW remaining \in SUBSET Keys, target \in remaining, dependency \in remaining
+    PROVE /\ target \notin SourceReadyKeys([key \in Keys |-> {dependency}], Keys \ remaining)
+          /\ target \in GeneratedReadyKeys([key \in Keys |-> {}], remaining)
+    BY SMT DEF SourceReadyKeys, GeneratedReadyKeys
+
+THEOREM SkippingAnEarlierReadyDeclarationChangesTheStableOrder ==
+    ASSUME NEW count \in Nat, NEW declarations, NEW ready,
+           NEW earlier \in 1..count, NEW later \in 1..count, earlier < later,
+           declarations[earlier] \in ready, declarations[later] \in ready
+    PROVE ~FirstReadyDeclaration(count, declarations, ready, later)
+    BY SMT DEF FirstReadyDeclaration
+
+GeneratedDependencyPrefix(count, declarations, dependencies, length, order) ==
+    /\ length \in 0..count
+    /\ order \in [1..length -> Keys]
+    /\ \A first, second \in 1..length : order[first] = order[second] => first = second
+    /\ \A step \in 1..length : \E index \in 1..count :
+        /\ FirstReadyDeclaration(count, declarations,
+            GeneratedReadyKeys(dependencies, Keys \ PrefixKeys(order, step - 1)), index)
+        /\ order[step] = declarations[index]
+
+THEOREM DeclarationOrderCountsAllKeys ==
+    ASSUME NEW count, NEW declarations, InitializationOrder(count, declarations)
+    PROVE Finite!IsFiniteSet(Keys) /\ Finite!Cardinality(Keys) = count
+    PROOF
+    <1>1. count \in Nat BY SMT DEF InitializationOrder
+    <1>2. declarations \in Finite!Bijection(1..count, Keys)
+        BY SMT DEF InitializationOrder, PrefixKeys, Finite!Bijection,
+            Finite!Injection, Finite!Surjection, Finite!IsInjective
+    <1>3. Finite!ExistsBijection(1..count, Keys)
+        BY <1>2, SMT DEF Finite!ExistsBijection
+    <1>4. Finite!IsFiniteSet(Keys)
+        BY <1>1, <1>3, Finite!FS_NatBijection, SMT
+    <1>5. Finite!Cardinality(Keys) = count
+        BY <1>1, <1>3, Finite!FS_CountingElements, SMT
+    <1>. QED BY <1>4, <1>5
+
+THEOREM AppendingTheFirstReadyKeyExtendsDependencyPrefix ==
+    ASSUME NEW count, NEW declarations, InitializationOrder(count, declarations),
+           NEW dependencies \in [Keys -> SUBSET Keys], NEW length, NEW order,
+           GeneratedDependencyPrefix(count, declarations, dependencies, length, order),
+           length < count, NEW index,
+           FirstReadyDeclaration(count, declarations,
+               GeneratedReadyKeys(dependencies, Keys \ PrefixKeys(order, length)), index)
+    PROVE /\ GeneratedDependencyPrefix(count, declarations, dependencies, length + 1,
+               HistoryAppend(order, length, declarations[index]))
+          /\ declarations[index] \in Keys \ PrefixKeys(order, length)
+          /\ Keys \ PrefixKeys(HistoryAppend(order, length, declarations[index]), length + 1)
+               = (Keys \ PrefixKeys(order, length)) \ {declarations[index]}
+    PROOF
+    <1>. DEFINE extended == HistoryAppend(order, length, declarations[index])
+    <1>1. count \in Nat /\ length \in Nat /\ length + 1 \in 0..count
+          /\ declarations[index] \in Keys \ PrefixKeys(order, length)
+        BY SMT DEF InitializationOrder, GeneratedDependencyPrefix, FirstReadyDeclaration, GeneratedReadyKeys
+    <1>2. extended \in [1..(length + 1) -> Keys]
+          /\ \A first, second \in 1..(length + 1) : extended[first] = extended[second] => first = second
+        BY <1>1, SMT DEF GeneratedDependencyPrefix, extended, HistoryAppend, PrefixKeys
+    <1>3. \A prefix \in 0..length : PrefixKeys(extended, prefix) = PrefixKeys(order, prefix)
+        BY <1>1, SMT DEF PrefixKeys, extended, HistoryAppend
+    <1>4. \A step \in 1..(length + 1) : \E position \in 1..count :
+        /\ FirstReadyDeclaration(count, declarations,
+            GeneratedReadyKeys(dependencies, Keys \ PrefixKeys(extended, step - 1)), position)
+        /\ extended[step] = declarations[position]
+        <2>. SUFFICES ASSUME NEW step \in 1..(length + 1)
+                     PROVE \E position \in 1..count :
+                         /\ FirstReadyDeclaration(count, declarations,
+                             GeneratedReadyKeys(dependencies, Keys \ PrefixKeys(extended, step - 1)), position)
+                         /\ extended[step] = declarations[position]
+            BY SMT
+        <2>1. CASE step = length + 1
+            BY <1>1, <1>3, <2>1, SMT DEF extended, HistoryAppend, FirstReadyDeclaration
+        <2>2. CASE step # length + 1
+            BY <1>1, <1>3, <2>2, SMT DEF GeneratedDependencyPrefix, extended, HistoryAppend
+        <2>. QED BY <2>1, <2>2, SMT
+    <1>5. GeneratedDependencyPrefix(count, declarations, dependencies, length + 1, extended)
+        BY <1>1, <1>2, <1>4 DEF GeneratedDependencyPrefix
+    <1>6a. PrefixKeys(extended, length + 1) = PrefixKeys(extended, length) \cup {extended[length + 1]}
+        BY <1>1, <1>2, PrefixKeysGrowByOne, SMT
+    <1>6b. PrefixKeys(extended, length) = PrefixKeys(order, length)
+          /\ extended[length + 1] = declarations[index]
+        BY <1>1, <1>3, SMT DEF extended, HistoryAppend
+    <1>6. Keys \ PrefixKeys(extended, length + 1)
+        = (Keys \ PrefixKeys(order, length)) \ {declarations[index]}
+        BY <1>6a, <1>6b
+    <1>. QED BY <1>1, <1>5, <1>6 DEF extended
+
+THEOREM RankedDependenciesConstructACompleteStableOrder ==
+    ASSUME NEW count, NEW declarations, InitializationOrder(count, declarations),
+           NEW dependencies \in [Keys -> SUBSET Keys], NEW rank \in [Keys -> Nat],
+           \A key \in Keys : \A dependency \in dependencies[key] : rank[dependency] < rank[key]
+    PROVE \E order, remaining :
+        /\ SourceDependencyOrder(count, declarations, dependencies, order)
+        /\ GeneratedDependencyOrder(count, declarations, dependencies, order)
+        /\ remaining \in [0..count -> SUBSET Keys]
+        /\ remaining[0] = Keys /\ remaining[count] = {}
+        /\ \A step \in 1..count :
+            /\ order[step] \in remaining[step - 1]
+            /\ remaining[step] = remaining[step - 1] \ {order[step]}
+    PROOF
+    <1>0. count \in Nat /\ Finite!IsFiniteSet(Keys) /\ Finite!Cardinality(Keys) = count
+        BY DeclarationOrderCountsAllKeys, SMT DEF InitializationOrder
+    <1>. DEFINE P(length) == length <= count => \E order :
+        /\ GeneratedDependencyPrefix(count, declarations, dependencies, length, order)
+        /\ Finite!IsFiniteSet(Keys \ PrefixKeys(order, length))
+        /\ Finite!Cardinality(Keys \ PrefixKeys(order, length)) = count - length
+    <1>1. P(0)
+        <2>. DEFINE empty == [index \in 1..0 |-> index]
+        <2>1. GeneratedDependencyPrefix(count, declarations, dependencies, 0, empty)
+            BY <1>0, SMT DEF GeneratedDependencyPrefix, empty
+        <2>2. Keys \ PrefixKeys(empty, 0) = Keys BY SMT DEF PrefixKeys
+        <2>. QED BY <1>0, <2>1, <2>2, SMT DEF P
+    <1>2. ASSUME NEW length \in Nat, P(length)
+          PROVE P(length + 1)
+        <2>. SUFFICES ASSUME length + 1 <= count
+                     PROVE \E order :
+                         /\ GeneratedDependencyPrefix(count, declarations, dependencies, length + 1, order)
+                         /\ Finite!IsFiniteSet(Keys \ PrefixKeys(order, length + 1))
+                         /\ Finite!Cardinality(Keys \ PrefixKeys(order, length + 1)) = count - (length + 1)
+            BY SMT DEF P
+        <2>1. PICK order :
+            /\ GeneratedDependencyPrefix(count, declarations, dependencies, length, order)
+            /\ Finite!IsFiniteSet(Keys \ PrefixKeys(order, length))
+            /\ Finite!Cardinality(Keys \ PrefixKeys(order, length)) = count - length
+            BY <1>0, P(length), SMT DEF P
+        <2>. DEFINE remaining == Keys \ PrefixKeys(order, length)
+        <2>2. remaining \in SUBSET Keys /\ remaining # {} /\ length < count
+            BY <1>0, <2>1, Finite!FS_EmptySet, SMT DEF remaining
+        <2>3. GeneratedReadyKeys(dependencies, remaining) \in SUBSET Keys
+              /\ GeneratedReadyKeys(dependencies, remaining) # {}
+            BY <2>2, RankedDependenciesAlwaysProvideAReadyKey, SMT DEF GeneratedReadyKeys
+        <2>4. PICK index \in 1..count :
+            FirstReadyDeclaration(count, declarations, GeneratedReadyKeys(dependencies, remaining), index)
+            BY <2>3, AReadyDeclarationHasAUniqueFirstPosition, SMT
+        <2>. DEFINE extended == HistoryAppend(order, length, declarations[index])
+        <2>5. GeneratedDependencyPrefix(count, declarations, dependencies, length + 1, extended)
+              /\ declarations[index] \in remaining
+              /\ Keys \ PrefixKeys(extended, length + 1) = remaining \ {declarations[index]}
+            BY <2>1, <2>2, <2>4, AppendingTheFirstReadyKeyExtendsDependencyPrefix, SMT DEF extended, remaining
+        <2>6. Finite!IsFiniteSet(Keys \ PrefixKeys(extended, length + 1))
+              /\ Finite!Cardinality(Keys \ PrefixKeys(extended, length + 1)) = count - (length + 1)
+            BY <1>0, <2>1, <2>5, Finite!FS_RemoveElement, SMT DEF remaining
+        <2>. QED BY <2>5, <2>6, SMT
+    <1>3. HIDE DEF P
+    <1>4. \A length \in Nat : P(length) BY <1>1, <1>2, NatInduction
+    <1>5. PICK order :
+        /\ GeneratedDependencyPrefix(count, declarations, dependencies, count, order)
+        /\ Finite!IsFiniteSet(Keys \ PrefixKeys(order, count))
+        /\ Finite!Cardinality(Keys \ PrefixKeys(order, count)) = 0
+        BY <1>0, <1>4, SMT DEF P
+    <1>6. Keys \ PrefixKeys(order, count) = {}
+        BY <1>5, Finite!FS_EmptySet, SMT
+    <1>6a. PrefixKeys(order, count) \subseteq Keys
+        BY <1>5, SMT DEF GeneratedDependencyPrefix, PrefixKeys
+    <1>6b. PrefixKeys(order, count) = Keys BY <1>6, <1>6a
+    <1>7. InitializationOrder(count, order)
+        BY <1>0, <1>5, <1>6b, SMT DEF InitializationOrder, GeneratedDependencyPrefix
+    <1>8. GeneratedDependencyOrder(count, declarations, dependencies, order)
+        BY <1>5, <1>7 DEF GeneratedDependencyOrder, GeneratedDependencyPrefix
+    <1>9. SourceDependencyOrder(count, declarations, dependencies, order)
+        BY <1>7, <1>8, SourceAndGeneratedDependencyOrderRulesAgree, SMT
+    <1>. DEFINE remaining == [index \in 0..count |-> Keys \ PrefixKeys(order, index)]
+    <1>10a. remaining \in [0..count -> SUBSET Keys]
+        BY SMT DEF remaining
+    <1>10b. remaining[0] = Keys BY <1>0 DEF remaining, PrefixKeys
+    <1>10c. remaining[count] = {} BY <1>0, <1>6, SMT DEF remaining
+    <1>11a. \A step \in 1..count :
+        PrefixKeys(order, step) = PrefixKeys(order, step - 1) \cup {order[step]}
+        BY <1>0, <1>7, PrefixKeysGrowByOne, SMT DEF InitializationOrder
+    <1>11b. \A step \in 1..count : order[step] \in remaining[step - 1]
+        BY <1>0, <1>8, SMT DEF remaining, GeneratedDependencyOrder,
+            FirstReadyDeclaration, GeneratedReadyKeys
+    <1>11c. \A step \in 1..count : remaining[step] = remaining[step - 1] \ {order[step]}
+        BY <1>0, <1>11a DEF remaining
+    <1>. QED BY <1>8, <1>9, <1>10a, <1>10b, <1>10c, <1>11b, <1>11c, SMT
+
+THEOREM SuccessfulDependencyOrderSuppliesADecreasingRank ==
+    ASSUME NEW count, NEW declarations, NEW dependencies \in [Keys -> SUBSET Keys],
+           NEW order, SourceDependencyOrder(count, declarations, dependencies, order)
+    PROVE \E rank \in [Keys -> Nat] :
+        \A key \in Keys : \A dependency \in dependencies[key] : rank[dependency] < rank[key]
+    PROOF
+    <1>0. InitializationOrder(count, order) /\ count \in Nat
+        BY SMT DEF SourceDependencyOrder, InitializationOrder
+    <1>1. \A key \in Keys : \E position \in 1..count : order[position] = key
+        BY <1>0, SMT DEF InitializationOrder, PrefixKeys
+    <1>. DEFINE rank == [key \in Keys |-> CHOOSE position \in 1..count : order[position] = key]
+    <1>2. rank \in [Keys -> Nat] /\
+        \A key \in Keys : rank[key] \in 1..count /\ order[rank[key]] = key
+        BY <1>0, <1>1, SMT DEF rank
+    <1>3. \A position \in 1..count : rank[order[position]] = position
+        BY <1>0, <1>2, SMT DEF InitializationOrder
+    <1>4. \A key \in Keys : \A dependency \in dependencies[key] : rank[dependency] < rank[key]
+        <2>. SUFFICES ASSUME NEW key \in Keys, NEW dependency \in dependencies[key]
+                     PROVE rank[dependency] < rank[key]
+            BY SMT
+        <2>1. dependencies[key] \subseteq PrefixKeys(order, rank[key] - 1)
+            BY <1>2, DependencyOrderBindsEveryReadBeforeEvaluation, SMT
+        <2>2. PICK position \in 1..(rank[key] - 1) : order[position] = dependency
+            BY <2>1, SMT DEF PrefixKeys
+        <2>3. position \in 1..count BY <1>0, <1>2, <2>2, SMT
+        <2>4. rank[dependency] = position BY <1>3, <2>2, <2>3, SMT
+        <2>. QED BY <1>2, <2>2, <2>4, SMT
+    <1>. QED BY <1>2, <1>4, SMT
+
 InitializerEvaluators(count, evaluate) ==
     evaluate \in [1..count -> [PartialBindings -> InitializerOutcomes]]
 

@@ -91,6 +91,162 @@ THEOREM IntInitializerChildrenSupplyOutcomeAgreement ==
                 Expressions!ExpressionPlan, Expressions!OutcomeAgrees, IntInitializationDomains
     <1>. QED BY <1>1, IntExpressionOutcomesSupplyInitializerOutcomes, SMT
 
+THEOREM IntReadDependenciesSupplyReadyInitializerChildren ==
+    ASSUME IntInitializationDomains, NEW plan, NEW prior \in PartialBindings,
+           PartialIntProjection(prior) \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax],
+           NEW state, NEW constructionHeights, NEW constructionStacks,
+           Expressions!ExpressionPlan(plan.count, plan.kinds, plan.literals,
+               plan.reads, plan.left, plan.right, state),
+           Expressions!ExpressionIndexStack(plan.count, plan.kinds, plan.left,
+               plan.right, constructionHeights, constructionStacks),
+           (Expressions!GeneratedReadDependencies(plan.count, plan.kinds, plan.reads,
+               plan.left, plan.right) \cap Keys) \cap (Keys \ (DOMAIN prior)) = {}
+    PROVE \E source, generated :
+        /\ IntInitializerChildren(plan, prior, source, generated)
+        /\ SourceIntInitializerOutcome(source[plan.count])
+            = GeneratedIntInitializerOutcome(generated[plan.count])
+    PROOF
+    <1>1. Expressions!GeneratedReadDependencies(plan.count, plan.kinds, plan.reads,
+        plan.left, plan.right) = Expressions!ExpressionReadKeys(plan.count, plan.kinds, plan.reads)
+        BY Expressions!ConstructedPlanReadDependenciesAreTotalAndExact, SMT
+            DEF IntInitializationDomains, Expressions!IntegerDomain
+    <1>2. Expressions!ExpressionReadKeys(plan.count, plan.kinds, plan.reads) \subseteq IntKeys
+        BY SMT DEF Expressions!ExpressionPlan, Expressions!ExpressionReadKeys
+    <1>3. Expressions!ExpressionReadKeys(plan.count, plan.kinds, plan.reads)
+        \subseteq (DOMAIN prior) \cap IntKeys
+        BY <1>1, <1>2, SMT DEF IntInitializationDomains
+    <1>4. (DOMAIN prior) \cap IntKeys \in SUBSET IntKeys BY SMT
+    <1>5. Expressions!CompleteIntBindings((DOMAIN prior) \cap IntKeys, PartialIntProjection(prior))
+        \in [IntKeys -> SwiftIntMin..SwiftIntMax]
+        BY <1>4, Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
+            DEF IntInitializationDomains, Expressions!IntegerDomain
+    <1>6. Expressions!PartialExpressionPlan(plan.count, plan.kinds, plan.literals,
+        plan.reads, plan.left, plan.right, (DOMAIN prior) \cap IntKeys, PartialIntProjection(prior))
+        BY <1>3, <1>4, <1>5, SMT DEF Expressions!PartialExpressionPlan, Expressions!ExpressionPlan
+    <1>7. PICK source, generated :
+        /\ Expressions!SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
+            plan.reads, plan.left, plan.right, PartialIntProjection(prior), source)
+        /\ Expressions!GeneratedExpressionHistory(plan.count, plan.kinds, plan.literals,
+            plan.reads, plan.left, plan.right, PartialIntProjection(prior), generated)
+        /\ \A index \in 0..plan.count :
+            /\ Expressions!OutcomeAgrees(source, generated, index)
+            /\ source[index] \in Expressions!ExpressionOutcomes
+            /\ generated[index] \in Expressions!ExpressionOutcomes
+        BY <1>6, Expressions!PartialOrderedIntExpressionsPreserveValueAndFailure, SMT
+            DEF IntInitializationDomains, Expressions!IntegerDomain
+    <1>8. IntInitializerChildren(plan, prior, source, generated)
+        BY <1>6, <1>7 DEF IntInitializerChildren
+    <1>9. SourceIntInitializerOutcome(source[plan.count])
+        = GeneratedIntInitializerOutcome(generated[plan.count])
+        BY <1>8, IntInitializerChildrenSupplyOutcomeAgreement, SMT
+    <1>. QED BY <1>8, <1>9, SMT
+
+IntDependencyPlans(intValueTargets, plans, construction, sourceDependencies, generatedDependencies) ==
+    \A target \in Keys :
+        IF target \in intValueTargets THEN
+            /\ Expressions!ExpressionPlan(plans[target].count, plans[target].kinds,
+                plans[target].literals, plans[target].reads, plans[target].left,
+                plans[target].right, construction[target].state)
+            /\ Expressions!ExpressionIndexStack(plans[target].count, plans[target].kinds,
+                plans[target].left, plans[target].right,
+                construction[target].heights, construction[target].stacks)
+            /\ sourceDependencies[target] = Expressions!ExpressionReadKeys(
+                plans[target].count, plans[target].kinds, plans[target].reads)
+            /\ generatedDependencies[target] = Expressions!GeneratedReadDependencies(
+                plans[target].count, plans[target].kinds, plans[target].reads,
+                plans[target].left, plans[target].right) \cap Keys
+        ELSE sourceDependencies[target] = generatedDependencies[target]
+
+THEOREM IntDependencyPlansSupplyDependencyAgreement ==
+    ASSUME IntInitializationDomains, NEW intValueTargets \in SUBSET IntKeys,
+           NEW plans, NEW construction,
+           NEW sourceDependencies \in [Keys -> SUBSET Keys],
+           NEW generatedDependencies \in [Keys -> SUBSET Keys],
+           IntDependencyPlans(intValueTargets, plans, construction, sourceDependencies, generatedDependencies)
+    PROVE sourceDependencies = generatedDependencies
+    PROOF
+    <1>1. \A target \in intValueTargets :
+        Expressions!GeneratedReadDependencies(plans[target].count, plans[target].kinds,
+            plans[target].reads, plans[target].left, plans[target].right)
+        = Expressions!ExpressionReadKeys(plans[target].count, plans[target].kinds, plans[target].reads)
+        <2>. SUFFICES ASSUME NEW target \in intValueTargets
+                     PROVE Expressions!GeneratedReadDependencies(plans[target].count, plans[target].kinds,
+                         plans[target].reads, plans[target].left, plans[target].right)
+                         = Expressions!ExpressionReadKeys(plans[target].count, plans[target].kinds, plans[target].reads)
+            BY SMT
+        <2>1. target \in Keys BY SMT DEF IntInitializationDomains
+        <2>. QED BY <2>1, Expressions!ConstructedPlanReadDependenciesAreTotalAndExact, SMT
+            DEF IntDependencyPlans, IntInitializationDomains, Expressions!IntegerDomain
+    <1>2. \A target \in Keys : sourceDependencies[target] = generatedDependencies[target]
+        <2>. SUFFICES ASSUME NEW target \in Keys
+                     PROVE sourceDependencies[target] = generatedDependencies[target]
+            BY SMT
+        <2>1. sourceDependencies[target] \subseteq Keys BY SMT
+        <2>2. CASE target \in intValueTargets
+            <3>1. generatedDependencies[target] = sourceDependencies[target] \cap Keys
+                BY <1>1, <2>2, SMT DEF IntDependencyPlans
+            <3>. QED BY <2>1, <3>1
+        <2>3. CASE target \notin intValueTargets BY <2>3, SMT DEF IntDependencyPlans
+        <2>. QED BY <2>2, <2>3, SMT
+    <1>. QED BY <1>2, SMT
+
+THEOREM IntReadDependenciesSupplyTheSameStableDependencySchedule ==
+    ASSUME IntInitializationDomains, NEW count, NEW declarations,
+           InitializationOrder(count, declarations),
+           NEW intValueTargets \in SUBSET IntKeys, NEW plans, NEW construction,
+           NEW sourceDependencies \in [Keys -> SUBSET Keys],
+           NEW generatedDependencies \in [Keys -> SUBSET Keys],
+           IntDependencyPlans(intValueTargets, plans, construction, sourceDependencies, generatedDependencies),
+           NEW source, NEW generated,
+           SourceDependencyOrder(count, declarations, sourceDependencies, source),
+           GeneratedDependencyOrder(count, declarations, generatedDependencies, generated)
+    PROVE /\ source = generated
+          /\ \A step \in 1..count :
+              sourceDependencies[source[step]] \subseteq PrefixKeys(source, step - 1)
+    PROOF
+    <1>1. sourceDependencies = generatedDependencies
+        BY IntDependencyPlansSupplyDependencyAgreement, SMT
+    <1>2. source = generated
+        BY <1>1, StableDependencyOrdersHaveTheSamePrefixes, SMT
+    <1>3. \A step \in 1..count :
+        sourceDependencies[source[step]] \subseteq PrefixKeys(source, step - 1)
+        BY DependencyOrderBindsEveryReadBeforeEvaluation, SMT
+    <1>. QED BY <1>2, <1>3
+
+THEOREM RankedIntDependenciesConstructAStableInitializationSchedule ==
+    ASSUME IntInitializationDomains, NEW count, NEW declarations,
+           InitializationOrder(count, declarations),
+           NEW intValueTargets \in SUBSET IntKeys, NEW plans, NEW construction,
+           NEW sourceDependencies \in [Keys -> SUBSET Keys],
+           NEW generatedDependencies \in [Keys -> SUBSET Keys],
+           IntDependencyPlans(intValueTargets, plans, construction, sourceDependencies, generatedDependencies),
+           NEW rank \in [Keys -> Nat],
+           \A key \in Keys : \A dependency \in sourceDependencies[key] : rank[dependency] < rank[key]
+    PROVE \E order, remaining :
+        /\ SourceDependencyOrder(count, declarations, sourceDependencies, order)
+        /\ GeneratedDependencyOrder(count, declarations, generatedDependencies, order)
+        /\ remaining \in [0..count -> SUBSET Keys]
+        /\ remaining[0] = Keys /\ remaining[count] = {}
+        /\ \A step \in 1..count :
+            /\ order[step] \in remaining[step - 1]
+            /\ remaining[step] = remaining[step - 1] \ {order[step]}
+            /\ sourceDependencies[order[step]] \subseteq PrefixKeys(order, step - 1)
+    PROOF
+    <1>1. sourceDependencies = generatedDependencies
+        BY IntDependencyPlansSupplyDependencyAgreement, SMT
+    <1>2. PICK order, remaining :
+        /\ SourceDependencyOrder(count, declarations, sourceDependencies, order)
+        /\ GeneratedDependencyOrder(count, declarations, sourceDependencies, order)
+        /\ remaining \in [0..count -> SUBSET Keys]
+        /\ remaining[0] = Keys /\ remaining[count] = {}
+        /\ \A step \in 1..count :
+            /\ order[step] \in remaining[step - 1]
+            /\ remaining[step] = remaining[step - 1] \ {order[step]}
+        BY RankedDependenciesConstructACompleteStableOrder, SMT
+    <1>3. \A step \in 1..count : sourceDependencies[order[step]] \subseteq PrefixKeys(order, step - 1)
+        BY <1>2, DependencyOrderBindsEveryReadBeforeEvaluation, SMT
+    <1>. QED BY <1>1, <1>2, <1>3, SMT
+
 THEOREM OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures ==
     ASSUME IntInitializationDomains,
            NEW count, NEW order, NEW sourceEvaluate, NEW generatedEvaluate,

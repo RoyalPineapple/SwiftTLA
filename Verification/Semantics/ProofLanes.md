@@ -59,6 +59,29 @@ The partial-prefix follow-on uses that admitted dependency in the same integrati
 It connects literal/read/checked-add expression histories to reachable initializer prefixes and their complete state and failure sets.
 `OrderedIntInitializationComposition.tla` follows both expression and initialization rules in the ordinary proof batch.
 The source and output owners remain unchanged. Concrete dependency extraction and traversal still require proof.
+It is admitted at `ba4c9bbf318ae13b0a5cf4a9b52947ca15710bca` within the hosted regression/proof boundary.
+
+The read-dependency follow-on uses the same integration lane and requires hosted evidence for its exact revision.
+It proves postorder read conservation, constructs a finite dependency walk and a complete stable scheduler, and connects them to partial initializer prefixes.
+It preserves plan construction, layout/target identity, other-child and checking premises.
+The scheduler uses a decreasing dependency rank.
+A successful source schedule supplies such a rank. Actual compiler-step extraction, resolved effect rules and cycle-diagnostic correspondence remain open.
+
+The existing canonical dependency-order owner reproduced four accepted resolved-order corruptions, including an observable first-failure change.
+A scoped existing-validator scalar candidate passed that owner and its four rejecting controls.
+A same-owner mutation-only follow-on then accepted exactly three ready range/set-literal/conditional-domain order corruptions, with all positive states intact.
+The existing read certificate now includes those typed domain constructors.
+Its focused owner passed all seven controls and the state and failure positives.
+The related run passed 205 tests across all 22 selected suites.
+
+The ordinary proof-input receipt includes the validator and canonical owner.
+The current pinned batch passed 25 ordered rows and 3,019 obligations.
+The expression, initialization and connection owners proved 934, 595 and 162 obligations respectively.
+Four range rules separate logical membership from enumeration width without restricting logical source members.
+The formal expression construction still covers literal/read/addition.
+Independent domain read/evaluation correspondence remains open.
+
+The partial certificate does not certify unsupported constructors or the separate unresolved runtime/rendering path.
 It adds no new family-dispatch name. A new integrated candidate requires ordinary CI and full unfiltered admission; historical family diagnostics cannot substitute for them.
 
 The shared outcome schema remains frozen during each family batch.
