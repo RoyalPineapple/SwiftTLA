@@ -202,7 +202,12 @@ jobs:
             Sources/SwiftTLA/CompiledTLARenderer.swift \
             Sources/SwiftTLAPlugin/OrderedIntSourceSyntaxCheck.swift \
             Sources/SwiftTLA/StateExpr+Scope.swift \
-            Sources/SwiftTLAPlugin/SpecParser+SpecBuilder.swift \
+            Sources/SwiftTLAPlugin/SpecParser{,+SpecBuilder,+Algorithm}.swift \
+            Sources/SwiftTLAPlugin/{SpecExpressionMacro,ModelMacro,ModelMacro+SourceTypes,SourceTypes}.swift \
+            Sources/SwiftTLA/{TypedValues,TypedOps,NativeMachineOperations,AlgorithmBuilder,Var}.swift \
+            Tests/SwiftTLATests/Signed{DivisionOutputFixtures,ModuloOutputFixtures,IntegerSemanticsTests}.swift \
+            Tests/SwiftTLATests/TypedFacadeSyntaxTests.swift \
+            Tests/SwiftTLATests/AlgorithmBuilderParsingTests.swift \
             Sources/SwiftTLAPlugin/SourceIntegerLiteral.swift \
             Tests/SwiftTLATests/ShortCircuitFailureProofTests.swift \
             Sources/SwiftTLA/StraightLineRenderedActionCheck+Sequence.swift \

@@ -22,6 +22,16 @@ import SwiftTLAMacros
         #expect(SpecParser.decodeTypedFacadeValue(unqualifiedParameter) == parameter)
         #expect(SpecParser.decodeTypedFacadeValue(swiftTLAQualifiedParameter) == parameter)
         #expect(SpecParser.decodeTypedFacadeValue(unrelatedQualifiedParameter) == nil)
+
+        for (source, expected) in [("Int.min", Int.min), ("Int.max", Int.max),
+                                   ("Swift.Int.min", Int.min), ("Swift.Int.max", Int.max)] {
+            #expect(SpecParser.decodeTypedFacadeValue(try parseSpecTestExpression(source)) == .value(.int(expected)))
+        }
+        let shadowed = ParserSession(sourceTypes: .init(enums: [
+            parserTestEnum("Int", cases: ["min": .int(7), "max": .int(9)]),
+        ]))
+        #expect(shadowed.decodeTypedFacadeValue(try parseSpecTestExpression("Int.min"), scope: .empty) == .value(.int(7)))
+        #expect(shadowed.decodeTypedFacadeValue(try parseSpecTestExpression("Int.max"), scope: .empty) == .value(.int(9)))
     }
 
     @Test("qualified empty set uses its structural type")

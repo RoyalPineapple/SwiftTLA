@@ -1634,24 +1634,35 @@ import SwiftTLAMacros
         ))
     }
 
-    @Test("parsed shared initializers retain and evaluate their formal expression")
-    func parsedSharedInitializerRetainsFormalExpression() throws {
-        let closure = try parseSpecTestClosure("""
-        { scope in
-            let count: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: 1 + 2)
+    @Test("parsed shared initializers retain raw values and explicit formal expressions")
+    func parsedSharedInitializersRetainValueContext() throws {
+        let raw = TLASpec("SharedInitializer") { scope in
+            let _: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: 1 + 2)
         }
-        """)
-        let parsed = SpecParser.parseSpecClosure(named: "SharedInitializer", closure)
-        #expect(parsed.diagnostics.isEmpty)
-
-        let parsedVariable = try #require(try loweredSource(parsed, named: "SharedInitializer").variables.first)
-
-        #expect(parsedVariable.initialization == .expression(.add(.value(.int(1)), .value(.int(2)))))
-
-        let compilation = try parsed.compile()
-        let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-        let count = try #require(TLAStateProjection.Token(validating: "count"))
-        #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
+        let formal = TLASpec("SharedInitializer") { scope in
+            let _: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: Expr<Int>(1) + 2)
+        }
+        let cases: [(String, VariableInitialization, TLASpec)] = [
+            ("1 + 2", .value(.int(3)), raw),
+            ("Expr<Int>(1) + 2", .expression(.add(.value(.int(1)), .value(.int(2)))), formal),
+        ]
+        for (source, expected, built) in cases {
+            let closure = try parseSpecTestClosure("""
+            { scope in
+                let count: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: \(source))
+            }
+            """)
+            let parsed = SpecParser.parseSpecClosure(named: "SharedInitializer", closure)
+            try #require(parsed.diagnostics.isEmpty)
+            let parsedVariable = try #require(try loweredSource(parsed, named: "SharedInitializer").variables.first)
+            #expect(parsedVariable.initialization == expected)
+            let compilation = try parsed.compile()
+            let builtCompilation = try built.compile()
+            #expect(compilation.identity == builtCompilation.identity)
+            let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+            let count = try #require(TLAStateProjection.Token(validating: "count"))
+            #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
+        }
     }
 
     @Test("parsed and built literal initializers have one compilation identity")

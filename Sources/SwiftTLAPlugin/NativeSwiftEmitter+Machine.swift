@@ -609,10 +609,36 @@ extension NativeSwiftEmitter {
     }
 
     func verifyIntInitialOutput(_ declaration: DeclSyntax?) throws {
+        // Release the template builder's frame before parsing its nested closures.
+        guard let source = try intInitialOutputSource(declaration) else { return }
+        let expected = Parser.parse(source: source).statements.first?.item.as(FunctionDeclSyntax.self)
+        let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+        let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) } ?? []
+        guard let expectedTokens, actualTokens == expectedTokens else { throw intInitialOutputMismatch() }
+        let slots = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
+            ($0.id, variable($0.id))
+        })
+        for initialization in program.behavior.initializations {
+            guard case .value(let expression) = initialization.initialization,
+                  expression.resultType == .int else { continue }
+            try verifyOrderedIntInitialExpression(declaration,
+                named: variable(initialization.variable), expression: expression, slots: slots)
+        }
+    }
+
+    private func intInitialOutputMismatch() -> CompilationDiagnostic {
+        CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native._initialStates.completeIntOutput",
+            expected: "the complete ordered Int initial-state and failure template",
+            actual: "the generated initial function contains an unrecognized statement or changed value",
+            nextSafeAction: "Report this native initialization generation failure.")
+    }
+
+    private func intInitialOutputSource(_ declaration: DeclSyntax?) throws -> String? {
         // shortcut: other domain/child operations, configuration and invariant selection need their own rules.
         guard program.layout.parameters.isEmpty, program.behavior.initialInvariant == nil,
               !program.behavior.initializations.isEmpty,
-              program.behavior.initializations.count == program.layout.variables.count else { return }
+              program.behavior.initializations.count == program.layout.variables.count else { return nil }
         var bindings: [(name: String, type: String, value: String)] = []
         let slots = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
             ($0.id, variable($0.id))
@@ -630,26 +656,19 @@ extension NativeSwiftEmitter {
                     type = "_ControlLocation"
                     value = "_ControlLocation.location\(location.ordinal)"
                 case (_, .int):
-                    guard let checked = checkedIntInitialValue(expression, slots: slots) else { return }
+                    guard let checked = checkedIntInitialValue(expression, slots: slots) else { return nil }
                     type = "Int"
                     value = checked
-                default: return
+                default: return nil
                 }
             case .memberOf(let domain):
                 guard program.variableTypes[initialization.variable] == .int,
                       domain.resultType == .set(.int),
-                      let checked = checkedIntInitialDomainValue(domain, slots: slots) else { return }
+                      let checked = checkedIntInitialDomainValue(domain, slots: slots) else { return nil }
                 type = "Int"
                 value = checked
             }
             bindings.append((variable(initialization.variable), type, value))
-        }
-        func mismatch() -> CompilationDiagnostic {
-            CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
-                path: "native._initialStates.completeIntOutput",
-                expected: "the complete ordered Int initial-state and failure template",
-                actual: "the generated initial function contains an unrecognized statement or changed value",
-                nextSafeAction: "Report this native initialization generation failure.")
         }
         let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) } ?? []
         let predicatePrefix = "_membershipPredicate"
@@ -661,7 +680,7 @@ extension NativeSwiftEmitter {
         guard Set(predicateNames).count == predicateNames.count,
               predicateNames.allSatisfy({ name in
                   Int(name.dropFirst(predicatePrefix.count)).map { $0 >= 0 } == true
-              }) else { throw mismatch() }
+              }) else { throw intInitialOutputMismatch() }
         var nextPredicate = 0
         let visible = Dictionary(uniqueKeysWithValues: model.api.variables.map {
             ($0.id, $0.swiftIdentifier)
@@ -690,7 +709,7 @@ extension NativeSwiftEmitter {
                 if let field = visible[initialization.variable] {
                     guard let membership = checkedIntInitialDomainMembership(domain, candidate: binding.name,
                         slots: slots, predicateNames: predicateNames, nextPredicate: &nextPredicate) else {
-                        throw mismatch()
+                        throw intInitialOutputMismatch()
                     }
                     body += """
                     let \(binding.name)Candidates: [Int] = try SwiftTLA._NativeMachineOperations.initialCandidates(
@@ -731,20 +750,12 @@ extension NativeSwiftEmitter {
         return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure,
             firstFailureInitializerOrdinal: firstFailureInitializerOrdinal)
         """
-        let expected = Parser.parse(source: """
+        guard nextPredicate == predicateNames.count else { throw intInitialOutputMismatch() }
+        return """
         private static func _initialStates(_selectedInitial: State? = nil) throws -> InitialEvaluationOutcomes<Snapshot> {
             \(body)
         }
-        """).statements.first?.item.as(FunctionDeclSyntax.self)
-        let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
-        guard nextPredicate == predicateNames.count, let expectedTokens,
-              actualTokens == expectedTokens else { throw mismatch() }
-        for initialization in program.behavior.initializations {
-            guard case .value(let expression) = initialization.initialization,
-                  expression.resultType == .int else { continue }
-            try verifyOrderedIntInitialExpression(declaration,
-                named: variable(initialization.variable), expression: expression, slots: slots)
-        }
+        """
     }
 
     private func selectedInitialDeclarations(arguments: String) throws -> [DeclSyntax] {
@@ -2661,7 +2672,19 @@ func verifyGeneratedActionWriteOutput(
             default: return nil
             }
         }
-        guard expression.resultType == .int, checkedOperation(expression.operation) != nil else { return nil }
+        guard expression.resultType == .int,
+              let rootOperation = checkedOperation(expression.operation) else { return nil }
+        if rootOperation.rightFirst, expression.children.count == 2,
+           expression.children.allSatisfy({ child in
+               guard child.resultType == .int, child.children.isEmpty,
+                     case .value(.integer) = child.operation else { return false }
+               return true
+           }),
+           let left = directScalarTokens(expression.children[0], parameters: parameters),
+           let right = directScalarTokens(expression.children[1], parameters: parameters) {
+            return ["(", "try", "SwiftTLA", ".", "_NativeMachineOperations", ".", rootOperation.name, "("]
+                + left + [","] + right + [")", ")"]
+        }
         var pending: [(expression: CompiledExpression, expanded: Bool)] = [(expression, false)]
         var values: [String] = []
         var statements: [String] = []

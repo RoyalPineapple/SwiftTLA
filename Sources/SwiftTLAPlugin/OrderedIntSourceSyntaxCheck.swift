@@ -341,23 +341,39 @@ enum OrderedIntSourceSyntaxCheck {
             }
             return nil
         }
-        if type == .int, let infix = syntax.as(InfixOperatorExprSyntax.self),
-           infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text == "+",
-           let lhs = value(infix.leftOperand, roots: roots),
-           let rhs = value(infix.rightOperand, roots: roots) { return .add(lhs, rhs) }
-        if type == .int, let sequence = syntax.as(SequenceExprSyntax.self) {
-            let elements = Array(sequence.elements)
-            guard elements.count >= 3, elements.count % 2 == 1,
-                  let first = value(elements[0], roots: roots) else { return nil }
-            var result = first
-            for index in stride(from: 1, to: elements.count, by: 2) {
-                guard elements[index].as(BinaryOperatorExprSyntax.self)?.operator.text == "+",
-                      let rhs = value(elements[index + 1], roots: roots) else { return nil }
-                result = .add(result, rhs)
-            }
-            return result
+        guard type == .int, operands.count >= 3, operands.count % 2 == 1 else { return nil }
+        let operations = stride(from: 1, to: operands.count, by: 2).compactMap { index -> (Int, String, Int)? in
+            guard let operation = operands[index].as(BinaryOperatorExprSyntax.self)?.operator.text,
+                  ["+", "-", "*", "/", "%"].contains(operation) else { return nil }
+            return (index, operation, operation == "+" || operation == "-" ? 0 : 1)
         }
-        return nil
+        guard operations.count == (operands.count - 1) / 2,
+              let split = operations.min(by: { $0.2 == $1.2 ? $0.0 > $1.0 : $0.2 < $1.2 }) else { return nil }
+        func operand(_ elements: ArraySlice<ExprSyntax>) -> StateExpr? {
+            guard let first = elements.first else { return nil }
+            let expression = elements.count == 1 ? first
+                : ExprSyntax(SequenceExprSyntax(elements: ExprListSyntax(elements)))
+            return value(expression, roots: roots)
+        }
+        guard let lhs = operand(operands[..<split.0]),
+              let rhs = operand(operands[(split.0 + 1)...]) else { return nil }
+        if case .value(.int(let left)) = lhs, case .value(.int(let right)) = rhs {
+            let result: (partialValue: Int, overflow: Bool)
+            switch split.1 {
+            case "+": result = left.addingReportingOverflow(right)
+            case "-": result = left.subtractingReportingOverflow(right)
+            case "*": result = left.multipliedReportingOverflow(by: right)
+            case "/":
+                guard right != 0 else { return nil }
+                result = left.dividedReportingOverflow(by: right)
+            case "%":
+                guard right != 0 else { return nil }
+                result = left.remainderReportingOverflow(dividingBy: right)
+            default: return nil
+            }
+            return result.overflow ? nil : .value(.int(result.partialValue))
+        }
+        return split.1 == "+" ? .add(lhs, rhs) : nil
     }
 
     private static func initialDomainMember(_ expression: StateExpr) -> Bool {
