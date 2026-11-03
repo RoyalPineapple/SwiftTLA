@@ -199,6 +199,7 @@ jobs:
             Tests/SwiftTLATests/LexicalBindingTests.swift \
             Sources/SwiftTLA/StraightLineAssignmentCheck.swift \
             Sources/SwiftTLA/ProgramResolver.swift \
+            Sources/SwiftTLA/CompiledProgram+InitializationDependencies.swift \
             Sources/SwiftTLA/CompiledTLARenderer.swift \
             Sources/SwiftTLAPlugin/OrderedIntSourceSyntaxCheck.swift \
             Sources/SwiftTLA/StateExpr+Scope.swift \
@@ -215,6 +216,7 @@ jobs:
             Tests/SwiftTLATests/GeneratedAtomicUpdateProofTests.swift \
             Tests/SwiftTLATests/ConjunctionFailureSelectionTests.swift \
             Tests/SwiftTLATests/OrderedAssignmentLoweringTests.swift \
+            Tests/SwiftTLATests/CompilerPipelineCanonicalizationTests.swift \
             Tests/SwiftTLATests/DependentInitializationOutputProofTests.swift \
             Tests/SwiftTLATests/InitialBranchFailureTests.swift \
             Tests/SwiftTLATests/TLCConfigurationSelectionTests.swift \

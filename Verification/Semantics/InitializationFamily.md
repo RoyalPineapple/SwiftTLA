@@ -1,10 +1,13 @@
 # Initialization outcomes and composition
 
-Status: partial-prefix proof development on admitted `3a0dda1b`.
-Both automatic hosted gates passed at that revision, with complete retained-evidence reconciliation.
-The local pinned batch passed all 25 ordered rows and 2,091 obligations.
-The current proof changes still require fresh hosted admission.
+Scope: dependency and readiness work on admitted `ba4c9bbf`.
+Both automatic hosted gates passed at that base, with complete retained-evidence reconciliation.
+The current local pinned batch passed all 25 ordered rows and 3,019 obligations.
+Local passes do not establish hosted admission for the current changes.
 These are conditional rules. Complete accepted-program preservation remains open.
+
+The earlier `3a0dda1b` checkpoint passed 25 local rows and 2,091 obligations.
+That result is historical evidence.
 
 ## Independent source rules
 
@@ -191,25 +194,174 @@ Under that premise, terminal selection retains exactly the same complete states 
 These are set histories, not a proof of the concrete depth-first traversal or the first stored failure.
 Other initializers retain their separate constructor rules and child obligations.
 
-The proof-only change preserves the existing production source and output checks and their rejecting controls.
+The admitted partial-prefix change preserved the existing production source and output checks and their rejecting controls.
 It does not prove dependency extraction, source-key association, source-to-plan extraction or output-checker soundness.
 The existing host tool and solver correctness premises remain explicit.
 
-The local `--nofp` batch passed 418 expression obligations, 275 initialization obligations and 70 obligations in the new connection module.
+The admitted partial-prefix revision's local `--nofp` batch passed 418 expression obligations, 275 initialization obligations and 70 obligations in its connection module.
 All 158 retained TLA+ snapshots and both runner hashes match the checked bytes.
 All 24 prior batch rows remain in order, before the new connection module.
 Static checks, the five download controls, family isolation and whitespace checks passed.
 Production, test, fixture, toolchain and workflow bytes remain unchanged from admitted `3a0dda1b`.
 No new local Swift test, legacy proof batch, tool bootstrap or binary reproduction is claimed.
-The expected hosted total is 101 modules and 6,598 obligations, derived from the new batch and unchanged admitted legacy inputs.
-That total remains an expectation until the new hosted run executes.
+At admitted `ba4c9bbf`, ordinary hosted validation executed all 101 modules and proved 6,598 obligations.
+That admission does not cover the local read-dependency follow-on below.
+
+## Read dependencies and stable initialization order
+
+The read-dependency follow-on starts from admitted `ba4c9bbf`.
+Its initial mathematical stage extended only the existing proof owners.
+The current follow-on also extends the existing resolved validator and its canonical dependency-order regression.
+That candidate repair is awaiting local Swift validation.
+The constructor inventory remains literal/read/checked-add for these expression rules.
+Other initializer and expression constructors retain their own child obligations.
+
+`ExpressionReadHistory` defines syntactic read effects independently of evaluation outcomes.
+Literal nodes contribute no reads, read nodes contribute their key, and addition joins both child effects.
+A finite typed history of these effects exists for every existing expression plan.
+This effect includes both children even when evaluation would fail in the first child.
+It describes conservative initialization dependencies, not evaluation order or a failure trace.
+
+A topologically numbered plan can contain nodes outside its root subtree.
+`ExpressionIndexStack` describes the existing postorder builder's push and binary-fold operations.
+The final stack contains only the root.
+`ConstructedPlanPreservesAllReads` proves that this construction retains exactly all numbered read keys at the root.
+The construction and source-key association are explicit premises.
+The conclusion does not cover arbitrary DAGs with unused nodes.
+
+`ReadWalkStep` pops pending nodes, collects state reads, and pushes addition's left child followed by its right child.
+This matches the right-first scheduling in unresolved `CompiledExpression.stateRequirements` for this constructor slice.
+Each step preserves collected reads joined with pending subtree effects.
+A completed formal walk therefore returns exactly the constructed plan's source reads.
+The resolved validator uses a separate postorder effect stack and function-effect fixed point.
+Its general call, binder and demand rules are not covered by this walk theorem.
+No Swift or TLA+ evaluation-order claim follows from dependency-walk order.
+
+Completion is now constructed within the proof.
+`ExpressionWorkHistory` gives each leaf one unit and each addition one plus both children's work.
+This positive finite history exists for every expression plan.
+`StackWorkHistory` sums the pending nodes' work.
+A nonempty stack has positive work, and every step constructs a well-typed successor with exactly one less unit.
+Natural-number induction constructs a finite completion from the initial root stack.
+No completed walk, supplied fuel trace or extra termination premise is required by that existence theorem.
+Successors are deterministic.
+Two walks agree on every common prefix.
+A completed walk bounds the length of every other segment from the same initial stack.
+These are mathematical termination results for the stated small-step rule, not a performance or allocation guarantee.
+
+`GeneratedReadDependencies` obtains its result from a completed formal walk.
+The proof establishes both existence and exact agreement with the independent source read set.
+Its choice of completion cannot change that result.
+The initializer connections therefore no longer require callers to supply read-effect or completed-walk histories.
+They still require plan construction, source/layout identity correspondence and typed Int prefix bindings.
+The readiness connection then supplies the existing partial expression histories and initializer outcome agreement.
+
+The source readiness rule requires every dependency to be bound.
+The generated rule requires dependencies to be disjoint from remaining declarations.
+These predicates agree when remaining keys complement the bound prefix.
+A nonempty ready set has a unique first declaration position.
+Successful source and generated schedules therefore have the same prefixes and order.
+Removing a ready key binds exactly that key.
+Execution position is not identified with a variable's layout ordinal.
+
+`RankedDependenciesConstructACompleteStableOrder` constructs the complete schedule under a decreasing dependency rank.
+It extends ready prefixes, maintains the remaining-key count, and derives the output permutation when no keys remain.
+It also constructs the exact one-key removal history, including the zero-declaration case.
+It does not assume `InitializationOrder` for its output.
+Conversely, a successful source schedule supplies a decreasing rank by inverse execution position.
+Rank is therefore not a new source-language guard.
+Correspondence with actual accepted-source dependencies and concrete cycle diagnostics still requires proof.
+
+The mixed Int connection derives dependency-map agreement from constructed expression plans and the total dependency algorithm.
+Other targets retain explicit dependency agreement premises.
+It then constructs a common source/generated stable schedule and binds every read before evaluation.
+No completed walk or complete output schedule is supplied to this combined construction theorem.
+The declaration list and its identity mapping remain input premises.
+The existing runtime/native initial-state and failure composition still needs concrete loop correspondence.
+
+Mathematical negative controls distinguish omitted reads and skipped earlier ready declarations.
+Existing changed-read and reversed-overflow-operand controls remain.
+These controls are not new actual-output mutation results.
+The existing source, Swift-output and TLA+-output rejecting controls remain unchanged.
+
+The first constructive stage passed 25 local `--nofp` rows and 2,995 obligations.
+Its expression, initialization and connection owners proved 913, 592 and 162 obligations respectively.
+The current integrated batch includes the read-certificate lemma and four range rules.
+It passed all 25 ordered rows and 3,019 obligations.
+Its expression, initialization and connection owners proved 934, 595 and 162 obligations respectively.
+
+All 158 retained TLA+ snapshots and both runners matched the current proof inputs.
+Seventeen library file hashes matched observations during and after the current batch.
+They also matched the earlier recorded library inputs.
+These local proofs are diagnostic evidence only.
+Hosted admission uses the exact frozen revision.
+
+Four range rules separate logical membership from enumeration width.
+The bounds-guard model agrees with an independent integer-width budget.
+A reversed range has no logical members and passes that guard.
+Logical membership uses only the lower and upper bounds.
+Zero belongs to the full Int range, although its enumeration guard fails.
+These rules do not prove the concrete generated membership or capability adapter.
+
+The next owned boundary is extraction of plans, identities and formal steps from the actual compiler loops.
+Source-to-plan extraction, layout/target association, concrete cycle diagnostics, operator/capture effects and output-checker soundness remain unproved.
+The host tool, solver and kernel trust limits remain unchanged.
+
+## Resolved order-checking baseline and candidate
+
+The existing canonical dependency-order owner now mutates only the initialization order of real compiled programs.
+The first unchanged-production baseline executed one test and accepted both intended order corruptions.
+The expanded baseline executed the same owner and accepted exactly four corruptions.
+It covers independent ready ties, a later ready limit, a newly ready read/add initializer, and first-failure selection.
+The correct source variation fails with addition operands `[3, Int.max]` at the first target.
+Swapping two ready initializers changes the corrupted program's failure to `[4, Int.max]` at the second target.
+All positives passed.
+These validator blind spots concern deliberately corrupted plans.
+The baselines did not show wrong unmutated production lowering.
+No new named model, fixture, production hook or checker API was added.
+
+The candidate extends the existing `validateInitializationDependencies` path.
+It retains all availability, complete-state, duplicate-target and total-coverage diagnostics before the new order check.
+The existing postorder effect pass assigns structural read-set certificates to typed Int and control leaves.
+Its compound cases cover addition, equality, integer ranges, Int set literals and conditional Int domains.
+Each compound case requires child certificates, exact types and the required arity.
+A second pass rejects an initializer that skips an earlier ready declaration with such a read set.
+Unknown constructor families retain their existing checks and explicit dependency premises.
+The new certificate lemma identifies when those checks establish the full first-ready rule.
+It requires coverage of every remaining earlier declaration.
+A partial certificate does not establish universal ordering.
+
+The scalar/addition candidate passed the unchanged canonical owner, including its four rejecting controls and positives.
+All 13 frozen inputs matched after its 1,220.09-second cold build.
+A subsequent mutation-only extension in the same owner accepted exactly three domain-order corruptions: `readyRange`, `readyMembers` and `readyConditional`.
+All domain positives produced three complete states with derived values 2, 3 and 4.
+That baseline kept the scalar candidate unchanged and introduced no new fixture or production seam.
+The domain certificate extension followed those three actual escapes.
+The focused owner passed all seven rejecting controls and its state and failure positives.
+All 14 frozen inputs matched after its 1,279.36-second cold build.
+The related run passed 205 tests across all 22 selected suites.
+All 35 recorded inputs matched at that run's completion.
+These runs include the existing recursive-demand, cycle, initializer, output, lexical, native, Dining and deep-binding controls.
+
+The ordinary proof-input receipt now includes this existing validator and canonical test owner.
+This is a resolved-program check.
+Standalone compiled-specification runtime/rendering uses a separate unresolved route.
+The candidate does not certify that route or supply the missing source/layout and compiler-step correspondence.
+The formal expression construction still covers literal, read and addition nodes.
+Equality, range, set-literal and conditional domain read/evaluation correspondence remains an explicit obligation.
+The generic domain initializer theorem starts from supplied members and does not discharge that obligation.
+The existing direct Swift/TLA+ output mutation controls remain unchanged.
+The new validator controls do not replace those output links or provide language-proof credit.
+No new hosted admission, bootstrap or binary reproduction is claimed.
 
 ## Remaining owned obligations
 
 - Complete the accepted-constructor inventory by source spelling, typing, placement and backend capability.
   Public declaration and AST inventories alone do not establish acceptance or preservation.
 - Extend source extraction and binding correspondence through every accepted expression and algorithm control form.
-- Derive stable dependency order from source reads and relate it to actual lowering and layout identities.
+- Connect the proved finite read walk and complete stable scheduler to actual extraction and returned schedules.
+  Verify the accepted cycle-diagnostic boundary and the separate resolved effect/fixed-point route.
+  Preserve source-key and layout identity correspondence.
   Execution position need not equal layout ordinal.
 - Supply independent value, definedness and payload rules for each initializer child constructor, including range capability failures.
 - Relate the concrete LIFO frontier and generated loops to every source branch and callback event.
