@@ -243,6 +243,48 @@ THEOREM InitializationHistoriesRetainAllStatesAndFailures ==
         BY <1>0, <1>4, FiniteIndexedPrefixProperty
     <1>. QED BY <1>5 DEF P
 
+THEOREM InitializationHistoriesNeedOnlyReachableChildAgreement ==
+    ASSUME NEW count, NEW order, NEW sourceEvaluate, NEW generatedEvaluate,
+           NEW source, NEW generated,
+           InitializationOrder(count, order),
+           InitializerEvaluators(count, sourceEvaluate),
+           InitializerEvaluators(count, generatedEvaluate),
+           InitializationHistory(FALSE, count, order, sourceEvaluate, source),
+           InitializationHistory(TRUE, count, order, generatedEvaluate, generated),
+           \A index \in 1..count :
+               \A prior \in source[index - 1].states :
+                   sourceEvaluate[index][prior] = generatedEvaluate[index][prior]
+    PROVE \A index \in 0..count : source[index] = generated[index]
+    PROOF
+    <1>. DEFINE P(index) == source[index] = generated[index]
+    <1>1. \A index \in 0..count :
+              source[index].states \subseteq [PrefixKeys(order, index) -> Values]
+        BY SourceHistoriesBindEveryPrefixKey
+    <1>2. P(0)
+        BY SMT DEF P, InitializationHistory
+    <1>3. \A index \in 1..count :
+              ((\A child \in 0..(index - 1) : P(child)) => P(index))
+        <2>. SUFFICES ASSUME NEW index \in 1..count,
+                             \A child \in 0..(index - 1) : P(child)
+                     PROVE P(index)
+            BY SMT
+        <2>1. P(index - 1)
+            BY SMT DEF InitializationOrder
+        <2>2. PrefixKeys(order, index - 1) \subseteq Keys
+              /\ order[index] \in Keys \ PrefixKeys(order, index - 1)
+            BY SMT DEF InitializationOrder, PrefixKeys
+        <2>3. SourceAdvance(source[index - 1], order[index], sourceEvaluate[index])
+                = GeneratedAdvance(source[index - 1], order[index], generatedEvaluate[index])
+            BY <1>1, <2>2, InitializerAdvancesPreserveAllBranches, SMT
+                DEF InitializerEvaluators, InitializationHistory, InitializationOrder
+        <2>. QED BY <2>1, <2>3, SMT
+            DEF P, InitializationHistory, InitializationAdvance, InitializationOrder
+    <1>4. count \in Nat
+        BY SMT DEF InitializationOrder
+    <1>5. \A index \in 0..count : P(index)
+        BY <1>2, <1>3, <1>4, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>5 DEF P
+
 SelectionOutcomes ==
     {outcome \in [satisfied: BOOLEAN, firstFailure: FailureValues \cup {NoFailure}] :
         outcome.firstFailure # NoFailure => ~outcome.satisfied}

@@ -25,3 +25,4 @@ BooleanExpressionComposition
 SequenceExpressionComposition
 CheckingSelectionComposition
 InitializationComposition
+OrderedIntInitializationComposition

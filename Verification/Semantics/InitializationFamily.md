@@ -1,9 +1,9 @@
 # Initialization outcomes and composition
 
-Status: unpublished source-elaboration repair on admitted base `1fb1dde9`.
-Local checks passed: 44 focused tests, one parser contract, and 567 tests across all 59 related suites.
-Fresh hosted admission remains pending. The prior hosted admission is historical evidence.
-`InitializationOutcomeRules` passed 38 obligations; `InitializationComposition` passed 247.
+Status: partial-prefix proof development on admitted `3a0dda1b`.
+Both automatic hosted gates passed at that revision, with complete retained-evidence reconciliation.
+The local pinned batch passed all 25 ordered rows and 2,091 obligations.
+The current proof changes still require fresh hosted admission.
 These are conditional rules. Complete accepted-program preservation remains open.
 
 ## Independent source rules
@@ -89,10 +89,10 @@ All 157 retained TLA+ snapshots and both runner hashes remain exact after the so
 This byte confirmation is not a new tool bootstrap or binary reproduction.
 The admitted ordinary proof receipt contains 227 actual input entries.
 The admitted hosted run proved 100 modules and 6,408 obligations.
-That result does not admit the current source-elaboration repair.
+Those prior results do not replace the separate admission of the source-elaboration repair at `3a0dda1b`.
 Regression, fixture and inventory counts provide no language-proof credit.
 
-## Current source-elaboration repair
+## Source-elaboration repair at admitted `3a0dda1b`
 
 An executed accepted-program baseline found four source/builder issues.
 Raw Swift division and remainder were translated as formal operations.
@@ -133,7 +133,7 @@ Its private template builder returns before parsing, reducing the caller stack f
 The formerly crashing initialization owner passed in both the focused and complete related runs.
 The expected template bytes remain exact. These results do not prove unbounded nesting capacity.
 
-All 157 current theorem files and both runner inputs match admitted frozen objects and actual retained snapshots.
+That source-only repair preserved all 157 theorem files and both runner inputs against admitted objects and actual retained snapshots.
 This is byte preservation, not a new proof execution, tool bootstrap or binary reproduction.
 The final focused run passed 44 tests in four suites on unchanged production bytes.
 The parser contract separately passed one test after its expected raw initializer shape was corrected.
@@ -142,7 +142,7 @@ The final related run passed 567 tests in all 59 selected suites.
 All 1,127 frozen tracked inputs remained exact through that run.
 The new ordinary proof receipt contains 243 actual input entries, including the parser and type-metadata dependencies.
 It retains all 227 earlier entries. A receipt records bytes; it does not prove those dependencies sound.
-The candidate still requires fresh ordinary and full hosted admission.
+The source-elaboration candidate is admitted at `3a0dda1b` within the existing hosted regression and proof boundary.
 The universal accepted-program preservation objective remains open.
 
 ## Source forms covered by this repair
@@ -157,9 +157,52 @@ This is a partial acceptance/link inventory. No row is a complete accepted-progr
 | Raw and formal typed locals in `Do` | The result annotation reaches the existing lexical binding decoder; runtime/native comparisons distinguish both results | General lexical extraction, capture/layout correspondence and arbitrary accepted local values |
 
 `OrderedIntExpressionRule` composes literal, read and checked-addition nodes under its stated plan and projection premises.
-The current division/modulo regressions do not extend that theorem to those constructors.
-Initialization composition still requires child outcome agreement on every valid prefix.
+The division/modulo regressions do not extend that theorem to those constructors.
 The wider accepted-constructor inventory remains incomplete.
+
+## Partial-prefix expression connection
+
+`ExpressionReadKeys` identifies every read node in the finite literal/read/add plan.
+The source and generated node rules depend only on those bindings and their earlier child outcomes.
+Read agreement therefore preserves every history outcome, including ordered overflow operands and the first child failure.
+The proof applies to both source histories and generated histories.
+
+`PartialExpressionPlan` requires those read keys in the current partial binding.
+Its completion supplies zero only for absent keys, without changing any bound value.
+The partial histories exist, retain typed outcomes, and agree with every total completion that preserves the bound values.
+The completion value is therefore unobservable through these expression rules.
+No runtime or source-language rule requires absent keys to contain zero.
+The mathematical plan still requires well-founded child positions and the existing literal/read/add forms.
+Source extraction and correspondence to actual layout identities remain premises.
+
+`OrderedIntInitializationComposition` projects only initialized Int keys from a partial binding.
+Independent source and generated adapters convert expression success into a fixed candidate and failure into its complete payload.
+The leaf theorem preserves the preceding binding, target identity, complete candidate states and failure event.
+The mathematical negative controls distinguish changed read values and reversed overflow operands.
+These controls do not replace actual-output mutation regressions.
+
+The history theorem derives initializer agreement from expression plans and histories on every reachable source prefix.
+It derives that agreement at designated Int value positions, with child agreement premises at all other positions.
+The composition therefore permits other initializer constructors, including nondeterministic domains.
+It does not require expression typing on unreachable assignments that give an Int key a non-Int value.
+The generic reachable-prefix theorem then composes all successful states and accumulated failure events across arbitrary finite initializer counts, including zero.
+Selected checks still require outcome agreement on the completed reachable states.
+Under that premise, terminal selection retains exactly the same complete states and failure events.
+These are set histories, not a proof of the concrete depth-first traversal or the first stored failure.
+Other initializers retain their separate constructor rules and child obligations.
+
+The proof-only change preserves the existing production source and output checks and their rejecting controls.
+It does not prove dependency extraction, source-key association, source-to-plan extraction or output-checker soundness.
+The existing host tool and solver correctness premises remain explicit.
+
+The local `--nofp` batch passed 418 expression obligations, 275 initialization obligations and 70 obligations in the new connection module.
+All 158 retained TLA+ snapshots and both runner hashes match the checked bytes.
+All 24 prior batch rows remain in order, before the new connection module.
+Static checks, the five download controls, family isolation and whitespace checks passed.
+Production, test, fixture, toolchain and workflow bytes remain unchanged from admitted `3a0dda1b`.
+No new local Swift test, legacy proof batch, tool bootstrap or binary reproduction is claimed.
+The expected hosted total is 101 modules and 6,598 obligations, derived from the new batch and unchanged admitted legacy inputs.
+That total remains an expectation until the new hosted run executes.
 
 ## Remaining owned obligations
 
