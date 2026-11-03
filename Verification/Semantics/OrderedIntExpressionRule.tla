@@ -576,4 +576,175 @@ THEOREM OrderedIntExpressionPreservesAssignmentOutcome ==
         DEF SourceAssignmentEdges, GeneratedAssignmentEdges,
             SourceAssignmentFailures, GeneratedAssignmentFailures
 
+ExpressionReadKeys(count, kinds, reads) ==
+    {reads[index] : index \in {position \in 1..count : kinds[position] = "read"}}
+
+THEOREM ExpressionNodeUsesOnlyItsReadKeys ==
+    ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
+           NEW first, NEW second, NEW history, NEW generated \in BOOLEAN,
+           ExpressionPlan(count, kinds, literals, reads, left, right, first),
+           NEW index \in 1..count,
+           \A key \in ExpressionReadKeys(count, kinds, reads) : first[key] = second[key]
+    PROVE ExpressionNode(generated, index, kinds, literals, reads, left, right, first, history)
+        = ExpressionNode(generated, index, kinds, literals, reads, left, right, second, history)
+    PROOF
+    <1>1. kinds[index] = "read" => reads[index] \in ExpressionReadKeys(count, kinds, reads)
+        BY SMT DEF ExpressionReadKeys
+    <1>. QED BY <1>1, SMT DEF ExpressionNode, SourceNode, GeneratedNode
+
+THEOREM ExpressionPrefixTransfersAcrossReadAgreement ==
+    ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
+           NEW first, NEW second, NEW history, NEW generated \in BOOLEAN,
+           ExpressionPlan(count, kinds, literals, reads, left, right, first),
+           \A key \in ExpressionReadKeys(count, kinds, reads) : first[key] = second[key],
+           ExpressionPrefix(generated, count, kinds, literals, reads, left, right, first, history)
+    PROVE ExpressionPrefix(generated, count, kinds, literals, reads, left, right, second, history)
+    PROOF
+    <1>1. \A index \in 1..count :
+              ExpressionNode(generated, index, kinds, literals, reads, left, right, first, history)
+                = ExpressionNode(generated, index, kinds, literals, reads, left, right, second, history)
+        BY ExpressionNodeUsesOnlyItsReadKeys, SMT
+    <1>. QED BY <1>1, SMT DEF ExpressionPrefix
+
+THEOREM ExpressionHistoriesRespectReadAgreement ==
+    ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
+           NEW first, NEW second, NEW before, NEW after, NEW generated \in BOOLEAN,
+           ExpressionPlan(count, kinds, literals, reads, left, right, first),
+           \A key \in ExpressionReadKeys(count, kinds, reads) : first[key] = second[key],
+           ExpressionPrefix(generated, count, kinds, literals, reads, left, right, first, before),
+           ExpressionPrefix(generated, count, kinds, literals, reads, left, right, second, after)
+    PROVE \A index \in 0..count : before[index] = after[index]
+    PROOF
+    <1>. DEFINE P(index) == before[index] = after[index]
+    <1>1. P(0)
+        BY SMT DEF P, ExpressionPrefix
+    <1>2. \A index \in 1..count :
+              ((\A child \in 0..(index - 1) : P(child)) => P(index))
+        <2>. SUFFICES ASSUME NEW index \in 1..count,
+                             \A child \in 0..(index - 1) : P(child)
+                     PROVE P(index)
+            BY SMT
+        <2>1. ExpressionNode(generated, index, kinds, literals, reads, left, right, first, before)
+                = ExpressionNode(generated, index, kinds, literals, reads, left, right, first, after)
+            BY ExpressionNodeUsesOnlyEarlierResults, SMT DEF P
+        <2>2. ExpressionNode(generated, index, kinds, literals, reads, left, right, first, after)
+                = ExpressionNode(generated, index, kinds, literals, reads, left, right, second, after)
+            BY ExpressionNodeUsesOnlyItsReadKeys
+        <2>. QED BY <2>1, <2>2, SMT DEF P, ExpressionPrefix
+    <1>3. count \in Nat
+        BY SMT DEF ExpressionPlan
+    <1>4. \A index \in 0..count : P(index)
+        BY <1>1, <1>2, <1>3, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>4 DEF P
+
+CompleteIntBindings(bound, bindings) ==
+    [key \in Keys |-> IF key \in bound THEN bindings[key] ELSE 0]
+
+PartialExpressionPlan(count, kinds, literals, reads, left, right, bound, bindings) ==
+    /\ bound \in SUBSET Keys
+    /\ bindings \in [bound -> SwiftIntMin..SwiftIntMax]
+    /\ ExpressionReadKeys(count, kinds, reads) \subseteq bound
+    /\ ExpressionPlan(count, kinds, literals, reads, left, right,
+           CompleteIntBindings(bound, bindings))
+
+THEOREM CompletingPartialBindingsRetainsEveryBoundValue ==
+    ASSUME NEW bound \in SUBSET Keys,
+           NEW bindings \in [bound -> SwiftIntMin..SwiftIntMax]
+    PROVE /\ CompleteIntBindings(bound, bindings) \in [Keys -> SwiftIntMin..SwiftIntMax]
+          /\ \A key \in bound : CompleteIntBindings(bound, bindings)[key] = bindings[key]
+    BY IntegerDomain, SMT DEF CompleteIntBindings, IntegerDomain
+
+THEOREM PartialOrderedIntExpressionsPreserveValueAndFailure ==
+    ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
+           NEW bound, NEW bindings,
+           PartialExpressionPlan(count, kinds, literals, reads, left, right, bound, bindings)
+    PROVE \E source, generated :
+              /\ SourceExpressionHistory(count, kinds, literals, reads, left, right, bindings, source)
+              /\ GeneratedExpressionHistory(count, kinds, literals, reads, left, right, bindings, generated)
+              /\ \A index \in 0..count :
+                     /\ OutcomeAgrees(source, generated, index)
+                     /\ source[index] \in ExpressionOutcomes
+                     /\ generated[index] \in ExpressionOutcomes
+    PROOF
+    <1>. DEFINE completed == CompleteIntBindings(bound, bindings)
+    <1>1. PICK source, generated :
+              /\ SourceExpressionHistory(count, kinds, literals, reads, left, right, completed, source)
+              /\ GeneratedExpressionHistory(count, kinds, literals, reads, left, right, completed, generated)
+              /\ \A index \in 0..count : OutcomeAgrees(source, generated, index)
+        BY EveryOrderedIntExpressionPreservesOutcome DEF PartialExpressionPlan, completed
+    <1>2. \A index \in 0..count :
+              source[index] \in ExpressionOutcomes /\ generated[index] \in ExpressionOutcomes
+        BY <1>1, ExpressionHistoriesHaveTypedOutcomes DEF PartialExpressionPlan, completed
+    <1>3. \A key \in ExpressionReadKeys(count, kinds, reads) : completed[key] = bindings[key]
+        BY CompletingPartialBindingsRetainsEveryBoundValue, SMT DEF PartialExpressionPlan, completed
+    <1>4. ExpressionPrefix(FALSE, count, kinds, literals, reads, left, right, completed, source)
+          /\ ExpressionPrefix(TRUE, count, kinds, literals, reads, left, right, completed, generated)
+        BY <1>1, SMT DEF ExpressionPrefix, ExpressionNode,
+            SourceExpressionHistory, GeneratedExpressionHistory
+    <1>5. ExpressionPrefix(FALSE, count, kinds, literals, reads, left, right, bindings, source)
+          /\ ExpressionPrefix(TRUE, count, kinds, literals, reads, left, right, bindings, generated)
+        BY <1>3, <1>4, ExpressionPrefixTransfersAcrossReadAgreement, SMT
+            DEF PartialExpressionPlan, completed
+    <1>. QED BY <1>1, <1>2, <1>5, SMT DEF ExpressionPrefix, ExpressionNode,
+        SourceExpressionHistory, GeneratedExpressionHistory
+
+THEOREM PartialExpressionOutcomesDoNotDependOnCompletion ==
+    ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
+           NEW bound, NEW bindings, NEW completed \in [Keys -> SwiftIntMin..SwiftIntMax],
+           NEW partialHistory, NEW completeHistory, NEW generated \in BOOLEAN,
+           PartialExpressionPlan(count, kinds, literals, reads, left, right, bound, bindings),
+           \A key \in bound : completed[key] = bindings[key],
+           ExpressionPrefix(generated, count, kinds, literals, reads, left, right, bindings, partialHistory),
+           ExpressionPrefix(generated, count, kinds, literals, reads, left, right, completed, completeHistory)
+    PROVE \A index \in 0..count : partialHistory[index] = completeHistory[index]
+    PROOF
+    <1>1. ExpressionPlan(count, kinds, literals, reads, left, right, completed)
+        BY SMT DEF PartialExpressionPlan, ExpressionPlan
+    <1>2. \A key \in ExpressionReadKeys(count, kinds, reads) : completed[key] = bindings[key]
+        BY SMT DEF PartialExpressionPlan
+    <1>. QED BY <1>1, <1>2, ExpressionHistoriesRespectReadAgreement, SMT
+
+THEOREM ChangingAReadValueChangesItsOutcome ==
+    ASSUME NEW index, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
+           NEW first, NEW second, NEW history,
+           kinds[index] = "read", first[reads[index]] # second[reads[index]]
+    PROVE SourceNode(index, kinds, literals, reads, left, right, first, history)
+        # SourceNode(index, kinds, literals, reads, left, right, second, history)
+    BY SMT DEF SourceNode, Success
+
+THEOREM AnyPartialOrderedIntHistoriesPreserveValueAndFailure ==
+    ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
+           NEW bound, NEW bindings, NEW partialSource, NEW partialGenerated,
+           PartialExpressionPlan(count, kinds, literals, reads, left, right, bound, bindings),
+           SourceExpressionHistory(count, kinds, literals, reads, left, right, bindings, partialSource),
+           GeneratedExpressionHistory(count, kinds, literals, reads, left, right, bindings, partialGenerated)
+    PROVE \A index \in 0..count :
+              /\ OutcomeAgrees(partialSource, partialGenerated, index)
+              /\ partialSource[index] \in ExpressionOutcomes
+              /\ partialGenerated[index] \in ExpressionOutcomes
+    PROOF
+    <1>. DEFINE completed == CompleteIntBindings(bound, bindings)
+    <1>1. PICK source, generated :
+              /\ SourceExpressionHistory(count, kinds, literals, reads, left, right, completed, source)
+              /\ GeneratedExpressionHistory(count, kinds, literals, reads, left, right, completed, generated)
+              /\ \A index \in 0..count : OutcomeAgrees(source, generated, index)
+        BY EveryOrderedIntExpressionPreservesOutcome DEF PartialExpressionPlan, completed
+    <1>2. \A index \in 0..count :
+              source[index] \in ExpressionOutcomes /\ generated[index] \in ExpressionOutcomes
+        BY <1>1, ExpressionHistoriesHaveTypedOutcomes DEF PartialExpressionPlan, completed
+    <1>3. completed \in [Keys -> SwiftIntMin..SwiftIntMax]
+          /\ \A key \in bound : completed[key] = bindings[key]
+        BY CompletingPartialBindingsRetainsEveryBoundValue DEF PartialExpressionPlan, completed
+    <1>4. ExpressionPrefix(FALSE, count, kinds, literals, reads, left, right, bindings, partialSource)
+          /\ ExpressionPrefix(TRUE, count, kinds, literals, reads, left, right, bindings, partialGenerated)
+          /\ ExpressionPrefix(FALSE, count, kinds, literals, reads, left, right, completed, source)
+          /\ ExpressionPrefix(TRUE, count, kinds, literals, reads, left, right, completed, generated)
+        BY <1>1, SMT DEF ExpressionPrefix, ExpressionNode,
+            SourceExpressionHistory, GeneratedExpressionHistory
+    <1>5. \A index \in 0..count : partialSource[index] = source[index]
+        BY <1>3, <1>4, PartialExpressionOutcomesDoNotDependOnCompletion
+    <1>6. \A index \in 0..count : partialGenerated[index] = generated[index]
+        BY <1>3, <1>4, PartialExpressionOutcomesDoNotDependOnCompletion
+    <1>. QED BY <1>1, <1>2, <1>5, <1>6, SMT DEF OutcomeAgrees
+
 =============================================================================

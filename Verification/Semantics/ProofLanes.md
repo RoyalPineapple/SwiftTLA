@@ -50,11 +50,15 @@ The initialization follow-on uses that dependency in the same integration lane.
 Its fixed/domain/failure rules, complete prefix composition and remaining owned boundaries are recorded in `InitializationFamily.md`.
 It reuses the existing source, output and initial-failure owners and adds no diagnostic selector.
 It is admitted at `1fb1dde983c8b2eea7d06d026134390de761b5ba` within the hosted regression/proof boundary.
-The current arithmetic-elaboration repair uses that dependency and preserves its theorem inputs.
+The arithmetic-elaboration repair uses that dependency and preserves its theorem inputs.
 It distinguishes raw Swift values from formal arithmetic, retains guarded Int bounds, and repairs typed local decoding.
 The existing native emitter and output checker also avoid redundant literal closures and a measured template-parser stack failure.
-Its 44 focused tests and 567 tests across 59 related suites passed locally. Fresh hosted admission remains pending.
+It is admitted at `3a0dda1b23af314c5255533ca177138d23f307bb` within the hosted regression/proof boundary.
 Full source binding, child rules, concrete execution and checker/kernel soundness remain open.
+The partial-prefix follow-on uses that admitted dependency in the same integration lane.
+It connects literal/read/checked-add expression histories to reachable initializer prefixes and their complete state and failure sets.
+`OrderedIntInitializationComposition.tla` follows both expression and initialization rules in the ordinary proof batch.
+The source and output owners remain unchanged. Concrete dependency extraction and traversal still require proof.
 It adds no new family-dispatch name. A new integrated candidate requires ordinary CI and full unfiltered admission; historical family diagnostics cannot substitute for them.
 
 The shared outcome schema remains frozen during each family batch.
