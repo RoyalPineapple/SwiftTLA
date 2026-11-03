@@ -679,6 +679,24 @@ struct NativeSwiftEmitter {
         _ root: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
+        let literalOperation: String?
+        switch root.operation {
+        case .divide, .integerDivide: literalOperation = "divide"
+        case .modulo: literalOperation = "modulo"
+        default: literalOperation = nil
+        }
+        if let literalOperation, root.resultType == .int, root.children.count == 2,
+           root.children.allSatisfy({ child in
+               guard child.resultType == .int, child.children.isEmpty,
+                     case .value(.integer) = child.operation else { return false }
+               return expressionValues[child] == nil
+           }) {
+            // Literal operands are total; keep the checked helper without a nested arithmetic closure.
+            let arguments = try root.children.map {
+                try expression($0, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            }
+            return "(try SwiftTLA._NativeMachineOperations.\(literalOperation)(\(arguments.joined(separator: ", "))))"
+        }
         var pending: [(id: CompiledExpression, expanded: Bool)] = [(root, false)]
         var values: [String] = []
         var statements: [String] = []

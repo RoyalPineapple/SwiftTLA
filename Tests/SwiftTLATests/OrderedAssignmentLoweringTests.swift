@@ -135,9 +135,12 @@ struct OrderedAssignmentLoweringTests {
         }
         let constantDomainSpec = #spec("OrderedAssignment") {
             let algorithm = Algorithm(scoped: { scope in
-                let first = scope.sharedVar(in: 0...1)
+                let first = scope.sharedVar(in: 0...3)
                 let second = scope.sharedVar(in: If(first == 0,
-                    then: SetExpr<Int>.literal(0), else: SetExpr<Int>.literal(0, 1 + 2)))
+                    then: SetExpr<Int>.literal(0, 1 + 2, 10 - 3 - 2, 2 + 3 * 4),
+                    else: If(first == 1, then: SetExpr<Int>.literal((-3) / 2),
+                        else: If(first == 2, then: SetExpr<Int>.literal((-3) % 2),
+                            else: SetExpr<Int>.literal(3 % (-2))))))
                 Do(OrderedAssignmentStep.`switch`) {
                     Assign(first, to: second + 1)
                     Assign(second, to: first)
@@ -145,21 +148,118 @@ struct OrderedAssignmentLoweringTests {
             })
             algorithm
         }
-        let domains: [(TLASpec, [[Int]], NativeMachineEvaluationError?)] = [
-            (domainSpec, [[0, 0], [1, 0], [1, 1]], nil),
-            (fallibleDomainSpec, [[0, 0]], .integerOverflow(.addition, operands: [1, Int.max])),
-            (constantDomainSpec, [[0, 0], [1, 0], [1, 3]], nil),
+        let formalArithmeticDomainSpec = #spec("OrderedAssignment") {
+            let formalConstant: Expr<Int> = (-3) / 2
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(in: 0...3)
+                let second = scope.sharedVar(in: If(first == 0,
+                    then: SetExpr<Int>.literal((first + (-3)) / 2, (first + (-3)) % 2,
+                        (first + (-3)) / ((-3) / 2)),
+                    else: If(first == 1, then: SetExpr<Int>.literal(formalConstant, Expr<Int>(-3) / 2),
+                        else: If(first == 2, then: SetExpr<Int>.literal(Expr<Int>(-3) % 2),
+                            else: SetExpr<Int>.literal(Expr<Int>(3) % (-2))))))
+                Do(OrderedAssignmentStep.`switch`) {
+                    Assign(first, to: second + 1)
+                    Assign(second, to: first)
+                }
+            })
+            algorithm
+        }
+        let constantInitialSpec = #spec("OrderedAssignment") {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(in: 0...3)
+                let second = scope.sharedVar(initial: 1 + 2)
+                Do(OrderedAssignmentStep.`switch`) {
+                    Assign(first, to: second + 1)
+                    Assign(second, to: first)
+                }
+            })
+            algorithm
+        }
+        let boundaryInitialSpec = #spec("OrderedAssignment") {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(in: 0...3)
+                let second = scope.sharedVar(initial: Int.min)
+                Do(OrderedAssignmentStep.`switch`) {
+                    Assign(first, to: second + 1)
+                    Assign(second, to: first)
+                }
+            })
+            algorithm
+        }
+        let domains: [(TLASpec, [[Int]], NativeMachineEvaluationError?, (prefix: String, initializer: String)?)] = [
+            (boundaryInitialSpec, [[0, Int.min], [1, Int.min], [2, Int.min], [3, Int.min]], nil,
+                ("", "initial: Int.min")),
+            (domainSpec, [[0, 0], [1, 0], [1, 1]], nil, nil),
+            (fallibleDomainSpec, [[0, 0]], .integerOverflow(.addition, operands: [1, Int.max]), nil),
+            (constantDomainSpec, [[0, 0], [0, 3], [0, 5], [0, 14], [1, -1], [2, -1], [3, 1]], nil,
+                ("", "in: If(first == 0, then: SetExpr<Int>.literal(0, 1 + 2, 10 - 3 - 2, 2 + 3 * 4), "
+                    + "else: If(first == 1, then: SetExpr<Int>.literal((-3) / 2), "
+                    + "else: If(first == 2, then: SetExpr<Int>.literal((-3) % 2), else: SetExpr<Int>.literal(3 % (-2)))))")),
+            (formalArithmeticDomainSpec, [[0, -2], [0, 1], [0, 3], [1, -2], [2, 1]], .negativeModuloDivisor(-2),
+                ("let formalConstant: Expr<Int> = (-3) / 2",
+                    "in: If(first == 0, then: SetExpr<Int>.literal((first + (-3)) / 2, (first + (-3)) % 2, (first + (-3)) / ((-3) / 2)), "
+                    + "else: If(first == 1, then: SetExpr<Int>.literal(formalConstant, Expr<Int>(-3) / 2), "
+                    + "else: If(first == 2, then: SetExpr<Int>.literal(Expr<Int>(-3) % 2), else: SetExpr<Int>.literal(Expr<Int>(3) % (-2)))))")),
+            (constantInitialSpec, [[0, 3], [1, 3], [2, 3], [3, 3]], nil, ("", "initial: 1 + 2")),
         ]
-        for (specification, expectedStates, expectedFailure) in domains {
-            let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        for (specification, expectedStates, expectedFailure, sourceDomain) in domains {
+            let program: CompiledProgram
+            do {
+                program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+            } catch {
+                Issue.record("Accepted Int builder failed compilation for \(sourceDomain?.initializer ?? "existing domain"): \(error)")
+                continue
+            }
             let first = try #require(program.layout.variables.first { $0.declaration.name == "first" }).id
             let second = try #require(program.layout.variables.first { $0.declaration.name == "second" }).id
             let outcomes = try CompiledRuntime(program: program).initialOutcomes()
-            #expect(Set(try outcomes.states.map { [try $0.value(for: first), try $0.value(for: second)] })
-                == Set(expectedStates.map { $0.map(CompiledValue.integer) }))
+            let runtimeStates = Set(try outcomes.states.map {
+                [try $0.value(for: first), try $0.value(for: second)]
+            })
+            #expect(runtimeStates == Set(expectedStates.map { $0.map(CompiledValue.integer) }))
             #expect(outcomes.firstFailure == expectedFailure)
             if expectedFailure != nil {
                 #expect(outcomes.firstFailureInitializerOrdinal == second.ordinal)
+            }
+            if let sourceDomain {
+                let source = """
+                {
+                    \(sourceDomain.prefix)
+                    let algorithm = Algorithm(scoped: { scope in
+                        let first = scope.sharedVar(in: 0...3)
+                        let second = scope.sharedVar(\(sourceDomain.initializer))
+                        Do(OrderedAssignmentStep.`switch`) {
+                            Assign(first, to: second + 1)
+                            Assign(second, to: first)
+                        }
+                    })
+                    algorithm
+                }
+                """
+                let parsed = SpecParser.parseSpecClosure(named: "OrderedAssignment",
+                    try parseSpecTestClosure(source), sourceTypes: .init(enums: [
+                        parserTestEnum("OrderedAssignmentStep", cases: ["switch": .string("switch")]),
+                    ]))
+                try #require(parsed.diagnostics.isEmpty)
+                let parsedProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: parsed.compile()))
+                let parsedFirst = try #require(parsedProgram.layout.variables.first { $0.declaration.name == "first" }).id
+                let parsedSecond = try #require(parsedProgram.layout.variables.first { $0.declaration.name == "second" }).id
+                let parsedOutcomes = try CompiledRuntime(program: parsedProgram).initialOutcomes()
+                let parsedStates = Set(try parsedOutcomes.states.map {
+                    [try $0.value(for: parsedFirst), try $0.value(for: parsedSecond)]
+                })
+                #expect(parsedStates == runtimeStates,
+                    "Source/builder arithmetic states differ: \(sourceDomain.initializer)")
+                #expect(parsedOutcomes.firstFailure == outcomes.firstFailure,
+                    "Source/builder arithmetic failure differs: \(sourceDomain.initializer)")
+                // Keep failed source agreement from hiding later source cases in output generation.
+                guard parsedStates == runtimeStates,
+                      parsedOutcomes.firstFailure == outcomes.firstFailure else { continue }
+                _ = try parsedProgram.renderModule()
+                var parsedEmitter = NativeSwiftEmitter(model: try MacroCompilation(
+                    typeName: "OrderedAssignment", program: parsedProgram))
+                _ = try parsedEmitter.machineMembers()
             }
             _ = try program.renderModule()
             var emitter = NativeSwiftEmitter(model: try MacroCompilation(

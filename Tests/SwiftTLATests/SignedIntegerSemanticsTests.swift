@@ -1,4 +1,8 @@
+import Foundation
 @testable import SwiftTLA
+@testable import SwiftTLAPlugin
+import SwiftParser
+import SwiftSyntax
 import Testing
 
 @Suite struct SignedIntegerSemanticsTests {
@@ -18,19 +22,97 @@ import Testing
         #expect(try specification.compile().render().tlaBundle.tla.contains("minimum = \(minimum)"))
     }
 
-    @Test("Generated Swift machine uses floor division for negative divisors")
+    @Test("Generated Swift retains raw and formal signed division")
     func generatedSignedDivision() throws {
-        var machine = try SignedDivisionOutputModel.makeMachine()
-        #expect(machine.state.quotient == 0)
-        let transition = try machine.send(.divide)
-        #expect(transition.after.quotient == -3)
+        let compilation = try SignedDivisionOutputModel.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let quotient = try #require(compilation.layout.variables.first { $0.declaration.name == "quotient" }).id
+        let cases: [(SignedDivisionOutputModel.Action, String, Int)] = [
+            (.divide, "divide", -2), (.formalDivide, "formalDivide", -3),
+            (.integerDivide, "integerDivide", -3),
+            (.formalLocal, "formalLocal", -3),
+            (.rawLocal, "rawLocal", -2),
+        ]
+        for (step, label, expected) in cases {
+            let action = try #require(compilation.layout.testActionID(named: label))
+            let successor = try #require(try runtime.successors(for: action, from: initial).first)
+            #expect(try successor.state.value(for: quotient) == .integer(expected), "Runtime \(label)")
+            var machine = try SignedDivisionOutputModel.makeMachine()
+            #expect(machine.state.quotient == 0)
+            let transition = try machine.send(step)
+            #expect(transition.after.quotient == expected, "Native \(label)")
+        }
+        let failures: [(SignedDivisionOutputModel.Action, String, NativeMachineEvaluationError, EvalError)] = [
+            (.zeroDivide, "zeroDivide", .divisionByZero, .divisionByZero),
+            (.overflowDivide, "overflowDivide", .integerOverflow(.division, operands: [Int.min, -1]),
+                .integerOverflow(.division, operands: [Int.min, -1])),
+        ]
+        for (step, label, nativeFailure, runtimeFailure) in failures {
+            var machine = try SignedDivisionOutputModel.makeMachine()
+            let before = machine.snapshot
+            #expect(throws: nativeFailure) { try machine.send(step) }
+            #expect(machine.snapshot == before)
+            let action = try #require(compilation.layout.testActionID(named: label))
+            #expect(throws: runtimeFailure) { try runtime.successors(for: action, from: initial) }
+        }
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let formalID = try #require(compilation.layout.testActionID(named: "formalDivide"))
+        let formalAction = try #require(program.behavior.actions.first { $0.id == formalID })
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "SignedDivisionOutputModel", program: program))
+        let native = try emitter.updateFunction(formalAction, configurationParameters: "")
+        let writes = try emitter.actionFunctions(formalAction.body).writes
+        try verifyGeneratedActionWriteOutput(native, action: formalAction.body,
+            program: program, stateFields: emitter.stateMemberNames, parts: writes)
+        let call = "SwiftTLA._NativeMachineOperations.divide(5, -2)"
+        try #require(native.description.components(separatedBy: call).count == 2)
+        for (label, changedCall) in [
+            ("operand", "SwiftTLA._NativeMachineOperations.divide(4, -2)"),
+            ("order", "SwiftTLA._NativeMachineOperations.divide(-2, 5)"),
+            ("operation", "SwiftTLA._NativeMachineOperations.modulo(5, -2)"),
+            ("qualification", "_NativeMachineOperations.divide(5, -2)"),
+        ] {
+            let changed = native.description.replacingOccurrences(of: call, with: changedCall)
+            let declaration = try #require(Parser.parse(source: changed).statements.first?.item.as(DeclSyntax.self))
+            do {
+                try verifyGeneratedActionWriteOutput(declaration, action: formalAction.body,
+                    program: program, stateFields: emitter.stateMemberNames, parts: writes)
+                Issue.record("Literal division native corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.hasPrefix("native.action.binding."))
+            }
+        }
     }
 
     @Test("Generated Swift machine uses nonnegative modulo for positive divisors")
     func generatedSignedModulo() throws {
-        var machine = try SignedModuloOutputModel.makeMachine()
-        let transition = try machine.send(.modulo)
-        #expect(transition.after.remainder == 1)
+        let compilation = try SignedModuloOutputModel.spec.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let remainder = try #require(compilation.layout.variables.first { $0.declaration.name == "remainder" }).id
+        let cases: [(SignedModuloOutputModel.Action, String)] = [(.modulo, "modulo"), (.literalModulo, "literalModulo")]
+        for (step, label) in cases {
+            var machine = try SignedModuloOutputModel.makeMachine()
+            let transition = try machine.send(step)
+            #expect(transition.after.remainder == 1)
+            let action = try #require(compilation.layout.testActionID(named: label))
+            let successor = try #require(try runtime.successors(for: action, from: initial).first)
+            #expect(try successor.state.value(for: remainder) == .integer(1))
+        }
+        let failures: [(SignedModuloOutputModel.Action, String, NativeMachineEvaluationError, EvalError)] = [
+            (.negativeModulo, "negativeModulo", .negativeModuloDivisor(-2), .negativeModuloDivisor(-2)),
+            (.zeroModulo, "zeroModulo", .divisionByZero, .divisionByZero),
+        ]
+        for (step, label, nativeFailure, runtimeFailure) in failures {
+            var machine = try SignedModuloOutputModel.makeMachine()
+            let before = machine.snapshot
+            #expect(throws: nativeFailure) { try machine.send(step) }
+            #expect(machine.snapshot == before)
+            let action = try #require(compilation.layout.testActionID(named: label))
+            #expect(throws: runtimeFailure) { try runtime.successors(for: action, from: initial) }
+        }
     }
 
     @Test("Right-first operations preserve the first operand failure")

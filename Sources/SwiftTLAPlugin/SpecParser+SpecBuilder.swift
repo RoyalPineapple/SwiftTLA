@@ -116,7 +116,8 @@ extension ParserSession {
                 continue
             }
             guard let call = initializer.as(FunctionCallExprSyntax.self) else {
-                if let value = decodeTypedFacadeValue(initializer, scope: sourceScope) {
+                if let value = decodeTypedFacadeValue(initializer, scope: sourceScope,
+                    requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation)) {
                     sourceScope = sourceScope.extending(binding: sourceName, to: value,
                         shape: typedFacadeValueType(initializer, scope: sourceScope))
                 } else {
@@ -375,7 +376,8 @@ extension ParserSession {
                 parseVariableBinding(binding, call: call, constructor: constructor, into: &components)
             } else if let value = decodeTypedFacadeValue(
                 ExprSyntax(call),
-                scope: sourceScope
+                scope: sourceScope,
+                requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation)
             ) {
                 sourceScope = sourceScope.extending(binding: sourceName, to: value,
                     shape: typedFacadeValueType(ExprSyntax(call), scope: sourceScope))
