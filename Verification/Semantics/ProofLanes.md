@@ -44,7 +44,12 @@ Its scope and remaining premises are recorded in `OrderedIntAssignmentFamily.md`
 It is admitted at `2d59884f3f31ca8e3c73dc5e2efdd0da06deb3a0` within the hosted regression/proof boundary.
 The checking-selection follow-on uses that admitted dependency in the same integration lane.
 Its source rules, conditional observation composition and actual-output boundaries are recorded in `CheckingSelectionFamily.md`.
-It reuses the existing validation and CFG checkers and canonical test owners; its own admission is still pending.
+It reuses the existing validation and CFG checkers and canonical test owners.
+It is admitted at `0b7b61800c5eab69a2ae80525ed16909201ce2ae` within the hosted regression/proof boundary.
+The initialization follow-on uses that dependency in the same integration lane.
+Its fixed/domain/failure rules, complete prefix composition and remaining owned boundaries are recorded in `InitializationFamily.md`.
+It reuses the existing source, output and initial-failure owners and adds no diagnostic selector.
+Its local checks are qualified; hosted admission for a new final revision remains pending.
 It adds no new family-dispatch name. A new integrated candidate requires ordinary CI and full unfiltered admission; historical family diagnostics cannot substitute for them.
 
 The shared outcome schema remains frozen during each family batch.

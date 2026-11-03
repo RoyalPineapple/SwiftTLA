@@ -55,7 +55,7 @@ struct OrderedAssignmentLoweringTests {
             return
         }
         #expect(StraightLineRenderedActionCheck.initialIntPredicate(
-            secondExpression, named: "second", layout: compiled.layout) != nil)
+            .value(secondExpression), named: "second", layout: compiled.layout) != nil)
         _ = try compiled.render()
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         let action = try #require(program.behavior.actions.first)
@@ -107,10 +107,70 @@ struct OrderedAssignmentLoweringTests {
                 _ = try spec._checkingOrderedIntSource(algorithm: "algorithm", components: changed).compile()
             }
         }
+
+        let domainSpec = #spec("OrderedAssignment") {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(in: 0...1)
+                let second = scope.sharedVar(in: If(first == 0,
+                    then: SetExpr<Int>.literal(0), else: SetExpr<Int>.literal(0, 1)))
+                Do(OrderedAssignmentStep.`switch`) {
+                    Assign(first, to: second + 1)
+                    Assign(second, to: first)
+                }
+            })
+            algorithm
+        }
+        let fallibleDomainSpec = #spec("OrderedAssignment") {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(in: 0...1)
+                let second = scope.sharedVar(in: If(first == 0,
+                    then: SetExpr<Int>.literal(0),
+                    else: SetExpr<Int>.literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)))
+                Do(OrderedAssignmentStep.`switch`) {
+                    Assign(first, to: second + 1)
+                    Assign(second, to: first)
+                }
+            })
+            algorithm
+        }
+        let constantDomainSpec = #spec("OrderedAssignment") {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(in: 0...1)
+                let second = scope.sharedVar(in: If(first == 0,
+                    then: SetExpr<Int>.literal(0), else: SetExpr<Int>.literal(0, 1 + 2)))
+                Do(OrderedAssignmentStep.`switch`) {
+                    Assign(first, to: second + 1)
+                    Assign(second, to: first)
+                }
+            })
+            algorithm
+        }
+        let domains: [(TLASpec, [[Int]], NativeMachineEvaluationError?)] = [
+            (domainSpec, [[0, 0], [1, 0], [1, 1]], nil),
+            (fallibleDomainSpec, [[0, 0]], .integerOverflow(.addition, operands: [1, Int.max])),
+            (constantDomainSpec, [[0, 0], [1, 0], [1, 3]], nil),
+        ]
+        for (specification, expectedStates, expectedFailure) in domains {
+            let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+            let first = try #require(program.layout.variables.first { $0.declaration.name == "first" }).id
+            let second = try #require(program.layout.variables.first { $0.declaration.name == "second" }).id
+            let outcomes = try CompiledRuntime(program: program).initialOutcomes()
+            #expect(Set(try outcomes.states.map { [try $0.value(for: first), try $0.value(for: second)] })
+                == Set(expectedStates.map { $0.map(CompiledValue.integer) }))
+            #expect(outcomes.firstFailure == expectedFailure)
+            if expectedFailure != nil {
+                #expect(outcomes.firstFailureInitializerOrdinal == second.ordinal)
+            }
+            _ = try program.renderModule()
+            var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+                typeName: "OrderedAssignment", program: program))
+            _ = try emitter.machineMembers()
+        }
+
     }
 
     @Test("The actual #spec witness rejects a builder that changes an initial value")
-    func orderedIntSpecRejectsChangedBuilderOutput() {
+    func orderedIntSpecRejectsChangedBuilderOutput() throws {
         func Algorithm(
             _name name: String = "algorithm",
             @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement]
@@ -133,6 +193,39 @@ struct OrderedAssignmentLoweringTests {
             algorithm
         }
         #expect(throws: SourceParseDiagnostic.self) { _ = try spec.compile() }
+
+        let domainSpec = #spec("ChangedBuilder") {
+            let algorithm = Algorithm(scoped: { scope in
+                let value = scope.sharedVar(in: 0...1)
+                Do(OrderedAssignmentStep.`switch`) { Assign(value, to: value + 1) }
+            })
+            algorithm
+        }
+        let radixSpec = #spec("ChangedBuilder") {
+            let algorithm = Algorithm(scoped: { scope in
+                let value = scope.sharedVar(initial: 0x1)
+                Do(OrderedAssignmentStep.`switch`) { Assign(value, to: value + 1) }
+            })
+            algorithm
+        }
+        let fallibleDomainSpec = #spec("ChangedBuilder") {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(in: 0...1)
+                let second = scope.sharedVar(in: If(first == 0,
+                    then: SetExpr<Int>.literal(0),
+                    else: SetExpr<Int>.literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)))
+                Do(OrderedAssignmentStep.`switch`) { Assign(first, to: second + 1) }
+            })
+            algorithm
+        }
+        for (label, changed) in [("domain", domainSpec), ("radix", radixSpec),
+                                 ("fallibleDomain", fallibleDomainSpec)] {
+            do {
+                _ = try changed.compile()
+                Issue.record("Ordered Int builder corruption accepted: \(label)")
+            } catch is SourceParseDiagnostic {}
+        }
+
     }
 
     @Test("The #spec rewrite preserves every ordered Int initializer and step")
@@ -172,6 +265,62 @@ struct OrderedAssignmentLoweringTests {
                     rewritten: try parseSpecTestClosure(changed))
             }
         }
+
+        let domainSource = source
+            .replacingOccurrences(of: "initial: 1", with: "in: 0...1")
+            .replacingOccurrences(of: "initial: first + 2",
+                with: "in: If(first == 0, then: SetExpr<Int>.literal(0), else: SetExpr<Int>.literal(0, 1))")
+        let domainOriginal = try parseSpecTestClosure(domainSource)
+        let domainExpanded = domainSource
+            .replacingOccurrences(of: "Algorithm(scoped:", with: "Algorithm(_name: \"algorithm\", scoped:")
+            .replacingOccurrences(of: "scope.sharedVar(in: 0...1)",
+                with: "scope.sharedVar(_name: \"first\", in: 0...1)")
+        try OrderedIntSourceSyntaxCheck.verifyRewrite(domainOriginal,
+            rewritten: try parseSpecTestClosure(domainExpanded))
+        let mutations = [
+            ("algorithmIdentity", domainExpanded.replacingOccurrences(of: "_name: \"algorithm\"", with: "_name: \"other\"")),
+            ("stateIdentity", domainExpanded.replacingOccurrences(of: "_name: \"first\"", with: "_name: \"other\"")),
+            ("rangeUpper", domainExpanded.replacingOccurrences(of: "in: 0...1", with: "in: 0...2")),
+            ("conditionOperation", domainExpanded.replacingOccurrences(of: "If(first == 0", with: "If(first != 0")),
+            ("conditionRead", domainExpanded.replacingOccurrences(of: "If(first == 0", with: "If(0 == 0")),
+            ("setMember", domainExpanded.replacingOccurrences(of: "else: SetExpr<Int>.literal(0, 1)",
+                with: "else: SetExpr<Int>.literal(0, 2)")),
+        ]
+        for (label, changed) in mutations {
+            #expect(changed != domainExpanded)
+            do {
+                try OrderedIntSourceSyntaxCheck.verifyRewrite(domainOriginal,
+                    rewritten: try parseSpecTestClosure(changed))
+                Issue.record("Ordered Int domain rewrite corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "algorithms.algorithm.macroRewrite")
+            }
+        }
+
+        let fallibleSource = domainSource.replacingOccurrences(of: "SetExpr<Int>.literal(0, 1)",
+            with: "SetExpr<Int>.literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)")
+        let fallibleExpanded = domainExpanded.replacingOccurrences(of: "SetExpr<Int>.literal(0, 1)",
+            with: "SetExpr<Int>.literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)")
+        let fallibleOriginal = try parseSpecTestClosure(fallibleSource)
+        try OrderedIntSourceSyntaxCheck.verifyRewrite(fallibleOriginal,
+            rewritten: try parseSpecTestClosure(fallibleExpanded))
+        for (label, changed) in [
+            ("additionOperand", fallibleExpanded.replacingOccurrences(
+                of: "first + 9_223_372_036_854_775_807", with: "first + 0")),
+            ("childOrder", fallibleExpanded.replacingOccurrences(
+                of: "literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)",
+                with: "literal(9_223_372_036_854_775_807 + first, first + 9_223_372_036_854_775_807)")),
+        ] {
+            try #require(changed != fallibleExpanded)
+            do {
+                try OrderedIntSourceSyntaxCheck.verifyRewrite(fallibleOriginal,
+                    rewritten: try parseSpecTestClosure(changed))
+                Issue.record("Fallible domain source rewrite corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "algorithms.algorithm.macroRewrite")
+            }
+        }
+
     }
 
     @Test("Authored sequential Int syntax agrees with its parsed initial values and ordered steps")
@@ -242,6 +391,115 @@ struct OrderedAssignmentLoweringTests {
             try OrderedIntSourceSyntaxCheck.verify(try parseSpecTestClosure(wrongLabeledInitial),
                 parsed: labeledModel, enums: enums)
         }
+
+        let domainExpression = "If(first == 0, then: SetExpr<Int>.literal(0), else: SetExpr<Int>.literal(0, 1))"
+        let domainSource = source
+            .replacingOccurrences(of: "initial: 1", with: "in: 0...1")
+            .replacingOccurrences(of: "initial: first + 2", with: "in: \(domainExpression)")
+        let domainSyntax = try parseSpecTestClosure(domainSource)
+        let domainParsed = SpecParser.parseSpecClosure(named: "OrderedInt", domainSyntax,
+            sourceTypes: .init(enums: enums))
+        try #require(domainParsed.diagnostics.isEmpty)
+        let domainProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: domainParsed.compile()))
+        #expect(try CompiledRuntime(program: domainProgram).initialOutcomes().states.count == 3)
+        _ = try domainProgram.renderModule()
+        var domainEmitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "OrderedInt", program: domainProgram))
+        _ = try domainEmitter.machineMembers()
+        try OrderedIntSourceSyntaxCheck.verify(domainSyntax, parsed: domainParsed, enums: enums)
+        let swappedArms = domainSource
+            .replacingOccurrences(of: "then: SetExpr<Int>.literal(0),", with: "then: SetExpr<Int>.literal(0, 1),")
+            .replacingOccurrences(of: "else: SetExpr<Int>.literal(0, 1)", with: "else: SetExpr<Int>.literal(0)")
+        let mutations = [
+            ("rangeUpper", domainSource.replacingOccurrences(of: "in: 0...1", with: "in: 0...2")),
+            ("conditionOperation", domainSource.replacingOccurrences(of: "If(first == 0", with: "If(first != 0")),
+            ("conditionRead", domainSource.replacingOccurrences(of: "If(first == 0", with: "If(0 == 0")),
+            ("armOrder", swappedArms),
+            ("setMember", domainSource.replacingOccurrences(of: "else: SetExpr<Int>.literal(0, 1)",
+                with: "else: SetExpr<Int>.literal(0, 2)")),
+            ("omittedMember", domainSource.replacingOccurrences(of: "else: SetExpr<Int>.literal(0, 1)",
+                with: "else: SetExpr<Int>.literal(0)")),
+            ("domainConstructor", domainSource.replacingOccurrences(of: domainExpression,
+                with: "SetExpr<Int>.literal(0, 1)")),
+        ]
+        for (label, changed) in mutations {
+            #expect(changed != domainSource)
+            let altered = SpecParser.parseSpecClosure(named: "OrderedInt", try parseSpecTestClosure(changed),
+                sourceTypes: .init(enums: enums))
+            try #require(altered.diagnostics.isEmpty)
+            _ = try altered.compile()
+            do {
+                try OrderedIntSourceSyntaxCheck.verify(domainSyntax, parsed: altered, enums: enums)
+                Issue.record("Ordered Int domain extraction corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "algorithms.algorithm.authoredSyntax")
+            }
+        }
+        let radixAltered = SpecParser.parseSpecClosure(named: "OrderedInt",
+            try parseSpecTestClosure(source.replacingOccurrences(of: "initial: 1", with: "initial: 3")),
+            sourceTypes: .init(enums: enums))
+        try #require(radixAltered.diagnostics.isEmpty)
+        for spelling in ["0x1", "0b1", "0o1", "1_000", "-0x8000000000000000"] {
+            let radixSyntax = try parseSpecTestClosure(source.replacingOccurrences(of: "initial: 1",
+                with: "initial: \(spelling)"))
+            let radixParsed = SpecParser.parseSpecClosure(named: "OrderedInt", radixSyntax,
+                sourceTypes: .init(enums: enums))
+            try #require(radixParsed.diagnostics.isEmpty)
+            _ = try radixParsed.compile()
+            do {
+                try OrderedIntSourceSyntaxCheck.verify(radixSyntax, parsed: radixParsed, enums: enums)
+            } catch let diagnostic as CompilationDiagnostic {
+                let initializers = radixParsed.sourceAlgorithms.flatMap { $0.model.components }.compactMap {
+                    component -> String? in
+                    guard case .shared(let state) = component else { return nil }
+                    return "\(state.root): swiftType=\(String(reflecting: state.swiftTypeName)), resolvedType=\(String(reflecting: state.resolvedValueType)), \(String(reflecting: state.initialization))"
+                }
+                Issue.record("Source witness rejected accepted Int spelling \(spelling): \(initializers); \(diagnostic)")
+                continue
+            }
+            do {
+                try OrderedIntSourceSyntaxCheck.verify(radixSyntax, parsed: radixAltered, enums: enums)
+                Issue.record("Ordered Int radix extraction corruption accepted: \(spelling)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "algorithms.algorithm.authoredSyntax")
+            }
+        }
+
+        let fallibleSource = domainSource.replacingOccurrences(of: "SetExpr<Int>.literal(0, 1)",
+            with: "SetExpr<Int>.literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)")
+        let fallibleSyntax = try parseSpecTestClosure(fallibleSource)
+        let fallibleParsed = SpecParser.parseSpecClosure(named: "OrderedInt", fallibleSyntax,
+            sourceTypes: .init(enums: enums))
+        try #require(fallibleParsed.diagnostics.isEmpty)
+        let fallibleProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: fallibleParsed.compile()))
+        let fallibleOutcomes = try CompiledRuntime(program: fallibleProgram).initialOutcomes()
+        #expect(fallibleOutcomes.states.count == 1)
+        #expect(fallibleOutcomes.firstFailure == .integerOverflow(.addition, operands: [1, Int.max]))
+        _ = try fallibleProgram.renderModule()
+        var fallibleEmitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "OrderedInt", program: fallibleProgram))
+        _ = try fallibleEmitter.machineMembers()
+        try OrderedIntSourceSyntaxCheck.verify(fallibleSyntax, parsed: fallibleParsed, enums: enums)
+        for (label, changed) in [
+            ("additionOperand", fallibleSource.replacingOccurrences(
+                of: "first + 9_223_372_036_854_775_807", with: "first + 0")),
+            ("childOrder", fallibleSource.replacingOccurrences(
+                of: "literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)",
+                with: "literal(9_223_372_036_854_775_807 + first, first + 9_223_372_036_854_775_807)")),
+        ] {
+            try #require(changed != fallibleSource)
+            let altered = SpecParser.parseSpecClosure(named: "OrderedInt", try parseSpecTestClosure(changed),
+                sourceTypes: .init(enums: enums))
+            try #require(altered.diagnostics.isEmpty)
+            let changedProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: altered.compile()))
+            let changedOutcomes = try CompiledRuntime(program: changedProgram).initialOutcomes()
+            #expect(changedOutcomes.firstFailure == .integerOverflow(.addition, operands: [Int.max, 1]))
+            do {
+                try OrderedIntSourceSyntaxCheck.verify(fallibleSyntax, parsed: altered, enums: enums)
+                Issue.record("Fallible domain source extraction corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "algorithms.algorithm.authoredSyntax")
+            }
+        }
+
     }
 
     private enum Symbol: Equatable {
@@ -1058,6 +1316,11 @@ struct OrderedAssignmentLoweringTests {
         let lowered = try #require(inputs.semantics.behavior.initializations.first {
             $0.variable == variable.id
         }?.initialization)
+        var sourceChecker = try CompiledTypeChecker(inputs: inputs)
+        let checkedProgram = try sourceChecker.checkProgram()
+        let checked = try #require(checkedProgram.behavior.initializations.first {
+            $0.variable == variable.id
+        }?.initialization)
         let program = try CompiledProgram(inputs: inputs)
         let resolved = try #require(program.behavior.initializations.first {
             $0.variable == variable.id
@@ -1065,7 +1328,7 @@ struct OrderedAssignmentLoweringTests {
         let path = "variables.first.initialization"
         try StraightLineAssignmentCheck.verifyInitialIntExpression(source.initialization,
             lowered: lowered, layout: inputs.layout, at: path)
-        try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
+        try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
             resolved: resolved, at: path)
 
         let wrongValue = CompiledVariableInitialization.value(.value(.integer(9)))
@@ -1076,13 +1339,13 @@ struct OrderedAssignmentLoweringTests {
         let wrongResolvedValue = CompiledVariableInitialization.value(.init(
             operation: .value(.integer(9)), resultType: .int, children: []))
         #expect(throws: CompilationDiagnostic.self) {
-            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
                 resolved: wrongResolvedValue, at: path)
         }
         let wrongType = CompiledVariableInitialization.value(.init(
             operation: .value(.integer(1)), resultType: .bool, children: []))
         #expect(throws: CompilationDiagnostic.self) {
-            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
                 resolved: wrongType, at: path)
         }
 
@@ -1188,6 +1451,104 @@ struct OrderedAssignmentLoweringTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.Init")
         }
+
+        let domainSpec = DependentInitializationOutputProofModel.spec
+        let domainSource = try domainSpec.loweredSourceModel()
+        let domainInputs = try SourceTypeResolver().resolve(in: domainSpec.compile())
+        var domainSourceChecker = try CompiledTypeChecker(inputs: domainInputs)
+        let checkedDomainProgram = try domainSourceChecker.checkProgram()
+        let domainProgram = try CompiledProgram(inputs: domainInputs)
+        _ = try domainProgram.renderModule()
+        var domainEmitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "DependentInitializationOutputProofModel", program: domainProgram))
+        _ = try domainEmitter.machineMembers()
+        func changed(_ node: CompiledExpression, operation: CompiledOperation? = nil,
+                     children: [CompiledExpression]) -> CompiledExpression {
+            .init(operation: operation ?? node.operation, resultType: node.resultType,
+                children: children)
+        }
+        func integer(_ value: Int, like node: CompiledExpression) -> CompiledExpression {
+            .init(operation: .value(.integer(value)), resultType: node.resultType, children: [])
+        }
+        func domainMutants(_ expression: CompiledExpression, name: String) throws
+            -> [(String, CompiledExpression)] {
+            if name == "seed" {
+                guard expression.operation == .integerRange, expression.children.count == 2 else {
+                    throw InvalidShape.lowered
+                }
+                return [
+                    ("rangeUpper", changed(expression, children: [expression.children[0],
+                        integer(2, like: expression.children[1])])),
+                    ("rangeOrder", changed(expression, children: Array(expression.children.reversed()))),
+                ]
+            }
+            guard expression.operation == .ifThenElse, expression.children.count == 3 else {
+                throw InvalidShape.lowered
+            }
+            let condition = expression.children[0]
+            let yes = expression.children[1]
+            let no = expression.children[2]
+            guard condition.operation == .equal, condition.children.count == 2,
+                  case .stateVariable = condition.children[0].operation,
+                  yes.operation == .setLiteral, yes.children.count == 1,
+                  no.operation == .setLiteral, no.children.count == 2 else {
+                throw InvalidShape.lowered
+            }
+            let wrongCondition = changed(condition, operation: .notEqual, children: condition.children)
+            let missingRead = changed(condition, children: [integer(0, like: condition.children[0]),
+                condition.children[1]])
+            let wrongMember = changed(no, children: [no.children[0], integer(2, like: no.children[1])])
+            let missingMember = changed(no, children: [no.children[0]])
+            return [
+                ("conditionOperation", changed(expression, children: [wrongCondition, yes, no])),
+                ("conditionRead", changed(expression, children: [missingRead, yes, no])),
+                ("armOrder", changed(expression, children: [condition, no, yes])),
+                ("setMember", changed(expression, children: [condition, yes, wrongMember])),
+                ("omittedMember", changed(expression, children: [condition, yes, missingMember])),
+                ("domainConstructor", changed(expression, operation: .setLiteral, children: yes.children)),
+            ]
+        }
+        for name in ["seed", "choice"] {
+            let source = try #require(domainSource.variables.first { $0.name == name })
+            let id = try #require(domainInputs.layout.variables.first {
+                $0.declaration.name == name
+            }).id
+            let lowered = try #require(domainInputs.semantics.behavior.initializations.first {
+                $0.variable == id
+            }).initialization
+            let checked = try #require(checkedDomainProgram.behavior.initializations.first {
+                $0.variable == id
+            }).initialization
+            let resolved = try #require(domainProgram.behavior.initializations.first {
+                $0.variable == id
+            }).initialization
+            guard case .memberOf = source.initialization,
+                  case .memberOf(let loweredDomain) = lowered,
+                  case .memberOf(let resolvedDomain) = resolved else { throw InvalidShape.lowered }
+            let path = "variables.\(name).initialization"
+            try StraightLineAssignmentCheck.verifyInitialIntExpression(source.initialization,
+                lowered: lowered, layout: domainInputs.layout, at: path)
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
+                resolved: resolved, at: path)
+            for (label, expression) in try domainMutants(loweredDomain, name: name) {
+                do {
+                    try StraightLineAssignmentCheck.verifyInitialIntExpression(source.initialization,
+                        lowered: .memberOf(expression), layout: domainInputs.layout, at: path)
+                    Issue.record("Initial domain source corruption accepted: \(name).\(label)")
+                } catch let diagnostic as CompilationDiagnostic {
+                    #expect(diagnostic.path == path)
+                }
+            }
+            for (label, expression) in try domainMutants(resolvedDomain, name: name) {
+                do {
+                    try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
+                        resolved: .memberOf(expression), at: path)
+                    Issue.record("Initial domain resolved corruption accepted: \(name).\(label)")
+                } catch let diagnostic as CompilationDiagnostic {
+                    #expect(diagnostic.path == path)
+                }
+            }
+        }
     }
 
     @Test("Dependent Int initialization retains complete sequential control checking")
@@ -1232,10 +1593,14 @@ struct OrderedAssignmentLoweringTests {
         let resolved = try #require(program.behavior.initializations.first {
             $0.variable == variable.id
         }?.initialization)
+        var sourceChecker = try CompiledTypeChecker(inputs: inputs)
+        let checked = try #require(try sourceChecker.checkProgram().behavior.initializations.first {
+            $0.variable == variable.id
+        }?.initialization)
         let path = "variables.second.initialization"
         try StraightLineAssignmentCheck.verifyInitialIntExpression(.expression(source),
             lowered: lowered, layout: inputs.layout, at: path)
-        try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
+        try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
             resolved: resolved, at: path)
 
         guard case .value(let loweredExpression) = lowered,
@@ -1252,7 +1617,7 @@ struct OrderedAssignmentLoweringTests {
             children: [.init(operation: .value(.integer(3)), resultType: .int, children: []),
                 resolvedExpression.children[1]]))
         #expect(throws: CompilationDiagnostic.self) {
-            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
                 resolved: wrongResolved, at: path)
         }
         let mistypedChild = CompiledExpression(
@@ -1261,7 +1626,7 @@ struct OrderedAssignmentLoweringTests {
         let mistypedResolved = CompiledVariableInitialization.value(.init(operation: .add,
             resultType: .int, children: [mistypedChild, resolvedExpression.children[1]]))
         #expect(throws: CompilationDiagnostic.self) {
-            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered,
+            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
                 resolved: mistypedResolved, at: path)
         }
 
@@ -1279,7 +1644,7 @@ struct OrderedAssignmentLoweringTests {
             try verifyGeneratedInitialBindings(declaration, expected: bindings,
                 expectedLoops: [:], expectedCandidateSources: [:],
                 expectedIntExpressions: [name: resolvedExpression], stateSlots: slots)
-            try emitter.verifyDeterministicIntInitialOutput(declaration)
+            try emitter.verifyIntInitialOutput(declaration)
         }
         try verify(declaration)
         try verifyOrderedIntInitialExpression(declaration,
@@ -1322,7 +1687,7 @@ struct OrderedAssignmentLoweringTests {
             String($0.dropFirst("  /\\ ".count))
         }
         let expectedPredicate = try #require(StraightLineRenderedActionCheck.initialIntPredicate(
-            resolvedExpression, named: "second", layout: program.layout))
+            .value(resolvedExpression), named: "second", layout: program.layout))
         let controls = program.behavior.initializations.compactMap {
             initialization -> (String, String)? in
             guard case .value(let expression) = initialization.initialization,
@@ -1427,7 +1792,7 @@ struct OrderedAssignmentLoweringTests {
         let original = try #require(try emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
         })
-        try emitter.verifyDeterministicIntInitialOutput(original)
+        try emitter.verifyIntInitialOutput(original)
 
         let marker = "var firstFailure: NativeMachineEvaluationError?"
         let wrong = original.description.replacingOccurrences(of: marker, with: """
@@ -1455,7 +1820,7 @@ struct OrderedAssignmentLoweringTests {
         try emitter.verifyInitialSelection(declaration, expectedMembershipSources: [:])
         try emitter.verifyInitialStateAssembly(declaration)
         do {
-            try emitter.verifyDeterministicIntInitialOutput(declaration)
+            try emitter.verifyIntInitialOutput(declaration)
             Issue.record("An early return discarded the compiled initial state")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native._initialStates.completeIntOutput")

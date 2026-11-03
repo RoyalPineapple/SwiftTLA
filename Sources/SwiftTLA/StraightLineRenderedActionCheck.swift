@@ -20,10 +20,11 @@ enum StraightLineRenderedActionCheck {
     private struct AdditionTree {
         let value: String
         let sites: [AdditionSite]
+        var usesLazyBranches = false
 
         var defined: String {
             let guards = sites.map(\.guardText)
-            return guards.count == 1 ? guards[0] : guards.reversed().reduce("TRUE") { result, guard_ in
+            return guards.count == 1 && !usesLazyBranches ? guards[0] : guards.reversed().reduce("TRUE") { result, guard_ in
                 "(IF \(guard_) THEN \(result) ELSE FALSE)"
             }
         }
@@ -265,23 +266,96 @@ enum StraightLineRenderedActionCheck {
         return .init(value: values[0], sites: sites)
     }
 
-    static func initialIntPredicate(_ expression: CompiledExpression, named name: String,
-                                    layout: CompiledLayout) -> String? {
-        guard expression.resultType == .int ||
-                (expression.resultType == .unknown && layout.variables.contains {
-                    $0.declaration.name == name && $0.generatedSwiftType == "Int"
-                }) else { return nil }
+    static func initialIntPredicate(_ initialization: CompiledVariableInitialization,
+                                    named name: String, layout: CompiledLayout) -> String? {
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
             ($0.id, $0.declaration.name)
         })
-        switch expression.operation {
-        case .stateVariable(let id) where expression.children.isEmpty:
-            return variables[id].map { "\(name) = \($0)" }
-        case .add:
-            guard let tree = addition(expression, variables: variables, binders: [:]) else { return nil }
-            return "(IF \(tree.defined) THEN \(name) = \(tree.value) ELSE FALSE)"
-        default: return nil
+        switch initialization {
+        case .value(let expression):
+            guard expression.resultType == .int ||
+                    (expression.resultType == .unknown && layout.variables.contains {
+                        $0.declaration.name == name && $0.generatedSwiftType == "Int"
+                    }) else { return nil }
+            switch expression.operation {
+            case .stateVariable(let id) where expression.children.isEmpty:
+                return variables[id].map { "\(name) = \($0)" }
+            case .add:
+                guard let tree = addition(expression, variables: variables, binders: [:]) else { return nil }
+                return "(IF \(tree.defined) THEN \(name) = \(tree.value) ELSE FALSE)"
+            default: return nil
+            }
+        case .memberOf(let root):
+            guard root.resultType == .set(.int) ||
+                    (root.resultType == .unknown && layout.variables.contains {
+                        $0.declaration.name == name && $0.generatedSwiftType == "Int"
+                    }) else { return nil }
+            guard let tree = initialIntDomain(root, layout: layout, variables: variables) else { return nil }
+            let predicate = "\(name) \\in \(tree.value)"
+            return tree.sites.isEmpty ? predicate : "(IF \(tree.defined) THEN \(predicate) ELSE FALSE)"
         }
+    }
+
+    private static func initialIntDomain(_ root: CompiledExpression, layout: CompiledLayout,
+                                         variables: [VariableID: String],
+                                         binders: [BinderID: String] = [:]) -> AdditionTree? {
+        // shortcut: other child operations and domain types still need independent outcome rules.
+        var pending = [(root, CompiledValueType.set(.int), false)]
+        var values: [AdditionTree] = []
+        while let (node, type, expanded) = pending.popLast() {
+            guard node.resultType == type || node.resultType == .unknown else { return nil }
+            let types: [CompiledValueType]
+            switch (node.operation, type) {
+            case (.value(.integer(let integer)), .int) where node.children.isEmpty:
+                values.append(.init(value: checkedIntegerLiteral(integer), sites: []))
+                continue
+            case (.stateVariable(let id), .int) where node.children.isEmpty:
+                guard let variable = layout.variables.first(where: { $0.id == id }),
+                      node.resultType == .int || variable.generatedSwiftType == "Int",
+                      let name = variables[id] else { return nil }
+                values.append(.init(value: name, sites: []))
+                continue
+            case (.add, .int):
+                guard let tree = addition(node, variables: variables, binders: binders) else { return nil }
+                values.append(tree)
+                continue
+            case (.equal, .bool), (.integerRange, .set(.int)):
+                guard node.children.count == 2 else { return nil }
+                types = [.int, .int]
+            case (.setLiteral, .set(.int)): types = node.children.map { _ in .int }
+            case (.ifThenElse, .set(.int)) where node.children.count == 3:
+                types = [.bool, .set(.int), .set(.int)]
+            default: return nil
+            }
+            if !expanded {
+                pending.append((node, type, true))
+                pending.append(contentsOf: zip(node.children, types).reversed().map { ($0.0, $0.1, false) })
+                continue
+            }
+            guard values.count >= types.count else { return nil }
+            let children = Array(values.suffix(types.count))
+            values.removeLast(types.count)
+            var sites = children.flatMap(\.sites)
+            var usesLazyBranches = children.contains { $0.usesLazyBranches }
+            let value: String
+            switch node.operation {
+            case .equal: value = "(\(children[0].value) = \(children[1].value))"
+            case .integerRange: value = "\(children[0].value)..\(children[1].value)"
+            case .setLiteral: value = "{\(children.map(\.value).sorted().joined(separator: ", "))}"
+            case .ifThenElse:
+                let condition = children[0].value
+                value = "(IF \(condition) THEN \(children[1].value) ELSE \(children[2].value))"
+                usesLazyBranches = true
+                sites = children[0].sites + children[1].sites.map {
+                    .init(guardText: "(IF \(condition) THEN \($0.guardText) ELSE TRUE)", operands: $0.operands)
+                } + children[2].sites.map {
+                    .init(guardText: "(IF \(condition) THEN TRUE ELSE \($0.guardText))", operands: $0.operands)
+                }
+            default: return nil
+            }
+            values.append(.init(value: value, sites: sites, usesLazyBranches: usesLazyBranches))
+        }
+        return values.count == 1 ? values[0] : nil
     }
 
     static func requiresInitialIntFailureRecord(_ behavior: CompiledBehavior,
@@ -304,7 +378,7 @@ enum StraightLineRenderedActionCheck {
                       expression.children.isEmpty, layout.controlLocation(id) != nil else { return false }
             case .stateVariable, .add:
                 guard variable.generatedSwiftType == "Int", expression.resultType == .int,
-                      initialIntPredicate(expression, named: variable.declaration.name,
+                      initialIntPredicate(.value(expression), named: variable.declaration.name,
                         layout: layout) != nil else { return false }
                 if case .add = expression.operation { hasAddition = true }
             default: return false
@@ -331,7 +405,8 @@ enum StraightLineRenderedActionCheck {
                 actual: "an initial failure, operand, or prefix guard differs from its compiled expression",
                 nextSafeAction: "Regenerate the TLA+ initial failure declarations.")
         }
-        guard let tree = addition(expression, variables: names, binders: binders) else {
+        guard let tree = addition(expression, variables: names, binders: binders)
+            ?? initialIntDomain(expression, layout: layout, variables: names, binders: binders) else {
             if case .add = expression.operation { throw mismatch() }
             return
         }
@@ -352,12 +427,18 @@ enum StraightLineRenderedActionCheck {
             default: return nil
             }
         }
-        var earlier: [(name: String, value: String, defined: String?)] = []
+        var earlier: [(name: String, value: String, defined: String?, membership: Bool)] = []
         for prior in prefix {
-            guard case .value(let expression) = prior.initialization,
-                  let name = names[prior.variable],
-                  let value = initialValue(expression) else { return }
-            earlier.append((name, value.value, value.defined))
+            guard let name = names[prior.variable] else { return }
+            switch prior.initialization {
+            case .value(let expression):
+                guard let value = initialValue(expression) else { return }
+                earlier.append((name, value.value, value.defined, false))
+            case .memberOf(let expression):
+                guard let tree = initialIntDomain(expression, layout: layout,
+                    variables: names, binders: binders) else { return }
+                earlier.append((name, tree.value, tree.sites.isEmpty ? nil : tree.defined, true))
+            }
         }
         guard emitted.count == tree.sites.count else { throw mismatch() }
         var preceding: [String] = []
@@ -379,9 +460,15 @@ enum StraightLineRenderedActionCheck {
                 "(IF \(predicate) THEN [site |-> \(ordinal), kind |-> \"integerOverflow.addition\", operands |-> \(site.operands)] ELSE FALSE)"
             }
             for prior in earlier.reversed() {
-                relation = "(LET \(prior.name) == \(prior.value) IN \(relation))"
-                selection = "(LET \(prior.name) == \(prior.value) IN \(selection))"
-                record = record.map { "(LET \(prior.name) == \(prior.value) IN \($0))" }
+                if prior.membership {
+                    relation = "(\\E \(prior.name) \\in \(prior.value): \(relation))"
+                    selection = "(\\E \(prior.name) \\in \(prior.value): \(selection))"
+                    record = nil
+                } else {
+                    relation = "(LET \(prior.name) == \(prior.value) IN \(relation))"
+                    selection = "(LET \(prior.name) == \(prior.value) IN \(selection))"
+                    record = record.map { "(LET \(prior.name) == \(prior.value) IN \($0))" }
+                }
                 if let defined = prior.defined {
                     relation = "(IF \(defined) THEN \(relation) ELSE FALSE)"
                     selection = "(IF \(defined) THEN \(selection) ELSE FALSE)"

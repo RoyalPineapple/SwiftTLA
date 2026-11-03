@@ -2602,10 +2602,14 @@ private extension CompiledModuleMetadata {
                     .map { "(IF \($0) THEN \(assignment) ELSE FALSE)" } ?? assignment
             case .memberOf(let set):
                 let literal = set.computation
+                let defined = try renderer.evaluationDefined(set)
+                func guarded(_ predicate: String) -> String {
+                    defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
+                }
                 if case .randomSubset = literal.operation {
                     let count = try renderer.state(literal.children[0])
                     let domain = try renderer.state(literal.children[1])
-                    return "(\(count) > 0 /\\ \(name) \\in \(domain))"
+                    return guarded("(\(count) > 0 /\\ \(name) \\in \(domain))")
                 }
                 func isRecord(_ expression: CompiledExpression) -> Bool {
                     var value = expression
@@ -2632,9 +2636,9 @@ private extension CompiledModuleMetadata {
                 }
                 if let alternatives {
                     let alternatives = alternatives.sorted().map { "\(name) = \($0)" }
-                    return alternatives.isEmpty ? "FALSE" : "(\(alternatives.joined(separator: " \\/ ")))"
+                    return guarded(alternatives.isEmpty ? "FALSE" : "(\(alternatives.joined(separator: " \\/ ")))")
                 }
-                return "\(name) \\in \(try renderer.state(set))"
+                return guarded("\(name) \\in \(try renderer.state(set))")
             }
         }
         var selectedInitialInvariant: CompiledStatePredicate?
@@ -2666,7 +2670,7 @@ private extension CompiledModuleMetadata {
             switch expression.operation {
             case .value, .stateVariable, .controlLocation:
                 return true
-            case .convert, .setLiteral:
+            case .convert, .setLiteral, .integerRange, .equal, .ifThenElse:
                 return expression.children.allSatisfy(isTotalInitialExpression)
             default:
                 return false
@@ -2728,6 +2732,7 @@ private extension CompiledModuleMetadata {
                 let defined = try renderer.evaluationDefined(expression)
                 guard isTotalInitialExpression(expression) || defined != nil else { return }
             }
+            let occupiedBeforePrefix = occupied
             var prefixNames: [VariableID: String] = [:]
             for prior in prefix {
                 var binder = "__SwiftTLAInitialValue\(prior.variable.ordinal)"
@@ -2737,6 +2742,9 @@ private extension CompiledModuleMetadata {
             }
             var occurrences: [String: Int] = [:]
             let failures = try renderer.expressionEvaluationFailures(expression, stateNames: prefixNames)
+            if siteOrdinal == nil && failures.isEmpty {
+                occupied = occupiedBeforePrefix
+            }
             var emitted: [(failure: RenderedEvaluationFailure, relation: String,
                            operandsName: String?, selection: String,
                            operationDeclaration: String?, record: String?)] = []
@@ -2809,6 +2817,7 @@ private extension CompiledModuleMetadata {
                         if let defined { record = record.map { "(IF \(defined) THEN \($0) ELSE FALSE)" } }
                     case .memberOf(let expression):
                         initialFailureRecordEligible = false
+                        record = nil
                         let domain = try renderer.state(expression, stateNames: prefixNames)
                         let bound = "(\\E \(binder) \\in \(domain): \(relation))"
                         let selected = "(\\E \(binder) \\in \(domain): \(selection))"
@@ -2843,11 +2852,20 @@ private extension CompiledModuleMetadata {
                 binders: renderer.bindings.binders)
         }
         for (index, initialization) in behavior.initializations.enumerated() {
-            guard case .value(let expression) = initialization.initialization else { continue }
+            let expression: CompiledExpression
+            let siteOrdinal: Int?
+            switch initialization.initialization {
+            case .value(let value):
+                expression = value
+                siteOrdinal = initialization.variable.ordinal
+            case .memberOf(let domain):
+                expression = domain
+                siteOrdinal = nil
+            }
             try appendInitialEvaluationFailures(expression,
                 after: behavior.initializations.prefix(index), namePrefix: "Initial",
                 indexSuffix: "\(initialization.variable.ordinal)",
-                siteOrdinal: initialization.variable.ordinal)
+                siteOrdinal: siteOrdinal)
         }
         if let selectedInitialInvariant {
             try appendInitialEvaluationFailures(selectedInitialInvariant.predicate.expression,
@@ -2967,9 +2985,9 @@ private extension CompiledModuleMetadata {
         })
         let expectedIntPredicates = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
             variable -> (String, String)? in
-            guard case .value(let expression)? = initializations[variable.id],
+            guard let initialization = initializations[variable.id],
                   let predicate = StraightLineRenderedActionCheck.initialIntPredicate(
-                    expression, named: variable.declaration.name, layout: layout) else { return nil }
+                    initialization, named: variable.declaration.name, layout: layout) else { return nil }
             return (variable.declaration.name, predicate)
         })
         try verifyRenderedInitialConjunction(source, predicates: initialPredicates,

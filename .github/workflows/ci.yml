@@ -198,12 +198,20 @@ jobs:
             Sources/SwiftTLAPlugin/NativeSwiftEmitter+Validation.swift \
             Tests/SwiftTLATests/LexicalBindingTests.swift \
             Sources/SwiftTLA/StraightLineAssignmentCheck.swift \
+            Sources/SwiftTLA/ProgramResolver.swift \
+            Sources/SwiftTLA/CompiledTLARenderer.swift \
+            Sources/SwiftTLAPlugin/OrderedIntSourceSyntaxCheck.swift \
+            Sources/SwiftTLA/StateExpr+Scope.swift \
+            Sources/SwiftTLAPlugin/SpecParser+SpecBuilder.swift \
+            Sources/SwiftTLAPlugin/SourceIntegerLiteral.swift \
             Tests/SwiftTLATests/ShortCircuitFailureProofTests.swift \
             Sources/SwiftTLA/StraightLineRenderedActionCheck+Sequence.swift \
             Tests/SwiftTLATests/SequenceExpressionLoweringContractTests.swift \
             Tests/SwiftTLATests/GeneratedAtomicUpdateProofTests.swift \
             Tests/SwiftTLATests/ConjunctionFailureSelectionTests.swift \
             Tests/SwiftTLATests/OrderedAssignmentLoweringTests.swift \
+            Tests/SwiftTLATests/DependentInitializationOutputProofTests.swift \
+            Tests/SwiftTLATests/InitialBranchFailureTests.swift \
             Tests/SwiftTLATests/TLCConfigurationSelectionTests.swift \
             Tests/SwiftTLATests/NativeExecutionBoundaryTests.swift \
             > .build/semantic-proof-evidence/proof-inputs.sha256

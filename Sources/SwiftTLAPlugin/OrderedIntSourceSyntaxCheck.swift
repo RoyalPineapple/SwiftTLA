@@ -137,6 +137,7 @@ enum OrderedIntSourceSyntaxCheck {
             switch initialization {
             case .value(.int(let number)): value = ".value(.int(\(number)))"
             case .expression(let expression): value = ".expression(\(try render(expression)))"
+            case .memberOf(let expression): value = ".memberOf(\(try render(expression)))"
             default: throw drift(root)
             }
             return ".variable(root: \(String(reflecting: root)), initialization: \(value))"
@@ -156,6 +157,12 @@ enum OrderedIntSourceSyntaxCheck {
         case .value(.int(let number)): return ".value(.int(\(number)))"
         case .variable(let root): return ".variable(\(String(reflecting: root)))"
         case .add(let lhs, let rhs): return ".add(\(try render(lhs)), \(try render(rhs)))"
+        case .equal(let lhs, let rhs): return ".equal(\(try render(lhs)), \(try render(rhs)))"
+        case .integerRange(let lhs, let rhs): return ".integerRange(\(try render(lhs)), \(try render(rhs)))"
+        case .setLiteral(let members):
+            return ".setLiteral([\(try members.map(render).joined(separator: ", "))])"
+        case .ifThenElse(let condition, let yes, let no):
+            return ".ifThenElse(\(try render(condition)), \(try render(yes)), \(try render(no)))"
         default: throw drift("ordered Int expression")
         }
     }
@@ -190,15 +197,21 @@ enum OrderedIntSourceSyntaxCheck {
                member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == scope,
                member.declName.baseName.text == "sharedVar",
                initializer.arguments.allSatisfy({
-                   $0.label?.text == "_name" || $0.label?.text == "label" || $0.label?.text == "initial"
+                   $0.label?.text == "_name" || $0.label?.text == "label"
+                       || $0.label?.text == "initial" || $0.label?.text == "in"
                }),
-               let initial = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,
-               let initialValue = value(initial, roots: roots) {
+               let initial = initializer.arguments.first(where: {
+                   $0.label?.text == "initial" || $0.label?.text == "in"
+               }),
+               let initialValue = value(initial.expression, roots: roots,
+                   type: initial.label?.text == "in" ? .set(.int) : .int) {
                 let root = initializer.arguments.first(where: { $0.label?.text == "_name" })?
                     .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? sourceName
                 guard roots.updateValue(root, forKey: sourceName) == nil else { return nil }
                 let initialization: VariableInitialization
-                if case .value(.int(let number)) = initialValue {
+                if initial.label?.text == "in" {
+                    initialization = .memberOf(initialValue)
+                } else if case .value(.int(let number)) = initialValue {
                     initialization = .value(.int(number))
                 } else {
                     initialization = .expression(initialValue)
@@ -255,27 +268,84 @@ enum OrderedIntSourceSyntaxCheck {
     }
 
     private static func integer(_ syntax: ExprSyntax) -> Int? {
-        if let literal = syntax.as(IntegerLiteralExprSyntax.self) {
-            return Int(literal.literal.text.replacingOccurrences(of: "_", with: ""))
-        }
+        let literal: IntegerLiteralExprSyntax
+        let sign: String
         if let prefix = syntax.as(PrefixOperatorExprSyntax.self), prefix.operator.text == "-",
-           let literal = prefix.expression.as(IntegerLiteralExprSyntax.self) {
-            return Int("-" + literal.literal.text.replacingOccurrences(of: "_", with: ""))
+           let operand = prefix.expression.as(IntegerLiteralExprSyntax.self) {
+            literal = operand
+            sign = "-"
+        } else if let operand = syntax.as(IntegerLiteralExprSyntax.self) {
+            literal = operand
+            sign = ""
+        } else { return nil }
+        let text = literal.literal.text.replacingOccurrences(of: "_", with: "")
+        let radix: Int
+        switch text.prefix(2) {
+        case "0b": radix = 2
+        case "0o": radix = 8
+        case "0x": radix = 16
+        default: radix = 10
         }
-        return nil
+        let digits = radix == 10 ? text : String(text.dropFirst(2))
+        return Int(sign + digits, radix: radix)
     }
 
-    private static func value(_ syntax: ExprSyntax, roots: [String: String]) -> StateExpr? {
-        if let integer = integer(syntax) { return .value(.int(integer)) }
-        if let name = syntax.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
+    private static func value(_ syntax: ExprSyntax, roots: [String: String],
+                              type: CompiledValueType = .int) -> StateExpr? {
+        if type == .int, let integer = integer(syntax) { return .value(.int(integer)) }
+        if type == .int, let name = syntax.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
            let root = roots[name] { return .variable(root) }
         if let group = syntax.as(TupleExprSyntax.self), group.elements.count == 1,
-           let element = group.elements.first { return value(element.expression, roots: roots) }
-        if let infix = syntax.as(InfixOperatorExprSyntax.self),
+           let element = group.elements.first { return value(element.expression, roots: roots, type: type) }
+        if type == .set(.int), let call = syntax.as(FunctionCallExprSyntax.self),
+           call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty {
+            if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "If",
+               call.arguments.count == 3,
+               call.arguments.first?.label == nil,
+               call.arguments.dropFirst().first?.label?.text == "then",
+               call.arguments.last?.label?.text == "else" {
+                let arguments = Array(call.arguments)
+                guard let condition = value(arguments[0].expression, roots: roots, type: .bool),
+                      let yes = value(arguments[1].expression, roots: roots, type: type),
+                      let no = value(arguments[2].expression, roots: roots, type: type) else { return nil }
+                return .ifThenElse(condition, yes, no)
+            }
+            if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+               member.declName.baseName.text == "literal",
+               let generic = member.base?.as(GenericSpecializationExprSyntax.self),
+               generic.expression.as(DeclReferenceExprSyntax.self)?.baseName.text == "SetExpr",
+               generic.genericArgumentClause.arguments.count == 1,
+               generic.genericArgumentClause.arguments.first?.argument.as(IdentifierTypeSyntax.self)?.name.text == "Int",
+               call.arguments.allSatisfy({ $0.label == nil }) {
+                let members = call.arguments.compactMap { value($0.expression, roots: roots) }
+                guard members.count == call.arguments.count, members.allSatisfy(initialDomainMember) else { return nil }
+                return .setLiteral(members)
+            }
+        }
+        let operands: [ExprSyntax]
+        if let infix = syntax.as(InfixOperatorExprSyntax.self) {
+            operands = [infix.leftOperand, infix.operator, infix.rightOperand]
+        } else if let sequence = syntax.as(SequenceExprSyntax.self) {
+            operands = Array(sequence.elements)
+        } else { return nil }
+        if type != .int, operands.count == 3,
+           let operation = operands[1].as(BinaryOperatorExprSyntax.self)?.operator.text,
+           let lhs = value(operands[0], roots: roots), let rhs = value(operands[2], roots: roots),
+           initialLeaf(lhs), initialLeaf(rhs) {
+            if type == .set(.int), operation == "...",
+               case .value = lhs, case .value = rhs { return .integerRange(lhs, rhs) }
+            if type == .bool, operation == "==" {
+                // shortcut: raw Swift comparisons and fallible children need typed source evaluation before widening.
+                if case .variable = lhs { return .equal(lhs, rhs) }
+                if case .variable = rhs { return .equal(lhs, rhs) }
+            }
+            return nil
+        }
+        if type == .int, let infix = syntax.as(InfixOperatorExprSyntax.self),
            infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text == "+",
            let lhs = value(infix.leftOperand, roots: roots),
            let rhs = value(infix.rightOperand, roots: roots) { return .add(lhs, rhs) }
-        if let sequence = syntax.as(SequenceExprSyntax.self) {
+        if type == .int, let sequence = syntax.as(SequenceExprSyntax.self) {
             let elements = Array(sequence.elements)
             guard elements.count >= 3, elements.count % 2 == 1,
                   let first = value(elements[0], roots: roots) else { return nil }
@@ -288,5 +358,21 @@ enum OrderedIntSourceSyntaxCheck {
             return result
         }
         return nil
+    }
+
+    private static func initialDomainMember(_ expression: StateExpr) -> Bool {
+        if case .add(let lhs, let rhs) = expression {
+            // Literal-only Swift additions evaluate before the DSL constructs its members.
+            return !expression.freeVariableNames.isEmpty
+                && initialDomainMember(lhs) && initialDomainMember(rhs)
+        }
+        return initialLeaf(expression)
+    }
+
+    private static func initialLeaf(_ expression: StateExpr) -> Bool {
+        switch expression {
+        case .value(.int), .variable: return true
+        default: return false
+        }
     }
 }

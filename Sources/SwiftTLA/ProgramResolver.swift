@@ -1,8 +1,12 @@
 extension CompiledProgram {
     package init(inputs: CompiledTypeInputs) throws {
         var checker = try CompiledTypeChecker(inputs: inputs)
-        self = try ProgramResolver(checked: checker.checkProgram(), types: inputs.types,
+        let checked = try checker.checkProgram()
+        self = try ProgramResolver(checked: checked, types: inputs.types,
             nextBinder: (inputs.bindings.binders.keys.map(\.ordinal).max() ?? -1) + 1).resolve()
+        let checkedInitializations = Dictionary(uniqueKeysWithValues: checked.behavior.initializations.map {
+            ($0.variable, $0.initialization)
+        })
         let resolvedInitializations = Dictionary(uniqueKeysWithValues: behavior.initializations.map {
             ($0.variable, $0.initialization)
         })
@@ -19,7 +23,8 @@ extension CompiledProgram {
             if variableTypes[original.variable] == .int &&
                 (inputs.authoredAlgorithm != nil || isLiteralInt) {
                 try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(
-                    original.initialization, resolved: resolvedInitializations[original.variable], at: path)
+                    original.initialization, checked: checkedInitializations[original.variable],
+                    resolved: resolvedInitializations[original.variable], at: path)
             }
             try StraightLineAssignmentCheck.verifyResolvedInitialControlLocation(
                 original.initialization, resolved: resolvedInitializations[original.variable], at: path)

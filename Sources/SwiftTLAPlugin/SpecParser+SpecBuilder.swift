@@ -875,7 +875,7 @@ extension ParserSession {
            let type = typedFacadeType(member.base), type.name == "PartialFunction" {
             return type.renderedSourceName
         }
-        if expression.is(IntegerLiteralExprSyntax.self) { return "Int" }
+        if expression.is(IntegerLiteralExprSyntax.self) || SourceIntegerLiteral.value(expression) != nil { return "Int" }
         if expression.is(BooleanLiteralExprSyntax.self) { return "Bool" }
         if expression.is(StringLiteralExprSyntax.self) { return "String" }
         if let call = expression.as(FunctionCallExprSyntax.self),
