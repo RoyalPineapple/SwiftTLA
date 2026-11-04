@@ -1,8 +1,21 @@
 import Foundation
 import SwiftTLA
 
+private struct NativeInitialBindingOutput: Codable {
+    let name: String
+    let value: TLAValue
+}
+
+private struct NativeInitialEventOutput: Codable {
+    let site: Int
+    let kind: String
+    let operands: [Int]
+    let before: [NativeInitialBindingOutput]
+}
+
 private struct NativeInitialFailureOutput: Codable {
     let successfulInitialStates: Int
+    let failures: [NativeInitialEventOutput]
     let site: Int
     let kind: String
     let operands: [Int]
@@ -46,6 +59,16 @@ package enum InitialFailureEvidence {
               operands.count == 2 else {
             throw InitialFailureEvidenceError.unsupportedNativeOutcome
         }
+        let failures = try native.failures.map { event -> NativeInitialEventOutput in
+            guard case .initializer(let ordinal) = event.site,
+                  case .integerOverflow(.addition, let operands) = event.failure,
+                  operands.count == 2 else { throw InitialFailureEvidenceError.unsupportedNativeOutcome }
+            let before = try event.formalBindingsBeforeFailure().entries.map {
+                NativeInitialBindingOutput(name: $0.token.description, value: $0.value)
+            }
+            return .init(site: ordinal, kind: failureKind, operands: operands, before: before)
+        }
+        guard failures.count == 1 else { throw InitialFailureEvidenceError.unsupportedNativeOutcome }
         let rendered = try CheckedAdditionPrefixInitialModel.render()
         guard let check = try rendered.initialEvaluationFailureBundle(capturingRecord: true) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
@@ -61,12 +84,12 @@ package enum InitialFailureEvidence {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         let nativeBytes = try encoder.encode(NativeInitialFailureOutput(
-            successfulInitialStates: 0, site: site, kind: failureKind, operands: operands))
+            successfulInitialStates: 0, failures: failures, site: site, kind: failureKind, operands: operands))
         try nativeBytes.write(to: nativeURL, options: .atomic)
         let proofBytes = Data(proof.utf8)
         try proofBytes.write(to: proofURL, options: .atomic)
         let report = InitialFailureEvidenceReport(
-            schema: "swifttla.initial-failure-proof-v2", sourceSHA: sourceSHA,
+            schema: "swifttla.initial-failure-proof-v3", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),

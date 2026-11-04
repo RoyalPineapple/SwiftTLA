@@ -135,7 +135,7 @@ struct DependentInitializationOutputProofTests {
                 with: "evaluatingInitializerOrdinal = \(seedID.ordinal)")),
             ("earlyReturn", native.description.replacingOccurrences(
                 of: "var result: [Snapshot] = []",
-                with: "var result: [Snapshot] = []\nreturn InitialEvaluationOutcomes(states: result, firstFailure: nil, firstFailureInitializerOrdinal: nil)")),
+                with: "var result: [Snapshot] = []\nreturn InitialEvaluationOutcomes(states: result, failures: [])")),
         ]
         for (label, changed) in changedNativeOutputs {
             try #require(changed != native.description)
@@ -546,7 +546,7 @@ struct DependentInitializationOutputProofTests {
             ("enumeration", emitted.replacingOccurrences(of: enumeration, with: "Set<Int>()")),
             ("membership", emitted.replacingOccurrences(of: membership, with: "return { _ in false }")),
             ("earlyReturn", emitted.replacingOccurrences(of: "var result: [Snapshot] = []",
-                with: "var result: [Snapshot] = []\nif _selectedInitial == nil { return InitialEvaluationOutcomes(states: result, firstFailure: nil, firstFailureInitializerOrdinal: nil) }")),
+                with: "var result: [Snapshot] = []\nif _selectedInitial == nil { return InitialEvaluationOutcomes(states: result, failures: []) }")),
         ] {
             try #require(changed != emitted)
             let corrupted = try #require(Parser.parse(source: changed).statements.first?.item.as(DeclSyntax.self))

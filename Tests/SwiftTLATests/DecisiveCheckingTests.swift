@@ -37,7 +37,10 @@ struct DecisiveCheckingTests {
         let machine = try #require(scenario.initialMachines().first)
         let reason = NativeMachineEvaluationError.invalidRandomSubsetCount(-1)
         let result = try MachineValidator.run(
-            initialOutcomes: .init(states: [machine], firstFailure: reason), maximumStates: 1,
+            initialOutcomes: .init(states: [machine], failures: [
+                .init(site: .initializer(0), failure: reason,
+                    projectingBefore: { throw TLAStateProjectionDiagnostic.invalidValue(path: "eager prefix projection") })
+            ]), maximumStates: 1,
             checking: .init(properties: [.belowThree], checkDeadlock: false), stopOnViolation: true
         ) { _ in }
         #expect(result.completion == .decisiveViolation)
@@ -52,7 +55,10 @@ struct DecisiveCheckingTests {
         let reason = NativeMachineEvaluationError.integerOverflow(.addition,
             operands: [Int.max, 1])
         let result = try MachineValidator.run(
-            initialOutcomes: .init(states: [machine], firstFailure: reason), maximumStates: 3,
+            initialOutcomes: .init(states: [machine], failures: [
+                .init(site: .initializer(0), failure: reason,
+                    projectingBefore: { try TLAStateProjection(validating: []) })
+            ]), maximumStates: 3,
             checking: .init(properties: [], checkDeadlock: true), stopOnViolation: false
         ) { _ in }
         #expect(result.initialStates == 1)

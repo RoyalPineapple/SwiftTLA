@@ -278,16 +278,29 @@ extension NativeSwiftEmitter {
         return declarations
     }
 
+    private func initialFailureBindingsSource(
+        _ prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>
+    ) throws -> String {
+        let captures = prefix.map { variable($0.variable) }
+        let entries = try prefix.map { entry in
+            let value = try formalValue(variable(entry.variable), type: program.variableTypes[entry.variable]!)
+            return ".init(token: Self.__swifttlaFormalProjectionTokens[\(entry.variable.ordinal)], value: \(value))"
+        }
+        let capture = captures.isEmpty ? "" : "[" + captures.joined(separator: ", ") + "] in "
+        return "{ \(capture)try TLAStateProjection(validating: [\(entries.joined(separator: ", "))]) }"
+    }
+
     mutating func initialDeclarations(parameters: String, arguments: String) throws -> [DeclSyntax] {
         let hasRandomSubset = hasRandomSubsetInitializer
-        var code = "var result: [Snapshot] = []\nvar firstFailure: NativeMachineEvaluationError?\nvar firstFailureInitializerOrdinal: Int?\nvar evaluatingInitializerOrdinal: Int?\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
+        var code = "var result: [Snapshot] = []\nvar failures: [InitialEvaluationFailure] = []\nvar evaluatingInitializerOrdinal: Int?\nvar evaluatingInitialBindings: @Sendable () throws -> TLAStateProjection = { try TLAStateProjection(validating: []) }\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
         var closing = ""
         var expectedLoops: [String: String] = [:]
         var expectedCandidateSources: [String: String] = [:]
         var expectedMembershipSources: [String: String] = [:]
-        for initialization in program.behavior.initializations {
+        for (index, initialization) in program.behavior.initializations.enumerated() {
             let type = program.variableTypes[initialization.variable]!
             let name = variable(initialization.variable)
+            code += "evaluatingInitialBindings = \(try initialFailureBindingsSource(program.behavior.initializations.prefix(index)))\n"
             switch initialization.initialization {
             case .value(let expression):
                 code += "evaluatingInitializerOrdinal = \(initialization.variable.ordinal)\n"
@@ -361,10 +374,9 @@ extension NativeSwiftEmitter {
                 }
                 closing = """
                 }, onEvaluationFailure: { failure in
-                    if firstFailure == nil {
-                        firstFailure = failure
-                        firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
-                    }
+                    failures.append(.init(
+                        site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                        failure: failure, projectingBefore: evaluatingInitialBindings))
                 })
                 }
                 """ + closing
@@ -372,6 +384,7 @@ extension NativeSwiftEmitter {
         }
         if let selected = program.behavior.initialInvariant {
             let arguments = arguments.isEmpty ? "" : ", " + arguments
+            code += "evaluatingInitialBindings = \(try initialFailureBindingsSource(program.behavior.initializations[...]))\n"
             code += "let candidate = \(executionState(values: variable))\n"
             code += "if try Self._invariant\(selected.ordinal)(in: candidate, atLevel: 0\(arguments)) { result.append(candidate) }\n"
         } else {
@@ -380,13 +393,11 @@ extension NativeSwiftEmitter {
         code += closing
         code += """
         }, onEvaluationFailure: { failure in
-            if firstFailure == nil {
-                firstFailure = failure
-                firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
-            }
+            failures.append(.init(
+                site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                failure: failure, projectingBefore: evaluatingInitialBindings))
         })
-        return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure,
-            firstFailureInitializerOrdinal: firstFailureInitializerOrdinal)
+        return InitialEvaluationOutcomes(states: result, failures: failures)
         """
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
         let appendedArguments = arguments.isEmpty ? "" : ", " + arguments
@@ -405,8 +416,7 @@ extension NativeSwiftEmitter {
         public static func initialOutcomes(\(parameters)) throws -> InitialEvaluationOutcomes<Self> {
             let outcome = try _initialStates(\(arguments))
             return InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) },
-                firstFailure: outcome.firstFailure,
-                firstFailureInitializerOrdinal: outcome.firstFailureInitializerOrdinal)
+                failures: outcome.failures)
         }
         public static func initialMachines(\(parameters)) throws -> [Self] {
             try _completedInitialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }
@@ -560,6 +570,7 @@ extension NativeSwiftEmitter {
         if let invariant = program.behavior.initialInvariant {
             let configuration = program.layout.parameters.isEmpty ? "" : ", configuration: configuration"
             append = """
+            evaluatingInitialBindings = \(try initialFailureBindingsSource(program.behavior.initializations[...]))
             let candidate = \(state)
             if try Self._invariant\(invariant.ordinal)(in: candidate, atLevel: 0\(configuration)) { result.append(candidate) }
             """
@@ -571,10 +582,9 @@ extension NativeSwiftEmitter {
             case .memberOf:
                 return """
                 }, onEvaluationFailure: { failure in
-                    if firstFailure == nil {
-                        firstFailure = failure
-                        firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
-                    }
+                    failures.append(.init(
+                        site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                        failure: failure, projectingBefore: evaluatingInitialBindings))
                 })
                 }
 
@@ -585,13 +595,11 @@ extension NativeSwiftEmitter {
         }.joined()
         let suffix = append + "\n" + closing + """
         }, onEvaluationFailure: { failure in
-            if firstFailure == nil {
-                firstFailure = failure
-                firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
-            }
+            failures.append(.init(
+                site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                failure: failure, projectingBefore: evaluatingInitialBindings))
         })
-        return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure,
-            firstFailureInitializerOrdinal: firstFailureInitializerOrdinal)
+        return InitialEvaluationOutcomes(states: result, failures: failures)
         }
         """
         let expected = Array(Parser.parse(source: suffix).tokens(viewMode: .sourceAccurate))
@@ -609,12 +617,15 @@ extension NativeSwiftEmitter {
     }
 
     func verifyIntInitialOutput(_ declaration: DeclSyntax?) throws {
-        // Release the template builder's frame before parsing its nested closures.
         guard let source = try intInitialOutputSource(declaration) else { return }
-        let expected = Parser.parse(source: source).statements.first?.item.as(FunctionDeclSyntax.self)
-        let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+        // Template lines have complete lexemes; parse them separately to avoid recursive closure nesting.
+        let expectedTokens = source.split(separator: "\n").flatMap { line in
+            Parser.parse(source: String(line)).tokens(viewMode: .sourceAccurate)
+                .filter { $0.tokenKind != .endOfFile }.map(\.text)
+        }
         let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) } ?? []
-        guard let expectedTokens, actualTokens == expectedTokens else { throw intInitialOutputMismatch() }
+        guard declaration?.is(FunctionDeclSyntax.self) == true,
+              actualTokens == expectedTokens else { throw intInitialOutputMismatch() }
         let slots = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
             ($0.id, variable($0.id))
         })
@@ -691,10 +702,27 @@ extension NativeSwiftEmitter {
         let hiddenFields = program.layout.variables.filter { visible[$0.id] == nil }.map {
             ", \(variable($0.id)): \(variable($0.id))"
         }.joined()
-        var body = "var result: [Snapshot] = []\nvar firstFailure: NativeMachineEvaluationError?\nvar firstFailureInitializerOrdinal: Int?\nvar evaluatingInitializerOrdinal: Int?\n"
+        var body = "var result: [Snapshot] = []\nvar failures: [InitialEvaluationFailure] = []\nvar evaluatingInitializerOrdinal: Int?\nvar evaluatingInitialBindings: @Sendable () throws -> TLAStateProjection = { try TLAStateProjection(validating: []) }\n"
         body += "try SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
         var closing = ""
-        for (initialization, binding) in zip(program.behavior.initializations, bindings) {
+        for (index, pair) in zip(program.behavior.initializations, bindings).enumerated() {
+            let (initialization, binding) = pair
+            let prefix = zip(program.behavior.initializations, bindings).prefix(index)
+            let captures = prefix.map { $0.1.name }
+            let entries = prefix.map { prior, binding -> String in
+                let value: String
+                if binding.type == "Int" {
+                    value = "TLAValue.int(\(binding.name))"
+                } else {
+                    let cases = program.layout.controlLocations.map {
+                        "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.formalName)))"
+                    }.joined(separator: "\n")
+                    value = "try { () throws -> TLAValue in switch \(binding.name) {\n\(cases)\n} }()"
+                }
+                return ".init(token: Self.__swifttlaFormalProjectionTokens[\(prior.variable.ordinal)], value: \(value))"
+            }
+            let capture = captures.isEmpty ? "" : "[" + captures.joined(separator: ", ") + "] in "
+            body += "evaluatingInitialBindings = { \(capture)try TLAStateProjection(validating: [\(entries.joined(separator: ", "))]) }\n"
             body += "evaluatingInitializerOrdinal = \(initialization.variable.ordinal)\n"
             switch initialization.initialization {
             case .value:
@@ -729,10 +757,9 @@ extension NativeSwiftEmitter {
                 body += "evaluatingInitializerOrdinal = nil\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
                 closing = """
                 }, onEvaluationFailure: { failure in
-                    if firstFailure == nil {
-                        firstFailure = failure
-                        firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
-                    }
+                    failures.append(.init(
+                        site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                        failure: failure, projectingBefore: evaluatingInitialBindings))
                 })
                 }
 
@@ -742,13 +769,11 @@ extension NativeSwiftEmitter {
         body += "result.append(Snapshot(state: State(\(publicFields))\(hiddenFields)))\n" + closing
         body += """
         }, onEvaluationFailure: { failure in
-            if firstFailure == nil {
-                firstFailure = failure
-                firstFailureInitializerOrdinal = evaluatingInitializerOrdinal
-            }
+            failures.append(.init(
+                site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                failure: failure, projectingBefore: evaluatingInitialBindings))
         })
-        return InitialEvaluationOutcomes(states: result, firstFailure: firstFailure,
-            firstFailureInitializerOrdinal: firstFailureInitializerOrdinal)
+        return InitialEvaluationOutcomes(states: result, failures: failures)
         """
         guard nextPredicate == predicateNames.count else { throw intInitialOutputMismatch() }
         return """
@@ -1474,8 +1499,7 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
     public static func initialOutcomes(\(parameters)) throws -> InitialEvaluationOutcomes<Self> {
         let outcome = try _initialStates(\(arguments))
         return InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) },
-            firstFailure: outcome.firstFailure,
-            firstFailureInitializerOrdinal: outcome.firstFailureInitializerOrdinal)
+            failures: outcome.failures)
     }
     public static func initialMachines(\(parameters)) throws -> [Self] {
         try _completedInitialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }

@@ -67,6 +67,21 @@ struct InitialBranchFailureTests {
         let compiled = try CompiledRuntime(compilation: InitialFailureOrderModel.spec.compile()).initialOutcomes()
         #expect(compiled.states.isEmpty)
         #expect(compiled.firstFailure == generated.firstFailure)
+        func prefix(_ entries: [(String, TLAValue)]) throws -> TLAStateProjection {
+            try TLAStateProjection(validating: entries.map { name, value in
+                .init(token: try #require(TLAStateProjection.Token(validating: name)), value: value)
+            })
+        }
+        let beforeInvariant = try prefix([("pc", .string("stay")), ("divisor", .int(0)), ("quotient", .int(1))])
+        let beforeInitializer = try prefix([("pc", .string("stay")), ("divisor", .int(1))])
+        for failures in [generated.failures, compiled.failures] {
+            #expect(failures.count == 2)
+            guard failures.count == 2 else { continue }
+            #expect(failures.map(\.failure) == [.negativeModuloDivisor(-1), .divisionByZero])
+            #expect(failures.map(\.site) == [.selectedInvariant, .initializer(2)])
+            #expect(try failures[0].formalBindingsBeforeFailure() == beforeInvariant)
+            #expect(try failures[1].formalBindingsBeforeFailure() == beforeInitializer)
+        }
     }
 
     @Test("An out-of-domain function read retains the valid initial branch")
@@ -171,6 +186,18 @@ struct InitialBranchFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
         })
         try emitter.verifyIntInitialOutput(swiftOutput)
+        let secondField = try #require(program.layout.variables.first { $0.declaration.name == "second" })
+        let firstField = try #require(program.layout.variables.first { $0.declaration.name == "first" })
+        let correctPrefix = "TLAValue.int(\(emitter.variable(secondField.id)))"
+        #expect(swiftOutput.description.components(separatedBy: correctPrefix).count == 2)
+        let wrongPrefix = swiftOutput.description.replacingOccurrences(of: correctPrefix,
+            with: "TLAValue.int(\(emitter.variable(firstField.id)))")
+        #expect(wrongPrefix != swiftOutput.description)
+        let wrongPrefixOutput = try #require(Parser.parse(source: wrongPrefix)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try emitter.verifyIntInitialOutput(wrongPrefixOutput)
+        }
         let siteAssignment = "evaluatingInitializerOrdinal = \(last.id.ordinal)"
         let wrongSwift = swiftOutput.description.replacingOccurrences(of: siteAssignment,
             with: "evaluatingInitializerOrdinal = \(last.id.ordinal - 1)")

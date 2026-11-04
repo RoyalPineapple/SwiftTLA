@@ -225,12 +225,20 @@ jobs:
           report = json.loads((case / "preparation.json").read_text())
           native = json.loads((case / "native-initial-failure.json").read_text())
           expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
-          assert report["schema"] == "swifttla.initial-failure-proof-v2"
+          assert report["schema"] == "swifttla.initial-failure-proof-v3"
           assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
           assert report["result"] == "prepared" and report["graphCompared"] is False
           assert (report["site"], report["kind"], report["operands"]) == expected
           assert native["successfulInitialStates"] == 0
           assert (native["site"], native["kind"], native["operands"]) == expected
+          assert len(native["failures"]) == 1
+          event = native["failures"][0]
+          assert (event["site"], event["kind"], event["operands"]) == expected
+          assert event["before"] == [
+              {"name": "first", "value": {"version": 1, "tag": "int", "value": 1}},
+              {"name": "pc", "value": {"version": 1, "tag": "string", "value": "stay"}},
+              {"name": "second", "value": {"version": 1, "tag": "int", "value": 3}},
+          ]
           files = {
               "moduleSHA256": case / "generated-tla" / (report["module"] + ".tla"),
               "checkModuleSHA256": case / "generated-tla" / (report["checkModule"] + ".tla"),

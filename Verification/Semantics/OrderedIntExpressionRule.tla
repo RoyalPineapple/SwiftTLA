@@ -641,6 +641,730 @@ ExpressionIndexStack(count, kinds, left, right, heights, stacks) ==
                 heights[index - 1], index)
     /\ heights[count] = 1
 
+\* Storage typing does not assume that an addition points to earlier nodes.
+ExpressionNodeStorage(count, kinds, literals, reads, left, right, state) ==
+    /\ count \in Nat \ {0}
+    /\ kinds \in [1..count -> {"literal", "read", "add"}]
+    /\ literals \in [1..count -> SwiftIntMin..SwiftIntMax]
+    /\ reads \in [1..count -> Keys]
+    /\ left \in [1..count -> Int]
+    /\ right \in [1..count -> Int]
+    /\ \A index \in 1..count : kinds[index] # "add" =>
+        /\ left[index] = 0
+        /\ right[index] = 0
+    /\ state \in [Keys -> SwiftIntMin..SwiftIntMax]
+
+THEOREM PostorderAppendPreservesIndexBounds ==
+    ASSUME NEW count \in Nat, NEW height \in Nat,
+           NEW stack \in [1..height -> 1..count],
+           NEW retained \in 0..height
+    PROVE HistoryAppend(stack, retained, count + 1)
+        \in [1..(retained + 1) -> 1..(count + 1)]
+    BY SMT DEF HistoryAppend
+
+RetainedIndexCount(kind, height) == IF kind = "add" THEN height - 2 ELSE height
+
+\* These are the actual prefix removal and append operations, without an index-bound premise.
+PostorderIndexOperations(count, kinds, left, right, heights, stacks) ==
+    /\ count \in Nat \ {0}
+    /\ heights \in [0..count -> Nat]
+    /\ heights[0] = 0
+    /\ stacks[0] = [position \in 1..0 |-> position]
+    /\ \A index \in 1..count :
+        LET before == heights[index - 1]
+            retained == RetainedIndexCount(kinds[index], before)
+        IN /\ retained \in 0..before
+           /\ heights[index] = retained + 1
+           /\ stacks[index] = HistoryAppend(stacks[index - 1], retained, index)
+           /\ (kinds[index] = "add" =>
+                   /\ left[index] = stacks[index - 1][before - 1]
+                   /\ right[index] = stacks[index - 1][before])
+    /\ heights[count] = 1
+
+THEOREM PostorderIndexOperationsKeepEveryPrefixBounded ==
+    ASSUME NEW count, NEW kinds, NEW left, NEW right, NEW heights, NEW stacks,
+           PostorderIndexOperations(count, kinds, left, right, heights, stacks)
+    PROVE \A index \in 0..count :
+        stacks[index] \in [1..heights[index] -> 1..index]
+    PROOF
+    <1>. DEFINE bounded(index) == stacks[index] \in [1..heights[index] -> 1..index]
+    <1>1. bounded(0)
+        BY SMT DEF bounded, PostorderIndexOperations
+    <1>2. \A index \in 1..count :
+        ((\A prior \in 0..(index - 1) : bounded(prior)) => bounded(index))
+        <2>. SUFFICES ASSUME NEW index \in 1..count,
+                             \A prior \in 0..(index - 1) : bounded(prior)
+                     PROVE bounded(index)
+            BY SMT
+        <2>. DEFINE before == heights[index - 1]
+                    retained == RetainedIndexCount(kinds[index], before)
+        <2>1. index - 1 \in Nat /\ before \in Nat
+              /\ retained \in 0..before /\ bounded(index - 1)
+            BY SMT DEF before, retained, PostorderIndexOperations
+        <2>2. HistoryAppend(stacks[index - 1], retained, index)
+                  \in [1..(retained + 1) -> 1..index]
+            BY <2>1, PostorderAppendPreservesIndexBounds, SMT DEF bounded
+        <2>. QED BY <2>2, SMT DEF bounded, before, retained, PostorderIndexOperations
+    <1>3. count \in Nat BY SMT DEF PostorderIndexOperations
+    <1>4. \A index \in 0..count : bounded(index)
+        BY <1>1, <1>2, <1>3, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>4 DEF bounded
+
+THEOREM PostorderIndexOperationsSupplyTheConstructionInvariant ==
+    ASSUME NEW count, NEW kinds, NEW left, NEW right, NEW heights, NEW stacks,
+           PostorderIndexOperations(count, kinds, left, right, heights, stacks)
+    PROVE ExpressionIndexStack(count, kinds, left, right, heights, stacks)
+    PROOF
+    <1>1. \A index \in 0..count :
+        stacks[index] \in [1..heights[index] -> 1..index]
+        BY PostorderIndexOperationsKeepEveryPrefixBounded
+    <1>2. \A index \in 1..count : kinds[index] = "add" =>
+        /\ heights[index - 1] >= 2
+        /\ heights[index] = heights[index - 1] - 1
+        BY SMT DEF PostorderIndexOperations, RetainedIndexCount
+    <1>. QED BY <1>1, <1>2, SMT
+        DEF ExpressionIndexStack, PostorderIndexOperations, RetainedIndexCount
+
+THEOREM PostorderConstructionSuppliesExpressionPlan ==
+    ASSUME NEW count, NEW kinds, NEW literals, NEW reads, NEW left, NEW right,
+           NEW state, NEW heights, NEW stacks,
+           ExpressionNodeStorage(count, kinds, literals, reads, left, right, state),
+           ExpressionIndexStack(count, kinds, left, right, heights, stacks)
+    PROVE ExpressionPlan(count, kinds, literals, reads, left, right, state)
+    PROOF
+    <1>1. \A index \in 1..count : kinds[index] = "add" =>
+        /\ left[index] \in 1..(index - 1)
+        /\ right[index] \in 1..(index - 1)
+        <2>. SUFFICES ASSUME NEW index \in 1..count, kinds[index] = "add"
+                     PROVE /\ left[index] \in 1..(index - 1)
+                           /\ right[index] \in 1..(index - 1)
+            BY SMT
+        <2>1. index - 1 \in 0..count
+            BY SMT DEF ExpressionNodeStorage
+        <2>2. stacks[index - 1] \in [1..heights[index - 1] -> 1..(index - 1)]
+              /\ heights[index - 1] \in Nat
+              /\ heights[index - 1] >= 2
+            BY <2>1, SMT DEF ExpressionIndexStack
+        <2>3. left[index] = stacks[index - 1][heights[index - 1] - 1]
+              /\ right[index] = stacks[index - 1][heights[index - 1]]
+            BY SMT DEF ExpressionIndexStack
+        <2>. QED BY <2>2, <2>3, SMT
+    <1>2. \A index \in 1..count :
+        /\ left[index] \in 0..count
+        /\ right[index] \in 0..count
+        BY <1>1, SMT DEF ExpressionNodeStorage
+    <1>3. left \in [1..count -> 0..count]
+          /\ right \in [1..count -> 0..count]
+        BY <1>2, SMT DEF ExpressionNodeStorage
+    <1>. QED BY <1>1, <1>3, SMT DEF ExpressionNodeStorage, ExpressionPlan
+
+THEOREM CompletedPostorderConstructionSelectsTheLastNode ==
+    ASSUME NEW count \in Nat \ {0}, NEW kinds, NEW left, NEW right,
+           NEW heights, NEW stacks,
+           ExpressionIndexStack(count, kinds, left, right, heights, stacks)
+    PROVE stacks[count][1] = count
+    PROOF
+    <1>1. heights[count] = 1
+        BY SMT DEF ExpressionIndexStack
+    <1>2. CASE kinds[count] = "add"
+        <2>1. heights[count - 1] = 2
+              /\ stacks[count] = HistoryAppend(stacks[count - 1], 0, count)
+            BY <1>1, <1>2, SMT DEF ExpressionIndexStack
+        <2>. QED BY <2>1, SMT DEF HistoryAppend
+    <1>3. CASE kinds[count] # "add"
+        <2>1. heights[count - 1] = 0
+              /\ stacks[count] = HistoryAppend(stacks[count - 1], 0, count)
+            BY <1>1, <1>3, SMT DEF ExpressionIndexStack
+        <2>. QED BY <2>1, SMT DEF HistoryAppend
+    <1>. QED BY <1>2, <1>3, SMT
+
+\* Ghost syntax prefixes specify pending-frame obligations; they do not evaluate expressions.
+VisitPrefix(height, terms) == [height |-> height, terms |-> terms]
+EmptyVisitPrefix == VisitPrefix(0, [position \in 1..0 |-> position])
+PushVisitPrefix(prefix, node) ==
+    VisitPrefix(prefix.height + 1, HistoryAppend(prefix.terms, prefix.height, node))
+FoldVisitPrefix(prefix, node) ==
+    VisitPrefix(prefix.height - 1, HistoryAppend(prefix.terms, prefix.height - 2, node))
+WellFormedVisitPrefix(prefix) ==
+    /\ prefix.height \in Nat
+    /\ prefix.terms = [position \in 1..prefix.height |-> prefix.terms[position]]
+VisitFrame(node, expanded, prefix) ==
+    [node |-> node, expanded |-> expanded, prefix |-> prefix]
+VisitFrameExit(frame) ==
+    IF frame.expanded THEN FoldVisitPrefix(frame.prefix, frame.node)
+    ELSE PushVisitPrefix(frame.prefix, frame.node)
+WellFormedVisitFrame(frame, sourceLeft, sourceRight) ==
+    /\ frame.expanded \in BOOLEAN
+    /\ WellFormedVisitPrefix(frame.prefix)
+    /\ (frame.expanded =>
+        /\ frame.prefix.height >= 2
+        /\ frame.prefix.terms[frame.prefix.height - 1] = sourceLeft[frame.node]
+        /\ frame.prefix.terms[frame.prefix.height] = sourceRight[frame.node])
+
+THEOREM PushingASyntaxRootPreservesItsPrefix ==
+    ASSUME NEW prefix, NEW node, WellFormedVisitPrefix(prefix)
+    PROVE WellFormedVisitPrefix(PushVisitPrefix(prefix, node))
+    BY SMT DEF WellFormedVisitPrefix, PushVisitPrefix, VisitPrefix, HistoryAppend
+
+THEOREM FoldingTwoCompletedChildrenRestoresTheParentPrefix ==
+    ASSUME NEW prefix, NEW parent, NEW sourceLeft, NEW sourceRight,
+           WellFormedVisitPrefix(prefix)
+    PROVE FoldVisitPrefix(
+        PushVisitPrefix(PushVisitPrefix(prefix, sourceLeft), sourceRight), parent)
+        = PushVisitPrefix(prefix, parent)
+    BY SMT DEF FoldVisitPrefix, PushVisitPrefix, VisitPrefix,
+        WellFormedVisitPrefix, HistoryAppend
+
+ExpandedVisitFrames(frame, sourceLeft, sourceRight) ==
+    LET leftPrefix == PushVisitPrefix(frame.prefix, sourceLeft[frame.node])
+        bothPrefix == PushVisitPrefix(leftPrefix, sourceRight[frame.node])
+    IN [position \in 1..3 |->
+        IF position = 1 THEN VisitFrame(frame.node, TRUE, bothPrefix)
+        ELSE IF position = 2 THEN VisitFrame(sourceRight[frame.node], FALSE, leftPrefix)
+        ELSE VisitFrame(sourceLeft[frame.node], FALSE, frame.prefix)]
+
+THEOREM ExpandedFramesThreadLeftThenRightIntoTheParent ==
+    ASSUME NEW frame, NEW sourceLeft, NEW sourceRight,
+           WellFormedVisitFrame(frame, sourceLeft, sourceRight), ~frame.expanded
+    PROVE LET frames == ExpandedVisitFrames(frame, sourceLeft, sourceRight)
+          IN /\ \A position \in 1..3 :
+                    WellFormedVisitFrame(frames[position], sourceLeft, sourceRight)
+             /\ frames[3].prefix = frame.prefix
+             /\ VisitFrameExit(frames[3]) = frames[2].prefix
+             /\ VisitFrameExit(frames[2]) = frames[1].prefix
+             /\ VisitFrameExit(frames[1]) = VisitFrameExit(frame)
+    PROOF
+    <1>1. WellFormedVisitPrefix(frame.prefix)
+        BY SMT DEF WellFormedVisitFrame
+    <1>2. WellFormedVisitPrefix(PushVisitPrefix(frame.prefix, sourceLeft[frame.node]))
+        BY <1>1, PushingASyntaxRootPreservesItsPrefix
+    <1>3. WellFormedVisitPrefix(PushVisitPrefix(
+        PushVisitPrefix(frame.prefix, sourceLeft[frame.node]), sourceRight[frame.node]))
+        BY <1>2, PushingASyntaxRootPreservesItsPrefix
+    <1>4. FoldVisitPrefix(PushVisitPrefix(
+        PushVisitPrefix(frame.prefix, sourceLeft[frame.node]), sourceRight[frame.node]), frame.node)
+        = PushVisitPrefix(frame.prefix, frame.node)
+        BY <1>1, FoldingTwoCompletedChildrenRestoresTheParentPrefix
+    <1>. DEFINE frames == ExpandedVisitFrames(frame, sourceLeft, sourceRight)
+    <1>5. WellFormedVisitFrame(frames[1], sourceLeft, sourceRight)
+        BY <1>1, <1>3, SMT
+            DEF frames, ExpandedVisitFrames, WellFormedVisitFrame, WellFormedVisitPrefix,
+                VisitFrame, PushVisitPrefix, VisitPrefix, HistoryAppend
+    <1>6. WellFormedVisitFrame(frames[2], sourceLeft, sourceRight)
+          /\ WellFormedVisitFrame(frames[3], sourceLeft, sourceRight)
+        BY <1>1, <1>2, SMT
+            DEF frames, ExpandedVisitFrames, WellFormedVisitFrame, VisitFrame
+    <1>7. \A position \in 1..3 :
+        WellFormedVisitFrame(frames[position], sourceLeft, sourceRight)
+        BY <1>5, <1>6, SMT DEF frames, ExpandedVisitFrames
+    <1>8. frames[3].prefix = frame.prefix
+          /\ VisitFrameExit(frames[3]) = frames[2].prefix
+          /\ VisitFrameExit(frames[2]) = frames[1].prefix
+          /\ VisitFrameExit(frames[1]) = VisitFrameExit(frame)
+        BY <1>4, SMT DEF frames, ExpandedVisitFrames, VisitFrame, VisitFrameExit
+    <1>. QED BY <1>7, <1>8 DEF frames
+
+PendingVisitContract(height, pending, current, goal, sourceLeft, sourceRight) ==
+    /\ height \in Nat
+    /\ \A position \in 1..height :
+        WellFormedVisitFrame(pending[position], sourceLeft, sourceRight)
+    /\ \A position \in 2..height :
+        pending[position - 1].prefix = VisitFrameExit(pending[position])
+    /\ IF height = 0 THEN current = goal
+       ELSE /\ current = pending[height].prefix
+            /\ goal = VisitFrameExit(pending[1])
+
+ReplaceTopVisitFrame(pending, height, frames) ==
+    [position \in 1..(height + 2) |->
+        IF position < height THEN pending[position] ELSE frames[position - height + 1]]
+
+THEOREM ExpandingAPendingParentPreservesTheVisitContract ==
+    ASSUME NEW height, NEW pending, NEW current, NEW goal, NEW sourceLeft, NEW sourceRight,
+           PendingVisitContract(height, pending, current, goal, sourceLeft, sourceRight),
+           height > 0, ~pending[height].expanded
+    PROVE PendingVisitContract(height + 2,
+        ReplaceTopVisitFrame(pending, height,
+            ExpandedVisitFrames(pending[height], sourceLeft, sourceRight)),
+        current, goal, sourceLeft, sourceRight)
+    PROOF
+    <1>. DEFINE frames == ExpandedVisitFrames(pending[height], sourceLeft, sourceRight)
+                next == ReplaceTopVisitFrame(pending, height, frames)
+    <1>1. \A position \in 1..3 :
+        WellFormedVisitFrame(frames[position], sourceLeft, sourceRight)
+        BY ExpandedFramesThreadLeftThenRightIntoTheParent, SMT
+            DEF frames, PendingVisitContract
+    <1>2. frames[3].prefix = pending[height].prefix
+          /\ VisitFrameExit(frames[3]) = frames[2].prefix
+          /\ VisitFrameExit(frames[2]) = frames[1].prefix
+          /\ VisitFrameExit(frames[1]) = VisitFrameExit(pending[height])
+        BY ExpandedFramesThreadLeftThenRightIntoTheParent, SMT
+            DEF frames, PendingVisitContract
+    <1>3. \A position \in 1..(height + 2) :
+        WellFormedVisitFrame(next[position], sourceLeft, sourceRight)
+        BY <1>1, SMT DEF next, ReplaceTopVisitFrame, PendingVisitContract
+    <1>4. \A position \in 2..(height + 2) :
+        next[position - 1].prefix = VisitFrameExit(next[position])
+        BY <1>2, SMT DEF next, ReplaceTopVisitFrame, PendingVisitContract
+    <1>. QED BY <1>2, <1>3, <1>4, SMT
+        DEF next, ReplaceTopVisitFrame, PendingVisitContract
+
+THEOREM CompletingAPendingFramePreservesTheVisitContract ==
+    ASSUME NEW height, NEW pending, NEW current, NEW goal, NEW sourceLeft, NEW sourceRight,
+           PendingVisitContract(height, pending, current, goal, sourceLeft, sourceRight), height > 0
+    PROVE PendingVisitContract(height - 1, HistoryPrefix(pending, height - 1),
+        VisitFrameExit(pending[height]), goal, sourceLeft, sourceRight)
+    BY SMT DEF PendingVisitContract, HistoryPrefix
+
+THEOREM ASourceRootStartsItsOwnPendingVisitContract ==
+    ASSUME NEW root, NEW sourceLeft, NEW sourceRight
+    PROVE PendingVisitContract(1,
+        [position \in 1..1 |-> VisitFrame(root, FALSE, EmptyVisitPrefix)],
+        EmptyVisitPrefix, PushVisitPrefix(EmptyVisitPrefix, root), sourceLeft, sourceRight)
+    BY SMT DEF PendingVisitContract, VisitFrame, VisitFrameExit,
+        EmptyVisitPrefix, WellFormedVisitFrame, WellFormedVisitPrefix, VisitPrefix
+
+PendingVisitStep(sourceKinds, sourceLeft, sourceRight,
+                 height, pending, current, nextHeight, nextPending, nextCurrent) ==
+    /\ height > 0
+    /\ LET frame == pending[height]
+       IN IF ~frame.expanded /\ sourceKinds[frame.node] = "add"
+          THEN /\ nextHeight = height + 2
+               /\ nextPending = ReplaceTopVisitFrame(pending, height,
+                      ExpandedVisitFrames(frame, sourceLeft, sourceRight))
+               /\ nextCurrent = current
+          ELSE /\ (frame.expanded /\ sourceKinds[frame.node] = "add")
+                      \/ (~frame.expanded /\ sourceKinds[frame.node] \in {"literal", "read"})
+               /\ nextHeight = height - 1
+               /\ nextPending = HistoryPrefix(pending, height - 1)
+               /\ nextCurrent = VisitFrameExit(frame)
+
+THEOREM APendingVisitStepPreservesTheContract ==
+    ASSUME NEW sourceKinds, NEW sourceLeft, NEW sourceRight,
+           NEW height, NEW pending, NEW current, NEW goal,
+           NEW nextHeight, NEW nextPending, NEW nextCurrent,
+           PendingVisitContract(height, pending, current, goal, sourceLeft, sourceRight),
+           PendingVisitStep(sourceKinds, sourceLeft, sourceRight,
+               height, pending, current, nextHeight, nextPending, nextCurrent)
+    PROVE PendingVisitContract(nextHeight, nextPending, nextCurrent, goal, sourceLeft, sourceRight)
+    PROOF
+    <1>1. CASE ~pending[height].expanded /\ sourceKinds[pending[height].node] = "add"
+        BY <1>1, ExpandingAPendingParentPreservesTheVisitContract, SMT DEF PendingVisitStep
+    <1>2. CASE ~(~pending[height].expanded /\ sourceKinds[pending[height].node] = "add")
+        BY <1>2, CompletingAPendingFramePreservesTheVisitContract, SMT DEF PendingVisitStep
+    <1>. QED BY <1>1, <1>2, SMT
+
+PendingVisitHistory(steps, root, sourceKinds, sourceLeft, sourceRight, heights, pendings, currents) ==
+    /\ steps \in Nat
+    /\ heights \in [0..steps -> Nat]
+    /\ heights[0] = 1
+    /\ pendings[0] = [position \in 1..1 |-> VisitFrame(root, FALSE, EmptyVisitPrefix)]
+    /\ currents[0] = EmptyVisitPrefix
+    /\ \A step \in 1..steps : PendingVisitStep(sourceKinds, sourceLeft, sourceRight,
+        heights[step - 1], pendings[step - 1], currents[step - 1],
+        heights[step], pendings[step], currents[step])
+
+THEOREM PendingVisitHistoryPreservesTheSourceRootContext ==
+    ASSUME NEW steps, NEW root, NEW sourceKinds, NEW sourceLeft, NEW sourceRight,
+           NEW heights, NEW pendings, NEW currents,
+           PendingVisitHistory(steps, root, sourceKinds, sourceLeft, sourceRight, heights, pendings, currents)
+    PROVE \A step \in 0..steps : PendingVisitContract(heights[step], pendings[step], currents[step],
+        PushVisitPrefix(EmptyVisitPrefix, root), sourceLeft, sourceRight)
+    PROOF
+    <1>. DEFINE holds(step) == PendingVisitContract(heights[step], pendings[step], currents[step],
+        PushVisitPrefix(EmptyVisitPrefix, root), sourceLeft, sourceRight)
+    <1>0. PendingVisitContract(1,
+        [position \in 1..1 |-> VisitFrame(root, FALSE, EmptyVisitPrefix)],
+        EmptyVisitPrefix, PushVisitPrefix(EmptyVisitPrefix, root), sourceLeft, sourceRight)
+        BY ASourceRootStartsItsOwnPendingVisitContract
+    <1>1. holds(0)
+        BY <1>0, SMT DEF holds, PendingVisitHistory
+    <1>2. \A step \in 1..steps :
+        ((\A prior \in 0..(step - 1) : holds(prior)) => holds(step))
+        <2>. SUFFICES ASSUME NEW step \in 1..steps,
+                             \A prior \in 0..(step - 1) : holds(prior)
+                     PROVE holds(step)
+            BY SMT
+        <2>1. holds(step - 1)
+            BY SMT DEF PendingVisitHistory
+        <2>2. PendingVisitStep(sourceKinds, sourceLeft, sourceRight,
+            heights[step - 1], pendings[step - 1], currents[step - 1],
+            heights[step], pendings[step], currents[step])
+            BY SMT DEF PendingVisitHistory
+        <2>. QED BY <2>1, <2>2, APendingVisitStepPreservesTheContract DEF holds
+    <1>3. steps \in Nat BY SMT DEF PendingVisitHistory
+    <1>4. \A step \in 0..steps : holds(step)
+        BY <1>1, <1>2, <1>3, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>4 DEF holds
+
+THEOREM SuccessfulPendingVisitReturnsOnlyItsSourceRoot ==
+    ASSUME NEW steps, NEW root, NEW sourceKinds, NEW sourceLeft, NEW sourceRight,
+           NEW heights, NEW pendings, NEW currents,
+           PendingVisitHistory(steps, root, sourceKinds, sourceLeft, sourceRight, heights, pendings, currents),
+           heights[steps] = 0
+    PROVE /\ currents[steps] = PushVisitPrefix(EmptyVisitPrefix, root)
+          /\ currents[steps].height = 1
+          /\ currents[steps].terms[1] = root
+    PROOF
+    <1>1. \A step \in 0..steps : PendingVisitContract(heights[step], pendings[step], currents[step],
+        PushVisitPrefix(EmptyVisitPrefix, root), sourceLeft, sourceRight)
+        BY PendingVisitHistoryPreservesTheSourceRootContext
+    <1>2. PendingVisitContract(heights[steps], pendings[steps], currents[steps],
+        PushVisitPrefix(EmptyVisitPrefix, root), sourceLeft, sourceRight)
+        BY <1>1, SMT DEF PendingVisitHistory
+    <1>3. currents[steps] = PushVisitPrefix(EmptyVisitPrefix, root)
+        BY <1>2, SMT DEF PendingVisitContract
+    <1>. QED BY <1>3, SMT
+        DEF PushVisitPrefix, EmptyVisitPrefix, VisitPrefix, HistoryAppend
+
+\* Total record projections represent the associated fields of the existing three node cases.
+EmptyNodeEmission ==
+    LET empty == [position \in 1..0 |-> position]
+    IN [count |-> 0, height |-> 0, indices |-> empty, nodes |-> empty, origins |-> empty]
+AppendedVisitNode(view, frame, emitted) ==
+    LET kind == view.kinds[frame.node]
+    IN [kind |-> kind,
+        payload |-> IF kind = "literal" THEN view.literals[frame.node]
+                    ELSE IF kind = "read" THEN view.reads[frame.node] ELSE 0,
+        left |-> IF kind = "add" THEN emitted.indices[emitted.height - 1] ELSE 0,
+        right |-> IF kind = "add" THEN emitted.indices[emitted.height] ELSE 0]
+AppendVisitNode(view, frame, emitted) ==
+    LET retained == RetainedIndexCount(view.kinds[frame.node], emitted.height)
+        index == emitted.count + 1
+    IN [count |-> index, height |-> retained + 1,
+        indices |-> HistoryAppend(emitted.indices, retained, index),
+        nodes |-> HistoryAppend(emitted.nodes, emitted.count, AppendedVisitNode(view, frame, emitted)),
+        origins |-> HistoryAppend(emitted.origins, emitted.count, frame.node)]
+
+NodeEmissionArrays(emitted) ==
+    /\ emitted.count \in Nat /\ emitted.height \in Nat
+    /\ emitted.indices \in [1..emitted.height -> 1..emitted.count]
+    /\ emitted.nodes = [index \in 1..emitted.count |-> emitted.nodes[index]]
+    /\ emitted.origins = [index \in 1..emitted.count |-> emitted.origins[index]]
+    /\ (emitted.height > 0 => emitted.indices[emitted.height] = emitted.count)
+NodeRootsMatchVisitPrefix(emitted, current) ==
+    /\ current.height = emitted.height
+    /\ \A position \in 1..emitted.height :
+        current.terms[position] = emitted.origins[emitted.indices[position]]
+NodePayloadMatchesSource(view, emitted, index) ==
+    LET node == emitted.nodes[index]
+        origin == emitted.origins[index]
+    IN /\ node.kind \in {"literal", "read", "add"}
+       /\ node.kind = view.kinds[origin]
+       /\ node.payload = IF node.kind = "literal" THEN view.literals[origin]
+                         ELSE IF node.kind = "read" THEN view.reads[origin] ELSE 0
+       /\ IF node.kind = "add"
+          THEN /\ node.left \in 1..(index - 1) /\ node.right \in 1..(index - 1)
+               /\ emitted.origins[node.left] = view.left[origin]
+               /\ emitted.origins[node.right] = view.right[origin]
+          ELSE /\ node.left = 0 /\ node.right = 0
+AllNodePayloadsMatchSource(view, emitted) ==
+    \A index \in 1..emitted.count : NodePayloadMatchesSource(view, emitted, index)
+
+THEOREM AppendingACompletedFrameKeepsNodeArrays ==
+    ASSUME NEW view, NEW frame, NEW emitted,
+           NodeEmissionArrays(emitted), WellFormedVisitFrame(frame, view.left, view.right),
+           frame.prefix.height = emitted.height,
+           (frame.expanded /\ view.kinds[frame.node] = "add")
+               \/ (~frame.expanded /\ view.kinds[frame.node] \in {"literal", "read"})
+    PROVE NodeEmissionArrays(AppendVisitNode(view, frame, emitted))
+    PROOF
+    <1>. DEFINE retained == RetainedIndexCount(view.kinds[frame.node], emitted.height)
+                next == AppendVisitNode(view, frame, emitted)
+    <1>1. retained \in 0..emitted.height
+        BY SMT DEF retained, RetainedIndexCount, WellFormedVisitFrame, NodeEmissionArrays
+    <1>2. HistoryAppend(emitted.indices, retained, emitted.count + 1)
+        \in [1..(retained + 1) -> 1..(emitted.count + 1)]
+        BY <1>1, PostorderAppendPreservesIndexBounds, SMT DEF NodeEmissionArrays
+    <1>. QED BY <1>1, <1>2, SMT
+        DEF next, NodeEmissionArrays, AppendVisitNode, retained, HistoryAppend
+
+THEOREM AppendingACompletedFrameKeepsTheSyntaxRootCoupling ==
+    ASSUME NEW view, NEW frame, NEW emitted,
+           NodeEmissionArrays(emitted), WellFormedVisitFrame(frame, view.left, view.right),
+           NodeRootsMatchVisitPrefix(emitted, frame.prefix),
+           (frame.expanded /\ view.kinds[frame.node] = "add")
+               \/ (~frame.expanded /\ view.kinds[frame.node] \in {"literal", "read"})
+    PROVE NodeRootsMatchVisitPrefix(AppendVisitNode(view, frame, emitted), VisitFrameExit(frame))
+    PROOF
+    <1>. DEFINE retained == RetainedIndexCount(view.kinds[frame.node], emitted.height)
+    <1>1. retained \in 0..emitted.height
+        BY SMT DEF retained, RetainedIndexCount, WellFormedVisitFrame,
+            NodeRootsMatchVisitPrefix, NodeEmissionArrays
+    <1>2. \A position \in 1..retained : emitted.indices[position] \in 1..emitted.count
+        BY <1>1, SMT DEF NodeEmissionArrays
+    <1>. QED BY <1>1, <1>2, SMT
+        DEF NodeRootsMatchVisitPrefix, AppendVisitNode, VisitFrameExit,
+            PushVisitPrefix, FoldVisitPrefix, VisitPrefix, HistoryAppend,
+            retained, RetainedIndexCount, NodeEmissionArrays
+
+THEOREM AppendingACompletedFramePreservesEveryOldNodePayload ==
+    ASSUME NEW view, NEW frame, NEW emitted,
+           NodeEmissionArrays(emitted), AllNodePayloadsMatchSource(view, emitted)
+    PROVE \A index \in 1..emitted.count :
+        NodePayloadMatchesSource(view, AppendVisitNode(view, frame, emitted), index)
+    PROOF
+    <1>. SUFFICES ASSUME NEW index \in 1..emitted.count
+                 PROVE NodePayloadMatchesSource(view, AppendVisitNode(view, frame, emitted), index)
+        BY SMT
+    <1>1. NodePayloadMatchesSource(view, emitted, index)
+        BY SMT DEF AllNodePayloadsMatchSource
+    <1>2. emitted.nodes[index].kind = "add" =>
+        /\ emitted.nodes[index].left \in 1..emitted.count
+        /\ emitted.nodes[index].right \in 1..emitted.count
+        BY <1>1, SMT DEF NodePayloadMatchesSource, NodeEmissionArrays
+    <1>. QED BY <1>1, <1>2, SMT
+        DEF NodePayloadMatchesSource, AppendVisitNode, HistoryAppend, NodeEmissionArrays
+
+THEOREM AppendingACompletedFrameRetainsItsSourcePayload ==
+    ASSUME NEW view, NEW frame, NEW emitted,
+           NodeEmissionArrays(emitted), WellFormedVisitFrame(frame, view.left, view.right),
+           NodeRootsMatchVisitPrefix(emitted, frame.prefix),
+           (frame.expanded /\ view.kinds[frame.node] = "add")
+               \/ (~frame.expanded /\ view.kinds[frame.node] \in {"literal", "read"})
+    PROVE NodePayloadMatchesSource(view, AppendVisitNode(view, frame, emitted), emitted.count + 1)
+    PROOF
+    <1>1. CASE frame.expanded
+        <2>1. view.kinds[frame.node] = "add" /\ emitted.height >= 2
+            BY <1>1, SMT DEF WellFormedVisitFrame, NodeRootsMatchVisitPrefix
+        <2>2. emitted.indices[emitted.height - 1] \in 1..emitted.count
+              /\ emitted.indices[emitted.height] \in 1..emitted.count
+            BY <2>1, SMT DEF NodeEmissionArrays
+        <2>3. emitted.origins[emitted.indices[emitted.height - 1]] = view.left[frame.node]
+              /\ emitted.origins[emitted.indices[emitted.height]] = view.right[frame.node]
+            BY <1>1, <2>1, SMT DEF NodeRootsMatchVisitPrefix, WellFormedVisitFrame, NodeEmissionArrays
+        <2>. QED BY <2>1, <2>2, <2>3, SMT
+            DEF NodePayloadMatchesSource, AppendVisitNode, AppendedVisitNode, HistoryAppend, NodeEmissionArrays
+    <1>2. CASE ~frame.expanded
+        BY <1>2, SMT DEF NodePayloadMatchesSource, AppendVisitNode, AppendedVisitNode,
+            HistoryAppend, NodeEmissionArrays
+    <1>. QED BY <1>1, <1>2, SMT
+
+NodeEmissionStep(view, frame, emitted, next) ==
+    IF ~frame.expanded /\ view.kinds[frame.node] = "add"
+    THEN next = emitted
+    ELSE next = AppendVisitNode(view, frame, emitted)
+
+THEOREM ASynchronizedVisitStepPreservesNodesAndSourcePayloads ==
+    ASSUME NEW view, NEW height, NEW pending, NEW current, NEW goal,
+           NEW nextHeight, NEW nextPending, NEW nextCurrent, NEW emitted, NEW next,
+           PendingVisitContract(height, pending, current, goal, view.left, view.right),
+           PendingVisitStep(view.kinds, view.left, view.right,
+               height, pending, current, nextHeight, nextPending, nextCurrent),
+           NodeEmissionArrays(emitted), NodeRootsMatchVisitPrefix(emitted, current),
+           AllNodePayloadsMatchSource(view, emitted),
+           NodeEmissionStep(view, pending[height], emitted, next)
+    PROVE /\ NodeEmissionArrays(next)
+          /\ NodeRootsMatchVisitPrefix(next, nextCurrent)
+          /\ AllNodePayloadsMatchSource(view, next)
+    PROOF
+    <1>1. CASE ~pending[height].expanded /\ view.kinds[pending[height].node] = "add"
+        BY <1>1, SMT DEF NodeEmissionStep, PendingVisitStep
+    <1>2. CASE ~(~pending[height].expanded /\ view.kinds[pending[height].node] = "add")
+        <2>. DEFINE frame == pending[height]
+        <2>1. WellFormedVisitFrame(frame, view.left, view.right)
+              /\ NodeRootsMatchVisitPrefix(emitted, frame.prefix)
+              /\ ((frame.expanded /\ view.kinds[frame.node] = "add")
+                  \/ (~frame.expanded /\ view.kinds[frame.node] \in {"literal", "read"}))
+            BY <1>2, SMT DEF frame, PendingVisitContract, PendingVisitStep
+        <2>2. next = AppendVisitNode(view, frame, emitted)
+              /\ nextCurrent = VisitFrameExit(frame)
+            BY <1>2, SMT DEF frame, NodeEmissionStep, PendingVisitStep
+        <2>3. NodeEmissionArrays(next)
+            BY <2>1, <2>2, AppendingACompletedFrameKeepsNodeArrays, SMT DEF NodeRootsMatchVisitPrefix
+        <2>4. NodeRootsMatchVisitPrefix(next, nextCurrent)
+            BY <2>1, <2>2, AppendingACompletedFrameKeepsTheSyntaxRootCoupling
+        <2>5. \A index \in 1..emitted.count : NodePayloadMatchesSource(view, next, index)
+            BY <2>2, AppendingACompletedFramePreservesEveryOldNodePayload
+        <2>6. NodePayloadMatchesSource(view, next, emitted.count + 1)
+            BY <2>1, <2>2, AppendingACompletedFrameRetainsItsSourcePayload
+        <2>7. AllNodePayloadsMatchSource(view, next)
+            BY <2>2, <2>5, <2>6, SMT DEF AllNodePayloadsMatchSource, AppendVisitNode, NodeEmissionArrays
+        <2>. QED BY <2>3, <2>4, <2>7
+    <1>. QED BY <1>1, <1>2, SMT
+
+SynchronizedNodeHistory(steps, root, view, heights, pendings, currents, emissions) ==
+    /\ PendingVisitHistory(steps, root, view.kinds, view.left, view.right, heights, pendings, currents)
+    /\ emissions[0] = EmptyNodeEmission
+    /\ \A step \in 1..steps : NodeEmissionStep(view,
+        pendings[step - 1][heights[step - 1]], emissions[step - 1], emissions[step])
+
+THEOREM SynchronizedNodeHistoryPreservesEverySourcePayload ==
+    ASSUME NEW steps, NEW root, NEW view, NEW heights, NEW pendings, NEW currents, NEW emissions,
+           SynchronizedNodeHistory(steps, root, view, heights, pendings, currents, emissions)
+    PROVE \A step \in 0..steps :
+        /\ NodeEmissionArrays(emissions[step])
+        /\ NodeRootsMatchVisitPrefix(emissions[step], currents[step])
+        /\ AllNodePayloadsMatchSource(view, emissions[step])
+    PROOF
+    <1>. DEFINE holds(step) ==
+        /\ NodeEmissionArrays(emissions[step])
+        /\ NodeRootsMatchVisitPrefix(emissions[step], currents[step])
+        /\ AllNodePayloadsMatchSource(view, emissions[step])
+    <1>1. \A step \in 0..steps : PendingVisitContract(heights[step], pendings[step], currents[step],
+        PushVisitPrefix(EmptyVisitPrefix, root), view.left, view.right)
+        BY PendingVisitHistoryPreservesTheSourceRootContext, SMT DEF SynchronizedNodeHistory
+    <1>2. holds(0)
+        BY SMT DEF holds, SynchronizedNodeHistory, PendingVisitHistory,
+            EmptyNodeEmission, NodeEmissionArrays, NodeRootsMatchVisitPrefix,
+            AllNodePayloadsMatchSource, EmptyVisitPrefix, VisitPrefix
+    <1>3. \A step \in 1..steps :
+        ((\A prior \in 0..(step - 1) : holds(prior)) => holds(step))
+        <2>. SUFFICES ASSUME NEW step \in 1..steps,
+                             \A prior \in 0..(step - 1) : holds(prior)
+                     PROVE holds(step)
+            BY SMT
+        <2>1. holds(step - 1)
+            BY SMT DEF SynchronizedNodeHistory, PendingVisitHistory
+        <2>2. PendingVisitContract(heights[step - 1], pendings[step - 1], currents[step - 1],
+            PushVisitPrefix(EmptyVisitPrefix, root), view.left, view.right)
+            BY <1>1, SMT DEF SynchronizedNodeHistory, PendingVisitHistory
+        <2>3. PendingVisitStep(view.kinds, view.left, view.right,
+            heights[step - 1], pendings[step - 1], currents[step - 1],
+            heights[step], pendings[step], currents[step])
+            /\ NodeEmissionStep(view, pendings[step - 1][heights[step - 1]],
+                emissions[step - 1], emissions[step])
+            BY SMT DEF SynchronizedNodeHistory, PendingVisitHistory
+        <2>. QED BY <2>1, <2>2, <2>3, ASynchronizedVisitStepPreservesNodesAndSourcePayloads DEF holds
+    <1>4. steps \in Nat BY SMT DEF SynchronizedNodeHistory, PendingVisitHistory
+    <1>5. \A step \in 0..steps : holds(step)
+        BY <1>2, <1>3, <1>4, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>5 DEF holds
+
+THEOREM SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot ==
+    ASSUME NEW steps, NEW root, NEW view, NEW heights, NEW pendings, NEW currents, NEW emissions,
+           SynchronizedNodeHistory(steps, root, view, heights, pendings, currents, emissions),
+           heights[steps] = 0
+    PROVE LET result == emissions[steps]
+          IN /\ result.count \in Nat \ {0} /\ result.height = 1
+             /\ result.indices[1] = result.count
+             /\ result.origins[result.count] = root
+             /\ AllNodePayloadsMatchSource(view, result)
+    PROOF
+    <1>1. currents[steps].height = 1 /\ currents[steps].terms[1] = root
+        BY SuccessfulPendingVisitReturnsOnlyItsSourceRoot, SMT DEF SynchronizedNodeHistory
+    <1>2. \A step \in 0..steps :
+        /\ NodeEmissionArrays(emissions[step])
+        /\ NodeRootsMatchVisitPrefix(emissions[step], currents[step])
+        /\ AllNodePayloadsMatchSource(view, emissions[step])
+        BY SynchronizedNodeHistoryPreservesEverySourcePayload
+    <1>3. NodeEmissionArrays(emissions[steps])
+          /\ NodeRootsMatchVisitPrefix(emissions[steps], currents[steps])
+          /\ AllNodePayloadsMatchSource(view, emissions[steps])
+        BY <1>2, SMT DEF SynchronizedNodeHistory, PendingVisitHistory
+    <1>. QED BY <1>1, <1>3, SMT DEF NodeEmissionArrays, NodeRootsMatchVisitPrefix
+
+TypedVisitedSourceInputs(view, emitted) ==
+    \A index \in 1..emitted.count :
+        LET origin == emitted.origins[index]
+        IN /\ (view.kinds[origin] = "literal" => InRange(view.literals[origin]))
+           /\ (view.kinds[origin] = "read" => view.reads[origin] \in Keys)
+
+ExtractedNodePlan(emitted, fallbackRead) ==
+    [count |-> emitted.count,
+     kinds |-> [index \in 1..emitted.count |-> emitted.nodes[index].kind],
+     literals |-> [index \in 1..emitted.count |->
+         IF emitted.nodes[index].kind = "literal" THEN emitted.nodes[index].payload ELSE 0],
+     reads |-> [index \in 1..emitted.count |->
+         IF emitted.nodes[index].kind = "read" THEN emitted.nodes[index].payload ELSE fallbackRead],
+     left |-> [index \in 1..emitted.count |-> emitted.nodes[index].left],
+     right |-> [index \in 1..emitted.count |-> emitted.nodes[index].right]]
+
+THEOREM SourceMatchedNodesSupplyTheTypedExpressionPlan ==
+    ASSUME NEW view, NEW emitted, NEW fallbackRead \in Keys,
+           NEW state \in [Keys -> SwiftIntMin..SwiftIntMax],
+           NodeEmissionArrays(emitted), emitted.count > 0,
+           AllNodePayloadsMatchSource(view, emitted), TypedVisitedSourceInputs(view, emitted)
+    PROVE LET plan == ExtractedNodePlan(emitted, fallbackRead)
+          IN ExpressionPlan(plan.count, plan.kinds, plan.literals, plan.reads, plan.left, plan.right, state)
+    PROOF
+    <1>. DEFINE plan == ExtractedNodePlan(emitted, fallbackRead)
+    <1>0. USE IntegerDomain DEF IntegerDomain
+    <1>1. \A index \in 1..emitted.count :
+        /\ emitted.nodes[index].kind \in {"literal", "read", "add"}
+        /\ plan.literals[index] \in SwiftIntMin..SwiftIntMax
+        /\ plan.reads[index] \in Keys
+        BY SMT DEF plan, ExtractedNodePlan, AllNodePayloadsMatchSource, NodePayloadMatchesSource,
+            TypedVisitedSourceInputs, InRange, NodeEmissionArrays
+    <1>2. \A index \in 1..emitted.count :
+        /\ plan.left[index] \in 0..emitted.count
+        /\ plan.right[index] \in 0..emitted.count
+        /\ (plan.kinds[index] = "add" =>
+               /\ plan.left[index] \in 1..(index - 1)
+               /\ plan.right[index] \in 1..(index - 1))
+        BY SMT DEF plan, ExtractedNodePlan, AllNodePayloadsMatchSource,
+            NodePayloadMatchesSource, NodeEmissionArrays
+    <1>. QED BY <1>1, <1>2, SMT
+        DEF plan, ExtractedNodePlan, ExpressionPlan, NodeEmissionArrays
+
+THEOREM SuccessfulSynchronizedVisitSuppliesItsExpressionPlan ==
+    ASSUME NEW steps, NEW root, NEW view, NEW heights, NEW pendings, NEW currents, NEW emissions,
+           SynchronizedNodeHistory(steps, root, view, heights, pendings, currents, emissions),
+           heights[steps] = 0,
+           TypedVisitedSourceInputs(view, emissions[steps]),
+           NEW fallbackRead \in Keys, NEW state \in [Keys -> SwiftIntMin..SwiftIntMax]
+    PROVE LET plan == ExtractedNodePlan(emissions[steps], fallbackRead)
+          IN /\ ExpressionPlan(plan.count, plan.kinds, plan.literals, plan.reads, plan.left, plan.right, state)
+             /\ emissions[steps].origins[plan.count] = root
+             /\ AllNodePayloadsMatchSource(view, emissions[steps])
+    PROOF
+    <1>0. \A step \in 0..steps :
+        /\ NodeEmissionArrays(emissions[step])
+        /\ NodeRootsMatchVisitPrefix(emissions[step], currents[step])
+        /\ AllNodePayloadsMatchSource(view, emissions[step])
+        BY SynchronizedNodeHistoryPreservesEverySourcePayload
+    <1>1. NodeEmissionArrays(emissions[steps])
+          /\ AllNodePayloadsMatchSource(view, emissions[steps])
+        BY <1>0, SMT DEF SynchronizedNodeHistory, PendingVisitHistory
+    <1>2. emissions[steps].count > 0
+          /\ emissions[steps].origins[emissions[steps].count] = root
+        BY SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
+    <1>3. LET plan == ExtractedNodePlan(emissions[steps], fallbackRead)
+          IN ExpressionPlan(plan.count, plan.kinds, plan.literals, plan.reads, plan.left, plan.right, state)
+        BY <1>1, <1>2, SourceMatchedNodesSupplyTheTypedExpressionPlan
+    <1>. QED BY <1>1, <1>2, <1>3 DEF ExtractedNodePlan
+
+\* This is the exact unique-name count guard used by the initializer checker.
+LayoutNamesFS == INSTANCE FiniteSetTheorems
+LayoutNameRange(ids, names) == {names[id] : id \in ids}
+LayoutStateByName(ids, names, values) ==
+    [name \in LayoutNameRange(ids, names) |->
+        values[CHOOSE id \in ids : names[id] = name]]
+
+THEOREM UniqueLayoutNamesPreserveEveryReadValue ==
+    ASSUME NEW ids, LayoutNamesFS!IsFiniteSet(ids),
+           NEW nameUniverse, NEW names \in [ids -> nameUniverse],
+           LayoutNamesFS!Cardinality(LayoutNameRange(ids, names)) =
+               LayoutNamesFS!Cardinality(ids),
+           NEW readIDs \in SUBSET ids,
+           NEW values \in [readIDs -> SwiftIntMin..SwiftIntMax]
+    PROVE /\ \A first, second \in ids : names[first] = names[second] => first = second
+          /\ LayoutStateByName(readIDs, names, values) \in
+                 [LayoutNameRange(readIDs, names) -> SwiftIntMin..SwiftIntMax]
+          /\ \A id \in readIDs : LayoutStateByName(readIDs, names, values)[names[id]] = values[id]
+    PROOF
+    <1>1. names \in LayoutNamesFS!Surjection(ids, LayoutNameRange(ids, names))
+        BY SMT DEF LayoutNamesFS!Surjection, LayoutNameRange
+    <1>2. names \in LayoutNamesFS!Injection(ids, LayoutNameRange(ids, names))
+        BY <1>1, LayoutNamesFS!FS_SurjSameCardinalityImpliesInj
+    <1>3. \A first, second \in ids : names[first] = names[second] => first = second
+        BY <1>2, SMT DEF LayoutNamesFS!Injection, LayoutNamesFS!IsInjective
+    <1>4. \A name \in LayoutNameRange(readIDs, names) :
+          (CHOOSE id \in readIDs : names[id] = name) \in readIDs
+        BY SMT DEF LayoutNameRange
+    <1>5. \A id \in readIDs : (CHOOSE other \in readIDs : names[other] = names[id]) = id
+        BY <1>3, SMT
+    <1>6. LayoutStateByName(readIDs, names, values) \in
+              [LayoutNameRange(readIDs, names) -> SwiftIntMin..SwiftIntMax]
+        BY <1>4, SMT DEF LayoutStateByName, LayoutNameRange
+    <1>7. \A id \in readIDs : LayoutStateByName(readIDs, names, values)[names[id]] = values[id]
+        <2>1. TAKE id \in readIDs
+        <2>2. names[id] \in LayoutNameRange(readIDs, names)
+            BY SMT DEF LayoutNameRange
+        <2>3. (CHOOSE other \in readIDs : names[other] = names[id]) = id
+            BY <1>5
+        <2>. QED BY <2>2, <2>3 DEF LayoutStateByName
+    <1>. QED BY <1>3, <1>6, <1>7
+
 THEOREM StackReadKeysAfterPush ==
     ASSUME NEW height \in Nat, NEW stack, NEW effects, NEW node,
            effects[node] \subseteq Keys

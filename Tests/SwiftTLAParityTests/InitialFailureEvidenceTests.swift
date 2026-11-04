@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import SwiftTLA
 @testable import UpstreamParity
 
 @Suite("Selected initial failure evidence")
@@ -11,7 +12,7 @@ struct InitialFailureEvidenceTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let sha = String(repeating: "a", count: 40)
         let report = try InitialFailureEvidence.prepare(sourceSHA: sha, to: directory)
-        #expect(report.schema == "swifttla.initial-failure-proof-v2")
+        #expect(report.schema == "swifttla.initial-failure-proof-v3")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)
         #expect(!report.graphCompared)
@@ -20,6 +21,30 @@ struct InitialFailureEvidenceTests {
         #expect(report.operands == [3, Int.max])
 
         let native = try Data(contentsOf: directory.appendingPathComponent("native-initial-failure.json"))
+        struct NativeFailures: Decodable {
+            struct Failure: Decodable {
+                struct Binding: Decodable {
+                    let name: String
+                    let value: TLAValue
+                }
+                let site: Int
+                let kind: String
+                let operands: [Int]
+                let before: [Binding]
+            }
+            let failures: [Failure]
+        }
+        let failures = try JSONDecoder().decode(NativeFailures.self, from: native).failures
+        #expect(failures.count == 1)
+        let failure = try #require(failures.first)
+        #expect(failure.site == 3)
+        #expect(failure.kind == "integerOverflow.addition")
+        #expect(failure.operands == [3, Int.max])
+        #expect(Set(failure.before.map(\.name)) == ["pc", "first", "second"])
+        #expect(failure.before.count == 3)
+        #expect(failure.before.first { $0.name == "first" }?.value == .int(1))
+        #expect(failure.before.first { $0.name == "second" }?.value == .int(3))
+        #expect(failure.before.first { $0.name == "pc" }?.value == .string("stay"))
         let generated = directory.appendingPathComponent("generated-tla")
         let module = try Data(contentsOf: generated.appendingPathComponent("\(report.module).tla"))
         let checkModule = try Data(contentsOf: generated.appendingPathComponent("\(report.checkModule).tla"))

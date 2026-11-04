@@ -150,7 +150,7 @@ extension NativeSwiftEmitter {
             }
 
             public func initialOutcomes() throws -> InitialEvaluationOutcomes<Machine> {
-                \(hasRandomSubset ? "if case .simulation = checkingMode { return try .init(states: \(model.typeName).sampledInitialMachines(\(arguments)), firstFailure: nil) }" : "")
+                \(hasRandomSubset ? "if case .simulation = checkingMode { return try .init(states: \(model.typeName).sampledInitialMachines(\(arguments)), failures: []) }" : "")
                 return try \(model.typeName).initialOutcomes(\(arguments))
             }
             public func initialMachines() throws -> [\(model.typeName)] {
@@ -173,7 +173,7 @@ extension NativeSwiftEmitter {
             public func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
                 stopOnViolation: Bool, stopOnReachability: Bool,
                 emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
-                try runValidation(initialOutcomes: .init(states: initialMachines, firstFailure: nil),
+                try runValidation(initialOutcomes: .init(states: initialMachines, failures: []),
                     maximumStates: maximumStates, checking: checking,
                     stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability, emit: emit)
             }
