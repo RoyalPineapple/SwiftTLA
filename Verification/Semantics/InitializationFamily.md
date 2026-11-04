@@ -1,10 +1,15 @@
 # Initialization outcomes and composition
 
-Status: candidate based on admitted `2f0098a`.
-Hosted admission for these changes is pending.
-Current local checks passed 537 tests across 48 selected suites.
-The pinned `--nofp` batch proved all 26 ordered rows and 3,527 obligations.
-All 158 proof snapshots and both runner hashes matched the current proof inputs.
+Status: candidate follow-up to failed `bac1d6cd`, based on admitted `2f0098a`.
+The failed hosted attempt and measured repair are recorded in [OrderedIntAssignmentFamily.md](OrderedIntAssignmentFamily.md).
+Current local checks passed 599 tests across all 55 selected suites.
+Eight stored outputs now retain the measured typed `Init` predicates; their other definitions remain exact.
+The canonical refinement owner checks the complete specialized initial relation.
+The initialization rules and production compiler are unchanged by this follow-up.
+The pinned `--nofp` batch proved all 26 rows and 3,530 obligations.
+The seven affected legacy modules separately proved 2,450 obligations.
+All 158 snapshots and both runner inputs matched the current proof inputs.
+These local passes do not establish hosted admission.
 These are conditional rules. Complete accepted-program preservation remains open.
 
 ## Current mathematical integer domains

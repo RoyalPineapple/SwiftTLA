@@ -72,8 +72,16 @@ struct RefinementExportTests {
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: root.compile()))
         let module = try program.renderModule()
         #expect(module.imports.count == 2)
+        let expectedInit = #"""
+        Init ==
+          /\ value = 3
+          /\ (IF (value >= (-2 * 1000000000 - 147483648) /\ value <= (2 * 1000000000 + 147483647)) THEN TRUE ELSE value \in ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)..((9 * 1000000000 + 223372036) * 1000000000 + 854775807))
+        """#
         for imported in module.imports {
-            #expect(imported.tla.contains("Init == value = 3"))
+            let initial = try #require(imported.tla.components(separatedBy: "\n\n").first {
+                $0.hasPrefix("Init ==")
+            })
+            #expect(initial == expectedInit)
             #expect(!imported.tla.contains("CONSTANTS Limit"))
         }
         try validateBundle(module, name: program.moduleName, identity: program.identity)

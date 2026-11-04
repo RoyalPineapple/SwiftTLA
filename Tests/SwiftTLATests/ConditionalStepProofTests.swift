@@ -58,7 +58,8 @@ struct ConditionalStepProofTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/ConditionalStepProofModel.tla")
             .standardizedFileURL
-        #expect(rendered == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let expectedProofModule = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(rendered == expectedProofModule)
     }
 
     @Test("Compiled conditional selects the branch from the prior atomic write")

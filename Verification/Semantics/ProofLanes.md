@@ -5,11 +5,18 @@ Family diagnostics give early feedback. They do not replace integrated admission
 
 ## Current local candidate
 
-The current integration candidate uses admitted `2f0098a` as its base.
-These changes await hosted admission.
-The current local checks passed 537 tests across all 48 selected suites.
-The pinned generic rule batch proved 26 ordered rows and 3,527 obligations.
-All 158 proof snapshots and both runners matched the current inputs.
+The current integration follow-up uses failed `bac1d6cd`, whose parent `2f0098a` was admitted.
+Both hosted runs at `bac1d6cd` failed and their retained evidence is fully reconciled.
+Unavailable provider comparisons remain explicit failures; they receive no historical pass credit.
+The follow-up preserves production source and repairs only measured expectations, proof steps and receipt paths.
+Current local checks passed 599 tests across all 55 selected suites.
+The focused assignment proof passed 108 obligations without changing theorem premises.
+All 158 snapshots, both runners and qualified tool/input hashes matched that check.
+The seven affected legacy modules proved 2,450 obligations.
+The full 26-row batch proved 3,530 obligations with exact source and runner receipts.
+The expected hosted total is 101 modules and 8,020 obligations, including 68 unchanged legacy modules.
+That expected inventory is not a fresh local run of every legacy module.
+This follow-up requires new ordinary CI and full unfiltered admission after one reviewed publication.
 
 The existing domain rule now includes an independent mathematical `Int` constructor and its membership predicate.
 The initialization connection retains the complete logical relation after declared-type filtering.

@@ -27,9 +27,11 @@ THEOREM IntChildOutcomesAreTyped ==
     PROVE /\ SourceChildOutcome(result) \in ValueOutcomes
           /\ GeneratedChildOutcome(result) \in ValueOutcomes
     PROOF
-    <1>1. 0 \in Values
+    <1>1. 0 \in SwiftIntMin..SwiftIntMax
         BY SMT DEF IntDomains
-    <1>. QED BY <1>1, SMT
+    <1>2. 0 \in Values
+        BY <1>1, SMT DEF IntDomains
+    <1>. QED BY <1>2, SMT
         DEF SourceChildOutcome, GeneratedChildOutcome, ValueOutcomes, IntDomains,
             Expressions!ExpressionOutcomes
 
