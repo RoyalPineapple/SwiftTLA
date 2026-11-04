@@ -144,7 +144,7 @@ public protocol AssumptionValidationScenario: Sendable {
 
 extension ModelValidationScenario {
     public func initialOutcomes() throws -> InitialEvaluationOutcomes<Machine> {
-        try .init(states: initialMachines(), firstFailure: nil)
+        try .init(states: initialMachines(), failures: [])
     }
 
     public var checkingMode: ValidationCheckingMode { .exhaustive }

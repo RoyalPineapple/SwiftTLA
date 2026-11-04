@@ -1768,7 +1768,7 @@ struct OrderedAssignmentLoweringTests {
         try verifyOrderedIntInitialExpression(declaration,
             named: name, expression: resolvedExpression, slots: slots)
         let missingFailure = declaration.description.replacingOccurrences(
-            of: "firstFailure = failure", with: "")
+            of: "failure: failure, projectingBefore: evaluatingInitialBindings", with: "failure: .divisionByZero, projectingBefore: evaluatingInitialBindings")
         #expect(missingFailure != declaration.description)
         let missingFailureDeclaration = try #require(Parser.parse(source: missingFailure)
             .statements.first?.item.as(DeclSyntax.self))
@@ -1914,10 +1914,10 @@ struct OrderedAssignmentLoweringTests {
         })
         try emitter.verifyIntInitialOutput(original)
 
-        let marker = "var firstFailure: NativeMachineEvaluationError?"
+        let marker = "var failures: [InitialEvaluationFailure] = []"
         let wrong = original.description.replacingOccurrences(of: marker, with: """
         \(marker)
-        if true { return InitialEvaluationOutcomes(states: [], firstFailure: nil) }
+        if true { return InitialEvaluationOutcomes(states: [], failures: []) }
         """)
         #expect(wrong != original.description)
         let declaration = try #require(Parser.parse(source: wrong)
@@ -1985,7 +1985,7 @@ struct OrderedAssignmentLoweringTests {
 
         let lostInitialFailure = actual.description.replacingOccurrences(
             of: "return try OrderedIntValidationOutput.initialOutcomes()",
-            with: "return try .init(states: OrderedIntValidationOutput.initialMachines(), firstFailure: nil)")
+            with: "return try .init(states: OrderedIntValidationOutput.initialMachines(), failures: [])")
         #expect(lostInitialFailure != actual.description)
         let wrongInitial = try #require(Parser.parse(source: lostInitialFailure)
             .statements.first?.item.as(DeclSyntax.self))
