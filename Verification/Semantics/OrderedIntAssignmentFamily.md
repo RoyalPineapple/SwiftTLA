@@ -1,13 +1,30 @@
 # Ordered Int expressions and assignment outcomes
 
-Status: candidate based on admitted `2f0098a`.
-Hosted admission for these changes is pending.
+Status: candidate follow-up to failed `bac1d6cd`, based on admitted `2f0098a`.
+Both automatic hosted runs at `bac1d6cd` failed; their retained evidence is fully reconciled.
+Ordinary CI found stale initialization expectations and one unproved assignment obligation.
+Full validation also lacked required comparisons after hour-clock provider abandonment and a prisoners artifact-action failure.
+Those provider causes remain unknown. This follow-up is not admitted.
 No complete accepted-program rule is claimed.
 
-The current pinned `--nofp` batch proved 26 ordered rows and 3,527 obligations.
-All 158 proof snapshots and both runner hashes matched the current proof inputs.
-The current safety-wrapper checks passed 537 tests across 48 selected suites.
-Static checks passed family isolation and all five pinned-download controls.
+The prior local batch proved 26 ordered rows and 3,527 obligations; that pass did not replace hosted failure.
+The measured follow-up passed 599 tests across all 55 selected suites.
+Its focused assignment proof proved 108 obligations with the same theorem statements and premises.
+All 158 snapshots, both runners and the qualified tool/input hashes matched that check.
+The complete pinned `--nofp` batch proved 26 ordered rows and 3,530 obligations.
+The seven affected legacy modules proved 2,450 obligations, including all 2,074 in `SingleAssignment`.
+The expected hosted inventory is 101 modules and 8,020 obligations.
+That total combines the current rule batch and seven legacy runs with exact unchanged logs for the other 68 legacy modules.
+It is not a fresh local run of all 75 legacy modules or hosted admission.
+
+The existing five-owner baseline executed 46 tests and captured seven complete module mismatches.
+Together with the hosted OrderedCopy pair, all eight affected outputs were measured before migration.
+Only their `Init` declarations changed; every action and failure definition remains exact.
+The ten fixed integer bindings satisfy the added type predicates, so these regression initial states are unchanged.
+The refinement owner now checks each complete specialized `Init`, including value 3 and its type predicate.
+The ordinary receipt retains its prior 256 paths and adds seven canonical regression owners, yielding 263 entries.
+No production source, authored model, DSL form, theorem premise, tool pin or checking limit changes.
+No new fixture is added.
 
 ## Current domain queries and initialization connection
 

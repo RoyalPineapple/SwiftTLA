@@ -50,7 +50,8 @@ struct CheckedViewKindMismatchTests {
         let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/IncompatibleCheckedRecordView.tla")
             .standardizedFileURL
-        #expect(source == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let expectedProofModule = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(source == expectedProofModule)
         let cfg = try #require(rendered.tlaBundle(checking: [], checkDeadlock: false).root.cfg)
         #expect(cfg.contains("INVARIANT __SwiftTLAEvaluationOK\n"))
     }

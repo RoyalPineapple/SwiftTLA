@@ -370,7 +370,8 @@ private struct MissingFunctionKey {
         let actual = rendered.tlaBundle.root.tla.replacingOccurrences(
             of: "__binder_SpecParser_[0-9]+_[0-9]+_", with: "__binder_",
             options: .regularExpression)
-        #expect(actual == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let expectedProofModule = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(actual == expectedProofModule)
 
         let source = Parser.parse(source: try String(contentsOfFile: #filePath, encoding: .utf8))
         let declaration = try #require(source.statements.compactMap {

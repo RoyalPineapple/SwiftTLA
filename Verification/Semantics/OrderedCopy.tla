@@ -27,6 +27,8 @@ Init ==
   /\ pc = "copy"
   /\ x = 1
   /\ y = 0
+  /\ (IF (x >= (-2 * 1000000000 - 147483648) /\ x <= (2 * 1000000000 + 147483647)) THEN TRUE ELSE x \in OrderedIntMin..OrderedIntMax)
+  /\ (IF (y >= (-2 * 1000000000 - 147483648) /\ y <= (2 * 1000000000 + 147483647)) THEN TRUE ELSE y \in OrderedIntMin..OrderedIntMax)
 
 Next ==
   \/ copy
