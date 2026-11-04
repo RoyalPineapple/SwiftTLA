@@ -1667,17 +1667,22 @@ import SwiftTLAMacros
 
     @Test("parsed and built literal initializers have one compilation identity")
     func parsedAndBuiltLiteralInitializersShareIdentity() throws {
-        let closure = try parseSpecTestClosure("""
-        { scope in
-            let count = scope.sharedVar(_name: "count", initial: 1)
+        func built<Value: TLAValueType>(_ value: Value) -> TLASpec {
+            TLASpec("LiteralInitializer") { scope in
+                let _ = scope.sharedVar(_name: "count", initial: value)
+            }
         }
-        """)
-        let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
-        let built = try TLASpec("LiteralInitializer") { scope in
-            let _ = scope.sharedVar(_name: "count", initial: 1)
-        }.compile()
-
-        #expect(parsed.identity == built.identity)
+        for (source, specification) in [("1", built(1)), ("true", built(true)),
+                                         ("\"one\"", built("one")), ("[1]", built([1]))] {
+            let closure = try parseSpecTestClosure("""
+            { scope in
+                let count = scope.sharedVar(_name: "count", initial: \(source))
+            }
+            """)
+            let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
+            let built = try specification.compile()
+            #expect(parsed.identity == built.identity)
+        }
     }
 
     @Test("parsed initial domains retain state dependencies")

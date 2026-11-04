@@ -2251,6 +2251,8 @@ private extension CompiledModuleMetadata {
             }
             try StraightLineRenderedActionCheck.verify(compiled.body, rendered: renderedBody,
                 layout: layout, binders: renderer.bindings.binders,
+                moduleName: renderer.moduleName,
+                reservedNames: renderer.reservedNames.union(renderer.bindings.operatorNames.values),
                 required: requiresIndependentCheck)
             return DirectModuleAction(
                 sourceName: declaration.declaration.name,
@@ -2296,6 +2298,8 @@ private extension CompiledModuleMetadata {
                 named: rendered.renderedName, body: rendered.renderedBody,
                 module: directOutput.source, layout: layout, binders: renderer.bindings.binders,
                 failureDeclarations: directOutput.evaluationFailureDeclarations,
+                moduleName: renderer.moduleName,
+                reservedNames: renderer.reservedNames.union(renderer.bindings.operatorNames.values),
                 required: orderedIntProofActionNames.contains(rendered.sourceName))
         }
         try StraightLineRenderedActionCheck.verifyFiniteInvocations(behavior,
@@ -2583,6 +2587,15 @@ private extension CompiledModuleMetadata {
                 ($0.variable, $0.initialization)
             }
         )
+        let intStateVariables = Set(layout.variables.filter {
+            $0.resolvedValueType.map { $0 == .int } ?? ($0.generatedSwiftType == "Int")
+        }.map(\.id))
+        // Keep exact Swift bounds lazy for TLC's Int32-valued states.
+        func intStatePredicate(_ name: String) -> String {
+            let small = "(\(name) >= \(TLAValue.int(Int(Int32.min)).description) /\\ \(name) <= \(TLAValue.int(Int(Int32.max)).description))"
+            let allowed = "\(name) \\in \(TLAValue.int(Int.min).description)..\(TLAValue.int(Int.max).description)"
+            return "(IF \(small) THEN TRUE ELSE \(allowed))"
+        }
         var initialPredicates = try layout.variables.map { variable -> String in
             let name = variable.declaration.name
             guard let initialization = initializations[variable.id] else {
@@ -2641,6 +2654,8 @@ private extension CompiledModuleMetadata {
                 return guarded("\(name) \\in \(try renderer.state(set))")
             }
         }
+        initialPredicates += layout.variables.filter { intStateVariables.contains($0.id) }
+            .map { intStatePredicate($0.declaration.name) }
         var selectedInitialInvariant: CompiledStatePredicate?
         if let selected = behavior.initialInvariant {
             guard let invariant = behavior.invariants.first(where: { $0.id == selected }) else {
@@ -2670,6 +2685,8 @@ private extension CompiledModuleMetadata {
             switch expression.operation {
             case .value, .stateVariable, .controlLocation:
                 return true
+            case .integerSet:
+                return expression.children.isEmpty
             case .convert, .setLiteral, .integerRange, .equal, .ifThenElse:
                 return expression.children.allSatisfy(isTotalInitialExpression)
             default:
@@ -2705,6 +2722,9 @@ private extension CompiledModuleMetadata {
             var relation = "(\(failedCount) < 0 /\\ \(failedCount) = \(count))"
             for prior in layout.variables.prefix(index).reversed() {
                 let binder = prefixNames[prior.id]!
+                if intStateVariables.contains(prior.id) {
+                    relation = "(IF \(intStatePredicate(binder)) THEN \(relation) ELSE FALSE)"
+                }
                 switch initializations[prior.id]! {
                 case .value(let expression):
                     relation = "(LET \(binder) == \(try renderer.state(expression, stateNames: prefixNames)) IN \(relation))"
@@ -2803,6 +2823,12 @@ private extension CompiledModuleMetadata {
                 }
                 for prior in prefix.reversed() {
                     let binder = prefixNames[prior.variable]!
+                    if intStateVariables.contains(prior.variable) {
+                        let predicate = intStatePredicate(binder)
+                        relation = "(IF \(predicate) THEN \(relation) ELSE FALSE)"
+                        selection = "(IF \(predicate) THEN \(selection) ELSE FALSE)"
+                        record = record.map { "(IF \(predicate) THEN \($0) ELSE FALSE)" }
+                    }
                     switch prior.initialization {
                     case .value(let expression):
                         let value = try renderer.state(expression, stateNames: prefixNames)
@@ -2994,6 +3020,10 @@ private extension CompiledModuleMetadata {
             expectedIntLiterals: expectedIntLiterals,
             expectedControlLocations: expectedControlLocations,
             expectedIntPredicates: expectedIntPredicates,
+            expectedIntStateNames: Set(layout.variables.filter { intStateVariables.contains($0.id) }
+                .map { $0.declaration.name }),
+            expectedPredicateCount: layout.variables.count + intStateVariables.count
+                + (selectedInitialInvariant == nil ? 0 : 1),
             requireCompleteSimpleInitials: behavior.initialInvariant == nil
                 && expectedIntLiterals.count + expectedIntPredicates.count
                     + expectedControlLocations.count == layout.variables.count)
@@ -3058,6 +3088,8 @@ func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
                                       expectedIntLiterals: [String: Int] = [:],
                                       expectedControlLocations: [String: String] = [:],
                                       expectedIntPredicates: [String: String] = [:],
+                                      expectedIntStateNames: Set<String> = [],
+                                      expectedPredicateCount: Int? = nil,
                                       requireCompleteSimpleInitials: Bool = false) throws {
     let lines = source.components(separatedBy: "\n")
     let starts = lines.indices.filter { lines[$0] == "Init ==" || lines[$0].hasPrefix("Init == ") }
@@ -3075,9 +3107,10 @@ func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
         actual = "\(starts.count) Init declarations"
     }
     guard actual == expected,
+          expectedPredicateCount.map({ predicates.count == $0 }) ?? true,
           (!requireCompleteSimpleInitials
               || predicates.count == expectedIntLiterals.count + expectedIntPredicates.count
-                  + expectedControlLocations.count),
+                  + expectedControlLocations.count + expectedIntStateNames.count),
           expectedIntLiterals.allSatisfy({ name, value in
               predicates.filter { $0 == "\(name) = \(TLAValue.int(value).description)" }.count == 1
           }),
@@ -3086,6 +3119,10 @@ func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
           }),
           expectedIntPredicates.values.allSatisfy({ predicate in
               predicates.filter { $0 == predicate }.count == 1
+          }),
+          expectedIntStateNames.allSatisfy({ name in
+              let predicate = StraightLineRenderedActionCheck.initialIntStatePredicate(named: name)
+              return predicates.filter { $0 == predicate }.count == 1
           }) else {
         throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
             path: "tla.Init", expected: expected, actual: actual,

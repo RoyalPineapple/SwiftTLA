@@ -1,9 +1,60 @@
 # Ordered Int expressions and assignment outcomes
 
-Status: integrated candidate on admitted `c582b814`. Local checks passed; new
-hosted admission is pending. No complete accepted-program rule is claimed.
+Status: candidate based on admitted `2f0098a`.
+Hosted admission for these changes is pending.
+No complete accepted-program rule is claimed.
 
-The pinned `--nofp` batch proved all twenty ordered rows and 1,554 obligations.
+The current pinned `--nofp` batch proved 26 ordered rows and 3,527 obligations.
+All 158 proof snapshots and both runner hashes matched the current proof inputs.
+The current safety-wrapper checks passed 537 tests across 48 selected suites.
+Static checks passed family isolation and all five pinned-download controls.
+
+## Current domain queries and initialization connection
+
+`FiniteSetMembershipRule` separates mathematical domains from generated predicates that avoid enumeration.
+Its range and eager-union rules preserve every member and the selected child failure payload.
+Its `integerSet` rule supplies mathematical `Int` and an always-true membership predicate.
+Finite postorder histories compose these constructors under explicit operand and leaf agreement.
+The `integerSet` constructor has no child or supplied leaf-agreement premise.
+`OrderedIntAssignmentComposition` connects their query results to the complete labeled assignment observation.
+
+The existing lowerer and actual Swift/TLA+ owners retain their positive and rejecting controls.
+Independent checks cover supported source operands, emitted range predicates, and the selected failure operands.
+The initialization connection and declared-type filters appear in [InitializationFamily.md](InitializationFamily.md).
+Source extraction, unsupported constructors, concrete traversal, and checker/kernel soundness remain open.
+These local results do not establish hosted admission or universal preservation.
+
+## Finite integer-domain equality
+
+The source rule compares a finite integer domain with the complete mathematical interval.
+The generated rule handles an empty domain first.
+For a nonempty domain, it checks the last endpoint from the count and requires every key within the interval.
+The proof uses the pinned standard-library finite-set theorems without expanding recursive cardinality definitions.
+An internal endpoint overflow makes the query false; it does not create a model evaluation failure.
+The parent rule preserves operand order and each genuine child failure payload.
+The assignment connection supplies the resulting Boolean value or failure to the complete labeled observation.
+
+The baseline ran the three existing equality cases with production code unchanged.
+It recorded nine accepted corruptions across source, actual Swift, and actual TLA+ checks.
+It also recorded four incorrect runtime outcomes across the native and compiled paths.
+Wide equality raised an enumeration-capability error instead of returning false.
+Range-first evaluation hid the genuine domain division failure behind that capability error.
+The repaired cases pass, including all nine rejecting controls and both operand orders.
+The interval is never materialized by this query.
+The global enumeration guard remains unchanged.
+
+The native output check covers integer-keyed dictionary state reads and the supported scalar or arithmetic bounds.
+Arbitrary function-child outputs remain outside that check.
+Resolution correspondence, Boolean-query initialization outputs, and checking-specific output links remain unproved.
+Finite dictionary key/count projection, source extraction, type correspondence, and checker/kernel soundness remain explicit boundaries.
+This rule does not complete the general equality or domain constructors.
+
+## Original assignment connection
+
+The original assignment connection used admitted `c582b814` as its base.
+The results in this section describe that earlier stage.
+
+That pinned `--nofp` batch proved all twenty ordered rows and 1,554 obligations.
 All 153 proof snapshots and both runner hashes matched the checked inputs.
 The combined safety-wrapper check passed 183 tests across all 22 current
 regression owners, including both overlapping-target arguments. Static checks

@@ -11,6 +11,7 @@ FrameActionRule
 PendingWriteOutcomeRule
 PendingFrameOutcomeRule
 OrderedIntExpressionRule
+FiniteSetMembershipRule
 AssignmentActionRule
 BooleanExpressionConstructorRules
 SequenceExpressionConstructorRules

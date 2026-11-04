@@ -130,7 +130,8 @@ extension CompiledProgram {
             }
             // shortcut: certify ordered Int/domain constructors; extend with independent read rules for other families.
             switch (expression.operation, expression.resultType) {
-            case (.value(.integer), .int), (.stateVariable, .int), (.controlLocation, .controlLocation):
+            case (.value(.integer), .int), (.stateVariable, .int), (.controlLocation, .controlLocation),
+                 (.integerSet, .set(.int)):
                 effect.hasIndependentReadSet = children.isEmpty
             case (.add, .int), (.equal, .bool), (.integerRange, .set(.int)):
                 effect.hasIndependentReadSet = children.count == 2

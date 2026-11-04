@@ -102,8 +102,10 @@ public enum _NativeMachineOperations: Sendable {
         do {
             try visit()
         } catch let failure as NativeMachineEvaluationError {
+            guard failure != .nonEnumerableIntegerDomain else { throw failure }
             onEvaluationFailure(failure)
         } catch let failure as EvalError {
+            guard failure != .nonEnumerableIntegerDomain else { throw failure }
             guard let native = failure.nativeFailure else { throw failure }
             onEvaluationFailure(native)
         }

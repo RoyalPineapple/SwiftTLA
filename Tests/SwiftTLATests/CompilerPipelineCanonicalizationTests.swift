@@ -1569,6 +1569,7 @@ struct CompilerPipelineCanonicalizationTests {
 
         for (label, domain) in [
             ("readyRange", StateExpr.integerRange(.int(1), .variable("limit"))),
+            ("readyMathematical", StateExpr.integerSet),
             ("readyMembers", StateExpr.setLiteral([.int(1), .int(2), .variable("limit")])),
             ("readyConditional", StateExpr.ifThenElse(
                 .equal(.variable("limit"), .int(3)),
@@ -1581,19 +1582,23 @@ struct CompilerPipelineCanonicalizationTests {
                 initialization: .memberOf(domain), generatedSwiftType: "Int", origin: choice.origin)
             let domainCompilation = try domainSpecification.compile()
             let domainProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: domainCompilation))
-            let domainStates = try CompiledRuntime(program: domainProgram).initialStates()
-            #expect(domainStates.count == 3)
-            #expect(Set(try domainStates.map {
-                try renderedValue(named: "derived", in: $0, compilation: domainCompilation)
-            }) == [.int(2), .int(3), .int(4)])
-            let altered = try reorderedProgram(domainProgram, positions: [0, 1, 2, 5, 3, 4])
+            if domain != .integerSet {
+                let domainStates = try CompiledRuntime(program: domainProgram).initialStates()
+                #expect(domainStates.count == 3)
+                #expect(Set(try domainStates.map {
+                    try renderedValue(named: "derived", in: $0, compilation: domainCompilation)
+                }) == [.int(2), .int(3), .int(4)])
+            }
+            let altered = try reorderedProgram(domainProgram,
+                positions: domain == .integerSet ? [0, 1, 4, 2, 3, 5] : [0, 1, 2, 5, 3, 4])
             do {
                 try altered.validateInitializationDependencies()
                 Issue.record("Resolved initialization order corruption accepted: \(label)")
             } catch let diagnostic as CompilationDiagnostic {
                 #expect(diagnostic.code == .unsupportedGeneratedValueShape)
                 #expect(diagnostic.stage == .validation)
-                #expect(diagnostic.path == "variables.lastIndependent.initialization")
+                let target = domain == .integerSet ? "limit" : "lastIndependent"
+                #expect(diagnostic.path == "variables.\(target).initialization")
                 #expect(diagnostic.expected == "the first ready variable in declaration order")
             }
         }

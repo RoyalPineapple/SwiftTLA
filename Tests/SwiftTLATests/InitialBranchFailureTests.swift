@@ -89,6 +89,21 @@ struct InitialBranchFailureTests {
 
     @Test("A later initial overflow remains visible after an earlier checked addition")
     func preservesFailureAfterFallibleInitialPrefix() throws {
+        let sourceCompilation = try CheckedAdditionPrefixInitialModel.spec.compile()
+        let sourceFile = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Sources/UpstreamParity/ValidationModels/CheckedAdditionPrefixInitialModel.swift")
+            .standardizedFileURL
+        let syntax = Parser.parse(source: try String(contentsOf: sourceFile, encoding: .utf8))
+        let declaration = try #require(syntax.statements.compactMap { $0.item.as(StructDeclSyntax.self) }.first)
+        let parsedModel = try TLASpecVerifier.parseAndVerify(declaration)
+        for layout in [sourceCompilation.layout, parsedModel.program.layout] {
+            let intNames = Set(layout.variables.filter {
+                $0.resolvedValueType.map { $0 == .int } ?? ($0.generatedSwiftType == "Int")
+            }.map { $0.declaration.name })
+            #expect(intNames == ["first", "second", "last"])
+        }
+        #expect(StraightLineRenderedActionCheck.requiresInitialIntFailureRecord(
+            parsedModel.program.behavior, layout: parsedModel.program.layout))
         let generated = try CheckedAdditionPrefixInitialModel.initialOutcomes()
         #expect(generated.states.isEmpty)
         #expect(generated.firstFailure == .integerOverflow(.addition,
@@ -120,7 +135,7 @@ struct InitialBranchFailureTests {
                 declaration: String(selectedRecord))
         }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
-            in: CheckedAdditionPrefixInitialModel.spec.compile()))
+            in: sourceCompilation))
         let requiresRecord = StraightLineRenderedActionCheck.requiresInitialIntFailureRecord(
             program.behavior, layout: program.layout)
         #expect(requiresRecord)

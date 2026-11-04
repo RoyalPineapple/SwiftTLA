@@ -48,7 +48,8 @@ struct ArrayValueTests {
         #expect(try compiledValue(Fold(values.expr, startingWith: 0) { value, sum in value + sum }.stateExpr) == .int(5))
         let parser = ParserSession()
         let literal: ExprSyntax = "Array<Int>([2, 1, 2])"
-        #expect(parser.decodeTypedFacadeValue(literal, scope: .empty) == .tupleLiteral([.int(2), .int(1), .int(2)]))
+        let parsed = try #require(parser.decodeTypedFacadeValue(literal, scope: .empty))
+        #expect(try compiledValue(parsed) == .tuple([.int(2), .int(1), .int(2)]))
     }
 
     @Test("array configuration and native operations preserve ordinary Swift state and nominal members")

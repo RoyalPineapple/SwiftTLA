@@ -1040,9 +1040,10 @@ extension ParserSession {
             algorithmParseFailure = "State '\(declaredName)' has an invalid value type: \(error)"
             return nil
         }
+        let stateType = sourceTypeResolver.normalizedStateType(state.swiftTypeName, resolved: valueType)
         let resolvedState = AlgorithmStateModel(root: state.root, initialization: state.initialization,
-            displayLabel: state.displayLabel, swiftTypeName: state.swiftTypeName,
-            resolvedValueType: inferredType, exposed: state.exposed)
+            displayLabel: state.displayLabel, swiftTypeName: stateType.spelling,
+            resolvedValueType: stateType.resolved, exposed: state.exposed)
         recordStateDeclaration(named: resolvedState.root, at: binding)
         let component: AlgorithmComponentModel = kind == .shared ? .shared(resolvedState) : .local(resolvedState)
         return (sourceName, component, valueType)

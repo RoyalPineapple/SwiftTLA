@@ -12,7 +12,9 @@ __SwiftTLAOverflowOperation0 == "division"
 __SwiftTLAAnyEvaluationFailure0 == (\E __atomic_0 \in 0..1: ~((IF __atomic_0 # 0 THEN (IF (IF __atomic_0 # -1 THEN TRUE ELSE 1 # ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)) THEN TRUE ELSE FALSE) ELSE FALSE)))
 __SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)
 
-Init == result = 0
+Init ==
+  /\ result = 0
+  /\ (IF (result >= (-2 * 1000000000 - 147483648) /\ result <= (2 * 1000000000 + 147483647)) THEN TRUE ELSE result \in ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)..((9 * 1000000000 + 223372036) * 1000000000 + 854775807))
 
 Next == pick
 

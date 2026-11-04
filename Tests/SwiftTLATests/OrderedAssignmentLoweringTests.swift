@@ -1533,6 +1533,7 @@ struct OrderedAssignmentLoweringTests {
         try verifyRenderedInitialConjunction(module, predicates: predicates,
             expectedIntLiterals: literals,
             expectedControlLocations: [control.name: expectedFormalControl],
+            expectedIntStateNames: ["first", "second"], expectedPredicateCount: 5,
             requireCompleteSimpleInitials: true)
         let originalInit = (["Init =="] + predicates.map { "  /\\ \($0)" }).joined(separator: "\n")
         let extraInit = originalInit + "\n  /\\ FALSE"
@@ -1546,109 +1547,126 @@ struct OrderedAssignmentLoweringTests {
             try verifyRenderedInitialConjunction(extraModule, predicates: extraPredicates,
                 expectedIntLiterals: literals,
                 expectedControlLocations: [control.name: expectedFormalControl],
+                expectedIntStateNames: ["first", "second"], expectedPredicateCount: 5,
                 requireCompleteSimpleInitials: true)
             Issue.record("An extra Init conjunct discarded the compiled initial state")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.Init")
         }
 
-        let domainSpec = DependentInitializationOutputProofModel.spec
-        let domainSource = try domainSpec.loweredSourceModel()
-        let domainInputs = try SourceTypeResolver().resolve(in: domainSpec.compile())
-        var domainSourceChecker = try CompiledTypeChecker(inputs: domainInputs)
-        let checkedDomainProgram = try domainSourceChecker.checkProgram()
-        let domainProgram = try CompiledProgram(inputs: domainInputs)
-        _ = try domainProgram.renderModule()
-        var domainEmitter = NativeSwiftEmitter(model: try MacroCompilation(
-            typeName: "DependentInitializationOutputProofModel", program: domainProgram))
-        _ = try domainEmitter.machineMembers()
-        func changed(_ node: CompiledExpression, operation: CompiledOperation? = nil,
-                     children: [CompiledExpression]) -> CompiledExpression {
-            .init(operation: operation ?? node.operation, resultType: node.resultType,
-                children: children)
-        }
-        func integer(_ value: Int, like node: CompiledExpression) -> CompiledExpression {
-            .init(operation: .value(.integer(value)), resultType: node.resultType, children: [])
-        }
-        func domainMutants(_ expression: CompiledExpression, name: String) throws
-            -> [(String, CompiledExpression)] {
-            if name == "seed" {
-                guard expression.operation == .integerRange, expression.children.count == 2 else {
+        func verifyDomainInitializers(_ domainSpec: TLASpec, names: [String]) throws {
+            let domainSource = try domainSpec.loweredSourceModel()
+            let domainInputs = try SourceTypeResolver().resolve(in: domainSpec.compile())
+            var domainSourceChecker = try CompiledTypeChecker(inputs: domainInputs)
+            let checkedDomainProgram = try domainSourceChecker.checkProgram()
+            let domainProgram = try CompiledProgram(inputs: domainInputs)
+            _ = try domainProgram.renderModule()
+            var domainEmitter = NativeSwiftEmitter(model: try MacroCompilation(
+                typeName: "DependentInitializationOutputProofModel", program: domainProgram))
+            _ = try domainEmitter.machineMembers()
+            func changed(_ node: CompiledExpression, operation: CompiledOperation? = nil,
+                         children: [CompiledExpression]) -> CompiledExpression {
+                .init(operation: operation ?? node.operation, resultType: node.resultType,
+                    children: children)
+            }
+            func integer(_ value: Int, like node: CompiledExpression) -> CompiledExpression {
+                .init(operation: .value(.integer(value)), resultType: node.resultType, children: [])
+            }
+            func domainMutants(_ expression: CompiledExpression, name: String) throws
+                -> [(String, CompiledExpression)] {
+                if expression.operation == .integerSet {
+                    guard expression.children.isEmpty else { throw InvalidShape.lowered }
+                    return [
+                        ("integerSetConstructor", changed(expression, operation: .setLiteral, children: [])),
+                        ("integerSetArity", changed(expression, children: [
+                            .init(operation: .value(.integer(0)), resultType: .int, children: [])])),
+                    ]
+                }
+                if name == "seed" {
+                    guard expression.operation == .integerRange, expression.children.count == 2 else {
+                        throw InvalidShape.lowered
+                    }
+                    return [
+                        ("rangeUpper", changed(expression, children: [expression.children[0],
+                            integer(2, like: expression.children[1])])),
+                        ("rangeOrder", changed(expression, children: Array(expression.children.reversed()))),
+                    ]
+                }
+                guard expression.operation == .ifThenElse, expression.children.count == 3 else {
                     throw InvalidShape.lowered
                 }
+                let condition = expression.children[0]
+                let yes = expression.children[1]
+                let no = expression.children[2]
+                guard condition.operation == .equal, condition.children.count == 2,
+                      case .stateVariable = condition.children[0].operation,
+                      yes.operation == .setLiteral, yes.children.count == 1,
+                      no.operation == .setLiteral, no.children.count == 2 else {
+                    throw InvalidShape.lowered
+                }
+                let wrongCondition = changed(condition, operation: .notEqual, children: condition.children)
+                let missingRead = changed(condition, children: [integer(0, like: condition.children[0]),
+                    condition.children[1]])
+                let wrongMember = changed(no, children: [no.children[0], integer(2, like: no.children[1])])
+                let missingMember = changed(no, children: [no.children[0]])
                 return [
-                    ("rangeUpper", changed(expression, children: [expression.children[0],
-                        integer(2, like: expression.children[1])])),
-                    ("rangeOrder", changed(expression, children: Array(expression.children.reversed()))),
+                    ("conditionOperation", changed(expression, children: [wrongCondition, yes, no])),
+                    ("conditionRead", changed(expression, children: [missingRead, yes, no])),
+                    ("armOrder", changed(expression, children: [condition, no, yes])),
+                    ("setMember", changed(expression, children: [condition, yes, wrongMember])),
+                    ("omittedMember", changed(expression, children: [condition, yes, missingMember])),
+                    ("domainConstructor", changed(expression, operation: .setLiteral, children: yes.children)),
                 ]
             }
-            guard expression.operation == .ifThenElse, expression.children.count == 3 else {
-                throw InvalidShape.lowered
-            }
-            let condition = expression.children[0]
-            let yes = expression.children[1]
-            let no = expression.children[2]
-            guard condition.operation == .equal, condition.children.count == 2,
-                  case .stateVariable = condition.children[0].operation,
-                  yes.operation == .setLiteral, yes.children.count == 1,
-                  no.operation == .setLiteral, no.children.count == 2 else {
-                throw InvalidShape.lowered
-            }
-            let wrongCondition = changed(condition, operation: .notEqual, children: condition.children)
-            let missingRead = changed(condition, children: [integer(0, like: condition.children[0]),
-                condition.children[1]])
-            let wrongMember = changed(no, children: [no.children[0], integer(2, like: no.children[1])])
-            let missingMember = changed(no, children: [no.children[0]])
-            return [
-                ("conditionOperation", changed(expression, children: [wrongCondition, yes, no])),
-                ("conditionRead", changed(expression, children: [missingRead, yes, no])),
-                ("armOrder", changed(expression, children: [condition, no, yes])),
-                ("setMember", changed(expression, children: [condition, yes, wrongMember])),
-                ("omittedMember", changed(expression, children: [condition, yes, missingMember])),
-                ("domainConstructor", changed(expression, operation: .setLiteral, children: yes.children)),
-            ]
-        }
-        for name in ["seed", "choice"] {
-            let source = try #require(domainSource.variables.first { $0.name == name })
-            let id = try #require(domainInputs.layout.variables.first {
-                $0.declaration.name == name
-            }).id
-            let lowered = try #require(domainInputs.semantics.behavior.initializations.first {
-                $0.variable == id
-            }).initialization
-            let checked = try #require(checkedDomainProgram.behavior.initializations.first {
-                $0.variable == id
-            }).initialization
-            let resolved = try #require(domainProgram.behavior.initializations.first {
-                $0.variable == id
-            }).initialization
-            guard case .memberOf = source.initialization,
-                  case .memberOf(let loweredDomain) = lowered,
-                  case .memberOf(let resolvedDomain) = resolved else { throw InvalidShape.lowered }
-            let path = "variables.\(name).initialization"
-            try StraightLineAssignmentCheck.verifyInitialIntExpression(source.initialization,
-                lowered: lowered, layout: domainInputs.layout, at: path)
-            try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
-                resolved: resolved, at: path)
-            for (label, expression) in try domainMutants(loweredDomain, name: name) {
-                do {
-                    try StraightLineAssignmentCheck.verifyInitialIntExpression(source.initialization,
-                        lowered: .memberOf(expression), layout: domainInputs.layout, at: path)
-                    Issue.record("Initial domain source corruption accepted: \(name).\(label)")
-                } catch let diagnostic as CompilationDiagnostic {
-                    #expect(diagnostic.path == path)
+            for name in names {
+                let source = try #require(domainSource.variables.first { $0.name == name })
+                let id = try #require(domainInputs.layout.variables.first {
+                    $0.declaration.name == name
+                }).id
+                let lowered = try #require(domainInputs.semantics.behavior.initializations.first {
+                    $0.variable == id
+                }).initialization
+                let checked = try #require(checkedDomainProgram.behavior.initializations.first {
+                    $0.variable == id
+                }).initialization
+                let resolved = try #require(domainProgram.behavior.initializations.first {
+                    $0.variable == id
+                }).initialization
+                guard case .memberOf = source.initialization,
+                      case .memberOf(let loweredDomain) = lowered,
+                      case .memberOf(let resolvedDomain) = resolved else { throw InvalidShape.lowered }
+                let path = "variables.\(name).initialization"
+                try StraightLineAssignmentCheck.verifyInitialIntExpression(source.initialization,
+                    lowered: lowered, layout: domainInputs.layout, at: path)
+                try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
+                    resolved: resolved, at: path)
+                for (label, expression) in try domainMutants(loweredDomain, name: name) {
+                    do {
+                        try StraightLineAssignmentCheck.verifyInitialIntExpression(source.initialization,
+                            lowered: .memberOf(expression), layout: domainInputs.layout, at: path)
+                        Issue.record("Initial domain source corruption accepted: \(name).\(label)")
+                    } catch let diagnostic as CompilationDiagnostic {
+                        #expect(diagnostic.path == path)
+                    }
                 }
-            }
-            for (label, expression) in try domainMutants(resolvedDomain, name: name) {
-                do {
-                    try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
-                        resolved: .memberOf(expression), at: path)
-                    Issue.record("Initial domain resolved corruption accepted: \(name).\(label)")
-                } catch let diagnostic as CompilationDiagnostic {
-                    #expect(diagnostic.path == path)
+                var resolvedMutations = try domainMutants(resolvedDomain, name: name)
+                if resolvedDomain.operation == .integerSet {
+                    resolvedMutations.append(("integerSetType", .init(
+                        operation: .integerSet, resultType: .set(.bool), children: [])))
+                }
+                for (label, expression) in resolvedMutations {
+                    do {
+                        try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(lowered, checked: checked,
+                            resolved: .memberOf(expression), at: path)
+                        Issue.record("Initial domain resolved corruption accepted: \(name).\(label)")
+                    } catch let diagnostic as CompilationDiagnostic {
+                        #expect(diagnostic.path == path)
+                    }
                 }
             }
         }
+        try verifyDomainInitializers(DependentInitializationOutputProofModel.spec, names: ["seed", "choice"])
+        try verifyDomainInitializers(MathematicalIntegerDomainModel.spec, names: ["value"])
     }
 
     @Test("Dependent Int initialization retains complete sequential control checking")
@@ -1801,6 +1819,7 @@ struct OrderedAssignmentLoweringTests {
             expectedIntLiterals: ["first": 1],
             expectedControlLocations: [control.0: control.1],
             expectedIntPredicates: ["second": expectedPredicate],
+            expectedIntStateNames: ["first", "second"], expectedPredicateCount: 5,
             requireCompleteSimpleInitials: true)
         let completeInit = (["Init =="] + predicates.map { "  /\\ \($0)" }).joined(separator: "\n")
         let extraModule = module.replacingOccurrences(of: completeInit,
@@ -1811,6 +1830,7 @@ struct OrderedAssignmentLoweringTests {
                 expectedIntLiterals: ["first": 1],
                 expectedControlLocations: [control.0: control.1],
                 expectedIntPredicates: ["second": expectedPredicate],
+                expectedIntStateNames: ["first", "second"], expectedPredicateCount: 5,
                 requireCompleteSimpleInitials: true)
         }
         let wrongPredicate = expectedPredicate.replacingOccurrences(

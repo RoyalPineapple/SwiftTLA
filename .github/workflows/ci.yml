@@ -195,6 +195,7 @@ jobs:
             Sources/SwiftTLA/StraightLineRenderedActionCheck.swift \
             Sources/SwiftTLA/TLCConfiguration.swift \
             Sources/SwiftTLA/SpecCompilation.swift \
+            Sources/SwiftTLA/CompiledEvaluator.swift \
             Sources/SwiftTLAPlugin/NativeSwiftEmitter+Validation.swift \
             Tests/SwiftTLATests/LexicalBindingTests.swift \
             Sources/SwiftTLA/StraightLineAssignmentCheck.swift \
@@ -209,6 +210,7 @@ jobs:
             Tests/SwiftTLATests/Signed{DivisionOutputFixtures,ModuloOutputFixtures,IntegerSemanticsTests}.swift \
             Tests/SwiftTLATests/TypedFacadeSyntaxTests.swift \
             Tests/SwiftTLATests/AlgorithmBuilderParsingTests.swift \
+            Tests/SwiftTLATests/ArrayValueTests.swift \
             Sources/SwiftTLAPlugin/SourceIntegerLiteral.swift \
             Tests/SwiftTLATests/ShortCircuitFailureProofTests.swift \
             Sources/SwiftTLA/StraightLineRenderedActionCheck+Sequence.swift \
@@ -221,6 +223,11 @@ jobs:
             Tests/SwiftTLATests/InitialBranchFailureTests.swift \
             Tests/SwiftTLATests/TLCConfigurationSelectionTests.swift \
             Tests/SwiftTLATests/NativeExecutionBoundaryTests.swift \
+            Tests/SwiftTLATests/IntegerRangeMembership{Fixtures,Tests}.swift \
+            Tests/SwiftTLATests/IntegerRangeDomainEquality{Fixtures,Tests}.swift \
+            Tests/SwiftTLATests/MathematicalIntegerDomain{Fixtures,Tests}.swift \
+            Tests/SwiftTLATests/NativeTypeDiagnosticTests.swift \
+            Tests/SwiftTLATests/RandomSubsetExpressionTests.swift \
             > .build/semantic-proof-evidence/proof-inputs.sha256
           proof_tool_dir='${{ steps.proof-tool.outputs.directory }}'
           "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version \

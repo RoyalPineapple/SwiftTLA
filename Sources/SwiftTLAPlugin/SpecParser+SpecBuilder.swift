@@ -515,11 +515,12 @@ extension ParserSession {
                     ))
                     valueType = nil
                 }
+                let stateType = sourceTypeResolver.normalizedStateType(variable.generatedSwiftType, resolved: valueType)
                 components.variables[components.variables.count - 1] = .init(
                     name: variable.name, initialization: variable.initialization,
                     displayLabel: variable.displayLabel,
-                    generatedSwiftType: variable.generatedSwiftType,
-                    resolvedValueType: variable.generatedSwiftType == nil ? valueType : nil,
+                    generatedSwiftType: stateType.spelling,
+                    resolvedValueType: stateType.resolved,
                     origin: variable.origin)
                 sourceScope = sourceScope.extending(binding: patternName,
                     to: .variable(variable.name),
@@ -847,6 +848,11 @@ extension ParserSession {
               let element = parentheses.elements.first,
               element.label == nil {
             expression = element.expression
+        }
+        if let array = expression.as(ArrayExprSyntax.self), let first = array.elements.first,
+           let element = initialValueTypeName(from: first.expression),
+           array.elements.allSatisfy({ initialValueTypeName(from: $0.expression) == element }) {
+            return "Array<\(element)>"
         }
         if let call = expression.as(FunctionCallExprSyntax.self), let record = nominalRecordType(call.calledExpression) {
             return record.swiftType

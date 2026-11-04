@@ -39,6 +39,7 @@ enum StraightLineRenderedActionCheck {
     private struct BooleanTree {
         let value: String
         let sites: [BooleanSite]
+        var hasDivision = false
 
         var defined: String? {
             guard !sites.isEmpty else { return nil }
@@ -60,18 +61,88 @@ enum StraightLineRenderedActionCheck {
         }
     }
 
-    // Leaves outside scalar equality/modulo remain child-rule premises.
+    private static func divisionValue(_ expression: CompiledExpression,
+                                      variables: [VariableID: String], binders: [BinderID: String],
+                                      moduleName: String, reservedNames: Set<String>) -> String? {
+        var pending: [Task] = [.value(expression)]
+        var parts: [String] = []
+        var ordinal = 0
+        let occupied = reservedNames.union(variables.values).union(binders.values)
+        func fresh(_ role: String) -> String {
+            var name = "__\(moduleName)_\(role)\(ordinal)"
+            ordinal += 1
+            while occupied.contains(name) { name += "_" }
+            return name
+        }
+        func schedule(_ tasks: [Task]) { pending.append(contentsOf: tasks.reversed()) }
+        while let task = pending.popLast() {
+            switch task {
+            case .token(let text): parts.append(text)
+            case .action: return nil
+            case .value(let node):
+                switch node.operation {
+                case .stateVariable(let id):
+                    guard let name = variables[id] else { return nil }
+                    parts.append(name)
+                case .boundValue(let id):
+                    guard let name = binders[id] else { return nil }
+                    parts.append(name)
+                case .value(.integer(let value)): parts.append(checkedIntegerLiteral(value))
+                case .value(.boolean(let value)): parts.append(value ? "TRUE" : "FALSE")
+                case .divide, .integerDivide:
+                    let lhs = fresh("dividend"), rhs = fresh("divisor")
+                    schedule([.token("(LET \(lhs) == "), .value(node.children[0]),
+                        .token(" IN (LET \(rhs) == "), .value(node.children[1]),
+                        .token(" IN (IF \(rhs) < 0 THEN (-\(lhs)) \\div (-\(rhs)) ELSE \(lhs) \\div \(rhs))))")])
+                case .not:
+                    schedule([.token("(~"), .value(node.children[0]), .token(")")])
+                case .ifThenElse, .and, .or:
+                    let yes: Task = node.operation == .or ? .token("TRUE") : .value(node.children[1])
+                    let no: Task = node.operation == .and ? .token("FALSE")
+                        : .value(node.children[node.operation == .or ? 1 : 2])
+                    schedule([.token("(IF "), .value(node.children[0]), .token(" THEN "), yes,
+                        .token(" ELSE "), no, .token(")")])
+                case .setLiteral:
+                    var members: [Task] = [.token("{")]
+                    for (index, child) in node.children.enumerated() {
+                        if index > 0 { members.append(.token(", ")) }
+                        members.append(.value(child))
+                    }
+                    members.append(.token("}")); schedule(members)
+                case .integerRange:
+                    schedule([.value(node.children[0]), .token(".."), .value(node.children[1])])
+                case .domain:
+                    guard node.children.count == 1 else { return nil }
+                    schedule([.token("DOMAIN "), .value(node.children[0])])
+                case .equal, .modulo, .in, .union:
+                    let operation = node.operation == .equal ? "=" : node.operation == .modulo ? "%"
+                        : node.operation == .in ? "\\in" : "\\cup"
+                    schedule([.token("("), .value(node.children[0]), .token(" \(operation) "),
+                        .value(node.children[1]), .token(")")])
+                default: return nil
+                }
+            }
+        }
+        return parts.joined()
+    }
+
+    // Unsupported scalar and domain children remain child-rule premises.
     private static func booleanTree(_ expression: CompiledExpression,
                                     variables: [VariableID: String],
-                                    binders: [BinderID: String]) -> BooleanTree? {
+                                    binders: [BinderID: String], moduleName: String?,
+                                    reservedNames: Set<String>) -> BooleanTree? {
         var pending = [(expression, false)]
         var results: [BooleanTree] = []
         while let (node, expanded) = pending.popLast() {
             if !expanded {
                 let arity: Int
                 switch node.operation {
-                case .not: arity = 1
-                case .and, .or, .equal, .modulo: arity = 2
+                case .not, .domain: arity = 1
+                case .and, .or, .equal, .modulo, .in, .integerRange, .union: arity = 2
+                case .divide, .integerDivide:
+                    guard node.resultType == .int else { return nil }
+                    arity = 2
+                case .setLiteral: arity = node.children.count
                 case .ifThenElse: arity = 3
                 case .stateVariable(let id):
                     guard node.children.isEmpty, let value = variables[id] else { return nil }
@@ -95,6 +166,18 @@ enum StraightLineRenderedActionCheck {
             let children = Array(results.suffix(node.children.count))
             guard children.count == node.children.count else { return nil }
             results.removeLast(children.count)
+            let hasDivision = node.operation == .divide || node.operation == .integerDivide
+                || children.contains(where: \.hasDivision)
+            let dividedValue = hasDivision ? moduleName.flatMap {
+                divisionValue(node, variables: variables, binders: binders,
+                    moduleName: $0, reservedNames: reservedNames)
+            } : nil
+            guard !hasDivision || dividedValue != nil else { return nil }
+            if node.operation == .setLiteral {
+                results.append(.init(value: dividedValue ?? "{\(children.map(\.value).joined(separator: ", "))}",
+                    sites: children.flatMap(\.sites), hasDivision: hasDivision))
+                continue
+            }
             let first = children[0]
             func selected(_ tree: BooleanTree, whenTrue: Bool) -> [BooleanSite] {
                 tree.sites.map { site in
@@ -122,6 +205,17 @@ enum StraightLineRenderedActionCheck {
             case .equal:
                 value = "(\(first.value) = \(children[1].value))"
                 sites = first.sites + children[1].sites
+            case .domain:
+                value = "DOMAIN \(first.value)"; sites = first.sites
+            case .integerRange:
+                value = "\(first.value)..\(children[1].value)"
+                sites = first.sites + children[1].sites
+            case .union:
+                value = "(\(first.value) \\cup \(children[1].value))"
+                sites = first.sites + children[1].sites
+            case .in:
+                value = "(\(first.value) \\in \(children[1].value))"
+                sites = children[1].sites + first.sites
             case .modulo:
                 let divisor = children[1].value
                 value = "(\(first.value) % \(divisor))"
@@ -129,15 +223,24 @@ enum StraightLineRenderedActionCheck {
                     .init(guardText: "\(divisor) # 0", operands: divisor, kind: .divisionByZero),
                     .init(guardText: "\(divisor) > 0", operands: divisor, kind: .negativeModuloDivisor)
                 ]
+            case .divide, .integerDivide:
+                let divisor = children[1].value
+                guard let dividedValue else { return nil }
+                value = dividedValue
+                sites = children[1].sites + first.sites + [
+                    .init(guardText: "\(divisor) # 0", operands: divisor, kind: .divisionByZero),
+                    .init(guardText: "(IF \(divisor) # -1 THEN TRUE ELSE \(first.value) # \(checkedIntegerLiteral(.min)))",
+                        operands: "<<\(first.value), \(divisor)>>", kind: .overflow(.division))
+                ]
             default: return nil
             }
-            results.append(.init(value: value, sites: sites))
+            results.append(.init(value: dividedValue ?? value, sites: sites, hasDivision: hasDivision))
         }
         return results.count == 1 ? results[0] : nil
     }
 
     private static let tokenPattern = try? NSRegularExpression(
-        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|\\o|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}+*<>%~#-]|="#)
+        pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|\\o|\\in|\\cup|\\div|\.\.|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}+*<>%~#-]|="#)
 
     private static func checkedIntegerLiteral(_ value: Int) -> String {
         let radix = 1_000_000_000
@@ -266,6 +369,16 @@ enum StraightLineRenderedActionCheck {
         return .init(value: values[0], sites: sites)
     }
 
+    private static func initialIsInt(_ variable: CompiledVariableLayout) -> Bool {
+        variable.resolvedValueType.map { $0 == .int } ?? (variable.generatedSwiftType == "Int")
+    }
+
+    static func initialIntStatePredicate(named name: String) -> String {
+        let small = "(\(name) >= \(checkedIntegerLiteral(Int(Int32.min))) /\\ \(name) <= \(checkedIntegerLiteral(Int(Int32.max))))"
+        let allowed = "\(name) \\in \(checkedIntegerLiteral(.min))..\(checkedIntegerLiteral(.max))"
+        return "(IF \(small) THEN TRUE ELSE \(allowed))"
+    }
+
     static func initialIntPredicate(_ initialization: CompiledVariableInitialization,
                                     named name: String, layout: CompiledLayout) -> String? {
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
@@ -275,7 +388,7 @@ enum StraightLineRenderedActionCheck {
         case .value(let expression):
             guard expression.resultType == .int ||
                     (expression.resultType == .unknown && layout.variables.contains {
-                        $0.declaration.name == name && $0.generatedSwiftType == "Int"
+                        $0.declaration.name == name && initialIsInt($0)
                     }) else { return nil }
             switch expression.operation {
             case .stateVariable(let id) where expression.children.isEmpty:
@@ -288,7 +401,7 @@ enum StraightLineRenderedActionCheck {
         case .memberOf(let root):
             guard root.resultType == .set(.int) ||
                     (root.resultType == .unknown && layout.variables.contains {
-                        $0.declaration.name == name && $0.generatedSwiftType == "Int"
+                        $0.declaration.name == name && initialIsInt($0)
                     }) else { return nil }
             guard let tree = initialIntDomain(root, layout: layout, variables: variables) else { return nil }
             let predicate = "\(name) \\in \(tree.value)"
@@ -306,12 +419,15 @@ enum StraightLineRenderedActionCheck {
             guard node.resultType == type || node.resultType == .unknown else { return nil }
             let types: [CompiledValueType]
             switch (node.operation, type) {
+            case (.integerSet, .set(.int)) where node.children.isEmpty:
+                values.append(.init(value: "Int", sites: []))
+                continue
             case (.value(.integer(let integer)), .int) where node.children.isEmpty:
                 values.append(.init(value: checkedIntegerLiteral(integer), sites: []))
                 continue
             case (.stateVariable(let id), .int) where node.children.isEmpty:
                 guard let variable = layout.variables.first(where: { $0.id == id }),
-                      node.resultType == .int || variable.generatedSwiftType == "Int",
+                      node.resultType == .int || initialIsInt(variable),
                       let name = variables[id] else { return nil }
                 values.append(.init(value: name, sites: []))
                 continue
@@ -370,14 +486,14 @@ enum StraightLineRenderedActionCheck {
                   case .value(let expression) = initialization.initialization else { return false }
             switch expression.operation {
             case .value(.integer):
-                guard variable.generatedSwiftType == "Int", expression.resultType == .int,
+                guard initialIsInt(variable), expression.resultType == .int,
                       expression.children.isEmpty else { return false }
             case .controlLocation(let id):
                 guard variable.declaration.origin == .programCounter,
                       expression.resultType == .controlLocation,
                       expression.children.isEmpty, layout.controlLocation(id) != nil else { return false }
             case .stateVariable, .add:
-                guard variable.generatedSwiftType == "Int", expression.resultType == .int,
+                guard initialIsInt(variable), expression.resultType == .int,
                       initialIntPredicate(.value(expression), named: variable.declaration.name,
                         layout: layout) != nil else { return false }
                 if case .add = expression.operation { hasAddition = true }
@@ -427,17 +543,18 @@ enum StraightLineRenderedActionCheck {
             default: return nil
             }
         }
-        var earlier: [(name: String, value: String, defined: String?, membership: Bool)] = []
+        var earlier: [(name: String, value: String, defined: String?, membership: Bool, isInt: Bool)] = []
         for prior in prefix {
             guard let name = names[prior.variable] else { return }
+            let isInt = layout.variables.first(where: { $0.id == prior.variable }).map(initialIsInt) ?? false
             switch prior.initialization {
             case .value(let expression):
                 guard let value = initialValue(expression) else { return }
-                earlier.append((name, value.value, value.defined, false))
+                earlier.append((name, value.value, value.defined, false, isInt))
             case .memberOf(let expression):
                 guard let tree = initialIntDomain(expression, layout: layout,
                     variables: names, binders: binders) else { return }
-                earlier.append((name, tree.value, tree.sites.isEmpty ? nil : tree.defined, true))
+                earlier.append((name, tree.value, tree.sites.isEmpty ? nil : tree.defined, true, isInt))
             }
         }
         guard emitted.count == tree.sites.count else { throw mismatch() }
@@ -460,6 +577,12 @@ enum StraightLineRenderedActionCheck {
                 "(IF \(predicate) THEN [site |-> \(ordinal), kind |-> \"integerOverflow.addition\", operands |-> \(site.operands)] ELSE FALSE)"
             }
             for prior in earlier.reversed() {
+                if prior.isInt {
+                    let predicate = initialIntStatePredicate(named: prior.name)
+                    relation = "(IF \(predicate) THEN \(relation) ELSE FALSE)"
+                    selection = "(IF \(predicate) THEN \(selection) ELSE FALSE)"
+                    record = record.map { "(IF \(predicate) THEN \($0) ELSE FALSE)" }
+                }
                 if prior.membership {
                     relation = "(\\E \(prior.name) \\in \(prior.value): \(relation))"
                     selection = "(\\E \(prior.name) \\in \(prior.value): \(selection))"
@@ -595,10 +718,17 @@ enum StraightLineRenderedActionCheck {
 
     static func verify(_ action: CompiledActionExpr, rendered: String,
                        layout: CompiledLayout, binders: [BinderID: String],
+                       moduleName: String? = nil, reservedNames: Set<String> = [],
                        required: Bool = false) throws {
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
             ($0.id, $0.declaration.name)
         })
+        let occupied = reservedNames.union(layout.declarations.map(\.name))
+            .union(layout.actions.map(\.renderedName))
+        func checked(_ expression: CompiledExpression) -> BooleanTree? {
+            booleanTree(expression, variables: variables, binders: binders,
+                moduleName: moduleName, reservedNames: occupied)
+        }
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(
                 code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -625,8 +755,8 @@ enum StraightLineRenderedActionCheck {
         func directBoolean(_ expression: CompiledExpression) -> Bool {
             if controlledEquality(expression) { return true }
             switch expression.operation {
-            case .not, .and, .or, .ifThenElse, .equal:
-                return booleanTree(expression, variables: variables, binders: binders) != nil
+            case .not, .and, .or, .ifThenElse, .equal, .in:
+                return checked(expression) != nil
             default: break
             }
             guard expression.children.isEmpty else { return false }
@@ -636,7 +766,7 @@ enum StraightLineRenderedActionCheck {
             }
         }
         func guarded(_ tasks: [Task], by expression: CompiledExpression) throws -> [Task] {
-            guard let tree = booleanTree(expression, variables: variables, binders: binders),
+            guard let tree = checked(expression),
                   let defined = tree.defined else { return tasks }
             guard let guardTokens = tokens(defined) else { throw mismatch() }
             return [.token("("), .token("IF")] + guardTokens.map(Task.token)
@@ -656,7 +786,7 @@ enum StraightLineRenderedActionCheck {
                         .value(expression.children[1]), .token(")")])
                     continue
                 }
-                if let tree = booleanTree(expression, variables: variables, binders: binders) {
+                if let tree = checked(expression) {
                     guard let rendered = tokens(tree.value) else { throw mismatch() }
                     expected.append(contentsOf: rendered)
                     continue
@@ -743,8 +873,15 @@ enum StraightLineRenderedActionCheck {
     static func verifyDeclaration(_ action: CompiledAction, named name: String,
                                   body: String, module: String, layout: CompiledLayout,
                                   binders: [BinderID: String],
-                                  failureDeclarations: [String], required: Bool = false) throws {
-        try verify(action.body, rendered: body, layout: layout, binders: binders)
+                                  failureDeclarations: [String], moduleName: String? = nil,
+                                  reservedNames: Set<String> = [], required: Bool = false) throws {
+        let moduleHeader = module.components(separatedBy: "\n").first?
+            .split(whereSeparator: \.isWhitespace) ?? []
+        let declaredModuleName = moduleHeader.count == 4 && moduleHeader[0] == "----"
+            && moduleHeader[1] == "MODULE" && moduleHeader[3] == "----"
+            && isFormalIdentifier(String(moduleHeader[2])) ? String(moduleHeader[2]) : nil
+        try verify(action.body, rendered: body, layout: layout, binders: binders,
+            moduleName: moduleName ?? declaredModuleName, reservedNames: reservedNames)
         let parameters = try action.bindings.map { binding -> String in
             guard let name = binders[binding.binder], isFormalIdentifier(name) else {
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape,
@@ -963,7 +1100,10 @@ enum StraightLineRenderedActionCheck {
             ($0.id, $0.declaration.name)
         })
         func checkedExpression(_ value: CompiledExpression) -> BooleanTree? {
-            booleanTree(value, variables: variables, binders: renderer.bindings.binders)
+            booleanTree(value, variables: variables, binders: renderer.bindings.binders,
+                moduleName: renderer.moduleName,
+                reservedNames: renderer.reservedNames.union(renderer.bindings.operatorNames.values)
+                    .union(renderer.layout.declarations.map(\.name)).union(renderer.layout.actions.map(\.renderedName)))
         }
         func expressionFacts(_ value: CompiledExpression) throws ->
             (value: String, defined: String?, failure: String?, sites: [RenderedEvaluationFailure]) {
