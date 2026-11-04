@@ -783,7 +783,7 @@ struct CompiledTLARenderer {
                         guard_: site.guard_, operands: site.operands)]
                 }
             case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
-                 .in, .setLiteral, .integerRange, .tupleLiteral, .tupleAppend, .tupleConcatenate, .tupleLength,
+                 .in, .setLiteral, .integerRange, .union, .tupleLiteral, .tupleAppend, .tupleConcatenate, .tupleLength,
                  .cardinality:
                 var preceding: [OrderedEvaluationSite] = []
                 let children = value.operation.evaluatesRightOperandFirst

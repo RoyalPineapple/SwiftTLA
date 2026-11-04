@@ -769,15 +769,16 @@ struct NativeSwiftEmitter {
             let upper = try self.expression(range.children[1], state: state,
                 substitutions: substitutions, activeFunctions: activeFunctions)
             let functionBinding = "let _domainFunction = \(function)"
-            let boundsBinding = "let _domainBounds = try SwiftTLA._NativeMachineOperations.integerRangeBounds(\(lower), \(upper))"
+            let boundsBinding = "let _domainBounds = (\(lower), \(upper))"
             let bindings = domainFirst
                 ? [functionBinding, boundsBinding] : [boundsBinding, functionBinding]
             return """
             (try { () throws -> Bool in
                 \(bindings.joined(separator: "\n"))
-                guard let _domainBounds else { return _domainFunction.isEmpty }
-                return _domainFunction.count == _domainBounds.count
-                    && _domainFunction.keys.allSatisfy { _domainBounds.contains($0) }
+                guard !_domainFunction.isEmpty else { return _domainBounds.0 > _domainBounds.1 }
+                let _domainLast = _domainBounds.0.addingReportingOverflow(_domainFunction.count - 1)
+                return !_domainLast.overflow && _domainLast.partialValue == _domainBounds.1
+                    && _domainFunction.keys.allSatisfy { _domainBounds.0 <= $0 && $0 <= _domainBounds.1 }
             }())
             """
         }
@@ -1022,8 +1023,8 @@ struct NativeSwiftEmitter {
             """
         case .integerRange:
             body = """
-            let bounds = try SwiftTLA._NativeMachineOperations.integerRangeBounds(\(try emit(node.children[0])), \(try emit(node.children[1])))
-            return { candidate in bounds?.contains(candidate) ?? false }
+            let bounds = (\(try emit(node.children[0])), \(try emit(node.children[1])))
+            return { candidate in bounds.0 <= candidate && candidate <= bounds.1 }
             """
         case .functionSet:
             let range = try predicate(node.children[1])

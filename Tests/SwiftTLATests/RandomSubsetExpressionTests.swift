@@ -70,8 +70,10 @@ struct RandomSubsetExpressionTests {
         }
 
         let tla = try FiniteRandomSubsetInitialModel.render().tlaBundle.tla
-        let predicates = ["pc = \"stay\"", "(2 > 0 /\\ chosen \\in {1, 2, 3})"]
-        try verifyRenderedInitialConjunction(tla, predicates: predicates)
+        let predicates = ["pc = \"stay\"", "(2 > 0 /\\ chosen \\in {1, 2, 3})",
+            StraightLineRenderedActionCheck.initialIntStatePredicate(named: "chosen")]
+        try verifyRenderedInitialConjunction(tla, predicates: predicates,
+            expectedIntStateNames: ["chosen"], expectedPredicateCount: 3)
         let weakened = tla.replacingOccurrences(of: "2 > 0", with: "2 = 0")
         #expect(weakened != tla)
         #expect(throws: CompilationDiagnostic.self) {
@@ -165,14 +167,17 @@ struct RandomSubsetExpressionTests {
     @Test("rendered initial states and negative-count failures match the source rule")
     func renderedMixedInitialOutcomes() throws {
         let tla = try MixedInitialEvaluationModel.render().tlaBundle.tla
-        let predicates = ["pc = \"stay\"", "limit \\in {-1, 1}",
-            "(limit > 0 /\\ chosen \\in {7})"]
-        try verifyRenderedInitialConjunction(tla, predicates: predicates)
+        let predicates = ["pc = \"stay\"", "limit \\in {-1, 1}", "(limit > 0 /\\ chosen \\in {7})",
+            StraightLineRenderedActionCheck.initialIntStatePredicate(named: "limit"),
+            StraightLineRenderedActionCheck.initialIntStatePredicate(named: "chosen")]
+        try verifyRenderedInitialConjunction(tla, predicates: predicates,
+            expectedIntStateNames: ["limit", "chosen"], expectedPredicateCount: 5)
         let name = "__SwiftTLAInitialRandomSubsetCountFailure2("
-        let expected = "__SwiftTLAInitialRandomSubsetCountFailure2(__SwiftTLAInitialFailedCount2) == "
-            + "(LET __SwiftTLAInitialValue0 == \"stay\" IN (\\E __SwiftTLAInitialValue1 \\in {-1, 1}: "
-            + "(__SwiftTLAInitialFailedCount2 < 0 /\\ "
-            + "__SwiftTLAInitialFailedCount2 = __SwiftTLAInitialValue1)))"
+        let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/RandomSubsetInitialOutcomeProof.tla")
+            .standardizedFileURL
+        let proofSource = try String(contentsOf: proofInput, encoding: .utf8)
+        let expected = try #require(proofSource.components(separatedBy: "\n").first { $0.hasPrefix(name) })
         func emittedFailure(in module: String) -> String? {
             module.components(separatedBy: "\n").first { $0.hasPrefix(name) }
         }

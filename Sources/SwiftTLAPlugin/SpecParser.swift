@@ -1588,7 +1588,11 @@ final class ParserSession {
                     expectedEnumType: expectedEnumType, expectedType: expectedType?.selectedElement)
             }
             guard elements.count == array.elements.count else { return nil }
-            return .tupleLiteral(elements)
+            let literals = elements.compactMap { value -> TLAValue? in
+                if case .value(let literal) = value { return literal }
+                return nil
+            }
+            return literals.count == elements.count ? .value(.tuple(literals)) : .tupleLiteral(elements)
         }
         if let dictionary = expression.as(DictionaryExprSyntax.self) {
             return decodeDictionaryLiteral(dictionary, scope: scope, expectedType: expectedType)
@@ -1924,6 +1928,30 @@ final class ParserSession {
               element.label == nil {
             expression = element.expression
         }
+        if SourceIntegerLiteral.value(expression) != nil || decodeSwiftIntegerBound(expression, scope: scope) != nil {
+            return .int
+        }
+        let integerOperations = ["+", "-", "*", "/", "%"]
+        if let sequence = expression.as(SequenceExprSyntax.self) {
+            let elements = Array(sequence.elements)
+            // Precedence changes values, but these operators all preserve the Int type.
+            if elements.count >= 3, elements.count % 2 == 1,
+               stride(from: 1, to: elements.count, by: 2).allSatisfy({ index in
+                   elements[index].as(BinaryOperatorExprSyntax.self).map {
+                       integerOperations.contains($0.operator.text)
+                   } == true
+               }),
+               stride(from: 0, to: elements.count, by: 2).allSatisfy({
+                   typedFacadeValueType(elements[$0], scope: scope) == .int
+               }) { return .int }
+        }
+        if let infix = expression.as(InfixOperatorExprSyntax.self),
+           let operation = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
+           integerOperations.contains(operation),
+           typedFacadeValueType(infix.leftOperand, scope: scope) == .int,
+           typedFacadeValueType(infix.rightOperand, scope: scope) == .int { return .int }
+        if let prefix = expression.as(PrefixOperatorExprSyntax.self), prefix.operator.text == "-",
+           typedFacadeValueType(prefix.expression, scope: scope) == .int { return .int }
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             return scope.shape(for: reference)
         }

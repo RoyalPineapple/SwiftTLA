@@ -84,6 +84,49 @@ import Testing
                 #expect(diagnostic.path.hasPrefix("native.action.binding."))
             }
         }
+        let output = try program.renderModule()
+        let invariant = try #require(output.configuration.intrinsicInvariants.first {
+            $0.hasPrefix("__SwiftTLAEvaluationOK")
+        })
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName, reservedNames: [],
+            layout: program.layout, bindings: .init(binders: program.binderNames),
+            operators: compilation.semantics.operators,
+            actions: program.behavior.actions, functions: program.functions)
+        func verifyFailureOutput(_ module: String, declarations: [String]) throws {
+            try StraightLineRenderedActionCheck.verifyEvaluationSelection(program.behavior,
+                module: module, failureDeclarations: declarations, evaluationInvariant: invariant,
+                configuration: output.configuration, renderer: renderer)
+        }
+        try verifyFailureOutput(output.renderedModuleSource, declarations: output.evaluationFailureDeclarations)
+        let zeroID = try #require(compilation.layout.testActionID(named: "zeroDivide"))
+        let overflowID = try #require(compilation.layout.testActionID(named: "overflowDivide"))
+        let operandsBase = "__SwiftTLAOverflowOperands\(overflowID.ordinal)"
+        let operands = try #require(output.evaluationFailureDeclarations.first {
+            $0.hasPrefix(operandsBase + " == ")
+        }).components(separatedBy: " == ")
+        try #require(operands.count == 2 && operands[1].hasPrefix("<<") && operands[1].hasSuffix(">>"))
+        let pair = String(operands[1].dropFirst(2).dropLast(2)).components(separatedBy: ", ")
+        try #require(pair.count == 2 && pair[0] != pair[1])
+        for (label, base, wrongValue) in [
+            ("detail", "__SwiftTLADivisionByZeroFailure\(zeroID.ordinal)", "FALSE"),
+            ("operation", "__SwiftTLAOverflowOperation\(overflowID.ordinal)", "\"addition\""),
+            ("operands", operandsBase, "<<\(pair[1]), \(pair[0])>>"),
+        ] {
+            let original = try #require(output.evaluationFailureDeclarations.first {
+                $0.hasPrefix(base + " == ")
+            })
+            let changed = base + " == " + wrongValue
+            try #require(changed != original)
+            try #require(output.renderedModuleSource.components(separatedBy: original).count == 2)
+            let changedModule = output.renderedModuleSource.replacingOccurrences(of: original, with: changed)
+            do {
+                try verifyFailureOutput(changedModule,
+                    declarations: output.evaluationFailureDeclarations.map { $0 == original ? changed : $0 })
+                Issue.record("Signed division emitted TLA failure \(label) escaped output verification")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "tla.evaluationSelection")
+            }
+        }
     }
 
     @Test("Generated Swift machine uses nonnegative modulo for positive divisors")

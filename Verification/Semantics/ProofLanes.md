@@ -3,6 +3,28 @@
 Hosted admission checks one frozen integrated revision. Development continues in separate worktrees while those checks run.
 Family diagnostics give early feedback. They do not replace integrated admission or prove universal `#spec` fidelity.
 
+## Current local candidate
+
+The current integration candidate uses admitted `2f0098a` as its base.
+These changes await hosted admission.
+The current local checks passed 537 tests across all 48 selected suites.
+The pinned generic rule batch proved 26 ordered rows and 3,527 obligations.
+All 158 proof snapshots and both runners matched the current inputs.
+
+The existing domain rule now includes an independent mathematical `Int` constructor and its membership predicate.
+The initialization connection retains the complete logical relation after declared-type filtering.
+Existing source, resolved, Swift-output, readiness, and public capability owners cover the measured implementation repairs.
+Native enumeration of `Int.all` remains unavailable and throws a capability error.
+The logical relation does not establish concrete enumeration or complete failure storage.
+
+The finite integer-domain equality rule now avoids interval enumeration and preserves genuine operand failures.
+Its source, actual Swift, and actual TLA+ owners reject the nine measured corruptions.
+The native output check covers dictionary state reads with supported bounds.
+Resolution, arbitrary function children, Boolean-query initialization and checking-specific links remain open.
+Other capability errors, source/type extraction, concrete traversal, and checker/kernel soundness also remain open.
+The earlier checkpoint sections retain their original evidence.
+The original family revisions and the user-owned composition checklist remain unchanged.
+
 ## Ownership
 
 | Lane | Branch and worktree | Owned changes |
@@ -75,7 +97,7 @@ Its focused owner passed all seven controls and the state and failure positives.
 The related run passed 205 tests across all 22 selected suites.
 
 The ordinary proof-input receipt includes the validator and canonical owner.
-The current pinned batch passed 25 ordered rows and 3,019 obligations.
+The earlier pinned batch passed 25 ordered rows and 3,019 obligations.
 The expression, initialization and connection owners proved 934, 595 and 162 obligations respectively.
 Four range rules separate logical membership from enumeration width without restricting logical source members.
 The formal expression construction still covers literal/read/addition.

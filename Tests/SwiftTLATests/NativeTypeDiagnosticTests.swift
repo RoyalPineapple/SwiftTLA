@@ -468,6 +468,20 @@ import Testing
             typealias `Count` = Int
             typealias Counts = [Count]
             typealias `repeat` = Counts
+            enum Step: String, CaseIterable { case stay }
+            static var spec: TLASpec {
+                #spec("AliasInitialStates") { scope in
+                    let outer: SharedVariable<Count> = scope.sharedVar(in: Int.all)
+                    let aliasInitialStates = Algorithm(label: "AliasInitialStates", scoped: { algorithm in
+                        let inner: SharedVariable<Count> = algorithm.sharedVar(initial: outer + 1)
+                        Do(Step.stay) {
+                            Assign(outer, to: outer)
+                            Assign(inner, to: inner)
+                        }
+                    })
+                    aliasInitialStates
+                }
+            }
         }
         """)
         let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
@@ -476,6 +490,28 @@ import Testing
         #expect(try resolver.resolve("Count") == .int)
         #expect(try resolver.resolve("`Count`") == .int)
         #expect(try resolver.resolve("`repeat`") == .array(.int))
+        let verified = try TLASpecVerifier.parseAndVerify(model)
+        let output = try verified.program.renderModule().renderedModuleSource
+        let lines = output.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let start = try #require(lines.firstIndex(of: "Init =="))
+        let end = lines[(start + 1)...].firstIndex(of: "") ?? lines.count
+        let predicates = lines[(start + 1)..<end].map { String($0.dropFirst(5)) }
+        try verifyRenderedInitialConjunction(output, predicates: predicates,
+            expectedIntStateNames: ["outer", "inner"], expectedPredicateCount: 5)
+        enum Step: String, CaseIterable { case stay }
+        typealias Count = Int
+        let built = try TLASpec("AliasInitialStates") { scope in
+            let outer: SharedVariable<Count> = scope.sharedVar(_name: "outer", in: Int.all)
+            let aliasInitialStates = Algorithm("aliasInitialStates", label: "AliasInitialStates", scoped: { algorithm in
+                let inner: SharedVariable<Count> = algorithm.sharedVar(_name: "inner", initial: outer + 1)
+                Do(Step.stay) {
+                    Assign(outer, to: outer)
+                    Assign(inner, to: inner)
+                }
+            })
+            aliasInitialStates
+        }.compile()
+        #expect(verified.program.identity == built.identity)
     }
 
     @Test("Source aliases preserve nested record field types")

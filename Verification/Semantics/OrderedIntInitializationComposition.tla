@@ -3,6 +3,7 @@ EXTENDS InitializationComposition, Integers
 
 CONSTANTS IntKeys, SwiftIntMin, SwiftIntMax
 Expressions == INSTANCE OrderedIntExpressionRule WITH Keys <- IntKeys
+Membership == INSTANCE FiniteSetMembershipRule
 
 IntInitializationDomains ==
     /\ SwiftIntMin \in Int /\ SwiftIntMax \in Int
@@ -311,5 +312,117 @@ THEOREM ReversingOverflowOperandsChangesTheInitializerFailure ==
     BY InitialSentinels, SMT DEF InitialSentinels, SourceInitialFailures,
         GeneratedInitialFailures, SourceIntInitializerOutcome, GeneratedIntInitializerOutcome,
         SourceFailed, GeneratedFailed, Expressions!SourceOverflow, Expressions!GeneratedOverflow
+
+SourceIntDomainInitialLeaf(prior, target, outcome) ==
+    SourceTypedInitialLeaf(prior, target, SwiftIntMin..SwiftIntMax, outcome)
+GeneratedIntDomainInitialLeaf(prior, target, outcome) ==
+    GeneratedTypedInitialLeaf(prior, target, SwiftIntMin..SwiftIntMax, outcome)
+
+THEOREM MathematicalIntDomainsRetainAllTypedInitialStatesAndFailures ==
+    ASSUME IntInitializationDomains,
+           NEW bound \in SUBSET Keys, NEW prior \in [bound -> Values],
+           NEW target \in IntKeys \ bound, NEW universe,
+           NEW outcome \in [candidates: SUBSET universe,
+                             firstFailure: FailureValues \cup {NoFailure}],
+           outcome.firstFailure # NoFailure => outcome.candidates = {}
+    PROVE SourceIntDomainInitialLeaf(prior, target, outcome)
+        = GeneratedIntDomainInitialLeaf(prior, target, outcome)
+    PROOF
+    <1>1. /\ target \in Keys \ bound
+          /\ SwiftIntMin..SwiftIntMax \in SUBSET Values
+        BY SMT DEF IntInitializationDomains
+    <1>2. SourceTypedInitialLeaf(prior, target, SwiftIntMin..SwiftIntMax, outcome)
+            = GeneratedTypedInitialLeaf(prior, target, SwiftIntMin..SwiftIntMax, outcome)
+        BY <1>1, TypedInitializerRetainsCompleteStatesAndFailures, SMT
+    <1>. QED BY <1>2 DEF SourceIntDomainInitialLeaf, GeneratedIntDomainInitialLeaf
+
+\* This is the complete logical initial relation; eager native enumeration is unavailable.
+SourceIntegerSetInitialLeaf(prior, target) ==
+    SourceIntDomainInitialLeaf(prior, target, SourceDomain(Membership!SourceIntegerDomain.value))
+GeneratedIntegerSetInitialLeaf(prior, target) ==
+    GeneratedInitialLeaf(prior, target,
+        [candidates |-> {candidate \in SwiftIntMin..SwiftIntMax :
+                            Membership!NativeIntegerDomain.value[candidate]},
+         firstFailure |-> NoFailure])
+
+THEOREM IntegerSetConstructorSuppliesEveryTypedInitialState ==
+    ASSUME IntInitializationDomains,
+           NEW bound \in SUBSET Keys, NEW prior \in [bound -> Values],
+           NEW target \in IntKeys \ bound
+    PROVE /\ SourceIntegerSetInitialLeaf(prior, target)
+                = GeneratedIntegerSetInitialLeaf(prior, target)
+          /\ SourceIntegerSetInitialLeaf(prior, target).states
+                = {GeneratedExtension(prior, target, candidate) : candidate \in SwiftIntMin..SwiftIntMax}
+          /\ SourceIntegerSetInitialLeaf(prior, target).failures = {}
+    PROOF
+    <1>1. /\ Membership!SourceIntegerDomain.value = Int
+          /\ {candidate \in SwiftIntMin..SwiftIntMax :
+                  Membership!NativeIntegerDomain.value[candidate]} = SwiftIntMin..SwiftIntMax
+        BY SMT DEF Membership!SourceIntegerDomain, Membership!NativeIntegerDomain,
+            Membership!QueryValue, IntInitializationDomains
+    <1>2. SourceIntDomainInitialLeaf(prior, target, SourceDomain(Int))
+            = GeneratedIntDomainInitialLeaf(prior, target, SourceDomain(Int))
+        PROOF
+        <2>1. TypedInitializerOutcome(SwiftIntMin..SwiftIntMax, SourceDomain(Int))
+                = SourceDomain(SwiftIntMin..SwiftIntMax)
+            BY SMT DEF TypedInitializerOutcome, SourceDomain, IntInitializationDomains
+        <2>2. SourceIntDomainInitialLeaf(prior, target, SourceDomain(Int))
+                = SourceInitialLeaf(prior, target,
+                    TypedInitializerOutcome(SwiftIntMin..SwiftIntMax, SourceDomain(Int)))
+            BY SMT DEF SourceIntDomainInitialLeaf, SourceTypedInitialLeaf,
+                SourceInitialLeaf, SourceInitialStates, SourceInitialFailures,
+                SourceExtension, TypedInitializerOutcome
+        <2>3. TypedInitializerOutcome(SwiftIntMin..SwiftIntMax, SourceDomain(Int))
+                \in InitializerOutcomes
+            BY <2>1, SMT DEF SourceDomain, InitializerOutcomes, IntInitializationDomains
+        <2>4. SourceInitialLeaf(prior, target,
+                    TypedInitializerOutcome(SwiftIntMin..SwiftIntMax, SourceDomain(Int)))
+                = GeneratedInitialLeaf(prior, target,
+                    TypedInitializerOutcome(SwiftIntMin..SwiftIntMax, SourceDomain(Int)))
+            BY <2>3, InitializerLeafRetainsCompleteStatesAndFailures, SMT
+                DEF IntInitializationDomains
+        <2>. QED BY <2>2, <2>4 DEF GeneratedIntDomainInitialLeaf, GeneratedTypedInitialLeaf
+    <1>3. GeneratedIntDomainInitialLeaf(prior, target, SourceDomain(Int))
+            = GeneratedIntegerSetInitialLeaf(prior, target)
+        BY <1>1, SMT DEF GeneratedIntDomainInitialLeaf, GeneratedTypedInitialLeaf,
+            TypedInitializerOutcome, SourceDomain, GeneratedIntegerSetInitialLeaf,
+            IntInitializationDomains
+    <1>4. SourceIntegerSetInitialLeaf(prior, target)
+            = GeneratedIntegerSetInitialLeaf(prior, target)
+        BY <1>1, <1>2, <1>3, SMT DEF SourceIntegerSetInitialLeaf
+    <1>5. /\ GeneratedIntegerSetInitialLeaf(prior, target).states
+                = {GeneratedExtension(prior, target, candidate) : candidate \in SwiftIntMin..SwiftIntMax}
+          /\ GeneratedIntegerSetInitialLeaf(prior, target).failures = {}
+        BY <1>1, SMT DEF GeneratedIntegerSetInitialLeaf, GeneratedInitialLeaf,
+            GeneratedInitialStates, GeneratedInitialFailures
+    <1>. QED BY <1>4, <1>5, SMT
+
+THEOREM EmptyEnumerationIsNotTheMathematicalInitialRelation ==
+    ASSUME IntInitializationDomains,
+           NEW bound \in SUBSET Keys, NEW prior \in [bound -> Values],
+           NEW target \in IntKeys \ bound
+    PROVE SourceIntegerSetInitialLeaf(prior, target)
+        # GeneratedInitialLeaf(prior, target, GeneratedDomain({}))
+    PROOF
+    <1>1. GeneratedExtension(prior, target, 0) \in SourceIntegerSetInitialLeaf(prior, target).states
+        BY IntegerSetConstructorSuppliesEveryTypedInitialState, SMT DEF IntInitializationDomains
+    <1>2. GeneratedInitialLeaf(prior, target, GeneratedDomain({})).states = {}
+        BY SMT DEF GeneratedInitialLeaf, GeneratedInitialStates, GeneratedDomain
+    <1>. QED BY <1>1, <1>2, SMT
+
+SourceDeclaredIntState(value) == value \in SwiftIntMin..SwiftIntMax
+GeneratedDeclaredIntState(value, fastMinimum, fastMaximum) ==
+    IF value >= fastMinimum /\ value <= fastMaximum THEN TRUE
+    ELSE value \in SwiftIntMin..SwiftIntMax
+
+THEOREM FastRepresentationPredicateKeepsEveryDeclaredIntState ==
+    ASSUME IntInitializationDomains,
+           NEW fastMinimum \in Int, NEW fastMaximum \in Int,
+           SwiftIntMin <= fastMinimum, fastMinimum <= fastMaximum,
+           fastMaximum <= SwiftIntMax, NEW value \in Int
+    PROVE SourceDeclaredIntState(value)
+        = GeneratedDeclaredIntState(value, fastMinimum, fastMaximum)
+    BY SMT DEF SourceDeclaredIntState, GeneratedDeclaredIntState,
+        IntInitializationDomains
 
 =============================================================================

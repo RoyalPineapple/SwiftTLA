@@ -147,4 +147,55 @@ THEOREM EqualFirstFailureDoesNotProveCompleteFailures ==
     BY InitialSentinels, SMT
         DEF InitialSentinels, GeneratedStoreFirst, EmptyFirstFailure
 
+\* A domain remains mathematical; the declared variable type constrains states.
+TypedInitializerOutcome(allowed, outcome) ==
+    [candidates |-> allowed \cap outcome.candidates,
+     firstFailure |-> outcome.firstFailure]
+
+SourceTypedInitialLeaf(prior, key, allowed, outcome) ==
+    [states |-> {next \in SourceInitialStates(prior, key, outcome) : next[key] \in allowed},
+     failures |-> SourceInitialFailures(prior, key, outcome)]
+GeneratedTypedInitialLeaf(prior, key, allowed, outcome) ==
+    GeneratedInitialLeaf(prior, key, TypedInitializerOutcome(allowed, outcome))
+
+THEOREM TypedInitializerRetainsCompleteStatesAndFailures ==
+    ASSUME NEW bound \in SUBSET Keys, NEW prior \in [bound -> Values],
+           NEW key \in Keys \ bound, NEW allowed \in SUBSET Values,
+           NEW universe,
+           NEW outcome \in [candidates: SUBSET universe,
+                             firstFailure: FailureValues \cup {NoFailure}],
+           outcome.firstFailure # NoFailure => outcome.candidates = {}
+    PROVE SourceTypedInitialLeaf(prior, key, allowed, outcome)
+        = GeneratedTypedInitialLeaf(prior, key, allowed, outcome)
+    PROOF
+    <1>1. TypedInitializerOutcome(allowed, outcome) \in InitializerOutcomes
+        BY SMT DEF TypedInitializerOutcome, InitializerOutcomes
+    <1>2. SourceTypedInitialLeaf(prior, key, allowed, outcome)
+        = SourceInitialLeaf(prior, key, TypedInitializerOutcome(allowed, outcome))
+        BY SMT DEF SourceTypedInitialLeaf, SourceInitialLeaf, SourceInitialStates,
+            SourceInitialFailures, SourceExtension, TypedInitializerOutcome
+    <1>3. SourceInitialLeaf(prior, key, TypedInitializerOutcome(allowed, outcome))
+        = GeneratedInitialLeaf(prior, key, TypedInitializerOutcome(allowed, outcome))
+        BY <1>1, InitializerLeafRetainsCompleteStatesAndFailures
+    <1>. QED BY <1>2, <1>3 DEF GeneratedTypedInitialLeaf
+
+THEOREM OmittingTheDeclaredTypeChangesCompleteInitialStates ==
+    ASSUME NEW bound \in SUBSET Keys, NEW prior \in [bound -> Values],
+           NEW key \in Keys \ bound, NEW allowed \in SUBSET Values,
+           NEW universe,
+           NEW outcome \in [candidates: SUBSET universe,
+                             firstFailure: FailureValues \cup {NoFailure}],
+           outcome.firstFailure = NoFailure,
+           NEW outside \in outcome.candidates \ allowed
+    PROVE GeneratedInitialLeaf(prior, key, outcome).states
+        # SourceTypedInitialLeaf(prior, key, allowed, outcome).states
+    PROOF
+    <1>1. GeneratedExtension(prior, key, outside)
+        \in GeneratedInitialLeaf(prior, key, outcome).states
+        BY SMT DEF GeneratedInitialLeaf, GeneratedInitialStates
+    <1>2. GeneratedExtension(prior, key, outside)
+        \notin SourceTypedInitialLeaf(prior, key, allowed, outcome).states
+        BY SMT DEF SourceTypedInitialLeaf, GeneratedExtension
+    <1>. QED BY <1>1, <1>2, SMT
+
 =============================================================================

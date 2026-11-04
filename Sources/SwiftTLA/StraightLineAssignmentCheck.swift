@@ -5,6 +5,7 @@ enum StraightLineAssignmentCheck {
         case add(Int, Int)
         case equal(Int, Int)
         case range(Int, Int)
+        case integerSet
         case members([Int])
         case conditional(Int, Int, Int)
     }
@@ -18,6 +19,10 @@ enum StraightLineAssignmentCheck {
         while let (expression, type, expanded) = pending.popLast() {
             let children: [(StateExpr, CompiledValueType)]
             switch (expression, type) {
+            case (.integerSet, .set(.int)):
+                nodes.append(.integerSet)
+                indices.append(nodes.count)
+                continue
             case (.value(.int(let value)), .int):
                 nodes.append(.literal(value))
                 indices.append(nodes.count)
@@ -68,6 +73,10 @@ enum StraightLineAssignmentCheck {
             guard !requireTypes || expression.resultType == type else { return nil }
             let children: [(CompiledExpression, CompiledValueType)]
             switch (expression.operation, type) {
+            case (.integerSet, .set(.int)) where expression.children.isEmpty:
+                nodes.append(.integerSet)
+                indices.append(nodes.count)
+                continue
             case (.value(.integer(let value)), .int) where expression.children.isEmpty:
                 nodes.append(.literal(value))
                 indices.append(nodes.count)
@@ -929,12 +938,15 @@ enum StraightLineAssignmentCheck {
                     pending.append((right, compiled.children[1]))
                     pending.append((left, compiled.children[0]))
                 case .equal(let left, let right), .and(let left, let right), .or(let left, let right),
-                     .tupleAppend(let left, let right), .tupleConcatenate(let left, let right):
+                     .tupleAppend(let left, let right), .tupleConcatenate(let left, let right),
+                     .in(let left, let right), .integerRange(let left, let right):
                     let operation: CompiledOperation = switch source {
                     case .and: .and
                     case .or: .or
                     case .tupleAppend: .tupleAppend
                     case .tupleConcatenate: .tupleConcatenate
+                    case .in: .in
+                    case .integerRange: .integerRange
                     default: .equal
                     }
                     guard compiled.operation == operation, compiled.children.count == 2 else { return false }
@@ -942,6 +954,9 @@ enum StraightLineAssignmentCheck {
                     pending.append((left, compiled.children[0]))
                 case .not(let child):
                     guard compiled.operation == .not, compiled.children.count == 1 else { return false }
+                    pending.append((child, compiled.children[0]))
+                case .domain(let child):
+                    guard compiled.operation == .domain, compiled.children.count == 1 else { return false }
                     pending.append((child, compiled.children[0]))
                 case .ifThenElse(let condition, let yes, let no):
                     guard compiled.operation == .ifThenElse, compiled.children.count == 3 else { return false }
@@ -967,6 +982,10 @@ enum StraightLineAssignmentCheck {
                         guard let variable = stateIDs[name],
                               compiled.operation == .stateVariable(variable) else { return false }
                     }
+                case .parameter(let reference):
+                    let parameters = layout.parameters.filter { $0.reference == reference }
+                    guard parameters.count == 1, compiled.children.isEmpty,
+                          compiled.operation == .boundValue(parameters[0].binder) else { return false }
                 case .value(let value):
                     guard compiled.children.isEmpty,
                           compiled.operation == .value(CompiledValue(formal: value)) else { return false }
@@ -984,8 +1003,11 @@ enum StraightLineAssignmentCheck {
                   Set(sourceMembers.map(CompiledValue.init(formal:))) == Set(compiledMembers)
             else { throw mismatch() }
         }
-        var usedBinders = Set(compiledBindings.map(\.binder))
-        guard usedBinders.count == compiledBindings.count else { throw mismatch() }
+        var usedBinders = Set(layout.parameters.map(\.binder))
+        guard usedBinders.count == layout.parameters.count else { throw mismatch() }
+        for binding in compiledBindings {
+            guard usedBinders.insert(binding.binder).inserted else { throw mismatch() }
+        }
         var bindings = Dictionary(uniqueKeysWithValues: zip(action.bindings, compiledBindings)
             .map { ($0.name, $1.binder) })
         var pending: [CompiledVisit] = [.pair(action.body, body)]
@@ -1036,16 +1058,17 @@ enum StraightLineAssignmentCheck {
         while let node = pending.popLast() {
             switch node {
             case .variable(let name): reads.insert(name)
-            case .value: break
+            case .value, .parameter: break
             case .add(let left, let right), .divide(let left, let right),
                  .modulo(let left, let right):
                 pending.append(right)
                 pending.append(left)
             case .equal(let left, let right), .and(let left, let right), .or(let left, let right),
-                 .tupleAppend(let left, let right), .tupleConcatenate(let left, let right):
+                 .tupleAppend(let left, let right), .tupleConcatenate(let left, let right),
+                 .in(let left, let right), .integerRange(let left, let right):
                 pending.append(right)
                 pending.append(left)
-            case .not(let child):
+            case .not(let child), .domain(let child):
                 pending.append(child)
             case .ifThenElse(let condition, let yes, let no):
                 pending.append(no)

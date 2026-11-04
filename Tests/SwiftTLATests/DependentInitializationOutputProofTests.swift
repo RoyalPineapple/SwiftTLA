@@ -37,6 +37,8 @@ struct DependentInitializationOutputProofTests {
             "pc = \"finish\"",
             "seed \\in 0..1",
             "choice \\in (IF (seed = 0) THEN {0} ELSE {0, 1})",
+            StraightLineRenderedActionCheck.initialIntStatePredicate(named: "seed"),
+            StraightLineRenderedActionCheck.initialIntStatePredicate(named: "choice"),
         ]
         let missingDependentClause = rendered.replacingOccurrences(
             of: "  /\\ choice \\in (IF (seed = 0) THEN {0} ELSE {0, 1})\n", with: "")
@@ -46,7 +48,8 @@ struct DependentInitializationOutputProofTests {
             Issue.record("A missing dependent initializer was accepted")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.Init")
-            #expect(diagnostic.actual == "Init ==\n  /\\ pc = \"finish\"\n  /\\ seed \\in 0..1")
+            let remaining = predicates.filter { !$0.hasPrefix("choice \\in ") }
+            #expect(diagnostic.actual == (["Init =="] + remaining.map { "  /\\ \($0)" }).joined(separator: "\n"))
         }
 
         let compilation = try DependentInitializationOutputProofModel.spec.compile()
@@ -67,6 +70,7 @@ struct DependentInitializationOutputProofTests {
         }
         try verifyRenderedInitialConjunction(rendered, predicates: predicates,
             expectedControlLocations: ["pc": "finish"], expectedIntPredicates: independentDomains,
+            expectedIntStateNames: ["seed", "choice"], expectedPredicateCount: 5,
             requireCompleteSimpleInitials: true)
         let extraConjunct = rendered.replacingOccurrences(of: "Init ==\n",
             with: "Init ==\n  /\\ FALSE\n")
@@ -74,6 +78,7 @@ struct DependentInitializationOutputProofTests {
         do {
             try verifyRenderedInitialConjunction(extraConjunct, predicates: ["FALSE"] + predicates,
                 expectedControlLocations: ["pc": "finish"], expectedIntPredicates: independentDomains,
+                expectedIntStateNames: ["seed", "choice"], expectedPredicateCount: 5,
                 requireCompleteSimpleInitials: true)
             Issue.record("Complete TLA Init corruption accepted: extraConjunct")
         } catch let diagnostic as CompilationDiagnostic {
@@ -85,6 +90,7 @@ struct DependentInitializationOutputProofTests {
             try verifyRenderedInitialConjunction(wrongRange,
                 predicates: predicates.map { $0.replacingOccurrences(of: "seed \\in 0..1", with: "seed \\in 0..2") },
                 expectedControlLocations: ["pc": "finish"], expectedIntPredicates: independentDomains,
+                expectedIntStateNames: ["seed", "choice"], expectedPredicateCount: 5,
                 requireCompleteSimpleInitials: true)
             Issue.record("Complete TLA Init corruption accepted: rangeBounds")
         } catch let diagnostic as CompilationDiagnostic {
@@ -474,7 +480,7 @@ struct DependentInitializationOutputProofTests {
             of: "for \(choiceName) in \(choiceName)Candidates {",
             with: "for \(choiceName) in \(choiceName)Candidates {\nif \(choiceName) == 1 { continue }\n")
         let wrongRangeBounds = initialStates.description.replacingOccurrences(
-            of: "integerRangeBounds(0, 1)", with: "integerRangeBounds(0, 2)")
+            of: "let bounds = (0, 1)", with: "let bounds = (0, 2)")
         for (label, source) in [("earlyReturn", earlyReturn), ("prunedSibling", prunedSibling),
                                 ("rangeBounds", wrongRangeBounds)] {
             #expect(source != initialStates.description)
@@ -504,5 +510,52 @@ struct DependentInitializationOutputProofTests {
         _ = try named.program.renderModule()
         var namedEmitter = NativeSwiftEmitter(model: named)
         _ = try namedEmitter.machineMembers()
+
+        let mathematicalSource = try String(contentsOf: fixture, encoding: .utf8)
+            .replacingOccurrences(of: "let seed = scope.sharedVar(in: 0...1)",
+                with: "let seed = scope.sharedVar(in: Int.all)")
+        let mathematicalDeclaration = try #require(Parser.parse(source: mathematicalSource)
+            .statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "DependentInitializationOutputProofModel" })
+        let mathematical = try TLASpecVerifier.parseAndVerify(mathematicalDeclaration)
+        let mathematicalSeed = try #require(mathematical.program.layout.variables.first {
+            $0.declaration.name == "seed"
+        })
+        let mathematicalInitialization = try #require(mathematical.program.behavior.initializations.first {
+            $0.variable == mathematicalSeed.id
+        }?.initialization)
+        guard case .memberOf(let mathematicalDomain) = mathematicalInitialization else {
+            Issue.record("The mathematical Int initializer must retain its membership domain")
+            return
+        }
+        #expect(mathematicalDomain.operation == .integerSet)
+        #expect(mathematicalDomain.children.isEmpty)
+        #expect(mathematicalDomain.resultType == .set(.int))
+        _ = try mathematical.program.renderModule()
+        var mathematicalEmitter = NativeSwiftEmitter(model: mathematical)
+        let mathematicalInitial = try #require(try mathematicalEmitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        try mathematicalEmitter.verifyIntInitialOutput(mathematicalInitial)
+        let emitted = mathematicalInitial.description
+        let enumeration = "(try SwiftTLA._NativeMachineOperations.integerSet())"
+        let membership = "return { _ in true }"
+        try #require(emitted.components(separatedBy: enumeration).count == 2)
+        try #require(emitted.components(separatedBy: membership).count == 2)
+        for (label, changed) in [
+            ("enumeration", emitted.replacingOccurrences(of: enumeration, with: "Set<Int>()")),
+            ("membership", emitted.replacingOccurrences(of: membership, with: "return { _ in false }")),
+            ("earlyReturn", emitted.replacingOccurrences(of: "var result: [Snapshot] = []",
+                with: "var result: [Snapshot] = []\nif _selectedInitial == nil { return InitialEvaluationOutcomes(states: result, firstFailure: nil, firstFailureInitializerOrdinal: nil) }")),
+        ] {
+            try #require(changed != emitted)
+            let corrupted = try #require(Parser.parse(source: changed).statements.first?.item.as(DeclSyntax.self))
+            do {
+                try mathematicalEmitter.verifyIntInitialOutput(corrupted)
+                Issue.record("Complete Swift integerSet corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+            }
+        }
     }
 }

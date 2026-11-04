@@ -18,6 +18,7 @@ __SwiftTLAEvaluationOK == ~(__SwiftTLAAnyEvaluationFailure0)
 Init ==
   /\ pc = "advance"
   /\ count = SwiftIntMax
+  /\ (IF (count >= (-2 * 1000000000 - 147483648) /\ count <= (2 * 1000000000 + 147483647)) THEN TRUE ELSE count \in SwiftIntMin..SwiftIntMax)
 
 Next ==
   \/ advance

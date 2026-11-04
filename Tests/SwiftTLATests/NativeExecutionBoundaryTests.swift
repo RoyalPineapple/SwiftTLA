@@ -482,14 +482,20 @@ private struct ReachableInvariantFailure {
         }
 
         let rendered = try CheckedExecutionOverflow.render()
+        let initialPredicates = ["pc = \"advance\"", "count = \(TLAValue.int(Int.max).description)",
+            StraightLineRenderedActionCheck.initialIntStatePredicate(named: "count")]
+        try verifyRenderedInitialConjunction(rendered.tlaBundle.root.tla, predicates: initialPredicates,
+            expectedIntLiterals: ["count": Int.max], expectedControlLocations: ["pc": "advance"],
+            expectedIntStateNames: ["count"], expectedPredicateCount: 3, requireCompleteSimpleInitials: true)
         let initialPredicate = "  /\\ count = \(TLAValue.int(Int.max).description)"
         let wrongInitialModule = rendered.tlaBundle.root.tla.replacingOccurrences(
             of: initialPredicate, with: "  /\\ count = 0")
         #expect(wrongInitialModule != rendered.tlaBundle.root.tla)
         #expect(throws: CompilationDiagnostic.self) {
             try verifyRenderedInitialConjunction(wrongInitialModule,
-                predicates: ["pc = \"advance\"", "count = 0"],
-                expectedIntLiterals: ["count": Int.max])
+                predicates: initialPredicates.map { $0.hasPrefix("count = ") ? "count = 0" : $0 },
+                expectedIntLiterals: ["count": Int.max], expectedIntStateNames: ["count"],
+                expectedPredicateCount: 3)
         }
         let proofInput = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

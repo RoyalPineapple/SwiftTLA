@@ -1,10 +1,48 @@
 # Initialization outcomes and composition
 
-Scope: dependency and readiness work on admitted `ba4c9bbf`.
-Both automatic hosted gates passed at that base, with complete retained-evidence reconciliation.
-The current local pinned batch passed all 25 ordered rows and 3,019 obligations.
-Local passes do not establish hosted admission for the current changes.
+Status: candidate based on admitted `2f0098a`.
+Hosted admission for these changes is pending.
+Current local checks passed 537 tests across 48 selected suites.
+The pinned `--nofp` batch proved all 26 ordered rows and 3,527 obligations.
+All 158 proof snapshots and both runner hashes matched the current proof inputs.
 These are conditional rules. Complete accepted-program preservation remains open.
+
+## Current mathematical integer domains
+
+`FiniteSetMembershipRule` defines mathematical `Int` independently from the generated membership predicate.
+The predicate accepts every integer without enumeration.
+An explicit `integerSet` node composes through the existing finite postorder histories.
+This constructor does not require supplied leaf agreement.
+
+`OrderedIntInitializationComposition` connects this constructor to the complete logical initial relation after declared-type filtering.
+The relation includes every allowed Swift integer and no semantic failure from this constructor.
+The existing typed relation rules also retain failure events from other initializer children.
+Concrete enumeration, frontier traversal, callbacks, and complete failure storage still need separate correspondence arguments.
+
+A baseline ran four existing cases with production code unchanged.
+It found nine accepted checker corruptions and two capability errors in the model-failure channel.
+The same cases passed after the repairs.
+The existing source and resolved checks now retain the childless constructor, its type, and its empty read set.
+The independent Swift output check rejects changed enumeration, membership, and early-return code.
+The TLA+ owner rejects replacement of the mathematical domain with an empty domain.
+
+Native `initialOutcomes` now throws `nonEnumerableIntegerDomain` as `NativeMachineEvaluationError`.
+The private compiled runtime retains its original `EvalError` channel.
+Selected initial-state membership remains available without enumeration.
+TLA+ initial predicates retain declared Swift `Int` bounds for state values and failure prefixes.
+Other capability errors still need separate constructor baselines.
+
+Source extraction, type correspondence, scheduler extraction, and checker/kernel soundness remain open.
+The range-equality action/query rule and measured capability repairs appear in [OrderedIntAssignmentFamily.md](OrderedIntAssignmentFamily.md).
+No Boolean equality initialization output link or rejecting control is established by those action checks.
+Fixtures remain regressions.
+
+## Earlier dependency checkpoints
+
+Dependency and readiness work used admitted `ba4c9bbf` as its base.
+Both automatic hosted gates passed at that base, with complete retained-evidence reconciliation.
+An earlier local batch passed 25 ordered rows and 3,019 obligations.
+These earlier results do not establish hosted admission for the current changes.
 
 The earlier `3a0dda1b` checkpoint passed 25 local rows and 2,091 obligations.
 That result is historical evidence.

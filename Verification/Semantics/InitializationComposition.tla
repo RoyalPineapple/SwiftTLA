@@ -830,11 +830,12 @@ THEOREM SourceAdvanceBuildsExactlyTheNextConstraintPrefix ==
         <2>. QED BY <2>2, <2>3
     <1>. QED BY <1>3, <1>4, SMT DEF SourceConstraintPrefix
 
-THEOREM SourceHistoriesSatisfyExactlyTheInitializerConjunction ==
+THEOREM SourceHistoriesMatchEveryInitializerPrefix ==
     ASSUME NEW count, NEW order, NEW evaluate, NEW history,
            InitializationOrder(count, order), InitializerEvaluators(count, evaluate),
            InitializationHistory(FALSE, count, order, evaluate, history)
-    PROVE history[count].states = SourceConstraintPrefix(order, count, evaluate)
+    PROVE \A index \in 0..count :
+        history[index].states = SourceConstraintPrefix(order, index, evaluate)
     PROOF
     <1>. DEFINE P(index) == history[index].states = SourceConstraintPrefix(order, index, evaluate)
     <1>0. count \in Nat
@@ -860,5 +861,220 @@ THEOREM SourceHistoriesSatisfyExactlyTheInitializerConjunction ==
     <1>4. \A index \in 0..count : P(index)
         BY <1>0, <1>3, FiniteIndexedPrefixProperty
     <1>. QED BY <1>0, <1>4, SMT DEF P
+
+THEOREM SourceHistoriesSatisfyExactlyTheInitializerConjunction ==
+    ASSUME NEW count, NEW order, NEW evaluate, NEW history,
+           InitializationOrder(count, order), InitializerEvaluators(count, evaluate),
+           InitializationHistory(FALSE, count, order, evaluate, history)
+    PROVE history[count].states = SourceConstraintPrefix(order, count, evaluate)
+    BY SourceHistoriesMatchEveryInitializerPrefix, SMT DEF InitializationOrder
+
+SourceFailureConstraintPrefix(order, count, evaluate) ==
+    UNION {UNION {SourceInitialFailures(prior, order[index], evaluate[index][prior]) :
+        prior \in SourceConstraintPrefix(order, index - 1, evaluate)} : index \in 1..count}
+
+THEOREM FailureConstraintPrefixGrowsByTheNextInitializer ==
+    ASSUME NEW count, NEW order, NEW evaluate,
+           InitializationOrder(count, order), InitializerEvaluators(count, evaluate),
+           NEW index \in 1..count
+    PROVE SourceFailureConstraintPrefix(order, index, evaluate)
+        = SourceFailureConstraintPrefix(order, index - 1, evaluate)
+          \cup UNION {SourceInitialFailures(prior, order[index], evaluate[index][prior]) :
+              prior \in SourceConstraintPrefix(order, index - 1, evaluate)}
+    PROOF
+    <1>1. index \in Nat /\ index > 0
+        BY SMT DEF InitializationOrder
+    <1>2. 1..index = (1..(index - 1)) \cup {index}
+        BY <1>1, SMT
+    <1>. QED BY <1>2, SMT DEF SourceFailureConstraintPrefix
+
+THEOREM SourceHistoriesMatchEveryInitialFailurePrefix ==
+    ASSUME NEW count, NEW order, NEW evaluate, NEW history,
+           InitializationOrder(count, order), InitializerEvaluators(count, evaluate),
+           InitializationHistory(FALSE, count, order, evaluate, history)
+    PROVE \A index \in 0..count :
+        history[index].failures = SourceFailureConstraintPrefix(order, index, evaluate)
+    PROOF
+    <1>. DEFINE P(index) == history[index].failures
+        = SourceFailureConstraintPrefix(order, index, evaluate)
+    <1>0. count \in Nat BY SMT DEF InitializationOrder
+    <1>1. \A index \in 0..count :
+        history[index].states = SourceConstraintPrefix(order, index, evaluate)
+        BY SourceHistoriesMatchEveryInitializerPrefix
+    <1>2. P(0)
+        BY SMT DEF P, InitializationHistory, InitialSeed, SourceFailureConstraintPrefix
+    <1>3. \A index \in 1..count :
+        ((\A child \in 0..(index - 1) : P(child)) => P(index))
+        <2>. SUFFICES ASSUME NEW index \in 1..count,
+            \A child \in 0..(index - 1) : P(child)
+            PROVE P(index) BY SMT
+        <2>1. P(index - 1) BY SMT DEF InitializationOrder
+        <2>2. history[index].failures
+            = history[index - 1].failures
+              \cup UNION {SourceInitialFailures(prior, order[index], evaluate[index][prior]) :
+                  prior \in SourceConstraintPrefix(order, index - 1, evaluate)}
+            BY <1>1, SMT DEF InitializationHistory, InitializationAdvance,
+                SourceAdvance, SourceInitialLeaf, InitializationOrder
+        <2>. QED BY <2>1, <2>2, FailureConstraintPrefixGrowsByTheNextInitializer, SMT DEF P
+    <1>4. P(0) /\ \A index \in 1..count :
+        ((\A child \in 0..(index - 1) : P(child)) => P(index))
+        BY <1>2, <1>3
+    <1>5. HIDE DEF P
+    <1>6. \A index \in 0..count : P(index)
+        BY <1>0, <1>4, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>6 DEF P
+
+WideInitializerOutcomes(universe) ==
+    {outcome \in [candidates: SUBSET universe,
+                  firstFailure: FailureValues \cup {NoFailure}] :
+        outcome.firstFailure # NoFailure => outcome.candidates = {}}
+
+TypedCandidateEvaluators(count, order, allowed, evaluate) ==
+    [index \in 1..count |-> [prior \in PartialBindings |->
+        TypedInitializerOutcome(allowed[order[index]], evaluate[index][prior])]]
+
+SourceTypedConstraintPrefix(order, count, allowed, evaluate) ==
+    {state \in [PrefixKeys(order, count) -> Values] :
+        \A index \in 1..count :
+            /\ state[order[index]] \in allowed[order[index]]
+            /\ state[order[index]] \in evaluate[index]
+                [SourceRestriction(state, PrefixKeys(order, index - 1))].candidates}
+SourceTypedFailurePrefix(order, count, allowed, evaluate) ==
+    UNION {UNION {SourceInitialFailures(prior, order[index], evaluate[index][prior]) :
+        prior \in SourceTypedConstraintPrefix(order, index - 1, allowed, evaluate)} :
+            index \in 1..count}
+SourceTypedInitialResult(order, count, allowed, evaluate) ==
+    [states |-> SourceTypedConstraintPrefix(order, count, allowed, evaluate),
+     failures |-> SourceTypedFailurePrefix(order, count, allowed, evaluate)]
+
+THEOREM DeclaredTypesSupplyWellTypedInitializerEvaluators ==
+    ASSUME NEW count, NEW order, InitializationOrder(count, order),
+           NEW allowed \in [Keys -> SUBSET Values], NEW universe,
+           NEW evaluate \in [1..count -> [PartialBindings -> WideInitializerOutcomes(universe)]]
+    PROVE InitializerEvaluators(count, TypedCandidateEvaluators(count, order, allowed, evaluate))
+    BY SMT DEF InitializerEvaluators, TypedCandidateEvaluators, TypedInitializerOutcome,
+        InitializerOutcomes, WideInitializerOutcomes, InitializationOrder
+
+THEOREM TypedConjunctionAndFailurePrefixesKeepTheRawDomainMeaning ==
+    ASSUME NEW count, NEW order, InitializationOrder(count, order),
+           NEW allowed \in [Keys -> SUBSET Values], NEW universe,
+           NEW evaluate \in [1..count -> [PartialBindings -> WideInitializerOutcomes(universe)]]
+    PROVE \A index \in 0..count :
+        /\ SourceTypedConstraintPrefix(order, index, allowed, evaluate)
+            = SourceConstraintPrefix(order, index,
+                TypedCandidateEvaluators(count, order, allowed, evaluate))
+        /\ SourceTypedFailurePrefix(order, index, allowed, evaluate)
+            = SourceFailureConstraintPrefix(order, index,
+                TypedCandidateEvaluators(count, order, allowed, evaluate))
+    PROOF
+    <1>1. \A index \in 0..count :
+        SourceTypedConstraintPrefix(order, index, allowed, evaluate)
+            = SourceConstraintPrefix(order, index,
+                TypedCandidateEvaluators(count, order, allowed, evaluate))
+        <2>. SUFFICES ASSUME NEW index \in 0..count
+            PROVE SourceTypedConstraintPrefix(order, index, allowed, evaluate)
+                = SourceConstraintPrefix(order, index,
+                    TypedCandidateEvaluators(count, order, allowed, evaluate))
+            BY SMT
+        <2>1. \A child \in 1..index :
+            /\ child \in 1..count
+            /\ order[child] \in Keys
+            /\ PrefixKeys(order, child - 1) \subseteq PrefixKeys(order, index)
+            /\ PrefixKeys(order, child - 1) \subseteq Keys
+            BY SMT DEF InitializationOrder, PrefixKeys
+        <2>2. \A state \in [PrefixKeys(order, index) -> Values] :
+            \A child \in 1..index :
+                SourceRestriction(state, PrefixKeys(order, child - 1)) \in PartialBindings
+            <3>. SUFFICES ASSUME NEW state \in [PrefixKeys(order, index) -> Values],
+                NEW child \in 1..index
+                PROVE SourceRestriction(state, PrefixKeys(order, child - 1)) \in PartialBindings
+                BY SMT
+            <3>1. PrefixKeys(order, child - 1) \subseteq PrefixKeys(order, index)
+                /\ PrefixKeys(order, child - 1) \subseteq Keys
+                BY <2>1
+            <3>2. SourceRestriction(state, PrefixKeys(order, child - 1))
+                \in [PrefixKeys(order, child - 1) -> Values]
+                BY <3>1, SourceRestrictionIsTyped
+            <3>3. [PrefixKeys(order, child - 1) -> Values]
+                \subseteq PartialBindings
+                BY <3>1, SMT DEF PartialBindings
+            <3>. QED BY <3>2, <3>3, SMT
+        <2>3. \A state \in [PrefixKeys(order, index) -> Values] :
+            \A child \in 1..index :
+                TypedCandidateEvaluators(count, order, allowed, evaluate)[child]
+                    [SourceRestriction(state, PrefixKeys(order, child - 1))].candidates
+                = allowed[order[child]] \cap evaluate[child]
+                    [SourceRestriction(state, PrefixKeys(order, child - 1))].candidates
+            BY <2>1, <2>2, SMT DEF TypedCandidateEvaluators, TypedInitializerOutcome
+        <2>. QED BY <2>3, SMT DEF SourceTypedConstraintPrefix, SourceConstraintPrefix
+    <1>2. \A index \in 1..count :
+        \A prior \in SourceTypedConstraintPrefix(order, index - 1, allowed, evaluate) :
+            /\ prior \in PartialBindings
+            /\ TypedCandidateEvaluators(count, order, allowed, evaluate)[index][prior].firstFailure
+                = evaluate[index][prior].firstFailure
+        BY SMT DEF SourceTypedConstraintPrefix, PrefixKeys, InitializationOrder,
+            PartialBindings, TypedCandidateEvaluators, TypedInitializerOutcome
+    <1>3. \A index \in 1..count :
+        UNION {SourceInitialFailures(prior, order[index], evaluate[index][prior]) :
+            prior \in SourceTypedConstraintPrefix(order, index - 1, allowed, evaluate)}
+        = UNION {SourceInitialFailures(prior, order[index],
+                TypedCandidateEvaluators(count, order, allowed, evaluate)[index][prior]) :
+            prior \in SourceConstraintPrefix(order, index - 1,
+                TypedCandidateEvaluators(count, order, allowed, evaluate))}
+        BY <1>1, <1>2, SMT DEF SourceInitialFailures, InitializationOrder
+    <1>4. \A index \in 0..count : SourceTypedFailurePrefix(order, index, allowed, evaluate)
+        = SourceFailureConstraintPrefix(order, index,
+            TypedCandidateEvaluators(count, order, allowed, evaluate))
+        BY <1>3, SMT DEF SourceTypedFailurePrefix, SourceFailureConstraintPrefix,
+            InitializationOrder
+    <1>. QED BY <1>1, <1>4, SMT
+
+THEOREM TypedInitialRelationsRetainAllStatesAndFailureEvents ==
+    ASSUME NEW count, NEW order, InitializationOrder(count, order),
+           NEW allowed \in [Keys -> SUBSET Values], NEW universe,
+           NEW sourceEvaluate \in [1..count -> [PartialBindings -> WideInitializerOutcomes(universe)]],
+           NEW generatedEvaluate \in [1..count -> [PartialBindings -> WideInitializerOutcomes(universe)]],
+           \A index \in 1..count :
+               \A prior \in [PrefixKeys(order, index - 1) -> Values] :
+                   TypedInitializerOutcome(allowed[order[index]], sourceEvaluate[index][prior])
+                    = TypedInitializerOutcome(allowed[order[index]], generatedEvaluate[index][prior])
+    PROVE /\ \E generated : InitializationHistory(TRUE, count, order,
+                TypedCandidateEvaluators(count, order, allowed, generatedEvaluate), generated)
+          /\ \A generated : InitializationHistory(TRUE, count, order,
+                TypedCandidateEvaluators(count, order, allowed, generatedEvaluate), generated)
+              => SourceTypedInitialResult(order, count, allowed, sourceEvaluate) = generated[count]
+    PROOF
+    <1>. DEFINE filteredSource == TypedCandidateEvaluators(count, order, allowed, sourceEvaluate)
+                filteredGenerated == TypedCandidateEvaluators(count, order, allowed, generatedEvaluate)
+    <1>1. InitializerEvaluators(count, filteredSource) /\ InitializerEvaluators(count, filteredGenerated)
+        BY DeclaredTypesSupplyWellTypedInitializerEvaluators DEF filteredSource, filteredGenerated
+    <1>2. PICK history : InitializationHistory(FALSE, count, order, filteredSource, history)
+        BY <1>1, InitializationHistoriesExist
+    <1>3. \E result : InitializationHistory(TRUE, count, order, filteredGenerated, result)
+        BY <1>1, InitializationHistoriesExist
+    <1>4. history[count].states = SourceConstraintPrefix(order, count, filteredSource)
+          /\ history[count].failures = SourceFailureConstraintPrefix(order, count, filteredSource)
+        BY <1>1, <1>2, SourceHistoriesMatchEveryInitializerPrefix,
+            SourceHistoriesMatchEveryInitialFailurePrefix, SMT DEF InitializationOrder
+    <1>5. /\ SourceTypedConstraintPrefix(order, count, allowed, sourceEvaluate)
+                = SourceConstraintPrefix(order, count, filteredSource)
+          /\ SourceTypedFailurePrefix(order, count, allowed, sourceEvaluate)
+                = SourceFailureConstraintPrefix(order, count, filteredSource)
+        BY TypedConjunctionAndFailurePrefixesKeepTheRawDomainMeaning, SMT
+            DEF filteredSource, InitializationOrder
+    <1>6. history[count] \in InitializationResults
+        BY <1>2, SMT DEF InitializationHistory, InitializationOrder
+    <1>7. SourceTypedInitialResult(order, count, allowed, sourceEvaluate) = history[count]
+        BY <1>4, <1>5, <1>6, SMT DEF SourceTypedInitialResult, InitializationResults
+    <1>8. \A index \in 1..count :
+        \A prior \in [PrefixKeys(order, index - 1) -> Values] :
+            filteredSource[index][prior] = filteredGenerated[index][prior]
+        BY SMT DEF filteredSource, filteredGenerated, TypedCandidateEvaluators,
+            PartialBindings, InitializationOrder, PrefixKeys
+    <1>9. \A result : InitializationHistory(TRUE, count, order, filteredGenerated, result)
+            => \A index \in 0..count : history[index] = result[index]
+        BY <1>1, <1>2, <1>8, InitializationHistoriesRetainAllStatesAndFailures
+    <1>. QED BY <1>3, <1>7, <1>9, SMT DEF filteredGenerated, InitializationOrder
+
 
 =============================================================================

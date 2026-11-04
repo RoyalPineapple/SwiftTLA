@@ -1531,6 +1531,7 @@ private func checkedIntInitialDomainValue(_ root: CompiledExpression,
         }
         let types: [CompiledValueType]
         switch (node.operation, node.resultType) {
+        case (.integerSet, .set(.int)) where node.children.isEmpty: types = []
         case (.equal, .bool) where node.children.count == 2: types = [.int, .int]
         case (.integerRange, .set(.int)) where node.children.count == 2: types = [.int, .int]
         case (.setLiteral, .set(.int)): types = node.children.map { _ in .int }
@@ -1549,6 +1550,7 @@ private func checkedIntInitialDomainValue(_ root: CompiledExpression,
         values.removeLast(types.count)
         let value: String
         switch node.operation {
+        case .integerSet: value = "(try SwiftTLA._NativeMachineOperations.integerSet())"
         case .equal: value = "(\(children[0]) == \(children[1]))"
         case .integerRange:
             value = "(try SwiftTLA._NativeMachineOperations.integerRange(\(children[0]), \(children[1])))"
@@ -1567,7 +1569,7 @@ private func checkedIntInitialDomainMembership(_ root: CompiledExpression, candi
     var nodes = [root]
     var symbolic = false
     while let node = nodes.popLast() {
-        if case .integerRange = node.operation { symbolic = true; break }
+        if node.operation == .integerRange || node.operation == .integerSet { symbolic = true; break }
         nodes.append(contentsOf: node.children)
     }
     if !symbolic {
@@ -1590,13 +1592,16 @@ private func checkedIntInitialDomainMembership(_ root: CompiledExpression, candi
         }
         let body: String
         switch node.operation {
+        case .integerSet:
+            guard node.children.isEmpty, node.resultType == .set(.int) else { return nil }
+            body = "return { _ in true }"
         case .integerRange:
             guard node.children.count == 2,
                   let lower = checkedIntInitialDomainValue(node.children[0], slots: slots),
                   let upper = checkedIntInitialDomainValue(node.children[1], slots: slots) else { return nil }
             body = """
-            let bounds = try SwiftTLA._NativeMachineOperations.integerRangeBounds(\(lower), \(upper))
-            return { candidate in bounds?.contains(candidate) ?? false }
+            let bounds = (\(lower), \(upper))
+            return { candidate in bounds.0 <= candidate && candidate <= bounds.1 }
             """
         case .setLiteral:
             guard let members = checkedIntInitialDomainValue(node, slots: slots) else { return nil }
@@ -2648,6 +2653,10 @@ func verifyGeneratedActionWriteOutput(
                   let field = stateFields[variable] else { return nil }
             return ["(", "state", ".", "state", ".", field, ".", "count", ")"]
         case .boundValue(let binding) where program.bindingTypes[binding] == expression.resultType:
+            if let parameter = program.layout.parameters.first(where: { $0.binder == binding }) {
+                return Parser.parse(source: "configuration.`\(parameter.reference.name)`")
+                    .tokens(viewMode: .sourceAccurate).map(\.text).filter { !$0.isEmpty }
+            }
             guard let name = program.binderNames[binding].map({ "_\($0)_\(binding.ordinal)" }),
                   parameters.contains(name) || externalScalarNames.contains(name) else { return nil }
             return [name]
@@ -2721,6 +2730,62 @@ func verifyGeneratedActionWriteOutput(
         return ["(", "try", "{", "(", ")", "throws", "->", "Int", "in"] + statements +
             ["return", result, "}", "(", ")", ")"]
     }
+    func rangeMembershipSource(_ expression: CompiledExpression, parameters: [String]) -> String? {
+        guard expression.operation == .in, expression.resultType == .bool,
+              expression.children.count == 2, expression.children[0].resultType == .int,
+              expression.children[1].resultType == .set(.int) else { return nil }
+        var pending = [expression.children[1]]
+        var hasRange = false
+        while let node = pending.popLast() {
+            if node.operation == .integerRange { hasRange = true; break }
+            switch node.operation {
+            case .union, .intersection, .setDifference: pending += node.children
+            case .ifThenElse: pending += node.children.dropFirst()
+            default: break
+            }
+        }
+        guard hasRange else { return nil }
+        func scalar(_ node: CompiledExpression) -> String? {
+            (directScalarTokens(node, parameters: parameters)
+                ?? arithmeticIntTokens(node, parameters: parameters)).map { $0.joined(separator: " ") }
+        }
+        var ordinal = 0
+        func domain(_ node: CompiledExpression) -> (declaration: String, call: String)? {
+            guard node.resultType == .set(.int) else { return nil }
+            let name = "_membershipPredicate\(ordinal)"
+            ordinal += 1
+            let body: String
+            switch node.operation {
+            case .integerRange:
+                guard node.children.count == 2,
+                      let lower = scalar(node.children[0]), let upper = scalar(node.children[1]) else { return nil }
+                body = "let bounds = (\(lower), \(upper))\nreturn { candidate in bounds.0 <= candidate && candidate <= bounds.1 }"
+            case .integerSet:
+                body = "return { _ in true }"
+            case .setLiteral:
+                let members = node.children.compactMap(scalar)
+                guard members.count == node.children.count else { return nil }
+                body = "let members = Set<Int>([\(members.joined(separator: ", "))])\nreturn { members.contains($0) }"
+            case .union, .intersection, .setDifference:
+                guard node.children.count == 2,
+                      let left = domain(node.children[0]), let right = domain(node.children[1]) else { return nil }
+                let operation = node.operation == .union ? "left(candidate) || right(candidate)"
+                    : node.operation == .intersection ? "left(candidate) && right(candidate)" : "left(candidate) && !right(candidate)"
+                body = "\(left.declaration)\n\(right.declaration)\nlet left = \(left.call)\nlet right = \(right.call)\nreturn { candidate in \(operation) }"
+            case .ifThenElse:
+                guard node.children.count == 3,
+                      let first = domain(node.children[1]), let second = domain(node.children[2]),
+                      let condition = scalarPredicateTokens(node.children[0], parameters: parameters) else { return nil }
+                body = "\(first.declaration)\n\(second.declaration)\nif \(condition.joined(separator: " ")) { return \(first.call) }\nreturn \(second.call)"
+            default:
+                // shortcut: callable domain leaves need their own output rule before universal query claims.
+                return nil
+            }
+            return ("func \(name)() throws -> ((Int) -> Bool) {\n\(body)\n}", "try \(name)()")
+        }
+        guard let predicate = domain(expression.children[1]), let candidate = scalar(expression.children[0]) else { return nil }
+        return "(try { () throws -> Bool in\n\(predicate.declaration)\nlet contains = \(predicate.call)\nlet candidate = \(candidate)\nreturn contains(candidate)\n}())"
+    }
     func scalarPredicateTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
         if let source = controlComparisonSource(expression) {
             return Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
@@ -2746,6 +2811,11 @@ func verifyGeneratedActionWriteOutput(
                 continue
             }
             if case .in = node.operation {
+                if let source = rangeMembershipSource(node, parameters: parameters) {
+                    values.append(Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                        .map(\.text).filter { !$0.isEmpty })
+                    continue
+                }
                 guard node.children.count == 2,
                       case .set(let elementType) = node.children[1].resultType,
                       elementType == node.children[0].resultType,
@@ -2928,8 +2998,9 @@ func verifyGeneratedActionWriteOutput(
     func canonicalPredicateNames(_ tokens: [String]) -> [String] {
         let declared = Set(tokens.indices.compactMap { index -> String? in
             guard index > 0, tokens[index - 1] == "func",
-                  tokens[index].hasPrefix("_predicate"),
-                  Int(tokens[index].dropFirst("_predicate".count)) != nil else { return nil }
+                  ["_predicate", "_membershipPredicate"].contains(where: {
+                      tokens[index].hasPrefix($0) && Int(tokens[index].dropFirst($0.count)) != nil
+                  }) else { return nil }
             return tokens[index]
         })
         var names: [String: String] = [:]
@@ -2953,12 +3024,46 @@ func verifyGeneratedActionWriteOutput(
         }
         return normalized
     }
+    func domainRangeEqualitySource(_ root: CompiledExpression, parameters: [String]) -> String? {
+        guard root.operation == .equal, root.resultType == .bool, root.children.count == 2 else { return nil }
+        let domainFirst = root.children[0].operation == .domain && root.children[1].operation == .integerRange
+        let rangeFirst = root.children[0].operation == .integerRange && root.children[1].operation == .domain
+        guard domainFirst || rangeFirst else { return nil }
+        let domain = root.children[domainFirst ? 0 : 1], range = root.children[domainFirst ? 1 : 0]
+        // shortcut: dictionary state reads only; extend with independent function-child output rules.
+        guard domain.children.count == 1, range.children.count == 2,
+              domain.resultType == .set(.int), range.resultType == .set(.int),
+              case .dictionary(.int, _) = domain.children[0].resultType,
+              case .stateVariable(let id) = domain.children[0].operation,
+              domain.children[0].children.isEmpty,
+              program.variableTypes[id] == domain.children[0].resultType,
+              let field = stateFields[id],
+              let lower = directScalarTokens(range.children[0], parameters: parameters)
+                ?? arithmeticIntTokens(range.children[0], parameters: parameters),
+              let upper = directScalarTokens(range.children[1], parameters: parameters)
+                ?? arithmeticIntTokens(range.children[1], parameters: parameters) else { return nil }
+        let function = "let _domainFunction = state.state.\(field)"
+        let bounds = "let _domainBounds = (\(lower.joined(separator: " ")), \(upper.joined(separator: " ")))"
+        let bindings = domainFirst ? [function, bounds] : [bounds, function]
+        return """
+        (try { () throws -> Bool in
+            \(bindings.joined(separator: "\n"))
+            guard !_domainFunction.isEmpty else { return _domainBounds.0 > _domainBounds.1 }
+            let _domainLast = _domainBounds.0.addingReportingOverflow(_domainFunction.count - 1)
+            return !_domainLast.overflow && _domainLast.partialValue == _domainBounds.1
+                && _domainFunction.keys.allSatisfy { _domainBounds.0 <= $0 && $0 <= _domainBounds.1 }
+        }())
+        """
+    }
     func checkedValueTokens(
         _ expression: CompiledExpression, parameters: [String], actual: [String]
     ) -> (expected: [String], actual: [String])? {
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
                 .map(\.text).filter { !$0.isEmpty }
+        }
+        if let source = domainRangeEqualitySource(expression, parameters: parameters) {
+            return (tokens(source), actual)
         }
         if case .controlLocation(let id) = expression.operation,
            expression.resultType == .controlLocation, expression.children.isEmpty,
