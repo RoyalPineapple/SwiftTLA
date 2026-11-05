@@ -354,9 +354,15 @@ That probe has no initial states and checks the failure aggregate through an ass
 Its result is not a complete graph or a general checking-outcome proof.
 
 The failure observation remains the stopping boundary for the pilot.
-The TLA aggregate reports whether an initial failure exists, and its record selects site, kind and operands.
-That record does not retain every branch's preceding partial bindings.
-The published native and compiled collectors return successful states and a selected first failure.
+The TLA aggregate reports whether an initial failure exists.
+Its deterministic selected record carries site, kind, operands and the preceding binding prefix.
+The prefix uses source-visible names in UTF-8 key order, including hidden control, and excludes the failing target.
+The existing output checker constructs this expected prefix independently from the compiled initializations.
+The v4 evidence consumer takes its expected prefix from the actual native failure projection.
+Its generated theorem checks the complete record; the existing hosted proof job also rejects an erased prefix.
+This does not retain every branch's preceding partial bindings in TLA.
+The `SingleAssignment` site/payload theorems describe only the site, kind and operand projection.
+They do not establish the new prefix field or mechanically connect it to every accepted initializer.
 The native and compiled collectors now retain every callback event with a typed site and immutable captured prefix.
 Its formal prefix projection is lazy, so evidence conversion does not introduce errors into application initialization.
 The existing evidence consumer now serializes these contexts; the selected first-failure properties derive from the event array.

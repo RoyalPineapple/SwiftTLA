@@ -75,7 +75,7 @@ package enum InitialFailureEvidence {
         }
         let module = rendered.tlaBundle.root
         let proof = try proofSource(module: module.name, tla: module.tla,
-            site: site, operands: operands)
+            site: site, operands: operands, before: failures[0].before)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let generated = directory.appendingPathComponent("generated-tla")
         try GeneratedTLCOracle.retainGeneratedInputs(check, in: generated)
@@ -89,7 +89,7 @@ package enum InitialFailureEvidence {
         let proofBytes = Data(proof.utf8)
         try proofBytes.write(to: proofURL, options: .atomic)
         let report = InitialFailureEvidenceReport(
-            schema: "swifttla.initial-failure-proof-v3", sourceSHA: sourceSHA,
+            schema: "swifttla.initial-failure-proof-v4", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
@@ -103,7 +103,7 @@ package enum InitialFailureEvidence {
     }
 
     private static func proofSource(module: String, tla: String, site: Int,
-                                    operands: [Int]) throws -> String {
+                                    operands: [Int], before: [NativeInitialBindingOutput]) throws -> String {
         guard isIdentifier(module), tla.contains("\nInit ==") else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
@@ -122,18 +122,28 @@ package enum InitialFailureEvidence {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let failureDefs = failures.joined(separator: ", ")
+        let bindings = try before.map { binding in
+            let value: String
+            switch binding.value {
+            case .int(let integer): value = binaryLiteral(integer)
+            case .string: value = binding.value.description
+            default: throw InitialFailureEvidenceError.unsupportedNativeOutcome
+            }
+            return "[name |-> \(TLAValue.string(binding.name)), value |-> \(value)]"
+        }.joined(separator: ", ")
         return """
         ---- MODULE \(proofModule) ----
         EXTENDS \(module), TLAPS
 
         ExpectedOperand0 == \(binaryLiteral(operands[0]))
         ExpectedOperand1 == \(binaryLiteral(operands[1]))
+        ExpectedBefore == <<\(bindings)>>
 
         THEOREM SelectedFailurePayload ==
           \(selected[0]) =
             [site |-> \(site), kind |-> "\(failureKind)",
-             operands |-> <<ExpectedOperand0, ExpectedOperand1>>]
-          BY SMT DEF ExpectedOperand0, ExpectedOperand1, \(selected[0]), \(failureDefs)
+             operands |-> <<ExpectedOperand0, ExpectedOperand1>>, before |-> ExpectedBefore]
+          BY SMT DEF ExpectedOperand0, ExpectedOperand1, ExpectedBefore, \(selected[0]), \(failureDefs)
 
         THEOREM InitialFailurePrecedesGraph ==
           /\\ \(aggregate[0])

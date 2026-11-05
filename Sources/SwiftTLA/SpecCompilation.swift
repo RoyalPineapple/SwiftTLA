@@ -2814,7 +2814,12 @@ private extension CompiledModuleMetadata {
                 var record: String?
                 if case .overflow(.addition) = failure.kind,
                    let siteOrdinal, let operands = failure.operands {
-                    record = "(IF \(failure.predicate) THEN [site |-> \(siteOrdinal), kind |-> \"integerOverflow.addition\", operands |-> \(operands)] ELSE FALSE)"
+                    let before = layout.variables.filter { prefixNames[$0.id] != nil }
+                        .sorted { FormalStringIdentity.less($0.declaration.name, $1.declaration.name) }
+                        .map { variable in
+                            "[name |-> \(TLAValue.string(variable.declaration.name)), value |-> \(prefixNames[variable.id]!)]"
+                        }.joined(separator: ", ")
+                    record = "(IF \(failure.predicate) THEN [site |-> \(siteOrdinal), kind |-> \"integerOverflow.addition\", operands |-> \(operands), before |-> <<\(before)>>] ELSE FALSE)"
                 } else {
                     initialFailureRecordEligible = false
                 }

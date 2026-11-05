@@ -12,7 +12,7 @@ struct InitialFailureEvidenceTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let sha = String(repeating: "a", count: 40)
         let report = try InitialFailureEvidence.prepare(sourceSHA: sha, to: directory)
-        #expect(report.schema == "swifttla.initial-failure-proof-v3")
+        #expect(report.schema == "swifttla.initial-failure-proof-v4")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)
         #expect(!report.graphCompared)
@@ -40,7 +40,7 @@ struct InitialFailureEvidenceTests {
         #expect(failure.site == 3)
         #expect(failure.kind == "integerOverflow.addition")
         #expect(failure.operands == [3, Int.max])
-        #expect(Set(failure.before.map(\.name)) == ["pc", "first", "second"])
+        #expect(failure.before.map(\.name) == ["first", "pc", "second"])
         #expect(failure.before.count == 3)
         #expect(failure.before.first { $0.name == "first" }?.value == .int(1))
         #expect(failure.before.first { $0.name == "second" }?.value == .int(3))
@@ -61,6 +61,8 @@ struct InitialFailureEvidenceTests {
             encoding: .utf8)
         #expect(proofText.contains("InitialFailurePrecedesGraph"))
         #expect(proofText.contains("1073741824"))
+        #expect(proofText.contains("ExpectedBefore == <<[name |-> \"first\", value |-> 1], [name |-> \"pc\", value |-> \"stay\"], [name |-> \"second\", value |-> 3]>>"))
+        #expect(proofText.contains("before |-> ExpectedBefore"))
     }
 
     @Test("Invalid source provenance is refused before output")
