@@ -846,10 +846,24 @@ THEOREM ExpandedFramesThreadLeftThenRightIntoTheParent ==
         = PushVisitPrefix(frame.prefix, frame.node)
         BY <1>1, FoldingTwoCompletedChildrenRestoresTheParentPrefix
     <1>. DEFINE frames == ExpandedVisitFrames(frame, sourceLeft, sourceRight)
+                leftPrefix == PushVisitPrefix(frame.prefix, sourceLeft[frame.node])
+                bothPrefix == PushVisitPrefix(leftPrefix, sourceRight[frame.node])
     <1>5. WellFormedVisitFrame(frames[1], sourceLeft, sourceRight)
-        BY <1>1, <1>3, SMT
-            DEF frames, ExpandedVisitFrames, WellFormedVisitFrame, WellFormedVisitPrefix,
-                VisitFrame, PushVisitPrefix, VisitPrefix, HistoryAppend
+        <2>1. frames[1] = VisitFrame(frame.node, TRUE, bothPrefix)
+            BY SMT DEF frames, ExpandedVisitFrames, bothPrefix, leftPrefix
+        <2>2. frame.prefix.height \in Nat
+              /\ leftPrefix.height = frame.prefix.height + 1
+              /\ bothPrefix.height = frame.prefix.height + 2
+            BY <1>1, SMT
+                DEF leftPrefix, bothPrefix, WellFormedVisitPrefix, PushVisitPrefix, VisitPrefix
+        <2>3. leftPrefix.terms[leftPrefix.height] = sourceLeft[frame.node]
+            BY <2>2, SMT DEF leftPrefix, PushVisitPrefix, VisitPrefix, HistoryAppend
+        <2>4. bothPrefix.terms[bothPrefix.height - 1] = sourceLeft[frame.node]
+              /\ bothPrefix.terms[bothPrefix.height] = sourceRight[frame.node]
+            BY <2>2, <2>3, SMT DEF bothPrefix, PushVisitPrefix, VisitPrefix, HistoryAppend
+        <2>5. WellFormedVisitPrefix(bothPrefix)
+            BY <1>3 DEF bothPrefix, leftPrefix
+        <2>. QED BY <2>1, <2>2, <2>4, <2>5, SMT DEF WellFormedVisitFrame, VisitFrame
     <1>6. WellFormedVisitFrame(frames[2], sourceLeft, sourceRight)
           /\ WellFormedVisitFrame(frames[3], sourceLeft, sourceRight)
         BY <1>1, <1>2, SMT
