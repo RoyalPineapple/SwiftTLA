@@ -245,12 +245,35 @@ struct InitialBranchFailureTests {
         let operands = try #require(checkedFailure.operands)
         let relationOperands = "\(operandsName) = \(operands)"
         #expect(relation.contains(relationOperands))
+        let pc = try #require(program.layout.variables.first { $0.declaration.origin == .programCounter })
+        let firstName = try #require(names[firstField.id])
+        let pcName = try #require(names[pc.id])
+        let secondName = try #require(names[secondField.id])
+        let before = "<<[name |-> \"first\", value |-> \(firstName)], [name |-> \"pc\", value |-> \(pcName)], [name |-> \"second\", value |-> \(secondName)]>>"
         let record = relation.replacingOccurrences(of: relationOperands,
-            with: "[site |-> 3, kind |-> \"integerOverflow.addition\", operands |-> \(operands)]")
+            with: "[site |-> 3, kind |-> \"integerOverflow.addition\", operands |-> \(operands), before |-> \(before)]")
+        #expect(selectedRecord.contains("before |-> \(before)"))
         try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
             after: prefix, names: names,
             emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration, record)],
             siteOrdinal: 3, layout: program.layout)
+
+        let secondBinding = "[name |-> \"second\", value |-> \(secondName)]"
+        #expect(record.components(separatedBy: secondBinding).count == 2)
+        for changedPrefix in [
+            "<<>>",
+            before.replacingOccurrences(of: secondBinding,
+                with: "[name |-> \"second\", value |-> \(firstName)]"),
+        ] {
+            let wrongPrefixRecord = record.replacingOccurrences(of: before, with: changedPrefix)
+            #expect(wrongPrefixRecord != record)
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
+                    after: prefix, names: names,
+                    emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration, wrongPrefixRecord)],
+                    siteOrdinal: 3, layout: program.layout)
+            }
+        }
 
         let missingOperand = CompiledExpression(operation: .add, resultType: .int,
             children: Array(expression.children.prefix(1)))

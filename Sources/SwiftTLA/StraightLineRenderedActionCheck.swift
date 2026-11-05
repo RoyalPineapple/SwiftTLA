@@ -543,18 +543,19 @@ enum StraightLineRenderedActionCheck {
             default: return nil
             }
         }
-        var earlier: [(name: String, value: String, defined: String?, membership: Bool, isInt: Bool)] = []
+        var earlier: [(name: String, token: String, value: String, defined: String?, membership: Bool, isInt: Bool)] = []
         for prior in prefix {
-            guard let name = names[prior.variable] else { return }
-            let isInt = layout.variables.first(where: { $0.id == prior.variable }).map(initialIsInt) ?? false
+            guard let name = names[prior.variable],
+                  let variable = layout.variables.first(where: { $0.id == prior.variable }) else { throw mismatch() }
+            let isInt = initialIsInt(variable)
             switch prior.initialization {
             case .value(let expression):
                 guard let value = initialValue(expression) else { return }
-                earlier.append((name, value.value, value.defined, false, isInt))
+                earlier.append((name, variable.declaration.name, value.value, value.defined, false, isInt))
             case .memberOf(let expression):
                 guard let tree = initialIntDomain(expression, layout: layout,
                     variables: names, binders: binders) else { return }
-                earlier.append((name, tree.value, tree.sites.isEmpty ? nil : tree.defined, true, isInt))
+                earlier.append((name, variable.declaration.name, tree.value, tree.sites.isEmpty ? nil : tree.defined, true, isInt))
             }
         }
         guard emitted.count == tree.sites.count else { throw mismatch() }
@@ -573,8 +574,11 @@ enum StraightLineRenderedActionCheck {
             }
             var relation = "(IF \(predicate) THEN \(operandsName) = \(site.operands) ELSE FALSE)"
             var selection = predicate
+            let before = earlier.sorted { $0.token.utf8.lexicographicallyPrecedes($1.token.utf8) }
+                .map { "[name |-> \(TLAValue.string($0.token)), value |-> \($0.name)]" }
+                .joined(separator: ", ")
             var record = siteOrdinal.map { ordinal in
-                "(IF \(predicate) THEN [site |-> \(ordinal), kind |-> \"integerOverflow.addition\", operands |-> \(site.operands)] ELSE FALSE)"
+                "(IF \(predicate) THEN [site |-> \(ordinal), kind |-> \"integerOverflow.addition\", operands |-> \(site.operands), before |-> <<\(before)>>] ELSE FALSE)"
             }
             for prior in earlier.reversed() {
                 if prior.isInt {
@@ -653,7 +657,7 @@ enum StraightLineRenderedActionCheck {
     private static func initialFailureRecordMismatch() -> CompilationDiagnostic {
         CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
             path: "tla.initialEvaluationFailureRecord",
-            expected: "the selected initial failure site, kind, and operands",
+            expected: "the selected initial failure site, kind, operands, and binding prefix",
             actual: "the emitted selected initial failure record is absent or differs",
             nextSafeAction: "Regenerate the TLA+ initial failure record.")
     }
@@ -664,7 +668,7 @@ enum StraightLineRenderedActionCheck {
                 == [Substring(declaration)] else {
             throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                 path: "tla.initialEvaluationFailureRecord",
-                expected: "the selected initial failure site, kind, and operands",
+                expected: "the selected initial failure site, kind, operands, and binding prefix",
                 actual: "the emitted selected initial failure record differs",
                 nextSafeAction: "Regenerate the TLA+ initial failure record.")
         }

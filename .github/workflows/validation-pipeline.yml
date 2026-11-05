@@ -225,7 +225,7 @@ jobs:
           report = json.loads((case / "preparation.json").read_text())
           native = json.loads((case / "native-initial-failure.json").read_text())
           expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
-          assert report["schema"] == "swifttla.initial-failure-proof-v3"
+          assert report["schema"] == "swifttla.initial-failure-proof-v4"
           assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
           assert report["result"] == "prepared" and report["graphCompared"] is False
           assert (report["site"], report["kind"], report["operands"]) == expected
@@ -283,13 +283,27 @@ jobs:
           fi
           grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
             .build/initial-failure-artifacts/wrong-payload.log
+          wrong_before=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongBefore.tla
+          test "$(grep -c '^ExpectedBefore ==' "$source_proof")" -eq 1
+          sed -e 's/MODULE SwiftTLAInitialFailureProof/MODULE SwiftTLAInitialFailureWrongBefore/' \
+              -e 's/^ExpectedBefore == .*/ExpectedBefore == <<>>/' \
+              "$source_proof" > "$wrong_before"
+          ! cmp -s "$source_proof" "$wrong_before"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "$wrong_before" \
+              > .build/initial-failure-artifacts/wrong-before.log 2>&1; then
+            echo 'wrong-before proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-before.log
           python3 - <<'PY'
           import json
           from pathlib import Path
 
           root = Path(".build/initial-failure-artifacts")
           result = json.loads((root / "case" / "preparation.json").read_text())
-          result.update(result="proved", proofMethod="TLAPS", wrongPayloadRejected=True)
+          result.update(result="proved", proofMethod="TLAPS", wrongPayloadRejected=True,
+                        wrongBeforeRejected=True)
           (root / "proof-result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
           PY
       - name: Retain source revision
