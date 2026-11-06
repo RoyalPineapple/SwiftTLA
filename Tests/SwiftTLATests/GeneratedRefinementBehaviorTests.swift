@@ -1,8 +1,77 @@
 import Testing
 import SwiftTLA
+import UpstreamParity
 
 @Suite("Generated refinement behavior")
 struct GeneratedRefinementBehaviorTests {
+    @Test("generated refinement imports retain abstract model values in the root module and configuration")
+    func retainsAbstractModelValues() throws {
+        let configuration = try ArrayValueMachine.Configuration(input: [])
+        let initial = try #require(try ArrayValueMachine.initialMachines(configuration: configuration).first)
+        #expect(initial.state.row.isEmpty)
+        #expect(initial.state.choices == [.one, .two, .one])
+        let target = try ArrayValueMachine.render(configuration: configuration)
+        try #require(target.tlaBundle.cfg.contains("CONSTANT one = one\n"))
+        try #require(target.tlaBundle.cfg.contains("CONSTANT two = two\n"))
+
+        func importingValues(_ source: RenderedSpecification, name: String) throws -> RenderedSpecification {
+            try source.addingGeneratedRefinement(name, instance: "collection", of: ArrayValueMachine.self,
+                configuration: configuration, behavior: .initialAndNext,
+                parameters: [(\ArrayValueMachine.Configuration.input, "<<>>")],
+                state: [(\ArrayValueMachine.State.row, "<<>>"),
+                        (\ArrayValueMachine.State.choices, "<<>>")])
+        }
+        let rendered = try importingValues(StutteringRefinementSource.render(), name: "CollectionSafety")
+        #expect(rendered.tlaBundle.root.tla.contains("CONSTANTS one, two\n"))
+        #expect(rendered.tlaBundle.root.tla.contains("one <- (one)"))
+        #expect(rendered.tlaBundle.root.tla.contains("two <- (two)"))
+        #expect(rendered.tlaBundle.cfg.contains("CONSTANT one = one\n"))
+        #expect(rendered.tlaBundle.cfg.contains("CONSTANT two = two\n"))
+
+        let repeated = try importingValues(rendered, name: "CollectionSafetyAgain")
+        #expect(repeated.tlaBundle.root.tla.split(separator: "\n").filter {
+            $0.hasPrefix("collection == INSTANCE ")
+        }.count == 1)
+        for name in ["one", "two"] {
+            #expect(repeated.tlaBundle.cfg.split(separator: "\n").filter {
+                $0 == "CONSTANT \(name) = \(name)"
+            }.count == 1)
+        }
+
+        let occupied = try StutteringRefinementSource.render().addingGeneratedRefinement(
+            "OneSafety", instance: "one", of: FairRefinementTarget.self,
+            configuration: .init(N: 1), behavior: .initialAndNext,
+            parameters: [(\FairRefinementTarget.Configuration.N, "1")],
+            state: [(\FairRefinementTarget.State.value, "value")])
+        try #require(occupied.tlaBundle.root.tla.contains("one == INSTANCE FairRefinementTarget "))
+        let collision = try importingValues(occupied, name: "CollisionSafety")
+        #expect(collision.tlaBundle.root.tla.contains("CONSTANTS one_, two\n"))
+        #expect(collision.tlaBundle.root.tla.contains("one <- (one_)"))
+        #expect(collision.tlaBundle.cfg.contains("CONSTANT one_ = one\n"))
+        #expect(collision.tlaBundle.root.tla.contains("one == INSTANCE FairRefinementTarget "))
+        let repeatedCollision = try importingValues(collision, name: "CollisionSafetyAgain")
+        #expect(repeatedCollision.tlaBundle.cfg.split(separator: "\n").filter {
+            $0 == "CONSTANT one_ = one"
+        }.count == 1)
+        #expect(repeatedCollision.tlaBundle.root.tla.split(separator: "\n").filter {
+            $0.hasPrefix("collection == INSTANCE ")
+        }.count == 1)
+
+        let configured = try importingValues(
+            ConfiguredCounter.render(configuration: .init(limit: 1, stopAtLimit: true)),
+            name: "ConfiguredCollectionSafety")
+        let authored = try configured.plusCalBundle()
+        #expect(authored.cfg == configured.tlaBundle.cfg)
+        #expect(authored.provenance == configured.tlaBundle.provenance)
+        for bundle in [configured.tlaBundle, authored] {
+            #expect(bundle.tla.contains("CONSTANTS one_, two\n"))
+            #expect(bundle.tla.contains("one <- (one_)"))
+            #expect(bundle.cfg.contains("CONSTANT one_ = one\n"))
+            #expect(!bundle.cfg.contains("CONSTANT input"))
+            #expect(!bundle.cfg.contains("INVARIANT Shape\n"))
+        }
+    }
+
     @Test("safety refinement frames cover the complete abstract declaration")
     func retainsCompleteAbstractFrame() throws {
         let source = try StutteringRefinementSource.render()
