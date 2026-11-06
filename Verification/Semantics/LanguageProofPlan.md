@@ -93,6 +93,8 @@ The proof dependencies above still govern proof closure; they do not block indep
   Fairness terms and profile bodies retain separate open obligations.
 - [ ] I5 Inspect the remaining source/output boundaries across initialization, actions and control for concrete implementation gaps.
   Fix measured gaps in their existing owners; preserve every accepted route.
+- [x] I5a Resolve action names against known compiled module, model-value and binder declarations.
+  Preserve action IDs, source labels and the valid single unbound `Next` case.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -347,6 +349,20 @@ The corrected control uses the existing runtime-built domain and requires the qu
 Native runtime argument/state assertions passed before the measured output-check rejections.
 After repair, all 63 selected tests passed on unchanged captured producer/test inputs.
 No formal proof or hosted admission result is inferred, and no six-link proof row is completed by this checkpoint.
+
+### Action-name allocation checkpoint 6 November 2026
+
+The existing action-name owner exposed four collisions with `Spec`, `Init`, a state field and multi-action `Next`.
+Native transition IDs remained valid; three cases reached export diagnostics and the state-field case returned a conflicting symbol.
+The final name pass now runs after lowering, reserves known declarations, model values, binders and generated operators,
+and retains the valid single unbound `Next` behavior. Source labels, declaration identities and action IDs are preserved.
+The suffix-capture control also reserves an identity constant named `Spec__2`.
+
+All 99 selected tests passed, including existing external-client checks, on unchanged captured producer/test bytes.
+One intentionally stopped setup attempt and one Swift type-checker failure executed no tests and receive no rejection/proof credit.
+No resource, tool, pin or timeout was changed to repair either setup issue.
+Opaque/imported namespaces, non-action declaration collisions, physical name interpretation and the full namespace proof remain open.
+This is implementation correspondence support, not completion of a six-link proof row.
 
 ## Work discipline and admission
 
