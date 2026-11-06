@@ -3,6 +3,34 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct StateDeclarationNamesTests {
+    @Test("key-path refinement mappings bind source declarations before formal renaming", arguments: [false, true])
+    func retainsRefinementSourceNames(projecting: Bool) throws {
+        let instance = Instance(_name: "abstract", of: FairRefinementTarget.self) {
+            Bind(\FairRefinementTarget.Configuration.N, to: 1)
+        }
+        func check(_ source: TLASpec, name: String, formalName: String,
+                   mapping: GeneratedModelStateMapping<FairRefinementTarget.State>) throws {
+            var source = source
+            source.generatedModelInstances.append(instance)
+            source.generatedRefinements.append(Refinement(_name: "KeepsSource", instance: instance) { mapping })
+            let compilation = try source.compile()
+            let variable = try #require(compilation.layout.testVariableID(named: name))
+            let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            let binding = try #require(program.generatedRefinements.first?.state.first)
+            #expect(binding.value.expression.operation == .stateVariable(variable))
+            #expect(binding.projected == projecting)
+            #expect(try program.renderGeneratedModelValue(binding.value) == formalName)
+        }
+        let escaped = projecting
+            ? Map(\FairRefinementTarget.State.value, from: \EscapedStateNamesModel.State.`default`, projecting: Int.self)
+            : Map(\FairRefinementTarget.State.value, from: \EscapedStateNamesModel.State.`default`)
+        try check(EscapedStateNamesModel.spec, name: "default", formalName: "default", mapping: escaped)
+        let renamed = projecting
+            ? Map(\FairRefinementTarget.State.value, from: \BoundStateNamesModel.State.Init, projecting: Int.self)
+            : Map(\FairRefinementTarget.State.value, from: \BoundStateNamesModel.State.Init)
+        try check(BoundStateNamesModel.spec, name: "Init", formalName: "Init__2", mapping: renamed)
+    }
+
     @Test("state fields keep Swift identity when formal behavior names are occupied")
     func retainsFieldsNamedAfterBehavior() throws {
         for name in ["Init", "Next", "Spec", "TRUE", "FALSE"] {

@@ -104,6 +104,12 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5d Keep public state names and declaration IDs while assigning distinct formal names for generated behavior and known declarations.
   Carry the same formal names through TLA/PlusCal, generated field identities, complete projections and initial failure prefixes.
   Unoccupied names stay unchanged; inherited standard/opaque namespaces and the general name-correspondence proof remain open.
+- [x] I5e Forward closed constant assignments through generated-refinement instances and root configurations.
+  Reuse equivalent root bindings and preserve literal bytes, including embedded assignment separators.
+  Module-operator replacements and nonliteral configuration-value export retain separate open obligations.
+- [x] I5f Bind generated source key paths through source declaration names before allocating formal symbols.
+  Preserve escaped Swift names and the direct/projecting mapping routes.
+  General key-path interpretation and source/query correspondence remain open.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -444,6 +450,33 @@ including the existing external-client checks, on unchanged captured producer an
 Inherited standard and opaque namespaces, PlusCal keywords, other declaration kinds, general name correspondence,
 complete source/IR/output interpretation and parent composition remain owned open obligations.
 These are implementation and regression receipts, not a new formal proof, hosted admission or completion of a six-link row.
+
+### Generated refinement binding checkpoint 6 November 2026
+
+The generated linker retained identity model values but omitted closed constant assignments.
+Its existing assignment reader now preserves the complete right-hand side after the first separator.
+The existing symbol allocator forwards every unbound target assignment and reuses equivalent root bindings.
+The existing configured fixture covers a boolean, a finite set and text containing an assignment separator,
+including repeated imports and authored PlusCal. Explicit parameter mappings retain precedence.
+
+The corrected unchanged-owner baseline executed one test with twelve overlapping export issues.
+Its earlier fifteen-issue version unnecessarily requested a new boolean symbol; the final control requires reuse.
+The first attempted target lacked the required configured-model conformance and executed no tests.
+After repair, fifty tests passed. A reviewed concrete-field operand was then corrected to use its typed field identity;
+all four refinement owner tests passed again in the subsequent binding baseline.
+
+Both source-key-path overloads used the physical formal name before source binding.
+Their actual compiler baseline reported two unresolved `Init__2` errors, one per direct/projecting argument case.
+Escaped `default` source controls passed first. The existing field identity now exposes its unescaped Swift source name
+internally; both builders use it for source lookup. Formal names remain the output identity.
+The combined final run passed sixty-nine tests in ten selected suites on unchanged captured inputs,
+including the existing external-consumer controls. These runs overlap and are not additive coverage totals.
+
+Module-operator forwarding, nonliteral closed-constant configuration, general key-path ownership and interpretation,
+source/query correspondence, complete observations and composition remain owned open obligations.
+The pinned TLC parser's numerical token handling and `IntValue` arithmetic capacity are also separate from Swift `Int`
+and from the mathematical integer rules. Primary-source inspection is not execution or a proof of that value correspondence.
+All accepted forms remain in scope. No new formal proof, hosted admission or six-link closure follows from this checkpoint.
 
 ## Work discipline and admission
 

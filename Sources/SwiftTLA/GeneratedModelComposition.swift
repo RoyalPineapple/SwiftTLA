@@ -95,7 +95,7 @@ public func Map<State: GeneratedModelFields, Concrete: GeneratedModelFields, Val
 ) -> GeneratedModelStateMapping<State> {
     let targetIdentity = State.fieldIdentities[target]
     let sourceIdentity = Concrete.fieldIdentities[source]
-    let value = sourceIdentity.map { StateExpr.variable($0.formalName) }
+    let value = sourceIdentity.map { StateExpr.variable($0.sourceName) }
         ?? .sourceIssue(.formalDeclaration(kind: "generated state field", name: nil,
             problem: "unregistered concrete key path"))
     return .init(fieldName: targetIdentity?.swiftName ?? _fieldName, source: value, projected: false)
@@ -119,7 +119,7 @@ public func Map<State: GeneratedModelFields, Concrete: GeneratedModelFields,
 ) -> GeneratedModelStateMapping<State> {
     let targetIdentity = State.fieldIdentities[target]
     let sourceIdentity = Concrete.fieldIdentities[source]
-    let value = sourceIdentity.map { StateExpr.variable($0.formalName) }
+    let value = sourceIdentity.map { StateExpr.variable($0.sourceName) }
         ?? .sourceIssue(.formalDeclaration(kind: "generated state field", name: nil,
             problem: "unregistered concrete key path"))
     return .init(fieldName: targetIdentity?.swiftName ?? _fieldName, source: value, projected: true)
