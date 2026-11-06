@@ -124,6 +124,7 @@ public enum _NativeMachineOperations: Sendable {
     public static let maximumRecursiveDepth = 4_096
 
     /// Handle a model failure within one initial branch without abandoning other branches.
+    /// Unbounded-domain enumeration errors propagate instead of becoming branch failures.
     public static func visitInitialBranch(
         _ visit: () throws -> Void,
         onEvaluationFailure: (NativeMachineEvaluationError) -> Void
@@ -131,10 +132,12 @@ public enum _NativeMachineOperations: Sendable {
         do {
             try visit()
         } catch let failure as NativeMachineEvaluationError {
-            guard failure != .nonEnumerableIntegerDomain else { throw failure }
+            guard failure != .nonEnumerableIntegerDomain,
+                  failure != .nonEnumerableSequenceDomain else { throw failure }
             onEvaluationFailure(failure)
         } catch let failure as EvalError {
-            guard failure != .nonEnumerableIntegerDomain else { throw failure }
+            guard failure != .nonEnumerableIntegerDomain,
+                  failure != .nonEnumerableSequenceDomain else { throw failure }
             guard let native = failure.nativeFailure else { throw failure }
             onEvaluationFailure(native)
         }
