@@ -33,6 +33,33 @@ struct TypedActionParameterTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.Next.finiteInvocations")
         }
+
+        let specification = BoundOrderedAssignment.spec
+        let step = try #require(specification.sourceAtomicSteps.first)
+        let sourceBinding = try #require(step.bindings.first)
+        for members in [[2, 10], [-2, -1], [Int.min, 0], [Int.max, 0],
+                        [-2_000_000_000, 0], [1_000_000_000_000_000_000, 0]] {
+            var varied = specification
+            varied.sourceAtomicSteps = [AtomicStep(model: step.model,
+                bindings: [ActionBinding(name: sourceBinding.name,
+                    domain: .value(.set(Set(members.map(TLAValue.int)))),
+                    generatedSwiftType: sourceBinding.generatedSwiftType)])]
+            let variedProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: varied.compile()))
+            let binding = try #require(variedProgram.behavior.actions.first?.bindings.first)
+            try #require(binding.literalMembers == nil)
+            let runtime = CompiledRuntime(program: variedProgram)
+            let initial = try #require(try runtime.initialStates().first)
+            let successors = try runtime.successors(from: initial)
+            #expect(Set(successors.map(\.arguments)) == Set(members.map { [CompiledValue.integer($0)] }))
+            do {
+                _ = try variedProgram.renderModule()
+                var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+                    typeName: "BoundOrderedAssignment", program: variedProgram))
+                _ = try emitter.machineMembers()
+            } catch {
+                Issue.record("Valid quantified Int members \(members) failed their output check: \(error)")
+            }
+        }
     }
 
     @Test("A bound ordered assignment keeps its source value through both emitted action routes")

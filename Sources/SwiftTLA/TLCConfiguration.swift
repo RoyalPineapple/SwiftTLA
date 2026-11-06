@@ -174,7 +174,8 @@ package struct TLCConfiguration: Equatable, Sendable {
     func render(usesSymmetryReduction: Bool) throws -> String {
         func checked(_ text: String) throws -> String {
             try StraightLineRenderedActionCheck.verifyCheckingConfiguration(self,
-                rendered: text, requiringSourceDefaultDeadlock: false)
+                rendered: text, usesSymmetryReduction: usesSymmetryReduction,
+                requiringSourceDefaultDeadlock: false)
             return text
         }
         if assumptionsOnly {
