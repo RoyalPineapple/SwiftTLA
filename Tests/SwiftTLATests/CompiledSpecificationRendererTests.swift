@@ -131,6 +131,22 @@ struct CompiledSpecificationRendererTests {
                 layout: compilation.layout, binders: compilation.bindings.binders,
                 module: withoutSecondAction)
         }
+        let behavior = "Spec ==\n  /\\ Init\n  /\\ [][Next]_count\n"
+        try #require(rendered.components(separatedBy: behavior).count == 2)
+        for replacement in ["Spec == TRUE\n",
+                            behavior.replacingOccurrences(of: "/\\ Init", with: "/\\ TRUE"),
+                            behavior.replacingOccurrences(of: "[Next]_count", with: "[Next]_other"),
+                            behavior + "\n" + behavior] {
+            let changed = rendered.replacingOccurrences(of: behavior, with: replacement)
+            try #require(changed != rendered)
+            do {
+                try StraightLineRenderedActionCheck.verifyFiniteInvocations(compilation.semantics.behavior,
+                    layout: compilation.layout, binders: compilation.bindings.binders, module: changed)
+                Issue.record("A changed Spec behavior was accepted")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "tla.Spec")
+            }
+        }
     }
 
     @Test("Action dependencies are declared before their enabledness consumers")

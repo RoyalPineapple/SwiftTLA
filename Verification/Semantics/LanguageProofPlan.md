@@ -77,6 +77,27 @@ The global accepted-domain inventory continues during M1 through M6.
 Its final completion is required for M8. It does not delay a justified pilot proof.
 All source and proof work remains independent of archive availability and CI completion.
 
+### Implementation first across the plan
+
+The implementation queue spans M1 through M7 before deeper proof work on any one constructor.
+Take small, measured repairs to existing compiler, output and checking boundaries first.
+The proof dependencies above still govern proof closure; they do not block independent implementation repairs.
+
+- [x] I1 Repair independent signed integer output checks and remove the direct-literal producer self-comparison.
+  Published in `85264617`; regression and remaining proof limits are recorded below.
+- [x] I2 Make the existing CFG check retain selected behavior and all configuration directives.
+  Cover assumption-only, specification and Init/Next behavior, declarations, symmetry, views and postconditions.
+- [x] I3 Repair finite scalar action-call encoding and domain order in the existing output check.
+  Exercise quantified and expanded calls through their existing owners.
+- [x] I4 Check the emitted fairness-free `Spec` body against its compiled state frame and Init/Next connection.
+  Fairness terms and profile bodies retain separate open obligations.
+- [ ] I5 Inspect the remaining source/output boundaries across initialization, actions and control for concrete implementation gaps.
+  Fix measured gaps in their existing owners; preserve every accepted route.
+- [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
+  Keep remaining implementation omissions separate from unfinished formal arguments.
+
+Implementation checkboxes do not complete the six-link proof rows.
+
 ## M0 Observation contract and pilot domain
 
 - [ ] M0.1 Define complete observations in the existing outcome rules.
@@ -309,6 +330,23 @@ All 1201 captured inputs were unchanged during that run.
 An earlier standalone literal baseline passed and is retained as producer/runtime evidence, not rejection evidence.
 The final occurrence/change guards are a subsequent test-only amendment; that changed owner passed its focused rerun.
 These receipts establish regression behavior only. Hosted admission remains separate.
+
+### Broad implementation checkpoint 6 November 2026
+
+I2 through I4 extend existing production checks and existing test owners; they add no new checker, model or evaluator.
+The CFG check now verifies the complete ordered directive text, including behavior, declarations, symmetry, views and postconditions.
+The UTF-8 comparison preserves whitespace inside string constants; the producer's symmetry selection is passed explicitly.
+The finite-call check reuses the independent integer encoder and orders quantified set members by their emitted text.
+The existing behavior check also verifies the complete default `Spec` body when base fairness is empty.
+Fairness terms, profile bodies, non-scalar/state-dependent invocation domains, token/namespace soundness and compiler/source correspondence remain open.
+
+Measured baselines retained 18 ignored CFG corruptions, then four accepted `Spec` corruptions, one ignored string-whitespace change,
+four valid expanded-call rejections and six valid quantified-call rejections.
+An initial quantified control stopped at its coverage guard because parsing the fixture chose expanded calls; it receives no rejection credit.
+The corrected control uses the existing runtime-built domain and requires the quantified branch.
+Native runtime argument/state assertions passed before the measured output-check rejections.
+After repair, all 63 selected tests passed on unchanged captured producer/test inputs.
+No formal proof or hosted admission result is inferred, and no six-link proof row is completed by this checkpoint.
 
 ## Work discipline and admission
 

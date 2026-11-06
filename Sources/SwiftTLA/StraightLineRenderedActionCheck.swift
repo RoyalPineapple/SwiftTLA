@@ -1065,7 +1065,8 @@ enum StraightLineRenderedActionCheck {
     }
 
     static func verifyCheckingConfiguration(_ configuration: TLCConfiguration,
-                                            rendered: String, requiringSourceDefaultDeadlock: Bool) throws {
+                                            rendered: String, usesSymmetryReduction: Bool = false,
+                                            requiringSourceDefaultDeadlock: Bool) throws {
         let lines = rendered.split(separator: "\n").map { $0.split(whereSeparator: \.isWhitespace) }
         let deadlock = lines.filter { $0.first?.hasPrefix("CHECK_DEADLOCK") == true }
         if requiringSourceDefaultDeadlock,
@@ -1084,16 +1085,42 @@ enum StraightLineRenderedActionCheck {
             : configuration.properties + configuration.refinements
         let expectedDeadlock: [[Substring]] = configuration.assumptionsOnly ? []
             : [["CHECK_DEADLOCK", configuration.checkDeadlock ? "TRUE" : "FALSE"]]
+        let behavior: [String]
+        if configuration.assumptionsOnly {
+            behavior = []
+        } else {
+            switch configuration.behavior {
+            case .specification: behavior = ["SPECIFICATION \(configuration.specificationName)"]
+            case .initialAndNext: behavior = ["INIT Init", "NEXT Next"]
+            }
+        }
+        var expected = behavior + expectedDeadlock.map { $0.joined(separator: " ") }
+            + configuration.declarations
+        expected += expectedInvariants.map { "INVARIANT \($0)" }
+            + expectedProperties.map { "PROPERTY \($0)" }
+        if !configuration.assumptionsOnly {
+            if usesSymmetryReduction && configuration.properties.isEmpty && configuration.refinements.isEmpty {
+                expected += configuration.symmetry.map { "SYMMETRY \($0)" }
+            }
+            if let view = configuration.view { expected.append("VIEW \(view)") }
+            if let postcondition = configuration.postcondition { expected.append("POSTCONDITION \(postcondition)") }
+        }
+        let expectedText = expected.joined(separator: "\n") + (expected.isEmpty ? "" : "\n")
+        let selectors = lines.filter { line in
+            ["SPECIFICATION", "INIT", "NEXT"].contains { line.first?.hasPrefix($0) == true }
+        }
         // shortcut: generated CFG directives are canonical single lines; use a CFG parser if authored directives are retained.
         guard deadlock == expectedDeadlock,
+              selectors == behavior.map({ $0.split(whereSeparator: \.isWhitespace) }),
+              rendered.utf8.elementsEqual(expectedText.utf8),
               invariants.allSatisfy({ $0.count == 2 && $0.first == "INVARIANT" }),
               properties.allSatisfy({ $0.count == 2 && $0.first == "PROPERTY" }),
               invariants.map({ String($0[1]) }) == expectedInvariants,
               properties.map({ String($0[1]) }) == expectedProperties else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
                 path: "tla.checking.selection",
-                expected: "the selected check kinds, declaration order, intrinsic invariants and deadlock setting",
-                actual: "the emitted configuration changes a check selection",
+                expected: "the selected behavior, declarations, checks, reduction, view and postcondition in order",
+                actual: "the emitted configuration changes a selected directive",
                 nextSafeAction: "Report this TLA+ configuration emission failure.")
         }
     }
@@ -1423,6 +1450,21 @@ enum StraightLineRenderedActionCheck {
         guard behavior.actions.count == layout.actions.count else { throw mismatch() }
         let included = layout.actions.indices.filter { !layout.actions[$0].declaration.name.isEmpty }
         guard !layout.variables.isEmpty || !included.isEmpty else { return }
+        let lines = module.components(separatedBy: "\n")
+        if behavior.fairness.isEmpty {
+            let names = layout.variables.map(\.declaration.name)
+            let frame = names.count == 1 ? names[0] : "<<\(names.joined(separator: ", "))>>"
+            let expected = "Spec ==\n  /\\ Init\n  /\\ [][Next]_\(frame)"
+            let starts = lines.indices.filter { lines[$0] == "Spec ==" || lines[$0].hasPrefix("Spec == ") }
+            guard starts.count == 1, let start = starts.first, start + 1 < lines.count,
+                  let end = lines[(start + 1)...].firstIndex(of: ""),
+                  lines[start..<end].joined(separator: "\n") == expected else {
+                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                    path: "tla.Spec", expected: "the complete fairness-free Init and stuttering Next specification",
+                    actual: "the emitted Spec changes its initial predicate, next relation or state frame",
+                    nextSafeAction: "Report this TLA+ behavior emission failure.")
+            }
+        }
         let enabled = Set(behavior.enabledActionIndices)
         func values(_ binding: CompiledActionBinding) -> [CompiledValue]? {
             guard case .set(let element) = binding.domain.resultType,
@@ -1443,7 +1485,7 @@ enum StraightLineRenderedActionCheck {
         }
         func scalar(_ value: CompiledValue) -> String {
             switch value {
-            case .integer(let integer): String(integer)
+            case .integer(let integer): checkedIntegerLiteral(integer)
             case .boolean(let boolean): boolean ? "TRUE" : "FALSE"
             default: preconditionFailure("finite invocation preflight rejected non-scalar values")
             }
@@ -1464,7 +1506,7 @@ enum StraightLineRenderedActionCheck {
                     return name
                 }
                 let domains = zip(names, bindings).map { binder, binding in
-                    let members = Set(values(binding)!).sorted().map(scalar).joined(separator: ", ")
+                    let members = Set(values(binding)!).map(scalar).sorted().joined(separator: ", ")
                     return "\(binder) \\in {\(members)}"
                 }
                 let call = "\(name)(\(names.joined(separator: ", ")))"
@@ -1498,7 +1540,6 @@ enum StraightLineRenderedActionCheck {
         case 1: expected = "Next == \(invocations[0])"
         default: expected = "Next ==\n" + invocations.map { "  \\/ \($0)" }.joined(separator: "\n")
         }
-        let lines = module.components(separatedBy: "\n")
         let starts = lines.indices.filter { lines[$0] == "Next ==" || lines[$0].hasPrefix("Next == ") }
         guard starts.count == 1, let start = starts.first, start + 1 < lines.count,
               let end = lines[(start + 1)...].firstIndex(of: ""),

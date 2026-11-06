@@ -2255,6 +2255,29 @@ struct OrderedAssignmentLoweringTests {
                     body: compiledAction.body), variableTypes: inputs.variableTypes,
                 resolvedVariableTypes: program.variableTypes, resolvedBindingTypes: program.bindingTypes)
         }
+        for members in [[2, 10], [-2, -1], [Int.min, 0], [Int.max, 0],
+                        [-2_000_000_000, 0], [1_000_000_000_000_000_000, 0]] {
+            var varied = specification
+            varied.sourceAtomicSteps = [AtomicStep(model: step.model,
+                bindings: [ActionBinding(name: "member", values: members.map(TLAValue.int))])]
+            let variedProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: varied.compile()))
+            try #require(variedProgram.behavior.actions.first?.bindings.first?.literalMembers?.count == 2)
+            let runtime = CompiledRuntime(program: variedProgram)
+            let initial = try #require(try runtime.initialStates().first)
+            let successors = try runtime.successors(from: initial)
+            #expect(Set(successors.map(\.arguments)) == Set(members.map { [CompiledValue.integer($0)] }))
+            for successor in successors {
+                let member = try #require(successor.arguments.first)
+                for variable in variedProgram.layout.variables {
+                    #expect(try successor.state.value(for: variable.id) == member)
+                }
+            }
+            do {
+                _ = try variedProgram.renderModule()
+            } catch {
+                Issue.record("Valid expanded Int members \(members) failed their output check: \(error)")
+            }
+        }
     }
 
     @Test("The emitted TLA assignment action has the source's complete symbolic result")
