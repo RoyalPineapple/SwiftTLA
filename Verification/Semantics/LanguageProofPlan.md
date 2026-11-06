@@ -98,6 +98,9 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5b Preserve state names that occupy `vars` and link generated refinements without duplicate instance declarations.
   Use substituted safety frames only when the mappings cover every actual declared abstract variable.
   Hidden or noncanonical frames retain the existing alias route and an open correspondence obligation.
+- [x] I5c Retain generated-refinement model values in root declarations, instance substitutions and checking configuration.
+  Preserve existing symbols and model-value identity when names collide; reuse established bindings on repeated imports.
+  Concrete abstract constants and module-operator replacements retain separate open forwarding obligations.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -390,6 +393,32 @@ Neither is a production semantic mismatch or proof-rejection result.
 Canonical declaration/instance interpretation, general hidden or noncanonical mappings, other namespace collisions,
 source correspondence, import semantics and refinement/checking kernels remain owned open obligations.
 No formal proof or hosted admission is inferred, and no six-link proof row is complete.
+
+### Generated refinement model-value checkpoint 6 November 2026
+
+The generated-refinement linker copied the abstract module without its model-value bindings.
+The existing enum/array target initialized correctly and retained both values in its own configuration,
+but the concrete export lacked root declarations, instance substitutions and checking assignments for them.
+The first unchanged-production baseline reported five issues in one test.
+An expanded baseline reported ten checks of the same gap, including repeated and colliding imports;
+these are overlapping checks, not fifteen independent faults or observed TLC mismatches.
+
+The linker now reads canonical bare model-value assignments from the existing target configuration.
+It reuses an established root binding for the same value or declares a fresh root symbol before the instance.
+The instance substitution and root CFG retain the original model-value identity even when the symbol is renamed.
+Repeated links reuse renamed bindings as well as instance declarations.
+The same link step handles direct TLA and authored PlusCal bundles and retains their import provenance.
+Target parameter assignments, invariant selection and constraints are not imported as concrete checks.
+
+All 32 tests across the six selected existing suites passed on unchanged captured inputs.
+The final changed three-test owner also passed, including repeat-after-collision and PlusCal controls.
+Those three tests overlap the earlier run and must not be added as distinct cases.
+No model, fixture, evaluator, checker family, theorem, pin, dependency, corpus, budget or timeout changed.
+
+Canonical configuration/identifier interpretation, concrete abstract constants, module-operator replacement forwarding,
+import/instance semantics and native/TLC refinement kernels remain owned open obligations.
+These are implementation and regression receipts, not a SANY/TLC execution, new formal proof, hosted admission
+or completion of a six-link proof row.
 
 ## Work discipline and admission
 

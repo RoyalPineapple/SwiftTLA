@@ -585,13 +585,53 @@ public struct RenderedSpecification: Sendable {
             return mapped
         }
         let stateBindings = try substitutions(state, names: Abstract.State.fieldIdentities, kind: "state")
-        let bindings = try substitutions(parameters, names: Abstract.Configuration.fieldIdentities, kind: "parameters")
+        var bindings = try substitutions(parameters, names: Abstract.Configuration.fieldIdentities, kind: "parameters")
             + stateBindings
-        let target = try abstract.render(configuration: abstractConfiguration).tlaBundle
+        let renderedTarget = try abstract.render(configuration: abstractConfiguration)
+        let target = renderedTarget.tlaBundle
         guard case .compiled(let targetIdentity, let targetOwnership, let targetDependencies) = target.provenance else {
             throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                 path: "refinements.\(name).abstract", expected: "a generated compiled abstract model",
                 actual: "external formal input", nextSafeAction: "Use a generated model as the refinement target.")
+        }
+        func modelValueBindings(in configuration: TLCConfiguration) -> [(name: String, value: String)] {
+            configuration.declarations.compactMap { declaration -> (name: String, value: String)? in
+                guard declaration.hasPrefix("CONSTANT ") else { return nil }
+                let fields = declaration.dropFirst("CONSTANT ".count).components(separatedBy: " = ")
+                guard fields.count == 2, isTLADeclarationName(fields[0]), isTLADeclarationName(fields[1]) else {
+                    return nil
+                }
+                return (fields[0], fields[1])
+            }
+        }
+        let boundNames = Set(bindings.map { $0.0 })
+        let abstractValues = Set(modelValueBindings(in: renderedTarget.configuration).filter {
+            $0.name == $0.value && !boundNames.contains($0.name)
+        }.map { $0.value }).sorted()
+        var modelValues = modelValueBindings(in: configuration)
+        var declarations = configuration.declarations
+        var constantNames: [String] = []
+        var occupiedSources = tlaBundle.files.map(\.tla) + declarations
+        if case .success(let bundle)? = renderedPlusCalModuleBundle { occupiedSources.append(bundle.root.tla) }
+        for result in renderedPlusCalProfiles.values {
+            if case .success(let bundle) = result { occupiedSources.append(bundle.root.tla) }
+        }
+        // shortcut: concrete abstract constants and module replacements still need separate import forwarding.
+        for value in abstractValues {
+            let symbol: String
+            if let existing = modelValues.first(where: { $0.value == value }) {
+                symbol = existing.name
+            } else {
+                var fresh = value
+                while occupiedSources.contains(where: { $0.contains(fresh) }) { fresh += "_" }
+                symbol = fresh
+                let declaration = "CONSTANT \(symbol) = \(value)"
+                declarations.append(declaration)
+                occupiedSources.append(declaration)
+                modelValues.append((symbol, value))
+                constantNames.append(symbol)
+            }
+            bindings.append((value, symbol))
         }
         let replacement = bindings.sorted { $0.0 < $1.0 }
             .map { "\($0.0) <- (\($0.1))" }.joined(separator: ", ")
@@ -614,7 +654,7 @@ public struct RenderedSpecification: Sendable {
         }
         let selected = TLCConfiguration(behavior: configuration.behavior,
             specificationName: configuration.specificationName, assumptionsOnly: configuration.assumptionsOnly,
-            declarations: configuration.declarations, checkDeadlock: configuration.checkDeadlock,
+            declarations: declarations, checkDeadlock: configuration.checkDeadlock,
             intrinsicInvariants: configuration.intrinsicInvariants,
             invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
             properties: configuration.properties, refinements: configuration.refinements + [name],
@@ -640,7 +680,8 @@ public struct RenderedSpecification: Sendable {
             let property = behavior == .specification
                 ? "\(linkedInstance)!Spec"
                 : "\(linkedInstance)!Init /\\ [][\(linkedInstance)!Next]_\(mappedFrame ?? "\(linkedInstance)!vars")"
-            let definitions = (existingInstance ? "" : "\(linkedInstance) == \(instanceBody)\n")
+            let constants = constantNames.isEmpty ? "" : "CONSTANTS \(constantNames.sorted().joined(separator: ", "))\n"
+            let definitions = constants + (existingInstance ? "" : "\(linkedInstance) == \(instanceBody)\n")
                 + "\(name) == \(property)\n"
             let sourceText = String(source.root.tla[..<end.lowerBound]) + definitions + source.root.tla[end.lowerBound...]
             var imports = source.imports
