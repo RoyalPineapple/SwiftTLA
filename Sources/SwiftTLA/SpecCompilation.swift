@@ -409,7 +409,7 @@ public struct CompiledSpecification: Sendable {
         }
         return try RenderedSpecification(
             tlaBundle: renderedBundle,
-            configuration: rootModule.configuration, constantValues: metadata.constants,
+            configuration: rootModule.configuration, constantValues: metadata.constants, parameterNames: [],
             initialEvaluationFailure: rootModule.initialEvaluationFailure,
             initialEvaluationFailureRecord: rootModule.initialEvaluationFailureRecord,
             actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle.map { .success($0) },
@@ -429,6 +429,9 @@ public struct RenderedSpecification: Sendable {
     public let tlaBundle: TLAModuleBundle
     fileprivate let configuration: TLCConfiguration
     private let constantValues: [ConstantDecl]
+    private let parameterNames: Set<String>
+    private let configurationNamespaceSources: [String]
+    private let configurationDefinitionNames: Set<String>
     private let refinementBundle: TLAModuleBundle
     private let initialEvaluationFailure: String?
     private let initialEvaluationFailureRecord: String?
@@ -439,6 +442,8 @@ public struct RenderedSpecification: Sendable {
     package let temporalObligations: [String: [_RenderedTemporalObligation]]
 
     init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration, constantValues: [ConstantDecl],
+        parameterNames: Set<String>, configurationNamespaceSources: [String]? = nil,
+        configurationDefinitionNames: Set<String> = [],
         refinementBundle: TLAModuleBundle? = nil,
         initialEvaluationFailure: String? = nil, initialEvaluationFailureRecord: String? = nil,
         actions: [RenderedAction],
@@ -459,11 +464,18 @@ public struct RenderedSpecification: Sendable {
         var declarations = configuration.declarations
         var definitions: [String] = []
         var prefix = "__SwiftTLAParameter"
-        var sources = tlaBundle.files.map(\.tla) + declarations
-        if case .success(let bundle)? = renderedPlusCalModuleBundle { sources += bundle.files.map(\.tla) }
-        for result in renderedPlusCalProfiles.values {
-            if case .success(let bundle) = result { sources += bundle.files.map(\.tla) }
+        // Runtime configuration values are data, not a declaration namespace.
+        var namespaceSources: [String]
+        if let configurationNamespaceSources {
+            namespaceSources = configurationNamespaceSources
+        } else {
+            namespaceSources = tlaBundle.files.map(\.tla)
+            if case .success(let bundle)? = renderedPlusCalModuleBundle { namespaceSources += bundle.files.map(\.tla) }
+            for result in renderedPlusCalProfiles.values {
+                if case .success(let bundle) = result { namespaceSources += bundle.files.map(\.tla) }
+            }
         }
+        let sources = namespaceSources + (refinementBundle?.files.map(\.tla) ?? []) + constantValues.map(\.name)
         while sources.contains(where: { $0.contains(prefix) }) { prefix += "_" }
         var modelValueNames: [String: String] = [:]
         for binding in constantValues.sorted(by: { $0.name < $1.name }) {
@@ -509,6 +521,10 @@ public struct RenderedSpecification: Sendable {
         self.tlaBundle = try configured(tlaBundle)
         self.configuration = configuration
         self.constantValues = constantValues
+        self.parameterNames = parameterNames
+        self.configurationNamespaceSources = namespaceSources
+        self.configurationDefinitionNames = configurationDefinitionNames.union(
+            constantValues.indices.map { "\(prefix)\($0)" })
         self.refinementBundle = refinementBundle ?? tlaBundle
         self.initialEvaluationFailure = initialEvaluationFailure
         self.initialEvaluationFailureRecord = initialEvaluationFailureRecord
@@ -583,6 +599,7 @@ public struct RenderedSpecification: Sendable {
         let plusCalProfiles = try _generatedPlusCalProfiles.mapValues(configuredPlusCal)
         try self.init(tlaBundle: bundle, configuration: configuration,
             constantValues: _generatedConstants + _generatedParameters.map { .init($0.name, $0.value) },
+            parameterNames: Set(_generatedParameters.map(\.name)),
             initialEvaluationFailure: _generatedInitialEvaluationFailure,
             initialEvaluationFailureRecord: _generatedInitialEvaluationFailureRecord,
             actions: actions, renderedPlusCalModuleBundle: plusCal,
@@ -658,19 +675,19 @@ public struct RenderedSpecification: Sendable {
         var rootConstants = constantValues
         var declarations = configuration.declarations
         var constantNames: [String] = []
-        var occupiedSources = tlaBundle.files.map(\.tla) + declarations
-        if case .success(let bundle)? = renderedPlusCalModuleBundle { occupiedSources.append(bundle.root.tla) }
-        for result in renderedPlusCalProfiles.values {
-            if case .success(let bundle) = result { occupiedSources.append(bundle.root.tla) }
-        }
+        var occupiedSources = configurationNamespaceSources + refinementBundle.files.map(\.tla)
+            + configurationDefinitionNames.sorted() + rootConstants.map(\.name)
         // shortcut: module-operator replacements still need separate import forwarding.
         for constant in abstractConstants {
             let symbol: String
-            if let existing = rootConstants.first(where: { $0.value == constant.value }) {
+            // Equality in one configuration cannot make a parameter a closed constant.
+            if let existing = rootConstants.first(where: {
+                !parameterNames.contains($0.name) && $0.value == constant.value
+            }) {
                 symbol = existing.name
             } else {
                 var fresh = constant.name
-                while occupiedSources.contains(where: { $0.contains(fresh) }) { fresh += "_" }
+                while fresh == name || occupiedSources.contains(where: { $0.contains(fresh) }) { fresh += "_" }
                 symbol = fresh
                 let declaration = "CONSTANT \(symbol) = \(constant.value)"
                 declarations.append(declaration)
@@ -708,6 +725,15 @@ public struct RenderedSpecification: Sendable {
             symmetry: configuration.symmetry, viewOperators: configuration.viewOperators, view: configuration.view,
             postconditionOperators: configuration.postconditionOperators,
             postcondition: configuration.postcondition)
+        let instanceBody = "INSTANCE \(target.root.name)"
+            + (replacement.isEmpty ? "" : " WITH " + replacement)
+        let sourceLines = refinementBundle.root.tla.split(separator: "\n")
+        var linkedInstance = instance
+        while linkedInstance == name || (occupiedSources.contains(where: { $0.contains(linkedInstance) })
+            && !sourceLines.contains(Substring("\(linkedInstance) == \(instanceBody)"))) {
+            linkedInstance += "_"
+        }
+        let existingInstance = sourceLines.contains(Substring("\(linkedInstance) == \(instanceBody)"))
         func linked(_ source: TLAModuleBundle) throws -> TLAModuleBundle {
             guard let end = source.root.tla.range(of: "====", options: .backwards),
                   case .compiled(let rootIdentity, let rootOwnership, let rootDependencies) = source.provenance else {
@@ -715,15 +741,6 @@ public struct RenderedSpecification: Sendable {
                     path: "refinements.\(name).source", expected: "a complete generated concrete module",
                     actual: "an incomplete or external module", nextSafeAction: "Render the generated concrete model first.")
             }
-            let instanceBody = "INSTANCE \(target.root.name)"
-                + (replacement.isEmpty ? "" : " WITH " + replacement)
-            let sourceLines = source.root.tla.split(separator: "\n")
-            var linkedInstance = instance
-            while source.root.tla.contains(linkedInstance),
-                  !sourceLines.contains(Substring("\(linkedInstance) == \(instanceBody)")) {
-                linkedInstance += "_"
-            }
-            let existingInstance = sourceLines.contains(Substring("\(linkedInstance) == \(instanceBody)"))
             let property = behavior == .specification
                 ? "\(linkedInstance)!Spec"
                 : "\(linkedInstance)!Init /\\ [][\(linkedInstance)!Next]_\(mappedFrame ?? "\(linkedInstance)!vars")"
@@ -768,8 +785,12 @@ public struct RenderedSpecification: Sendable {
             case .failure(let diagnostic): return .failure(diagnostic)
             }
         }
+        let template = try linked(refinementBundle)
         return try Self(tlaBundle: linked(tlaBundle), configuration: selected, constantValues: rootConstants,
-            refinementBundle: linked(refinementBundle),
+            parameterNames: parameterNames,
+            configurationNamespaceSources: configurationNamespaceSources,
+            configurationDefinitionNames: configurationDefinitionNames,
+            refinementBundle: template,
             initialEvaluationFailure: initialEvaluationFailure,
             initialEvaluationFailureRecord: initialEvaluationFailureRecord, actions: actions,
             renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map(linkedResult),
@@ -939,7 +960,9 @@ public struct RenderedSpecification: Sendable {
             selectedPlusCal = try renderedPlusCalModuleBundle.map { try selectedBundle($0, using: selected) }
         }
         return try .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected,
-            constantValues: constantValues, refinementBundle: refinementBundle,
+            constantValues: constantValues, parameterNames: parameterNames,
+            configurationNamespaceSources: configurationNamespaceSources,
+            configurationDefinitionNames: configurationDefinitionNames, refinementBundle: refinementBundle,
             initialEvaluationFailure: initialEvaluationFailure,
             initialEvaluationFailureRecord: initialEvaluationFailureRecord, actions: actions,
             renderedPlusCalModuleBundle: selectedPlusCal,

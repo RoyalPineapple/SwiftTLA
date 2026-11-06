@@ -117,6 +117,10 @@ The proof dependencies above still govern proof closure; they do not block indep
   Preserve typed constant values through generated refinement links and omit parameter-value helpers from imported templates.
   Guard literal, nested model-value alias, direct compiler, generated, authored and selected profile transport in existing owners.
   General formal imports, module replacements, integer representation and implementation correspondence remain open.
+- [x] I5i Keep generated nested-link allocation independent of runtime parameter values.
+  Retain parameter ownership, unconfigured declaration/profile namespaces and potential helper names through copies.
+  Reuse closed bindings, allocate each instance once across output forms, and retain source/native controls for both configurations.
+  General namespace/source correspondence, formal imports and module-operator forwarding remain open.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -170,10 +174,15 @@ tuples and records recursively; a row does not silently replace them with intege
 I6 next actions are to reconcile exact signatures/type/placement guards within these rows,
 separate actual missing/incorrect routes from implemented-but-unproved ones, and batch measured repairs by owner.
 The first grouped transport repair, closed constants and generated refinement forwarding (R27/R28), is recorded under I5h.
-Nested configuration-dependent linking and general formal-import bindings retain separate implementation obligations;
-each next repair still requires an actual accepted-route baseline.
+The measured Boolean nested-link case is repaired under I5i. General template/source correspondence and formal-import bindings
+retain separate obligations; each next repair still requires an actual accepted-route baseline.
 The pinned integer-capacity/representation boundary (R01/R03) is a separate implementation blocker for a full-Int claim.
 Candidate collection-member routes require public-API and source-guard evidence before being labelled defects or extended.
+The reviewed R13 nominal-record route rejects custom initializers in the scanned record declaration, recursive or generic
+record shapes, wrapped/lazy instance fields, accessors and missing explicit field types. Constructor arguments retain their labels
+and source order before the existing complete-field check. This does not establish extension/imported binding ownership.
+The enum collector separately guards its supported direct/exhaustive encoding forms and unique encoded case values;
+dynamic encodings are diagnosed. These are source-guard observations, not a proof of either nominal representation.
 I6 remains unchecked. All six proof links for these rows remain open unless an actual derived result is recorded.
 
 ## M0 Observation contract and pilot domain
@@ -580,6 +589,29 @@ set literals. The formal-core `Constant` API has its separate `TLAValueConvertib
 that corresponding macro spellings are accepted. General formal-import configuration, module-operator forwarding,
 pinned integer capacity, helper/decoder soundness and source-to-output correspondence remain explicit owned boundaries.
 All proof milestones and I6 remain open.
+
+### Nested configuration-linking checkpoint 6 November 2026
+
+The existing stuttering refinement fixture now uses a finite Boolean parameter in a tautological stay guard.
+Existing callers supply their configuration explicitly. There is no new fixture/model type, corpus case or state field.
+The first variation failed compilation because the parameter was unused; zero tests executed and no semantic credit
+was assigned. After the guard made its use explicit, the unchanged-production baseline executed one actual test with
+two issues: different module text across the Boolean configurations and a real duplicate-module error on the second
+nested import. Earlier native safety/fairness, shifted/repeated-link and provenance controls passed first.
+
+Runtime parameter equality in one configuration is no longer treated as a closed constant binding.
+The final artifact retains parameter ownership and the original declaration/profile namespace.
+Helper prefixes ignore serialized runtime values. Potential helper names are reserved even when a current literal
+parameter needs no helper. Each instance name is chosen once for the actual, authored/profile and unconfigured exports.
+Only the initial namespace and current template are retained, rather than every intermediate template version.
+These are compiler/linker implementation changes; their general correspondence proof remains open.
+
+The final focused run passed forty-eight tests in eight suites on all 1,201 unchanged captured inputs.
+It checks native safety/fairness under both Boolean configurations, actual parent import of both nested instances,
+closed-binding ownership, repeated-instance provenance, a helper/property-name collision and namespace-looking string data.
+The finite fixture guards and fixed output expectations are regression evidence, not an all-program invariance proof.
+General formal-import configuration, module replacements, integer representation, complete observations and all six-link
+proof rows remain open. No local TLC run, new formal proof, binary reproduction or hosted admission is inferred.
 
 ## Work discipline and admission
 

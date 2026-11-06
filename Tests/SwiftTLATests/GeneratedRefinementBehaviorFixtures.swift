@@ -31,8 +31,9 @@ struct StutteringRefinementSource {
 
     static var spec: TLASpec {
         #spec("StutteringRefinementSource") { scope in
+            let flag = scope.parameter(as: Bool.self, in: Set<Bool>([false, true]))
             let value = scope.sharedVar(initial: 0)
-            Do(Step.stay) { Skip() }
+            Do(Step.stay, when: flag || !flag) { Skip() }
             Do(Step.advance, when: value == 0) { Assign(value, to: 1) }
 
             let abstract = Instance(of: FairRefinementTarget.self) { Bind(\.N, to: 1) }
