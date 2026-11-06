@@ -3,7 +3,7 @@ import Testing
 
 struct ConfigurationValueExportTests {
     @Test("TLC configuration literals retain their direct representation", arguments: [
-        TLAValue.int(0), .bool(true), .string("jug"), .constant("Jug"),
+        TLAValue.int(0), .int(1_000_000_000), .bool(true), .string("jug"), .constant("Jug"),
         .set([.set([]), .set([.int(3), .int(5)])])])
     func preservesLiterals(_ value: TLAValue) throws {
         let rendered = try render(value)
@@ -26,6 +26,7 @@ struct ConfigurationValueExportTests {
     @Test("nonliteral configuration values use collision-free definitions in both exports", arguments: [
         TLAValue.function([:]), .function([.string("small"): .int(3), .string("big"): .int(5)]),
         .tuple([.int(1), .int(2)]), .record(["count": .int(2)]), .int(-1),
+        .int(1_000_000_001), .int(Int(Int32.max)), .set([.int(1_000_000_001)]),
         .set([.function([.int(1): .int(2)])]), .string("line\nbreak"), .string("a\"b")])
     func substitutesCompositeValues(_ value: TLAValue) throws {
         let rendered = try render(value)
