@@ -101,6 +101,9 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5c Retain generated-refinement model values in root declarations, instance substitutions and checking configuration.
   Preserve existing symbols and model-value identity when names collide; reuse established bindings on repeated imports.
   Concrete abstract constants and module-operator replacements retain separate open forwarding obligations.
+- [x] I5d Keep public state names and declaration IDs while assigning distinct formal names for generated behavior and known declarations.
+  Carry the same formal names through TLA/PlusCal, generated field identities, complete projections and initial failure prefixes.
+  Unoccupied names stay unchanged; inherited standard/opaque namespaces and the general name-correspondence proof remain open.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -419,6 +422,28 @@ Canonical configuration/identifier interpretation, concrete abstract constants, 
 import/instance semantics and native/TLC refinement kernels remain owned open obligations.
 These are implementation and regression receipts, not a SANY/TLC execution, new formal proof, hosted admission
 or completion of a six-link proof row.
+
+### State-symbol allocation checkpoint 6 November 2026
+
+Accepted state fields named `Init`, `Next`, `Spec`, `TRUE` and `FALSE` occupied generated behavior or literal names.
+The existing layout now retains each source declaration and ID while assigning its physical formal name once.
+Rendering, authored PlusCal, generated field identities, complete state projections, graph metadata and lazy failure prefixes
+use that formal name. Swift fields and action labels retain their source identity. Existing suffix names are reserved first.
+The existing compiled fixture now exercises a public `State.Init`, its two initial values, successor and formal projection.
+
+The first attempted baseline reached an unregistered test-label coverage guard and receives no collision-rejection credit.
+The corrected unchanged-production baseline reported fifteen issues across five name variants; its expanded two-test baseline
+reported twenty-seven overlapping checks, including emitted field metadata and failure-prefix keys.
+Native values, transitions and failure-site guards passed before repair.
+
+The first broad repair run executed ninety-eight tests and found three pinned module differences confined to the spelling
+of the compiler-owned `Terminating` action. Its allocator now retains that owned name when free; occupied names still allocate
+separately. The pinned proof inputs are unchanged. The final focused run passed all ninety-eight tests in ten suites,
+including the existing external-client checks, on unchanged captured producer and test bytes.
+
+Inherited standard and opaque namespaces, PlusCal keywords, other declaration kinds, general name correspondence,
+complete source/IR/output interpretation and parent composition remain owned open obligations.
+These are implementation and regression receipts, not a new formal proof, hosted admission or completion of a six-link row.
 
 ## Work discipline and admission
 

@@ -1257,7 +1257,7 @@ public extension TLASpec {
         semantics.operators = lowerer.operators
         semantics.operators.resolveDependencies()
         let bindings = lowerer.bindings
-        var occupied = renderedDeclarationNames(includingActions: false)
+        var occupied = renderedDeclarationNames(includingActions: false, includingVariables: false)
             .union(lowerer.modelValueNames)
             .union(bindings.binders.values).union(bindings.operatorNames.values)
             .union(symmetrySets.map { "Symm\($0.variableName)" })
@@ -1268,6 +1268,12 @@ public extension TLASpec {
             if scenario.view != nil { occupied.insert("__SwiftTLAView\(index)") }
             if let postcondition = scenario.postconditionName { occupied.insert(postcondition) }
         }
+        if semantics.behavior.constraint != nil { occupied.insert("StateConstraint") }
+        if semantics.behavior.actionConstraint != nil { occupied.insert("ActionConstraint") }
+        var variableReservations = occupied
+        if authoredAlgorithm != nil { variableReservations.insert("Terminating") }
+        layout.resolveVariableNames(reserving: variableReservations)
+        occupied.formUnion(layout.variables.map(\.formalName))
         let directNext = layout.actions.count == 1 && layout.actions[0].renderedName == "Next"
             && semantics.behavior.actions.count == 1
             && semantics.behavior.actions[0].bindings.isEmpty && !occupied.contains("Next")
@@ -2103,7 +2109,8 @@ extension CompiledProgram {
         var replacements = formalModuleReplacements.map { $0.configuration(moduleNames: moduleNames) }
             + moduleImports.replacements(for: metadata.imports, moduleNames: moduleNames)
         let modelValues = exportedModelValueNames
-        var reserved = Set(layout.declarations.map(\.name))
+        var reserved = Set(layout.declarations.filter { $0.kind != .variable }.map(\.name))
+            .union(layout.variables.map(\.formalName))
         reserved.formUnion(metadata.constants.map(\.name))
         reserved.formUnion(layout.parameters.map { $0.reference.name })
         reserved.formUnion(layout.moduleInstances.map(\.namespace))
@@ -2149,7 +2156,7 @@ extension CompiledProgram {
                     actual: "mapping count differs", nextSafeAction: "Resolve all variable mappings before typed export.")
             }
             var mappings = try zip(refinement.abstract.layout.variables, refinement.variableMappings).map {
-                "\($0.declaration.name) <- \(try renderer.state($1.expression))"
+                "\($0.formalName) <- \(try renderer.state($1.expression))"
             }
             for parameter in refinement.abstract.layout.parameters {
                 guard let concrete = layout.parameters.first(where: { $0.reference == parameter.reference }),
@@ -2438,7 +2445,7 @@ private extension CompiledModuleMetadata {
         instancesAfterBehavior: Bool
     ) throws -> (source: String, evaluationFailureDeclarations: [String],
         evaluationInvariant: String?, initialFailureAggregate: String?, initialFailureRecord: String?) {
-        let varNames = layout.variables.map(\.declaration.name)
+        let varNames = layout.variables.map(\.formalName)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = varNames.isEmpty && renderedActions.isEmpty
         var lines: [String] = []
@@ -2504,6 +2511,7 @@ private extension CompiledModuleMetadata {
         var occupied = renderer.reservedNames.union(renderer.bindings.binders.values)
             .union(renderer.bindings.operatorNames.values)
             .union(layout.declarations.map(\.name))
+            .union(layout.variables.map(\.formalName))
             .union(layout.actions.map(\.renderedName))
             .union(renderedActions.flatMap(\.calls).map(\.renderedName))
         if !isLibraryModule, varNames.count > 1, !occupied.contains("vars") {
@@ -2683,7 +2691,7 @@ private extension CompiledModuleMetadata {
             return "(IF \(small) THEN TRUE ELSE \(allowed))"
         }
         var initialPredicates = try layout.variables.map { variable -> String in
-            let name = variable.declaration.name
+            let name = variable.formalName
             guard let initialization = initializations[variable.id] else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
@@ -2741,7 +2749,7 @@ private extension CompiledModuleMetadata {
             }
         }
         initialPredicates += layout.variables.filter { intStateVariables.contains($0.id) }
-            .map { intStatePredicate($0.declaration.name) }
+            .map { intStatePredicate($0.formalName) }
         var selectedInitialInvariant: CompiledStatePredicate?
         if let selected = behavior.initialInvariant {
             guard let invariant = behavior.invariants.first(where: { $0.id == selected }) else {
@@ -2901,9 +2909,9 @@ private extension CompiledModuleMetadata {
                 if case .overflow(.addition) = failure.kind,
                    let siteOrdinal, let operands = failure.operands {
                     let before = layout.variables.filter { prefixNames[$0.id] != nil }
-                        .sorted { FormalStringIdentity.less($0.declaration.name, $1.declaration.name) }
+                        .sorted { FormalStringIdentity.less($0.formalName, $1.formalName) }
                         .map { variable in
-                            "[name |-> \(TLAValue.string(variable.declaration.name)), value |-> \(prefixNames[variable.id]!)]"
+                            "[name |-> \(TLAValue.string(variable.formalName)), value |-> \(prefixNames[variable.id]!)]"
                         }.joined(separator: ", ")
                     record = "(IF \(failure.predicate) THEN [site |-> \(siteOrdinal), kind |-> \"integerOverflow.addition\", operands |-> \(operands), before |-> <<\(before)>>] ELSE FALSE)"
                 } else {
@@ -3090,7 +3098,7 @@ private extension CompiledModuleMetadata {
             guard case .value(let expression)? = initializations[variable.id],
                   case .value(.integer(let value)) = expression.operation,
                   expression.children.isEmpty else { return nil }
-            return (variable.declaration.name, value)
+            return (variable.formalName, value)
         })
         let expectedControlLocations = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
             variable -> (String, String)? in
@@ -3098,21 +3106,21 @@ private extension CompiledModuleMetadata {
                   case .controlLocation(let id) = expression.operation,
                   expression.children.isEmpty,
                   let location = layout.controlLocation(id) else { return nil }
-            return (variable.declaration.name, location.formalName)
+            return (variable.formalName, location.formalName)
         })
         let expectedIntPredicates = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
             variable -> (String, String)? in
             guard let initialization = initializations[variable.id],
                   let predicate = StraightLineRenderedActionCheck.initialIntPredicate(
-                    initialization, named: variable.declaration.name, layout: layout) else { return nil }
-            return (variable.declaration.name, predicate)
+                    initialization, named: variable.formalName, layout: layout) else { return nil }
+            return (variable.formalName, predicate)
         })
         try verifyRenderedInitialConjunction(source, predicates: initialPredicates,
             expectedIntLiterals: expectedIntLiterals,
             expectedControlLocations: expectedControlLocations,
             expectedIntPredicates: expectedIntPredicates,
             expectedIntStateNames: Set(layout.variables.filter { intStateVariables.contains($0.id) }
-                .map { $0.declaration.name }),
+                .map { $0.formalName }),
             expectedPredicateCount: layout.variables.count + intStateVariables.count
                 + (selectedInitialInvariant == nil ? 0 : 1),
             requireCompleteSimpleInitials: behavior.initialInvariant == nil

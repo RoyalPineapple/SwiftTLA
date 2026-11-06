@@ -44,7 +44,7 @@ struct CompiledState: Hashable, Sendable, Comparable {
             )
         }
         let entries = try layout.variables.map { variable -> TLAStateProjection.Entry in
-            guard let token = TLAStateProjection.Token(validating: variable.declaration.name) else {
+            guard let token = TLAStateProjection.Token(validating: variable.formalName) else {
                 throw CompiledEvaluationError.invalidStateLayout(
                     expected: layout.variables.count,
                     actual: values.count

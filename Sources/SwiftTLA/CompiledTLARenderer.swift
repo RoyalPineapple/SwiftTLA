@@ -168,7 +168,8 @@ struct CompiledTLARenderer {
 
     private func stateCaptureName(_ variable: VariableID) throws -> String {
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.actions.map(\.renderedName))
         var name = "__\(moduleName)_state\(variable.ordinal)"
         while occupied.contains(name) { name += "_" }
         return name
@@ -177,7 +178,8 @@ struct CompiledTLARenderer {
     private func resolvedFunctionName(_ id: ResolvedFunctionID) throws -> String {
         guard functions.indices.contains(id.ordinal) else { throw missing("resolved function", id.ordinal) }
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.actions.map(\.renderedName))
         var name = "__\(moduleName)_resolvedFunction\(id.ordinal)"
         while occupied.contains(name) { name += "_" }
         return name
@@ -554,7 +556,8 @@ struct CompiledTLARenderer {
                 nextSafeAction: "Report the missing compiled failure predicate for this With branch.")
         }
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.actions.map(\.renderedName))
         var names: [String] = []
         for stem in ["FailedCandidates", "FirstFailingCandidate", "EarlierCandidate"] {
             var name = "__SwiftTLA\(stem)\(binder.ordinal)"
@@ -829,7 +832,8 @@ struct CompiledTLARenderer {
         let function = try state(expression.children[0], stateNames: stateNames)
         let domain = try state(expression.children[1], stateNames: stateNames)
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.actions.map(\.renderedName))
             .union(stateNames.values)
         var names: [String] = []
         for role in ["index", "candidate", "member"] {
@@ -1068,7 +1072,8 @@ struct CompiledTLARenderer {
         var tasks = [StateRenderingTask.expression(expression)]
         var parts: [String] = []
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.actions.map(\.renderedName))
             .union(stateNames.values)
         var nextDivisionName = 0
         var nextChoiceName = 0
@@ -1491,7 +1496,7 @@ struct CompiledTLARenderer {
 
     func variableName(_ id: VariableID) throws -> String {
         guard layout.variables.indices.contains(id.ordinal) else { throw missing("variable", id.ordinal) }
-        return layout.variables[id.ordinal].declaration.name
+        return layout.variables[id.ordinal].formalName
     }
 
     func actionReference(_ id: ActionID, named operatorName: String? = nil) throws -> String {

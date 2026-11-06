@@ -263,7 +263,7 @@ enum StraightLineRenderedActionCheck {
     static func verifyStructure(_ action: CompiledActionExpr, rendered: String,
                                 renderer: CompiledTLARenderer) throws {
         let names = Dictionary(uniqueKeysWithValues: renderer.layout.variables.map {
-            ($0.id, $0.declaration.name)
+            ($0.id, $0.formalName)
         })
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -386,13 +386,13 @@ enum StraightLineRenderedActionCheck {
     static func initialIntPredicate(_ initialization: CompiledVariableInitialization,
                                     named name: String, layout: CompiledLayout) -> String? {
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
-            ($0.id, $0.declaration.name)
+            ($0.id, $0.formalName)
         })
         switch initialization {
         case .value(let expression):
             guard expression.resultType == .int ||
                     (expression.resultType == .unknown && layout.variables.contains {
-                        $0.declaration.name == name && initialIsInt($0)
+                        $0.formalName == name && initialIsInt($0)
                     }) else { return nil }
             switch expression.operation {
             case .stateVariable(let id) where expression.children.isEmpty:
@@ -405,7 +405,7 @@ enum StraightLineRenderedActionCheck {
         case .memberOf(let root):
             guard root.resultType == .set(.int) ||
                     (root.resultType == .unknown && layout.variables.contains {
-                        $0.declaration.name == name && initialIsInt($0)
+                        $0.formalName == name && initialIsInt($0)
                     }) else { return nil }
             guard let tree = initialIntDomain(root, layout: layout, variables: variables) else { return nil }
             let predicate = "\(name) \\in \(tree.value)"
@@ -498,7 +498,7 @@ enum StraightLineRenderedActionCheck {
                       expression.children.isEmpty, layout.controlLocation(id) != nil else { return false }
             case .stateVariable, .add:
                 guard initialIsInt(variable), expression.resultType == .int,
-                      initialIntPredicate(.value(expression), named: variable.declaration.name,
+                      initialIntPredicate(.value(expression), named: variable.formalName,
                         layout: layout) != nil else { return false }
                 if case .add = expression.operation { hasAddition = true }
             default: return false
@@ -555,11 +555,11 @@ enum StraightLineRenderedActionCheck {
             switch prior.initialization {
             case .value(let expression):
                 guard let value = initialValue(expression) else { return }
-                earlier.append((name, variable.declaration.name, value.value, value.defined, false, isInt))
+                earlier.append((name, variable.formalName, value.value, value.defined, false, isInt))
             case .memberOf(let expression):
                 guard let tree = initialIntDomain(expression, layout: layout,
                     variables: names, binders: binders) else { return }
-                earlier.append((name, variable.declaration.name, tree.value, tree.sites.isEmpty ? nil : tree.defined, true, isInt))
+                earlier.append((name, variable.formalName, tree.value, tree.sites.isEmpty ? nil : tree.defined, true, isInt))
             }
         }
         guard emitted.count == tree.sites.count else { throw mismatch() }
@@ -729,7 +729,7 @@ enum StraightLineRenderedActionCheck {
                        moduleName: String? = nil, reservedNames: Set<String> = [],
                        required: Bool = false) throws {
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
-            ($0.id, $0.declaration.name)
+            ($0.id, $0.formalName)
         })
         let occupied = reservedNames.union(layout.declarations.map(\.name))
             .union(layout.actions.map(\.renderedName))
@@ -926,7 +926,7 @@ enum StraightLineRenderedActionCheck {
            case .stateVariable(let id) = condition.children[0].operation,
            id == programCounter,
            case .controlLocation(let location) = condition.children[1].operation,
-           let variableName = layout.variables.first(where: { $0.id == id })?.declaration.name,
+           let variableName = layout.variables.first(where: { $0.id == id })?.formalName,
            let locationName = layout.controlLocation(location)?.formalName {
             selection = "(\(variableName) = \"\(locationName)\")"
             body = guardedBody
@@ -961,7 +961,7 @@ enum StraightLineRenderedActionCheck {
             }
         }
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
-            ($0.id, $0.declaration.name)
+            ($0.id, $0.formalName)
         })
         func scalarValue(_ expression: CompiledExpression) -> String? {
             if case .add = expression.operation {
@@ -1132,7 +1132,7 @@ enum StraightLineRenderedActionCheck {
                                           renderer: CompiledTLARenderer) throws {
         let lines = module.components(separatedBy: "\n")
         let variables = Dictionary(uniqueKeysWithValues: renderer.layout.variables.map {
-            ($0.id, $0.declaration.name)
+            ($0.id, $0.formalName)
         })
         func checkedExpression(_ value: CompiledExpression) -> BooleanTree? {
             booleanTree(value, variables: variables, binders: renderer.bindings.binders,
@@ -1292,7 +1292,7 @@ enum StraightLineRenderedActionCheck {
                     return (tree.defined.map { "~(\($0))" }, tree.failures)
                 }
                 let names = Dictionary(uniqueKeysWithValues: renderer.layout.variables.map {
-                    ($0.id, $0.declaration.name)
+                    ($0.id, $0.formalName)
                 })
                 if let tree = addition(value, variables: names, binders: renderer.bindings.binders) {
                     var preceding: [String] = []
@@ -1452,7 +1452,7 @@ enum StraightLineRenderedActionCheck {
         guard !layout.variables.isEmpty || !included.isEmpty else { return }
         let lines = module.components(separatedBy: "\n")
         if behavior.fairness.isEmpty {
-            let names = layout.variables.map(\.declaration.name)
+            let names = layout.variables.map(\.formalName)
             let frame = names.count == 1 ? names[0] : "<<\(names.joined(separator: ", "))>>"
             let expected = "Spec ==\n  /\\ Init\n  /\\ [][Next]_\(frame)"
             let starts = lines.indices.filter { lines[$0] == "Spec ==" || lines[$0].hasPrefix("Spec == ") }

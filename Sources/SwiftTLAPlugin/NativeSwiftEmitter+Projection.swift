@@ -6,7 +6,7 @@ extension NativeSwiftEmitter {
     /// Serialize resolved native values only at the independent validation boundary.
     func formalProjectionDeclarations() throws -> [DeclSyntax] {
         let fields = try program.layout.variables.map { variable in
-            let name = variable.declaration.name
+            let name = variable.formalName
             guard TLAStateProjection.Token(validating: name) != nil else {
                 throw unsupported("invalid formal state identifier: \(name)")
             }

@@ -114,8 +114,8 @@ struct CompiledRuntime {
                         guard let field = layout.variables.first(where: { $0.id == variable }) else {
                             throw CompiledEvaluationError.invalidVariableID(variable)
                         }
-                        guard let token = TLAStateProjection.Token(validating: field.declaration.name) else {
-                            throw TLAStateProjectionDiagnostic.invalidKey(path: field.declaration.name)
+                        guard let token = TLAStateProjection.Token(validating: field.formalName) else {
+                            throw TLAStateProjectionDiagnostic.invalidKey(path: field.formalName)
                         }
                         return .init(token: token, value: try value.rendered(using: layout))
                     }

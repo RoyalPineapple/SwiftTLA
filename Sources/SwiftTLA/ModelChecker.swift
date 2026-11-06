@@ -88,7 +88,7 @@ package struct ModelChecker {
         FiniteExploration(
             graph: StateGraph(
                 specName: compilation.description.name,
-                variableNames: compilation.layout.variables.map(\.declaration.name),
+                variableNames: compilation.layout.variables.map(\.formalName),
                 transitions: [:],
                 states: [:]
             ),
@@ -130,7 +130,7 @@ private func compiledBFS(
         }
         return StateGraph(
             specName: specificationName,
-            variableNames: layout.variables.map(\.declaration.name),
+            variableNames: layout.variables.map(\.formalName),
             transitions: transitions,
             states: states
         )
