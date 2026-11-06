@@ -3,6 +3,27 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct StateDeclarationNamesTests {
+    @Test("a state named vars retains its value without a conflicting generated tuple alias")
+    func retainsVarsStateName() throws {
+        let source = try parseSpecTestClosure("""
+        { scope in
+            let vars = scope.sharedVar(initial: 0)
+            let count = scope.sharedVar(initial: 1)
+        }
+        """)
+        let specification = SpecParser.parseSpecClosure(named: "BoundStateNames", source)
+        try #require(specification.diagnostics.isEmpty)
+        let compiled = try specification.compile()
+        let runtime = CompiledRuntime(compilation: compiled)
+        let initial = try #require(try runtime.initialStates().first)
+        let variable = try #require(compiled.layout.testVariableID(named: "vars"))
+        #expect(try initial.value(for: variable) == .integer(0))
+        let output = try compiled.render().tlaBundle.tla
+        #expect(output.contains("VARIABLES vars, count\n"))
+        #expect(!output.split(separator: "\n").contains { $0.hasPrefix("vars ==") })
+        #expect(output.contains("[][Next]_<<vars, count>>"))
+    }
+
     @Test("escaped Swift declarations retain unescaped model identities")
     func resolvesEscapedStateNames() throws {
         let compiled = try EscapedStateNamesModel.spec.compile()

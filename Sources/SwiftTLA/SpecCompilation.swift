@@ -584,8 +584,9 @@ public struct RenderedSpecification: Sendable {
             }
             return mapped
         }
+        let stateBindings = try substitutions(state, names: Abstract.State.fieldIdentities, kind: "state")
         let bindings = try substitutions(parameters, names: Abstract.Configuration.fieldIdentities, kind: "parameters")
-            + substitutions(state, names: Abstract.State.fieldIdentities, kind: "state")
+            + stateBindings
         let target = try abstract.render(configuration: abstractConfiguration).tlaBundle
         guard case .compiled(let targetIdentity, let targetOwnership, let targetDependencies) = target.provenance else {
             throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
@@ -594,12 +595,23 @@ public struct RenderedSpecification: Sendable {
         }
         let replacement = bindings.sorted { $0.0 < $1.0 }
             .map { "\($0.0) <- (\($0.1))" }.joined(separator: ", ")
-        let property = behavior == .specification
-            ? "\(instance)!Spec"
-            : "\(instance)!Init /\\ [][\(instance)!Next]_\(instance)!vars"
-        let definitions = "\(instance) == INSTANCE \(target.root.name)"
-            + (replacement.isEmpty ? "" : " WITH " + replacement)
-            + "\n\(name) == \(property)\n"
+        let variableDeclarations = target.root.tla.split(separator: "\n").filter {
+            $0.hasPrefix("VARIABLES ")
+        }
+        let variableNames = variableDeclarations.count == 1
+            ? variableDeclarations[0].dropFirst("VARIABLES ".count)
+                .components(separatedBy: ", ") : []
+        let mappedValues = Dictionary(uniqueKeysWithValues: stateBindings)
+        let mappedFrame: String?
+        if !variableNames.isEmpty, variableNames.allSatisfy(isTLADeclarationName),
+           Set(variableNames).count == variableNames.count,
+           Set(variableNames) == Set(mappedValues.keys) {
+            let values = variableNames.map { "(\(mappedValues[$0]!))" }
+            mappedFrame = values.count == 1 ? values[0] : "<<\(values.joined(separator: ", "))>>"
+        } else {
+            // shortcut: hidden or noncanonical frames keep the existing alias; derive their full mapping before inlining.
+            mappedFrame = nil
+        }
         let selected = TLCConfiguration(behavior: configuration.behavior,
             specificationName: configuration.specificationName, assumptionsOnly: configuration.assumptionsOnly,
             declarations: configuration.declarations, checkDeadlock: configuration.checkDeadlock,
@@ -616,6 +628,20 @@ public struct RenderedSpecification: Sendable {
                     path: "refinements.\(name).source", expected: "a complete generated concrete module",
                     actual: "an incomplete or external module", nextSafeAction: "Render the generated concrete model first.")
             }
+            let instanceBody = "INSTANCE \(target.root.name)"
+                + (replacement.isEmpty ? "" : " WITH " + replacement)
+            let sourceLines = source.root.tla.split(separator: "\n")
+            var linkedInstance = instance
+            while source.root.tla.contains(linkedInstance),
+                  !sourceLines.contains(Substring("\(linkedInstance) == \(instanceBody)")) {
+                linkedInstance += "_"
+            }
+            let existingInstance = sourceLines.contains(Substring("\(linkedInstance) == \(instanceBody)"))
+            let property = behavior == .specification
+                ? "\(linkedInstance)!Spec"
+                : "\(linkedInstance)!Init /\\ [][\(linkedInstance)!Next]_\(mappedFrame ?? "\(linkedInstance)!vars")"
+            let definitions = (existingInstance ? "" : "\(linkedInstance) == \(instanceBody)\n")
+                + "\(name) == \(property)\n"
             let sourceText = String(source.root.tla[..<end.lowerBound]) + definitions + source.root.tla[end.lowerBound...]
             var imports = source.imports
             for file in [target.root] + target.imports {
@@ -629,17 +655,18 @@ public struct RenderedSpecification: Sendable {
             let identityInput = rootIdentity.value + ":" + targetIdentity.value + ":" + definitions
             let identity = CompilationIdentity(value: SHA256.hash(data: Data(identityInput.utf8))
                 .map { String(format: "%02x", $0) }.joined())
-            let path = [instance]
+            let path = [linkedInstance]
             let ownership = rootOwnership + targetOwnership.map {
                 TLAModuleBundle.OwnershipEntry(moduleName: $0.moduleName,
                     owningRoot: source.root.name, structuralPath: path + $0.structuralPath)
-            }
-            let dependencies = rootDependencies
-                + [.init(importingModule: source.root.name, importedModule: target.root.name, structuralPath: path)]
+            }.filter { !rootOwnership.contains($0) }
+            let linkedDependencies = [TLAModuleBundle.ModuleDependency(
+                importingModule: source.root.name, importedModule: target.root.name, structuralPath: path)]
                 + targetDependencies.map {
-                    .init(importingModule: $0.importingModule, importedModule: $0.importedModule,
+                    TLAModuleBundle.ModuleDependency(importingModule: $0.importingModule, importedModule: $0.importedModule,
                         structuralPath: path + $0.structuralPath)
                 }
+            let dependencies = rootDependencies + linkedDependencies.filter { !rootDependencies.contains($0) }
             let bundle = TLAModuleBundle(root: .init(name: source.root.name, tla: sourceText,
                 cfg: try selected.render(usesSymmetryReduction: false)), imports: imports,
                 provenance: .compiled(identity: identity, ownership: ownership, dependencies: dependencies))
@@ -2433,15 +2460,16 @@ private extension CompiledModuleMetadata {
         lines += try renderer.assumptions(behavior)
         if behavior.assume != nil { lines.append("") }
 
-        if !isLibraryModule, varNames.count > 1 {
-            lines.append("vars == \(varsTuple)")
-            lines.append("")
-        }
         var occupied = renderer.reservedNames.union(renderer.bindings.binders.values)
             .union(renderer.bindings.operatorNames.values)
             .union(layout.declarations.map(\.name))
             .union(layout.actions.map(\.renderedName))
             .union(renderedActions.flatMap(\.calls).map(\.renderedName))
+        if !isLibraryModule, varNames.count > 1, !occupied.contains("vars") {
+            lines.append("vars == \(varsTuple)")
+            lines.append("")
+            occupied.insert("vars")
+        }
         var evaluationFailureDeclarations: [String] = []
         var actionFailureReferences: [String] = []
         var actionDeclarations: [(header: String, definition: String)] = []

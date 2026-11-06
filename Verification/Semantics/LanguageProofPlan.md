@@ -95,6 +95,9 @@ The proof dependencies above still govern proof closure; they do not block indep
   Fix measured gaps in their existing owners; preserve every accepted route.
 - [x] I5a Resolve action names against known compiled module, model-value and binder declarations.
   Preserve action IDs, source labels and the valid single unbound `Next` case.
+- [x] I5b Preserve state names that occupy `vars` and link generated refinements without duplicate instance declarations.
+  Use substituted safety frames only when the mappings cover every actual declared abstract variable.
+  Hidden or noncanonical frames retain the existing alias route and an open correspondence obligation.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -363,6 +366,30 @@ One intentionally stopped setup attempt and one Swift type-checker failure execu
 No resource, tool, pin or timeout was changed to repair either setup issue.
 Opaque/imported namespaces, non-action declaration collisions, physical name interpretation and the full namespace proof remain open.
 This is implementation correspondence support, not completion of a six-link proof row.
+
+### State-frame and refinement checkpoint 6 November 2026
+
+The state-name owner exposed a generated `vars` alias colliding with an accepted state declaration.
+The generated refinement owner also exposed a single-variable target referenced through an absent `vars` alias,
+duplicate declarations for equal instance substitutions, and collisions between different substitutions of one instance.
+The initial two-test baseline reported two issues. The expanded one-test refinement baseline reported six issues;
+these overlap the initial export faults and are not eight independent semantic failures.
+
+The existing renderer now omits the optional tuple alias when its name is occupied.
+The existing generated-refinement linker substitutes the safety frame only when every actual declared abstract variable is mapped.
+Equal instances are reused; different mappings get separate names and corresponding import provenance.
+The final owner also checks a three-variable mapped frame in declaration order and the complete hidden `pc, row` alias fallback.
+
+The six selected existing suites passed all 55 tests, including the native fairness and external-client controls.
+After adding the frame guard cases, the final two-test refinement owner passed on unchanged captured inputs.
+Its repeated test overlaps the earlier run; these counts must not be added as distinct cases.
+A missing `try` caused a test-source compile failure with zero executed tests, and the first hidden-frame coverage guard
+assumed the wrong declaration order. Both were corrected without production, resource or timeout changes.
+Neither is a production semantic mismatch or proof-rejection result.
+
+Canonical declaration/instance interpretation, general hidden or noncanonical mappings, other namespace collisions,
+source correspondence, import semantics and refinement/checking kernels remain owned open obligations.
+No formal proof or hosted admission is inferred, and no six-link proof row is complete.
 
 ## Work discipline and admission
 
