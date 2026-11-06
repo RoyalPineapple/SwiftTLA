@@ -110,10 +110,66 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5f Bind generated source key paths through source declaration names before allocating formal symbols.
   Preserve escaped Swift names and the direct/projecting mapping routes.
   General key-path interpretation and source/query correspondence remain open.
+- [x] I5g Route expression-form integer configuration values through existing definitions.
+  Keep the inclusive direct-token boundary and recurse through finite sets without restricting accepted values.
+  Pinned evaluator capacity and general integer correspondence remain separate open obligations.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
 Implementation checkboxes do not complete the six-link proof rows.
+
+### I6 first-pass accepted-route inventory
+
+This is a source-owner map and a finite expansion queue, not an acceptance or preservation certificate.
+Each row is parameterized by the actual admitted child types and lexical placement.
+Its guards must be reconciled with the parser, builder and type checker before I6 is complete.
+Presence in an internal enum, a fixture or a dispatch switch does not establish membership or correctness.
+Formal-core forms accepted inside `#spec` stay in scope even when they are not the application authoring style.
+
+Common expression owners are `SpecParser.decodeTypedFacadeValue/decodeTypedFacadeExpr`,
+`SourceTypeResolver`, `CompiledLowerer`, `CompiledTypeChecker`, `NativeSwiftEmitter`,
+`CompiledEvaluator` and `CompiledTLARenderer`. The native interpreter and generated-code routes need separate links.
+Type schemas include primitive and nominal values, finite/union/OneOf values, sets, arrays, dictionaries,
+tuples and records recursively; a row does not silently replace them with integer examples.
+
+| Route | Source forms and placement to reconcile | Distinct implementation link / parent consumer | Current limit |
+| --- | --- | --- | --- |
+| R01 Scalars | Integer spellings and signs, Bool/String literals, enum cases and bounds | `SourceIntegerLiteral`, `decodeEnumCase`, `decodeSwiftIntegerBound`; expression child rules | Literal regressions exist; source binding, representation and kernel correspondence open |
+| R02 Reads | Scoped state/parameter/local reads, captures and bound values | `TypedFacadeScope`, layout IDs, binder scopes; `OrderedIntExpressionRule` read cases | Names repaired; arbitrary lexical ownership and prefix availability unproved |
+| R03 Arithmetic | Plain Swift constant folding separately from typed formal `+ - * / %` and `integerDivided` | `decodeSwiftIntegerValue` versus formal operation lowering; `OrderedArithmeticFailures` | Overload/placement reconciliation and full target-Int/backend range open |
+| R04 Boolean/conditional | `!`, `&&`, `||`, comparisons and supported conditional expressions | Lazy children, skipped failures; Boolean and conditional composition rules | Actual source/output and complete evaluation observations unproved |
+| R05 Set construction | Closed Swift/SetExpr values separately from `SetExpr.literal` queries | `decodeTypedSetValue` versus `decodeTypedSetLiteral`; membership/Boolean parents | Purity, occurrence identity and admitted element types need explicit guards |
+| R06 Set operations | Membership, subset, union/intersection/difference, cardinality, subsets, flattening and Sum | Typed collection methods, binders and finite-domain kernels | Parent rules and failure/order correspondence incomplete |
+| R07 Bound expressions | Filtering, mapping, flatMapping, ForAll/Exists, expression Select and formal choice | Typed closure scope versus algorithm Choose; expression/Boolean consumers | Choice order, no-match and nested failures retain open links |
+| R08 Swift arrays | Array literals/constructors, count, subscripts and edits | `SwiftArrayValue`, typed decoder offsets, tuple operations; sequence rules | Zero-based source versus formal indexing must be derived per route |
+| R09 DSL sequences | TupleExpr and Pair/Triple/Quintuple, head/tail/append/concat/remove/prefix/select | One-based typed APIs and sequence constructor/composition rules | Compound types, dynamic bounds and complete failures open |
+| R10 Zero-based sequences | Literals/fill, sequence domains, conversions and ZSequences calls | `decodeZeroBasedSequenceFill`, imported operator signatures | Representation and imported-operator correspondence open |
+| R11 Dictionaries/functions | Swift dictionary literals/mapping, Function/PartialFunction, domain/keys/apply/update/override | Key/value schemas, totality and missing-key handling; function/assignment consumers | Type/placement guards and generic parent proof missing |
+| R12 Function spaces | Functions domains, direct membership and converted membership | `functionSpaceMembership` optimization versus enumeration | Each capability and evaluation route needs its own correspondence |
+| R13 Records/views/unions | Immutable nominal/structural fields, OneOf cases and checked `assuming` views | Source record metadata, projections, conversion and rollback | Existing view proofs are scoped; general typed representation open |
+| R14 Random expressions | RandomSubset/RandomElement in initializers and queries | Sampling separately from complete initial support and selected reconstruction | Sampling bounds are not exhaustive outcomes; generic source correspondence open |
+| R15 Checking effects | Registers/set, checkingLevel/checkingDiameter and PrintT | `SpecParser+Checking`, validation context and emitted obligations | Evaluation count, precedence and observable effects need the M0 contract |
+| R16 State/initialization | sharedVar/localVar value or memberOf initialization at each legal scope; formal Variable forms | Dependency order, hidden state, event/prefix collection; initialization composition | Complete TLA branch events and arbitrary-prefix correspondence open |
+| R17 Atomic writes | Assign to roots, collection entries and record paths; ordered repeated targets | `scheduleAtomicStatements`, pending writes and materialization; framed action composition | Actual substitution, failure rollback and all lvalue routes unproved |
+| R18 Atomic branches | Do/When/Assert, Let/With/If/Either/Choose and bound-step arguments | Algorithm parser, branchwise continuation, action enumeration | Source guards, captures, labels and complete outcomes open |
+| R19 Sequential control | Registered Algorithm, While/Goto/Stop/Skip and fallthrough | Algorithm lowering, pc/termination routing; `SingleAssignment` | General accepted control/use premises not discharged |
+| R20 Processes | Static/configured Each populations, local/exposed families and scheduling | Process binders, family layout, native routing and authored PlusCal | Population/identity/frame proof and parent composition open |
+| R21 Procedures/reuse | Procedure/Call/Return, recursion, bound Macro statements and local expressions | Hygienic substitution, argument capture and call-stack state | Full source and control-composition links missing |
+| R22 Safety/reachability | Invariant, InitialStates selection and positive Reachable | Predicates, initial filtering and witness/verdict selection | Checking composition still assumes equal machine observations |
+| R23 Temporal/fairness | Five temporal forms, bound/process/projected fairness and profiles | Temporal lowering, native checker and Spec/profile bodies | Existing bounded comparisons do not prove generic temporal preservation |
+| R24 Validation | Registered Validation, Bind, check selection, expectations, exhaustive/decisive/simulation modes and limits | Scenario compiler, native validation, TLCConfiguration | Expected failures, unavailable results and resource limits need explicit contract links |
+| R25 Symmetry | Registered immutable symmetry and applicable safety scenarios | Native unreduced graph versus formal quotient/checking | Orbit/quotient and selector correspondence open |
+| R26 Formal functions/imports | FormalDefinition, local recursion/LetIn, registered formal calls, Import/Extends and replacements | Source/module parsing, typed function plans, native/TLA calls | Actual imported-code interpretation and generic function parents open |
+| R27 Instances/refinement | Formal and generated Instance/Refinement, direct/projecting maps, configuration and hidden frames | Existing typed linker, mapping and refinement checkers | Repairs exist; nonliteral constants, module replacements and general refinement proof open |
+| R28 Export/observation | Native machine/projection, direct TLA, authored PlusCal, CFG/profiles and selected initial reconstruction | Existing emitters, bundle closure, codecs and checking kernels | Complete source-to-output/checker soundness remains open |
+
+I6 next actions are to reconcile exact signatures/type/placement guards within these rows,
+separate actual missing/incorrect routes from implemented-but-unproved ones, and batch measured repairs by owner.
+The first source-identified transport group is nonliteral closed constants and their refinement forwarding (R27/R28);
+its actual regression must be measured before repair.
+The pinned integer-capacity/representation boundary (R01/R03) is a separate implementation blocker for a full-Int claim.
+Candidate collection-member routes require public-API and source-guard evidence before being labelled defects or extended.
+I6 remains unchecked. All six proof links for these rows remain open unless an actual derived result is recorded.
 
 ## M0 Observation contract and pilot domain
 
@@ -477,6 +533,19 @@ source/query correspondence, complete observations and composition remain owned 
 The pinned TLC parser's numerical token handling and `IntValue` arithmetic capacity are also separate from Swift `Int`
 and from the mathematical integer rules. Primary-source inspection is not execution or a proof of that value correspondence.
 All accepted forms remain in scope. No new formal proof, hosted admission or six-link closure follows from this checkpoint.
+
+### Integer configuration transport checkpoint 6 November 2026
+
+The parameter exporter classified every nonnegative integer as a direct CFG literal, while the existing integer formatter
+emits arithmetic expressions above one billion. The existing value-classification guard now retains direct tokens only
+through that inclusive boundary. Larger and negative values, including values inside finite sets, use the existing
+definition-backed configuration path. No accepted value or DSL form was rejected.
+
+The unchanged-production baseline executed three tests with eighteen overlapping direct/authored encoding issues
+for three new argument cases. The inclusive direct-literal control and previous value cases passed.
+The repaired configuration suites passed all twenty-four tests on unchanged captured inputs.
+This is a transport regression, not TLC execution, an integer arithmetic proof or hosted admission.
+The pinned parser and arithmetic capacity, nonliteral closed constants and full source/value correspondence remain open.
 
 ## Work discipline and admission
 
