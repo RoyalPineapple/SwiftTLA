@@ -773,7 +773,7 @@ private struct ReachableInvariantFailure {
         let source = "---- MODULE WidthMismatch ----\n====\n"
         do {
             _ = try RenderedSpecification(_generatedModule: "WidthMismatch", source: source,
-                compilationIdentity: "width-mismatch", declarations: [], checkDeadlock: false,
+                compilationIdentity: "width-mismatch", declarations: [], _generatedConstants: [], checkDeadlock: false,
                 _generatedIntegerBitWidth: Int.bitWidth - 1, _generatedIntrinsicInvariants: [],
                 invariants: [], reachabilityProperties: [], properties: [], refinements: [],
                 symmetry: [], actions: [])

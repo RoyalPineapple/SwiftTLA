@@ -100,19 +100,23 @@ The proof dependencies above still govern proof closure; they do not block indep
   Hidden or noncanonical frames retain the existing alias route and an open correspondence obligation.
 - [x] I5c Retain generated-refinement model values in root declarations, instance substitutions and checking configuration.
   Preserve existing symbols and model-value identity when names collide; reuse established bindings on repeated imports.
-  Concrete abstract constants and module-operator replacements retain separate open forwarding obligations.
+  Module-operator replacements and general value correspondence retain separate open obligations.
 - [x] I5d Keep public state names and declaration IDs while assigning distinct formal names for generated behavior and known declarations.
   Carry the same formal names through TLA/PlusCal, generated field identities, complete projections and initial failure prefixes.
   Unoccupied names stay unchanged; inherited standard/opaque namespaces and the general name-correspondence proof remain open.
 - [x] I5e Forward closed constant assignments through generated-refinement instances and root configurations.
   Reuse equivalent root bindings and preserve literal bytes, including embedded assignment separators.
-  Module-operator replacements and nonliteral configuration-value export retain separate open obligations.
+  Module-operator replacements and general formal-import configuration retain separate open obligations.
 - [x] I5f Bind generated source key paths through source declaration names before allocating formal symbols.
   Preserve escaped Swift names and the direct/projecting mapping routes.
   General key-path interpretation and source/query correspondence remain open.
 - [x] I5g Route expression-form integer configuration values through existing definitions.
   Keep the inclusive direct-token boundary and recurse through finite sets without restricting accepted values.
   Pinned evaluator capacity and general integer correspondence remain separate open obligations.
+- [x] I5h Share definition-backed final binding for closed constants and runtime parameters.
+  Preserve typed constant values through generated refinement links and omit parameter-value helpers from imported templates.
+  Guard literal, nested model-value alias, direct compiler, generated, authored and selected profile transport in existing owners.
+  General formal imports, module replacements, integer representation and implementation correspondence remain open.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -160,13 +164,14 @@ tuples and records recursively; a row does not silently replace them with intege
 | R24 Validation | Registered Validation, Bind, check selection, expectations, exhaustive/decisive/simulation modes and limits | Scenario compiler, native validation, TLCConfiguration | Expected failures, unavailable results and resource limits need explicit contract links |
 | R25 Symmetry | Registered immutable symmetry and applicable safety scenarios | Native unreduced graph versus formal quotient/checking | Orbit/quotient and selector correspondence open |
 | R26 Formal functions/imports | FormalDefinition, local recursion/LetIn, registered formal calls, Import/Extends and replacements | Source/module parsing, typed function plans, native/TLA calls | Actual imported-code interpretation and generic function parents open |
-| R27 Instances/refinement | Formal and generated Instance/Refinement, direct/projecting maps, configuration and hidden frames | Existing typed linker, mapping and refinement checkers | Repairs exist; nonliteral constants, module replacements and general refinement proof open |
+| R27 Instances/refinement | Formal and generated Instance/Refinement, direct/projecting maps, configuration and hidden frames | Existing typed linker, mapping and refinement checkers | Closed-value forwarding repaired; general formal imports, module replacements and refinement proof open |
 | R28 Export/observation | Native machine/projection, direct TLA, authored PlusCal, CFG/profiles and selected initial reconstruction | Existing emitters, bundle closure, codecs and checking kernels | Complete source-to-output/checker soundness remains open |
 
 I6 next actions are to reconcile exact signatures/type/placement guards within these rows,
 separate actual missing/incorrect routes from implemented-but-unproved ones, and batch measured repairs by owner.
-The first source-identified transport group is nonliteral closed constants and their refinement forwarding (R27/R28);
-its actual regression must be measured before repair.
+The first grouped transport repair, closed constants and generated refinement forwarding (R27/R28), is recorded under I5h.
+Nested configuration-dependent linking and general formal-import bindings retain separate implementation obligations;
+each next repair still requires an actual accepted-route baseline.
 The pinned integer-capacity/representation boundary (R01/R03) is a separate implementation blocker for a full-Int claim.
 Candidate collection-member routes require public-API and source-guard evidence before being labelled defects or extended.
 I6 remains unchecked. All six proof links for these rows remain open unless an actual derived result is recorded.
@@ -546,6 +551,35 @@ for three new argument cases. The inclusive direct-literal control and previous 
 The repaired configuration suites passed all twenty-four tests on unchanged captured inputs.
 This is a transport regression, not TLC execution, an integer arithmetic proof or hosted admission.
 The pinned parser and arithmetic capacity, nonliteral closed constants and full source/value correspondence remain open.
+
+### Closed constant and refinement transport checkpoint 6 November 2026
+
+The existing generated refinement fixture admitted a negative closed constant, but the pre-fix exporter wrote its
+expression directly into CFG. One actual test failed at the missing definition-backed binding after its native initial
+state and prior literal controls passed. That requirement stopped the run before the later quoted/import assertions;
+those assertions receive only the post-fix execution credit below.
+
+The final artifact constructor now applies the existing literal-versus-definition distinction to both closed constants
+and runtime parameters. Generated exports carry typed `ConstantDecl` values into this boundary, and refinements retain
+those values instead of parsing rendered value expressions. All three handwritten artifact-constructor callers were
+migrated to the required underscored metadata argument. Application model State, Action and Transition APIs are unchanged.
+Definition expressions use actual root aliases for model values, preserving string contents and record field names.
+The linker imports the unconfigured module template because its explicit substitutions bind each target parameter.
+The existing direct abstract-model case now reuses one module across distinct parameter configurations.
+Template invariance through nested configuration-dependent constant reuse and name allocation is not established.
+
+The first focused run passed forty-four tests in seven suites on all 1,201 unchanged captured inputs.
+The final run passed the same forty-four tests after adding independent fixed literal expectations, a profile-only helper
+collision, nested model-value aliases, direct compiled constant export and distinct configured imports in existing owners.
+Production bytes were unchanged between the runs. These overlapping runs are not additive coverage totals.
+No local TLC execution, new theorem, six-link closure, binary reproduction or hosted admission follows from them.
+
+The reviewed macro guard is exactly two unlabeled arguments, no trailing closure, a literal name and a value decoded in
+empty source scope that the existing static-value checker accepts. That checker admits value nodes and recursively closed
+set literals. The formal-core `Constant` API has its separate `TLAValueConvertible` route; its broader values do not prove
+that corresponding macro spellings are accepted. General formal-import configuration, module-operator forwarding,
+pinned integer capacity, helper/decoder soundness and source-to-output correspondence remain explicit owned boundaries.
+All proof milestones and I6 remain open.
 
 ## Work discipline and admission
 

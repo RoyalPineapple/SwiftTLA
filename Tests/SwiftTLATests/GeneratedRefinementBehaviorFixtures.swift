@@ -10,6 +10,8 @@ struct FairRefinementTarget {
             Constant("EnabledValue", true)
             Constant("FiniteValues", SetExpr<Int>(1, 2))
             Constant("TextValue", "left = right")
+            Constant("Minimum", -1)
+            Constant("QuotedText", "a\"b")
             let N = scope.parameter(as: Int.self, in: Set<Int>([1]))
             let value = scope.sharedVar(initial: 0)
             let advance = Do(Step.advance, when: value == 0) {
