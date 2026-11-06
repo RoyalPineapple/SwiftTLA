@@ -3117,7 +3117,7 @@ func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
               || predicates.count == expectedIntLiterals.count + expectedIntPredicates.count
                   + expectedControlLocations.count + expectedIntStateNames.count),
           expectedIntLiterals.allSatisfy({ name, value in
-              predicates.filter { $0 == "\(name) = \(TLAValue.int(value).description)" }.count == 1
+              predicates.filter { $0 == "\(name) = \(StraightLineRenderedActionCheck.checkedIntegerLiteral(value))" }.count == 1
           }),
           expectedControlLocations.allSatisfy({ name, location in
               predicates.filter { $0 == "\(name) = \(TLAValue.string(location).description)" }.count == 1

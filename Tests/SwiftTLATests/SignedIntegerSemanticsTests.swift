@@ -16,10 +16,37 @@ import Testing
         #expect(TLAValue.int(-2_147_483_648).description == "(-2 * 1000000000 - 147483648)")
         #expect(TLAValue.tuple([.int(.min), .int(Int.max)]).description == "<<\(minimum), \(maximum)>>")
         #expect(TLAValue.set([.int(.min)]).description == "{\(minimum)}")
-        let specification = TLASpec("MinimumIntegerLiteral") {
-            Variable(Var<Int>("minimum"), Int.min)
+        let radixBoundaries: [(Int, String)] = [
+            (.min, minimum),
+            (.max, maximum),
+            (0, "0"),
+            (1_000_000_000, "1000000000"),
+            (-1_000_000_000, "-1000000000"),
+            (-2_000_000_000, "(-2 * 1000000000 + 0)"),
+            (-2_000_000_001, "(-2 * 1000000000 - 1)"),
+            (1_000_000_000_000_000_000, "(1000000000 * 1000000000 + 0)"),
+            (1_000_000_000_000_000_001, "(1000000000 * 1000000000 + 1)"),
+            (1_000_000_000_999_999_999, "(1000000000 * 1000000000 + 999999999)"),
+            (1_000_000_001_000_000_000, "((1 * 1000000000 + 1) * 1000000000 + 0)"),
+            (-1_000_000_000_000_000_000, "(-1000000000 * 1000000000 + 0)"),
+            (-1_000_000_000_000_000_001, "(-1000000000 * 1000000000 - 1)"),
+        ]
+        for (value, expected) in radixBoundaries {
+            #expect(TLAValue.int(value).description == expected)
+            let specification = TLASpec("MinimumIntegerLiteral") {
+                Variable(Var<Int>("minimum"), value)
+            }
+            let compilation = try specification.compile()
+            let runtime = CompiledRuntime(compilation: compilation)
+            let initial = try #require(try runtime.initialStates().first)
+            let field = try #require(compilation.layout.testVariableID(named: "minimum"))
+            #expect(try initial.value(for: field) == .integer(value))
+            do {
+                #expect(try compilation.render().tlaBundle.tla.contains("minimum = \(expected)"))
+            } catch {
+                Issue.record("A valid signed literal \(value) failed its emitted-output check: \(error)")
+            }
         }
-        #expect(try specification.compile().render().tlaBundle.tla.contains("minimum = \(minimum)"))
     }
 
     @Test("Generated Swift retains raw and formal signed division")

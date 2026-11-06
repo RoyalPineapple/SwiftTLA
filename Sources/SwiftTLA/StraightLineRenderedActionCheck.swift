@@ -242,16 +242,20 @@ enum StraightLineRenderedActionCheck {
     private static let tokenPattern = try? NSRegularExpression(
         pattern: #"\s+|"(?:[^"\\]|\\.)*"|==|>=|<=|/\\|\\/|\\o|\\in|\\cup|\\div|\.\.|-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*'?|[(),{}+*<>%~#-]|="#)
 
-    private static func checkedIntegerLiteral(_ value: Int) -> String {
+    static func checkedIntegerLiteral(_ value: Int) -> String {
         let radix = 1_000_000_000
         guard value.magnitude > UInt(radix) else { return String(value) }
         let digits = Array(String(value.magnitude))
-        let firstCount = (digits.count - 1) % 9 + 1
+        var firstCount = (digits.count - 1) % 9 + 1
+        // The renderer stops at the radix itself, so its leading chunk can have ten digits.
+        if firstCount == 1, digits.starts(with: Array(String(radix))) {
+            firstCount += 9
+        }
         let negative = value < 0
         var result = (negative ? "-" : "") + String(digits[..<firstCount])
         for start in stride(from: firstCount, to: digits.count, by: 9) {
             let remainder = Int(String(digits[start..<(start + 9)]))!
-            result = "(\(result) * \(radix) \(negative ? "-" : "+") \(remainder))"
+            result = "(\(result) * \(radix) \(negative && remainder != 0 ? "-" : "+") \(remainder))"
         }
         return result
     }
