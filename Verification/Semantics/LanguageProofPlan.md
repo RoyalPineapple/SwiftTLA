@@ -121,6 +121,9 @@ The proof dependencies above still govern proof closure; they do not block indep
   Retain parameter ownership, unconfigured declaration/profile namespaces and potential helper names through copies.
   Reuse closed bindings, allocate each instance once across output forms, and retain source/native controls for both configurations.
   General namespace/source correspondence, formal imports and module-operator forwarding remain open.
+- [x] I5j Preserve captured state reads in zero-based sequence literals and fills.
+  Reuse the existing fresh-name allocator and one shared fill constructor; reserve root parameter names for rendered local binders.
+  Retain the existing empty-sequence, membership and failure controls. General binder/source correspondence remains open.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -164,12 +167,13 @@ tuples and records recursively; a row does not silently replace them with intege
 | R20 Processes | Static/configured Each populations, local/exposed families and scheduling | Process binders, family layout, native routing and authored PlusCal | Population/identity/frame proof and parent composition open |
 | R21 Procedures/reuse | Procedure/Call/Return, recursion, bound Macro statements and local expressions | Hygienic substitution, argument capture and call-stack state | Full source and control-composition links missing |
 | R22 Safety/reachability | Invariant, InitialStates selection and positive Reachable | Predicates, initial filtering and witness/verdict selection | Checking composition still assumes equal machine observations |
-| R23 Temporal/fairness | Five temporal forms, bound/process/projected fairness and profiles | Temporal lowering, native checker and Spec/profile bodies | Existing bounded comparisons do not prove generic temporal preservation |
+| R23 Temporal/fairness | Base temporal forms plus all/conditional/alwaysStep composition, bound/process/projected fairness and profiles | Temporal lowering, native checker and Spec/profile bodies | Existing bounded comparisons do not prove generic temporal preservation |
 | R24 Validation | Registered Validation, Bind, check selection, expectations, exhaustive/decisive/simulation modes and limits | Scenario compiler, native validation, TLCConfiguration | Expected failures, unavailable results and resource limits need explicit contract links |
 | R25 Symmetry | Registered immutable symmetry and applicable safety scenarios | Native unreduced graph versus formal quotient/checking | Orbit/quotient and selector correspondence open |
 | R26 Formal functions/imports | FormalDefinition, local recursion/LetIn, registered formal calls, Import/Extends and replacements | Source/module parsing, typed function plans, native/TLA calls | Actual imported-code interpretation and generic function parents open |
 | R27 Instances/refinement | Formal and generated Instance/Refinement, direct/projecting maps, configuration and hidden frames | Existing typed linker, mapping and refinement checkers | Closed-value forwarding repaired; general formal imports, module replacements and refinement proof open |
 | R28 Export/observation | Native machine/projection, direct TLA, authored PlusCal, CFG/profiles and selected initial reconstruction | Existing emitters, bundle closure, codecs and checking kernels | Complete source-to-output/checker soundness remains open |
+| R29 Builder assembly | Named registration, lexical aliases and parser/builder repetition routes | `parseSpecClosure`, `parseForLoop` and result-builder assembly before algorithm lowering | Reconcile actual accepted reachability; a parser branch or public builder method alone does not establish it |
 
 I6 next actions are to reconcile exact signatures/type/placement guards within these rows,
 separate actual missing/incorrect routes from implemented-but-unproved ones, and batch measured repairs by owner.
@@ -183,7 +187,15 @@ record shapes, wrapped/lazy instance fields, accessors and missing explicit fiel
 and source order before the existing complete-field check. This does not establish extension/imported binding ownership.
 The enum collector separately guards its supported direct/exhaustive encoding forms and unique encoded case values;
 dynamic encodings are diagnosed. These are source-guard observations, not a proof of either nominal representation.
+The bounded R16 through R25 guard review also distinguishes independent parameterized Do (one through three typed domains)
+from enclosing Algorithm control, procedure arities, process populations, registered property handles and validation selections.
+The existing validation lowerer requires complete closed parameter bindings, rejects duplicate/foreign selections,
+restricts simulation expectations and selects symmetry only with applicable checks. These guards do not establish kernel or verdict semantics.
+R29 records a separate assembly obligation: the top-level loop parser expands a literal closed integer range in iteration/body order,
+while public result-builder availability alone does not prove that a spelling is accepted by `#spec`.
 I6 remains unchecked. All six proof links for these rows remain open unless an actual derived result is recorded.
+After I5j, the next work package is M0/M1 and the literal/read/addition chain below.
+The remaining inventory continues alongside it; it does not justify another unbounded implementation sweep before the pilot proof.
 
 ## M0 Observation contract and pilot domain
 
@@ -612,6 +624,27 @@ closed-binding ownership, repeated-instance provenance, a helper/property-name c
 The finite fixture guards and fixed output expectations are regression evidence, not an all-program invariance proof.
 General formal-import configuration, module replacements, integer representation, complete observations and all six-link
 proof rows remain open. No local TLC run, new formal proof, binary reproduction or hosted admission is inferred.
+
+### Sequence capture checkpoint 6 November 2026
+
+Status: I5j implementation repaired; E READ, R10, I6 and every six-link proof row remain open.
+An existing sequence fixture now deliberately names its earlier state and configuration parameter like the generated indices.
+Its literal and filled sequence values have independent element expectations; the bounds and existing fixture type are unchanged.
+The unchanged-production baseline at `9f68362f` executed one test with forty-five issues:
+forty-four initial-value/membership discrepancies and one exported binder/configuration-constant collision.
+The native binder identities alone did not prevent the separate rendered-name collision.
+
+Both fill construction routes now share the existing sequence-construction family and avoid free state-variable names.
+Literal construction uses the same existing freshness operation for all element expressions.
+Ordinary compiled binder allocation also reserves root runtime parameter names before choosing a rendered local name.
+This repairs the measured captures without changing public APIs, accepted forms, expression types or evaluator/checker families.
+General source-generated hygiene, exact-name control binders, formal imports and name/identity correspondence remain open.
+
+The final guarded run passed sixty-six tests across nine existing suites, including the previously failing owner,
+empty and large sequence cases, failure controls, configuration, indexing, mapping, lexical bindings and record siblings.
+All 1,201 captured inputs stayed unchanged. The whole log is 85,667 bytes,
+SHA256 `7e51ce4c2ffe4113062332f35501b6175e5d4036f7909ca9e9e2567f38e02ba3`.
+Only this plan changed afterward. These are regression receipts; no local TLC execution, formal proof or hosted admission is inferred.
 
 ## Work discipline and admission
 
