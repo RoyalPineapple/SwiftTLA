@@ -46,6 +46,11 @@ assert(seededState.count == 0)
 The typed initializer selects one unique state from the source model's declared
 initial states.
 
+`initialOutcomes()` retains successful initial states and reached model failures.
+An attempt to enumerate mathematical `Int` or `Seq(S)` with a nonempty element set throws a capability error.
+This does not mean that a model branch failed.
+When domain membership does not require enumeration, you can supply a typed initial state to `makeMachine(_:)`.
+
 ## Property checks
 
 `violatedInvariants(atLevel:)` reports the `Property` values of false invariants without changing

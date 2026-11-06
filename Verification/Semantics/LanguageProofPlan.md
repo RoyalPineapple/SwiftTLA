@@ -199,6 +199,9 @@ The remaining inventory continues alongside it; it does not justify another unbo
 
 ## M0 Observation contract and pilot domain
 
+- [x] M0a Extend the existing integer-enumeration guard to unbounded sequence enumeration.
+  Propagate the original capability error through generated and compiled initial collection.
+  This local recovery result does not complete the observation contract below.
 - [ ] M0.1 Define complete observations in the existing outcome rules.
   Include state identity, labels, disabled behavior, failure site, payload, preceding bindings and selected outcomes.
   Separate logical domains, enumeration capability, execution limits and model failures.
@@ -382,12 +385,52 @@ This result supplies a child rule. Complete initializer state assembly remains i
 - [ ] L2 State the independent literal outcome and its empty read/failure effects in the existing expression rules.
 - [ ] L3 Prove the actual source/compiled literal cases preserve `n`, Int type and empty children.
   Start with both `orderedIntPlan` overloads in `StraightLineAssignmentCheck`.
+- [x] L3a Derive scalar literal extraction and recognized value-initializer acceptance from the actual code.
+  The local proof below uses documented Swift semantics. Full L3 and its source/type/call-coverage obligations remain open.
 - [ ] L4 Prove the accepted Swift literal tokens and TLA integer encoding denote that same `n`.
   Reuse the existing native decoder and signed-radix lemmas. Include zero, negative values and target bounds in the general argument.
 - [ ] L5 Instantiate the literal child cases in the expression and initializer composition modules.
   Record the exact premises that these results discharge.
 - [ ] L6 Retain the proof inputs and existing owner regressions for the exact implementation revision.
   Keep any unresolved source or decoder interpretation open. Do not promote a partial route to the complete literal family.
+
+### Scalar literal code-case result 7 November 2026
+
+Let `n` be any target `Int` value. The source constructor for this local result is `.value(.int(n))`.
+Raw tokens, nominal values, conversions and membership domains retain separate obligations.
+The result uses documented Swift pattern matching, value copies, arrays, dictionary updates and synthesized equality.
+It is a manual proof of code cases, without a mechanically checked Swift translation or new TLAPS execution.
+
+1. The source `orderedIntPlan` starts with one pending root and empty node/index arrays.
+   With expected type `.int`, its literal arm copies `n` into `.literal(n)` and appends index one.
+   The pending stack is empty after that arm. The return condition holds, yielding exactly that singleton plan.
+   Neither the read-name set nor the renaming map supplies the payload.
+2. The compiled overload first applies its `requireTypes` guard. Its literal arm also requires empty children.
+   It then copies the integer payload into the same singleton plan.
+   With `requireTypes: false`, this result supplies no result-type fact.
+3. A successful singleton literal plan cannot come from a read or an unsupported root.
+   A read has a different enum tag. An add root places its expanded frame below its child tasks.
+   The add node is last after its child tasks complete. Unsupported roots return `nil`.
+   Combined with the literal-arm guard, synthesized plan equality requires the same payload and empty children.
+4. `verifyInitialIntExpression` always recognizes the stated source constructor.
+   Normal return forces the lowered value initializer to contain that proper literal, without establishing its type.
+   `verifyResolvedInitialIntExpression` also recognizes this proper lowered literal, so its unsupported-plan return cannot apply.
+   Its successful resolved comparison requires the same payload, empty children and result type `.int`.
+   When its variable type is `.int`, `ProgramResolver` invokes that check for a proper literal entry.
+5. `CompiledEvaluator.evaluate` returns the stored literal before it creates evaluation tasks or a scope.
+   Consequently, this expression returns `.integer(n)` without a model-state read or a model evaluation failure.
+   In `CompiledRuntime` the value-initializer branch then copies the prior bindings, assigns the target and appends its continuation.
+   With a fresh `VariableID`, the update preserves every prior binding and stores `.integer(n)` at that ID.
+   This supplies the local map-update shape used by `GeneratedExtension`.
+   Source-name and value projections remain M2 obligations.
+   This local expression adds no failure event. It does not establish complete state assembly or later invariant outcomes.
+
+The extractor, initializer-check, resolver, evaluator and runtime bodies for this argument remain unchanged from `d25a0818`.
+The reviewed recovery helper invokes its callback only after a caught error, which the literal case does not produce.
+These facts remove the local literal-payload and interpreter-dispatch assumptions for the stated entry shapes.
+The existing literal cases in `OrderedIntExpressionRule` and `IntExpressionOutcomesSupplyInitializerOutcomes` can consume those child facts.
+The full parent still needs source-constructor correspondence, matching initializer/target identities, value projections, type and call coverage, and both output interpretations.
+No general visitor, layout, token, helper-binding, TLA/CFG or kernel soundness follows. L3, E LIT and all six-link rows remain open.
 
 ### Literal encoding checkpoint 6 November 2026
 
@@ -645,6 +688,28 @@ empty and large sequence cases, failure controls, configuration, indexing, mappi
 All 1,201 captured inputs stayed unchanged. The whole log is 85,667 bytes,
 SHA256 `7e51ce4c2ffe4113062332f35501b6175e5d4036f7909ca9e9e2567f38e02ba3`.
 Only this plan changed afterward. These are regression receipts; no local TLC execution, formal proof or hosted admission is inferred.
+
+### Initial enumeration checkpoint 7 November 2026
+
+Status: M0a implementation repaired. M0.1 through M0.5 remain open.
+An attempt to enumerate `Seq(S)` for a nonempty element set cannot return a complete finite list of initial states.
+For each natural length, repetition of one element produces a different valid sequence.
+The existing recovery helper nevertheless converted that capability error into a reached model failure.
+The unchanged-production baseline at `d25a0818` ran one existing test with two issues.
+Both generated and compiled `initialOutcomes()` returned zero states and one sequence-enumeration failure event at initializer one.
+The selected-state and transition controls, including a 10,000-element witness, ran before those failing expectations.
+
+The shared helper now propagates sequence-enumeration errors through both catch arms, matching its existing integer-domain guard.
+This local exception-routing result follows directly from the two guards: each original error leaves its catch arm before the recovery callback.
+Neither guard returns a completed empty result. Selected-state construction still checks membership without requesting full enumeration.
+Ordinary mapped model errors retain the existing callback and event collection.
+Finite collection cardinality, power-set size, recursion depth, sampled execution and checking-context classifications retain separate obligations.
+
+The guarded repair run passed seventeen tests across five existing suites on all 1,201 unchanged captured inputs.
+The owners cover generated/compiled sequence outcomes, mathematical integers, ordinary initial failures, output checks and support binding.
+The whole log is 75,594 bytes, SHA256 `443c0635de9163d1106f41a013c9dbfe4066e059c9c196ac2b995a2edd60d9b5`.
+Only this plan changed afterward. The repair introduces no new model, fixture type, evaluator/checker, API signature, domain bound or resource limit.
+The local literal code-case result has its own reasoning above. Neither result completes E LIT, M0, hosted admission or whole-language preservation.
 
 ## Work discipline and admission
 
