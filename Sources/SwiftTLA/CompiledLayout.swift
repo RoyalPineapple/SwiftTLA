@@ -82,6 +82,17 @@ package struct CompiledVariableLayout: Hashable, Sendable {
     package let displayLabel: String?
     package let generatedSwiftType: String?
     package let resolvedValueType: CompiledValueType?
+    package let formalName: String
+
+    init(id: VariableID, declaration: CompiledDeclaration, displayLabel: String?,
+         generatedSwiftType: String?, resolvedValueType: CompiledValueType?, formalName: String? = nil) {
+        self.id = id
+        self.declaration = declaration
+        self.displayLabel = displayLabel
+        self.generatedSwiftType = generatedSwiftType
+        self.resolvedValueType = resolvedValueType
+        self.formalName = formalName ?? declaration.name
+    }
 }
 
 package struct CompiledActionLayout: Hashable, Sendable {
@@ -186,7 +197,7 @@ package struct CompiledLayout: Hashable, Sendable {
 
     package let parameters: [CompiledParameterLayout]
     package let checkingRegisters: [CompiledCheckingRegisterLayout]
-    package let variables: [CompiledVariableLayout]
+    package private(set) var variables: [CompiledVariableLayout]
     package private(set) var actions: [CompiledActionLayout]
     let stateProperties: [CompiledPropertyLayout]
     let temporalProperties: [CompiledPropertyLayout]
@@ -288,11 +299,33 @@ package struct CompiledLayout: Hashable, Sendable {
         }?.id
     }
 
+    mutating func resolveVariableNames(reserving names: Set<String>) {
+        let reserved = names.union(["Init", "Next", "Spec", "TRUE", "FALSE", "BOOLEAN", "STRING"])
+        var used = reserved.union(variables.map(\.declaration.name))
+        variables = variables.map { variable in
+            let stem = variable.declaration.name
+            var name = stem
+            if reserved.contains(name) {
+                var suffix = 2
+                repeat {
+                    name = "\(stem)__\(suffix)"
+                    suffix += 1
+                } while !used.insert(name).inserted
+            }
+            return .init(id: variable.id, declaration: variable.declaration, displayLabel: variable.displayLabel,
+                generatedSwiftType: variable.generatedSwiftType, resolvedValueType: variable.resolvedValueType,
+                formalName: name)
+        }
+    }
+
     mutating func resolveActionNames(reserving names: Set<String>, preservingDirectNext: Bool) {
         var used = names.union(["Init", "Next", "Spec", "vars", "StateConstraint", "ActionConstraint", "Terminating"])
         if preservingDirectNext { used.remove("Next") }
         actions = actions.map { action in
             let stem = action.renderedName
+            if action.isTermination, stem == "Terminating", !names.contains(stem) {
+                used.remove(stem)
+            }
             var name = stem
             var suffix = 2
             while !used.insert(name).inserted {

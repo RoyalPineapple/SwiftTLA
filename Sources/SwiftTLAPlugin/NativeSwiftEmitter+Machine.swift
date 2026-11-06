@@ -105,7 +105,7 @@ extension NativeSwiftEmitter {
         }.joined(separator: ",\n")
         let stateFormalNames = api.variables.map { variable in
             let declaration = program.layout.variables[variable.id.ordinal]
-            return "\\State.\(variable.swiftIdentifier): .init(swiftName: \(String(reflecting: variable.swiftIdentifier)), formalName: \(String(reflecting: declaration.declaration.name)))"
+            return "\\State.\(variable.swiftIdentifier): .init(swiftName: \(String(reflecting: variable.swiftIdentifier)), formalName: \(String(reflecting: declaration.formalName)))"
         }.joined(separator: ",\n")
         let stateDeclarations = try nativeDeclarations("""
         public struct State: Hashable, GeneratedModelFields {
@@ -130,7 +130,7 @@ extension NativeSwiftEmitter {
         """)
         try verifyGeneratedStateConstructorOutput(stateDeclarations.first, fields: try api.variables.map {
             (name: $0.swiftIdentifier, type: try swiftType(program.variableTypes[$0.id]!),
-             ordinal: $0.id.ordinal, formalName: program.layout.variables[$0.id.ordinal].declaration.name)
+             ordinal: $0.id.ordinal, formalName: program.layout.variables[$0.id.ordinal].formalName)
         })
         declarations += stateDeclarations
         declarations += try formalProjectionDeclarations()
@@ -789,7 +789,7 @@ extension NativeSwiftEmitter {
             let type = program.variableTypes[variable.id]!
             return """
             guard let _json\(index) = formalJSON.value(for: Self.__swifttlaFormalProjectionTokens[\(index)]) else {
-                throw TLAStateProjectionDiagnostic.invalidKey(path: \(String(reflecting: variable.declaration.name)))
+                throw TLAStateProjectionDiagnostic.invalidKey(path: \(String(reflecting: variable.formalName)))
             }
             let _decoded\(variable.id.ordinal): \(try swiftType(type)) = \(try formalJSONValue("_json\(index)", type: type))
             """
