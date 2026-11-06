@@ -120,6 +120,7 @@ package struct RenderedModule: Sendable, Equatable {
     package var importedOwnership: [TLAModuleBundle.OwnershipEntry] = []
     package var dependencies: [TLAModuleBundle.ModuleDependency] = []
     package let renderedModuleSource: String
+    package let constantValues: [ConstantDecl]
     let evaluationFailureDeclarations: [String]
     package let initialEvaluationFailure: String?
     package let initialEvaluationFailureRecord: String?
@@ -406,9 +407,9 @@ public struct CompiledSpecification: Sendable {
             try bundle.validateDeclaredClosure()
             return bundle
         }
-        return RenderedSpecification(
+        return try RenderedSpecification(
             tlaBundle: renderedBundle,
-            configuration: rootModule.configuration,
+            configuration: rootModule.configuration, constantValues: metadata.constants,
             initialEvaluationFailure: rootModule.initialEvaluationFailure,
             initialEvaluationFailureRecord: rootModule.initialEvaluationFailureRecord,
             actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle.map { .success($0) },
@@ -427,6 +428,8 @@ public struct CompiledSpecification: Sendable {
 public struct RenderedSpecification: Sendable {
     public let tlaBundle: TLAModuleBundle
     fileprivate let configuration: TLCConfiguration
+    private let constantValues: [ConstantDecl]
+    private let refinementBundle: TLAModuleBundle
     private let initialEvaluationFailure: String?
     private let initialEvaluationFailureRecord: String?
     public let actions: [RenderedAction]
@@ -435,20 +438,83 @@ public struct RenderedSpecification: Sendable {
     fileprivate let fairnessProfileOperators: [String: String]
     package let temporalObligations: [String: [_RenderedTemporalObligation]]
 
-    init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration,
+    init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration, constantValues: [ConstantDecl],
+        refinementBundle: TLAModuleBundle? = nil,
         initialEvaluationFailure: String? = nil, initialEvaluationFailureRecord: String? = nil,
         actions: [RenderedAction],
         renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?,
         renderedPlusCalProfiles: [String: Result<TLAModuleBundle, CompilationDiagnostic>] = [:],
         fairnessProfileOperators: [String: String] = [:],
-        temporalObligations: [String: [_RenderedTemporalObligation]] = [:]) {
-        self.tlaBundle = tlaBundle
+        temporalObligations: [String: [_RenderedTemporalObligation]] = [:]) throws {
+        var constantValues = constantValues
+        let knownNames = Set(constantValues.map(\.name))
+        for declaration in configuration.declarations where declaration.hasPrefix("CONSTANT ") {
+            let parts = declaration.dropFirst("CONSTANT ".count).components(separatedBy: " = ")
+            if parts.count == 2, !knownNames.contains(parts[0]),
+               isTLADeclarationName(parts[0]), isTLADeclarationName(parts[1]),
+               parts[1] != "TRUE", parts[1] != "FALSE" {
+                constantValues.append(.init(parts[0], .constant(parts[1])))
+            }
+        }
+        var declarations = configuration.declarations
+        var definitions: [String] = []
+        var prefix = "__SwiftTLAParameter"
+        var sources = tlaBundle.files.map(\.tla) + declarations
+        if case .success(let bundle)? = renderedPlusCalModuleBundle { sources += bundle.files.map(\.tla) }
+        for result in renderedPlusCalProfiles.values {
+            if case .success(let bundle) = result { sources += bundle.files.map(\.tla) }
+        }
+        while sources.contains(where: { $0.contains(prefix) }) { prefix += "_" }
+        var modelValueNames: [String: String] = [:]
+        for binding in constantValues.sorted(by: { $0.name < $1.name }) {
+            if case .constant(let value) = binding.value, modelValueNames[value] == nil {
+                modelValueNames[value] = binding.name
+            }
+        }
+        for (index, constant) in constantValues.enumerated() where !constant.value.isTLCConfigurationLiteral {
+            let assignment = "CONSTANT \(constant.name) = \(constant.value)"
+            guard let position = declarations.firstIndex(of: assignment) else { continue }
+            let definition = "\(prefix)\(index)"
+            definitions.append("\(definition) == \(Self.renamingModelValues(constant.value, names: modelValueNames))")
+            declarations[position] = "CONSTANT \(constant.name) <- \(definition)"
+        }
+        let configuration = TLCConfiguration(behavior: configuration.behavior,
+            specificationName: configuration.specificationName, assumptionsOnly: configuration.assumptionsOnly,
+            declarations: declarations, checkDeadlock: configuration.checkDeadlock,
+            intrinsicInvariants: configuration.intrinsicInvariants,
+            invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
+            properties: configuration.properties, refinements: configuration.refinements,
+            symmetry: configuration.symmetry, viewOperators: configuration.viewOperators, view: configuration.view,
+            postconditionOperators: configuration.postconditionOperators, postcondition: configuration.postcondition)
+        func configured(_ bundle: TLAModuleBundle) throws -> TLAModuleBundle {
+            guard !definitions.isEmpty else { return bundle }
+            guard let end = bundle.root.tla.range(of: "====", options: .backwards) else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "configuration",
+                    expected: "a complete rendered module", actual: "missing module terminator",
+                    nextSafeAction: "Render the resolved model before binding configuration.")
+            }
+            let source = String(bundle.root.tla[..<end.lowerBound]) + definitions.joined(separator: "\n")
+                + "\n" + bundle.root.tla[end.lowerBound...]
+            return TLAModuleBundle(root: .init(name: bundle.root.name, tla: source,
+                cfg: try configuration.render(usesSymmetryReduction: false)),
+                imports: bundle.imports, provenance: bundle.provenance)
+        }
+        func configuredResult(_ result: Result<TLAModuleBundle, CompilationDiagnostic>) throws
+            -> Result<TLAModuleBundle, CompilationDiagnostic> {
+            switch result {
+            case .success(let bundle): return .success(try configured(bundle))
+            case .failure(let diagnostic): return .failure(diagnostic)
+            }
+        }
+        self.tlaBundle = try configured(tlaBundle)
         self.configuration = configuration
+        self.constantValues = constantValues
+        self.refinementBundle = refinementBundle ?? tlaBundle
         self.initialEvaluationFailure = initialEvaluationFailure
         self.initialEvaluationFailureRecord = initialEvaluationFailureRecord
         self.actions = actions
-        self.renderedPlusCalModuleBundle = renderedPlusCalModuleBundle
-        self.renderedPlusCalProfiles = renderedPlusCalProfiles
+        self.renderedPlusCalModuleBundle = try renderedPlusCalModuleBundle.map(configuredResult)
+        self.renderedPlusCalProfiles = try renderedPlusCalProfiles.mapValues(configuredResult)
         self.fairnessProfileOperators = fairnessProfileOperators
         self.temporalObligations = temporalObligations.mapValues { obligations in
             obligations.sorted {
@@ -460,7 +526,7 @@ public struct RenderedSpecification: Sendable {
     /// Final artifact boundary used by generated machines; this does not compile or interpret a model.
     @_documentation(visibility: internal)
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
-        declarations: [String], checkDeadlock: Bool, _generatedIntegerBitWidth: Int,
+        declarations: [String], _generatedConstants: [ConstantDecl], checkDeadlock: Bool, _generatedIntegerBitWidth: Int,
         _generatedIntrinsicInvariants: [String],
         invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
         symmetry: [String], viewOperators: [String] = [], postconditionOperators: [String] = [],
@@ -480,30 +546,7 @@ public struct RenderedSpecification: Sendable {
                 actual: "generated Int width \(_generatedIntegerBitWidth)",
                 nextSafeAction: "Regenerate the model for the target architecture.")
         }
-        var declarations = declarations
-        var definitions: [String] = []
-        var prefix = "__SwiftTLAParameter"
-        let sources = [source] + _generatedImports.map(\.source)
-            + [(try? _generatedPlusCal?.get()) ?? ""] + declarations + _generatedParameters.map(\.name)
-        while sources.contains(where: { $0.contains(prefix) }) { prefix += "_" }
-        for (index, parameter) in _generatedParameters.enumerated() {
-            if parameter.value.isTLCConfigurationLiteral {
-                declarations.append("CONSTANT \(parameter.name) = \(parameter.value)")
-            } else {
-                let definition = "\(prefix)\(index)"
-                definitions.append("\(definition) == \(parameter.value)")
-                declarations.append("CONSTANT \(parameter.name) <- \(definition)")
-            }
-        }
-        func configuredSource(_ source: String) throws -> String {
-            guard !definitions.isEmpty else { return source }
-            guard let end = source.range(of: "====", options: .backwards) else {
-                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "configuration",
-                    expected: "a complete rendered module", actual: "missing module terminator",
-                    nextSafeAction: "Render the resolved model before binding configuration.")
-            }
-            return String(source[..<end.lowerBound]) + definitions.joined(separator: "\n") + "\n" + source[end.lowerBound...]
-        }
+        let declarations = declarations + _generatedParameters.map { "CONSTANT \($0.name) = \($0.value)" }
         if _assumptionsOnly && (checkDeadlock || !invariants.isEmpty || !reachabilityProperties.isEmpty
             || !properties.isEmpty || !refinements.isEmpty || !symmetry.isEmpty || !actions.isEmpty) {
             throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
@@ -516,7 +559,7 @@ public struct RenderedSpecification: Sendable {
             invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements,
             symmetry: symmetry, viewOperators: viewOperators,
             postconditionOperators: postconditionOperators)
-        let bundle = TLAModuleBundle(root: .init(name: name, tla: try configuredSource(source),
+        let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
             cfg: try configuration.render(usesSymmetryReduction: false)),
             imports: _generatedImports.map { .init(name: $0.name, tla: $0.source) }, provenance: .compiled(
                 identity: .init(value: compilationIdentity),
@@ -530,7 +573,7 @@ public struct RenderedSpecification: Sendable {
             switch result {
             case .failure(let diagnostic): return .failure(diagnostic)
             case .success(let source):
-                let authored = TLAModuleBundle(root: .init(name: name, tla: try configuredSource(source), cfg: bundle.root.cfg),
+                let authored = TLAModuleBundle(root: .init(name: name, tla: source, cfg: bundle.root.cfg),
                     imports: bundle.imports, provenance: bundle.provenance)
                 try authored.validateDeclaredClosure()
                 return .success(authored)
@@ -538,13 +581,29 @@ public struct RenderedSpecification: Sendable {
         }
         let plusCal = try _generatedPlusCal.map(configuredPlusCal)
         let plusCalProfiles = try _generatedPlusCalProfiles.mapValues(configuredPlusCal)
-        self.init(tlaBundle: bundle, configuration: configuration,
+        try self.init(tlaBundle: bundle, configuration: configuration,
+            constantValues: _generatedConstants + _generatedParameters.map { .init($0.name, $0.value) },
             initialEvaluationFailure: _generatedInitialEvaluationFailure,
             initialEvaluationFailureRecord: _generatedInitialEvaluationFailureRecord,
             actions: actions, renderedPlusCalModuleBundle: plusCal,
             renderedPlusCalProfiles: plusCalProfiles,
             fairnessProfileOperators: _generatedFairnessProfileOperators,
             temporalObligations: _generatedTemporalObligations)
+    }
+
+    private static func renamingModelValues(_ value: TLAValue, names: [String: String]) -> TLAValue {
+        switch value {
+        case .constant(let name): return .constant(names[name] ?? name)
+        case .set(let values): return .set(Set(values.map { renamingModelValues($0, names: names) }))
+        case .tuple(let values): return .tuple(values.map { renamingModelValues($0, names: names) })
+        case .record(let record): return .record(.init(record.fields.map {
+            .init($0.name, renamingModelValues($0.value, names: names))
+        }))
+        case .function(let values): return .function(Dictionary(uniqueKeysWithValues: values.map {
+            (renamingModelValues($0.key, names: names), renamingModelValues($0.value, names: names))
+        }))
+        case .int, .bool, .string: return value
+        }
     }
 
     /// Links another generated model's compiled TLA at the final export boundary.
@@ -588,26 +647,15 @@ public struct RenderedSpecification: Sendable {
         var bindings = try substitutions(parameters, names: Abstract.Configuration.fieldIdentities, kind: "parameters")
             + stateBindings
         let renderedTarget = try abstract.render(configuration: abstractConfiguration)
-        let target = renderedTarget.tlaBundle
+        let target = renderedTarget.refinementBundle
         guard case .compiled(let targetIdentity, let targetOwnership, let targetDependencies) = target.provenance else {
             throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                 path: "refinements.\(name).abstract", expected: "a generated compiled abstract model",
                 actual: "external formal input", nextSafeAction: "Use a generated model as the refinement target.")
         }
-        func constantBindings(in configuration: TLCConfiguration) -> [(name: String, value: String)] {
-            configuration.declarations.compactMap { declaration -> (name: String, value: String)? in
-                guard declaration.hasPrefix("CONSTANT ") else { return nil }
-                let assignment = declaration.dropFirst("CONSTANT ".count)
-                guard let separator = assignment.range(of: " = ") else { return nil }
-                let name = String(assignment[..<separator.lowerBound])
-                let value = String(assignment[separator.upperBound...])
-                guard isTLADeclarationName(name), !value.isEmpty else { return nil }
-                return (name, value)
-            }
-        }
         let boundNames = Set(bindings.map { $0.0 })
-        let abstractConstants = constantBindings(in: renderedTarget.configuration).filter { !boundNames.contains($0.name) }
-        var rootConstants = constantBindings(in: configuration)
+        let abstractConstants = renderedTarget.constantValues.filter { !boundNames.contains($0.name) }
+        var rootConstants = constantValues
         var declarations = configuration.declarations
         var constantNames: [String] = []
         var occupiedSources = tlaBundle.files.map(\.tla) + declarations
@@ -627,7 +675,7 @@ public struct RenderedSpecification: Sendable {
                 let declaration = "CONSTANT \(symbol) = \(constant.value)"
                 declarations.append(declaration)
                 occupiedSources.append(declaration)
-                rootConstants.append((symbol, constant.value))
+                rootConstants.append(.init(symbol, constant.value))
                 constantNames.append(symbol)
             }
             bindings.append((constant.name, symbol))
@@ -720,7 +768,8 @@ public struct RenderedSpecification: Sendable {
             case .failure(let diagnostic): return .failure(diagnostic)
             }
         }
-        return try Self(tlaBundle: linked(tlaBundle), configuration: selected,
+        return try Self(tlaBundle: linked(tlaBundle), configuration: selected, constantValues: rootConstants,
+            refinementBundle: linked(refinementBundle),
             initialEvaluationFailure: initialEvaluationFailure,
             initialEvaluationFailureRecord: initialEvaluationFailureRecord, actions: actions,
             renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map(linkedResult),
@@ -890,6 +939,7 @@ public struct RenderedSpecification: Sendable {
             selectedPlusCal = try renderedPlusCalModuleBundle.map { try selectedBundle($0, using: selected) }
         }
         return try .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected,
+            constantValues: constantValues, refinementBundle: refinementBundle,
             initialEvaluationFailure: initialEvaluationFailure,
             initialEvaluationFailureRecord: initialEvaluationFailureRecord, actions: actions,
             renderedPlusCalModuleBundle: selectedPlusCal,
@@ -2405,7 +2455,7 @@ private extension CompiledModuleMetadata {
             evaluationInvariant: directOutput.evaluationInvariant,
             configuration: renderedConfiguration, renderer: renderer)
         return RenderedModule(
-            renderedModuleSource: directOutput.source,
+            renderedModuleSource: directOutput.source, constantValues: constants,
             evaluationFailureDeclarations: directOutput.evaluationFailureDeclarations,
             initialEvaluationFailure: directOutput.initialFailureAggregate,
             initialEvaluationFailureRecord: directOutput.initialFailureRecord,

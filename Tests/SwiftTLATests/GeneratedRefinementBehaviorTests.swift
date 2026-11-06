@@ -35,6 +35,20 @@ struct GeneratedRefinementBehaviorTests {
                 $0 == "CONSTANT \(symbol) = \(value)"
             }.count == 1)
         }
+        for (name, value) in [("Minimum", "-1"), ("QuotedText", #""a\"b""#)] {
+            for bundle in [target.tlaBundle, rendered.tlaBundle, authored, repeated.tlaBundle] {
+                let binding = try #require(bundle.cfg.split(separator: "\n").first {
+                    $0.hasPrefix("CONSTANT \(name) <- ")
+                })
+                let definition = binding.dropFirst("CONSTANT \(name) <- ".count)
+                #expect(bundle.root.tla.contains("\(definition) == \(value)\n"))
+                #expect(!bundle.cfg.contains("CONSTANT \(name) ="))
+            }
+            #expect(rendered.tlaBundle.root.tla.contains("\(name) <- (\(name))"))
+            #expect(repeated.tlaBundle.cfg.split(separator: "\n").filter {
+                $0.hasPrefix("CONSTANT \(name) <- ")
+            }.count == 1)
+        }
         #expect(repeated.tlaBundle.tla.split(separator: "\n").filter {
             $0.hasPrefix("finite == INSTANCE ")
         }.count == 1)
@@ -63,6 +77,18 @@ struct GeneratedRefinementBehaviorTests {
         #expect(rendered.tlaBundle.root.tla.contains("two <- (two)"))
         #expect(rendered.tlaBundle.cfg.contains("CONSTANT one = one\n"))
         #expect(rendered.tlaBundle.cfg.contains("CONSTANT two = two\n"))
+
+        let differentlyConfigured = try rendered.addingGeneratedRefinement(
+            "RepeatedInputSafety", instance: "collection", of: ArrayValueMachine.self,
+            configuration: .init(input: [2, 1, 2]), behavior: .initialAndNext,
+            parameters: [(\ArrayValueMachine.Configuration.input, "<<2, 1, 2>>")],
+            state: [(\ArrayValueMachine.State.row, "<<>>"),
+                    (\ArrayValueMachine.State.choices, "<<>>")])
+        #expect(differentlyConfigured.tlaBundle.imports.filter { $0.name == "ArrayValueMachine" }.count == 1)
+        #expect(differentlyConfigured.tlaBundle.root.tla.contains("input <- (<<2, 1, 2>>)"))
+        #expect(!differentlyConfigured.tlaBundle.imports.contains {
+            $0.tla.contains("__SwiftTLAParameter")
+        })
 
         let repeated = try importingValues(rendered, name: "CollectionSafetyAgain")
         #expect(repeated.tlaBundle.root.tla.split(separator: "\n").filter {

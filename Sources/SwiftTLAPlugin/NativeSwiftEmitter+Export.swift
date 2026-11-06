@@ -123,6 +123,7 @@ extension NativeSwiftEmitter {
                 source: \(String(reflecting: module.renderedModuleSource)),
                 compilationIdentity: \(String(reflecting: program.identity.value)),
                 declarations: [\(declarations.joined(separator: ", "))],
+                _generatedConstants: [\(module.constantValues.map { "ConstantDecl(\(String(reflecting: $0.name)), \(renderedLiteral($0.value)))" }.joined(separator: ", "))],
                 checkDeadlock: \(module.configuration.checkDeadlock),
                 _generatedIntegerBitWidth: \(Int.bitWidth),
                 _generatedIntrinsicInvariants: \(String(reflecting: module.configuration.intrinsicInvariants)),
