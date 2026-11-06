@@ -2483,6 +2483,7 @@ struct CompiledLowerer {
             preferredRenderedName = "_\(preferredRenderedName)"
         }
         var unavailableNames = reservedRenderedNames
+        unavailableNames.formUnion(layout.parameters.compactMap { binderNames[$0.binder] })
         unavailableNames.formUnion(scope.values.values.compactMap { binderNames[$0] })
         unavailableNames.formUnion(scope.operators.values.compactMap { operatorNames[$0] })
         let renderedName = exactRenderedName == nil

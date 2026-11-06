@@ -659,11 +659,7 @@ final class ParserSession {
               let length = decodeTypedFacadeValue(lengthSyntax, scope: scope),
               let value = decodeTypedFacadeValue(valueSyntax, scope: scope)
         else { return nil }
-        return .functionLiteral(
-            .integerRange(.int(0), .subtract(length, .int(1))),
-            "__zeroBasedSequenceIndex",
-            value
-        )
+        return formalZeroBasedSequence(length: length, repeating: value)
     }
 
     private func decodeSubsetDomain(
