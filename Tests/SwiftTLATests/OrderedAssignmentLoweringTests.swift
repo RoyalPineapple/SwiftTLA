@@ -538,6 +538,34 @@ struct OrderedAssignmentLoweringTests {
             try parseSpecTestClosure(source.replacingOccurrences(of: "initial: 1", with: "initial: 3")),
             sourceTypes: .init(enums: enums))
         try #require(radixAltered.diagnostics.isEmpty)
+        try #require(source.components(separatedBy: "initial: first + 2").count == 2)
+        for value in [-2_000_000_000, -2_000_000_001,
+                      1_000_000_000_000_000_000, 1_000_000_000_000_000_001,
+                      1_000_000_000_999_999_999, 1_000_000_001_000_000_000,
+                      -1_000_000_000_000_000_000, -1_000_000_000_000_000_001] {
+            let literalSource = source.replacingOccurrences(
+                of: "initial: first + 2", with: "initial: first + \(value)")
+            try #require(literalSource != source)
+            let literalSyntax = try parseSpecTestClosure(literalSource)
+            let literalParsed = SpecParser.parseSpecClosure(named: "OrderedInt", literalSyntax,
+                sourceTypes: .init(enums: enums))
+            try #require(literalParsed.diagnostics.isEmpty)
+            try OrderedIntSourceSyntaxCheck.verify(literalSyntax, parsed: literalParsed, enums: enums)
+            let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: literalParsed.compile()))
+            let second = try #require(program.layout.variables.first { $0.declaration.name == "second" })
+            let initialization = try #require(program.behavior.initializations.first {
+                $0.variable == second.id
+            }?.initialization)
+            _ = try #require(StraightLineRenderedActionCheck.initialIntPredicate(
+                initialization, named: "second", layout: program.layout))
+            do {
+                _ = try program.renderModule()
+                var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "OrderedInt", program: program))
+                _ = try emitter.machineMembers()
+            } catch {
+                Issue.record("A valid Int addend \(value) failed its emitted-output check: \(error)")
+            }
+        }
         for spelling in ["0x1", "0b1", "0o1", "1_000", "-0x8000000000000000"] {
             let radixSyntax = try parseSpecTestClosure(source.replacingOccurrences(of: "initial: 1",
                 with: "initial: \(spelling)"))
