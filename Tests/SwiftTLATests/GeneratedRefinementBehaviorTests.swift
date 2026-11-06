@@ -11,7 +11,7 @@ struct GeneratedRefinementBehaviorTests {
         #expect(initial.state.value == 0)
         let target = try FairRefinementTarget.render(configuration: configuration)
         let concreteField = try #require(ConfiguredCounter.State.fieldIdentities[\ConfiguredCounter.State.value]?.formalName)
-        let constants = [("EnabledValue", "TRUE", "stopAtLimit"), ("FiniteValues", "{1, 2}", "FiniteValues"),
+        let constants = [("EnabledValue", "TRUE", "EnabledValue"), ("FiniteValues", "{1, 2}", "FiniteValues"),
                          ("TextValue", #""left = right""#, "TextValue")]
         for (name, value, _) in constants {
             try #require(target.tlaBundle.cfg.contains("CONSTANT \(name) = \(value)\n"))
@@ -71,7 +71,7 @@ struct GeneratedRefinementBehaviorTests {
                 state: [(\ArrayValueMachine.State.row, "<<>>"),
                         (\ArrayValueMachine.State.choices, "<<>>")])
         }
-        let rendered = try importingValues(StutteringRefinementSource.render(), name: "CollectionSafety")
+        let rendered = try importingValues(StutteringRefinementSource.render(configuration: .init(flag: true)), name: "CollectionSafety")
         #expect(rendered.tlaBundle.root.tla.contains("CONSTANTS one, two\n"))
         #expect(rendered.tlaBundle.root.tla.contains("one <- (one)"))
         #expect(rendered.tlaBundle.root.tla.contains("two <- (two)"))
@@ -100,7 +100,7 @@ struct GeneratedRefinementBehaviorTests {
             }.count == 1)
         }
 
-        let occupied = try StutteringRefinementSource.render().addingGeneratedRefinement(
+        let occupied = try StutteringRefinementSource.render(configuration: .init(flag: true)).addingGeneratedRefinement(
             "OneSafety", instance: "one", of: FairRefinementTarget.self,
             configuration: .init(N: 1), behavior: .initialAndNext,
             parameters: [(\FairRefinementTarget.Configuration.N, "1")],
@@ -136,7 +136,7 @@ struct GeneratedRefinementBehaviorTests {
 
     @Test("safety refinement frames cover the complete abstract declaration")
     func retainsCompleteAbstractFrame() throws {
-        let source = try StutteringRefinementSource.render()
+        let source = try StutteringRefinementSource.render(configuration: .init(flag: true))
         let mapped = try source.addingGeneratedRefinement("SequenceSafety", instance: "sequences",
             of: ConfiguredSequenceDomainMachine.self,
             configuration: .init(members: Set<Int>([]), lengths: Set<Int>([0])),
@@ -162,7 +162,7 @@ struct GeneratedRefinementBehaviorTests {
 
     @Test("generated refinement maps non-initial states and respects selected abstract fairness")
     func explicitSafetyOnlyRefinement() throws {
-        let initial = try StutteringRefinementSource.initialMachines()
+        let initial = try StutteringRefinementSource.initialMachines(configuration: .init(flag: true))
         var graph = try ReachabilityGraph(initialMachines: initial, maximumStates: 10)
         let machine = try #require(initial.first)
         let failures = try machine.refinementFailures(in: &graph)
@@ -172,7 +172,7 @@ struct GeneratedRefinementBehaviorTests {
             return
         }
 
-        let rendered = try StutteringRefinementSource.render()
+        let rendered = try StutteringRefinementSource.render(configuration: .init(flag: true))
         #expect(rendered.tlaBundle.root.tla.contains("Full == abstract!Spec"))
         #expect(rendered.tlaBundle.root.tla.contains(
             "Safety == abstract!Init /\\ [][abstract!Next]_(value)"))
@@ -207,6 +207,45 @@ struct GeneratedRefinementBehaviorTests {
             #expect(dependencies.filter { $0.structuralPath == ["abstract_"] }.count == 1)
         } else {
             Issue.record("Generated refinement exports must retain compiled provenance")
+        }
+
+        let alternate = try StutteringRefinementSource.render(configuration: .init(flag: false))
+        let alternateInitial = try #require(try StutteringRefinementSource.initialMachines(
+            configuration: .init(flag: false)).first)
+        #expect(alternateInitial.state.value == 0)
+        var alternateGraph = try ReachabilityGraph(initialMachines: [alternateInitial], maximumStates: 10)
+        let alternateFailures = try alternateInitial.refinementFailures(in: &alternateGraph)
+        #expect(alternateGraph.transitions.count == graph.transitions.count)
+        #expect(alternateFailures[.Safety] == nil)
+        guard case .fairness? = alternateFailures[.Full] else {
+            Issue.record("The alternate configuration must retain the full-behavior fairness failure")
+            return
+        }
+        #expect(rendered.tlaBundle.cfg.contains("CONSTANT flag = TRUE\n"))
+        #expect(alternate.tlaBundle.cfg.contains("CONSTANT flag = FALSE\n"))
+        #expect(rendered.tlaBundle.root.tla == alternate.tlaBundle.root.tla)
+        let concreteField = try #require(ConfiguredCounter.State.fieldIdentities[\ConfiguredCounter.State.value]?.formalName)
+        let source = try ConfiguredCounter.render(configuration: .init(limit: 1, stopAtLimit: true))
+        let nested = try source.addingGeneratedRefinement("NestedSafety", instance: "nested",
+            of: StutteringRefinementSource.self, configuration: .init(flag: true), behavior: .initialAndNext,
+            parameters: [(\StutteringRefinementSource.Configuration.flag, "TRUE")],
+            state: [(\StutteringRefinementSource.State.value, concreteField)])
+        let nestedAgain = try nested.addingGeneratedRefinement("AlternateNestedSafety", instance: "nested",
+            of: StutteringRefinementSource.self, configuration: .init(flag: false), behavior: .initialAndNext,
+            parameters: [(\StutteringRefinementSource.Configuration.flag, "FALSE")],
+            state: [(\StutteringRefinementSource.State.value, concreteField)])
+        #expect(nestedAgain.tlaBundle.imports.filter { $0.name == "StutteringRefinementSource" }.count == 1)
+        #expect(nestedAgain.tlaBundle.root.tla.contains("flag <- (TRUE)"))
+        #expect(nestedAgain.tlaBundle.root.tla.contains("flag <- (FALSE)"))
+
+        let collision = try source.addingGeneratedRefinement("__SwiftTLAParameter0_",
+            instance: "__SwiftTLAParameter0", of: FairRefinementTarget.self,
+            configuration: .init(N: 1), behavior: .initialAndNext,
+            parameters: [(\FairRefinementTarget.Configuration.N, "1")],
+            state: [(\FairRefinementTarget.State.value, concreteField)])
+        for bundle in [collision.tlaBundle, try collision.plusCalBundle()] {
+            #expect(bundle.root.tla.contains("__SwiftTLAParameter0__ == INSTANCE FairRefinementTarget "))
+            #expect(bundle.root.tla.contains("__SwiftTLAParameter0_ == __SwiftTLAParameter0__!Init"))
         }
     }
 }

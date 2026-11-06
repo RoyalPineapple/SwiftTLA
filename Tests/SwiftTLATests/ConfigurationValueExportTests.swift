@@ -37,7 +37,8 @@ struct ConfigurationValueExportTests {
         (.int(Int(Int32.max)), "(2 * 1000000000 + 147483647)"),
         (.set([.int(1_000_000_001)]), "{(1 * 1000000000 + 1)}"),
         (.set([.function([.int(1): .int(2)])]), #"{[__tla_fn_0 \in {1} |-> 2]}"#),
-        (.string("line\nbreak"), #""line\nbreak""#), (.string("a\"b"), #""a\"b""#)])
+        (.string("line\nbreak"), #""line\nbreak""#), (.string("a\"b"), #""a\"b""#),
+        (.string("__SwiftTLAParameter__0\""), #""__SwiftTLAParameter__0\"""#)])
     func substitutesCompositeValues(_ input: (value: TLAValue, expression: String)) throws {
         for closedConstant in [false, true] {
             let rendered = try render(input.value, closedConstant: closedConstant)
