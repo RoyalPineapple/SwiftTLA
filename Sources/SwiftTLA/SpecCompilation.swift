@@ -594,21 +594,20 @@ public struct RenderedSpecification: Sendable {
                 path: "refinements.\(name).abstract", expected: "a generated compiled abstract model",
                 actual: "external formal input", nextSafeAction: "Use a generated model as the refinement target.")
         }
-        func modelValueBindings(in configuration: TLCConfiguration) -> [(name: String, value: String)] {
+        func constantBindings(in configuration: TLCConfiguration) -> [(name: String, value: String)] {
             configuration.declarations.compactMap { declaration -> (name: String, value: String)? in
                 guard declaration.hasPrefix("CONSTANT ") else { return nil }
-                let fields = declaration.dropFirst("CONSTANT ".count).components(separatedBy: " = ")
-                guard fields.count == 2, isTLADeclarationName(fields[0]), isTLADeclarationName(fields[1]) else {
-                    return nil
-                }
-                return (fields[0], fields[1])
+                let assignment = declaration.dropFirst("CONSTANT ".count)
+                guard let separator = assignment.range(of: " = ") else { return nil }
+                let name = String(assignment[..<separator.lowerBound])
+                let value = String(assignment[separator.upperBound...])
+                guard isTLADeclarationName(name), !value.isEmpty else { return nil }
+                return (name, value)
             }
         }
         let boundNames = Set(bindings.map { $0.0 })
-        let abstractValues = Set(modelValueBindings(in: renderedTarget.configuration).filter {
-            $0.name == $0.value && !boundNames.contains($0.name)
-        }.map { $0.value }).sorted()
-        var modelValues = modelValueBindings(in: configuration)
+        let abstractConstants = constantBindings(in: renderedTarget.configuration).filter { !boundNames.contains($0.name) }
+        var rootConstants = constantBindings(in: configuration)
         var declarations = configuration.declarations
         var constantNames: [String] = []
         var occupiedSources = tlaBundle.files.map(\.tla) + declarations
@@ -616,22 +615,22 @@ public struct RenderedSpecification: Sendable {
         for result in renderedPlusCalProfiles.values {
             if case .success(let bundle) = result { occupiedSources.append(bundle.root.tla) }
         }
-        // shortcut: concrete abstract constants and module replacements still need separate import forwarding.
-        for value in abstractValues {
+        // shortcut: module-operator replacements still need separate import forwarding.
+        for constant in abstractConstants {
             let symbol: String
-            if let existing = modelValues.first(where: { $0.value == value }) {
+            if let existing = rootConstants.first(where: { $0.value == constant.value }) {
                 symbol = existing.name
             } else {
-                var fresh = value
+                var fresh = constant.name
                 while occupiedSources.contains(where: { $0.contains(fresh) }) { fresh += "_" }
                 symbol = fresh
-                let declaration = "CONSTANT \(symbol) = \(value)"
+                let declaration = "CONSTANT \(symbol) = \(constant.value)"
                 declarations.append(declaration)
                 occupiedSources.append(declaration)
-                modelValues.append((symbol, value))
+                rootConstants.append((symbol, constant.value))
                 constantNames.append(symbol)
             }
-            bindings.append((value, symbol))
+            bindings.append((constant.name, symbol))
         }
         let replacement = bindings.sorted { $0.0 < $1.0 }
             .map { "\($0.0) <- (\($0.1))" }.joined(separator: ", ")

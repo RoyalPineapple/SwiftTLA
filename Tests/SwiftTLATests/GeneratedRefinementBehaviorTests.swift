@@ -4,6 +4,42 @@ import UpstreamParity
 
 @Suite("Generated refinement behavior")
 struct GeneratedRefinementBehaviorTests {
+    @Test("generated refinement imports bind the target's closed finite constants")
+    func retainsAbstractFiniteConstants() throws {
+        let configuration = try FairRefinementTarget.Configuration(N: 1)
+        let initial = try #require(try FairRefinementTarget.initialMachines(configuration: configuration).first)
+        #expect(initial.state.value == 0)
+        let target = try FairRefinementTarget.render(configuration: configuration)
+        let concreteField = try #require(ConfiguredCounter.State.fieldIdentities[\ConfiguredCounter.State.value]?.formalName)
+        let constants = [("EnabledValue", "TRUE", "stopAtLimit"), ("FiniteValues", "{1, 2}", "FiniteValues"),
+                         ("TextValue", #""left = right""#, "TextValue")]
+        for (name, value, _) in constants {
+            try #require(target.tlaBundle.cfg.contains("CONSTANT \(name) = \(value)\n"))
+        }
+        func importing(_ source: RenderedSpecification, name: String) throws -> RenderedSpecification {
+            try source.addingGeneratedRefinement(name, instance: "finite", of: FairRefinementTarget.self,
+                configuration: configuration, behavior: .initialAndNext,
+                parameters: [(\FairRefinementTarget.Configuration.N, "1")],
+                state: [(\FairRefinementTarget.State.value, concreteField)])
+        }
+        let rendered = try importing(
+            ConfiguredCounter.render(configuration: .init(limit: 1, stopAtLimit: true)), name: "FiniteSafety")
+        let repeated = try importing(rendered, name: "FiniteSafetyAgain")
+        let authored = try rendered.plusCalBundle()
+        for (name, value, symbol) in constants {
+            for bundle in [rendered.tlaBundle, authored] {
+                #expect(bundle.tla.contains("\(name) <- (\(symbol))"))
+                #expect(bundle.cfg.contains("CONSTANT \(symbol) = \(value)\n"))
+            }
+            #expect(repeated.tlaBundle.cfg.split(separator: "\n").filter {
+                $0 == "CONSTANT \(symbol) = \(value)"
+            }.count == 1)
+        }
+        #expect(repeated.tlaBundle.tla.split(separator: "\n").filter {
+            $0.hasPrefix("finite == INSTANCE ")
+        }.count == 1)
+    }
+
     @Test("generated refinement imports retain abstract model values in the root module and configuration")
     func retainsAbstractModelValues() throws {
         let configuration = try ArrayValueMachine.Configuration(input: [])
