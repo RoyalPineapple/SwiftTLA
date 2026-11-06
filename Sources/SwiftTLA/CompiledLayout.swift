@@ -187,7 +187,7 @@ package struct CompiledLayout: Hashable, Sendable {
     package let parameters: [CompiledParameterLayout]
     package let checkingRegisters: [CompiledCheckingRegisterLayout]
     package let variables: [CompiledVariableLayout]
-    package let actions: [CompiledActionLayout]
+    package private(set) var actions: [CompiledActionLayout]
     let stateProperties: [CompiledPropertyLayout]
     let temporalProperties: [CompiledPropertyLayout]
     let refinementProperties: [CompiledPropertyLayout]
@@ -286,6 +286,22 @@ package struct CompiledLayout: Hashable, Sendable {
         variables.first {
             $0.declaration.origin == .programCounter
         }?.id
+    }
+
+    mutating func resolveActionNames(reserving names: Set<String>, preservingDirectNext: Bool) {
+        var used = names.union(["Init", "Next", "Spec", "vars", "StateConstraint", "ActionConstraint", "Terminating"])
+        if preservingDirectNext { used.remove("Next") }
+        actions = actions.map { action in
+            let stem = action.renderedName
+            var name = stem
+            var suffix = 2
+            while !used.insert(name).inserted {
+                name = "\(stem)__\(suffix)"
+                suffix += 1
+            }
+            return .init(id: action.id, declaration: action.declaration,
+                renderedName: name, isTermination: action.isTermination)
+        }
     }
 
     func procedureStackID() -> VariableID? {

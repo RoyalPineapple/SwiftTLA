@@ -147,6 +147,26 @@ struct CompiledSpecificationRendererTests {
                 #expect(diagnostic.path == "tla.Spec")
             }
         }
+        for names in [["Spec"], ["Init"], ["count"], ["Next", "advance"], ["Next"]] {
+            let varied = try TLASpec(name: "ResolvedActionNames", variables: [
+                .init(name: "count", initial: .int(0))
+            ], constants: [.init("Spec__2", .constant("Spec__2"))],
+                actions: names.map { .init(name: $0, body: .unchanged(.named("count"))) },
+                invariants: [.init(name: "CanAdvance", body: .enabledAction(names[0]))]).compile()
+            let formalNames = Set(varied.layout.actions.map(\.renderedName))
+            #expect(formalNames.isDisjoint(with: ["Init", "Spec", "count", "Spec__2"]))
+            if names.count > 1 { #expect(!formalNames.contains("Next")) }
+            let runtime = CompiledRuntime(compilation: varied)
+            let initial = try #require(try runtime.initialStates().first)
+            #expect(Set(try runtime.successors(from: initial).map(\.action)) == Set(varied.layout.actions.map(\.id)))
+            do {
+                let output = try varied.render().tlaBundle.tla
+                let actionName = try #require(varied.layout.actions.first?.renderedName)
+                #expect(output.contains("CanAdvance == ENABLED \(actionName)\n"))
+            } catch {
+                Issue.record("Valid action names \(names) failed their TLA export: \(error)")
+            }
+        }
     }
 
     @Test("Action dependencies are declared before their enabledness consumers")

@@ -1158,7 +1158,7 @@ public extension TLASpec {
         try validateRefinements()
         try validateGeneratedRefinements()
         let definitionOrder = try orderedDirectDefinitions()
-        let layout = CompiledLayout(source: self)
+        var layout = CompiledLayout(source: self)
         var formalControlNames: Set<String> = []
         if let duplicate = layout.controlLocations.map(\.formalName).first(where: {
             !formalControlNames.insert($0).inserted
@@ -1188,9 +1188,26 @@ public extension TLASpec {
             lowerer: &lowerer, layout: layout, semantics: semantics)
         semantics.operators = lowerer.operators
         semantics.operators.resolveDependencies()
+        let bindings = lowerer.bindings
+        var occupied = renderedDeclarationNames(includingActions: false)
+            .union(lowerer.modelValueNames)
+            .union(bindings.binders.values).union(bindings.operatorNames.values)
+            .union(symmetrySets.map { "Symm\($0.variableName)" })
+            .union(incomingModuleParameters.map(\.operatorName))
+            .union(generatedModelInstances.map(\.name)).union(generatedRefinements.map(\.name))
+            .union(semantics.behavior.fairnessProfiles.map(\.operatorName))
+        for (index, scenario) in semantics.behavior.validationScenarios.enumerated() {
+            if scenario.view != nil { occupied.insert("__SwiftTLAView\(index)") }
+            if let postcondition = scenario.postconditionName { occupied.insert(postcondition) }
+        }
+        let directNext = layout.actions.count == 1 && layout.actions[0].renderedName == "Next"
+            && semantics.behavior.actions.count == 1
+            && semantics.behavior.actions[0].bindings.isEmpty && !occupied.contains("Next")
+        // Model values and generated operator/binder names are complete only after lowering.
+        layout.resolveActionNames(reserving: occupied, preservingDirectNext: directNext)
         try validateAuthoredProperties(algorithm: authoredAlgorithm?.plan, layout: layout)
         return CompiledModule(
-            metadata: .init(source: self, modelValueNames: lowerer.modelValueNames), layout: layout, bindings: lowerer.bindings, semantics: semantics,
+            metadata: .init(source: self, modelValueNames: lowerer.modelValueNames), layout: layout, bindings: bindings, semantics: semantics,
             refinements: refinements, generatedRefinements: compiledGenerated,
             authoredAlgorithm: authoredAlgorithm,
             requiredStandardModules: lowerer.requiredStandardModules,
