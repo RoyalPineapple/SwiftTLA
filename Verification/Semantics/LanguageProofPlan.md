@@ -432,6 +432,68 @@ The existing literal cases in `OrderedIntExpressionRule` and `IntExpressionOutco
 The full parent still needs source-constructor correspondence, matching initializer/target identities, value projections, type and call coverage, and both output interpretations.
 No general visitor, layout, token, helper-binding, TLA/CFG or kernel soundness follows. L3, E LIT and all six-link rows remain open.
 
+### Raw integer literal code-case result 7 November 2026
+
+This result removes the numerical-decoder premise before the scalar literal result above.
+Its input is a well-formed Swift integer literal syntax node, optionally preceded by the standard unary minus.
+Its contextual type is the standard library `Int`, and its value `n` is representable by that target type.
+The decoder and source context must have the same Int width and bounds. Host/target agreement remains an owned premise.
+Decimal, binary, octal and hexadecimal spellings are covered, including separators, leading zeros and either case of hexadecimal digits.
+Unlabeled single-expression parentheses are covered at the typed value decoder by finite recursion.
+Type and operator binding are premises here. Arbitrary user-defined literal types and overloaded operators remain separate accepted routes.
+
+The independent meaning is the positional numeral's signed integer value in the stated radix.
+Evaluating this literal yields `n`, reads no model state, writes no model state and reaches no model evaluation failure.
+The existing `SourceNode` literal case represents that value outcome as `Success(n)`.
+Its branch does not inspect `state`, `reads`, `left`, `right` or either child history.
+This local effect statement does not supply a failure-trace contract for other expressions.
+
+The argument uses the documented [Swift literal grammar](https://docs.swift.org/latest/documentation/the-swift-programming-language/lexicalstructure/)
+and [integer parsing contract](https://developer.apple.com/documentation/swift/fixedwidthinteger/init(_:radix:)).
+Swift ignores numeral separators and leading zeros. The radix prefixes select bases two, eight and sixteen. Absence selects decimal.
+For a representable integer string, conversion returns its represented value.
+These language and standard-library operations are within the documented Swift trust boundary.
+
+1. Let `m` be the unsigned magnitude of `n` and let the target width be `w`.
+   Since `n` is representable, `m` fits the corresponding `UInt`, including `abs(Int.min)`.
+   `SourceIntegerLiteral.value` removes separators and the applicable radix prefix, then parses exactly those digits into `m`.
+   It neither changes the radix of a leading-zero decimal numeral nor interprets its digits as a state name.
+2. In the positive case, `m <= Int.max`. Exact conversion returns `n`.
+   In the negative case with `m == Int.min.magnitude`, the explicit minimum branch returns `Int.min` without negating it.
+   Every other negative case has `m <= Int.max`. Exact conversion followed by safe negation returns `n`, including negative zero.
+   Thus every stated input returns `n` rather than `nil`, without arithmetic overflow or a model-state operation.
+3. The independent `OrderedIntSourceSyntaxCheck.integer` removes the same inert separators and selects the same radix.
+   It parses the signed digit string directly as `Int`. Its representable result is also `n`.
+   With requested type `.int`, its `value` caller therefore constructs `.value(.int(n))`.
+   This discharges numerical agreement of the two decoders without treating their agreement as the definition of source meaning.
+4. In `decodeStateExpr`, the two earlier probes require member access syntax, so neither captures the stated literal input.
+   The integer branch therefore returns `.value(.int(n))`.
+   In `decodeTypedFacadeValue`, `decodeSwiftIntegerValue` explicitly excludes a recognized direct literal.
+   For an Int context the intervening enum, call, collection and member-access cases do not apply.
+   The direct integer branch returns the same constructor. Parentheses recurse with the same expected type.
+   `typedFacadeValueType` also recognizes the unwrapped literal as `.int`.
+5. This constructor fact and the scalar literal code-case result give the same payload in the resolved literal and its empty child list.
+   They also give compiled interpretation `.integer(n)` for the checked Int initializer route.
+   `CompiledValue.rendered(using:)` maps that scalar directly to `.int(n)` without consulting layout names.
+   For a fresh target and a typed prior binding map, `IntExpressionOutcomesSupplyInitializerOutcomes`
+   and `InitializerLeafRetainsCompleteStatesAndFailures` then give the singleton extension and empty failure set.
+   Here `SwiftIntMin` and `SwiftIntMax` denote those same bounds, and `IntInitializationDomains` remains a premise.
+   This literal leaf uses the already derived child value, rather than assuming an arbitrary matching expression history.
+   The caller still must supply the matching source target, fresh ID, typed prior map and value projection.
+
+This is a manual code-case proof under documented Swift semantics, not a mechanically checked Swift translation or new TLAPS execution.
+It assumes faithful SwiftSyntax node/token input and standard type/operator binding. It does not prove those owned links.
+Formal `Int.min`/`Int.max` member access, conversions, enum encoding, constant arithmetic and other initializer placements remain distinct routes.
+Generated Swift token/scope interpretation, complete TLA initialization, actual TLC integer capacity and parent call coverage remain open.
+L1 through L6 and E LIT remain open as complete tasks. The two local code-case results are partial inputs to them.
+
+The existing `AlgorithmBuilderParsingTests.parsedAndBuiltLiteralInitializersShareIdentity` owner now checks independent expected values
+for fifteen integer spellings through actual parsing, compilation and compiled initial outcomes.
+It retains the prior Bool, String and array variants, checks one state and no failures, and still checks builder identity.
+The focused run passed three tests in three suites, including the existing escaped-string and signed-TLA-rendering owners.
+All 1,201 captured inputs remained unchanged during execution. These are regression receipts, not universal proof or hosted admission.
+No model, fixture, production decoder, evaluator, checker family or formal theorem was added or changed.
+
 ### Literal encoding checkpoint 6 November 2026
 
 Status: implementation defect repaired; E LIT and L1 through L6 remain open.

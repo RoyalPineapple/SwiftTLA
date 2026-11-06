@@ -313,7 +313,7 @@ The remaining source and output interpretation boundaries are precise:
 
 | Boundary | Existing owner | Remaining obligation |
 | --- | --- | --- |
-| Authored syntax to witness | `OrderedIntSourceSyntaxCheck.components`, `integer`, `value`, `render` | SwiftSyntax input, precedence, literal decoding, name and label meaning |
+| Authored syntax to witness | `OrderedIntSourceSyntaxCheck.components`, `integer`, `value`, `render` | SwiftSyntax input, precedence, type/operator binding, other literal routes, names and labels. [Numeric decoding](LanguageProofPlan.md#raw-integer-literal-code-case-result-7-november-2026) has a manual proof under its stated syntax and binding premises. |
 | Witness to real model | `verifyRewrite`, `checkingBuilderOutput`, `_checkingOrderedIntSource`, `matchesOrderedIntSource` | Emitted witness and actual builder identities |
 | Source and resolved trees to node arrays | Both `orderedIntPlan` overloads | Reviewed Swift statements implement the checked synchronized record history |
 | Actual Swift tokens to expression steps | `verifyOrderedIntInitialExpression` | Accepted token grammar and scoped temporary interpretation |

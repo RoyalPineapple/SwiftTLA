@@ -1665,15 +1665,29 @@ import SwiftTLAMacros
         }
     }
 
-    @Test("parsed and built literal initializers have one compilation identity")
+    @Test("parsed and built literal initializers preserve their values and compilation identity")
     func parsedAndBuiltLiteralInitializersShareIdentity() throws {
         func built<Value: TLAValueType>(_ value: Value) -> TLASpec {
             TLASpec("LiteralInitializer") { scope in
                 let _ = scope.sharedVar(_name: "count", initial: value)
             }
         }
-        for (source, specification) in [("1", built(1)), ("true", built(true)),
-                                         ("\"one\"", built("one")), ("[1]", built([1]))] {
+        let integerCases: [(String, Int)] = [
+            ("0", 0), ("-0", 0), ("00012", 12),
+            ("1_000_000_001", 1_000_000_001), ("-1_000_000_001", -1_000_000_001),
+            ("0b1010_0101", 165), ("-0b1010_0101", -165),
+            ("0o17", 15), ("-0o17", -15),
+            ("0xCA_FE", 51_966), ("-0xca_fe", -51_966),
+            ("9223372036854775807", .max), ("-9223372036854775808", .min),
+            ("0x7fff_ffff_ffff_ffff", .max), ("-0x8000_0000_0000_0000", .min)
+        ]
+        var cases: [(String, TLASpec, TLAValue)] = integerCases.map { ($0.0, built($0.1), .int($0.1)) }
+        cases += [
+            ("true", built(true), .bool(true)),
+            ("\"one\"", built("one"), .string("one")),
+            ("[1]", built([1]), .tuple([.int(1)]))
+        ]
+        for (source, specification, expected) in cases {
             let closure = try parseSpecTestClosure("""
             { scope in
                 let count = scope.sharedVar(_name: "count", initial: \(source))
@@ -1682,6 +1696,11 @@ import SwiftTLAMacros
             let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
             let built = try specification.compile()
             #expect(parsed.identity == built.identity)
+            let outcomes = try CompiledRuntime(compilation: parsed).initialOutcomes()
+            #expect(outcomes.failures.isEmpty)
+            try #require(outcomes.states.count == 1)
+            let count = try #require(TLAStateProjection.Token(validating: "count"))
+            #expect(try outcomes.states[0].projection(using: parsed.layout).value(for: count) == expected)
         }
     }
 
