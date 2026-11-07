@@ -19,8 +19,27 @@ struct NativeCodeGenerationTests {
             model: try MacroCompilation(typeName: "FiniteOrdering", program: program), sharedTypes: declarations)
         let generated = try emitter.ordering(.oneOf(first, second))
         #expect(generated.components(separatedBy: "case ").count - 1 <= 8 * 32)
-        #expect(!generated.contains("TLAValue"))
-        #expect(!Parser.parse(source: "let order = \(generated)").hasError)
+        for (extra, expectedNative) in [
+            ("", true),
+            ("\nlet unexpectedFormalValue: SwiftTLA.TLAValue = .int(0)", false),
+            ("\nlet unexpectedFormalValue = SwiftTLA.TLAValue.int(0)", false)
+        ] {
+            let candidate = generated + extra
+            if !expectedNative {
+                #expect(candidate != generated)
+                #expect(candidate.components(separatedBy: "unexpectedFormalValue").count == 2)
+            }
+            let syntax = Parser.parse(source: "let order = \(candidate)")
+            #expect(!syntax.hasError)
+            let tokens = Array(syntax.tokens(viewMode: .sourceAccurate))
+            let nativeOnly = tokens.enumerated().allSatisfy { index, token in
+                token.tokenKind != .identifier("TLAValue") || (
+                    tokens[..<index].suffix(2).map(\.text) == ["SwiftTLA", "."]
+                    && [[".", "IntegerLiteralType"], [".", "BooleanLiteralType"],
+                        [".", "StringLiteralType"]].contains(tokens.dropFirst(index + 1).prefix(2).map(\.text)))
+            }
+            #expect(nativeOnly == expectedNative)
+        }
     }
 
     @Test("Native bindings retain resolved declaration names")
@@ -486,7 +505,27 @@ struct NativeCodeGenerationTests {
             guard let function = $0.as(FunctionDeclSyntax.self) else { return true }
             return !exportMethods.contains(function.name.text)
         }.map(\.description).joined(separator: "\n")
-        #expect(!execution.contains("TLAValue"))
+        for (extra, expectedNative) in [
+            ("", true),
+            ("\nlet unexpectedFormalValue: SwiftTLA.TLAValue = .int(0)", false),
+            ("\nlet unexpectedFormalValue = SwiftTLA.TLAValue.int(0)", false)
+        ] {
+            let candidate = execution + extra
+            if !expectedNative {
+                #expect(candidate != execution)
+                #expect(candidate.components(separatedBy: "unexpectedFormalValue").count == 2)
+            }
+            let syntax = Parser.parse(source: "struct Expansion {\n\(candidate)\n}")
+            #expect(!syntax.hasError)
+            let tokens = Array(syntax.tokens(viewMode: .sourceAccurate))
+            let nativeOnly = tokens.enumerated().allSatisfy { index, token in
+                token.tokenKind != .identifier("TLAValue") || (
+                    tokens[..<index].suffix(2).map(\.text) == ["SwiftTLA", "."]
+                    && [[".", "IntegerLiteralType"], [".", "BooleanLiteralType"],
+                        [".", "StringLiteralType"]].contains(tokens.dropFirst(index + 1).prefix(2).map(\.text)))
+            }
+            #expect(nativeOnly == expectedNative)
+        }
         #expect(!execution.contains("formalProjection("))
         #expect(!execution.contains("formalCall("))
         #expect(generated.contains("_NativeMachineOperations.add"))

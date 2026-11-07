@@ -528,6 +528,7 @@ final class ParserSession {
         if let prefix = expression.as(PrefixOperatorExprSyntax.self) {
             let operand = decodeStateExpr(prefix.expression)
             if prefix.operator.text == "!", let operand { return .not(operand) }
+            if prefix.operator.text == "+", isSwiftIntegerSyntax(expression) { return operand }
             if prefix.operator.text == "-", let operand {
                 return negated(operand)
             }

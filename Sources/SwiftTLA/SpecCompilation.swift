@@ -1329,9 +1329,12 @@ public extension TLASpec {
         semantics.operators = lowerer.operators
         semantics.operators.resolveDependencies()
         let bindings = lowerer.bindings
+        let parameterVariables = Dictionary(uniqueKeysWithValues:
+            (authoredAlgorithm?.plan.procedures ?? []).flatMap { zip($0.parameters, $0.parameterVariables) })
         var occupied = renderedDeclarationNames(includingActions: false, includingVariables: false)
             .union(lowerer.modelValueNames)
-            .union(bindings.binders.values).union(bindings.operatorNames.values)
+            .union(bindings.binders.filter { parameterVariables[$0.key] == nil }.values)
+            .union(bindings.operatorNames.values)
             .union(symmetrySets.map { "Symm\($0.variableName)" })
             .union(incomingModuleParameters.map(\.operatorName))
             .union(generatedModelInstances.map(\.name)).union(generatedRefinements.map(\.name))
@@ -1345,15 +1348,22 @@ public extension TLASpec {
         var variableReservations = occupied
         if authoredAlgorithm != nil { variableReservations.insert("Terminating") }
         layout.resolveVariableNames(reserving: variableReservations)
+        let parameterNames = parameterVariables.mapValues { layout.variables[$0.ordinal].formalName }
+        let resolvedBindings = CompiledBindingTable(operatorNames: bindings.operatorNames,
+            binders: bindings.binders.merging(parameterNames) { _, name in name })
         occupied.formUnion(layout.variables.map(\.formalName))
         let directNext = layout.actions.count == 1 && layout.actions[0].renderedName == "Next"
             && semantics.behavior.actions.count == 1
             && semantics.behavior.actions[0].bindings.isEmpty && !occupied.contains("Next")
         // Model values and generated operator/binder names are complete only after lowering.
-        layout.resolveActionNames(reserving: occupied, preservingDirectNext: directNext)
+        var actionReservations = occupied
+        if authoredAlgorithm != nil, !layout.actions.contains(where: \.isTermination) {
+            actionReservations.insert("Terminating")
+        }
+        layout.resolveActionNames(reserving: actionReservations, preservingDirectNext: directNext)
         try validateAuthoredProperties(algorithm: authoredAlgorithm?.plan, layout: layout)
         return CompiledModule(
-            metadata: .init(source: self, modelValueNames: lowerer.modelValueNames), layout: layout, bindings: bindings, semantics: semantics,
+            metadata: .init(source: self, modelValueNames: lowerer.modelValueNames), layout: layout, bindings: resolvedBindings, semantics: semantics,
             refinements: refinements, generatedRefinements: compiledGenerated,
             authoredAlgorithm: authoredAlgorithm,
             requiredStandardModules: lowerer.requiredStandardModules,

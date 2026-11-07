@@ -386,6 +386,26 @@ This restores the missing recognition case used by the source-to-initializer che
 It does not discharge their general source correspondence, complete failure-history or parent-composition premises.
 No new formal proof, hosted admission or complete six-link row follows from these receipts.
 
+### Closed integer unary plus
+
+The existing raw Swift integer route accepts unary plus as an identity operation on a closed Int operand.
+On unchanged `4e7b1a5f` production, the real builder produced the independently expected value three for
+`+(-(-(1 + 2)))`, but source decoding rejected it. The independent collector also skipped `+(-(-0x1))`,
+allowing the existing intentionally changed builder to replace authored one with two.
+The executed two-test baseline reported both failures; neither was a setup or compilation failure.
+
+The existing decoder now admits plus only through its closed Swift integer syntax guard.
+The shared source collector returns the already established closed Int operand unchanged.
+It still uses checked subtraction for minus and supplies no witness for unsupported or overflowing operands.
+These branches reach the existing parser, rewrite and real-builder consumers without a new evaluator or accepted-language restriction.
+Nonconstant and nominal operator binding, other placements, parser fidelity and complete source correspondence remain open.
+
+The final guarded combined run passed 210 tests in 13 suites, including the external consumer owner.
+All 1,201 captured inputs stayed exact; whole-log SHA256 is
+`b8decb1acccfd249dec3cb0cb830138a9f4b427d2800e5f3f52b59d7d085e09c`.
+The later native-guard-only run changed no producer or previously selected owner bytes.
+These are scoped regression receipts, not a complete E LIT row, initialization proof or hosted admission.
+
 ## Ordered observation contract
 
 The existing set results omit order and multiplicity.
