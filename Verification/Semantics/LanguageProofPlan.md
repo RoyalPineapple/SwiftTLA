@@ -527,6 +527,15 @@ This result supplies a child rule. Complete initializer state assembly remains i
   Start with both `orderedIntPlan` overloads in `StraightLineAssignmentCheck`.
 - [x] L3a Derive scalar literal extraction and recognized value-initializer acceptance from the actual code.
   The local proof below uses documented Swift semantics. Full L3 and its source/type/call-coverage obligations remain open.
+- [x] L3b Derive scalar constructor normalization and mandatory lowerer-check coverage from actual callers.
+  The [code-case proof](InitializationFamily.md#scalar-literal-normalization-and-lowerer-coverage) covers `VarDecl`/`NamedVar`, builder/shared paths and the same-source layout/zip loop.
+  It removes the local wrapper and authored-control skip assumptions. Resolved typing, later identity transport and full L3 remain open.
+- [x] L3c Derive separation of live compiled expression occurrences and preservation of occurrence identity across copies.
+  The [identity argument](InitializationFamily.md#compiled-expression-occurrence-identity) uses immutable, childless Swift object tokens instead of random UUIDs.
+  It removes the expression-token collision premise from resolver/cache reasoning. Cache context completeness, payload/type transport and full L3 remain open.
+- [x] L3d Derive typed literal transport through actual checking and resolution for the compiled pilot case.
+  The [transport argument](InitializationFamily.md#typed-scalar-literal-transport-through-resolution) derives the persistent Int-type invariant and both first-visit/cache-hit literal cases.
+  It supplies the scalar evaluator and initializer consumer without assumed checked/resolved literal agreement. Source typing, other scope routes and full L3 remain open.
 - [ ] L4 Prove the accepted Swift literal tokens and TLA integer encoding denote that same `n`.
   Reuse the existing native decoder and signed-radix lemmas. Include zero, negative values and target bounds in the general argument.
 - [x] L4a Retain token text and operator classification in the complete Int initial-output check.

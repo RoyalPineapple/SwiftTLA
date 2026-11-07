@@ -77,6 +77,133 @@ Its negative theorem shows that retaining the same first record does not prove p
 The public native result now stores the complete list of reached failure events, with a lazy projection of each preceding prefix.
 Its first-failure properties select the first list entry. They do not replace that list.
 
+### Scalar literal normalization and lowerer coverage
+
+This code-case result starts with an existing declaration constructor, not raw Swift syntax.
+Let `n` be any stored `Int` payload, including either bound of that Swift execution, and let `i` index `compileModule`'s variable array.
+Suppose that declaration was constructed with `.value(.int(n))` or `.expression(.value(.int(n)))`.
+For the normally returning `lower(spec: self)` call made by `compileModule`, its scalar check is mandatory.
+Its local initialization entry retains `n` at `VariableID(ordinal: i)`.
+No authored Algorithm or program-counter premise is needed for this result.
+
+The proof uses documented Swift enum matching, value copying, array enumeration, `zip`, and dictionary replacement.
+Its physical owners are [declaration construction](../../Sources/SwiftTLA/TLASpec.swift),
+[builder assembly](../../Sources/SwiftTLA/TLASpec+Building.swift),
+[algorithm lowering](../../Sources/SwiftTLA/AlgorithmLowering.swift),
+[module compilation](../../Sources/SwiftTLA/SpecCompilation.swift),
+[layout construction](../../Sources/SwiftTLA/CompiledLayout.swift),
+[lowering](../../Sources/SwiftTLA/CompiledLowerer.swift) and
+[the scalar check](../../Sources/SwiftTLA/StraightLineAssignmentCheck.swift).
+
+1. `VariableInitialization.normalized` converts only `.expression(.value(v))` to `.value(v)`.
+   Every other constructor returns unchanged. Applying it twice therefore has the same result as applying it once.
+   For `v = .int(n)`, it copies `n`; it performs no integer arithmetic, state access or model evaluation.
+2. Both `VarDecl` and `NamedVar` store `initialization.normalized` in a `let` property.
+   The formal-core typed-expression `Variable` overload passes through `VarDecl`.
+   `TLASpec` builder assembly passes a `VarDecl` through `NamedVar`.
+   The reviewed shared-variable paths in `AlgorithmLowerer` also construct `NamedVar` from the shared initializer.
+   Thus, at each of these storage boundaries, either stated input becomes `.value(.int(n))`.
+   This derives local wrapper coverage; raw parser selection and other placement routes remain separate.
+3. `compileModule` constructs `CompiledLayout(source: self)`, then passes that layout and the same `self` to `CompiledLowerer`.
+   The layout enumerates the variable array, assigning ordinal `i` and retaining that entry's declaration name.
+   The lowerer checks equal variable counts before its `zip` loop. No variable can disappear through zip truncation on normal return.
+   Its iteration for entry `i` therefore pairs that declaration with `VariableID(ordinal: i)`.
+4. For the normalized initializer, `checkIntInitializer` takes its first branch and becomes `true`.
+   The authored-Algorithm/program-counter branch cannot suppress this call.
+   The lowerer calls `verifyInitialIntExpression` before inserting the lowered initialization into its dictionary.
+   That check recognizes this source literal unconditionally and compares its singleton literal plan against the lowered value plan.
+   On normal return, the lowered entry has the same integer payload and no children, by the scalar extraction result in the working plan.
+   This stage does not establish its resolved type.
+5. The lowerer inserts this checked value at the paired ID. Enumeration makes the IDs distinct, so another iteration cannot overwrite that slot.
+   This establishes the local source-declaration/ID association and payload at insertion.
+   It does not establish later scheduling, resolver identity transport, source-visible names or runtime prefix freshness.
+
+The removed owned assumptions are that these constructor wrappers might leave the scalar in an unchecked expression case,
+and that the lowerer might skip the literal check when authored control is absent.
+This supplies the normalized scalar argument and mandatory invocation used by the existing scalar code-case result.
+When the later resolved variable type is `.int`, the separate resolver argument can then use its proper-literal branch.
+That resolved-type fact and transport to the resolver are still obligations; they are not supplied by normalization.
+
+For the existing `IntExpressionOutcomesSupplyInitializerOutcomes` consumer, instantiate the integer-bound constants with the same bounds as `n`'s Swift execution.
+Then `n` belongs to their interval, and the already derived literal result is `Expressions!Success(n)`.
+Its stated `IntInitializationDomains` premise supplies the value-domain fact needed by `FixedInitializerRetainsItsOnlyCandidate`.
+The parent then receives the singleton candidate `{n}` with `NoFailure`.
+`InitializerLeafRetainsCompleteStatesAndFailures` still requires the source target, a typed prior map and a fresh key.
+This proof does not discharge those parent premises or complete initializer state/failure histories.
+
+The result is a manual implementation-correspondence proof for these code cases, not a mechanically checked Swift translation.
+The reviewed normalization and lowerer bodies are unchanged. No new Swift tests or TLAPS obligations were run for that documentation checkpoint.
+Macro/source fidelity, type and helper binding, output/checker soundness, full-width TLC capacity and all complete six-link rows remain open.
+
+### Compiled expression occurrence identity
+
+`CompiledExpression` equality denotes an occurrence, not structural equality of its operation, type and children.
+The former UUID token required a separate uniqueness assumption. No actual collision was observed.
+The implementation now uses a private, empty, final `Sendable` class instance as its token.
+The expression remains a value struct; the token has no children or mutable state.
+This matches the existing identity/hash pattern for `CheckedOperatorCall`.
+
+The local invariant follows from documented Swift [reference and identity semantics](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/classesandstructures/)
+and [ObjectIdentifier lifetime semantics](https://developer.apple.com/documentation/swift/objectidentifier):
+
+1. Each normally returning expression initializer creates a fresh token instance.
+   Distinct live constructions therefore compare unequal with `===`, even when all expression payloads agree.
+2. Copying an expression copies its reference to that token. Equality and `hasSameOccurrence` therefore agree and preserve occurrence identity across copies.
+   The operation, type, children and token are immutable after initialization.
+3. Equal expressions hash the same `ObjectIdentifier`. Hash collisions between unequal tokens cannot make them equal.
+   Dictionary and Set operations still compare the expressions' token identities.
+4. Actual resolver keys store a `CompiledExpression`, and emitter caches, visited sets and the renderer's candidate cache also store expressions as keys or members.
+   Those values retain their tokens throughout membership. Object-address reuse after deallocation cannot alias a token still retained by a key, a member or the expression being compared.
+5. The token owns no expression or child token. It cannot create a recursive token-ownership chain or reference cycle.
+   Compiler-checked `Sendable` conformance requires no unchecked escape or synchronization state.
+
+This removes the probabilistic uniqueness premise for live `CompiledExpression` keys.
+In particular, a resolver cache hit cannot arise solely because two distinct expression occurrences received the same token.
+It supplies the occurrence-separation fact needed by the literal resolver argument; it does not prove that the cache key contains every semantic context.
+Resolver traversal, type preservation, capture ownership and the meaning of cached results remain separate obligations.
+Other declaration identities are outside this change. No cross-process or serialized expression identity is claimed.
+This is a manual code-case proof under trusted Swift behavior, not a new TLAPS theorem or a mechanically checked compiler proof.
+
+### Typed scalar literal transport through resolution
+
+Consider a proper `.value(.integer(n))` initializer with no expression children at variable `v`.
+Suppose its `CompiledTypeInputs.variableTypes[v]` is `.int`, and its compiled input uses the pilot's literal/read/addition and sequential control routes.
+In particular, there are no operator/callback calls, process-local projections or procedure scopes in this code-case instance.
+If `CompiledProgram(inputs:)` returns normally, the checked and resolved initializer at `v` is a proper literal with payload `n`, type `.int` and no children.
+Its final variable type is `.int`. The result preserves the variable ID, not the expression token across newly constructed compiler stages.
+
+The physical owners are [type inputs](../../Sources/SwiftTLA/CompiledTypeInputs.swift),
+[checking](../../Sources/SwiftTLA/CompiledTypeChecker.swift), [type merging](../../Sources/SwiftTLA/CompiledValueType.swift),
+[resolution](../../Sources/SwiftTLA/ProgramResolver.swift), [behavior transport](../../Sources/SwiftTLA/CompiledBehavior.swift)
+and [initializer transport](../../Sources/SwiftTLA/CompiledExpressions.swift).
+
+1. The checker copies the input type map. `merge(.int, t)` returns `.int` when `t` is `.int` or `.unknown`; every other case throws.
+   Its initializer, assignment and nonprojecting state-read updates all use that merge.
+   Projecting state reads leave the map unchanged. Authored sequential checking restores the saved map on exit.
+   The excluded call/process routes are the other scope updates. Induction over the actual returning updates therefore preserves `variables[v] == .int`.
+2. For the literal initializer, `checkOperand` takes its direct `inferResolved` path.
+   `literal(.integer(n), expected: .int)` skips union, finite and named cases, chooses `.int` and merges equal types.
+   The returned `CheckedType` has `.int` for both types, no call and its default empty children.
+   `checkedOccurrence` copies the literal operation and uses those children. Equal result/computation types prevent a conversion wrapper.
+3. The initializer array retains `v` and the value-initializer tag.
+   In the finishing pass, its result type equals the invariant final `.int`, and its computation type is resolved.
+   The pass therefore returns this expression unchanged. The checked program retains the map and initializer.
+4. `ProgramResolver` starts with an empty expression cache. For this literal occurrence and function context, a first visit schedules its expanded task with no children and no call.
+   That task copies the literal operation, `.int` type and empty children into the cache.
+   The only alternative cache insertion is the local-declaration case, which cannot apply to this literal.
+   By the occurrence-separation result, a different occurrence cannot populate this key.
+   Induction over insertions therefore also proves that any cache hit for this literal key has exactly that payload, type and child list.
+   The literal uses no capture lookup, so this case needs no assumed agreement between capture environments.
+5. `CompiledBehavior.map` retains each initializer's variable ID; `CompiledVariableInitialization.map` retains its tag.
+   Resolution forwards the checked variable-type map and layout. Its final proper-literal Int guard invokes the existing independent resolved check even without authored control.
+
+This removes the checked/resolved payload and type-transport assumptions for the stated compiled pilot case.
+Together with the preceding normalization result, it supplies the proper typed literal consumed by the existing scalar evaluator argument and `IntExpressionOutcomesSupplyInitializerOutcomes`.
+The input type premise still needs its source connection: type inputs use the layout's explicit resolved type or resolve its generated Swift spelling.
+The source resolver's primitive `Int` branch returns `.int`; alias/nominal precedence, layout metadata and actual Swift name binding remain owned source obligations.
+General calls/processes, cache-context completeness for nonliterals, backend interpretation, complete initializer histories and all six-link rows remain open.
+This argument changes no checker, evaluator or theorem body. It is a manual implementation proof, with local regressions kept separate from mathematical proof and hosted admission.
+
 ## Ordered observation contract
 
 The existing set results omit order and multiplicity.
