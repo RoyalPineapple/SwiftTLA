@@ -124,7 +124,7 @@ public enum _NativeMachineOperations: Sendable {
     public static let maximumRecursiveDepth = 4_096
 
     /// Handle a model failure within one initial branch without abandoning other branches.
-    /// Domain enumeration and collection capacity errors propagate instead of becoming branch failures.
+    /// Enumeration, capacity, call-depth and missing-context errors propagate without a completed branch result.
     public static func visitInitialBranch(
         _ visit: () throws -> Void,
         onEvaluationFailure: (NativeMachineEvaluationError) -> Void
@@ -134,7 +134,8 @@ public enum _NativeMachineOperations: Sendable {
         } catch let failure as NativeMachineEvaluationError {
             switch failure {
             case .nonEnumerableIntegerDomain, .nonEnumerableSequenceDomain,
-                 .collectionCardinalityOverflow, .powerSetTooLarge:
+                 .collectionCardinalityOverflow, .powerSetTooLarge,
+                 .recursionDepthExceeded, .checkingContextRequired:
                 throw failure
             default:
                 onEvaluationFailure(failure)
@@ -143,7 +144,8 @@ public enum _NativeMachineOperations: Sendable {
             guard let native = failure.nativeFailure else { throw failure }
             switch native {
             case .nonEnumerableIntegerDomain, .nonEnumerableSequenceDomain,
-                 .collectionCardinalityOverflow, .powerSetTooLarge:
+                 .collectionCardinalityOverflow, .powerSetTooLarge,
+                 .recursionDepthExceeded, .checkingContextRequired:
                 throw failure
             default:
                 onEvaluationFailure(native)

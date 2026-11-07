@@ -487,12 +487,20 @@ private struct MissingFunctionKey {
         // 2,050 named calls fit; the interleaved lambda calls exceed the limit.
         #expect(2050 < limit && 2050 * 2 > limit)
         #expect(throws: EvalError.recursionDepthExceeded(limit)) {
-            try runtime.successors(for: action, from: initial)
+            try _NativeMachineOperations.visitInitialBranch {
+                _ = try runtime.successors(for: action, from: initial)
+            } onEvaluationFailure: { _ in
+                Issue.record("A compiled call-depth limit became a completed model failure")
+            }
         }
         var machine = try NestedLambdaCallDepth.makeMachine()
         let before = machine.state
         #expect(throws: NativeMachineEvaluationError.recursionDepthExceeded(limit)) {
-            try machine.send(.countDown)
+            try _NativeMachineOperations.visitInitialBranch {
+                _ = try machine.send(.countDown)
+            } onEvaluationFailure: { _ in
+                Issue.record("A native call-depth limit became a completed model failure")
+            }
         }
         #expect(machine.state == before)
     }

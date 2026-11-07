@@ -93,8 +93,37 @@ THEOREM TheSameFailureSetAndFirstEventCanHideReorderedLaterEvents ==
              /\ InitialSetProjection(source) = InitialSetProjection(reordered)
              /\ InitialFirstFailure(3, original) = InitialFirstFailure(3, swapped)
              /\ source # reordered
-    BY SMT DEF InitialObservation, InitialObservationIsTyped, InitialFailureHistory,
-        InitialSetProjection, InitialFailureSet, InitialFirstFailure
+    PROOF
+    <1>. DEFINE empty == [index \in 1..0 |-> index]
+                original == [index \in 1..3 |->
+                    IF index = 1 THEN first ELSE IF index = 2 THEN second ELSE third]
+                swapped == [index \in 1..3 |->
+                    IF index = 1 THEN first ELSE IF index = 2 THEN third ELSE second]
+                source == InitialObservation(0, empty, 3, original)
+                reordered == InitialObservation(0, empty, 3, swapped)
+    <1>1. 1..3 = {1, 2, 3}
+        BY SMT
+    <1>2. /\ original[1] = first /\ original[2] = second /\ original[3] = third
+          /\ swapped[1] = first /\ swapped[2] = third /\ swapped[3] = second
+        BY SMT DEF original, swapped
+    <1>3. /\ original \in [1..3 -> InitialFailureEvents]
+          /\ swapped \in [1..3 -> InitialFailureEvents]
+        BY <1>1, SMT DEF original, swapped
+    <1>4. /\ InitialFailureSet(3, original) = {first, second, third}
+          /\ InitialFailureSet(3, swapped) = {first, second, third}
+        BY <1>1, <1>2, SMT DEF InitialFailureSet
+    <1>5. InitialObservationIsTyped(source) /\ InitialObservationIsTyped(reordered)
+        BY <1>3, SMT DEF source, reordered, empty, InitialObservation,
+            InitialObservationIsTyped, InitialFailureHistory
+    <1>6. InitialSetProjection(source) = InitialSetProjection(reordered)
+        BY <1>4, SMT DEF source, reordered, InitialObservation, InitialSetProjection
+    <1>7. InitialFirstFailure(3, original) = InitialFirstFailure(3, swapped)
+        BY <1>2, SMT DEF InitialFirstFailure
+    <1>8. source.failureHistory[2] = second /\ reordered.failureHistory[2] = third
+        BY <1>2, SMT DEF source, reordered, InitialObservation
+    <1>9. source # reordered
+        BY <1>8, SMT
+    <1>. QED BY <1>5, <1>6, <1>7, <1>9, SMT
 
 SourceAdvance(previous, key, evaluate) ==
     [states |-> UNION {SourceInitialLeaf(prior, key, evaluate[prior]).states :
