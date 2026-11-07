@@ -300,6 +300,16 @@ It then requires the return of the final temporary and the closing expression to
 The whole template check excludes additional statements and trailing expression changes.
 The local continuation-token check alone is not a complete function check.
 
+The complete Int initial-function check retains exact token text and prefix/binary operator classification.
+Five actual negative literal controls retained equal text-token sequences while changing those classifications.
+They passed the original check, with correct generated positives and mutation guards passing.
+The all-kind comparison rejected valid fixtures before tests: expected `binaryOperator("<")` versus actual `leftAngle`.
+The owner now allows an angle delimiter paired with an operator only when their text matches, retaining the minus distinction.
+All other token kinds, counts and existing expression checks remain intact. The guarded focused run passed 55 tests in five existing suites.
+The attempted blanket parser-error guards rejected configured corpus members before tests executed; they are removed.
+The declaration factory, integer emitter and checker template remain unchanged from `6f7702cc`.
+This token comparison does not establish general recovery, printing, grammar or symbol binding. Those obligations remain explicit below.
+
 Induction over these declarations preserves each completed subtree value.
 Swift `try` stops the expression at the first reached throwing declaration.
 Thus a failed left subtree prevents evaluation of the right subtree and parent.

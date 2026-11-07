@@ -621,11 +621,32 @@ extension NativeSwiftEmitter {
         // Template lines have complete lexemes; parse them separately to avoid recursive closure nesting.
         let expectedTokens = source.split(separator: "\n").flatMap { line in
             Parser.parse(source: String(line)).tokens(viewMode: .sourceAccurate)
-                .filter { $0.tokenKind != .endOfFile }.map(\.text)
+                .filter { $0.tokenKind != .endOfFile }
         }
-        let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) } ?? []
+        let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)) } ?? []
+        func sameToken(_ actual: TokenSyntax, _ expected: TokenSyntax) -> Bool {
+            guard actual.text == expected.text else { return false }
+            if actual.tokenKind == expected.tokenKind { return true }
+            // Fragment parsing can leave generic angle delimiters classified as operators.
+            switch (actual.tokenKind, expected.tokenKind) {
+            case (.leftAngle, .binaryOperator), (.leftAngle, .prefixOperator),
+                 (.leftAngle, .postfixOperator), (.rightAngle, .binaryOperator),
+                 (.rightAngle, .prefixOperator), (.rightAngle, .postfixOperator),
+                 (.binaryOperator, .leftAngle), (.prefixOperator, .leftAngle),
+                 (.postfixOperator, .leftAngle), (.binaryOperator, .rightAngle),
+                 (.prefixOperator, .rightAngle), (.postfixOperator, .rightAngle):
+                return true
+            default: return false
+            }
+        }
         guard declaration?.is(FunctionDeclSyntax.self) == true,
-              actualTokens == expectedTokens else { throw intInitialOutputMismatch() }
+              actualTokens.elementsEqual(expectedTokens, by: sameToken) else {
+            let detail = zip(actualTokens, expectedTokens).enumerated()
+                .first { !sameToken($0.element.0, $0.element.1) }
+                .map { "token \($0.offset): expected \($0.element.1.tokenKind), actual \($0.element.0.tokenKind)" }
+                ?? "token counts: expected \(expectedTokens.count), actual \(actualTokens.count)"
+            throw intInitialOutputMismatch(actual: detail)
+        }
         let slots = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
             ($0.id, variable($0.id))
         })
@@ -637,11 +658,13 @@ extension NativeSwiftEmitter {
         }
     }
 
-    private func intInitialOutputMismatch() -> CompilationDiagnostic {
+    private func intInitialOutputMismatch(
+        actual: String = "the generated initial function contains an unrecognized statement or changed value"
+    ) -> CompilationDiagnostic {
         CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
             path: "native._initialStates.completeIntOutput",
             expected: "the complete ordered Int initial-state and failure template",
-            actual: "the generated initial function contains an unrecognized statement or changed value",
+            actual: actual,
             nextSafeAction: "Report this native initialization generation failure.")
     }
 

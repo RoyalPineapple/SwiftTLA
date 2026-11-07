@@ -46,6 +46,33 @@ import Testing
             } catch {
                 Issue.record("A valid signed literal \(value) failed its emitted-output check: \(error)")
             }
+            if value < 0, value != .min {
+                let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+                var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+                    typeName: "MinimumIntegerLiteral", program: program))
+                let declaration = try #require(try emitter.machineMembers().first {
+                    $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+                })
+                try #require(!declaration.hasError)
+                try emitter.verifyIntInitialOutput(declaration)
+                let binding = "let \(emitter.variable(field)): Int = \(value)"
+                try #require(declaration.description.components(separatedBy: binding).count == 2)
+                let recoveredSource = declaration.description.replacingOccurrences(
+                    of: binding, with: "let \(emitter.variable(field)): Int = - \(value.magnitude)")
+                try #require(recoveredSource != declaration.description)
+                let recoveredTree = Parser.parse(source: recoveredSource)
+                try #require(recoveredTree.hasError)
+                let originalTokens = Array(declaration.tokens(viewMode: .sourceAccurate))
+                let recoveredTokens = Array(recoveredTree.tokens(viewMode: .sourceAccurate))
+                    .filter { $0.tokenKind != .endOfFile }
+                try #require(originalTokens.map(\.text) == recoveredTokens.map(\.text))
+                try #require(originalTokens.map(\.tokenKind) != recoveredTokens.map(\.tokenKind))
+                #expect(throws: CompilationDiagnostic.self) {
+                    for recovered in try nativeDeclarations(recoveredSource) {
+                        try emitter.verifyIntInitialOutput(recovered)
+                    }
+                }
+            }
         }
     }
 
