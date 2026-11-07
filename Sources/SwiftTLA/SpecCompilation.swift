@@ -2976,9 +2976,10 @@ private extension CompiledModuleMetadata {
             _ expression: CompiledExpression,
             after prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>,
             namePrefix: String,
-            indexSuffix: String,
-            siteOrdinal: Int?
+            site: (variable: VariableID, initialization: CompiledVariableInitialization)?
         ) throws {
+            let siteOrdinal = site?.variable.ordinal
+            let indexSuffix = siteOrdinal.map(String.init) ?? ""
             for prior in prefix {
                 let expression: CompiledExpression = switch prior.initialization {
                 case .value(let expression), .memberOf(let expression): expression
@@ -2996,8 +2997,11 @@ private extension CompiledModuleMetadata {
             }
             var occurrences: [String: Int] = [:]
             let failures = try renderer.expressionEvaluationFailures(expression, stateNames: prefixNames)
-            if siteOrdinal == nil && failures.isEmpty {
-                occupied = occupiedBeforePrefix
+            if failures.isEmpty {
+                switch site?.initialization {
+                case .none, .some(.memberOf(_)): occupied = occupiedBeforePrefix
+                case .some(.value(_)): break
+                }
             }
             var emitted: [(failure: RenderedEvaluationFailure, relation: String,
                            operandsName: String?, selection: String,
@@ -3135,25 +3139,17 @@ private extension CompiledModuleMetadata {
                 binders: renderer.bindings.binders)
         }
         for (index, initialization) in behavior.initializations.enumerated() {
-            let expression: CompiledExpression
-            let siteOrdinal: Int?
-            switch initialization.initialization {
-            case .value(let value):
-                expression = value
-                siteOrdinal = initialization.variable.ordinal
-            case .memberOf(let domain):
-                expression = domain
-                siteOrdinal = nil
+            let expression: CompiledExpression = switch initialization.initialization {
+            case .value(let value): value
+            case .memberOf(let domain): domain
             }
             try appendInitialEvaluationFailures(expression,
                 after: behavior.initializations.prefix(index), namePrefix: "Initial",
-                indexSuffix: "\(initialization.variable.ordinal)",
-                siteOrdinal: siteOrdinal)
+                site: initialization)
         }
         if let selectedInitialInvariant {
             try appendInitialEvaluationFailures(selectedInitialInvariant.predicate.expression,
-                after: behavior.initializations[...], namePrefix: "SelectedInitial", indexSuffix: "",
-                siteOrdinal: nil)
+                after: behavior.initializations[...], namePrefix: "SelectedInitial", site: nil)
         }
         let initialFailureAggregate: String?
         if initialFailurePredicates.isEmpty {

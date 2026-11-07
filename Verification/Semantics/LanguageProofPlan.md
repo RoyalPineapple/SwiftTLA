@@ -149,8 +149,8 @@ The proof dependencies above still govern proof closure; they do not block indep
   Importer-only reserved symbols, constants/model values, opaque imports and general namespace correspondence remain open.
 
 - [x] I5s Emit checked Int initialization failure-event sets across supported nondeterministic prefixes.
-  The existing renderer and checker retain all supported value-initializer addition failures with site, operands and full before-prefix. A source variant retains one valid initial state and two distinct failures; the original selected-record behavior and full core/generated bundle equality remain checked.
-  The existing evidence consumer now prepares schema v5 with an actual emitted event-set theorem and an empty-set proof control. Forty focused tests passed; the new pinned proof has not run. This is an implementation/observation result, with order, multiplicity, other failure kinds and generic correspondence still open.
+  The existing renderer and checker retain supported value and membership-domain addition failures with site, operands and full before-prefix. Lazy domain branches preserve their valid sibling. The public compiled and resolved exports produce matching complete TLA modules for the existing domain variants.
+  The final diagnostic passed 103 tests in six existing suites, including changed-input guards and actual event-loss rejections. Schema v5 prepares an emitted event-set theorem and an empty-set proof control; their execution requires separate evidence. Order, multiplicity, other failure kinds and generic correspondence remain open.
 
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
@@ -437,7 +437,7 @@ Exit: actual accepted pilot expressions supply the child theorem premises. No ex
   Derive first-failure selection from the complete observation contract.
 - [ ] M2.4 Prove actual TLA initialization and failure observations correspond to the same source prefixes.
   Complete branch observations cannot rely only on the deterministic selected record.
-  I5s supplies an implemented event-set expression for guarded Int value/add initialization with supported Int domains without modeled arithmetic failure sites. Its actual generic source/Swift/TLA relation and ordered observations still require proof; the prepared v5 deterministic case is separate admission evidence.
+  I5s supplies an implemented event-set expression for guarded Int value/add and supported membership-domain initialization, including lazy domain addition failures. Its generic source/Swift/TLA relation and ordered observations still require proof; the prepared v5 deterministic case is separate admission evidence.
 - [ ] M2.5 Prove complete initial function, selected filtering and hidden-state assembly correspond to the logical history.
 - [ ] M2.6 Discharge the evaluator and history premises at `OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures`.
 
@@ -612,15 +612,15 @@ This result supplies a child rule. Complete initializer state assembly remains i
 - [x] L4d Derive the actual emitted literal binding, state assembly and TLA leaf constraint under named interpretation conditions.
   The [output-row argument](InitializationFamily.md#emitted-literal-initializer-row-and-typed-relation-consumer) follows ID-indexed slots, constructor fields and integer projection; the real equality/type predicates allow exactly the literal extension.
   It supplies the literal position of the already checked `TypedInitialRelationsRetainAllStatesAndFailureEvents` instead of assuming backend child agreement.
-  This is a manual code-case result. Syntax/name/library/TLA interpretation, full-width checking and full L4 remain open; it does not close the pending L5a theorem.
+  This is a manual code-case result. Syntax/name/library/TLA interpretation, full-width checking and full L4 remain open. L5a records the separate checked formal instance.
 - [ ] L5 Instantiate the literal child cases in the expression and initializer composition modules.
   Record the exact premises that these results discharge.
   The output-meaning argument supplies the concrete `Success(n)` instance to `IntExpressionOutcomesSupplyInitializerOutcomes` and the existing initializer leaf result.
   It derives the singleton candidate and empty failure set. L3f supplies the runtime ID-target/prior-domain link; actual source-use coverage, backend projections and full L5 remain open.
-- [ ] L5a Check the concrete literal evaluator instance and its complete initialization parent.
+- [x] L5a Check the concrete literal evaluator instance and its complete initialization parent.
   `LiteralIntInitializersComposeCompleteStatesAndFailures` now constructs literal rows instead of assuming their agreement, and passes the derived fact to the existing complete-initialization theorem.
   Only other constructors and selected checks retain agreement premises. The code-case argument supplies the runtime target/prefix connection.
-  The first published pinned run failed the final quantified parent invocation. At `11e39453`, explicit prefix equality passed; selected terminal equality/typing remained one failed obligation out of 251. A second body-only refinement exposes typed-prefix and terminal-selection facts. The unchanged theorem remains pending a successful pinned check.
+  Earlier published runs failed the final parent invocation and selected-terminal typing/equality. The second body-only refinement passed the pinned Linux check at `b33d8979`: all 277 module obligations proved. Its statement and premises are unchanged. The retained source, runner and tool receipts bind that result to the published revision; full L5 and actual source/backend correspondence remain open.
 - [ ] L6 Retain the proof inputs and existing owner regressions for the exact implementation revision.
   Keep any unresolved source or decoder interpretation open. Do not promote a partial route to the complete literal family.
 

@@ -516,8 +516,9 @@ enum StraightLineRenderedActionCheck {
                 deterministic = false
                 guard initialIsInt(variable),
                       domain.resultType == .set(.int) || domain.resultType == .unknown,
-                      let tree = initialIntDomain(domain, layout: layout, variables: names, binders: [:]),
-                      tree.sites.isEmpty else { return (false, false) }
+                      let tree = initialIntDomain(domain, layout: layout, variables: names, binders: [:])
+                else { return (false, false) }
+                hasAddition = hasAddition || !tree.sites.isEmpty
             }
         }
         return (hasAddition && deterministic && resolvedTypes, hasAddition)

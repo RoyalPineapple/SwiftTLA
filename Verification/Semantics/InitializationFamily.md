@@ -447,10 +447,15 @@ It covers arbitrary finite counts, including zero, and arbitrary sets of literal
 Other constructors and selected checks still require their own correspondence; failure sets do not establish ordered failure-event histories.
 
 The published `dbd268d9` pinned execution failed one of 242 obligations in this module, at the final quantified parent invocation.
-The literal outcome, typing and child-agreement steps preceding it passed; the complete theorem remains unproved.
+The literal outcome, typing and child-agreement steps preceding that failed invocation passed.
 The published `11e39453` pinned execution proved prefix equality but left one of 251 obligations unproved at the selected-terminal equality/typing invocation (line 126).
-The current local body exposes the terminal prefix type, selected-check agreement and same-prefix terminal equality separately, then uses the checked prefix equality.
-Its statement, premises, earlier proof steps and every pre-existing theorem remain unchanged. This second body refinement awaits its own pinned execution.
+The second body refinement exposes the terminal prefix type, selected-check agreement and same-prefix terminal equality separately, then uses the checked prefix equality.
+Its statement, premises, earlier proof steps and every pre-existing theorem remain unchanged.
+The published `b33d8979` pinned Linux execution proved all 277 module obligations, including this complete literal instance.
+Its retained module SHA256 is `1b0012122ce1bb163b91fac420db47f9649ea4123f074b8fea17376c175ab324`.
+Run `42415865783`, job `128533696399` and artifact `13592907798` bind the successful result to the actual source snapshots and runners.
+The small artifact SHA256 is `3f57a9345c872b0a9cc0132431589c773ee822f11996f7982b615d13697b7fc7`; all entries passed integrity checks.
+The actual tool-cache identity, versions and binary-hash receipts are retained. This is not a cold build or binary reproduction.
 The implementation connection is a manual code-case argument.
 Neither this argument nor a later TLAPS pass establishes parser, emitted-language, checker-kernel or whole-language soundness.
 
@@ -804,8 +809,10 @@ Domains without failures no longer consume unused fresh binder names.
 The deterministic selected record already retains a before-prefix and is consumed by schema v4 evidence.
 It cannot describe both failed branches of a nondeterministic initializer prefix.
 The existing renderer now also emits `__SwiftTLAInitialFailureEvents`, with a fresh suffix when necessary, for its guarded Int observation route.
-The existing coverage policy recognizes declared Int literals, reads and checked-add value initializers, optional program-counter initialization and supported Int domains without modeled arithmetic failure sites.
-It handles both unresolved declared types and resolved types; parameters, selected initial invariants, other failure constructors and fallible domain evaluation remain outside this event-set capability. Enumeration capacity and other operational failures remain separate from these model-failure records.
+The existing coverage policy recognizes declared Int literals, reads, checked-add value initializers, optional program-counter initialization and supported Int domains.
+Domain evaluation may itself contain checked additions and lazy conditional branches.
+It handles both unresolved declared types and resolved types; parameters, selected initial invariants and other failure constructors remain outside this event-set capability.
+Enumeration capacity and other operational failures remain separate from these model-failure records.
 Other accepted programs retain their existing behavior and coverage limits.
 
 Each reached addition site contributes a singleton record containing its initializer ordinal, kind, ordered operands and complete prior bindings, or an empty set when its predicate does not hold.
@@ -821,9 +828,18 @@ The shared eligibility correction retains the old selected-record requirement an
 The final diagnostic passed all 40 tests in five existing suites, including the original full bundle-equality guard and the actual evidence consumer.
 No model/fixture type, evaluator, checker family, compatibility spelling, pin, budget, timeout or corpus case was added.
 
+The domain extension reuses the existing lazy membership owner. Its unchanged-producer baseline retained the valid sibling and native event, but emitted no event set.
+The emitter now receives the typed initializer identity for both value and domain evaluation. Non-failing domains retain their previous helper-name allocation.
+An additional public-export equality check exposed a real unresolved-type failure after successful compilation and test execution.
+The shared ordered arithmetic collector now accepts unresolved Int expressions, as its existing arithmetic fallback already did, while retaining lazy evaluation order.
+The final guarded run passed 103 tests in six suites on all 1,201 unchanged captured inputs.
+The complete 94,666-byte log has SHA256 `4b3b09741dec89537ba01b9bcf5923d198940e4eed68e2921202789b9a0f29e1`.
+The existing owner checks complete preceding bindings and actual sites, rejects changed site/prefix/branch/missing-event output, and compares both full TLA export paths.
+No event-set ordering or generic source-to-output theorem follows from these regressions.
+
 Schema v5 of the existing deterministic evidence consumer prepares `CompleteFailureEvents` against the actual emitted operator and the complete native singleton event set for that existing case.
 The existing pinned job also prepares an occurrence-checked, changed-input empty-set corruption, separate from its operand and before-prefix corruptions.
-These new proof checks have not yet executed. Preparation and regression results do not establish their mathematical conclusions.
+These generated proof checks require their own execution evidence. Preparation and regression results do not establish their mathematical conclusions.
 Even a later successful case check does not prove generic source/output correspondence.
 Event order and multiplicity, the serialized-record/partial-binding relation, unsupported initializer/failure constructors, selected invariants and whole accepted-program preservation remain open.
 

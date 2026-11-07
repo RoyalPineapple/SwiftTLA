@@ -119,6 +119,13 @@ struct DependentInitializationOutputProofTests {
         #expect(try outcomes.states[0].value(for: choiceID) == .integer(0))
         #expect(outcomes.firstFailure == .integerOverflow(.addition, operands: [1, Int.max]))
         #expect(outcomes.firstFailureInitializerOrdinal == choiceID.ordinal)
+        try #require(outcomes.failures.count == 1)
+        let seed = try #require(TLAStateProjection.Token(validating: "seed"))
+        let pc = try #require(TLAStateProjection.Token(validating: "pc"))
+        #expect(outcomes.failures[0].site == .initializer(choiceID.ordinal))
+        #expect(try outcomes.failures[0].formalBindingsBeforeFailure() == TLAStateProjection(validating: [
+            .init(token: pc, value: .string("finish")), .init(token: seed, value: .int(1))
+        ]))
         var fallibleEmitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "DependentInitializationOutputProofModel", program: fallibleProgram))
         let native = try #require(try fallibleEmitter.machineMembers().first {
@@ -148,6 +155,11 @@ struct DependentInitializationOutputProofTests {
             }
         }
         let fallibleTLA = try fallibleProgram.renderModule().renderedModuleSource
+        #expect(try fallible.compile().render().tlaBundle.root.tla == fallibleTLA)
+        let eventDeclaration = try #require(fallibleTLA.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAInitialFailureEvents == ")
+        })
+        let eventSet = String(eventDeclaration.dropFirst("__SwiftTLAInitialFailureEvents == UNION {".count).dropLast())
         if !fallibleTLA.contains("__SwiftTLAInitialOverflowFailure\(choiceID.ordinal)(") {
             Issue.record("Fallible memberOf domain lost its TLA initial failure relation")
         } else {
@@ -198,10 +210,35 @@ struct DependentInitializationOutputProofTests {
             let selected = String(aggregate.dropFirst("\(aggregateName) == ".count))
             try #require(selected.hasPrefix("(") && selected.hasSuffix(")"))
             let selection = String(selected.dropFirst().dropLast())
-            try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(domain,
-                after: prefix, names: names,
-                emitted: [(failure, relation, operandsName, selection, operation, nil)],
-                siteOrdinal: nil, eventSets: nil, layout: fallibleProgram.layout)
+            func verifyEvents(_ events: [String]) throws {
+                try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(domain,
+                    after: prefix, names: names,
+                    emitted: [(failure, relation, operandsName, selection, operation, nil)],
+                    siteOrdinal: choiceID.ordinal, eventSets: events, layout: fallibleProgram.layout)
+            }
+            try verifyEvents([eventSet])
+            let pcID = try #require(prefix.first { prior in
+                fallibleProgram.layout.variables[prior.variable.ordinal].declaration.origin == .programCounter
+            }?.variable)
+            let pcName = try #require(names[pcID])
+            let seedName = try #require(names[seedID])
+            let before = "before |-> <<[name |-> \"pc\", value |-> \(pcName)], [name |-> \"seed\", value |-> \(seedName)]>>"
+            let eventCorruptions = [
+                ("site", eventSet.replacingOccurrences(of: "site |-> \(choiceID.ordinal)",
+                    with: "site |-> \(seedID.ordinal)")),
+                ("before", eventSet.replacingOccurrences(of: before, with: "before |-> <<>>")),
+                ("branch", eventSet.replacingOccurrences(of: " \\in 0..1}", with: " \\in 0..0}"))
+            ]
+            for (label, changed) in eventCorruptions {
+                try #require(changed != eventSet)
+                do {
+                    try verifyEvents([changed])
+                    Issue.record("Fallible domain event-set corruption accepted: \(label)")
+                } catch let diagnostic as CompilationDiagnostic {
+                    #expect(diagnostic.path == "tla.initialEvaluationFailures")
+                }
+            }
+            #expect(throws: CompilationDiagnostic.self) { try verifyEvents([]) }
             for label in ["payload", "prefix", "missingRelation"] {
                 var changedModule = fallibleTLA
                 var emitted: [(failure: RenderedEvaluationFailure, relation: String,
@@ -313,6 +350,7 @@ struct DependentInitializationOutputProofTests {
                 typeName: "DependentInitializationOutputProofModel", program: program))
             _ = try emitter.machineMembers()
             let tla = try program.renderModule().renderedModuleSource
+            #expect(try specification.compile().render().tlaBundle.root.tla == tla)
             if !tla.contains("__SwiftTLAInitialOverflowFailure\(choice.ordinal)(") {
                 Issue.record("Fallible Int initialization lost its TLA failure relation: \(label)")
             }

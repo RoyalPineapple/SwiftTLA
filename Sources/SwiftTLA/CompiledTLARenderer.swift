@@ -758,7 +758,7 @@ struct CompiledTLARenderer {
                     guard_: "(\(sum) >= \(minimum) /\\ \(sum) <= \(maximum))",
                     operands: try sortedSummationOperands(value, stateNames: stateNames))]
             case .add, .subtract, .multiply, .negate, .divide, .integerDivide, .modulo:
-                guard value.resultType == .int,
+                guard value.resultType == .int || value.resultType == .unknown,
                       value.children.count == (value.operation == .negate ? 1 : 2) else { return nil }
                 var preceding: [OrderedEvaluationSite] = []
                 let children = value.operation.evaluatesRightOperandFirst ? Array(value.children.reversed()) : value.children
