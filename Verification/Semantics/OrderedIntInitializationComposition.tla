@@ -110,8 +110,21 @@ THEOREM LiteralIntInitializersComposeCompleteStatesAndFailures ==
            /\ SourceTerminal(source[count], sourceChecks)
                 = GeneratedTerminal(generated[count], generatedChecks)
            /\ SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
-        BY <1>2, <1>4, InitializationHistoriesRetainAllStatesAndFailures,
-            CompleteInitialStatesAndFailureEventsCompose, SMT
+        <2>. SUFFICES ASSUME NEW source, NEW generated,
+                      InitializationHistory(FALSE, count, order, sourceEvaluate, source),
+                      InitializationHistory(TRUE, count, order, generatedEvaluate, generated)
+                     PROVE /\ \A index \in 0..count : source[index] = generated[index]
+                           /\ SourceTerminal(source[count], sourceChecks)
+                               = GeneratedTerminal(generated[count], generatedChecks)
+                           /\ SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
+            BY SMT
+        <2>1. \A index \in 0..count : source[index] = generated[index]
+            BY <1>2, <1>4, InitializationHistoriesRetainAllStatesAndFailures, SMT
+        <2>2. /\ SourceTerminal(source[count], sourceChecks)
+                    = GeneratedTerminal(generated[count], generatedChecks)
+              /\ SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
+            BY <1>2, <1>4, CompleteInitialStatesAndFailureEventsCompose, SMT
+        <2>. QED BY <2>1, <2>2
     <1>. QED BY <1>5, <1>6
 
 THEOREM OrderedIntExpressionsSupplyPartialInitializationLeaves ==

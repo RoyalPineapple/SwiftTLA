@@ -1699,19 +1699,29 @@ import SwiftTLAMacros
             ("[1]", built([1]), .tuple([.int(1)]))
         ]
         for (source, specification, expected) in cases {
-            let closure = try parseSpecTestClosure("""
-            { scope in
-                let count = scope.sharedVar(_name: "count", initial: \(source))
-            }
-            """)
-            let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
             let built = try specification.compile()
-            #expect(parsed.identity == built.identity)
-            let outcomes = try CompiledRuntime(compilation: parsed).initialOutcomes()
-            #expect(outcomes.failures.isEmpty)
-            try #require(outcomes.states.count == 1)
-            let count = try #require(TLAStateProjection.Token(validating: "count"))
-            #expect(try outcomes.states[0].projection(using: parsed.layout).value(for: count) == expected)
+            for inAlgorithm in [false, true] {
+                let declaration = "let count = scope.sharedVar(initial: \(source))"
+                let body = inAlgorithm ? """
+                {
+                    let algorithm = Algorithm(scoped: { scope in
+                        \(declaration)
+                    })
+                    algorithm
+                }
+                """ : "{ scope in \(declaration) }"
+                let closure = try parseSpecTestClosure(body)
+                let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
+                if !inAlgorithm { #expect(parsed.identity == built.identity) }
+                #expect(parsed.layout.variables.count == 1)
+                #expect(parsed.semantics.behavior.actions.isEmpty)
+                let outcomes = try CompiledRuntime(compilation: parsed).initialOutcomes()
+                #expect(outcomes.failures.isEmpty)
+                try #require(outcomes.states.count == 1)
+                let count = try #require(TLAStateProjection.Token(validating: "count"))
+                #expect(try outcomes.states[0].projection(using: parsed.layout).value(for: count) == expected,
+                    "\(inAlgorithm ? "Algorithm" : "spec") initializer \(source)")
+            }
         }
     }
 

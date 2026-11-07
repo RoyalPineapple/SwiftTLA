@@ -552,6 +552,11 @@ This result supplies a child rule. Complete initializer state assembly remains i
   Its actual two-test baseline accepted a changed radix builder; the shared collector repair passed 156 tests in six suites. Nonconstant prefixes and full L1 remain open.
   The [closed unary-plus repair](InitializationFamily.md#closed-integer-unary-plus) adds the corresponding identity branch to existing decoding and witness collection.
   Actual accepted-builder and missed-rejection baselines precede the final 210-test combined pass; general binding and full L1 remain open.
+- [x] L1a Connect the registered Algorithm's unannotated shared literal declaration to its compiled child and root.
+  The [source-use argument](InitializationFamily.md#registered-algorithm-shared-literal-source-use) derives registration, scope-member selection, literal decoding, `.shared` transport and the actual ordinal target.
+  It supplies the source-use premise of the literal initializer instance under the existing AST/type/bounds hypotheses.
+  The existing value-table owner gains the registered placement. Its baseline exposed artificial control state for declaration-only Algorithms; the two-guard repair passed 167 tests in four sibling suites without changing the normalizer.
+  Other placements, overrides, binding and full L1 remain open.
 - [x] L2 State the independent literal outcome and its empty read/failure effects in the existing expression rules.
   `SourceNode` selects `Success(n)` without inspecting state, read keys or histories. The raw-source and [output meaning argument](InitializationFamily.md#native-and-mathematical-tla-integer-literal-meaning) state its empty model read/write/failure effects.
   This defines the leaf's independent meaning; it does not prove parsing, source binding or a complete observation contract.
@@ -598,7 +603,8 @@ This result supplies a child rule. Complete initializer state assembly remains i
   It derives the singleton candidate and empty failure set. L3f supplies the runtime ID-target/prior-domain link; actual source-use coverage, backend projections and full L5 remain open.
 - [ ] L5a Check the concrete literal evaluator instance and its complete initialization parent.
   `LiteralIntInitializersComposeCompleteStatesAndFailures` now constructs literal rows instead of assuming their agreement, and passes the derived fact to the existing complete-initialization theorem.
-  Only other constructors and selected checks retain agreement premises. The code-case argument supplies the runtime target/prefix connection; pinned execution of this new proof body is pending.
+  Only other constructors and selected checks retain agreement premises. The code-case argument supplies the runtime target/prefix connection.
+  The published pinned run failed one final quantified parent invocation. Its proof-body repair makes the history hypotheses and two parent uses explicit; the unchanged theorem remains pending a successful pinned check.
 - [ ] L6 Retain the proof inputs and existing owner regressions for the exact implementation revision.
   Keep any unresolved source or decoder interpretation open. Do not promote a partial route to the complete literal family.
 

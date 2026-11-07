@@ -204,11 +204,64 @@ Other placements, annotations and alias/nominal routes retain their source-type 
 General calls/processes, cache-context completeness for nonliterals, backend interpretation, complete initializer histories and all six-link rows remain open.
 This argument changes no checker, evaluator or theorem body. It is a manual implementation proof, with local regressions kept separate from mathematical proof and hosted admission.
 
+### Registered Algorithm shared literal source use
+
+This is the source-use instance for a single registered `let algorithm = Algorithm(scoped: { scope in ... })`.
+Inside that body, take a single unannotated immutable declaration `let x = scope.sharedVar(initial: literal)`.
+There is no explicit `_name` override, competing binding for `algorithm`, or duplicate state root in this instance.
+The literal is one of the signed/radix/parenthesized standard-Int forms in the existing raw-integer argument in the language plan.
+The AST/token provenance, standard Int/operator binding and equal host/target bounds remain its explicit premises.
+All other accepted placements, overrides, annotations and binding situations remain in the language domain with their own obligations.
+
+The independent meaning names the shared state `x` and gives its initializer `Success(n)` with no model reads or failures.
+The following code-case argument derives the parser's use of that child, rather than assuming that decoding and target selection succeeded:
+
+1. `parseSpecClosure` visits the immutable Algorithm binding through `parseLocalDeclaration`.
+   The actual constructor branch passes its source identifier as `boundName` to `parseAlgorithm` and stores the returned Algorithm under that key.
+   The later registration reference retrieves that stored value and appends it to `sourceAlgorithms`.
+   The final nonempty source-algorithm array selects the `.source` phase.
+2. `algorithmBuilderClosure` selects the `scoped:` closure. `closureParameterNames` extracts its declared `scope` parameter.
+   In the body loop, the declaration has one identifier binding and a member call whose base matches that parameter.
+   `AlgorithmSourceConstruct.isState(.shared, in: declarationScope)` therefore succeeds, and `parseAlgorithmVariableDeclaration` takes the shared-state branch.
+   With no `_name` argument, `declaredName` is exactly the source identifier `x`.
+3. The `initial:` argument is passed to `decodeTypedFacadeValue` without a nominal expected type.
+   The existing raw-integer argument supplies `.value(.int(n))` for this syntax, including parentheses.
+   Thus the value branch is taken; the `in:` domain alternative cannot replace it.
+   It constructs `AlgorithmStateModel(root: x, initialization: .expression(.value(.int(n))), ...)`.
+   The existing source-type argument supplies the primitive Int metadata, independently of an occupied short type name.
+4. The returned `.shared` component is appended to `algorithmComponents`; the visible handle is bound to `.variable(x)`.
+   That scope extension happens after decoding the initializer, so it cannot introduce a read or rewrite this literal.
+   `AlgorithmModel` stores those components. `resolvingAtomicSteps` leaves `.shared` components unchanged in its default case.
+5. `TLASpec.compile()` first calls `loweredSourceModel`. Its `.source` branch lowers the stored Algorithm and appends its lowered variables.
+   Both the ordinary Algorithm lowerer and its sequential specialization copy the shared root, initializer and primitive metadata into `NamedVar`.
+   Its normalizing constructor gives `.value(.int(n))`; the earlier same-source layout/lowerer argument then identifies its actual ordinal ID.
+   Compiler-created control fields may precede it. The runtime target/prefix argument uses the actual order and does not assume that `x` has ordinal zero.
+6. In the macro path, `TLASpecVerifier.parseAndVerify` uses that same parsed specification for compilation and the same source resolver for `CompiledTypeInputs`.
+   The previously derived checking/resolution cases therefore supply `.value(.integer(n))`, `.int`, empty children and the retained target ID.
+   These are the literal row and target/prefix facts consumed by `LiteralIntInitializerEvaluators` and its complete-initialization parent.
+
+The source-use premise removed here is that this registered shared declaration somehow produces the required literal at the required root.
+General source binding and faithful SwiftSyntax interpretation are still owned; this argument does not establish their universal correctness.
+The existing `AlgorithmBuilderParsingTests.parsedAndBuiltLiteralInitializersShareIdentity` now reuses its independent value table through both direct and registered-Algorithm placements.
+It checks actual successful initial outcomes and the value at `x`'s formal projection, rather than merely comparing two compiler identities.
+The first executed diagnostic failed during compilation, before the registered variant's initial outcomes were evaluated.
+The lowerer treated zero processes and zero procedures as requiring a program counter, although the sequential-step case is dispatched separately.
+That manufactured an empty control field and an always-enabled `Terminating` action for declaration-only source.
+The existing normalization check rejected its frame. No literal-value mismatch or successful kernel execution was established.
+The repair makes the zero-process decision depend on the presence of procedures; all nonempty-process decisions and sequential lowering remain unchanged.
+The owner also requires that declaration-only source has exactly its one state variable and no actions.
+This is a source/control boundary repair, not a relaxation of the normalizer or an accepted-language restriction.
+The guarded repair passed 167 tests in the four existing builder/parser, renderer and sequential-control suites.
+The literal owner exercised all eighteen independent values in both placements, requiring one state variable, no actions, one initial state, no failures and the expected projected value.
+All 1,201 captured inputs were unchanged during execution. The complete 106806-byte log has SHA256 `61c154cfe891b33d60e4d4191fc067f009bdaef6c8b169fdb29818d6e5c5e6ec`.
+This is regression evidence, separate from the code-case proof and hosted mathematical checking.
+
 ### Inferred scalar source types and native type binding
 
 For the pilot's unannotated scoped shared integer initializer, suppose decoding returns a proper integer literal with payload `n`
 and parsing/compilation return normally. The parser supplies the `.int` input premise of the preceding transport argument,
 including a model that declares its own `Int`.
+The registered-Algorithm source-use argument above discharges the decoding premise for its stated syntax route.
 
 The owners are [source inference](../../Sources/SwiftTLAPlugin/SpecParser+SpecBuilder.swift),
 [scoped declarations](../../Sources/SwiftTLAPlugin/SpecParser+Algorithm.swift),
@@ -393,7 +446,11 @@ The result includes existence of both histories, equality of every prefix, accum
 It covers arbitrary finite counts, including zero, and arbitrary sets of literal positions.
 Other constructors and selected checks still require their own correspondence; failure sets do not establish ordered failure-event histories.
 
-The new formal proof body is pending pinned proof execution. Its implementation connection is a manual code-case argument.
+The published `dbd268d9` pinned execution failed one of 242 obligations in this module, at the final quantified parent invocation.
+The literal outcome, typing and child-agreement steps preceding it passed; the complete theorem remains unproved.
+The proof body now introduces the two history hypotheses explicitly and invokes prefix equality and terminal composition separately.
+Its statement, premises, earlier proof steps and every pre-existing theorem remain unchanged. This body repair awaits its own pinned execution.
+The implementation connection is a manual code-case argument.
 Neither this argument nor a later TLAPS pass establishes parser, emitted-language, checker-kernel or whole-language soundness.
 
 ### Source rewrite token classification
