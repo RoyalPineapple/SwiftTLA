@@ -522,7 +522,11 @@ Required result: for each supported target Int value `n`, the literal expression
 This result supplies a child rule. Complete initializer state assembly remains in M2.
 
 - [ ] L1 Record the accepted source spellings, resolved type and placements covered by this first route.
-- [ ] L2 State the independent literal outcome and its empty read/failure effects in the existing expression rules.
+  The [source rewrite repair](InitializationFamily.md#source-rewrite-token-classification) retains operator classification in the existing recognized path.
+  Its unchanged-production baseline accepted a recovered negative operand; the two-line repair passed 156 tests in six suites. General placement and binding coverage remains open.
+- [x] L2 State the independent literal outcome and its empty read/failure effects in the existing expression rules.
+  `SourceNode` selects `Success(n)` without inspecting state, read keys or histories. The raw-source and [output meaning argument](InitializationFamily.md#native-and-mathematical-tla-integer-literal-meaning) state its empty model read/write/failure effects.
+  This defines the leaf's independent meaning; it does not prove parsing, source binding or a complete observation contract.
 - [ ] L3 Prove the actual source/compiled literal cases preserve `n`, Int type and empty children.
   Start with both `orderedIntPlan` overloads in `StraightLineAssignmentCheck`.
 - [x] L3a Derive scalar literal extraction and recognized value-initializer acceptance from the actual code.
@@ -541,6 +545,8 @@ This result supplies a child rule. Complete initializer state assembly remains i
   It discharges L3d's `.int` input premise for that route, including occupied scalar names. Other annotations/placements and full L3 remain open.
 - [ ] L4 Prove the accepted Swift literal tokens and TLA integer encoding denote that same `n`.
   Reuse the existing native decoder and signed-radix lemmas. Include zero, negative values and target bounds in the general argument.
+  The [actual formatter argument](InitializationFamily.md#native-and-mathematical-tla-integer-literal-meaning) now derives native leaf value, signed renderer recursion and independent decimal grouping at exact `3ee2c933`.
+  Namespace/operator/parser and actual checking-kernel interpretation remain owned; mathematical encoding does not close full-width TLC execution.
 - [x] L4a Retain token text and operator classification in the complete Int initial-output check.
   Five actual negative literal outputs kept identical token text while changing prefix-minus tokens to binary operators.
   Correct emitted positives and all mutation guards passed on unchanged production. The guarded repair passed 55 tests in five existing suites.
@@ -556,6 +562,8 @@ This result supplies a child rule. Complete initializer state assembly remains i
   The [scoped argument and receipts](InitializationFamily.md#inferred-scalar-source-types-and-native-type-binding) keep library/helper binding, TLA interpretation and full L4 open.
 - [ ] L5 Instantiate the literal child cases in the expression and initializer composition modules.
   Record the exact premises that these results discharge.
+  The output-meaning argument supplies the concrete `Success(n)` instance to `IntExpressionOutcomesSupplyInitializerOutcomes` and the existing initializer leaf result.
+  It derives the singleton candidate and empty failure set. Actual source-use coverage, target/prior-prefix identity and full L5 remain open.
 - [ ] L6 Retain the proof inputs and existing owner regressions for the exact implementation revision.
   Keep any unresolved source or decoder interpretation open. Do not promote a partial route to the complete literal family.
 
@@ -681,7 +689,8 @@ This is a manual code-case proof under documented Swift semantics, not a mechani
 It assumes faithful SwiftSyntax node/token input and standard type/operator binding. It does not prove those owned links.
 Formal `Int.min`/`Int.max` member access, conversions, enum encoding, constant arithmetic and other initializer placements remain distinct routes.
 Generated Swift token/scope interpretation, complete TLA initialization, actual TLC integer capacity and parent call coverage remain open.
-L1 through L6 and E LIT remain open as complete tasks. The two local code-case results are partial inputs to them.
+L2 now records the independent leaf definition. L1, L3 through L6 and E LIT remain open as complete tasks.
+The local code-case results are partial inputs to them.
 
 The existing `AlgorithmBuilderParsingTests.parsedAndBuiltLiteralInitializersShareIdentity` owner now checks independent expected values
 for fifteen integer spellings through actual parsing, compilation and compiled initial outcomes.

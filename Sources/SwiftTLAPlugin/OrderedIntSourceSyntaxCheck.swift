@@ -167,8 +167,8 @@ enum OrderedIntSourceSyntaxCheck {
         }
     }
 
-    private static func tokens(_ syntax: some SyntaxProtocol) -> [String] {
-        syntax.tokens(viewMode: .sourceAccurate).map(\.text)
+    private static func tokens(_ syntax: some SyntaxProtocol) -> [TokenKind] {
+        syntax.tokens(viewMode: .sourceAccurate).map(\.tokenKind)
     }
 
     private static func drift(_ name: String) -> CompilationDiagnostic {

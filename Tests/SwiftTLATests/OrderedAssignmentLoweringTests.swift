@@ -366,6 +366,25 @@ struct OrderedAssignmentLoweringTests {
             }
         }
 
+        let signedSource = source.replacingOccurrences(of: "initial: 1", with: "initial: -1")
+        let signedExpanded = expanded.replacingOccurrences(of: "initial: 1", with: "initial: -1")
+        let signedOriginal = try parseSpecTestClosure(signedSource)
+        let signedRewrite = try parseSpecTestClosure(signedExpanded)
+        try #require(!signedOriginal.hasError && !signedRewrite.hasError)
+        try OrderedIntSourceSyntaxCheck.verifyRewrite(signedOriginal, rewritten: signedRewrite)
+        try #require(signedExpanded.components(separatedBy: "initial: -1").count == 2)
+        let recoveredSource = signedExpanded.replacingOccurrences(of: "initial: -1", with: "initial: - 1")
+        try #require(recoveredSource != signedExpanded)
+        let recovered = try parseSpecTestClosure(recoveredSource)
+        try #require(recovered.hasError)
+        let correctTokens = Array(signedRewrite.tokens(viewMode: .sourceAccurate))
+        let recoveredTokens = Array(recovered.tokens(viewMode: .sourceAccurate))
+        try #require(correctTokens.map(\.text) == recoveredTokens.map(\.text))
+        try #require(correctTokens.map(\.tokenKind) != recoveredTokens.map(\.tokenKind))
+        #expect(throws: CompilationDiagnostic.self) {
+            try OrderedIntSourceSyntaxCheck.verifyRewrite(signedOriginal, rewritten: recovered)
+        }
+
         let domainSource = source
             .replacingOccurrences(of: "initial: 1", with: "in: 0...1")
             .replacingOccurrences(of: "initial: first + 2",
