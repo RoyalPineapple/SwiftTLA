@@ -146,7 +146,9 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5r Allocate formal operator names against owning-module standard exports and generated declarations, preserving source IDs through imports and qualified instances.
   The existing binding table carries resolved exported names; local operators and binders also reserve actual imported aliases.
   Existing owners cover direct and qualified calls, recursion, explicit refinement targets and a measured lexical capture.
-  Importer-only reserved symbols, constants/model values, opaque imports and general namespace correspondence remain open.
+  Owner exports are also finalized against model values retained across the compiled closure, then propagated through direct imports and qualified instances.
+  The existing import owner reproduced a caller model-value collision; the shared repair passed 52 focused tests while retaining model values, native results and lexical/standard reservations.
+  Importer-only reserved symbols, late configured/runtime values, opaque imports and general namespace correspondence remain open.
 
 - [x] I5s Emit checked Int initialization failure-event sets across supported nondeterministic prefixes.
   The existing renderer and checker retain supported value and membership-domain addition failures with site, operands and full before-prefix. Lazy domain branches preserve their valid sibling. The public compiled and resolved exports produce matching complete TLA modules for the existing domain variants.

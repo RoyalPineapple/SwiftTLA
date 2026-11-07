@@ -325,7 +325,10 @@ struct FormalOperatorTests {
           name: "advance",
           body: .assign(
             .named("counter"),
-            .letIn([LocalOperator("Len_1", parameters: [], body: .int(0))],
+            .letIn([
+              LocalOperator("Len_1", parameters: [], body: .int(0)),
+              LocalOperator("Spec_1_1", parameters: [], body: .int(0))
+            ],
               .operatorApplication(
                 .reference(reference, arity: 2),
                 [.operator(increment), .value(.variable("counter"))]
@@ -333,7 +336,9 @@ struct FormalOperatorTests {
             )
           )
         )],
-        invariants: [],
+        invariants: [.init(name: "keepsModelValue", body: .equal(
+          .value(.constant("Spec_1")), .value(.constant("Spec_1"))
+        ))],
         constraints: [.init(.lessOrEqual(.variable("counter"), .int(2)))],
         imports: qualified ? [] : [library],
         moduleInstances: qualified ? [.init("Operators", of: library)] : []
@@ -345,6 +350,9 @@ struct FormalOperatorTests {
       let formalName = try #require(compilation.bindings.operatorName(operation))
       let exportedName = try #require(formalName.split(separator: "!").last)
       #expect(!["Len", "Spec"].contains(String(exportedName)))
+      #expect(!compilation.moduleMetadata.modelValueNames.contains(formalName),
+        "An imported operator alias must stay distinct from the caller's model value")
+      #expect(bundle.root.tla.contains("CONSTANTS Spec_1"))
       #expect(compilation.bindings.operatorNames.values.filter { $0 == formalName }.count == 1,
         "An imported operator alias must not be captured by a distinct local declaration")
       #expect(bundle.root.tla.contains("\(formalName)("))
