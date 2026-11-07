@@ -1054,6 +1054,17 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("#spec rejects inline Algorithm and Validation builders")
+    func macroRejectsInlineBuilders() throws {
+        let build = try buildExternalConsumer("InvalidInlineSpecBuilder")
+
+        #expect(build.status != 0)
+        #expect(build.output.contains("Algorithm and Validation require an immutable named let binding inside #spec."))
+        for line in [5, 9, 13] {
+            #expect(build.output.contains("main.swift:\(line):"))
+        }
+    }
+
     @Test("Builder display labels require nonempty literals")
     func builderDisplayLabelsRequireLiterals() throws {
         for body in [

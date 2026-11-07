@@ -2,11 +2,13 @@ private struct InitializationReadEffect: Equatable {
     var variables: Set<VariableID> = []
     var binders: Set<BinderID> = []
     var requiresCompleteState = false
+    var hasIndependentReadSet = false
 
     mutating func formUnion(_ other: Self) {
         variables.formUnion(other.variables)
         binders.formUnion(other.binders)
         requiresCompleteState = requiresCompleteState || other.requiresCompleteState
+        hasIndependentReadSet = hasIndependentReadSet && other.hasIndependentReadSet
     }
 }
 
@@ -29,6 +31,7 @@ extension CompiledProgram {
         }
 
         var initialized: Set<VariableID> = []
+        var effects: [VariableID: InitializationReadEffect] = [:]
         for entry in behavior.initializations {
             let expression: CompiledExpression
             switch entry.initialization {
@@ -54,6 +57,7 @@ extension CompiledProgram {
                     actual: "unavailable variables \(missing.joined(separator: ", "))",
                     nextSafeAction: "Report this compiler dependency-ordering failure.")
             }
+            effects[entry.variable] = effect
             initialized.insert(entry.variable)
         }
         guard initialized == Set(layout.variables.map(\.id)) else {
@@ -62,6 +66,22 @@ extension CompiledProgram {
                 expected: "one initializer for every state variable",
                 actual: "the resolved initialization plan omits a state variable",
                 nextSafeAction: "Report this compiler initialization-plan failure.")
+        }
+        var remaining = initialized
+        for entry in behavior.initializations {
+            let earlier = layout.variables.prefix { $0.id != entry.variable }.first { candidate in
+                guard remaining.contains(candidate.id), let effect = effects[candidate.id] else { return false }
+                return effect.hasIndependentReadSet && effect.variables.isDisjoint(with: remaining)
+            }
+            if let earlier {
+                let name = layout.variables.first { $0.id == entry.variable }?.declaration.name ?? "unknown"
+                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                    path: "variables.\(name).initialization",
+                    expected: "the first ready variable in declaration order",
+                    actual: "the initializer precedes ready variable \(earlier.declaration.name)",
+                    nextSafeAction: "Report this compiler dependency-ordering failure.")
+            }
+            remaining.remove(entry.variable)
         }
     }
 
@@ -107,6 +127,27 @@ extension CompiledProgram {
                 throw CompiledEvaluationError.unresolvedOperator
             default:
                 children.forEach { effect.formUnion($0) }
+            }
+            // shortcut: certify ordered Int/domain constructors; extend with independent read rules for other families.
+            switch (expression.operation, expression.resultType) {
+            case (.value(.integer), .int), (.stateVariable, .int), (.controlLocation, .controlLocation),
+                 (.integerSet, .set(.int)):
+                effect.hasIndependentReadSet = children.isEmpty
+            case (.add, .int), (.equal, .bool), (.integerRange, .set(.int)):
+                effect.hasIndependentReadSet = children.count == 2
+                    && expression.children.allSatisfy { $0.resultType == .int }
+                    && children.allSatisfy(\.hasIndependentReadSet)
+            case (.setLiteral, .set(.int)):
+                effect.hasIndependentReadSet = expression.children.allSatisfy { $0.resultType == .int }
+                    && children.allSatisfy(\.hasIndependentReadSet)
+            case (.ifThenElse, .set(.int)):
+                effect.hasIndependentReadSet = children.count == 3
+                    && expression.children[0].resultType == .bool
+                    && expression.children[1].resultType == .set(.int)
+                    && expression.children[2].resultType == .set(.int)
+                    && children.allSatisfy(\.hasIndependentReadSet)
+            default:
+                effect.hasIndependentReadSet = false
             }
             results.append(effect)
         }

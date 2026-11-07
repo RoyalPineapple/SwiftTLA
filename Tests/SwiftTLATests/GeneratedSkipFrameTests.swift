@@ -42,7 +42,7 @@ struct GeneratedSkipFrameTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/GeneratedSkipFrameSwiftWitness.txt")
             .standardizedFileURL
-        let expected = try String(contentsOf: witness, encoding: .utf8)
+        let expected = nativeWitnessSource(try String(contentsOf: witness, encoding: .utf8))
         let expectedTokens = Array(Parser.parse(source: expected).tokens(viewMode: .sourceAccurate)).map(\.text)
         #expect(Array(Parser.parse(source: swift).tokens(viewMode: .sourceAccurate)).map(\.text)
             == expectedTokens)
@@ -53,6 +53,12 @@ struct GeneratedSkipFrameTests {
             try verifyGeneratedActionWriteOutput(wrongReadVisitor, action: action.body,
                 program: model.program, stateFields: emitter.stateMemberNames, parts: [
                 (id: 1, slot: emitter.variable(variable.id), value: "state.state.value"),
+            ])
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedActionWriteOutput(wrongReadVisitor, action: action.body,
+                program: model.program, stateFields: emitter.stateMemberNames, parts: [
+                (id: 1, slot: emitter.variable(variable.id), value: "1"),
             ])
         }
 

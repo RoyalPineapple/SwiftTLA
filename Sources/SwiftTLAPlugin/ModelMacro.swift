@@ -39,6 +39,7 @@ enum TLASpecVerifier {
         parser.sourceModelTypeName = typeName
         let parsed = parser.parseSpecClosure(named: source.name, source.closure)
         do {
+            try OrderedIntSourceSyntaxCheck.verify(source.closure, parsed: parsed, enums: enumInfos)
             let compilation = try parsed.compile()
             if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty && parsed.assumptions.isEmpty {
                 throw ModelMacroError.emptyState

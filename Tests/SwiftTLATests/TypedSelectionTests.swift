@@ -38,7 +38,8 @@ struct TypedSelectionTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/IncreasingSelection.tla")
             .standardizedFileURL
-        #expect(module == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let expectedProofModule = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(module == expectedProofModule)
     }
 
     @Test("Authored PlusCal guards empty choice before evaluating it")
@@ -296,7 +297,8 @@ struct TypedSelectionTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/MissingStringSelection.tla")
             .standardizedFileURL
-        #expect(actual == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let expected = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(actual == expected)
     }
 
     @Test("A nested empty selection fails natively and emits a TLA failure check")

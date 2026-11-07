@@ -453,7 +453,7 @@ struct LocalOperatorTests {
     #expect(throws: EvalError.expected(.set, actual: [.integer(0)])) {
       try compiledValue(call(domain: .int(0), argument: .int(1)))
     }
-    #expect(throws: EvalError.recursiveArgumentOutsideDomain) {
+    #expect(throws: NativeMachineEvaluationError.functionArgumentOutsideDomain) {
       try compiledValue(call(domain: .setLiteral([]), argument: .int(1)))
     }
   }
@@ -464,7 +464,7 @@ struct LocalOperatorTests {
       LocalOperator("OnlyZero", parameters: ["value"], domain: .setLiteral([.int(0)]), body: .variable("value"))
     ], .recursiveCall("OnlyZero", [.int(1)]))
 
-    #expect(throws: EvalError.self) {
+    #expect(throws: NativeMachineEvaluationError.functionArgumentOutsideDomain) {
       try compiledValue(expression)
     }
   }

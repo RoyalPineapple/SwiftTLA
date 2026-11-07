@@ -108,13 +108,14 @@ struct CompiledLowerer {
         nextOperatorOrdinal = operators.count
     }
 
-    var bindings: CompiledBindingTable {
+    func bindings(reserving importedNames: Set<String>) -> CompiledBindingTable {
         var names = binderNames
-        var unavailable = reservedRenderedNames.union(modelValueNames)
+        var unavailable = reservedRenderedNames.union(modelValueNames).union(importedNames)
             .union(binderNames.values).union(operatorNames.values)
         let parameterIDs = Set(layout.parameters.map(\.binder))
         for (binder, name) in binderNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
-            where modelValueNames.contains(name) || (parameterIDs.contains(binder) && reservedRenderedNames.contains(name)) {
+            where modelValueNames.contains(name) || importedNames.contains(name)
+                || (parameterIDs.contains(binder) && reservedRenderedNames.contains(name)) {
             let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
             names[binder] = renamed
             unavailable.insert(renamed)
@@ -179,11 +180,26 @@ struct CompiledLowerer {
             if case .value(let value) = declaration.initialization {
                 try validateValue(value, at: "\(path).initialization")
             }
-            initializations[variableLayout.id] = try lower(
+            let lowered = try lower(
                 declaration.initialization,
                 at: "\(path).initialization",
                 scope: rootScope
             )
+            let checkIntInitializer: Bool
+            if case .value(.int) = declaration.initialization {
+                checkIntInitializer = true
+            } else {
+                checkIntInitializer = authoredAlgorithm != nil && layout.programCounterID() != nil
+            }
+            if checkIntInitializer {
+                try StraightLineAssignmentCheck.verifyInitialIntExpression(
+                    declaration.initialization, lowered: lowered, layout: layout,
+                    at: "\(path).initialization")
+            }
+            try StraightLineAssignmentCheck.verifyInitialControlLocation(
+                declaration.initialization, lowered: lowered, layout: layout,
+                at: "\(path).initialization")
+            initializations[variableLayout.id] = lowered
         }
         let actions: [CompiledAction] = try zip(spec.actions, layout.actions).map {
             try lower($0.0, id: $0.1.id)
@@ -1216,6 +1232,8 @@ struct CompiledLowerer {
         var scope = rootScope
         let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
         let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope)
+        try StraightLineAssignmentCheck.verifyCompiled(action, bindings: bindings,
+            body: body, layout: layout)
         try body.verifyBranchwiseContinuation(at: "actions.\(action.name).body")
         return CompiledAction(
             id: id,
@@ -2466,6 +2484,7 @@ struct CompiledLowerer {
             preferredRenderedName = "_\(preferredRenderedName)"
         }
         var unavailableNames = reservedRenderedNames
+        unavailableNames.formUnion(layout.parameters.compactMap { binderNames[$0.binder] })
         unavailableNames.formUnion(scope.values.values.compactMap { binderNames[$0] })
         unavailableNames.formUnion(scope.operators.values.compactMap { operatorNames[$0] })
         let renderedName = exactRenderedName == nil

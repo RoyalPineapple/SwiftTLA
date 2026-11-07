@@ -370,7 +370,8 @@ private struct MissingFunctionKey {
         let actual = rendered.tlaBundle.root.tla.replacingOccurrences(
             of: "__binder_SpecParser_[0-9]+_[0-9]+_", with: "__binder_",
             options: .regularExpression)
-        #expect(actual == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let expectedProofModule = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(actual == expectedProofModule)
 
         let source = Parser.parse(source: try String(contentsOfFile: #filePath, encoding: .utf8))
         let declaration = try #require(source.statements.compactMap {
@@ -382,7 +383,7 @@ private struct MissingFunctionKey {
         })
         let swiftProofInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("MissingFunctionKeySwiftVisitor.txt")
-        let expectedVisitor = try String(contentsOf: swiftProofInput, encoding: .utf8)
+        let expectedVisitor = nativeWitnessSource(try String(contentsOf: swiftProofInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }
@@ -486,12 +487,20 @@ private struct MissingFunctionKey {
         // 2,050 named calls fit; the interleaved lambda calls exceed the limit.
         #expect(2050 < limit && 2050 * 2 > limit)
         #expect(throws: EvalError.recursionDepthExceeded(limit)) {
-            try runtime.successors(for: action, from: initial)
+            try _NativeMachineOperations.visitInitialBranch {
+                _ = try runtime.successors(for: action, from: initial)
+            } onEvaluationFailure: { _ in
+                Issue.record("A compiled call-depth limit became a completed model failure")
+            }
         }
         var machine = try NestedLambdaCallDepth.makeMachine()
         let before = machine.state
         #expect(throws: NativeMachineEvaluationError.recursionDepthExceeded(limit)) {
-            try machine.send(.countDown)
+            try _NativeMachineOperations.visitInitialBranch {
+                _ = try machine.send(.countDown)
+            } onEvaluationFailure: { _ in
+                Issue.record("A native call-depth limit became a completed model failure")
+            }
         }
         #expect(machine.state == before)
     }

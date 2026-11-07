@@ -1,0 +1,82 @@
+private static func _visitUpdates2(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                           _ _emit: (_Updates) throws -> Void) throws -> [NativeMachineEvaluationError] {
+var failures: [NativeMachineEvaluationError] = []
+func emit(_ update: _Updates) throws {
+    do { try _emit(update) }
+    catch { throw _StopSuccessorTraversal(cause: error) }
+}
+
+    func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
+    try _actionPart2(updates, { candidate in try _actionPart1(candidate, emit) })
+} catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
+    try _actionPart4(updates, { candidate in try _actionPart3(candidate, emit) })
+} catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+func _actionPart4(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
+    try _actionPart6(updates, { candidate in try _actionPart5(candidate, emit) })
+} catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+func _actionPart6(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
+    guard (state._value_pc_0 == _ControlLocation.location2) else { return }
+try emit(updates)
+} catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+func _actionPart5(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
+    guard ((try { (value: CheckedRecordConversion.IntegerRecord) throws -> NativeRecord0 in NativeRecord0(count: (try { (value: Int) throws -> Level in
+switch value { case 0: return Level.`zero`
+default: throw NativeMachineEvaluationError.noMatchingCase } }(value.`count`))) }(state.state.record)).`count` == Level.`zero`) else { return }
+try emit(updates)
+} catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+func _actionPart3(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
+    try _actionPart8(updates, { candidate in try _actionPart7(candidate, emit) })
+} catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+func _actionPart8(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
+    try emit(updates)
+} catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+func _actionPart7(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
+    if let merged = updates.merging(_Updates(_value_pc_0: _ControlLocation.location3)) { try emit(merged) }
+} catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
+    if let merged = updates.merging(_Updates(_value_record_1: state.state.record)) { try emit(merged) }
+} catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+do { try _actionPart0(_Updates(), emit) }
+catch let stop as _StopSuccessorTraversal {
+    if let cause = stop.cause { throw cause }
+    throw stop
+}
+return failures
+}

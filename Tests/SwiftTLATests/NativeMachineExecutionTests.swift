@@ -4,19 +4,21 @@ import SwiftTLAMacros
 
 @TLAModel
 private struct DescribedIntegerState {
-    enum Rank: Swift.Int, SwiftTLA.FiniteTLAValueDomain, Swift.CustomStringConvertible {
+    enum Int: Swift.Int, SwiftTLA.FiniteTLAValueDomain, Swift.CustomStringConvertible {
         case low = 1, high = 2
         static var defaultValue: Self { .low }
         static let finiteValues: [Self] = [.low, .high]
-        var description: String { self == .low ? "Low priority" : "High priority" }
+        var description: Swift.String { self == .low ? "Low priority" : "High priority" }
     }
-    enum Step: String, CaseIterable { case advance }
+    enum String: Swift.String, CaseIterable { case advance }
     static var spec: TLASpec {
         #spec {
             let describedIntegerState = Algorithm(label: "DescribedIntegerState", scoped: { scope in
-                let rank = scope.sharedVar(initial: Rank.low)
-                Do(Step.advance) {
-                    Assign(rank, to: Rank.high)
+                let rank = scope.sharedVar(initial: Int.low)
+                let literal = scope.sharedVar(initial: 1)
+                Do(String.advance) {
+                    Assign(rank, to: Int.high)
+                    Assign(literal, to: literal + 1)
                 }
             })
             describedIntegerState
@@ -26,12 +28,12 @@ private struct DescribedIntegerState {
 
 @TLAModel
 private struct BoundedExecutionCounter {
-    enum Step: String, CaseIterable { case advance }
+    enum Bool: String, CaseIterable { case advance }
     static var spec: TLASpec {
         #spec {
             let boundedExecutionCounter = Algorithm(label: "BoundedExecutionCounter", scoped: { scope in
                 let count = scope.sharedVar(initial: 0)
-                While(Step.advance, true) {
+                While(Bool.advance, true) {
                     When(count < 3)
                     Assign(count, to: count + 1)
                 }
@@ -43,13 +45,13 @@ private struct BoundedExecutionCounter {
 
 @TLAModel
 private struct SavedValueExecutionSwap {
-    enum Step: String, CaseIterable { case swap }
+    enum Swift: String, CaseIterable { case swap }
     static var spec: TLASpec {
         #spec {
             let savedValueExecutionSwap = Algorithm(label: "SavedValueExecutionSwap", scoped: { scope in
                 let left = scope.sharedVar(initial: 1)
                 let right = scope.sharedVar(initial: 2)
-                While(Step.swap, true) {
+                While(Swift.swap, true) {
                     let originalLeft = left
                     Assign(left, to: right)
                     Assign(right, to: originalLeft)
@@ -103,17 +105,21 @@ private struct AmbiguousExecutionChoice {
 
 @Suite("Generated transition contracts")
 struct NativeMachineExecutionTests {
-    @Test("Display descriptions do not change integer enum encoding or machine behavior")
+    @Test("Occupied scalar names preserve integer enum encoding and primitive machine state")
     func describedEnumsPreserveFormalEncoding() throws {
-        typealias Rank = DescribedIntegerState.Rank
+        typealias Rank = DescribedIntegerState.Int
         #expect(Rank.low.description == "Low priority")
         #expect(Rank.low.tlaValue == .int(1))
         #expect(Rank(formalValue: Rank.low.tlaValue) == .low)
         let rank = try #require(TLAStateProjection.Token(validating: "rank"))
         var machine = try DescribedIntegerState.makeMachine()
+        let initialLiteral: Swift.Int = machine.state.literal
+        #expect(initialLiteral == 1)
         #expect(try machine.formalProjection(of: machine.snapshot).value(for: rank) == .int(1))
         _ = try machine.send(.advance)
         #expect(machine.state.rank == .high)
+        let nextLiteral: Swift.Int = machine.state.literal
+        #expect(nextLiteral == 2)
         #expect(try machine.formalProjection(of: machine.snapshot).value(for: rank) == .int(2))
     }
 

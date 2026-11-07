@@ -75,14 +75,46 @@ public struct MachineActionEvaluationFailure<Action: Hashable & Sendable>: Error
     }
 }
 
-/// Complete successful alternatives and the first model failure encountered while visiting them.
+/// A reached initial failure with an immutable prefix for formal projection.
+public struct InitialEvaluationFailure: Sendable {
+    public enum Site: Equatable, Sendable {
+        case initializer(Int)
+        case selectedInvariant
+
+        var initializerOrdinal: Int? {
+            if case .initializer(let ordinal) = self { return ordinal }
+            return nil
+        }
+    }
+
+    public let site: Site
+    public let failure: NativeMachineEvaluationError
+    private let projectBefore: @Sendable () throws -> TLAStateProjection
+
+    public init(site: Site, failure: NativeMachineEvaluationError,
+                projectingBefore: @escaping @Sendable () throws -> TLAStateProjection) {
+        self.site = site
+        self.failure = failure
+        self.projectBefore = projectingBefore
+    }
+
+    /// Convert the captured prefix only at the formal evidence boundary.
+    public func formalBindingsBeforeFailure() throws -> TLAStateProjection {
+        try projectBefore()
+    }
+}
+
+/// Successful alternatives and the model failures encountered while visiting initial branches.
 public struct InitialEvaluationOutcomes<State: Sendable>: Sendable {
     public let states: [State]
-    public let firstFailure: NativeMachineEvaluationError?
+    public let failures: [InitialEvaluationFailure]
 
-    public init(states: [State], firstFailure: NativeMachineEvaluationError?) {
+    public var firstFailure: NativeMachineEvaluationError? { failures.first?.failure }
+    public var firstFailureInitializerOrdinal: Int? { failures.first?.site.initializerOrdinal }
+
+    public init(states: [State], failures: [InitialEvaluationFailure]) {
         self.states = states
-        self.firstFailure = firstFailure
+        self.failures = failures
     }
 }
 
@@ -92,6 +124,7 @@ public enum _NativeMachineOperations: Sendable {
     public static let maximumRecursiveDepth = 4_096
 
     /// Handle a model failure within one initial branch without abandoning other branches.
+    /// Enumeration, capacity, call-depth and missing-context errors propagate without a completed branch result.
     public static func visitInitialBranch(
         _ visit: () throws -> Void,
         onEvaluationFailure: (NativeMachineEvaluationError) -> Void
@@ -99,10 +132,24 @@ public enum _NativeMachineOperations: Sendable {
         do {
             try visit()
         } catch let failure as NativeMachineEvaluationError {
-            onEvaluationFailure(failure)
+            switch failure {
+            case .nonEnumerableIntegerDomain, .nonEnumerableSequenceDomain,
+                 .collectionCardinalityOverflow, .powerSetTooLarge,
+                 .recursionDepthExceeded, .checkingContextRequired:
+                throw failure
+            default:
+                onEvaluationFailure(failure)
+            }
         } catch let failure as EvalError {
             guard let native = failure.nativeFailure else { throw failure }
-            onEvaluationFailure(native)
+            switch native {
+            case .nonEnumerableIntegerDomain, .nonEnumerableSequenceDomain,
+                 .collectionCardinalityOverflow, .powerSetTooLarge,
+                 .recursionDepthExceeded, .checkingContextRequired:
+                throw failure
+            default:
+                onEvaluationFailure(native)
+            }
         }
     }
 

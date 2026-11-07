@@ -93,6 +93,19 @@ final class SourceTypeResolver {
         try resolveType(source).type
     }
 
+    func normalizedStateType(_ spelling: String?, resolved: CompiledValueType?)
+        -> (spelling: String?, resolved: CompiledValueType?) {
+        guard let resolved else { return (spelling, nil) }
+        let primitives: [CompiledValueType] = [.int, .bool, .string]
+        if primitives.contains(resolved) {
+            let canonical = resolved.swiftType
+            if (try? resolve(canonical)) == resolved { return (canonical, nil) }
+            return (spelling, resolved)
+        }
+        let needsWitness = spelling == nil || ["Int", "Bool", "String"].contains(spelling ?? "")
+        return (spelling, needsWitness ? resolved : nil)
+    }
+
     func formalShape(for source: String) throws -> FormalValueShape {
         try resolveType(source).view
     }

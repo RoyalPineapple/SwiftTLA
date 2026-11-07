@@ -663,12 +663,7 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
     length: some TypedExpression<Int>,
     with value: some TypedExpression<Element>
   ) -> Expr<Self> {
-    let index = "__zeroBasedSequenceIndex"
-    return Expr(.functionLiteral(
-      .integerRange(.int(0), .subtract(length.stateExpr, .int(1))),
-      index,
-      value.stateExpr
-    ))
+    Expr(formalZeroBasedSequence(length: length.stateExpr, repeating: value.stateExpr))
   }
 
   public static func filled(length: some TypedExpression<Int>, with value: Element) -> Expr<Self> {
@@ -810,10 +805,16 @@ package func formalSequenceDomain(
   return .letValue(lengthsName, lengths, .caseExpr([valid, sequences], nil))
 }
 
+package func formalZeroBasedSequence(length: StateExpr, repeating value: StateExpr) -> StateExpr {
+  let index = StateExpr.freshBoundName("__zeroBasedSequenceIndex", avoiding: value.freeVariableNames)
+  return .functionLiteral(.integerRange(.int(0), .subtract(length, .int(1))), index, value)
+}
+
 /// The index domain guarantees that exactly one CASE branch matches.
 package func formalZeroBasedSequence(_ elements: [StateExpr]) -> StateExpr {
   guard !elements.isEmpty else { return .value(.function([:])) }
-  let index = "__zeroBasedSequenceIndex"
+  let index = StateExpr.freshBoundName("__zeroBasedSequenceIndex",
+    avoiding: elements.reduce(into: Set<String>()) { $0.formUnion($1.freeVariableNames) })
   let branches = elements.enumerated().flatMap { offset, element in
     [StateExpr.equal(.variable(index), .int(offset)), element]
   }

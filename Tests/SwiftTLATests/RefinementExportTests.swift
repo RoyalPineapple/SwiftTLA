@@ -9,11 +9,18 @@ struct RefinementExportTests {
         enum Step: String, CaseIterable { case stay }
         let value = Var<Int>("value")
         let abstract = TLASpec("AbstractConstants") {
-            Constant("Limit", 2)
+            Constant("Limit", -2)
             Constant("Marker", TLAValue.constant("Token"))
             Variable(value, 0)
             Action("stay") { value.stays }
         }
+        let direct = try abstract.compile().render().tlaBundle
+        let limitBinding = try #require(direct.cfg.split(separator: "\n").first {
+            $0.hasPrefix("CONSTANT Limit <- ")
+        })
+        let limitDefinition = limitBinding.dropFirst("CONSTANT Limit <- ".count)
+        #expect(direct.tla.contains("\(limitDefinition) == -2\n"))
+        #expect(!direct.cfg.contains("CONSTANT Limit ="))
         let instance = Instance("Abstract", of: abstract)
         let source = TLASpec("ConcreteConstants") {
             Algorithm("Loop", scoped: { scope in
@@ -26,7 +33,7 @@ struct RefinementExportTests {
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: source.compile()))
         let module = try program.renderModule()
         #expect(module.renderedModuleSource.contains("CONSTANTS Token\n"))
-        #expect(module.renderedModuleSource.contains("Limit <- 2"))
+        #expect(module.renderedModuleSource.contains("Limit <- -2"))
         #expect(module.renderedModuleSource.contains("Marker <- Token"))
         #expect(module.renderedModuleSource.contains("Token <- Token"))
         #expect(module.configuration.declarations.contains("CONSTANT Token = Token"))
@@ -34,7 +41,7 @@ struct RefinementExportTests {
         let plusCal = try #require(try program.renderAuthoredPlusCal(declarations: module))
         #expect(plusCal.contains("CONSTANTS Token\n"))
         #expect(plusCal.contains("Abstract == INSTANCE ConcreteConstants__Refinement0"))
-        #expect(plusCal.contains("Limit <- 2"))
+        #expect(plusCal.contains("Limit <- -2"))
         #expect(plusCal.contains("Marker <- Token"))
         #expect(plusCal.contains("Token <- Token"))
         let instancePosition = try #require(plusCal.range(of: "Abstract == INSTANCE"))
@@ -72,8 +79,16 @@ struct RefinementExportTests {
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: root.compile()))
         let module = try program.renderModule()
         #expect(module.imports.count == 2)
+        let expectedInit = #"""
+        Init ==
+          /\ value = 3
+          /\ (IF (value >= (-2 * 1000000000 - 147483648) /\ value <= (2 * 1000000000 + 147483647)) THEN TRUE ELSE value \in ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)..((9 * 1000000000 + 223372036) * 1000000000 + 854775807))
+        """#
         for imported in module.imports {
-            #expect(imported.tla.contains("Init == value = 3"))
+            let initial = try #require(imported.tla.components(separatedBy: "\n\n").first {
+                $0.hasPrefix("Init ==")
+            })
+            #expect(initial == expectedInit)
             #expect(!imported.tla.contains("CONSTANTS Limit"))
         }
         try validateBundle(module, name: program.moduleName, identity: program.identity)
@@ -169,6 +184,7 @@ struct RefinementExportTests {
         let configuration = module.configuration
         let rendered = try RenderedSpecification(_generatedModule: name, source: module.renderedModuleSource,
             compilationIdentity: identity.value, declarations: configuration.declarations,
+            _generatedConstants: module.constantValues,
             checkDeadlock: configuration.checkDeadlock,
             _generatedIntegerBitWidth: Int.bitWidth,
             _generatedIntrinsicInvariants: configuration.intrinsicInvariants,

@@ -113,6 +113,7 @@ extension EvalError {
         case .tupleIndexOutsideDomain(.integer(let index)): .tupleIndexOutsideDomain(index)
         case .recordFieldUnavailable(.string(let field)): .recordFieldUnavailable(field)
         case .functionArgumentOutsideDomain: .functionArgumentOutsideDomain
+        case .recursiveArgumentOutsideDomain: .functionArgumentOutsideDomain
         default: nil
         }
     }
@@ -304,6 +305,13 @@ private struct FoldEvaluation {
     }
 }
 
+private enum EvaluatorMembershipTest {
+    case members(Set<CompiledValue>)
+    case range(Int, Int)
+    case integers
+    case combine(CompiledOperation)
+}
+
 private enum EvaluatorTask {
     case expression(CompiledExpression, EvaluatorScope)
     case finish(CompiledOperation, operandCount: Int)
@@ -312,6 +320,15 @@ private enum EvaluatorTask {
     case randomFunctionSubset
     case sequenceMember
     case integerDomainMember(CompiledOperation)
+    case membershipDomain(CompiledExpression, EvaluatorScope)
+    case membershipRange
+    case membershipSet
+    case membershipCombine(CompiledOperation)
+    case membershipBranch(CompiledExpression, CompiledExpression, EvaluatorScope)
+    case membershipCandidate(CompiledExpression, EvaluatorScope, start: Int)
+    case membershipResult(start: Int)
+    case domainRangeBounds
+    case domainRangeEquality
     case booleanResult
     case conditional(then: CompiledExpression, otherwise: CompiledExpression, scope: EvaluatorScope)
     case booleanRight(CompiledExpression, scope: EvaluatorScope, shortCircuit: Bool)
@@ -388,10 +405,108 @@ struct CompiledEvaluator: Sendable {
         )
         var tasks = [EvaluatorTask.expression(expression, scope)]
         var values: [CompiledValue] = []
+        var membershipTests: [EvaluatorMembershipTest] = []
+        var domainEqualityBounds: [(Int, Int)] = []
         var recursiveDepth = 0
+
+        // shortcut: other symbolic domain constructors need rules before universal query claims.
+        func hasRangeDomain(_ root: CompiledExpression) -> Bool {
+            var pending = [root]
+            while let node = pending.popLast() {
+                switch node.operation {
+                case .integerRange: return true
+                case .union, .intersection, .setDifference: pending += node.children
+                case .ifThenElse: pending += node.children.dropFirst()
+                default: break
+                }
+            }
+            return false
+        }
 
         while let task = tasks.popLast() {
             switch task {
+            case .membershipDomain(let domain, let scope):
+                switch domain.operation {
+                case .integerRange:
+                    guard domain.children.count == 2 else { throw EvalError.collectionState }
+                    tasks.append(.membershipRange)
+                    tasks.append(.expression(domain.children[1], scope))
+                    tasks.append(.expression(domain.children[0], scope))
+                case .union, .intersection, .setDifference:
+                    guard domain.children.count == 2 else { throw EvalError.collectionState }
+                    tasks.append(.membershipCombine(domain.operation))
+                    tasks.append(.membershipDomain(domain.children[1], scope))
+                    tasks.append(.membershipDomain(domain.children[0], scope))
+                case .ifThenElse:
+                    guard domain.children.count == 3 else { throw EvalError.collectionState }
+                    tasks.append(.membershipBranch(domain.children[1], domain.children[2], scope))
+                    tasks.append(.expression(domain.children[0], scope))
+                case .integerSet:
+                    membershipTests.append(.integers)
+                default:
+                    // shortcut: callable and bound domains still materialize; extend their rules before universal query claims.
+                    tasks.append(.membershipSet)
+                    tasks.append(.expression(domain, scope))
+                }
+            case .membershipRange:
+                let upper = try integer(popValue(from: &values))
+                let lower = try integer(popValue(from: &values))
+                membershipTests.append(.range(lower, upper))
+            case .membershipSet:
+                let value = try popValue(from: &values)
+                guard case .set(let members) = value else { throw EvalError.expected(.set, actual: [value]) }
+                membershipTests.append(.members(members))
+            case .membershipCombine(let operation):
+                membershipTests.append(.combine(operation))
+            case .membershipBranch(let yes, let no, let scope):
+                tasks.append(.membershipDomain(try boolean(popValue(from: &values)) ? yes : no, scope))
+            case .membershipCandidate(let candidate, let scope, let start):
+                tasks.append(.membershipResult(start: start))
+                tasks.append(.expression(candidate, scope))
+            case .membershipResult(let start):
+                let candidate = try popValue(from: &values)
+                var matches: [Bool] = []
+                for test in membershipTests[start...] {
+                    switch test {
+                    case .members(let members): matches.append(members.contains(candidate))
+                    case .range(let lower, let upper):
+                        if case .integer(let member) = candidate {
+                            matches.append(lower <= member && member <= upper)
+                        } else { matches.append(false) }
+                    case .integers:
+                        if case .integer = candidate { matches.append(true) } else { matches.append(false) }
+                    case .combine(let operation):
+                        guard let right = matches.popLast(), let left = matches.popLast() else {
+                            throw EvalError.collectionState
+                        }
+                        switch operation {
+                        case .union: matches.append(left || right)
+                        case .intersection: matches.append(left && right)
+                        case .setDifference: matches.append(left && !right)
+                        default: throw EvalError.collectionState
+                        }
+                    }
+                }
+                guard matches.count == 1, let result = matches.first else { throw EvalError.collectionState }
+                membershipTests.removeSubrange(start...)
+                values.append(.boolean(result))
+            case .domainRangeBounds:
+                let upper = try integer(popValue(from: &values))
+                let lower = try integer(popValue(from: &values))
+                domainEqualityBounds.append((lower, upper))
+            case .domainRangeEquality:
+                let value = try popValue(from: &values)
+                guard case .set(let members) = value else { throw EvalError.expected(.set, actual: [value]) }
+                guard let (lower, upper) = domainEqualityBounds.popLast() else { throw EvalError.collectionState }
+                var matches = lower > upper
+                if !members.isEmpty {
+                    let last = lower.addingReportingOverflow(members.count - 1)
+                    matches = !last.overflow && last.partialValue == upper && members.allSatisfy {
+                        guard case .integer(let member) = $0 else { return false }
+                        return lower <= member && member <= upper
+                    }
+                }
+                values.append(.boolean(matches))
             case .finish(let operation, let operandCount):
                 try operation.apply(to: &values, operandCount: operandCount)
 
@@ -634,6 +749,30 @@ struct CompiledEvaluator: Sendable {
                 values.append(value)
 
             case .expression(let expression, let scope):
+                if expression.operation == .equal, expression.children.count == 2 {
+                    let left = expression.children[0], right = expression.children[1]
+                    let domainFirst = left.operation == .domain && right.operation == .integerRange
+                    let rangeFirst = left.operation == .integerRange && right.operation == .domain
+                    if domainFirst || rangeFirst {
+                        let domain = domainFirst ? left : right
+                        let range = domainFirst ? right : left
+                        guard domain.children.count == 1, range.children.count == 2 else {
+                            throw EvalError.collectionState
+                        }
+                        let bounds: [EvaluatorTask] = [.expression(range.children[0], scope),
+                            .expression(range.children[1], scope), .domainRangeBounds]
+                        let operands = domainFirst ? [.expression(domain, scope)] + bounds
+                            : bounds + [.expression(domain, scope)]
+                        tasks.append(.domainRangeEquality)
+                        tasks.append(contentsOf: operands.reversed())
+                        continue
+                    }
+                }
+                if case .in = expression.operation, hasRangeDomain(expression.children[1]) {
+                    tasks.append(.membershipCandidate(expression.children[0], scope, start: membershipTests.count))
+                    tasks.append(.membershipDomain(expression.children[1], scope))
+                    continue
+                }
                 if case .in = expression.operation, case .integerSet = expression.children[1].operation {
                     tasks.append(.integerDomainMember(.integerSet))
                     tasks.append(.expression(expression.children[0], scope))

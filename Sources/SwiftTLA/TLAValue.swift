@@ -159,7 +159,8 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
 
     package var isTLCConfigurationLiteral: Bool {
         switch self {
-        case .int(let value): value >= 0
+        // CFG values require a numeric token; larger integers render as expressions.
+        case .int(let value): value >= 0 && value <= 1_000_000_000
         case .bool, .constant: true
         case .string(let value):
             !value.unicodeScalars.contains { $0 == "\"" || $0 == "\\" || $0.value < 32 }

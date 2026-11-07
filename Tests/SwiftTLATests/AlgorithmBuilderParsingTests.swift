@@ -393,25 +393,25 @@ import SwiftTLAMacros
         #expect(!module.contains("Len(input)"))
     }
 
-    @Test("Algorithm parser preserves tuple type through With and quantifier bindings")
-    func parsesBoundTupleCounts() throws {
+    @Test("Algorithm parser preserves tuple type through With and quantifier bindings", arguments: ["tuple", "Len", "Cardinality", "PrintT", "TLCGet"])
+    func parsesBoundTupleCounts(binder: String) throws {
         let source = """
         {
-            Extends(.sequences)
+            \(binder == "TLCGet" ? "Extends(.tlc)" : "")
             let BoundTupleCount = Algorithm(scoped: { scope in
                 let pending = scope.sharedVar(_name: "pending",
                     initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>.literal(1))
                 )
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.advance) {
-                    With(pending) { tuple in
-                        Assign(count, to: tuple.expr.count)
+                    With(pending) { \(binder) in
+                        Assign(count, to: \(binder).expr.count)
                     }
                     Stop()
                 }
                 Invariant("TupleLengths") {
-                    ForAll(in: pending.expr) { tuple in
-                        tuple.expr.count == 1
+                    ForAll(in: pending.expr) { \(binder) in
+                        \(binder).expr.count == 1
                     }
                 }
             })
@@ -421,7 +421,18 @@ import SwiftTLAMacros
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let module = try compile(parsed, named: "BoundTupleCount").render().tlaBundle.tla
+        let compilation = try compile(parsed, named: "BoundTupleCount")
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let invariant = try #require(compilation.semantics.behavior.invariants.first)
+        #expect(try runtime.invariantHolds(invariant, in: initial))
+        let module = try compilation.render().tlaBundle.tla
+        let predicate = try #require(module.split(separator: "\n").first { $0.hasPrefix("TupleLengths ==") })
+        let quantifier = try #require(predicate.range(of: "\\A "))
+        let formalBinder = try #require(predicate[quantifier.upperBound...].split(separator: " ").first)
+        #expect(!["Len", "Cardinality", "TLCGet"].contains(String(formalBinder)))
+        #expect(predicate.contains("Len(\(formalBinder))"))
+        if binder == "PrintT" { #expect(formalBinder == "PrintT") }
         #expect(module.components(separatedBy: "Len(").count == 3)
     }
 
@@ -991,7 +1002,8 @@ import SwiftTLAMacros
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "ThreeWith")
         let rendered = try specification.compile().render().tlaBundle.tla
-        #expect(rendered.components(separatedBy: "\\E ").count == 4)
+        let choose = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("choose ==") })
+        #expect(choose.components(separatedBy: "\\E ").count == 4)
     }
 
     @Test("parser preserves a bounded statement macro through compilation")
@@ -1633,39 +1645,74 @@ import SwiftTLAMacros
         ))
     }
 
-    @Test("parsed shared initializers retain and evaluate their formal expression")
-    func parsedSharedInitializerRetainsFormalExpression() throws {
-        let closure = try parseSpecTestClosure("""
-        { scope in
-            let count: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: 1 + 2)
+    @Test("parsed shared initializers retain raw values and explicit formal expressions")
+    func parsedSharedInitializersRetainValueContext() throws {
+        let raw = TLASpec("SharedInitializer") { scope in
+            let _: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: 1 + 2)
         }
-        """)
-        let parsed = SpecParser.parseSpecClosure(named: "SharedInitializer", closure)
-        #expect(parsed.diagnostics.isEmpty)
-
-        let parsedVariable = try #require(try loweredSource(parsed, named: "SharedInitializer").variables.first)
-
-        #expect(parsedVariable.initialization == .expression(.add(.value(.int(1)), .value(.int(2)))))
-
-        let compilation = try parsed.compile()
-        let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-        let count = try #require(TLAStateProjection.Token(validating: "count"))
-        #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
+        let formal = TLASpec("SharedInitializer") { scope in
+            let _: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: Expr<Int>(1) + 2)
+        }
+        let cases: [(String, VariableInitialization, TLASpec)] = [
+            ("1 + 2", .value(.int(3)), raw),
+            ("Expr<Int>(1) + 2", .expression(.add(.value(.int(1)), .value(.int(2)))), formal),
+        ]
+        for (source, expected, built) in cases {
+            let closure = try parseSpecTestClosure("""
+            { scope in
+                let count: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: \(source))
+            }
+            """)
+            let parsed = SpecParser.parseSpecClosure(named: "SharedInitializer", closure)
+            try #require(parsed.diagnostics.isEmpty)
+            let parsedVariable = try #require(try loweredSource(parsed, named: "SharedInitializer").variables.first)
+            #expect(parsedVariable.initialization == expected)
+            let compilation = try parsed.compile()
+            let builtCompilation = try built.compile()
+            #expect(compilation.identity == builtCompilation.identity)
+            let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+            let count = try #require(TLAStateProjection.Token(validating: "count"))
+            #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
+        }
     }
 
-    @Test("parsed and built literal initializers have one compilation identity")
+    @Test("parsed and built literal initializers preserve their values and compilation identity")
     func parsedAndBuiltLiteralInitializersShareIdentity() throws {
-        let closure = try parseSpecTestClosure("""
-        { scope in
-            let count = scope.sharedVar(_name: "count", initial: 1)
+        func built<Value: TLAValueType>(_ value: Value) -> TLASpec {
+            TLASpec("LiteralInitializer") { scope in
+                let _ = scope.sharedVar(_name: "count", initial: value)
+            }
         }
-        """)
-        let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
-        let built = try TLASpec("LiteralInitializer") { scope in
-            let _ = scope.sharedVar(_name: "count", initial: 1)
-        }.compile()
-
-        #expect(parsed.identity == built.identity)
+        let integerCases: [(String, Int)] = [
+            ("0", 0), ("-0", 0), ("00012", 12),
+            ("1_000_000_001", 1_000_000_001), ("-1_000_000_001", -1_000_000_001),
+            ("0b1010_0101", 165), ("-0b1010_0101", -165),
+            ("0o17", 15), ("-0o17", -15),
+            ("0xCA_FE", 51_966), ("-0xca_fe", -51_966),
+            ("9223372036854775807", .max), ("-9223372036854775808", .min),
+            ("0x7fff_ffff_ffff_ffff", .max), ("-0x8000_0000_0000_0000", .min)
+        ]
+        var cases: [(String, TLASpec, TLAValue)] = integerCases.map { ($0.0, built($0.1), .int($0.1)) }
+        cases += [
+            ("true", built(true), .bool(true)),
+            ("\"one\"", built("one"), .string("one")),
+            ("[1]", built([1]), .tuple([.int(1)]))
+        ]
+        for (source, specification, expected) in cases {
+            let closure = try parseSpecTestClosure("""
+            { scope in
+                let count = scope.sharedVar(_name: "count", initial: \(source))
+            }
+            """)
+            let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
+            let built = try specification.compile()
+            #expect(parsed.identity == built.identity)
+            let outcomes = try CompiledRuntime(compilation: parsed).initialOutcomes()
+            #expect(outcomes.failures.isEmpty)
+            try #require(outcomes.states.count == 1)
+            let count = try #require(TLAStateProjection.Token(validating: "count"))
+            #expect(try outcomes.states[0].projection(using: parsed.layout).value(for: count) == expected)
+        }
     }
 
     @Test("parsed initial domains retain state dependencies")

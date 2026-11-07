@@ -71,6 +71,11 @@ public struct GeneratedModelFieldIdentity: Hashable, Sendable {
         self.swiftName = swiftName
         self.formalName = formalName
     }
+
+    var sourceName: String {
+        guard swiftName.hasPrefix("`"), swiftName.hasSuffix("`") else { return swiftName }
+        return String(swiftName.dropFirst().dropLast())
+    }
 }
 
 public protocol GeneratedModelFields: Sendable {

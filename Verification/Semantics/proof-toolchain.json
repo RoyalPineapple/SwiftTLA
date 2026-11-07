@@ -1,0 +1,9 @@
+{
+  "schema": "PinnedTLAPSBuild",
+  "sourceCommit": "941f894f6e764ccc1bfc63a237d26938a37e5fd3",
+  "sourceRevision": "941f894",
+  "ocamlCompiler": "ocaml-base-compiler.5.5.2",
+  "opamRepositoryCommit": "a1f0fcbd9384bce190ac51678bf1c2637a6a5cf4",
+  "packagingPatchSHA256": "2eab3ff4571397a94b3d126756105a53f28a57c7f13c6de54a861b30cc2b7b5d",
+  "z3Version": "4.15.4"
+}

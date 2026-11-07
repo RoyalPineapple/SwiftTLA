@@ -25,6 +25,15 @@ struct CheckingEffectsTests {
         let machine = try OrderedCheckingEffects.makeMachine()
         #expect(throws: MachineActionEvaluationFailure<OrderedCheckingEffects.Action>(
             action: .advance, reason: .checkingContextRequired)) { try machine.successors() }
+        var direct = machine
+        #expect(throws: NativeMachineEvaluationError.checkingContextRequired) {
+            try _NativeMachineOperations.visitInitialBranch {
+                _ = try direct.send(.advance)
+            } onEvaluationFailure: { _ in
+                Issue.record("A missing checking context became a completed model failure")
+            }
+        }
+        #expect(direct.state == machine.state)
     }
 
     @Test("The same checked register identities render as TLC get and set operations")

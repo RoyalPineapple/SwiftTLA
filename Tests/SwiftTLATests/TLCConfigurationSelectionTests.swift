@@ -15,6 +15,16 @@ struct TLCConfigurationSelectionTests {
         #expect(rendered.isAssumptionsOnly)
         #expect(!rendered.checksDeadlock)
         #expect(try rendered.tlaBundle(checking: [], checkDeadlock: false).cfg == "CONSTANT MaxNat = 7\n")
+        let configuration = TLCConfiguration(assumptionsOnly: true,
+            declarations: ["CONSTANT MaxNat = 7"], checkDeadlock: false,
+            invariants: [], properties: [], symmetry: [])
+        try StraightLineRenderedActionCheck.verifyCheckingConfiguration(configuration,
+            rendered: rendered.tlaBundle.cfg, requiringSourceDefaultDeadlock: false)
+        #expect(throws: CompilationDiagnostic.self) {
+            try StraightLineRenderedActionCheck.verifyCheckingConfiguration(configuration,
+                rendered: "SPECIFICATION Spec\n" + rendered.tlaBundle.cfg,
+                requiringSourceDefaultDeadlock: false)
+        }
         #expect(throws: CompilationDiagnostic.self) {
             try rendered.tlaBundle(checking: [], checkDeadlock: true)
         }
@@ -38,10 +48,10 @@ struct TLCConfigurationSelectionTests {
             #expect(bundle.imports == rendered.tlaBundle.imports)
             #expect(bundle.provenance == rendered.tlaBundle.provenance)
         }
-        #expect(complete.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\n")
-        #expect(invariant.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK TRUE\nINVARIANT Nonnegative\n")
-        #expect(temporal.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\nPROPERTY Progress\n")
-        #expect(initialAndNext.cfg == "INIT Init\nNEXT Next\nCHECK_DEADLOCK TRUE\nINVARIANT Nonnegative\n")
+        #expect(complete.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\nINVARIANT __SwiftTLAEvaluationOK\n")
+        #expect(invariant.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK TRUE\nINVARIANT __SwiftTLAEvaluationOK\nINVARIANT Nonnegative\n")
+        #expect(temporal.cfg == "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\nINVARIANT __SwiftTLAEvaluationOK\nPROPERTY Progress\n")
+        #expect(initialAndNext.cfg == "INIT Init\nNEXT Next\nCHECK_DEADLOCK TRUE\nINVARIANT __SwiftTLAEvaluationOK\nINVARIANT Nonnegative\n")
         #expect(rendered.tlaBundle.cfg.contains("INVARIANT Nonnegative\nPROPERTY Progress\n"))
         #expect(throws: CompilationDiagnostic.self) {
             try rendered.tlaBundle(checking: ["Advance"], checkDeadlock: false)
@@ -103,7 +113,7 @@ struct TLCConfigurationSelectionTests {
             invariants: ["TypeOK"], properties: ["Progress"], symmetry: ["Nodes"])
         let temporal = try configuration.selecting(["Progress"], checkDeadlock: true)
         #expect(temporal.behavior == .initialAndNext)
-        #expect(temporal.render(usesSymmetryReduction: true) == """
+        #expect(try temporal.render(usesSymmetryReduction: true) == """
         INIT Init
         NEXT Next
         CHECK_DEADLOCK TRUE
@@ -113,27 +123,67 @@ struct TLCConfigurationSelectionTests {
 
         """)
         let specification = try temporal.selecting(["Progress"], checkDeadlock: true, behavior: .specification)
-        #expect(specification.render(usesSymmetryReduction: false).hasPrefix("SPECIFICATION Spec\n"))
+        #expect(try specification.render(usesSymmetryReduction: false).hasPrefix("SPECIFICATION Spec\n"))
         #expect(configuration.behavior == .initialAndNext)
+        for (selection, directive) in [(temporal, "INIT Init\nNEXT Next\n"),
+                                       (specification, "SPECIFICATION Spec\n")] {
+            let output = try selection.render(usesSymmetryReduction: false)
+            try #require(output.components(separatedBy: directive).count == 2)
+            try StraightLineRenderedActionCheck.verifyCheckingConfiguration(selection,
+                rendered: output, requiringSourceDefaultDeadlock: false)
+            for replacement in ["", "SPECIFICATION Other\n", "INIT Other\nNEXT Wrong\n",
+                                directive + directive, directive + "NEXT Other\n"] {
+                let changed = output.replacingOccurrences(of: directive, with: replacement)
+                try #require(changed != output)
+                #expect(throws: CompilationDiagnostic.self) {
+                    try StraightLineRenderedActionCheck.verifyCheckingConfiguration(selection,
+                        rendered: changed, requiringSourceDefaultDeadlock: false)
+                }
+            }
+        }
     }
 
     @Test("check selection preserves constants, constraints, and declaration order while disabling symmetry")
     func preservesConfigurationDeclarations() throws {
         let configuration = TLCConfiguration(
-            declarations: ["CONSTANT N = 3", "CONSTRAINT Bound"], checkDeadlock: true,
-            invariants: ["Second", "First"], properties: ["Progress"], symmetry: ["Nodes"])
+            declarations: ["CONSTANT N = 3", "CONSTANT Text = \"a  b\"", "CONSTRAINT Bound"], checkDeadlock: true,
+            invariants: ["Second", "First"], properties: ["Progress"], symmetry: ["Nodes"],
+            viewOperators: ["Visible"], postconditionOperators: ["Complete"])
         let selected = try configuration.selecting(["First", "Second"], checkDeadlock: false)
-        #expect(selected.render(usesSymmetryReduction: false) == """
+        #expect(try selected.render(usesSymmetryReduction: false) == """
         SPECIFICATION Spec
         CHECK_DEADLOCK FALSE
         CONSTANT N = 3
+        CONSTANT Text = "a  b"
         CONSTRAINT Bound
         INVARIANT Second
         INVARIANT First
 
         """)
-        #expect(!configuration.render(usesSymmetryReduction: true).contains("SYMMETRY"))
-        #expect(configuration.render(usesSymmetryReduction: true).contains("PROPERTY Progress\n"))
-        #expect(selected.render(usesSymmetryReduction: true).hasSuffix("SYMMETRY Nodes\n"))
+        #expect(try !configuration.render(usesSymmetryReduction: true).contains("SYMMETRY"))
+        #expect(try configuration.render(usesSymmetryReduction: true).contains("PROPERTY Progress\n"))
+        #expect(try selected.render(usesSymmetryReduction: true).hasSuffix("SYMMETRY Nodes\n"))
+        let modifiers = try selected.selectingView("Visible").selectingPostcondition("Complete")
+        let output = try modifiers.render(usesSymmetryReduction: false)
+        try StraightLineRenderedActionCheck.verifyCheckingConfiguration(modifiers,
+            rendered: output, requiringSourceDefaultDeadlock: false)
+        for (original, replacement) in [
+            ("CONSTANT N = 3\n", "CONSTANT N = 4\n"),
+            ("CONSTANT Text = \"a  b\"\n", "CONSTANT Text = \"a b\"\n"),
+            ("CONSTRAINT Bound\n", ""),
+            ("CONSTRAINT Bound\n", "ACTION_CONSTRAINT Bound\n"),
+            ("VIEW Visible\n", "VIEW Other\n"),
+            ("POSTCONDITION Complete\n", ""),
+            ("POSTCONDITION Complete\n", "POSTCONDITION Other\n"),
+            ("VIEW Visible\n", "VIEW Visible\nSYMMETRY Nodes\n"),
+        ] {
+            try #require(output.components(separatedBy: original).count == 2)
+            let changed = output.replacingOccurrences(of: original, with: replacement)
+            try #require(changed != output)
+            #expect(throws: CompilationDiagnostic.self) {
+                try StraightLineRenderedActionCheck.verifyCheckingConfiguration(modifiers,
+                    rendered: changed, requiringSourceDefaultDeadlock: false)
+            }
+        }
     }
 }

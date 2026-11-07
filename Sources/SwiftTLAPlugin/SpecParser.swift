@@ -528,6 +528,7 @@ final class ParserSession {
         if let prefix = expression.as(PrefixOperatorExprSyntax.self) {
             let operand = decodeStateExpr(prefix.expression)
             if prefix.operator.text == "!", let operand { return .not(operand) }
+            if prefix.operator.text == "+", isSwiftIntegerSyntax(expression) { return operand }
             if prefix.operator.text == "-", let operand {
                 return negated(operand)
             }
@@ -659,11 +660,7 @@ final class ParserSession {
               let length = decodeTypedFacadeValue(lengthSyntax, scope: scope),
               let value = decodeTypedFacadeValue(valueSyntax, scope: scope)
         else { return nil }
-        return .functionLiteral(
-            .integerRange(.int(0), .subtract(length, .int(1))),
-            "__zeroBasedSequenceIndex",
-            value
-        )
+        return formalZeroBasedSequence(length: length, repeating: value)
     }
 
     private func decodeSubsetDomain(
@@ -1551,14 +1548,22 @@ final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil,
-        expectedType: CompiledValueType? = nil
+        expectedType: CompiledValueType? = nil,
+        requiresFormalResult: Bool = false
     ) -> StateExpr? {
         let expectedType = expectedType ?? expectedEnumType.flatMap { try? sourceTypeResolver.resolve($0) }
         let expectedEnumType = expectedType?.enumerationType ?? expectedEnumType
         if let tuple = expression.as(TupleExprSyntax.self), tuple.elements.count == 1,
            let element = tuple.elements.first, element.label == nil {
             return decodeTypedFacadeValue(element.expression, scope: scope,
-                expectedEnumType: expectedEnumType, expectedType: expectedType)
+                expectedEnumType: expectedEnumType, expectedType: expectedType,
+                requiresFormalResult: requiresFormalResult)
+        }
+        if !requiresFormalResult, let integer = decodeSwiftIntegerValue(expression) {
+            return .value(.int(integer))
+        }
+        if let integer = decodeSwiftIntegerBound(expression, scope: scope) {
+            return .value(.int(integer))
         }
         if case .oneOf(let first, let second) = expectedType,
            let call = expression.as(FunctionCallExprSyntax.self),
@@ -1580,7 +1585,11 @@ final class ParserSession {
                     expectedEnumType: expectedEnumType, expectedType: expectedType?.selectedElement)
             }
             guard elements.count == array.elements.count else { return nil }
-            return .tupleLiteral(elements)
+            let literals = elements.compactMap { value -> TLAValue? in
+                if case .value(let literal) = value { return literal }
+                return nil
+            }
+            return literals.count == elements.count ? .value(.tuple(literals)) : .tupleLiteral(elements)
         }
         if let dictionary = expression.as(DictionaryExprSyntax.self) {
             return decodeDictionaryLiteral(dictionary, scope: scope, expectedType: expectedType)
@@ -1689,6 +1698,74 @@ final class ParserSession {
               expectedEnumType.flatMap({ enumDefinition(named: $0) }) == nil
         else { return nil }
         return decodeStateExpr(expression)
+    }
+
+    private func decodeSwiftIntegerBound(_ syntax: ExprSyntax, scope: TypedFacadeScope) -> Int? {
+        guard let member = syntax.as(MemberAccessExprSyntax.self), let base = member.base,
+              ["min", "max"].contains(member.declName.baseName.sourceIdentifierName),
+              let path = Self.sourceTypePath(base), let root = path.first,
+              path.count == 1 || path == ["Swift", "Int"],
+              !scope.containsBinding(named: root), !sourceScope.containsBinding(named: root),
+              constants.value(named: root) == nil,
+              sourceTypes.aliases["Swift"] == nil, sourceTypes.structs["Swift"] == nil,
+              !sourceTypes.enums.contains(where: { $0.typeName == "Swift" }),
+              (try? sourceTypeResolver.resolve(path.joined(separator: "."))) == .int else { return nil }
+        // shortcut: external type/module binding still needs Swift binding evidence.
+        return member.declName.baseName.sourceIdentifierName == "min" ? Int.min : Int.max
+    }
+
+    func requiresFormalIntegerResult(_ annotation: TypeAnnotationSyntax?) -> Bool {
+        guard var type = annotation?.type else { return false }
+        var visited: Set<String> = []
+        while let reference = type.as(IdentifierTypeSyntax.self),
+              reference.genericArgumentClause == nil,
+              let alias = sourceTypes.aliases[reference.name.sourceIdentifierName] {
+            guard visited.insert(reference.name.sourceIdentifierName).inserted else { return true }
+            type = alias
+        }
+        // shortcut: unknown explicit result types keep formal decoding; widen with Swift binding evidence.
+        return Self.terminalTypeName(type) != "Int"
+    }
+
+    private func isSwiftIntegerSyntax(_ syntax: ExprSyntax) -> Bool {
+        syntax.tokens(viewMode: .sourceAccurate).allSatisfy { token in
+            if case .integerLiteral = token.tokenKind { return true }
+            return ["(", ")", "+", "-", "*", "/", "%"].contains(token.text)
+        }
+    }
+
+    private func decodeSwiftIntegerValue(_ syntax: ExprSyntax) -> Int? {
+        guard SourceIntegerLiteral.value(syntax) == nil, isSwiftIntegerSyntax(syntax),
+              let expression = decodeStateExpr(syntax) else { return nil }
+        func value(_ expression: StateExpr) -> Int? {
+            switch expression {
+            case .value(.int(let integer)): return integer
+            case .negate(let operand):
+                guard let operand = value(operand) else { return nil }
+                let result = 0.subtractingReportingOverflow(operand)
+                return result.overflow ? nil : result.partialValue
+            case .add(let left, let right), .subtract(let left, let right),
+                 .multiply(let left, let right), .divide(let left, let right),
+                 .modulo(let left, let right):
+                guard let left = value(left), let right = value(right) else { return nil }
+                let result: (partialValue: Int, overflow: Bool)
+                switch expression {
+                case .add: result = left.addingReportingOverflow(right)
+                case .subtract: result = left.subtractingReportingOverflow(right)
+                case .multiply: result = left.multipliedReportingOverflow(by: right)
+                case .divide:
+                    guard right != 0 else { return nil }
+                    result = left.dividedReportingOverflow(by: right)
+                case .modulo:
+                    guard right != 0 else { return nil }
+                    result = left.remainderReportingOverflow(dividingBy: right)
+                default: return nil
+                }
+                return result.overflow ? nil : result.partialValue
+            default: return nil
+            }
+        }
+        return value(expression)
     }
 
     private func decodeDictionaryLiteral(
@@ -1848,6 +1925,30 @@ final class ParserSession {
               element.label == nil {
             expression = element.expression
         }
+        if SourceIntegerLiteral.value(expression) != nil || decodeSwiftIntegerBound(expression, scope: scope) != nil {
+            return .int
+        }
+        let integerOperations = ["+", "-", "*", "/", "%"]
+        if let sequence = expression.as(SequenceExprSyntax.self) {
+            let elements = Array(sequence.elements)
+            // Precedence changes values, but these operators all preserve the Int type.
+            if elements.count >= 3, elements.count % 2 == 1,
+               stride(from: 1, to: elements.count, by: 2).allSatisfy({ index in
+                   elements[index].as(BinaryOperatorExprSyntax.self).map {
+                       integerOperations.contains($0.operator.text)
+                   } == true
+               }),
+               stride(from: 0, to: elements.count, by: 2).allSatisfy({
+                   typedFacadeValueType(elements[$0], scope: scope) == .int
+               }) { return .int }
+        }
+        if let infix = expression.as(InfixOperatorExprSyntax.self),
+           let operation = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,
+           integerOperations.contains(operation),
+           typedFacadeValueType(infix.leftOperand, scope: scope) == .int,
+           typedFacadeValueType(infix.rightOperand, scope: scope) == .int { return .int }
+        if let prefix = expression.as(PrefixOperatorExprSyntax.self), prefix.operator.text == "-",
+           typedFacadeValueType(prefix.expression, scope: scope) == .int { return .int }
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             return scope.shape(for: reference)
         }
@@ -2605,18 +2706,16 @@ final class ParserSession {
         let rhsEnumType = carriesEnumType && lhsElements.count == 1
             ? enumType(lhsElements[0]) ?? expectedEnumType
             : expectedEnumType
-        guard let lhs = decodeInfixExpr(
-                  lhsElements,
-                  expectedEnumType: lhsEnumType,
-                  enumType: enumType,
-                  decoding: decodeOperand
-              ),
-              let rhs = decodeInfixExpr(
-                  rhsElements,
-                  expectedEnumType: rhsEnumType,
-                  enumType: enumType,
-                  decoding: decodeOperand
-              )
+        func operand(_ elements: [ExprSyntax], expectedEnumType: String?) -> StateExpr? {
+            guard let first = elements.first else { return nil }
+            if elements.count == 1 { return decodeOperand(first, expectedEnumType) }
+            let syntax = ExprSyntax(SequenceExprSyntax(elements: ExprListSyntax(elements)))
+            if isSwiftIntegerSyntax(syntax) { return decodeOperand(syntax, expectedEnumType) }
+            return decodeInfixExpr(elements, expectedEnumType: expectedEnumType,
+                enumType: enumType, decoding: decodeOperand)
+        }
+        guard let lhs = operand(lhsElements, expectedEnumType: lhsEnumType),
+              let rhs = operand(rhsElements, expectedEnumType: rhsEnumType)
         else { return nil }
         return applyInfixOp(split.1, lhs, rhs)
     }
@@ -2912,7 +3011,8 @@ extension ParserSession {
               let binding = variable.bindings.first,
               let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
               let initializer = binding.initializer?.value,
-              let value = decodeTypedFacadeValue(initializer, scope: scope)
+              let value = decodeTypedFacadeValue(initializer, scope: scope,
+                requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation))
         else { return nil }
         return (name, value, typedFacadeValueType(initializer, scope: scope))
     }
