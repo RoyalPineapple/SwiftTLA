@@ -133,6 +133,9 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5n Retain every reached native action failure through the existing validation callback.
   Preserve selected-first convenience results, callback stopping, callback errors and failure multiplicity.
   Complete action event sites, before-prefix values and TLA event correspondence remain open.
+- [x] I5o Prevent lexical binders from capturing selected standard-module operators.
+  Finalize binder names against the same actual import set as states and actions, preserving binder identities.
+  Other declaration namespaces, opaque imports and general binding correspondence remain open.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1124,4 +1127,39 @@ This repair delivers native error payloads through the existing callback contrac
 It does not add complete action event sites, branch identities or before-prefix projections.
 The selected TLA payload rules and snapshots remain unchanged. Complete TLA branch events remain open.
 Source and lowering correspondence, output-checker soundness, callback interpretation and checking kernels remain owned proof boundaries.
+I5, I6, every complete six-link row and the whole-language theorem remain open.
+
+### Imported operator and local binder checkpoint 7 November 2026
+
+The existing tuple-binding owner accepts a quantifier whose source binder is named `Len`.
+Its compiled initial state and invariant evaluation retain the expected value.
+The pre-repair TLA output binds `Len` and then emits `Len(Len)`, capturing the imported length operator.
+One executed baseline test with two argument cases reported two output-name issues.
+The ordinary `tuple` control passed. This was an output binding defect, not a measured runtime mismatch or SANY result.
+
+The shared lowerer now finalizes binder names against the actual standard-module exports selected after lowering.
+The same import-name set supplies variable and action reservations.
+The existing fresh-name allocator avoids current declarations, binders and operators.
+Binder identities, expressions and runtime values remain unchanged.
+Procedure parameters still receive their final backing-variable names through the existing mapping.
+
+The existing owner covers implicit `Len` and `Cardinality` imports and explicit `TLCGet` imports.
+An absent TLC module leaves `PrintT` free.
+The final assertion reads the emitted quantifier name and checks its use by the imported length call.
+It does not prescribe a fresh-name suffix or derive expected runtime values from the renderer.
+The original executed baseline used suffix-specific assertions before this test cleanup.
+Its retained bound `Len` also violates the final noncapture requirement.
+The final assertion text was not rerun on old production.
+
+The guarded repair passed 164 tests across six existing suites, including the external consumer.
+The build took 1467.89 seconds, followed by 205.020 seconds of selected execution.
+All 1201 captured inputs remained exact.
+The whole 106736-byte log has SHA256 `e0482fba470efa1e03c0f6043e4a80d499fc7c068327b9bd9e13ff7d5b0ddccb`.
+The final suffix-independent owner then passed separately on unchanged production with five argument cases.
+Evidence is retained under `.git/swifttla-proof-evidence/standard-module-binder-names-2026-11-07/` in the primary checkout.
+Only this plan changed after the final diagnostic.
+
+This repair supplies a compiler-to-rendered-name implementation guard.
+It does not prove arbitrary source scopes, imported operator semantics, general namespace correspondence or TLA checker interpretation.
+Constants, model values, properties, formal operators and opaque import namespaces retain separate obligations.
 I5, I6, every complete six-link row and the whole-language theorem remain open.
