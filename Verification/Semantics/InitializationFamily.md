@@ -199,10 +199,61 @@ and [initializer transport](../../Sources/SwiftTLA/CompiledExpressions.swift).
 
 This removes the checked/resolved payload and type-transport assumptions for the stated compiled pilot case.
 Together with the preceding normalization result, it supplies the proper typed literal consumed by the existing scalar evaluator argument and `IntExpressionOutcomesSupplyInitializerOutcomes`.
-The input type premise still needs its source connection: type inputs use the layout's explicit resolved type or resolve its generated Swift spelling.
-The source resolver's primitive `Int` branch returns `.int`; alias/nominal precedence, layout metadata and actual Swift name binding remain owned source obligations.
+The source connection for an unannotated scoped shared literal is derived below.
+Other placements, annotations and alias/nominal routes retain their source-type obligations.
 General calls/processes, cache-context completeness for nonliterals, backend interpretation, complete initializer histories and all six-link rows remain open.
 This argument changes no checker, evaluator or theorem body. It is a manual implementation proof, with local regressions kept separate from mathematical proof and hosted admission.
+
+### Inferred scalar source types and native type binding
+
+For the pilot's unannotated scoped shared integer initializer, suppose decoding returns a proper integer literal with payload `n`
+and parsing/compilation return normally. The parser supplies the `.int` input premise of the preceding transport argument,
+including a model that declares its own `Int`.
+
+The owners are [source inference](../../Sources/SwiftTLAPlugin/SpecParser+SpecBuilder.swift),
+[scoped declarations](../../Sources/SwiftTLAPlugin/SpecParser+Algorithm.swift),
+[source types](../../Sources/SwiftTLAPlugin/SourceTypes.swift), [the macro entry point](../../Sources/SwiftTLAPlugin/ModelMacro.swift),
+[algorithm lowering](../../Sources/SwiftTLA/AlgorithmLowering.swift), [layout](../../Sources/SwiftTLA/CompiledLayout.swift)
+and [type inputs](../../Sources/SwiftTLA/CompiledTypeInputs.swift).
+
+1. `initialValueTypeName` recognizes the literal and normalizes `Swift.Int` with resolved type `.int`.
+   If the canonical short name resolves to `.int`, normalization uses it. Otherwise it retains the qualified spelling.
+   The corresponding Boolean and string branches use their own primitive types. Authored nominal type names are unchanged.
+2. `parseAlgorithmVariableDeclaration` resolves that spelling and normalizes the state metadata with the same resolver.
+   An unoccupied canonical name resolves to `.int`; an occupied name retains the explicit `.int` witness.
+   These type operations leave the integer payload and initialization expression unchanged.
+3. `AlgorithmLowerer` copies the spelling and resolved witness into `NamedVar`.
+   `CompiledLayout` copies both into the variable at its ordinal ID.
+   `CompiledTypeInputs` prefers the explicit witness; otherwise it resolves the retained spelling.
+   `TLASpecVerifier` uses the parser's resolver for that input construction. Both branches therefore give `variableTypes[v] == .int`.
+4. The earlier lowerer and resolver results now yield a resolved proper literal `n` with no children for this source route.
+   This discharges the input primitive-type premise for the scalar evaluator and `IntExpressionOutcomesSupplyInitializerOutcomes`.
+   Source declaration selection, other annotated/lexical placements, the target/prior-map/freshness facts and complete histories remain separate.
+
+Native scalar annotations now use `SwiftTLA.TLAValue.IntegerLiteralType`, `BooleanLiteralType` and `StringLiteralType`.
+The library's existing public literal conformances bind these associated types to standard `Int`, `Bool` and `String`.
+Under that library namespace binding, documented Swift associated-type identity makes those annotations independent of model declarations
+named `Int`, `Bool`, `String` or `Swift`. The emitter's `.named` branch retains the authored nominal type.
+Primitive state fields, control raw values, arithmetic temporaries, predicates and validation signatures use the fixed bindings.
+The independent output checks require their complete token sequences; they do not accept arbitrary type spellings.
+This removes the unoccupied scalar-name premise for those emitted annotations. General helper/module namespace binding remains owned.
+
+The source baseline executed the existing owner and reported three wrong nominal-domain resolutions.
+The native baseline failed generated-code compilation before any test executed; it is not a runtime rejection receipt.
+A source-only repair exposed a stack-guard SIGBUS in the existing recursive CASE type path.
+That path now uses the existing explicit worklist: condition before value, prior value type forwarded to the next value,
+optional otherwise last, then the same final operand contexts and original child occurrences.
+It removes the recursive `inferCases` path without changing accepted expressions or stack/resource limits.
+
+The source/checker repair first passed 196 tests in nine suites. The later native diagnostic executed 324 tests and failed on three
+old-format atomic-copy expectations in two tests; the source, occupied-name machine, dictionary-key and external-client owners passed.
+Only five test files changed afterward. Their follow-up passed 46 tests in five suites on the same production bytes.
+Retained witnesses expand only unshadowed standard scalar identifier notation; actual output is not normalized.
+The anchored initializer pattern retains every capture/append guard, and constructor negatives use a correct-output positive baseline.
+All 1,201 captured inputs matched each run's own manifest. No complete rerun of the 324-test filter is claimed.
+
+This is a manual code-case argument under documented Swift semantics, not a new TLAPS result or a mechanically checked compiler translation.
+Complete literal, initialization, source/output/helper/checker/kernel and whole-language rows remain open.
 
 ## Ordered observation contract
 

@@ -82,15 +82,15 @@ import SwiftSyntax
         let witness = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/OrderedCopySwiftVisitors.txt")
             .standardizedFileURL
-        let expected = try String(contentsOf: witness, encoding: .utf8)
+        let expected = nativeWitnessSource(try String(contentsOf: witness, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }
         let actual = (visitors + [dispatch, formalCall]).map(\.description).joined(separator: "\n")
         #expect(tokens(actual) == tokens(expected))
         let wrongSecondRead = visitors[1].description.replacingOccurrences(
-            of: "let _arithmetic0: Int = ___atomic_2_2",
-            with: "let _arithmetic0: Int = state.state.x")
+            of: "let _arithmetic0: \(nativeIntType) = ___atomic_2_2",
+            with: "let _arithmetic0: \(nativeIntType) = state.state.x")
         #expect(wrongSecondRead != visitors[1].description)
         #expect(tokens(([
             visitors[0].description, wrongSecondRead, visitors[2].description,

@@ -118,7 +118,7 @@ extension NativeSwiftEmitter {
     private func crossOrdering(_ left: CompiledValueType, _ right: CompiledValueType) throws -> String {
         if left == right { return try ordering(left) }
         func closure(_ body: String) throws -> String {
-            "{ (lhs: \(try swiftType(left)), rhs: \(try swiftType(right))) -> Bool in\n\(body)\n}"
+            "{ (lhs: \(try swiftType(left)), rhs: \(try swiftType(right))) -> \(nativeBoolType) in\n\(body)\n}"
         }
         func compare(_ lhs: String, _ left: CompiledValueType, _ rhs: String, _ right: CompiledValueType) throws -> String {
             "if (\(try crossOrdering(left, right)))(\(lhs), \(rhs)) { return true }; if (\(try crossOrdering(right, left)))(\(rhs), \(lhs)) { return false }"
@@ -149,8 +149,8 @@ extension NativeSwiftEmitter {
                 values.map { "case .\($0.name): return \(ranks[$0.value]!)" }.joined(separator: "\n")
             }
             return try closure("""
-            func leftRank(_ value: \(try swiftType(left))) -> Int { switch value { \(cases(a)) } }
-            func rightRank(_ value: \(try swiftType(right))) -> Int { switch value { \(cases(b)) } }
+            func leftRank(_ value: \(try swiftType(left))) -> \(nativeIntType) { switch value { \(cases(a)) } }
+            func rightRank(_ value: \(try swiftType(right))) -> \(nativeIntType) { switch value { \(cases(b)) } }
             return leftRank(lhs) < rightRank(rhs)
             """)
         }
@@ -226,14 +226,14 @@ extension NativeSwiftEmitter {
             let cases = try alternatives.enumerated().map { index, alternative in
                 "case .\(unionCase(type, index: index))(let payload): return \(try formalKindRank("payload", type: alternative))"
             }.joined(separator: "\n")
-            return "({ (value: \(try swiftType(type))) -> Int in\nswitch value { \(cases) } })(\(value))"
+            return "({ (value: \(try swiftType(type))) -> \(nativeIntType) in\nswitch value { \(cases) } })(\(value))"
         case .finite(let members):
             let cases = members.indices.map { "case .\(finiteCaseName(members, index: $0)): return \(members[$0].orderingKind)" }.joined(separator: "\n")
-            return "({ (value: \(try swiftType(type))) -> Int in\nswitch value { \(cases) } })(\(value))"
+            return "({ (value: \(try swiftType(type))) -> \(nativeIntType) in\nswitch value { \(cases) } })(\(value))"
         case .named(let name):
             guard let members = program.enums.cases[name] else { throw unsupported("union enum rank") }
             let cases = members.map { "case .`\($0.name)`: return \($0.value.orderingKind)" }.joined(separator: "\n")
-            return "({ (value: \(name)) -> Int in\nswitch value { \(cases) } })(\(value))"
+            return "({ (value: \(name)) -> \(nativeIntType) in\nswitch value { \(cases) } })(\(value))"
         default: throw unsupported("union alternative order")
         }
         return String(representative.orderingKind)

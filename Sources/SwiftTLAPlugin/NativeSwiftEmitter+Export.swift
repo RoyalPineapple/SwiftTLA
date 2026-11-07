@@ -65,7 +65,7 @@ extension NativeSwiftEmitter {
                     renderedName: FormalActionCall(name: \(name), arguments: _arguments).description))
                 """ + String(repeating: "\n}", count: loops.count)
             }
-            var obligationMetadata = "var _obligations: [String: [_RenderedTemporalObligation]] = [:]"
+            var obligationMetadata = "var _obligations: [\(nativeStringType): [_RenderedTemporalObligation]] = [:]"
             for property in program.behavior.temporalProperties {
                 guard let obligations = module.temporalObligations[property.id] else { continue }
                 var loops: [String] = []
@@ -93,7 +93,7 @@ extension NativeSwiftEmitter {
                 obligationMetadata += String(repeating: "\n}", count: loops.count)
             }
             if module.temporalObligations.isEmpty {
-                obligationMetadata = "let _obligations: [String: [_RenderedTemporalObligation]] = [:]"
+                obligationMetadata = "let _obligations: [\(nativeStringType): [_RenderedTemporalObligation]] = [:]"
             }
             let generatedLinks = try program.generatedRefinements.map { refinement in
                 let target = refinement.targetModelType

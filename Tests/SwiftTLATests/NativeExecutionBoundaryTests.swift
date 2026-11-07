@@ -362,9 +362,9 @@ private struct ReachableInvariantFailure {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
         })
         let countBinding = emitter.variable(count.id)
-        let originalLiteral = "let \(countBinding): Int = \(Int.max)"
+        let originalLiteral = "let \(countBinding): \(nativeIntType) = \(Int.max)"
         let wrongInitialSource = initialDeclaration.description.replacingOccurrences(
-            of: originalLiteral, with: "let \(countBinding): Int = 0")
+            of: originalLiteral, with: "let \(countBinding): \(nativeIntType) = 0")
         #expect(wrongInitialSource != initialDeclaration.description)
         let wrongInitial = try #require(Parser.parse(source: wrongInitialSource)
             .statements.first?.item.as(DeclSyntax.self))
@@ -432,7 +432,7 @@ private struct ReachableInvariantFailure {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
             .standardizedFileURL
-        let expectedSwift = try String(contentsOf: swiftWitness, encoding: .utf8)
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: swiftWitness, encoding: .utf8))
         let emittedTokens = Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
         let witnessTokens = Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text)
         #expect(emittedTokens == witnessTokens)
@@ -625,8 +625,8 @@ private struct ReachableInvariantFailure {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
             .standardizedFileURL
-        let expectedSwift = try String(contentsOf: additionWitness, encoding: .utf8)
-            .replacingOccurrences(of: "let _arithmetic1: Int = 1", with: "let _arithmetic1: Int = -1")
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: additionWitness, encoding: .utf8))
+            .replacingOccurrences(of: "let _arithmetic1: \(nativeIntType) = 1", with: "let _arithmetic1: \(nativeIntType) = -1")
             .replacingOccurrences(of: "_NativeMachineOperations.add", with: "_NativeMachineOperations.subtract")
         let actualTokens = Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
         let expectedTokens = Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text)
@@ -700,8 +700,8 @@ private struct ReachableInvariantFailure {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
             .standardizedFileURL
-        let expectedSwift = try String(contentsOf: witness, encoding: .utf8)
-            .replacingOccurrences(of: "let _arithmetic1: Int = 1", with: "let _arithmetic1: Int = 2")
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: witness, encoding: .utf8))
+            .replacingOccurrences(of: "let _arithmetic1: \(nativeIntType) = 1", with: "let _arithmetic1: \(nativeIntType) = 2")
             .replacingOccurrences(of: "_NativeMachineOperations.add", with: "_NativeMachineOperations.multiply")
         #expect(Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
             == Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text))
@@ -882,7 +882,7 @@ extension NativeExecutionBoundaryTests {
         })
         let swiftInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("CheckedRecordConversionSwiftVisitor.txt")
-        let expectedSwift = try String(contentsOf: swiftInput, encoding: .utf8)
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: swiftInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }

@@ -131,7 +131,7 @@ struct CheckedViewKindMismatchTests {
         })
         let swiftInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("NestedCheckedSequenceViewSwiftVisitor.txt")
-        let expectedSwift = try String(contentsOf: swiftInput, encoding: .utf8)
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: swiftInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }
@@ -177,7 +177,7 @@ struct CheckedViewKindMismatchTests {
         })
         let swiftInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("NestedCheckedSetViewSwiftVisitor.txt")
-        let expectedSwift = try String(contentsOf: swiftInput, encoding: .utf8)
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: swiftInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }

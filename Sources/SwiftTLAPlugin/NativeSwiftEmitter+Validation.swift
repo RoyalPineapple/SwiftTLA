@@ -19,10 +19,10 @@ extension NativeSwiftEmitter {
         public enum Property: Hashable, CaseIterable, Sendable {
             \(cases)
         }
-        public static var formalPropertyNames: [Property: String] {
+        public static var formalPropertyNames: [Property: \(nativeStringType)] {
             [\(identifiers.isEmpty ? ":" : projections)]
         }
-        public static var propertyDisplayNames: [Property: String] {
+        public static var propertyDisplayNames: [Property: \(nativeStringType)] {
             [\(identifiers.isEmpty ? ":" : displayProjections)]
         }
         """)
@@ -123,24 +123,24 @@ extension NativeSwiftEmitter {
         public struct ValidationScenario: ModelValidationScenario {
             public typealias Machine = \(model.typeName)
             public typealias Property = \(model.typeName).Property
-            public let name: String
-            public let displayName: String
+            public let name: \(nativeStringType)
+            public let displayName: \(nativeStringType)
             \(hasConfiguration ? "public let configuration: Configuration" : "")
             public let checking: ModelChecks<Property>
             public let checkingMode: ValidationCheckingMode
             public let behavior: ModelBehavior
-            let selectedSymmetry: String?
-            let selectedFairnessProfile: Int?
-            let selectedFairnessProfileName: String?
-            let selectedView: Int?
-            let selectedPostcondition: Int?
-            public let postconditionName: String?
+            let selectedSymmetry: \(nativeStringType)?
+            let selectedFairnessProfile: \(nativeIntType)?
+            let selectedFairnessProfileName: \(nativeStringType)?
+            let selectedView: \(nativeIntType)?
+            let selectedPostcondition: \(nativeIntType)?
+            public let postconditionName: \(nativeStringType)?
             public let postconditionExpectation: ValidationExpectation?
             public let expectations: [Property: ValidationExpectation]
             public let deadlockExpectation: ValidationExpectation?
-            public var usesView: Bool { selectedView != nil }
+            public var usesView: \(nativeBoolType) { selectedView != nil }
 
-            public func postconditionSatisfied(after summary: MachineValidationSummary<Property>) throws -> Bool? {
+            public func postconditionSatisfied(after summary: MachineValidationSummary<Property>) throws -> \(nativeBoolType)? {
                 guard case .exhausted = summary.completion else { return nil }
                 switch selectedPostcondition {
                 \(postconditionCases.joined(separator: "\n"))
@@ -158,7 +158,7 @@ extension NativeSwiftEmitter {
                 if let failure = outcome.firstFailure { throw failure }
                 return outcome.states
             }
-            public var formalPropertyNames: [Property: String] {
+            public var formalPropertyNames: [Property: \(nativeStringType)] {
                 Machine.formalPropertyNames
             }
             public func fairnessConditions(on machine: Machine) throws -> [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] {
@@ -170,15 +170,15 @@ extension NativeSwiftEmitter {
                 default: throw ExplorationError.configurationMismatch
                 }
             }
-            public func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
-                stopOnViolation: Bool, stopOnReachability: Bool,
+            public func runValidation(initialMachines: [Machine], maximumStates: \(nativeIntType), checking: ModelChecks<Property>,
+                stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
                 emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
                 try runValidation(initialOutcomes: .init(states: initialMachines, failures: []),
                     maximumStates: maximumStates, checking: checking,
                     stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability, emit: emit)
             }
-            public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: Int,
-                checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
+            public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: \(nativeIntType),
+                checking: ModelChecks<Property>, stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
                 emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
                 switch selectedView {
                 \(viewRuns.joined(separator: "\n"))
@@ -190,7 +190,7 @@ extension NativeSwiftEmitter {
                 }
             }
             public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
-                atLevel level: Int) throws -> TLAStateProjection {
+                atLevel level: \(nativeIntType)) throws -> TLAStateProjection {
                 switch selectedView {
                 \(viewProjections.joined(separator: "\n"))
                 case nil:
@@ -248,8 +248,8 @@ func verifyOrderedIntValidationOutput(_ declarations: [DeclSyntax], model: Macro
             return try \(modelName).initialOutcomes(\(arguments))
         }
         """), matches(actual("runValidation", firstParameter: "initialOutcomes"), expected: """
-        public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: Int,
-            checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
+        public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: \(nativeIntType),
+            checking: ModelChecks<Property>, stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
             emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
             switch selectedView {
             case nil:

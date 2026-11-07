@@ -111,7 +111,7 @@ struct GuardedStepExecutionTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/CheckedGuardOverflowSwiftWitness.txt")
             .standardizedFileURL
-        let expected = Array(Parser.parse(source: try String(contentsOf: swiftWitness, encoding: .utf8))
+        let expected = Array(Parser.parse(source: nativeWitnessSource(try String(contentsOf: swiftWitness, encoding: .utf8)))
             .tokens(viewMode: .sourceAccurate)).map(\.text).filter { !$0.isEmpty }
         #expect(Array(action.tokens(viewMode: .sourceAccurate)).map(\.text).filter { !$0.isEmpty } == expected)
         let invertedGuard = action.description.replacingOccurrences(of: "> 0) else", with: "< 0) else")

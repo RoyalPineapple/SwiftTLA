@@ -1,5 +1,22 @@
 @testable import SwiftTLA
 import Testing
+import SwiftParser
+import SwiftSyntax
+@testable import SwiftTLAPlugin
+
+// Retained visitors use unshadowed standard scalars; expand only that notation.
+func nativeWitnessSource(_ source: String) -> String {
+  Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map { token in
+    let type: String
+    switch token.tokenKind {
+    case .identifier("Int"): type = nativeIntType
+    case .identifier("Bool"): type = nativeBoolType
+    case .identifier("String"): type = nativeStringType
+    default: return token.description
+    }
+    return "\(token.leadingTrivia)\(type)\(token.trailingTrivia)"
+  }.joined()
+}
 
 func compiledValue(
   _ expression: StateExpr,

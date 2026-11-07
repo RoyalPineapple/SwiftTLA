@@ -52,8 +52,8 @@ extension NativeSwiftEmitter {
         }
         declarations += try nativeDeclarations("""
         public struct ValidationScenario: AssumptionValidationScenario {
-            public let name: String
-            public let displayName: String
+            public let name: \(nativeStringType)
+            public let displayName: \(nativeStringType)
             \(configured ? "public let configuration: Configuration" : "")
             public func evaluateAssumptions() throws -> AssumptionEvaluation {
                 try \(model.typeName).evaluateAssumptions(\(parameterCall))

@@ -3,6 +3,14 @@ import SwiftSyntaxBuilder
 import SwiftBasicFormat
 import SwiftTLA
 
+// Resolve scalar types through the library, outside user model declarations.
+let nativeIntTypeTokens = ["SwiftTLA", ".", "TLAValue", ".", "IntegerLiteralType"]
+let nativeBoolTypeTokens = ["SwiftTLA", ".", "TLAValue", ".", "BooleanLiteralType"]
+let nativeStringTypeTokens = ["SwiftTLA", ".", "TLAValue", ".", "StringLiteralType"]
+let nativeIntType = nativeIntTypeTokens.joined()
+let nativeBoolType = nativeBoolTypeTokens.joined()
+let nativeStringType = nativeStringTypeTokens.joined()
+
 /// Translates the resolved compiler program into typed Swift expressions.
 /// This object exists only while expanding the macro.
 struct NativeSwiftEmitter {
@@ -95,9 +103,9 @@ struct NativeSwiftEmitter {
 
     func swiftType(_ type: CompiledValueType) throws -> String {
         switch type {
-        case .int: return "Int"
-        case .bool: return "Bool"
-        case .string: return "String"
+        case .int: return nativeIntType
+        case .bool: return nativeBoolType
+        case .string: return nativeStringType
         case .modelValue: return "_ModelValue"
         case .controlLocation: return "_ControlLocation"
         case .named(let name): return name
@@ -189,7 +197,7 @@ struct NativeSwiftEmitter {
             throw unsupported("literal of \(name)")
         }
         switch (value, type) {
-        case (.integer(let value), .int): return value == Int.min ? "Int.min" : String(value)
+        case (.integer(let value), .int): return value == Int.min ? "\(nativeIntType).min" : String(value)
         case (.boolean(let value), .bool): return String(value)
         case (.string(let value), .string): return String(reflecting: value)
         case (.constant(let value), .modelValue):
@@ -293,11 +301,11 @@ struct NativeSwiftEmitter {
         case .controlLocation, .modelValue: body = "return lhs.rawValue < rhs.rawValue"
         case .finite(let members):
             let cases = members.indices.map { "case .\(finiteCaseName(members, index: $0)): return \($0)" }.joined(separator: "\n")
-            body = "func rank(_ value: \(name)) -> Int { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
+            body = "func rank(_ value: \(name)) -> \(nativeIntType) { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
         case .named(let name):
             if let members = program.enums.cases[name] {
                 let cases = members.enumerated().map { "case .`\($0.element.name)`: return \($0.offset)" }.joined(separator: "\n")
-                body = "func rank(_ value: \(name)) -> Int { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
+                body = "func rank(_ value: \(name)) -> \(nativeIntType) { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
             } else { throw unsupported("ordering opaque type \(name)") }
         case .array(let element):
             body = "return lhs.lexicographicallyPrecedes(rhs, by: \(try ordering(element)))"
@@ -327,7 +335,7 @@ struct NativeSwiftEmitter {
         case .union, .oneOf: body = try unionOrdering(type)
         case .unknown: throw unsupported("unresolved structural order")
         }
-        return "{ (lhs: \(name), rhs: \(name)) -> Bool in\n\(body)\n}"
+        return "{ (lhs: \(name), rhs: \(name)) -> \(nativeBoolType) in\n\(body)\n}"
     }
 
     private mutating func resolvedCall(
@@ -409,7 +417,7 @@ struct NativeSwiftEmitter {
             let resultType = try swiftType(resolved.resultType)
             let pendingReturns = hasPendingReturns
                 ? """
-                var _pendingReturns: [(depth: Int, apply: (\(resultType)) throws -> \(resultType)?)] = []
+                var _pendingReturns: [(depth: \(nativeIntType), apply: (\(resultType)) throws -> \(resultType)?)] = []
                 // Continuations can schedule more returns; release them on failure too.
                 defer { _pendingReturns.removeAll() }
                 """ : ""
@@ -627,9 +635,9 @@ struct NativeSwiftEmitter {
         case .checkingLevel:
             if let checkingLevelName { return checkingLevelName }
             guard let context = checkingContextName else {
-                return "(try { () throws -> Int in throw NativeMachineEvaluationError.checkingContextRequired }())"
+                return "(try { () throws -> \(nativeIntType) in throw NativeMachineEvaluationError.checkingContextRequired }())"
             }
-            return "(try { () throws -> Int in guard let level = \(context)?.level else { throw NativeMachineEvaluationError.checkingContextRequired }; return level }())"
+            return "(try { () throws -> \(nativeIntType) in guard let level = \(context)?.level else { throw NativeMachineEvaluationError.checkingContextRequired }; return level }())"
         case .checkingDiameter:
             guard let checkingDiameterName else { throw unsupported("checking diameter outside a postcondition") }
             return checkingDiameterName
@@ -643,7 +651,7 @@ struct NativeSwiftEmitter {
             guard let printTOutputName else { throw unsupported("PrintT outside generated evaluation") }
             let value = try expression(id.children[0], state: state, substitutions: substitutions,
                 activeFunctions: activeFunctions)
-            return "(try { () throws -> Bool in let printed = \(value); \(printTOutputName).append(printed.tlaValue); return true }())"
+            return "(try { () throws -> \(nativeBoolType) in let printed = \(value); \(printTOutputName).append(printed.tlaValue); return true }())"
         case .nextState:
             guard state != "nextState." else { throw unsupported("nested successor-state read") }
             return try expression(id.children[0], state: "nextState.", substitutions: substitutions,
@@ -731,12 +739,12 @@ struct NativeSwiftEmitter {
                 code = try expression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
             }
             let name = "_arithmetic\(statements.count)"
-            statements.append("let \(name): Int = \(code)")
+            statements.append("let \(name): \(nativeIntType) = \(code)")
             values.append(name)
         }
         guard let result = values.last else { throw unsupported("arithmetic result") }
         return """
-        (try { () throws -> Int in
+        (try { () throws -> \(nativeIntType) in
             \(statements.joined(separator: "\n"))
             return \(result)
         }())
@@ -773,7 +781,7 @@ struct NativeSwiftEmitter {
             let bindings = domainFirst
                 ? [functionBinding, boundsBinding] : [boundsBinding, functionBinding]
             return """
-            (try { () throws -> Bool in
+            (try { () throws -> \(nativeBoolType) in
                 \(bindings.joined(separator: "\n"))
                 guard !_domainFunction.isEmpty else { return _domainBounds.0 > _domainBounds.1 }
                 let _domainLast = _domainBounds.0.addingReportingOverflow(_domainFunction.count - 1)
@@ -862,15 +870,15 @@ struct NativeSwiftEmitter {
                     substitutions: substitutions, activeFunctions: activeFunctions)
                 let predicate = try emit(1)
                 return """
-                (try { () throws -> Bool in
+                (try { () throws -> \(nativeBoolType) in
                     guard let bounds = try SwiftTLA._NativeMachineOperations.integerRangeBounds(\(lower), \(upper)) else { return \(all) }
-                    return try bounds.\(method) { (\(binder(binding)): Int) throws -> Bool in \(predicate) }
+                    return try bounds.\(method) { (\(binder(binding)): \(nativeIntType)) throws -> \(nativeBoolType) in \(predicate) }
                 }())
                 """
             }
             let domain = try emit(0)
             let predicate = try emit(1)
-            return "(try \(domain).sorted(by: \(try ordering(element))).\(method) { (\(binder(binding)): \(try swiftType(element))) throws -> Bool in \(predicate) })"
+            return "(try \(domain).sorted(by: \(try ordering(element))).\(method) { (\(binder(binding)): \(try swiftType(element))) throws -> \(nativeBoolType) in \(predicate) })"
         }
         switch expression {
         case .setLiteral:
@@ -900,7 +908,7 @@ struct NativeSwiftEmitter {
                 let predicate = try membershipPredicate(node.children[1], state: state,
                     substitutions: substitutions, activeFunctions: activeFunctions, membershipFunctions: [])
                 return """
-                (try { () throws -> Bool in
+                (try { () throws -> \(nativeBoolType) in
                     \(needsDepth ? "var _nativeDepth = 0" : "")
                     \(predicate.declaration)
                     let contains = \(predicate.call)
@@ -930,7 +938,7 @@ struct NativeSwiftEmitter {
         case .integerRange: return "(try SwiftTLA._NativeMachineOperations.integerRange(\(try emit(0)), \(try emit(1))))"
         case .setFilter(let binding):
             guard case .set(let element) = node.resultType else { throw unsupported("set filter") }
-            return "Set<\(try swiftType(element))>(try \(try emit(0)).sorted(by: \(try ordering(element))).filter { (\(binder(binding)): \(try swiftType(element))) throws -> Bool in \(try emit(1)) })"
+            return "Set<\(try swiftType(element))>(try \(try emit(0)).sorted(by: \(try ordering(element))).filter { (\(binder(binding)): \(try swiftType(element))) throws -> \(nativeBoolType) in \(try emit(1)) })"
         case .setMap(let binding):
             guard case .set(let element) = node.resultType else { throw unsupported("set map") }
             guard case .set(let input) = childType(1) else { throw unsupported("set map domain") }
@@ -967,7 +975,7 @@ struct NativeSwiftEmitter {
         case .setSum:
             let functionCode = try emit(0)
             let domainCode = try emit(1)
-            return "(try { () throws -> Int in let mapping = \(functionCode); let members = \(domainCode); return try SwiftTLA._NativeMachineOperations.sum(try members.map { try SwiftTLA._NativeMachineOperations.functionValue(mapping, at: $0) }) }())"
+            return "(try { () throws -> \(nativeIntType) in let mapping = \(functionCode); let members = \(domainCode); return try SwiftTLA._NativeMachineOperations.sum(try members.map { try SwiftTLA._NativeMachineOperations.functionValue(mapping, at: $0) }) }())"
         default: throw unsupported("collectionExpression operation")
         }
     }
@@ -1000,7 +1008,7 @@ struct NativeSwiftEmitter {
         activeFunctions: Set<ResolvedFunctionID>, membershipFunctions: Set<ResolvedFunctionID>
     ) throws -> (declaration: String, call: String) {
         guard case .set(let element) = node.resultType else { throw unsupported("membership set") }
-        let predicateType = "(\(try swiftType(element))) -> Bool"
+        let predicateType = "(\(try swiftType(element))) -> \(nativeBoolType)"
         let name = "_membershipPredicate\(nextMembershipPredicate)"
         nextMembershipPredicate += 1
         func emit(_ expression: CompiledExpression) throws -> String {
@@ -1138,7 +1146,7 @@ struct NativeSwiftEmitter {
         case .sequenceSelect(let binding):
             let source = childType(0)
             let elements = try nativeSequenceElements(emit(0), source: source)
-            return "(try \(elements).filter { (\(binder(binding))) throws -> Bool in \(try emit(1)) })"
+            return "(try \(elements).filter { (\(binder(binding))) throws -> \(nativeBoolType) in \(try emit(1)) })"
         case .tupleAccess(let index):
             let source = childType(0)
             if case .tuple = source {
@@ -1180,7 +1188,7 @@ struct NativeSwiftEmitter {
             """
         case .tupleLength:
             if case .tuple(let elements) = childType(0) {
-                return "(try { () throws -> Int in _ = \(try emit(0)); return \(elements.count) }())"
+                return "(try { () throws -> \(nativeIntType) in _ = \(try emit(0)); return \(elements.count) }())"
             }
             let source = childType(0)
             return "(\(try nativeSequenceElements(emit(0), source: source)).count)"
@@ -1238,18 +1246,18 @@ struct NativeSwiftEmitter {
             case .dictionary: return "Set(\(try emit(0)).keys)"
             case .array: return "SwiftTLA._NativeMachineOperations.sequenceDomain(\(try emit(0)))"
             case .tuple(let values):
-                let domain = values.isEmpty ? "Set<Int>()" : "Set(1...\(values.count))"
-                return "(try { () throws -> Set<Int> in _ = \(try emit(0)); return \(domain) }())"
+                let domain = values.isEmpty ? "Set<\(nativeIntType)>()" : "Set(1...\(values.count))"
+                return "(try { () throws -> Set<\(nativeIntType)> in _ = \(try emit(0)); return \(domain) }())"
             case .record(let fields), .nominalRecord(_, let fields):
-                let domain = "Set<String>([\(fields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
-                return "(try { () throws -> Set<String> in _ = \(try emit(0)); return \(domain) }())"
+                let domain = "Set<\(nativeStringType)>([\(fields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
+                return "(try { () throws -> Set<\(nativeStringType)> in _ = \(try emit(0)); return \(domain) }())"
             case .oneOf(let first, let second):
                 guard let firstFields = first.recordFields, let secondFields = second.recordFields else {
                     throw unsupported("DOMAIN")
                 }
-                let firstDomain = "Set<String>([\(firstFields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
-                let secondDomain = "Set<String>([\(secondFields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
-                return "(try { () throws -> Set<String> in switch \(try emit(0)) { case .first(_): return \(firstDomain); case .second(_): return \(secondDomain) } }())"
+                let firstDomain = "Set<\(nativeStringType)>([\(firstFields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
+                let secondDomain = "Set<\(nativeStringType)>([\(secondFields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
+                return "(try { () throws -> Set<\(nativeStringType)> in switch \(try emit(0)) { case .first(_): return \(firstDomain); case .second(_): return \(secondDomain) } }())"
             default: throw unsupported("DOMAIN")
             }
         case .functionLiteral(let binding):

@@ -35,13 +35,13 @@ extension NativeSwiftEmitter {
                 body = "return \(value)"
             }
             declarations.append("""
-            func _predicate\(ordinal(for: id))() throws -> Bool {
+            func _predicate\(ordinal(for: id))() throws -> \(nativeBoolType) {
                 \(body)
             }
             """)
         }
         return """
-        (try { () throws -> Bool in
+        (try { () throws -> \(nativeBoolType) in
             \(declarations.joined(separator: "\n"))
             return try _predicate\(ordinal(for: root))()
         }())
