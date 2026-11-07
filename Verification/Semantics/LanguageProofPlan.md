@@ -202,6 +202,9 @@ The remaining inventory continues alongside it; it does not justify another unbo
 - [x] M0a Extend the existing integer-enumeration guard to unbounded sequence enumeration.
   Propagate the original capability error through generated and compiled initial collection.
   This local recovery result does not complete the observation contract below.
+- [x] M0b Propagate finite collection representation limits through the same branch handler.
+  Keep powerset, range and function-space capacity errors out of completed model-failure observations.
+  The measured baseline, focused repair result and ordered-history contract appear below. This does not complete the observation contract.
 - [ ] M0.1 Define complete observations in the existing outcome rules.
   Include state identity, labels, disabled behavior, failure site, payload, preceding bindings and selected outcomes.
   Separate logical domains, enumeration capability, execution limits and model failures.
@@ -219,6 +222,58 @@ Owners: [outcome rules](InitializationOutcomeRules.tla), [initialization histori
 [source witness](../../Sources/SwiftTLAPlugin/OrderedIntSourceSyntaxCheck.swift) and [compiled checks](../../Sources/SwiftTLA/StraightLineAssignmentCheck.swift).
 
 Exit: the pilot theorem has explicit premises and observations. Failure sets cannot silently replace an observable event trace.
+
+### Ordered initial observation contract 7 November 2026
+
+`InitializationComposition` now defines `InitialObservation` with separate indexed state and failure histories and their counts.
+Indices start at one. An empty history has count zero and an empty function domain.
+The carrier retains order and multiplicity for finite returned observations. It also represents intermediate prefixes.
+Total final bindings and complete source outcomes remain separate requirements.
+Infinite logical domains remain accepted, outside this finite returned-history carrier.
+Their capability and checking results still require correspondence.
+
+`InitialSetProjection` supplies the existing set-based result. `InitialFirstFailure` supplies its derived first-record view.
+The new extension postcondition preserves every earlier entry and appends one event at the next index.
+The indexed-append obligations retain that postcondition and both projections.
+Two negative obligations retain equal set and first-record views despite a dropped repeated occurrence or reordered later events.
+These abstract counterexamples expose information loss. They do not claim that a particular source program produces repeated events.
+The new formal obligations await pinned hosted execution. Earlier proof receipts do not establish them.
+Every existing definition and theorem outside the inserted block remains unchanged.
+
+The local runtime argument uses documented Swift control flow, Array value semantics and `append` on normally returning calls:
+
+1. These callback counts describe direct calls by one handler invocation.
+   If its visit returns normally, the handler does not invoke its callback directly.
+   A caught Native error outside the excluded cases invokes the nonthrowing callback exactly once.
+   A mapped Eval error follows the same path after its existing conversion.
+   Unmapped Eval errors and other thrown errors propagate without a callback.
+2. The excluded cases are integer/sequence non-enumerability, collection cardinality overflow and an unrepresentable powerset.
+   Both catch arms rethrow the original error, preserving its Native or Eval channel.
+   An inner recovery returns normally after its callback, so an enclosing handler does not observe that same throw again.
+   An excluded error propagates through enclosing handlers without becoming a model event.
+3. Each actual compiled callback constructs one event and appends it to its local failure array.
+   The emitted callbacks do the same. Neither collector sorts, deduplicates or removes failure entries.
+   For a defined event projection `p`, formal entry `i` is `p(failures[i - 1])`.
+   Array append therefore satisfies the indexed extension postcondition with unchanged earlier entries.
+   This derives local retention for the actual callback stream without assuming that set equality retains its history.
+4. `InitialEvaluationOutcomes` stores both arrays as values. Its first-failure properties read `failures.first`.
+   The public generated initializer forwards the failure array unchanged and maps states in their existing order.
+   Thus this transport preserves counts, positions and repeated occurrences.
+   Event construction stores the lazy prefix closure. It does not perform formal conversion during recovery.
+
+This manual code-case argument does not derive which source branches reach callbacks or their order.
+It also does not prove site/value projections, generated symbol binding, complete state assembly or TLA failure histories.
+The event projection must be defined. Projection errors and host execution limits remain separate owned boundaries.
+Recursion limits, checking context, sampling and other capability classifications remain open.
+M0.1, M0.2, M2.3 and whole-language preservation remain open.
+
+The existing routing owner now invokes actual powerset, range and function-space operations through both error channels.
+With production bytes unchanged, one test reported twelve issues: six capacity callbacks and six missing expected throws.
+The earlier internal-shape propagation check still passed. The first launch failed in shell setup and executed no tests.
+The repair changes the shared handler rather than collection bounds, source acceptance or evaluation algorithms.
+The guarded repair run passed thirty-three tests in six suites on all 1,201 unchanged captured inputs.
+Existing sibling states, ordered model failures, membership, sampling and unbounded-domain controls passed.
+Only this plan changed after that run. These local results do not establish hosted admission or the new formal obligations.
 
 ## M1 Literal read and checked addition
 

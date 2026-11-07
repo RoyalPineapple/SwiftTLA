@@ -1,12 +1,12 @@
 # Initialization outcomes and composition
 
-Status: candidate follow-up to failed `bac1d6cd`, based on admitted `2f0098a`.
+Historical typed-initialization checkpoint: follow-up to failed `bac1d6cd`, based on admitted `2f0098a`.
 The failed hosted attempt and measured repair are recorded in [OrderedIntAssignmentFamily.md](OrderedIntAssignmentFamily.md).
-Current local checks passed 599 tests across all 55 selected suites.
+The local checks at that checkpoint passed 599 tests across all 55 selected suites.
 Eight stored outputs now retain the measured typed `Init` predicates; their other definitions remain exact.
 The canonical refinement owner checks the complete specialized initial relation.
-The initialization rules and production compiler are unchanged by this follow-up.
-The pinned `--nofp` batch proved all 26 rows and 3,530 obligations.
+The initialization rules and production compiler were unchanged by that follow-up.
+Its pinned `--nofp` batch proved all 26 rows and 3,530 obligations.
 The seven affected legacy modules separately proved 2,450 obligations.
 All 158 snapshots and both runner inputs matched the current proof inputs.
 These local passes do not establish hosted admission.
@@ -74,7 +74,26 @@ The mathematical value universe and candidate domains need not be finite.
 Native enumeration capability and termination require separate arguments.
 A separate storage rule preserves the first failure's site and payload.
 Its negative theorem shows that retaining the same first record does not prove preservation of all later events.
-The public native result stores the first failure, not the complete event set.
+The public native result now stores the complete list of reached failure events, with a lazy projection of each preceding prefix.
+Its first-failure properties select the first list entry. They do not replace that list.
+
+## Ordered observation contract
+
+The existing set results omit order and multiplicity.
+`InitialObservation` now records finite state and failure histories, each with its count.
+`InitialSetProjection` supplies the earlier state and failure sets. `InitialFirstFailure` supplies the earlier first-record view.
+The history carrier permits repeated events. It does not assume that a particular compiler route produces repetitions.
+Two negative obligations distinguish a dropped repeated occurrence and a swap of later events from equal set/first projections.
+The new indexed-append obligations connect an independent extension postcondition to the existing `HistoryAppend` construction.
+These new proof obligations await pinned hosted execution. The historical proof totals above do not cover them.
+
+This contract describes finite returned observations, including their prefix forms.
+Complete state domains, source traversal order, error classification, event projections and generated TLA observations remain separate obligations.
+Infinite logical domains remain accepted. A capability error does not establish a completed initial observation.
+
+The shared branch handler now propagates native collection count limits through both error channels.
+This distinguishes representational limits from completed model failures without changing collection bounds.
+Recursion limits, checking context, sampling and other capability classifications remain open.
 
 ## Current implementation links
 
