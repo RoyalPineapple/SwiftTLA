@@ -533,6 +533,10 @@ This result supplies a child rule. Complete initializer state assembly remains i
   Five actual negative literal outputs kept identical token text while changing prefix-minus tokens to binary operators.
   Correct emitted positives and all mutation guards passed on unchanged production. The guarded repair passed 55 tests in five existing suites.
   This implementation task does not complete L4 or establish general parser-recovery soundness.
+- [x] L4b Check parsed statements for recognized scalar Int action captures and writes.
+  The existing division owner executed one test with one accepted malformed negative operand under unchanged production.
+  Correct output, unique mutation, token-text equality, kind difference and local recovered-binding guards passed.
+  The guarded repair passed 88 tests in seven existing suites. This is implementation closure only; unsupported value routes and general parser soundness remain open.
 - [ ] L5 Instantiate the literal child cases in the expression and initializer composition modules.
   Record the exact premises that these results discharge.
 - [ ] L6 Retain the proof inputs and existing owner regressions for the exact implementation revision.
@@ -558,6 +562,16 @@ They rejected existing configured corpus initial functions. The declaration fact
 Those compile failures supply no executed rejection evidence. No parser limit, accepted DSL, numerical emitter or checker template changed.
 General recovery, printing, token grammar, scope/type/helper binding and other directly constructed syntax routes remain open.
 No new formal rule or proof execution is claimed by this repair.
+
+The separate action-output baseline exposed the same text-only false acceptance in a captured divide operand.
+The actual corrupted local `VariableDeclSyntax` reports an error, while the original generated function is error-free.
+The action owner now retains each part's first statement from the existing parsed token tree.
+For values recognized by its existing direct or arithmetic Int rules, captures and writes require a parsed variable declaration or conditional without recovery errors.
+This guard leaves all value, target, frame and continuation checks in place. It adds no parser, evaluator or fixture and does not inspect entire configured declarations.
+Other value shapes, parser-library fidelity and full output interpretation retain separate obligations.
+The guarded repair passed 88 tests in seven existing suites after a 1241.14-second build, with all 1,201 captured inputs unchanged.
+The whole 95954-byte log has SHA256 `93e480ae2a1c81fb848ef2eddaec80a0d5251f3be45fa2e15bdb562b46d2b79b`. Only proof-status documentation changed afterward.
+These receipts close L4b as an implementation task. They do not close L4, E LIT, a six-link row or hosted admission.
 
 ### Scalar literal code-case result 7 November 2026
 

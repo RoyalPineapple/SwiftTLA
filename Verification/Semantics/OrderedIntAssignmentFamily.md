@@ -310,6 +310,11 @@ The attempted blanket parser-error guards rejected configured corpus members bef
 The declaration factory, integer emitter and checker template remain unchanged from `6f7702cc`.
 This token comparison does not establish general recovery, printing, grammar or symbol binding. Those obligations remain explicit below.
 
+The separate action-output owner now checks the parsed first statement for recognized scalar Int captures and writes.
+Its existing division baseline accepted malformed unary-minus syntax despite a parser-error-marked capture declaration; correct output and mutation guards passed.
+The guard reuses the existing direct/arithmetic Int recognizers and preserves the earlier value and continuation checks. The guarded repair passed 88 tests in seven existing suites; this is local regression evidence.
+Unsupported value shapes, whole-function grammar and parser-library soundness remain separate obligations.
+
 Induction over these declarations preserves each completed subtree value.
 Swift `try` stops the expression at the first reached throwing declaration.
 Thus a failed left subtree prevents evaluation of the right subtree and parent.
