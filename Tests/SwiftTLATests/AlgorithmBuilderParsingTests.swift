@@ -1674,9 +1674,59 @@ import SwiftTLAMacros
             let count = try #require(TLAStateProjection.Token(validating: "count"))
             #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
         }
+
+        let dependentCases: [(Int, String, Int?, [Int]?)] = [
+            (0, "count + 1", 1, nil),
+            (.max, "count + 1", nil, [.max, 1]),
+            (.max, "1 + count", nil, [1, .max]),
+            (.min, "count + (-1)", nil, [.min, -1]),
+            (.max - 1, "(count + 1) + (count + 2)", nil, [.max - 1, 2]),
+            (.max, "(count + 1) + (count + 2)", nil, [.max, 1]),
+            (-2, "(count + 1) + (count + 2)", -1, nil),
+            (0, "(count + 1) + (count + 2)", 3, nil)
+        ]
+        for (initial, expression, expected, operands) in dependentCases {
+            for inAlgorithm in [false, true] {
+                let declarations = """
+                let count = scope.sharedVar(initial: \(initial))
+                let copied = scope.sharedVar(initial: \(expression))
+                """
+                let body = inAlgorithm ? """
+                {
+                    let algorithm = Algorithm(scoped: { scope in
+                        \(declarations)
+                    })
+                    algorithm
+                }
+                """ : "{ scope in \(declarations) }"
+                let parsed = try SpecParser.parseSpecClosure(named: "SharedInitializer",
+                    parseSpecTestClosure(body)).compile()
+                let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: parsed))
+                let outcomes = try CompiledRuntime(program: program).initialOutcomes()
+                let count = try #require(TLAStateProjection.Token(validating: "count"))
+                let copied = try #require(TLAStateProjection.Token(validating: "copied"))
+                if let expected {
+                    #expect(outcomes.failures.isEmpty)
+                    try #require(outcomes.states.count == 1)
+                    let projection = try outcomes.states[0].projection(using: program.layout)
+                    #expect(projection.value(for: count) == .int(initial))
+                    #expect(projection.value(for: copied) == .int(expected))
+                } else {
+                    let operands = try #require(operands)
+                    #expect(outcomes.states.isEmpty)
+                    try #require(outcomes.failures.count == 1)
+                    let failure = outcomes.failures[0]
+                    #expect(failure.failure == .integerOverflow(.addition, operands: operands))
+                    #expect(failure.site == .initializer(1))
+                    #expect(try failure.formalBindingsBeforeFailure() == TLAStateProjection(validating: [
+                        .init(token: count, value: .int(initial))
+                    ]))
+                }
+            }
+        }
     }
 
-    @Test("parsed and built literal initializers preserve their values and compilation identity")
+    @Test("parsed and built literal initializers and state reads preserve their values and compilation identity")
     func parsedAndBuiltLiteralInitializersShareIdentity() throws {
         func built<Value: TLAValueType>(_ value: Value) -> TLASpec {
             TLASpec("LiteralInitializer") { scope in
@@ -1701,7 +1751,10 @@ import SwiftTLAMacros
         for (source, specification, expected) in cases {
             let built = try specification.compile()
             for inAlgorithm in [false, true] {
-                let declaration = "let count = scope.sharedVar(initial: \(source))"
+                let declaration = """
+                let count = scope.sharedVar(initial: \(source))
+                let copied = scope.sharedVar(initial: count)
+                """
                 let body = inAlgorithm ? """
                 {
                     let algorithm = Algorithm(scoped: { scope in
@@ -1712,15 +1765,24 @@ import SwiftTLAMacros
                 """ : "{ scope in \(declaration) }"
                 let closure = try parseSpecTestClosure(body)
                 let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
-                if !inAlgorithm { #expect(parsed.identity == built.identity) }
-                #expect(parsed.layout.variables.count == 1)
+                if !inAlgorithm {
+                    let literal = try SpecParser.parseSpecClosure(named: "LiteralInitializer",
+                        parseSpecTestClosure("{ scope in let count = scope.sharedVar(initial: \(source)) }")).compile()
+                    #expect(literal.identity == built.identity, "literal initializer \(source)")
+                }
+                #expect(parsed.layout.variables.count == 2)
                 #expect(parsed.semantics.behavior.actions.isEmpty)
-                let outcomes = try CompiledRuntime(compilation: parsed).initialOutcomes()
+                let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: parsed))
+                let outcomes = try CompiledRuntime(program: program).initialOutcomes()
                 #expect(outcomes.failures.isEmpty)
                 try #require(outcomes.states.count == 1)
                 let count = try #require(TLAStateProjection.Token(validating: "count"))
-                #expect(try outcomes.states[0].projection(using: parsed.layout).value(for: count) == expected,
+                let copied = try #require(TLAStateProjection.Token(validating: "copied"))
+                let projection = try outcomes.states[0].projection(using: parsed.layout)
+                #expect(projection.value(for: count) == expected,
                     "\(inAlgorithm ? "Algorithm" : "spec") initializer \(source)")
+                #expect(projection.value(for: copied) == expected,
+                    "\(inAlgorithm ? "Algorithm" : "spec") state read of \(source)")
             }
         }
     }
@@ -1729,7 +1791,7 @@ import SwiftTLAMacros
     func parsedInitialDomainsRetainStateDependencies() throws {
         let closure = try parseSpecTestClosure("""
         { scope in
-            let limit = scope.sharedVar(_name: "limit", initial: 2)
+            let limit = scope.sharedVar(_name: "limit", in: 1...2)
             let choice = scope.sharedVar(_name: "choice", in: Where(SetExpr<Int>.literal(1, 2, 3)) { value in
                 value <= limit
             })
@@ -1737,12 +1799,19 @@ import SwiftTLAMacros
         """)
         let parsed = SpecParser.parseSpecClosure(named: "DependentInitialDomain", closure)
         let compilation = try parsed.compile()
-        let choice = try #require(compilation.layout.testVariableID(named: "choice"))
-        let states = try CompiledRuntime(compilation: compilation).initialStates()
-
-        #expect(Set(try states.map {
-            try $0.value(for: choice).rendered(using: compilation.layout)
-        }) == [.int(1), .int(2)])
+        let limit = try #require(TLAStateProjection.Token(validating: "limit"))
+        let choice = try #require(TLAStateProjection.Token(validating: "choice"))
+        let outcomes = try CompiledRuntime(compilation: compilation).initialOutcomes()
+        #expect(outcomes.failures.isEmpty)
+        #expect(outcomes.states.count == 3)
+        let pairs = try outcomes.states.map { state -> TLAValue in
+            let projection = try state.projection(using: compilation.layout)
+            return .tuple([try #require(projection.value(for: limit)),
+                           try #require(projection.value(for: choice))])
+        }
+        #expect(Set(pairs) == [.tuple([.int(1), .int(1)]),
+                              .tuple([.int(2), .int(1)]),
+                              .tuple([.int(2), .int(2)])])
     }
 
     @Test("unsupported variable initializers fail during parsing")

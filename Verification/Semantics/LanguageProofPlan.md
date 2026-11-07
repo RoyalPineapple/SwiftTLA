@@ -170,7 +170,7 @@ tuples and records recursively; a row does not silently replace them with intege
 | Route | Source forms and placement to reconcile | Distinct implementation link / parent consumer | Current limit |
 | --- | --- | --- | --- |
 | R01 Scalars | Integer spellings and signs, Bool/String literals, enum cases and bounds | `SourceIntegerLiteral`, `decodeEnumCase`, `decodeSwiftIntegerBound`; expression child rules | Literal regressions exist; source binding, representation and kernel correspondence open |
-| R02 Reads | Scoped state/parameter/local reads, captures and bound values | `TypedFacadeScope`, layout IDs, binder scopes; `OrderedIntExpressionRule` read cases | Names repaired; arbitrary lexical ownership and prefix availability unproved |
+| R02 Reads | Scoped state/parameter/local reads, captures and bound values | `TypedFacadeScope`, layout IDs, binder scopes; `OrderedIntExpressionRule` read cases | Root Int initializer binding/availability has a scoped code-case argument below; arbitrary lexical ownership, captures and full correspondence remain open |
 | R03 Arithmetic | Plain Swift constant folding separately from typed formal `+ - * / %` and `integerDivided` | `decodeSwiftIntegerValue` versus formal operation lowering; `OrderedArithmeticFailures` | Overload/placement reconciliation and full target-Int/backend range open |
 | R04 Boolean/conditional | `!`, `&&`, `||`, comparisons and supported conditional expressions | Lazy children, skipped failures; Boolean and conditional composition rules | Actual source/output and complete evaluation observations unproved |
 | R05 Set construction | Closed Swift/SetExpr values separately from `SetExpr.literal` queries | `decodeTypedSetValue` versus `decodeTypedSetLiteral`; membership/Boolean parents | Purity, occurrence identity and admitted element types need explicit guards |
@@ -396,7 +396,14 @@ Complete these rows in order. Reuse the existing rules and checks.
 
 - [ ] M1.1 Complete all six links for E LIT.
 - [ ] M1.2 Complete all six links for E READ.
+- [x] M1.2a Derive the available typed root-state read child for the unshadowed, parameter-free scoped initializer route.
+  The [read-child argument](InitializationFamily.md#root-state-read-initializer-child) follows source handle binding, actual layout lookup, checked/resolved ID transport and mandatory dependency validation.
+  It derives current-prefix reads in the compiled runtime and native/TLA output rows, supplying the checked expression and typed-initialization consumers under the named interpretation conditions.
+  Its one-node plan and zero-prefix seed derive the checked read rule's premises explicitly. The existing copied-value and branching-correlation owners passed in the 63-test focused parser suite, using typed execution for the copied values. This manual result leaves captures, other placements and full E READ open.
 - [ ] M1.3 Complete all six links for E ADD.
+- [x] M1.3a Derive the call-free Int addition node case from its established child contracts.
+  The [addition-child argument](InitializationFamily.md#checked-addition-initializer-child) follows actual scheduling, checked helper/error transport and TLA expression guards into the checked `CombinedAdditionRule`.
+  Eight independent parser-context rows passed at two source placements, including nested failure precedence and retained before-prefix. This is a scoped manual code-case result with separate regression evidence; all six E ADD links, the full visitor mapping and complete TLA initial-event correspondence remain open.
 - [ ] M1.4 Derive `ExpressionPlan` from actual accepted input and actual compilation.
   Bind the physical visitor to the existing synchronized history proof. A supplied correct plan cannot replace this obligation.
 - [ ] M1.5 Prove the existing output checks are sound for these routes.

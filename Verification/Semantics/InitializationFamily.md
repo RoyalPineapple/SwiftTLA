@@ -527,6 +527,122 @@ The result is conditional on the named syntax, namespace, library and TLA interp
 Current full-width TLC execution, selected checking, generic output-checker soundness, complete mixed initializer event histories and whole-language preservation remain open.
 No new evaluator, observer, renderer oracle, theorem, fixture or test execution is introduced by this argument.
 
+### Root-state read initializer child
+
+Take the scoped source route with an already declared Int shared handle `r` and a distinct target declared with `scope.sharedVar(initial: r)`.
+Use the parameter-free, call-free, nonprojecting root-state route; the source/type/bounds and syntax interpretation conditions remain those above.
+The independent read meaning is `Success(prior[r])` when that Int binding is available. It reads exactly `r`, writes no expression state and reaches no model failure.
+The initializer, separately, binds its fresh target to that result.
+The prior Int value/type is an environment premise supplied by preceding initializer child rules, not an assumed read-evaluator result.
+
+**Source and ID.** The Algorithm parser extends `TypedFacadeScope` after the preceding shared declaration with `.variable(state.root)` and that declaration's shape.
+Its `value(for:)` and `shape(for:)` use the last matching source binding.
+For this unshadowed shared handle, `decodeTypedFacadeValue` therefore returns the actual shared root reference; it does not decode a parameter or constant.
+`typedFacadeValueType` supplies its Int shape to the target's initializer metadata, and `normalizedStateType` retains the primitive type spelling or explicit witness.
+This supplies the same `.int` type input used by the earlier literal/type transport argument.
+
+The lowerer's `.variable` case calls `value(named:scope:at:)`.
+With no parameter or local binder in this route, its binder branch does not intercept the name.
+Its layout lookup finds the unique declaration and produces `.stateVariable(rID)` before considering constants or operators.
+Layout ownership and unique declaration names follow from the same-source construction and normal-return uniqueness guard already used above.
+Thus the source read root supplies the actual ID; agreement of an arbitrary name map is not a new premise.
+
+**Typed resolution.** Checking the read against `.int` sees the referenced variable's persistent `.int` type.
+`canProjectRead(.int, to: .int)` returns true directly, and the checked type and computation type are both `.int` with no children.
+No conversion or projection wrapper is needed. The finishing pass retains that expression and target ID.
+At the resolver root, function context and captures are empty. Its expanded task copies the state-variable operation, ID, type and empty children.
+The occurrence-identity invariant ensures a cache hit for that immutable site has those same fields.
+The cache stores the read expression, not its value in any particular initial state; it cannot freeze the first branch's read value.
+
+**Available reached binding.** For the proper read leaf, `initializationReadEffect` has no child effects and inserts exactly `rID` into `effect.variables`.
+The mandatory resolved-program dependency validation requires that set to be a subset of the structurally initialized IDs before the target is inserted.
+The runtime prefix-domain induction above identifies those IDs with every reached pending pair's actual value-map domain.
+Consequently `rID` is present on every successful prefix reaching this read, including prefixes produced by different domain alternatives.
+The missing-variable branch is excluded by this derived invariant; it is not silently ignored or reclassified as a successful model outcome.
+
+**Actual value and outputs.** `CompiledRuntime` constructs the evaluator from that pending pair's immutable `values`.
+The evaluator's state-variable operation calls `variableValue(rID)`, which returns precisely that dictionary entry.
+For prior Int payload `m`, the actual result is therefore `.integer(m)` with no read-specific model failure.
+The target value case copies the prior map and updates only the fresh target, as in the literal argument.
+
+The native initializer emits the same ID's slot: `initialDeclarations` calls expression emission with an empty state prefix,
+and the state-variable branch calls `stateValue(rID, prefix: "")`, which selects `variable(rID)`.
+The previously derived slot/constructor/projection relation supplies `m` at that slot in each reached lexical prefix.
+No resolved function emission populates the native expression-value cache in this route.
+The read thus copies the current branch's value, and the existing initializer assembly retains it at the target ID.
+
+The actual TLA state-variable branch selects `stateNames[rID]` or the same layout ID's formal name.
+The ordinary `Init` call supplies no name override, so the emitted condition is `targetName = readName`.
+No choice, child or arithmetic site is present, giving no definedness wrapper or read failure record.
+For a fixed available prior with value `m` at `rID`, this equality has exactly candidate `{m}` at the fresh target.
+The optional Int bound predicate holds at `m` by the environment's target-Int typing, just as for the literal candidate.
+Under the stated name and TLA interpretation conditions this derives the same native and TLA child row, rather than assuming their agreement.
+
+**Parent use.** The read has a concrete one-node instance of the checked `ExpressionNodeRule`, rather than an assumed pair of matching evaluator histories.
+Take `count = 1`, `kinds[1] = "read"`, `reads[1] = rID`, unused `literals[1] = 0`, and unused `left[1] = right[1] = 0`.
+Project the prior onto its available Int keys `bound`, obtaining `bindings` with `rID` in `bound` and `bindings[rID] = m`.
+`CompletingPartialBindingsRetainsEveryBoundValue` supplies the total state `CompleteIntBindings(bound, bindings)`, retaining `m` at `rID`.
+These choices satisfy `ExpressionPlan`: the integer-domain assumptions put zero in range, and the read kind imposes no child-index constraint.
+Choose both zero-prefix histories to map index zero to `Success(0)`; their required equality and range facts follow directly.
+At index one the read branch supplies `Success(m)` without consulting either history or an unused child.
+`FixedInitializerRetainsItsOnlyCandidate` and `InitializerLeafRetainsCompleteStatesAndFailures` then give its fixed typed initializer row and exact fresh extension.
+That row supplies the read position of the existing checked `TypedInitialRelationsRetainAllStatesAndFailureEvents`.
+Other initializer children still supply their own premises; no complete read/capture family or whole-program theorem follows.
+
+The existing parser/value owner now checks a dependent copied state through both source placements.
+Its domain-dependency sibling checks complete `(limit, choice)` pairs across different limits, rather than only the projection onto choice.
+The focused parser suite passed all 63 tests, including typed-program execution of the copied values and all three correlated branch pairs.
+The literal-only compilation-identity check remains at its original boundary: a copied array may retain an explicit resolved-type witness where the runtime builder retains its Swift spelling, and those metadata representations contribute differently to identity.
+No production repair or new mathematical execution is claimed by this code-case argument.
+Captured parameters, local/procedure/process reads, arbitrary shadowing, all source placements, syntax/library/name/projection interpretation,
+checker kernels and complete mixed failure histories remain open. E READ and all six-link rows remain open.
+
+### Checked-addition initializer child
+
+Take the same available typed Int prefix and a formal addition whose two children are literal/read/add expressions.
+Closed raw Swift arithmetic that the parser folds belongs to the literal case instead.
+Use the established child contracts for their actual results or first reached failures, with no expression writes, calls or captures.
+These are compositional child hypotheses; agreement of the parent evaluators is not a premise.
+Syntax, overload selection, name/type interpretation and output-helper binding retain their named open conditions.
+
+The lowerer's `.add(lhs, rhs)` calls `scheduleBinary`, preserving left/right positions.
+Its common scheduler pushes the build continuation, then children in reverse onto a LIFO stack; successful child results are taken from the suffix in their original order.
+The Int type-checking case gives both children Int operand contexts and an Int result.
+For this route, resolution retains the operation, ordered children and Int types, as enforced by the existing source/resolved initializer checks.
+The full visitor-to-`ExpressionPlan` correspondence remains a separate obligation; this node case does not assume it has been proved.
+
+**Actual evaluation.** `.add.evaluatesRightOperandFirst` is false.
+The compiled evaluator schedules its finish task below the reversed operands, so the left child completes before the right child and the parent operation.
+Any throw leaves that evaluation before a later task executes.
+At finish, `.add.apply` removes the right result and then the left result, and calls `_NativeMachineOperations.add(lhs, rhs)` in that order.
+`nativeOperation` translates its overflow to the formal evaluator error without changing operation or operands.
+The native arithmetic emitter uses the same left-first order to produce sequential throwing `let` bindings, followed by the parent helper call.
+For this call-free initializer route the expression cache supplies no branch-specific precomputed value.
+A throwing child exits the emitted closure before its following bindings and parent operation run.
+
+The helper calls `lhs.addingReportingOverflow(rhs)` and returns its partial value only when the overflow flag is false.
+Otherwise `checked` throws exactly `integerOverflow(.addition, operands: [lhs, rhs])`.
+Under documented target Swift Int semantics this is the bounded-integer `SourceAdd` result, including signed underflow; no wrapped value is admitted as a success.
+Together with the child contracts, both actual evaluation paths therefore have three cases:
+left failure is propagated without evaluating right; successful left followed by right failure propagates that failure; two successes call checked addition once.
+For the first case the mathematical unused second outcome may be `Success(0)`; no executed right-child history is required.
+The checked `CombinedAdditionRule` consumes these child range facts and proves the same result as `GeneratedCombine`.
+
+**TLA expression row.** Ordered fallible-site collection appends left sites, right sites, then the parent addition site.
+The parent site carries `<<lhs, rhs>>` and the small-operands/exact signed bound guard of `GeneratedAddDefined`.
+`GeneratedAddGuardMatchesSource` proves that guard equivalent to representability for the two in-range child values.
+Earlier-site guards gate later failures, preserving the first reached expression failure under the stated TLA name/operator interpretation conditions.
+This supplies the expression result/guard/payload row. Complete TLA initializer branch events and their before-prefix correspondence are still open.
+
+For a successful result, the existing fixed initializer rule supplies the single fresh typed extension.
+For a failed result, the existing failed initializer and leaf rules supply no state and the reached failure at the unchanged prior prefix.
+The actual compiled/native initial recovery and immutable prefix argument supplies that prefix; the expression introduces no extra event or write.
+This node case can be used recursively with the literal/read children, while all syntax/visitor/output interpretation and complete-program obligations remain explicit.
+
+The existing parser-context owner checks eight independently specified rows at direct and registered-Algorithm placements through actual typed compilation.
+It checks successful values, operand order, underflow, left-before-right nested failure precedence, exact failure count/site and the full before-prefix.
+All 63 tests in the focused parser suite passed. These executions are regression evidence, not a new mathematical proof or hosted admission result.
+
 ### Source rewrite token classification
 
 `SpecExpressionMacro.expansion` calls `OrderedIntSourceSyntaxCheck.verifyRewrite` after the existing identity rewriter and before builder-witness emission.
