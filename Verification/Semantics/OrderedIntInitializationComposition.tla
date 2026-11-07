@@ -120,11 +120,26 @@ THEOREM LiteralIntInitializersComposeCompleteStatesAndFailures ==
             BY SMT
         <2>1. \A index \in 0..count : source[index] = generated[index]
             BY <1>2, <1>4, InitializationHistoriesRetainAllStatesAndFailures, SMT
-        <2>2. /\ SourceTerminal(source[count], sourceChecks)
-                    = GeneratedTerminal(generated[count], generatedChecks)
-              /\ SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
-            BY <1>2, <1>4, CompleteInitialStatesAndFailureEventsCompose, SMT
-        <2>. QED BY <2>1, <2>2
+        <2>2. count \in Nat /\ PrefixKeys(order, count) = Keys
+            BY SMT DEF InitializationOrder
+        <2>3. source[count] \in InitializationResults
+            BY <2>2, SMT DEF InitializationHistory
+        <2>4. \A index \in 0..count :
+            source[index].states \subseteq [PrefixKeys(order, index) -> Values]
+            BY <1>2, SourceHistoriesBindEveryPrefixKey, SMT
+        <2>5. source[count].states \subseteq [Keys -> Values]
+            BY <2>2, <2>4, SMT
+        <2>6. \A state \in source[count].states :
+            sourceChecks[state] = generatedChecks[state]
+            BY <2>5, SMT
+        <2>7. SourceTerminal(source[count], sourceChecks)
+            = GeneratedTerminal(source[count], generatedChecks)
+            BY <2>3, <2>6, TerminalSelectionRetainsEveryStateAndFailure, SMT
+        <2>8. SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
+            BY <2>5, SMT DEF SourceTerminal, SourceSelectedStates
+        <2>9. generated[count] = source[count]
+            BY <2>1, <2>2, SMT
+        <2>. QED BY <2>1, <2>7, <2>8, <2>9, SMT
     <1>. QED BY <1>5, <1>6
 
 THEOREM OrderedIntExpressionsSupplyPartialInitializationLeaves ==

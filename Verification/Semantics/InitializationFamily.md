@@ -439,7 +439,7 @@ Their numerical leaf argument is above; lexical scope, projection, library bindi
 constructs those literal rows explicitly for source and generated evaluation.
 `LiteralIntInitializersComposeCompleteStatesAndFailures` calls the existing `IntExpressionOutcomesSupplyInitializerOutcomes`
 for their typed agreement, then supplies that derived fact to `InitializationHistoriesRetainAllStatesAndFailures`
-and `CompleteInitialStatesAndFailureEventsCompose`.
+and the typed-prefix/terminal-selection constituents of `CompleteInitialStatesAndFailureEventsCompose`.
 Its agreement premise ranges only over nonliteral positions. No expression plan, supplied matching literal history,
 or arbitrary literal evaluator-agreement premise remains in that parent instance.
 The result includes existence of both histories, equality of every prefix, accumulated failure sets and selected terminal states.
@@ -448,8 +448,9 @@ Other constructors and selected checks still require their own correspondence; f
 
 The published `dbd268d9` pinned execution failed one of 242 obligations in this module, at the final quantified parent invocation.
 The literal outcome, typing and child-agreement steps preceding it passed; the complete theorem remains unproved.
-The proof body now introduces the two history hypotheses explicitly and invokes prefix equality and terminal composition separately.
-Its statement, premises, earlier proof steps and every pre-existing theorem remain unchanged. This body repair awaits its own pinned execution.
+The published `11e39453` pinned execution proved prefix equality but left one of 251 obligations unproved at the selected-terminal equality/typing invocation (line 126).
+The current local body exposes the terminal prefix type, selected-check agreement and same-prefix terminal equality separately, then uses the checked prefix equality.
+Its statement, premises, earlier proof steps and every pre-existing theorem remain unchanged. This second body refinement awaits its own pinned execution.
 The implementation connection is a manual code-case argument.
 Neither this argument nor a later TLAPS pass establishes parser, emitted-language, checker-kernel or whole-language soundness.
 

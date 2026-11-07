@@ -615,7 +615,7 @@ This result supplies a child rule. Complete initializer state assembly remains i
 - [ ] L5a Check the concrete literal evaluator instance and its complete initialization parent.
   `LiteralIntInitializersComposeCompleteStatesAndFailures` now constructs literal rows instead of assuming their agreement, and passes the derived fact to the existing complete-initialization theorem.
   Only other constructors and selected checks retain agreement premises. The code-case argument supplies the runtime target/prefix connection.
-  The published pinned run failed one final quantified parent invocation. Its proof-body repair makes the history hypotheses and two parent uses explicit; the unchanged theorem remains pending a successful pinned check.
+  The first published pinned run failed the final quantified parent invocation. At `11e39453`, explicit prefix equality passed; selected terminal equality/typing remained one failed obligation out of 251. A second body-only refinement exposes typed-prefix and terminal-selection facts. The unchanged theorem remains pending a successful pinned check.
 - [ ] L6 Retain the proof inputs and existing owner regressions for the exact implementation revision.
   Keep any unresolved source or decoder interpretation open. Do not promote a partial route to the complete literal family.
 
