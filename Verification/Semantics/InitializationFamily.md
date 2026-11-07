@@ -255,6 +255,114 @@ All 1,201 captured inputs matched each run's own manifest. No complete rerun of 
 This is a manual code-case argument under documented Swift semantics, not a new TLAPS result or a mechanically checked compiler translation.
 Complete literal, initialization, source/output/helper/checker/kernel and whole-language rows remain open.
 
+### Native and mathematical TLA integer literal meaning
+
+This result starts with the proper resolved `.value(.integer(n))` leaf derived above, at standard `.int` type.
+The emitter and target use the same `Int` width. The mathematical source outcome is `Expressions!Success(n)`:
+the literal reads no binding, performs no state write and reaches no model failure.
+The result below derives the emitted value. Actual namespace/operator binding, parsing and checker execution retain their separate obligations.
+
+The owners are [native emission](../../Sources/SwiftTLAPlugin/NativeSwiftEmitter.swift),
+[native initial declarations](../../Sources/SwiftTLAPlugin/NativeSwiftEmitter+Machine.swift),
+[formal value transport](../../Sources/SwiftTLA/CompiledValue.swift),
+[formal expression emission](../../Sources/SwiftTLA/CompiledTLARenderer.swift),
+[integer formatting](../../Sources/SwiftTLA/TLAValue.swift) and
+[independent decimal grouping](../../Sources/SwiftTLA/StraightLineRenderedActionCheck.swift).
+The arithmetic interface is documented Swift [decimal conversion](https://developer.apple.com/documentation/swift/string/init%28_%3Aradix%3Auppercase%3A%29)
+and [signed remainder and unary negation](https://github.com/swiftlang/swift-book/blob/main/TSPL.docc/LanguageGuide/BasicOperators.md).
+
+**Native leaf.** The pilot has no resolved function calls. `expressionValues` starts empty; its only writes occur in
+`recursiveBody`, reached through resolved function emission. That path is absent here, so a pilot literal cannot be replaced by a cached name.
+`expression` reaches `scalarExpression`, whose value branch calls `literal` with the stored value and `.int` type.
+The union, finite and nominal branches cannot intercept `.int`.
+For `n != Int.min`, the emitted text is the standard decimal representation of `n`.
+A negative value in this branch has representable positive magnitude, so the corresponding standard unary-minus expression is defined and equals `n`.
+For `Int.min`, the emitter instead uses the fixed primitive type's `.min` member; it does not form or negate an unrepresentable positive `Int`.
+The preceding associated-type argument identifies that primitive type under the stated library namespace binding.
+Neither leaf spelling invokes a model helper, reads state or adds a model failure.
+The initial-declaration owner places it in the typed immutable binding for that variable; this value argument does not prove the surrounding state construction.
+
+**TLA renderer.** `CompiledTLARenderer.state` begins with one expression task and no output parts.
+The proper value branch appends `CompiledValue.rendered(using:).description` without scheduling a child or consulting state names.
+For this value, transport returns `.int(n)`, and `TLAValue.description` calls `_integerForm(n)`.
+Let `R = 1000000000`. The interpretation here uses mathematical integer numerals, multiplication, addition and subtraction.
+
+1. For `-R <= n <= R`, formatting returns the signed decimal text of `n`.
+   Its natural numeral has magnitude at most `R`, including zero. Under the stated mathematical interpretation it denotes `n`.
+2. Otherwise set `q = n / R` and `r = n % R` using Swift's signed operations.
+   Their contract gives `n = q * R + r`, `abs(r) < R`, and a nonzero remainder with the sign of `n`.
+   Here that equation is mathematical; the formatter never evaluates `q * R` in host Swift.
+   The actual divisor is positive and greater than one, so neither division-by-zero nor minimum-divided-by-minus-one applies.
+   Both `q` and `r` are representable, and `abs(q) < abs(n)`.
+3. Induction on the mathematical magnitude therefore terminates at the base case.
+   If `r < 0`, the actual output is `(format(q) * R - magnitude(r))`, denoting `q * R + r = n`.
+   Otherwise the actual plus branch denotes `q * R + r = n` too.
+   In particular, a negative multiple of `R` uses `+ 0`, which has the same value as `- 0`.
+   The formatter takes only the remainder's unsigned magnitude; it never computes signed `abs(Int.min)`.
+4. Reverse those actual recursion steps. Let `negative` be `n < 0`, let `unsigned[0]` be the magnitude of the terminating quotient,
+   and let each `chunks[i]` be the corresponding remainder magnitude. Each chunk is in `0..(R-1)`.
+   The unsigned steps satisfy `UnsignedChunk`; the interpreted output steps satisfy `RenderedChunk`, including the zero-remainder equivalence.
+   The base satisfies `SignedMagnitude`. These are the actual premises of
+   [SignedLiteralComposition](SignedIntegerLiteralRule.tla), with final unsigned value equal to `n.magnitude`.
+   Thus the existing theorem consumes the renderer's derived history; no arbitrary matching output history is assumed for this leaf.
+
+**Independent checker.** `checkedIntegerLiteral` does not call `_integerForm`.
+It starts from decimal `n.magnitude`, grouping the digits from the right in blocks of nine.
+Each full nine-digit block parses to a value below `R`, so its conversion to `Int` is representable and its force unwrap is defined.
+The first group normally has one through nine digits. There is exactly one additional stopping case:
+when it has one digit and the decimal prefix is `1000000000`, the first two groups together equal `R`.
+The renderer stops at that value, so the checker merges those groups into its ten-digit leading chunk.
+Every other candidate leading ten-digit group is greater than `R`; groups starting with two or more digits cannot create this stopping case.
+The remaining full nine-digit groups are precisely the successive quotient/remainder digits of the same magnitude.
+The checker prefixes the sign once, then chooses minus for each nonzero negative chunk and plus otherwise.
+Induction through those groups therefore yields the same canonical text and the same signed value as the renderer.
+This derives the numerical/grouping assumption for this checker function; it does not establish the soundness of every output-check caller.
+
+**Existing parent instance.** Set the expression bounds to the same target `Int` bounds and take `result = Expressions!Success(n)`.
+Representability supplies `result` in `Expressions!ExpressionOutcomes`; neither source nor generated literal needs a child history or state read.
+Under the existing `IntInitializationDomains`, `IntExpressionOutcomesSupplyInitializerOutcomes` gives equal initializer outcomes,
+with candidate set `{n}` and `NoFailure`. For `prior` in `PartialBindings` and `target` in `IntKeys` outside `DOMAIN prior`,
+`PartialBindingsHaveSourceTypes` supplies its typed domain, and `InitializerLeafRetainsCompleteStatesAndFailures` gives the same singleton extension
+and empty failure set. No arbitrary source/generated evaluator-agreement premise is needed for this literal instance.
+Actual target identity, prior-prefix projection, complete histories, control and checking still need their compiler links.
+
+This is a manual implementation-correspondence argument for the stated value routes, using existing mathematical results.
+It adds no theorem, evaluator, fixture or local proof execution. The value argument was reviewed against exact `3ee2c933` bytes.
+Its formatter bodies are unchanged by the source-rewrite guard repair below.
+The prior diagnostic's source/native owners and the corrected five-suite follow-up remain separate regression receipts; no tests were rerun for this argument.
+TLA standard-module/operator interpretation and the actual checker kernels remain owned boundaries.
+The tools' [standard Integers module](https://github.com/tlaplus/tlaplus/blob/master/tlatools/org.lamport.tlatools/src/tla2sany/StandardModules/Integers.tla)
+explicitly delegates arithmetic to tool implementations; that reference is not a binding for the pinned binary.
+Small numeral tokens do not prove that pinned TLC can evaluate a full-width `Int` expression or a selected check involving it.
+L4, the complete six-link literal row and whole-language preservation remain open.
+
+### Source rewrite token classification
+
+`SpecExpressionMacro.expansion` calls `OrderedIntSourceSyntaxCheck.verifyRewrite` after the existing identity rewriter and before builder-witness emission.
+For its recognized registered Algorithm/scoped-state/ordered-Do route, the check removes only the permitted added identity arguments,
+then compares the statement, scoped body, outer call and registration tokens.
+The private shared comparison previously retained text alone.
+
+The existing rewrite owner executed a valid signed source and its correct identity-expanded output first.
+It then changed the single `initial: -1` occurrence to `initial: - 1`.
+The changed-input, parser-recovery, equal-token-text and unequal-token-kind requirements all passed.
+On unchanged `3ee2c933` production, the guard accepted that output: one executed test reported one expected-rejection issue.
+This is a measured guard failure, not a successfully compiled wrong program or a runtime mismatch.
+
+The two-line repair compares `TokenKind` arrays through the same private helper at all four sites.
+In the pinned SwiftSyntax dependency, identifier, literal and operator spellings are associated values of that enum;
+fixed punctuation and keyword cases retain their distinct kinds. Equality therefore retains spelling and operator classification.
+The measured prefix-to-binary-minus change now fails the existing guard. Trivia remains outside this token contract.
+The repair introduces no alternate parser, checker, accepted source form or output normalization.
+
+The guarded follow-up passed 156 tests across six existing suites, including the correct signed rewrite, the rejected corruption,
+domain/identity/order controls, parser/type owners and generated initialization output checks.
+All 1,201 captured inputs stayed exact. Its whole log is 114,323 bytes,
+SHA256 `54f806ee9545c31840e6246127a6407de624554c78b69b32c2b74c78c5299aa0`.
+The retained input and dependency receipts bind the actual enum source and current implementation inputs.
+This repairs the lexical-classification premise for the recognized rewrite path; full parser recovery, AST/scope/binding interpretation,
+unrecognized accepted routes and complete source-to-output correspondence remain open.
+
 ## Ordered observation contract
 
 The existing set results omit order and multiplicity.
