@@ -306,7 +306,9 @@ These abstract counterexamples expose information loss. They do not claim that a
 The first pinned hosted run at `4612a657` left one reordered-history obligation unproved, at line 96 of 720 module obligations.
 The retained source snapshot and input checksum match that exact Git blob.
 The proof body now exposes its finite indices, event positions, typing, set equality and unequal second entries separately.
-Its theorem statement and premises are unchanged. Pinned execution of this repair remains pending.
+Its theorem statement and premises are unchanged. The pinned Linux proof job at `905a224d` discharged all 750 module obligations.
+The retained snapshot SHA256 is `82ba7762fced358533e7a09e383620d0a7ce8af81610bd5b3e9fc0feb1d081d7`, matching the current module bytes.
+This confirms the logical history rules and repaired obligation. It does not establish actual source/event correspondence or current admission.
 Every existing definition and theorem outside the inserted block remains unchanged.
 
 The local runtime argument uses documented Swift control flow, Array value semantics and `append` on normally returning calls:
@@ -527,10 +529,35 @@ This result supplies a child rule. Complete initializer state assembly remains i
   The local proof below uses documented Swift semantics. Full L3 and its source/type/call-coverage obligations remain open.
 - [ ] L4 Prove the accepted Swift literal tokens and TLA integer encoding denote that same `n`.
   Reuse the existing native decoder and signed-radix lemmas. Include zero, negative values and target bounds in the general argument.
+- [x] L4a Retain token text and operator classification in the complete Int initial-output check.
+  Five actual negative literal outputs kept identical token text while changing prefix-minus tokens to binary operators.
+  Correct emitted positives and all mutation guards passed on unchanged production. The guarded repair passed 55 tests in five existing suites.
+  This implementation task does not complete L4 or establish general parser-recovery soundness.
 - [ ] L5 Instantiate the literal child cases in the expression and initializer composition modules.
   Record the exact premises that these results discharge.
 - [ ] L6 Retain the proof inputs and existing owner regressions for the exact implementation revision.
   Keep any unresolved source or decoder interpretation open. Do not promote a partial route to the complete literal family.
+
+The complete initial-function check now retains exact token text and SwiftSyntax operator classification, with the angle-delimiter equivalence below.
+Its existing lexical-line template parsing, function-kind guard and ordered-expression checks remain unchanged.
+The actual baseline executes the existing generated declaration and output-check route for five negative values.
+Each changed binding occurs once. The corrupted function has equal token text, different token kinds and reported parser errors.
+All five corruptions passed the original check; valid generated functions passed their positive checks.
+The all-kind comparison rejected valid existing initializers during compilation; no tests executed.
+Its actual first mismatch was expected `binaryOperator("<")` versus actual `leftAngle`.
+The pinned parser consumes generic delimiters as angle tokens; fragment parsing can retain operator tokens instead.
+The comparison now allows an angle token paired with an operator token only when their text is identical.
+It does not equate prefix and binary minus. Counts, all other kinds, the function guard and ordered child checks remain intact.
+The existing diagnostic now reports the first differing token. The guarded repair passed 55 tests in five existing suites.
+All 1,201 captured inputs remained exact through execution. The five malformed negative literals were rejected with correct positives retained.
+The build took 1222.17 seconds. The whole 83226-byte log has SHA256 `e58e9cf6307b5ca92054f4f2a28363c46c49851d2de8903d06cd6a956688fd58`.
+Only proof-status documentation changed afterward. These are local regression receipts, not general output-check soundness or hosted admission.
+
+Three unpublished blanket parser-error guards failed during compilation before tests ran.
+They rejected existing configured corpus initial functions. The declaration factory is restored byte-exact to `6f7702cc`.
+Those compile failures supply no executed rejection evidence. No parser limit, accepted DSL, numerical emitter or checker template changed.
+General recovery, printing, token grammar, scope/type/helper binding and other directly constructed syntax routes remain open.
+No new formal rule or proof execution is claimed by this repair.
 
 ### Scalar literal code-case result 7 November 2026
 

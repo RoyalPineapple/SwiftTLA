@@ -87,7 +87,9 @@ Two negative obligations distinguish a dropped repeated occurrence and a swap of
 The new indexed-append obligations connect an independent extension postcondition to the existing `HistoryAppend` construction.
 The first pinned hosted run at `4612a657` left one reordered-history obligation unproved, at line 96 of 720 module obligations.
 Its proof body now separates finite indices, event positions, set projections, typing and the unequal second entries.
-The statement and premises are unchanged. Pinned execution of that repair remains pending.
+The statement and premises are unchanged. The pinned Linux proof job at `905a224d` discharged all 750 module obligations.
+Its retained snapshot SHA256 is `82ba7762fced358533e7a09e383620d0a7ce8af81610bd5b3e9fc0feb1d081d7`, matching the current module bytes.
+This establishes the logical history obligations, including the repaired reorder case. Actual compiler/event correspondence and current admission remain open.
 
 This contract describes finite returned observations, including their prefix forms.
 Complete state domains, source traversal order, error classification, event projections and generated TLA observations remain separate obligations.
