@@ -1451,17 +1451,21 @@ enum StraightLineRenderedActionCheck {
         let included = layout.actions.indices.filter { !layout.actions[$0].declaration.name.isEmpty }
         guard !layout.variables.isEmpty || !included.isEmpty else { return }
         let lines = module.components(separatedBy: "\n")
-        if behavior.fairness.isEmpty {
-            let names = layout.variables.map(\.formalName)
-            let frame = names.count == 1 ? names[0] : "<<\(names.joined(separator: ", "))>>"
-            let expected = "Spec ==\n  /\\ Init\n  /\\ [][Next]_\(frame)"
-            let starts = lines.indices.filter { lines[$0] == "Spec ==" || lines[$0].hasPrefix("Spec == ") }
+        let names = layout.variables.map(\.formalName)
+        let frame = names.count == 1 ? names[0] : "<<\(names.joined(separator: ", "))>>"
+        let specifications = [("Spec", !behavior.fairness.isEmpty)]
+            + behavior.fairnessProfiles.map { ($0.operatorName, !$0.fairness.isEmpty) }
+        // shortcut: nonempty fairness tails stay unchecked, extend with independent fairness constructor rules.
+        for (name, hasFairness) in specifications {
+            let expected = ["\(name) ==", "  /\\ Init", "  /\\ [][Next]_\(frame)"]
+            let starts = lines.indices.filter { lines[$0] == "\(name) ==" || lines[$0].hasPrefix("\(name) == ") }
             guard starts.count == 1, let start = starts.first, start + 1 < lines.count,
                   let end = lines[(start + 1)...].firstIndex(of: ""),
-                  lines[start..<end].joined(separator: "\n") == expected else {
+                  lines[start..<end].starts(with: expected),
+                  hasFairness || Array(lines[start..<end]) == expected else {
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
-                    path: "tla.Spec", expected: "the complete fairness-free Init and stuttering Next specification",
-                    actual: "the emitted Spec changes its initial predicate, next relation or state frame",
+                    path: "tla.\(name)", expected: "the compiled Init, stuttering Next and complete state frame",
+                    actual: "the emitted \(name) changes its initial predicate, next relation or state frame",
                     nextSafeAction: "Report this TLA+ behavior emission failure.")
             }
         }

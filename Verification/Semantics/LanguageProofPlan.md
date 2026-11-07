@@ -139,6 +139,10 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5p Keep source property identities and labels while allocating distinct formal property names.
   Carry invariant, reachability, temporal and refinement names through behavior, CFG, authored export and native formal projection.
   Preserve selected property IDs and source-facing descriptions. Other declarations, opaque imports and general binding correspondence remain open.
+- [x] I5q Check Init, stuttering Next and the complete frame for emitted base and fairness-profile specifications.
+  Apply to outputs with state or named actions. Keep whole-body equality when fairness is empty.
+  Retain the existing action-call and configuration checks.
+  Nonempty fairness tails, checker soundness and reconstructed export-metadata correspondence remain open.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1202,4 +1206,37 @@ Evidence is retained under `.git/swifttla-proof-evidence/property-declaration-sy
 No new model, fixture type, checker family, evaluator, dependency, public application API or accepted DSL form was added.
 Constants, model values, formal operators, opaque imports and general namespace correspondence retain open obligations.
 Source and lowering correspondence, checker soundness, imported semantics, complete events and checking kernels remain open.
+I5, I6, every complete six-link row and the whole-language theorem remain open.
+
+### Fairness-profile behavior connection checkpoint 7 November 2026
+
+The existing scenario owner retains strict satisfaction, relaxed violation, equal initial states and equal labeled edges.
+Its first new checker call paired finalized generated output with separately reconstructed compiler metadata.
+That positive call failed at finite-invocation checking before the mutation was reached.
+It supplies no corruption credit. Correspondence between that export and this reconstructed metadata remains open.
+
+The corrected baseline uses the actual module output from the same compiled program as its checker metadata.
+Correct output, original native outcomes and CFG selectors pass.
+The existing test requires one profile prefix occurrence and a changed input before invoking the checker.
+Replacing that profile's Init conjunct with TRUE was accepted.
+The executed baseline reported one intended issue in one test on unchanged published production.
+
+The existing finite-invocation checker now validates the Init, Next and full-frame prefix for the base specification and each profile.
+It retains its existing guard for outputs with state or named actions.
+It retains exact whole-body equality when the compiled fairness list is empty.
+Nonempty fairness tails remain unchecked here, including operator strength, action scopes, projections and helper meaning.
+The change does not impose a line count or parser restriction on those tails.
+The existing owner rejects missing Init, changed Next, an unowned frame and duplicate headers for both base and profile output.
+Every corruption has a correct-output baseline, occurrence guard, changed-input guard and specification-specific diagnostic check.
+
+The guarded repair passed 157 tests across seven existing suites.
+The build took 1380.24 seconds, followed by 2.033 seconds of selected execution.
+All 1201 captured inputs remained exact. Only this plan changed afterward.
+The complete 107754-byte log has SHA256 `84ddbbe77965a503f475b833d23b5a57223287202fcde1c5ed15b2736324debf`.
+Evidence is retained under `.git/swifttla-proof-evidence/fairness-profile-frame-2026-11-07/` in the primary checkout.
+No new model, fixture, parser, checker family, evaluator or public API was added.
+
+This is a structural output-check implementation repair.
+It does not prove fairness preservation, TLA interpretation, arbitrary source correspondence or checking-kernel soundness.
+Selected checking still needs derived equal machine observations and predicates.
 I5, I6, every complete six-link row and the whole-language theorem remain open.
