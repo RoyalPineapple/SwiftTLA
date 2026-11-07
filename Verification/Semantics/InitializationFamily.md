@@ -363,6 +363,29 @@ The retained input and dependency receipts bind the actual enum source and curre
 This repairs the lexical-classification premise for the recognized rewrite path; full parser recovery, AST/scope/binding interpretation,
 unrecognized accepted routes and complete source-to-output correspondence remain open.
 
+### Grouped closed integer source values
+
+The existing independent source collector handled a minus directly on an integer token, but skipped minus on a grouped closed value.
+That made all three callers skip their witness for an otherwise recognized algorithm: parsed-model verification,
+identity-rewrite verification and the real runtime builder comparison.
+The unchanged-production baseline at `14e956e8` passed the existing correct-builder owner with `-(-(1 + 2))` and its independently expected value three.
+The existing corrupt-builder owner then accepted `-(-0x1)` after its producer replaced the authored value one with two.
+Two executed tests reported one intended rejection issue. This is missed guard coverage, not an observed default-builder runtime mismatch.
+
+The seven-line repair recurses through the existing collector on the strict prefix operand and requires an already closed Int value.
+Checked subtraction from zero supplies its negation. An overflow returns no witness; it does not certify a value or invent a model-failure event.
+The earlier signed-token case still handles the minimum integer directly.
+The change reaches the three existing callers through their shared collector, with no alternate parser, evaluator or checker family.
+Nonconstant prefix expressions, lexical/operator binding and general accepted-route coverage remain open.
+
+The guarded follow-up passed 156 tests across six existing suites after a 1299.74-second build.
+All 1,201 captured inputs stayed exact. The whole log is 114,323 bytes,
+SHA256 `1afb1bff87b4b8e8dda06e0a377314b7c3ee124f50d3ebf69d39051291f65e25`.
+The existing positive checks retain fixed runtime state expectations and source-parser agreement, followed by native and TLA output generation.
+This restores the missing recognition case used by the source-to-initializer checks.
+It does not discharge their general source correspondence, complete failure-history or parent-composition premises.
+No new formal proof, hosted admission or complete six-link row follows from these receipts.
+
 ## Ordered observation contract
 
 The existing set results omit order and multiplicity.
