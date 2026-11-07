@@ -228,7 +228,8 @@ and [type inputs](../../Sources/SwiftTLA/CompiledTypeInputs.swift).
    `TLASpecVerifier` uses the parser's resolver for that input construction. Both branches therefore give `variableTypes[v] == .int`.
 4. The earlier lowerer and resolver results now yield a resolved proper literal `n` with no children for this source route.
    This discharges the input primitive-type premise for the scalar evaluator and `IntExpressionOutcomesSupplyInitializerOutcomes`.
-   Source declaration selection, other annotated/lexical placements, the target/prior-map/freshness facts and complete histories remain separate.
+   Source declaration selection, other annotated/lexical placements and complete histories remain separate.
+   The runtime ID-target/prior-domain facts are derived in the target/prefix argument below; printed-name projection remains separate.
 
 Native scalar annotations now use `SwiftTLA.TLAValue.IntegerLiteralType`, `BooleanLiteralType` and `StringLiteralType`.
 The library's existing public literal conformances bind these associated types to standard `Int`, `Bool` and `String`.
@@ -324,7 +325,7 @@ Under the existing `IntInitializationDomains`, `IntExpressionOutcomesSupplyIniti
 with candidate set `{n}` and `NoFailure`. For `prior` in `PartialBindings` and `target` in `IntKeys` outside `DOMAIN prior`,
 `PartialBindingsHaveSourceTypes` supplies its typed domain, and `InitializerLeafRetainsCompleteStatesAndFailures` gives the same singleton extension
 and empty failure set. No arbitrary source/generated evaluator-agreement premise is needed for this literal instance.
-Actual target identity, prior-prefix projection, complete histories, control and checking still need their compiler links.
+The runtime ID-target/prior-domain link is derived below. Printed-name projection, complete backend histories, control and checking remain open.
 
 This is a manual implementation-correspondence argument for the stated value routes, using existing mathematical results.
 It adds no theorem, evaluator, fixture or local proof execution. The value argument was reviewed against exact `3ee2c933` bytes.
@@ -335,6 +336,65 @@ The tools' [standard Integers module](https://github.com/tlaplus/tlaplus/blob/ma
 explicitly delegates arithmetic to tool implementations; that reference is not a binding for the pinned binary.
 Small numeral tokens do not prove that pinned TLC can evaluate a full-width `Int` expression or a selected check involving it.
 L4, the complete six-link literal row and whole-language preservation remain open.
+
+### Literal initializer targets, prefixes and composition
+
+This step connects the existing literal result to state assembly; it does not infer a complete accepted-language proof from it.
+The source route is the preceding unannotated scoped shared Int initializer after its decoded payload has been established.
+Raw syntax provenance, other placements and actual generated-language interpretation retain their stated obligations.
+
+**Before.** The literal parent instance above still assumed that the reached target was outside the prior domain.
+It also left the association between the resolved literal, its variable ID and its reached prior map unspecified.
+Those facts can be derived for the compiled runtime rather than supplied as a new agreement premise.
+
+**Actual key order.** Let `order[j]` be the variable ID at zero-based offset `j` of the resolved `behavior.initializations`.
+Use ordinal IDs as mathematical keys; no printed-name conversion is needed for this argument.
+`CompiledLayout` constructs distinct IDs by enumerating its variable array.
+The lowerer's `orderedInitializations` starts with exactly that ID set, appends only a remaining ID and then removes it.
+Every normal return therefore lists every layout ID exactly once.
+Checking appends each initializer with its original ID, and both finishing passes retain that ID and array order.
+`CompiledBehavior.map` also retains the ID and order while mapping the initializer expression.
+Finally, `ProgramResolver.resolve` calls `validateInitializationDependencies` before returning the resolved program.
+Its first pass rejects repeated targets; its final set equality rejects any omitted layout ID.
+Thus a normally returned resolved program supplies `InitializationOrder(count, order)` with mathematical index `j + 1`.
+This is a code-case argument using documented Swift arrays, sets, enum matching and value copying, not a checked Swift translation.
+
+**Reached prior domain.** In `CompiledRuntime.initialOutcomes`, every pending pair `(j, values)` has
+`DOMAIN values = {order[0], ..., order[j - 1]}`. Prove this by induction over pending insertions:
+
+1. The only seed is `(0, [:])`, with empty domain.
+2. The value case copies `values`, writes only `order[j]`, and inserts only `(j + 1, copy)`.
+   If expression evaluation throws, that insertion is not reached. It cannot create a successful partial binding.
+3. Each member-of alternative likewise copies the prior map, writes only that target, and inserts the next index.
+   An empty domain inserts no successor. A failing branch records a failure without inserting a partial successor.
+4. Popping an existing pair preserves its invariant. Neither the final-state branch nor the failure callback inserts another pair.
+
+Distinct order IDs now give target freshness at every reached initializer, including one following branching initialization.
+This derives the ID-domain invariant; general value typing and source/generated branch agreement remain separate.
+It also proves that the literal's immutable `values` input is precisely the reached prefix, rather than a later reassignment.
+
+**Literal extension.** For the proper resolved `.value(.integer(n))` with no children, the previously derived type/payload result applies.
+`CompiledEvaluator.evaluate` returns the stored value immediately. It does not inspect any variable or call a model helper.
+The runtime therefore inserts exactly one successor, whose mathematical value projection is
+`GeneratedExtension(prior, target, n)`. Every old key/value remains unchanged, and only the fresh target is added.
+No model failure callback is invoked by this literal evaluation. Prior failures remain in the existing failure array.
+This supplies the fixed candidate `{n}` and `NoFailure` row for every reached prefix without an evaluator-equality hypothesis.
+The native emitter's immutable literal binding and the TLA renderer's ID-indexed equality use the same resolved entry.
+Their numerical leaf argument is above; lexical scope, projection, library binding and actual TLA/kernel interpretation remain owned.
+
+**Consumer.** `LiteralIntInitializerEvaluators` in [OrderedIntInitializationComposition](OrderedIntInitializationComposition.tla)
+constructs those literal rows explicitly for source and generated evaluation.
+`LiteralIntInitializersComposeCompleteStatesAndFailures` calls the existing `IntExpressionOutcomesSupplyInitializerOutcomes`
+for their typed agreement, then supplies that derived fact to `InitializationHistoriesRetainAllStatesAndFailures`
+and `CompleteInitialStatesAndFailureEventsCompose`.
+Its agreement premise ranges only over nonliteral positions. No expression plan, supplied matching literal history,
+or arbitrary literal evaluator-agreement premise remains in that parent instance.
+The result includes existence of both histories, equality of every prefix, accumulated failure sets and selected terminal states.
+It covers arbitrary finite counts, including zero, and arbitrary sets of literal positions.
+Other constructors and selected checks still require their own correspondence; failure sets do not establish ordered failure-event histories.
+
+The new formal proof body is pending pinned proof execution. Its implementation connection is a manual code-case argument.
+Neither this argument nor a later TLAPS pass establishes parser, emitted-language, checker-kernel or whole-language soundness.
 
 ### Source rewrite token classification
 

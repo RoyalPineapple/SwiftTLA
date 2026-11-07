@@ -38,6 +38,82 @@ THEOREM IntExpressionOutcomesSupplyInitializerOutcomes ==
             DEF SourceIntInitializerOutcome, GeneratedIntInitializerOutcome
     <1>. QED BY <1>1, <1>2, SMT DEF Expressions!ExpressionOutcomes
 
+\* Literal rows are constructed here; only other constructors supply child outcomes.
+LiteralIntInitializerEvaluators(generated, count, positions, literals, other) ==
+    [index \in 1..count |-> [prior \in PartialBindings |->
+        IF index \in positions
+        THEN IF generated
+             THEN GeneratedIntInitializerOutcome(Expressions!Success(literals[index]))
+             ELSE SourceIntInitializerOutcome(Expressions!Success(literals[index]))
+        ELSE other[index][prior]]]
+
+THEOREM LiteralIntInitializersComposeCompleteStatesAndFailures ==
+    ASSUME IntInitializationDomains, NEW count, NEW order,
+           InitializationOrder(count, order),
+           NEW positions \in SUBSET (1..count),
+           NEW literals \in [positions -> SwiftIntMin..SwiftIntMax],
+           NEW sourceOther \in [(1..count) \ positions -> [PartialBindings -> InitializerOutcomes]],
+           NEW generatedOther \in [(1..count) \ positions -> [PartialBindings -> InitializerOutcomes]],
+           \A index \in (1..count) \ positions :
+               \A prior \in [PrefixKeys(order, index - 1) -> Values] :
+                   sourceOther[index][prior] = generatedOther[index][prior],
+           NEW sourceChecks \in [PartialBindings -> SelectionOutcomes],
+           NEW generatedChecks \in [PartialBindings -> SelectionOutcomes],
+           \A state \in [Keys -> Values] : sourceChecks[state] = generatedChecks[state]
+    PROVE LET sourceEvaluate == LiteralIntInitializerEvaluators(FALSE, count, positions, literals, sourceOther)
+              generatedEvaluate == LiteralIntInitializerEvaluators(TRUE, count, positions, literals, generatedOther)
+          IN /\ \E source : InitializationHistory(FALSE, count, order, sourceEvaluate, source)
+             /\ \E generated : InitializationHistory(TRUE, count, order, generatedEvaluate, generated)
+             /\ \A source, generated :
+                 (InitializationHistory(FALSE, count, order, sourceEvaluate, source)
+                  /\ InitializationHistory(TRUE, count, order, generatedEvaluate, generated))
+                 => /\ \A index \in 0..count : source[index] = generated[index]
+                    /\ SourceTerminal(source[count], sourceChecks)
+                        = GeneratedTerminal(generated[count], generatedChecks)
+                    /\ SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
+    PROOF
+    <1>. DEFINE sourceEvaluate == LiteralIntInitializerEvaluators(FALSE, count, positions, literals, sourceOther)
+                generatedEvaluate == LiteralIntInitializerEvaluators(TRUE, count, positions, literals, generatedOther)
+    <1>1. \A index \in positions :
+        /\ Expressions!Success(literals[index]) \in Expressions!ExpressionOutcomes
+        /\ SourceIntInitializerOutcome(Expressions!Success(literals[index]))
+            = GeneratedIntInitializerOutcome(Expressions!Success(literals[index]))
+        /\ SourceIntInitializerOutcome(Expressions!Success(literals[index])) \in InitializerOutcomes
+        <2>. SUFFICES ASSUME NEW index \in positions
+                     PROVE /\ Expressions!Success(literals[index]) \in Expressions!ExpressionOutcomes
+                           /\ SourceIntInitializerOutcome(Expressions!Success(literals[index]))
+                               = GeneratedIntInitializerOutcome(Expressions!Success(literals[index]))
+                           /\ SourceIntInitializerOutcome(Expressions!Success(literals[index])) \in InitializerOutcomes
+            BY SMT
+        <2>1. Expressions!Success(literals[index]) \in Expressions!ExpressionOutcomes
+            BY SMT DEF Expressions!Success, Expressions!ExpressionOutcomes
+        <2>. QED BY <2>1, IntExpressionOutcomesSupplyInitializerOutcomes, SMT
+    <1>2. InitializerEvaluators(count, sourceEvaluate)
+          /\ InitializerEvaluators(count, generatedEvaluate)
+        BY <1>1, SMT DEF sourceEvaluate, generatedEvaluate,
+            LiteralIntInitializerEvaluators, InitializerEvaluators
+    <1>3. \A index \in 1..count :
+        [PrefixKeys(order, index - 1) -> Values] \subseteq PartialBindings
+        BY SMT DEF PartialBindings, PrefixKeys, InitializationOrder
+    <1>4. \A index \in 1..count :
+        \A prior \in [PrefixKeys(order, index - 1) -> Values] :
+            sourceEvaluate[index][prior] = generatedEvaluate[index][prior]
+        BY <1>1, <1>3, SMT DEF sourceEvaluate, generatedEvaluate,
+            LiteralIntInitializerEvaluators
+    <1>5. /\ \E source : InitializationHistory(FALSE, count, order, sourceEvaluate, source)
+          /\ \E generated : InitializationHistory(TRUE, count, order, generatedEvaluate, generated)
+        BY <1>2, InitializationHistoriesExist, SMT
+    <1>6. \A source, generated :
+        (InitializationHistory(FALSE, count, order, sourceEvaluate, source)
+         /\ InitializationHistory(TRUE, count, order, generatedEvaluate, generated))
+        => /\ \A index \in 0..count : source[index] = generated[index]
+           /\ SourceTerminal(source[count], sourceChecks)
+                = GeneratedTerminal(generated[count], generatedChecks)
+           /\ SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
+        BY <1>2, <1>4, InitializationHistoriesRetainAllStatesAndFailures,
+            CompleteInitialStatesAndFailureEventsCompose, SMT
+    <1>. QED BY <1>5, <1>6
+
 THEOREM OrderedIntExpressionsSupplyPartialInitializationLeaves ==
     ASSUME IntInitializationDomains, NEW prior \in PartialBindings,
            NEW target \in IntKeys \ (DOMAIN prior),

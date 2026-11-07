@@ -571,6 +571,10 @@ This result supplies a child rule. Complete initializer state assembly remains i
 - [x] L3e Supply the primitive input type for the unannotated scoped shared literal route.
   The [source-type argument](InitializationFamily.md#inferred-scalar-source-types-and-native-type-binding) follows normalization, explicit resolved witnesses, layout and the macro's shared resolver.
   It discharges L3d's `.int` input premise for that route, including occupied scalar names. Other annotations/placements and full L3 remain open.
+- [x] L3f Derive the resolved initializer's target order and reached ID-prefix domain from the actual runtime.
+  The [target/prefix argument](InitializationFamily.md#literal-initializer-targets-prefixes-and-composition) follows layout enumeration, scheduling, checked/resolved ID transport, mandatory dependency validation and every pending-insertion case.
+  For a proper literal, the actual dictionary write is its fresh singleton extension with no new model failure.
+  General value typing, printed-name projections, emitted-language interpretation and complete event histories remain open.
 - [ ] L4 Prove the accepted Swift literal tokens and TLA integer encoding denote that same `n`.
   Reuse the existing native decoder and signed-radix lemmas. Include zero, negative values and target bounds in the general argument.
   The [actual formatter argument](InitializationFamily.md#native-and-mathematical-tla-integer-literal-meaning) now derives native leaf value, signed renderer recursion and independent decimal grouping at exact `3ee2c933`.
@@ -591,7 +595,10 @@ This result supplies a child rule. Complete initializer state assembly remains i
 - [ ] L5 Instantiate the literal child cases in the expression and initializer composition modules.
   Record the exact premises that these results discharge.
   The output-meaning argument supplies the concrete `Success(n)` instance to `IntExpressionOutcomesSupplyInitializerOutcomes` and the existing initializer leaf result.
-  It derives the singleton candidate and empty failure set. Actual source-use coverage, target/prior-prefix identity and full L5 remain open.
+  It derives the singleton candidate and empty failure set. L3f supplies the runtime ID-target/prior-domain link; actual source-use coverage, backend projections and full L5 remain open.
+- [ ] L5a Check the concrete literal evaluator instance and its complete initialization parent.
+  `LiteralIntInitializersComposeCompleteStatesAndFailures` now constructs literal rows instead of assuming their agreement, and passes the derived fact to the existing complete-initialization theorem.
+  Only other constructors and selected checks retain agreement premises. The code-case argument supplies the runtime target/prefix connection; pinned execution of this new proof body is pending.
 - [ ] L6 Retain the proof inputs and existing owner regressions for the exact implementation revision.
   Keep any unresolved source or decoder interpretation open. Do not promote a partial route to the complete literal family.
 
