@@ -247,6 +247,18 @@ public enum StandardModule: String, Sendable, Hashable, CaseIterable {
   case sequences = "Sequences"
   case tlc = "TLC"
   case randomization = "Randomization"
+
+  var exportedDeclarationNames: Set<String> {
+    switch self {
+    case .integers: ["Int", "Nat"]
+    case .naturals: ["Nat"]
+    case .finiteSets: ["IsFiniteSet", "Cardinality"]
+    case .sequences: ["Seq", "Len", "Append", "Head", "Tail", "SubSeq", "SelectSeq"]
+    case .tlc: ["Print", "PrintT", "Assert", "JavaTime", "TLCGet", "TLCSet",
+                "Permutations", "SortSeq", "RandomElement", "Any", "ToString", "TLCEval"]
+    case .randomization: ["RandomSubset", "RandomSetOfSubsets", "TestRandomSetOfSubsets"]
+    }
+  }
 }
 
 package func canonicalStandardModules(_ modules: [StandardModule]) -> [StandardModule] {

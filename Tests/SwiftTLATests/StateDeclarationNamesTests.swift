@@ -33,9 +33,10 @@ struct StateDeclarationNamesTests {
 
     @Test("state fields keep Swift identity when formal behavior names are occupied")
     func retainsFieldsNamedAfterBehavior() throws {
-        for name in ["Init", "Next", "Spec", "TRUE", "FALSE"] {
+        for name in ["Init", "Next", "Spec", "TRUE", "FALSE", "Len", "Cardinality", "Int", "Nat", "PrintT", "RandomSubset"] {
             let sibling = name == "Spec" ? "Spec__2" : "count"
-            let formalName = name == "Spec" ? "Spec__3" : "\(name)__2"
+            let formalName = ["PrintT", "RandomSubset"].contains(name) ? name
+                : name == "Spec" ? "Spec__3" : "\(name)__2"
             let source = try parseSpecTestClosure("""
             { scope in
                 let \(name) = scope.sharedVar(initial: 0)
@@ -95,13 +96,15 @@ struct StateDeclarationNamesTests {
         #expect(try compiled.render().tlaBundle.tla.contains("[name |-> \"Spec__2\", value |-> "))
     }
 
-    @Test("authored PlusCal uses the same formal state names as direct TLA")
-    func retainsFormalNamesInAuthoredExport() throws {
+    @Test("authored PlusCal uses the same formal state names as direct TLA", arguments: ["Spec", "Len", "Cardinality", "Int", "Nat", "PrintT", "RandomSubset"])
+    func retainsFormalNamesInAuthoredExport(name: String) throws {
+        let imports = ["PrintT": "Extends(.tlc)", "RandomSubset": "Extends(.randomization)"][name] ?? ""
         let source = try parseSpecTestClosure("""
         {
+            \(imports)
             let workers = Algorithm(label: "Workers", scoped: { scope in
-                let Spec = scope.sharedVar(initial: 0)
-                Do(TestControlLabel.advance) { Assign(Spec, to: Spec + 1) }
+                let \(name) = scope.sharedVar(initial: 0)
+                Do(TestControlLabel.advance) { Assign(\(name), to: \(name) + 1) }
             })
             workers
         }
@@ -110,13 +113,20 @@ struct StateDeclarationNamesTests {
             sourceTypes: .init(enums: [parserTestEnum("TestControlLabel", cases: ["advance": .string("advance")])]))
         try #require(specification.diagnostics.isEmpty)
         let compiled = try specification.compile()
+        let variable = try #require(compiled.layout.testVariableID(named: name))
+        let runtime = CompiledRuntime(compilation: compiled)
+        let initial = try #require(try runtime.initialStates().first)
+        #expect(try initial.value(for: variable) == .integer(0))
+        let next = try #require(try runtime.successors(from: initial).first)
+        #expect(try next.state.value(for: variable) == .integer(1))
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         let module = try program.renderModule()
         let authored = try #require(try program.renderAuthoredPlusCal(declarations: module))
-        #expect(module.renderedModuleSource.contains("VARIABLES pc, Spec__2\n"))
-        #expect(authored.contains("Spec__2 = 0"))
-        #expect(authored.contains("Spec__2 :="))
-        #expect(!authored.contains("Spec :="))
+        let formalName = "\(name)__2"
+        #expect(module.renderedModuleSource.contains("VARIABLES pc, \(formalName)\n"))
+        #expect(authored.contains("\(formalName) = 0"))
+        #expect(authored.contains("\(formalName) :="))
+        #expect(!authored.contains("\(name) :="))
     }
 
     @Test("a state named vars retains its value without a conflicting generated tuple alias")

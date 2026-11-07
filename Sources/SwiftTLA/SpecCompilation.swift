@@ -1331,7 +1331,10 @@ public extension TLASpec {
         let bindings = lowerer.bindings
         let parameterVariables = Dictionary(uniqueKeysWithValues:
             (authoredAlgorithm?.plan.procedures ?? []).flatMap { zip($0.parameters, $0.parameterVariables) })
+        let standardModules = Set(extendsModules + [.finiteSets, .sequences]
+            + (symmetrySets.isEmpty ? [] : [.tlc])).union(lowerer.requiredStandardModules)
         var occupied = renderedDeclarationNames(includingActions: false, includingVariables: false)
+            .union(standardModules.flatMap(\.exportedDeclarationNames))
             .union(lowerer.modelValueNames)
             .union(bindings.binders.filter { parameterVariables[$0.key] == nil }.values)
             .union(bindings.operatorNames.values)
