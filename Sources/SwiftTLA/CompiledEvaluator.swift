@@ -113,6 +113,7 @@ extension EvalError {
         case .tupleIndexOutsideDomain(.integer(let index)): .tupleIndexOutsideDomain(index)
         case .recordFieldUnavailable(.string(let field)): .recordFieldUnavailable(field)
         case .functionArgumentOutsideDomain: .functionArgumentOutsideDomain
+        case .recursiveArgumentOutsideDomain: .functionArgumentOutsideDomain
         default: nil
         }
     }

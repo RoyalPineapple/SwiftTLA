@@ -32,11 +32,25 @@ private struct BoundedRecursiveCall {
         #expect(throws: EvalError.recursiveArgumentOutsideDomain) {
             try runtime.successors(for: action, from: initial)
         }
+        var compiledFailures: [NativeMachineEvaluationError] = []
+        do {
+            try _NativeMachineOperations.visitInitialBranch {
+                _ = try runtime.successors(for: action, from: initial)
+            } onEvaluationFailure: { compiledFailures.append($0) }
+        } catch {
+            Issue.record("A logical recursive-domain failure escaped branch recovery: \(error)")
+        }
+        #expect(compiledFailures == [.functionArgumentOutsideDomain])
         var machine = try BoundedRecursiveCall.makeMachine()
         let before = machine.state
         #expect(throws: NativeMachineEvaluationError.functionArgumentOutsideDomain) {
             try machine.send(.advance)
         }
+        var nativeFailures: [NativeMachineEvaluationError] = []
+        try _NativeMachineOperations.visitInitialBranch {
+            _ = try machine.send(.advance)
+        } onEvaluationFailure: { nativeFailures.append($0) }
+        #expect(nativeFailures == [.functionArgumentOutsideDomain])
         #expect(machine.state == before)
     }
 }

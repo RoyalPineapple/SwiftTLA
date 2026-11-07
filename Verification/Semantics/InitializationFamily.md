@@ -85,7 +85,9 @@ The existing set results omit order and multiplicity.
 The history carrier permits repeated events. It does not assume that a particular compiler route produces repetitions.
 Two negative obligations distinguish a dropped repeated occurrence and a swap of later events from equal set/first projections.
 The new indexed-append obligations connect an independent extension postcondition to the existing `HistoryAppend` construction.
-These new proof obligations await pinned hosted execution. The historical proof totals above do not cover them.
+The first pinned hosted run at `4612a657` left one reordered-history obligation unproved, at line 96 of 720 module obligations.
+Its proof body now separates finite indices, event positions, set projections, typing and the unequal second entries.
+The statement and premises are unchanged. Pinned execution of that repair remains pending.
 
 This contract describes finite returned observations, including their prefix forms.
 Complete state domains, source traversal order, error classification, event projections and generated TLA observations remain separate obligations.
@@ -93,7 +95,9 @@ Infinite logical domains remain accepted. A capability error does not establish 
 
 The shared branch handler now propagates native collection count limits through both error channels.
 This distinguishes representational limits from completed model failures without changing collection bounds.
-Recursion limits, checking context, sampling and other capability classifications remain open.
+It also propagates call-depth and missing-context errors. Logical recursive-domain errors use the existing function-domain model-failure channel.
+The focused routing run passed 87 tests across twelve existing suites, including both error channels and valid recursion/context controls.
+Sampling, action/checking kernels and general classification correspondence remain open.
 
 ## Current implementation links
 

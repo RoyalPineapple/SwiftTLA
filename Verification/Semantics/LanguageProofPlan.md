@@ -205,6 +205,10 @@ The remaining inventory continues alongside it; it does not justify another unbo
 - [x] M0b Propagate finite collection representation limits through the same branch handler.
   Keep powerset, range and function-space capacity errors out of completed model-failure observations.
   The measured baseline, focused repair result and ordered-history contract appear below. This does not complete the observation contract.
+- [x] M0c Separate call-depth and missing-context errors from logical recursive-domain failures in existing initial recovery.
+  Preserve original operational errors. Retain logical function-domain failures in both generated and compiled collection.
+  Both existing-owner baselines failed for the intended reasons. The focused repair passed 87 tests in twelve suites.
+  This is an implemented routing result, not completion of the observation or checking proofs.
 - [ ] M0.1 Define complete observations in the existing outcome rules.
   Include state identity, labels, disabled behavior, failure site, payload, preceding bindings and selected outcomes.
   Separate logical domains, enumeration capability, execution limits and model failures.
@@ -237,7 +241,10 @@ The new extension postcondition preserves every earlier entry and appends one ev
 The indexed-append obligations retain that postcondition and both projections.
 Two negative obligations retain equal set and first-record views despite a dropped repeated occurrence or reordered later events.
 These abstract counterexamples expose information loss. They do not claim that a particular source program produces repeated events.
-The new formal obligations await pinned hosted execution. Earlier proof receipts do not establish them.
+The first pinned hosted run at `4612a657` left one reordered-history obligation unproved, at line 96 of 720 module obligations.
+The retained source snapshot and input checksum match that exact Git blob.
+The proof body now exposes its finite indices, event positions, typing, set equality and unequal second entries separately.
+Its theorem statement and premises are unchanged. Pinned execution of this repair remains pending.
 Every existing definition and theorem outside the inserted block remains unchanged.
 
 The local runtime argument uses documented Swift control flow, Array value semantics and `append` on normally returning calls:
@@ -247,7 +254,7 @@ The local runtime argument uses documented Swift control flow, Array value seman
    A caught Native error outside the excluded cases invokes the nonthrowing callback exactly once.
    A mapped Eval error follows the same path after its existing conversion.
    Unmapped Eval errors and other thrown errors propagate without a callback.
-2. The excluded cases are integer/sequence non-enumerability, collection cardinality overflow and an unrepresentable powerset.
+2. The excluded cases are integer/sequence non-enumerability, collection cardinality overflow, an unrepresentable powerset, call-depth exhaustion and missing checking context.
    Both catch arms rethrow the original error, preserving its Native or Eval channel.
    An inner recovery returns normally after its callback, so an enclosing handler does not observe that same throw again.
    An excluded error propagates through enclosing handlers without becoming a model event.
@@ -264,7 +271,11 @@ The local runtime argument uses documented Swift control flow, Array value seman
 This manual code-case argument does not derive which source branches reach callbacks or their order.
 It also does not prove site/value projections, generated symbol binding, complete state assembly or TLA failure histories.
 The event projection must be defined. Projection errors and host execution limits remain separate owned boundaries.
-Recursion limits, checking context, sampling and other capability classifications remain open.
+The shared handler now propagates call-depth and missing-context errors through their original channels.
+Its existing Eval conversion also maps logical recursive-domain failures to the existing native function-domain failure.
+Direct compiled action evaluation still throws its original Eval error. Initial-state collection uses its existing normalized model-failure channel.
+The focused routing run passed 87 tests in twelve existing suites.
+Sampling, action/checking kernels and general classification correspondence remain open.
 M0.1, M0.2, M2.3 and whole-language preservation remain open.
 
 The existing routing owner now invokes actual powerset, range and function-space operations through both error channels.
@@ -274,6 +285,16 @@ The repair changes the shared handler rather than collection bounds, source acce
 The guarded repair run passed thirty-three tests in six suites on all 1,201 unchanged captured inputs.
 Existing sibling states, ordered model failures, membership, sampling and unbounded-domain controls passed.
 Only this plan changed after that run. These local results do not establish hosted admission or the new formal obligations.
+
+The next routing packet used unchanged `4612a657` production for both baselines.
+Two existing operational tests reported six issues: three incorrect failure callbacks and three missing expected throws.
+Three existing recursive-domain tests reported four issues, while their native recovery and direct action controls retained their expected behavior.
+The repair adds no new model, fixture, checker or evaluator. It changes the two existing shared error owners.
+Its guarded run passed 87 tests in twelve suites after a 1,241.51-second build.
+All 1,201 captured inputs remained unchanged through execution.
+The whole 90,301-byte log has SHA256 `28c0bc5611328d213531c0f8c7fe359e1eb4cca3f9f28e5a658a728182eb236a`.
+The subsequent edits affect proof/documentation only; the tested production and test bytes remain exact.
+The independent hosted history-proof failure is retained separately. Local runtime results do not establish its repair or hosted admission.
 
 ## M1 Literal read and checked addition
 
