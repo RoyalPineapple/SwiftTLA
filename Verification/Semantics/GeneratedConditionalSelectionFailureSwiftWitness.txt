@@ -2,56 +2,119 @@ private static let _closedChoice0: Result<Int, any Error> = Result { (try SwiftT
 return lhs < rhs
 })) { __PROOF_MEMBER__ in false }) }
 private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
-                                   _ emit: (_Updates) throws -> Void) throws {
+                                   _ _emit: (_Updates) throws -> Void) throws -> [NativeMachineEvaluationError] {
+var failures: [NativeMachineEvaluationError] = []
+func emit(_ update: _Updates) throws {
+    do { try _emit(update) }
+    catch { throw _StopSuccessorTraversal(cause: error) }
+}
+
     func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart2(updates, { candidate in try _actionPart1(candidate, emit) })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         guard (state._value_pc_0 == _ControlLocation.location0) else { return }
         try emit(updates)
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try SwiftTLA._NativeMachineOperations.visitAlternatives([false, true], emit: emit) { second, branchEmit in
             if second { try _actionPart3(updates, branchEmit) }
             else { try _actionPart4(updates, branchEmit) }
         }
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart4(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart6(updates, { candidate in try _actionPart5(candidate, emit) })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart6(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         guard state.state.attempt else { return }
         try emit(updates)
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart5(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         let ___atomic_0_0 = (try Self._closedChoice0.get())
         try _actionPart7(___atomic_0_0, updates, emit)
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart7(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart9(___atomic_0_0, updates, { candidate in try _actionPart8(___atomic_0_0, candidate, emit) })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart9(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart11(___atomic_0_0, updates, { candidate in try _actionPart10(___atomic_0_0, candidate, emit) })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart11(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try emit(updates)
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart10(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         if let merged = updates.merging(_Updates(_value_selected_2: ___atomic_0_0)) { try emit(merged) }
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart8(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart13(___atomic_0_0, updates, { candidate in try _actionPart12(___atomic_0_0, candidate, emit) })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart13(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         if let merged = updates.merging(_Updates(_value_pc_0: _ControlLocation.location1)) { try emit(merged) }
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart12(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         if let merged = updates.merging(_Updates(_value_attempt_1: state.state.attempt)) { try emit(merged) }
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart3(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart15(updates, { candidate in try _actionPart14(candidate, emit) })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart15(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         guard (try { () throws -> Bool in
             func _predicate1() throws -> Bool {
                 return try SwiftTLA._NativeMachineOperations.booleanNot { try _predicate0() }
@@ -60,31 +123,71 @@ private static func _visitUpdates0(from state: Snapshot, checking context: inout
             return try _predicate1()
         }()) else { return }
         try emit(updates)
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart14(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         let ___atomic_1_2 = 2
         try _actionPart16(___atomic_1_2, updates, emit)
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart16(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart18(___atomic_1_2, updates, { candidate in try _actionPart17(___atomic_1_2, candidate, emit) })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart18(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart20(___atomic_1_2, updates, { candidate in try _actionPart19(___atomic_1_2, candidate, emit) })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart20(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try emit(updates)
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart19(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         if let merged = updates.merging(_Updates(_value_selected_2: ___atomic_1_2)) { try emit(merged) }
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart17(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart22(___atomic_1_2, updates, { candidate in try _actionPart21(___atomic_1_2, candidate, emit) })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart22(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         if let merged = updates.merging(_Updates(_value_pc_0: _ControlLocation.location1)) { try emit(merged) }
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart21(_ ___atomic_1_2: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         if let merged = updates.merging(_Updates(_value_attempt_1: state.state.attempt)) { try emit(merged) }
-    }
-    try _actionPart0(_Updates(), emit)
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+    do { try _actionPart0(_Updates(), emit) }
+catch let stop as _StopSuccessorTraversal {
+    if let cause = stop.cause { throw cause }
+    throw stop
+}
+return failures
 }

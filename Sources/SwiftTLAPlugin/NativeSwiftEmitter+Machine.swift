@@ -138,6 +138,14 @@ extension NativeSwiftEmitter {
         declarations += try updateDeclarations()
         declarations += try initialDeclarations(parameters: configurationParameters, arguments: configurationArguments)
         let emittedActionIDs = Set(api.actions.map(\.compiledAction)).union(enabledActionIDs)
+        if !emittedActionIDs.isEmpty {
+            declarations += try nativeDeclarations("""
+            private struct _StopSuccessorTraversal: Error {
+                let cause: (any Error)?
+                init(cause: (any Error)? = nil) { self.cause = cause }
+            }
+            """)
+        }
         declarations += try program.behavior.actions.filter { emittedActionIDs.contains($0.id) }.map {
             try updateFunction($0, configurationParameters: appendedParameters)
         }
@@ -904,13 +912,44 @@ extension NativeSwiftEmitter {
             let parameters = (try bindings.map {
                 "_ \(binder($0)): \(try swiftType(program.bindingTypes[$0]!))"
             } + ["_ updates: _Updates", "_ emit: (_Updates) throws -> Void"]).joined(separator: ", ")
+            let checkedBody: String
+            if case .guard_(let predicate) = node, predicate.booleanConstant == false {
+                checkedBody = body
+            } else {
+                checkedBody = """
+                do {
+                    \(body)
+                } catch let failure as NativeMachineEvaluationError {
+                    failures.append(failure)
+                }
+                """
+            }
             declarations.append("""
             func _actionPart\(id)(\(parameters)) throws {
-                \(body)
+                \(checkedBody)
             }
             """)
         }
-        return (declarations.joined(separator: "\n") + "\ntry _actionPart0(_Updates(), emit)",
+        let failureBinding: String
+        if case .guard_(let predicate) = root, predicate.booleanConstant == false {
+            failureBinding = "let"
+        } else {
+            failureBinding = "var"
+        }
+        return ("""
+            \(failureBinding) failures: [NativeMachineEvaluationError] = []
+            func emit(_ update: _Updates) throws {
+                do { try _emit(update) }
+                catch { throw _StopSuccessorTraversal(cause: error) }
+            }
+            \(declarations.joined(separator: "\n"))
+            do { try _actionPart0(_Updates(), emit) }
+            catch let stop as _StopSuccessorTraversal {
+                if let cause = stop.cause { throw cause }
+                throw stop
+            }
+            return failures
+            """,
             writes, conditions)
     }
 
@@ -924,7 +963,7 @@ extension NativeSwiftEmitter {
         let parts = try actionFunctions(action.body)
         let declaration = DeclSyntax(stringLiteral: """
         private static func _visitUpdates\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
-                                                   _ emit: (_Updates) throws -> Void) throws {
+                                                   _ _emit: (_Updates) throws -> Void) throws -> [NativeMachineEvaluationError] {
             \(parts.source)
         }
         """)
@@ -966,7 +1005,8 @@ extension NativeSwiftEmitter {
             private static func _isEnabled\(action.id.ordinal)(in state: Snapshot\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?) throws -> \(nativeBoolType) {
                 \(loops)
                 var enabled = false
-                try _visitUpdates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(configurationArguments), checking: &context) { _ in enabled = true }
+                let failures = try _visitUpdates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(configurationArguments), checking: &context) { _ in enabled = true }
+                if let failure = failures.first { throw failure }
                 if enabled { return true }
                 \(closing)
                 return false
@@ -983,9 +1023,9 @@ extension NativeSwiftEmitter {
         let arguments = action.bindings.map { "\(binder($0.binder)): \(binder($0.binder))" }.joined(separator: ", ")
         let declaration = DeclSyntax(stringLiteral: """
         private static func _visitSuccessors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
-                                                      _ visit: (Snapshot) throws -> Void) throws {
+                                                      _ visit: (Snapshot) throws -> Void) throws -> [NativeMachineEvaluationError] {
             var emitted: [Snapshot] = []
-            try _visitUpdates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(configurationArguments), checking: &context) { updates in
+            return try _visitUpdates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(configurationArguments), checking: &context) { updates in
                 let candidate = updates.applying(to: state)
                 if !emitted.contains(candidate) {
                     emitted.append(candidate)
@@ -1047,7 +1087,7 @@ extension NativeSwiftEmitter {
                 }
                 formalArguments.append(try formalValue(argumentValue, type: type))
                 if apiBinding.isPublic {
-                    visitorValidations.append("guard \(domain).contains(\(name)) else { return }")
+                    visitorValidations.append("guard \(domain).contains(\(name)) else { return [] }")
                     invocation.append("\(name): \(name)")
                     loops += "for \(name) in \(domain) {\n"
                     closing += "}\n"
@@ -1061,7 +1101,7 @@ extension NativeSwiftEmitter {
             visitorCases.append("""
             case \(label):
                 \(visitorValidations.joined(separator: "\n"))
-                try Self._visitSuccessors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(configurationArguments), checking: &context, visit)
+                return try Self._visitSuccessors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(configurationArguments), checking: &context, visit)
             """)
             let actionValue = ".\(api.swiftIdentifier)" + (actionArguments.isEmpty ? "" : "(\(actionArguments.joined(separator: ", ")))")
             candidateEnumeration.append("do {\n" + loops + "try visit(\(actionValue))\n" + closing + "}\n")
@@ -1073,12 +1113,13 @@ extension NativeSwiftEmitter {
             defer { context = run! }
             var found = false
             do {
-                try _visitSuccessors(for: action, checking: &run) { execution in
+                let failures = try _visitSuccessors(for: action, checking: &run) { execution in
                     found = true
                     if try !visit(Self(execution: execution\(configurationArguments))) {
                         throw _StopSuccessorTraversal()
                     }
                 }
+                if let failure = failures.first { throw failure }
             } catch is _StopSuccessorTraversal {
             }
             return found
@@ -1094,11 +1135,12 @@ extension NativeSwiftEmitter {
         }
         private func _successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
             var result: [Snapshot] = []
-            try _visitSuccessors(for: action, checking: &context) { result.append($0) }
+            let failures = try _visitSuccessors(for: action, checking: &context) { result.append($0) }
+            if let failure = failures.first { throw failure }
             return result
         }
         private func _visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?,
-                                      _ visit: (Snapshot) throws -> Void) throws {
+                                      _ visit: (Snapshot) throws -> Void) throws -> [NativeMachineEvaluationError] {
             switch action {
                 \(visitorCases.joined(separator: "\n"))
             }
@@ -1145,8 +1187,9 @@ extension NativeSwiftEmitter {
             do {
                 func _visitAction(_ action: Action) throws {
                     var callbackFailed = false
+                    var failures: [NativeMachineEvaluationError] = []
                     do {
-                        try _visitSuccessors(for: action, checking: &context) { execution in
+                        failures = try _visitSuccessors(for: action, checking: &context) { execution in
                             found = true
                             do {
                                 if try !visit(action, Self(execution: execution\(configurationArguments))) {
@@ -1158,11 +1201,14 @@ extension NativeSwiftEmitter {
                             }
                         }
                     } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+                        failures.append(reason)
+                    } catch {
+                        throw error
+                    }
+                    for reason in failures {
                         if try !onEvaluationFailure(action, reason) {
                             throw _StopSuccessorTraversal()
                         }
-                    } catch {
-                        throw error
                     }
                 }
                 try _visitActionCandidates(_visitAction)
@@ -1170,7 +1216,6 @@ extension NativeSwiftEmitter {
             }
             return found
         }
-        private struct _StopSuccessorTraversal: Error {}
         public func enabledActions() throws -> [Action] {
             try _actions().filter { try isEnabled($0) }
         }
@@ -2093,9 +2138,9 @@ func verifyGeneratedSuccessorOutput(
 ) throws {
     let expected = Parser.parse(source: """
     private static func _visitSuccessors\(actionID)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
-                                                  _ visit: (Snapshot) throws -> Void) throws {
+                                                  _ visit: (Snapshot) throws -> Void) throws -> [NativeMachineEvaluationError] {
         var emitted: [Snapshot] = []
-        try _visitUpdates\(actionID)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(configurationArguments), checking: &context) { updates in
+        return try _visitUpdates\(actionID)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(configurationArguments), checking: &context) { updates in
             let candidate = updates.applying(to: state)
             if !emitted.contains(candidate) {
                 emitted.append(candidate)
@@ -2230,7 +2275,7 @@ func verifyGeneratedActionRoutingOutput(
     }
     for route in routes {
         let name = route.name.filter { $0 != "`" }
-        let expectedDispatch = tokens("try Self._visitSuccessors\(route.id)(from: _execution\(configurationArguments), checking: &context, visit)")
+        let expectedDispatch = tokens("return try Self._visitSuccessors\(route.id)(from: _execution\(configurationArguments), checking: &context, visit)")
         guard dispatched[name].map({ Array($0.body.tokens(viewMode: .sourceAccurate)).map(\.text) }) == expectedDispatch else {
             throw invalid("native.action.route.\(name)", "the complete successor route for compiled action \(route.id)")
         }
@@ -2246,7 +2291,7 @@ func verifyGeneratedActionRoutingOutput(
               Array(branch.dropLast()).allSatisfy({ $0.item.as(GuardStmtSyntax.self) != nil }),
               let call = branch.last,
               Array(call.tokens(viewMode: .sourceAccurate)).map(\.text).starts(with:
-                tokens("try Self._visitSuccessors\(route.id)(from: _execution")) else {
+                tokens("return try Self._visitSuccessors\(route.id)(from: _execution")) else {
             throw invalid("native.action.route.\(name)", "the selected action reaches compiled successor \(route.id)")
         }
         guard let label = labeled[name]?.body, label.count == 1, let statement = label.first,
@@ -2259,10 +2304,10 @@ func verifyGeneratedActionRoutingOutput(
         let name = route.name.filter { $0 != "`" }
         let pattern = ".\(route.name)(" + route.bindings.map { "\($0.label): let \($0.name)" }.joined(separator: ", ") + ")"
         let guards = route.bindings.map { binding in
-            "guard \(scalarDomain(binding)).contains(\(binding.name)) else { return }"
+            "guard \(scalarDomain(binding)).contains(\(binding.name)) else { return [] }"
         }.joined(separator: "\n")
         let arguments = route.bindings.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
-        let dispatch = "\(guards)\ntry Self._visitSuccessors\(route.id)(from: _execution, \(arguments)\(configurationArguments), checking: &context, visit)"
+        let dispatch = "\(guards)\nreturn try Self._visitSuccessors\(route.id)(from: _execution, \(arguments)\(configurationArguments), checking: &context, visit)"
         guard dispatched[name]?.pattern == tokens(pattern),
               dispatched[name].map({ Array($0.body.tokens(viewMode: .sourceAccurate)).map(\.text) }) == tokens(dispatch) else {
             throw invalid("native.action.route.\(name)", "the complete bound successor route for compiled action \(route.id)")
@@ -2291,7 +2336,8 @@ func verifyGeneratedActionRoutingOutput(
         """
         private func _successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
             var result: [Snapshot] = []
-            try _visitSuccessors(for: action, checking: &context) { result.append($0) }
+            let failures = try _visitSuccessors(for: action, checking: &context) { result.append($0) }
+            if let failure = failures.first { throw failure }
             return result
         }
         """,
@@ -2342,8 +2388,9 @@ func verifyGeneratedActionRoutingOutput(
         do {
             func _visitAction(_ action: Action) throws {
                 var callbackFailed = false
+                var failures: [NativeMachineEvaluationError] = []
                 do {
-                    try _visitSuccessors(for: action, checking: &context) { execution in
+                    failures = try _visitSuccessors(for: action, checking: &context) { execution in
                         found = true
                         do {
                             if try !visit(action, Self(execution: execution\(configurationArguments))) {
@@ -2355,11 +2402,14 @@ func verifyGeneratedActionRoutingOutput(
                         }
                     }
                 } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+                    failures.append(reason)
+                } catch {
+                    throw error
+                }
+                for reason in failures {
                     if try !onEvaluationFailure(action, reason) {
                         throw _StopSuccessorTraversal()
                     }
-                } catch {
-                    throw error
                 }
             }
             try _visitActionCandidates(_visitAction)
@@ -2498,6 +2548,7 @@ func verifyGeneratedActionWriteOutput(
     }
     var bodies: [Int: [String]] = [:]
     var firstStatements: [Int: Syntax] = [:]
+    var infallibleParts: Set<Int> = []
     var parameters: [Int: [String]] = [:]
     var coveredPartTokens = 0
     for index in visitorTokens.indices where visitorTokens[index] == "func" && tokenDepths[index] == 1 {
@@ -2538,21 +2589,63 @@ func verifyGeneratedActionWriteOutput(
             throw invalid("native.action.parts", "closed parameters for \(name)", "malformed parameter list")
         }
         parameters[id] = names
-        bodies[id] = Array(visitorTokens[(open + 1)..<(close - 1)])
-        firstStatements[id] = syntaxTokens[open + 1].parent
+        let wrapped = Array(visitorTokens[(open + 1)..<(close - 1)])
+        let catchSuffix = ["}", "catch", "let", "failure", "as", "NativeMachineEvaluationError",
+                           "{", "failures", ".", "append", "(", "failure", ")", "}"]
+        if wrapped == ["return"] {
+            infallibleParts.insert(id)
+            bodies[id] = wrapped
+            firstStatements[id] = syntaxTokens[open + 1].parent
+        } else {
+            guard wrapped.starts(with: ["do", "{"]), wrapped.count > catchSuffix.count + 2,
+              wrapped.suffix(catchSuffix.count) == catchSuffix else {
+                throw invalid("native.action.failures.\(id)",
+                    "retain every reached model failure after its action part", "missing or changed failure collection")
+            }
+            bodies[id] = Array(wrapped.dropFirst(2).dropLast(catchSuffix.count))
+            firstStatements[id] = syntaxTokens[open + 3].parent
+        }
         coveredPartTokens += close - index
     }
-    let expectedEntry = ["try", "_actionPart0", "(", "_Updates", "(", ")", ",", "emit", ")"]
-    let rootCalls = visitorTokens.indices.filter { index in
-        tokenDepths[index] == 1 && index + expectedEntry.count <= visitorTokens.count &&
-            Array(visitorTokens[index..<(index + expectedEntry.count)]) == expectedEntry
+    func envelopeTokens(_ source: String) -> [String] {
+        let proof = Parser.parse(source: "func proof() {\n\(source)\n}")
+            .statements.first?.item.as(FunctionDeclSyntax.self)
+        return proof?.body?.statements.tokens(viewMode: .sourceAccurate).map(\.text) ?? []
     }
+    let failureBinding: String
+    if case .guard_(let predicate) = action, predicate.booleanConstant == false {
+        failureBinding = "let"
+    } else {
+        failureBinding = "var"
+    }
+    let expectedPrefix = envelopeTokens("""
+    \(failureBinding) failures: [NativeMachineEvaluationError] = []
+    func emit(_ update: _Updates) throws {
+        do { try _emit(update) }
+        catch { throw _StopSuccessorTraversal(cause: error) }
+    }
+    """)
+    let expectedEntry = envelopeTokens("""
+    do { try _actionPart0(_Updates(), emit) }
+    catch let stop as _StopSuccessorTraversal {
+        if let cause = stop.cause { throw cause }
+        throw stop
+    }
+    return failures
+    """)
     guard let bodyOpen = visitorTokens.firstIndex(of: "{"),
           visitorTokens.last == "}",
-          rootCalls.count == 1,
-          rootCalls[0] + expectedEntry.count == visitorTokens.count - 1,
-          coveredPartTokens + expectedEntry.count == visitorTokens.count - bodyOpen - 2 else {
-        throw invalid("native.action.entry", "action parts followed by one root call",
+          let callback = visitor.signature.parameterClause.parameters.last,
+          callback.firstName.text == "_", callback.secondName?.text == "_emit",
+          callback.type.tokens(viewMode: .sourceAccurate).map(\.text)
+            == ["(", "_Updates", ")", "throws", "->", "Void"],
+          visitor.signature.returnClause?.type.tokens(viewMode: .sourceAccurate).map(\.text)
+            == ["[", "NativeMachineEvaluationError", "]"],
+          !expectedPrefix.isEmpty, !expectedEntry.isEmpty,
+          visitorTokens.dropFirst(bodyOpen + 1).starts(with: expectedPrefix),
+          visitorTokens.dropLast().suffix(expectedEntry.count) == expectedEntry,
+          coveredPartTokens + expectedPrefix.count + expectedEntry.count == visitorTokens.count - bodyOpen - 2 else {
+        throw invalid("native.action.entry", "checked failure collection, action parts and one root call",
             "unrecognized tokens in the generated visitor")
     }
 
@@ -2614,6 +2707,10 @@ func verifyGeneratedActionWriteOutput(
     guard bodies.count == expectedChildren.count else {
         throw invalid("native.action.parts", "one generated function per compiled action node",
             "found \(bodies.count) functions for \(expectedChildren.count) nodes")
+    }
+    guard infallibleParts == Set(guards.filter { $0.predicate.booleanConstant == false }.map(\.id)) else {
+        throw invalid("native.action.failures", "only constant-false guards omit failure collection",
+            "the unwrapped parts differ from the infallible compiled guards")
     }
     for (id, children) in expectedChildren {
         guard let tokens = bodies[id] else {
