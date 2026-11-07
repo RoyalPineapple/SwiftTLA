@@ -18,49 +18,88 @@ private struct _Updates: Sendable {
 private static func _visitUpdates0(
     from state: Snapshot,
     checking context: inout CheckingContext<CheckingRegisters>?,
-    _ emit: (_Updates) throws -> Void
-) throws {
+    _ _emit: (_Updates) throws -> Void
+) throws -> [NativeMachineEvaluationError] {
+var failures: [NativeMachineEvaluationError] = []
+func emit(_ update: _Updates) throws {
+    do { try _emit(update) }
+    catch { throw _StopSuccessorTraversal(cause: error) }
+}
+
     func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         let ___atomic_0_0 = state.state.__PROOF_READ__
         try _actionPart1(___atomic_0_0, updates, emit)
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart1(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         let ___atomic_1_1 = ___atomic_0_0
         try _actionPart2(___atomic_0_0, ___atomic_1_1, updates, emit)
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart2(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart4(___atomic_0_0, ___atomic_1_1, updates, { candidate in
             try _actionPart3(___atomic_0_0, ___atomic_1_1, candidate, emit)
         })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart4(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart6(___atomic_0_0, ___atomic_1_1, updates, { candidate in
             try _actionPart5(___atomic_0_0, ___atomic_1_1, candidate, emit)
         })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart6(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try emit(updates)
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart5(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         if let merged = updates.merging(_Updates(__PROOF_FIRST_SLOT__: ___atomic_0_0)) {
             try emit(merged)
         }
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart3(_ ___atomic_0_0: Int, _ ___atomic_1_1: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         if let merged = updates.merging(_Updates(__PROOF_SECOND_SLOT__: ___atomic_1_1)) {
             try emit(merged)
         }
-    }
-    try _actionPart0(_Updates(), emit)
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+    do { try _actionPart0(_Updates(), emit) }
+catch let stop as _StopSuccessorTraversal {
+    if let cause = stop.cause { throw cause }
+    throw stop
+}
+return failures
 }
 
 private static func _visitSuccessors0(
     from state: Snapshot,
     checking context: inout CheckingContext<CheckingRegisters>?,
     _ visit: (Snapshot) throws -> Void
-) throws {
+) throws -> [NativeMachineEvaluationError] {
     var emitted: [Snapshot] = []
-    try _visitUpdates0(from: state, checking: &context) { updates in
+    return try _visitUpdates0(from: state, checking: &context) { updates in
         let candidate = updates.applying(to: state)
         if !emitted.contains(candidate) {
             emitted.append(candidate)
@@ -77,10 +116,10 @@ public func visitSuccessors(checking context: inout CheckingContext<CheckingRegi
 }
 
 private func _visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?,
-                              _ visit: (Snapshot) throws -> Void) throws {
+                              _ visit: (Snapshot) throws -> Void) throws -> [NativeMachineEvaluationError] {
     switch action {
     case .__PROOF_ACTION__:
-        try Self._visitSuccessors0(from: _execution, checking: &context, visit)
+        return try Self._visitSuccessors0(from: _execution, checking: &context, visit)
     }
 }
 
@@ -104,8 +143,9 @@ private func _visitSuccessors(checking context: inout CheckingContext<CheckingRe
     do {
         func _visitAction(_ action: Action) throws {
             var callbackFailed = false
+            var failures: [NativeMachineEvaluationError] = []
             do {
-                try _visitSuccessors(for: action, checking: &context) { execution in
+                failures = try _visitSuccessors(for: action, checking: &context) { execution in
                     found = true
                     do {
                         if try !visit(action, Self(execution: execution)) {
@@ -117,11 +157,14 @@ private func _visitSuccessors(checking context: inout CheckingContext<CheckingRe
                     }
                 }
             } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+                failures.append(reason)
+            } catch {
+                throw error
+            }
+            for reason in failures {
                 if try !onEvaluationFailure(action, reason) {
                     throw _StopSuccessorTraversal()
                 }
-            } catch {
-                throw error
             }
         }
         try _visitActionCandidates(_visitAction)

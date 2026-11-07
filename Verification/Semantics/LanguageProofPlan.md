@@ -130,6 +130,9 @@ The proof dependencies above still govern proof closure; they do not block indep
   Keep ordinary action IDs, enablement and successor values unchanged. General namespace/control correspondence remains open.
 - [x] I5m Reserve imported standard operator names during variable and action allocation.
   Preserve source IDs, public field names and names from absent modules. Other declaration and import namespaces remain open.
+- [x] I5n Retain every reached native action failure through the existing validation callback.
+  Preserve selected-first convenience results, callback stopping, callback errors and failure multiplicity.
+  Complete action event sites, before-prefix values and TLA event correspondence remain open.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1089,3 +1092,36 @@ For a measured regression, retain the intended pre-fix failure and the positive 
 Hosted admission still requires exact revision/run/attempt evidence and complete required archive integrity checks.
 Historical gaps retain their original scope. They cannot supply evidence for a new revision or block unrelated source work.
 This planning task does not authorize merge, CI rerun, dispatch, cancellation, reviewer changes or goal-status changes.
+
+### Native action failure delivery checkpoint 7 November 2026
+
+The existing distinct-failure choice reached division by zero, then a negative modulo divisor.
+The published native visitor delivered only the first failure.
+The measured baseline executed one test and reported this missing second callback.
+Its legacy selected-first result and original selected TLA assertions passed.
+
+The existing action-part traversal now collects reached model errors in order.
+Each failing part stops its dependent continuation while independent alternatives continue.
+Duplicate errors from distinct branches remain distinct callbacks.
+The existing private successor routes return this collection without a second evaluator.
+Convenience APIs still select its first error. Validation delivers the complete collected payload list after successful successors.
+Callback exceptions retain their original identity and are excluded from model-failure classification.
+A callback can still stop delivery. Constant-false guards retain their existing immediate return without an unreachable catch.
+
+The existing output checks require the collection envelope and retain their original action-body checks.
+The existing choice owner rejects removal of an actual failure append after checking correct output.
+The migration updates 38 existing Swift witness files and preserves 388 original action-part core bodies.
+It adds no model, public API, evaluator, checker family or test seam.
+
+The final guarded diagnostic passed 153 tests across 19 suites.
+It covers failure order and multiplicity, selected-first results, callback stopping and errors, and affected output witnesses.
+The complete log contains 32414 bytes with SHA256 `f80f62fac246b60a1058c2cb55ed5f3403d5e592f87b8eec42d1df615bd1ed35`.
+Evidence is retained under `.git/swifttla-proof-evidence/action-observation-boundary-2026-11-07/` in the primary checkout.
+The final input binding derives from the preceding captured manifest and the recorded sole dispatcher-witness change.
+It is not an independently captured pre-run manifest.
+
+This repair delivers native error payloads through the existing callback contract.
+It does not add complete action event sites, branch identities or before-prefix projections.
+The selected TLA payload rules and snapshots remain unchanged. Complete TLA branch events remain open.
+Source and lowering correspondence, output-checker soundness, callback interpretation and checking kernels remain owned proof boundaries.
+I5, I6, every complete six-link row and the whole-language theorem remain open.

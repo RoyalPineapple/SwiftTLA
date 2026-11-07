@@ -1,13 +1,36 @@
 private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
-                                   _ emit: (_Updates) throws -> Void) throws {
+                                   _ _emit: (_Updates) throws -> Void) throws -> [NativeMachineEvaluationError] {
+var failures: [NativeMachineEvaluationError] = []
+func emit(_ update: _Updates) throws {
+    do { try _emit(update) }
+    catch { throw _StopSuccessorTraversal(cause: error) }
+}
+
     func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try _actionPart2(updates, { candidate in try _actionPart1(candidate, emit) })
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         try emit(updates)
-    }
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
     func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+do {
         if let merged = updates.merging(_Updates(_value_value_0: state.state.value)) { try emit(merged) }
-    }
-    try _actionPart0(_Updates(), emit)
+    } catch let failure as NativeMachineEvaluationError {
+    failures.append(failure)
+}
+}
+    do { try _actionPart0(_Updates(), emit) }
+catch let stop as _StopSuccessorTraversal {
+    if let cause = stop.cause { throw cause }
+    throw stop
+}
+return failures
 }
