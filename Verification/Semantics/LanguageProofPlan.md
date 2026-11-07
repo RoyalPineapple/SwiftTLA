@@ -128,6 +128,8 @@ The proof dependencies above still govern proof closure; they do not block indep
   Preserve parameter/variable IDs, genuine occupants and runtime call values; cover unoccupied and occupied names in the existing owner.
 - [x] I5l Reserve `Terminating` for actual generated or authored termination contexts, preserving a free formal-core action name.
   Keep ordinary action IDs, enablement and successor values unchanged. General namespace/control correspondence remains open.
+- [x] I5m Reserve imported standard operator names during variable and action allocation.
+  Preserve source IDs, public field names and names from absent modules. Other declaration and import namespaces remain open.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1021,6 +1023,40 @@ All producer and earlier selected owner bytes remained exact across this test-on
 These receipts repair the four observed ordinary-CI cases at parent `4e7b1a5f`; they do not replace that failed run.
 General namespace/import/source interpretation, PlusCal translation and checking kernels remain owned obligations.
 I5, I6, every complete six-link row, M0 through M8 and universal preservation remain open.
+
+### Imported standard operator name checkpoint 7 November 2026
+
+The existing allocator omitted names from the standard modules in each rendered module.
+Accepted `Len` and `Cardinality` states executed the expected transition from zero to one.
+Their exports retained names that collide with the imported operators.
+Two executed baseline tests reported eighteen name and projection failures.
+The first repair passed 101 tests across eight suites for the always imported modules.
+
+A second baseline covered `Int`, `Nat`, explicit TLC imports and explicit Randomization imports.
+The runtime values and free-name controls for absent modules passed.
+Two executed tests reported twenty-six name and projection failures for imported operators.
+These baselines expose output allocation faults, not runtime value mismatches or local SANY failures.
+
+The existing standard-module enum now supplies its named exports.
+The allocator uses the same explicit, required, default and symmetry modules as the renderer.
+The occupied-name set then feeds the existing variable and action allocators.
+Source declaration names, IDs and public field names stay unchanged.
+The existing projection, renderer and procedure-binding routes consume the allocated formal names.
+
+The metadata matches the [pinned module sources](https://github.com/tlaplus/tlaplus/tree/867aefb69ffc2452031292587b389d1fc3eb43ff/tlatools/org.lamport.tlatools/src/tla2sany/StandardModules).
+`Integers` exports `Nat` through its nonlocal extension of `Naturals`.
+Local instances in the other reviewed modules do not supply additional exported names.
+This is a reviewed source interface, not a JAR reconstruction or a proof of the standard operators.
+
+The final guarded run passed 101 tests across eight suites, including the external consumer.
+All 1,201 captured inputs stayed exact. Only this plan changed afterward.
+The result covers the occupied and free names through runtime values, projections, native metadata, direct TLA and authored PlusCal.
+The whole log has SHA256 `f76032bb838040f1c0cf40c8fa9dd8afad260c7dea0de045e040e14846331cb9`.
+
+Constant, model-value, property, formal-operator and other binder declarations retain separate namespace obligations.
+Opaque imports, source binding, parser and kernel interpretation also remain open.
+I5, I6, every complete six-link row, M0 through M8 and whole-language preservation remain open.
+These local results do not establish hosted admission.
 
 ## Work discipline and admission
 
