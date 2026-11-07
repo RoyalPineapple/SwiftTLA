@@ -597,6 +597,10 @@ This result supplies a child rule. Complete initializer state assembly remains i
   The source baseline executed three wrong-domain failures; the native baseline was a generated compile failure with zero tests.
   The 324-test diagnostic passed the repaired behavior but failed three old-format expectations. A five-owner follow-up passed 46 tests after test-only migration.
   The [scoped argument and receipts](InitializationFamily.md#inferred-scalar-source-types-and-native-type-binding) keep library/helper binding, TLA interpretation and full L4 open.
+- [x] L4d Derive the actual emitted literal binding, state assembly and TLA leaf constraint under named interpretation conditions.
+  The [output-row argument](InitializationFamily.md#emitted-literal-initializer-row-and-typed-relation-consumer) follows ID-indexed slots, constructor fields and integer projection; the real equality/type predicates allow exactly the literal extension.
+  It supplies the literal position of the already checked `TypedInitialRelationsRetainAllStatesAndFailureEvents` instead of assuming backend child agreement.
+  This is a manual code-case result. Syntax/name/library/TLA interpretation, full-width checking and full L4 remain open; it does not close the pending L5a theorem.
 - [ ] L5 Instantiate the literal child cases in the expression and initializer composition modules.
   Record the exact premises that these results discharge.
   The output-meaning argument supplies the concrete `Success(n)` instance to `IntExpressionOutcomesSupplyInitializerOutcomes` and the existing initializer leaf result.

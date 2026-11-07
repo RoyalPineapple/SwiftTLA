@@ -453,6 +453,80 @@ Its statement, premises, earlier proof steps and every pre-existing theorem rema
 The implementation connection is a manual code-case argument.
 Neither this argument nor a later TLAPS pass establishes parser, emitted-language, checker-kernel or whole-language soundness.
 
+### Emitted literal initializer row and typed relation consumer
+
+This argument starts with the proper resolved literal supplied above: target ID `v`, payload `n`, result type `.int` and no children.
+Use the parameter-free, call-free route and the public unselected `initialOutcomes` call, with no selected initial invariant.
+The source target is fresh in the reached prefix by the runtime target/prefix argument.
+Other accepted configurations, calls, selections and initializer constructors remain separate obligations.
+The numerical leaf argument is reused; this step derives its surrounding binding, state assembly and logical initial constraint.
+
+The method is a code-case proof using documented Swift value, binding, closure, array and dictionary semantics.
+Faithful SwiftSyntax construction/printing, the stated library/type bindings and TLA syntax/operator interpretation remain explicit owned conditions.
+It does not assume that the emitted initializer agrees with the source evaluator.
+
+**Native target and value.** Project a reached lexical prefix by reading the actual slot for each initialized ID.
+Project a completed Snapshot by reading the actual generated field route at that same ID.
+Both are proof relations on existing values, not new runtime observers or definitions through the initializer evaluator.
+The owners are [the emitter name table](../../Sources/SwiftTLAPlugin/NativeSwiftEmitter.swift),
+[API field selection](../../Sources/SwiftTLAPlugin/GeneratedMachineAPI.swift),
+[state/initializer emission](../../Sources/SwiftTLAPlugin/NativeSwiftEmitter+Machine.swift) and
+[the formal projection](../../Sources/SwiftTLAPlugin/NativeSwiftEmitter+Projection.swift).
+
+1. `variableNames` enumerates the complete layout and stores `_value_<sanitized source name>_<ordinal>` under each retained ID.
+   The decimal ordinal is the suffix after the final underscore. Equal slot strings therefore imply equal ordinals and equal IDs.
+   Sanitizing two source names to the same text cannot merge their slots. This derives slot separation for this parameter-free route.
+   It does not prove general collision freedom against parameters, callbacks or arbitrary surrounding declarations.
+2. `initialDeclarations` enumerates the actual initializer array and selects both type and slot with that entry's ID.
+   Its value case emits `let slot: nativeIntType = literal(n)` and resets the evaluating-site marker afterward.
+   The existing numerical argument supplies exactly `n`, including the primitive `.min` spelling at the lower bound.
+   The immutable binding extends the lexical prefix once and leaves every preceding binding unchanged.
+3. For a visible field, its enclosing selection condition starts with `_selectedInitial == nil`.
+   The public `initialOutcomes` call supplies no selected state, so that condition is true by documented Swift short-circuiting.
+   It cannot filter this candidate or evaluate the second field-comparison operand.
+4. `executionState` supplies each public constructor argument from the slot at that public field's ID.
+   `GeneratedMachineAPI.variables` filters source-origin layout entries and retains their IDs and order.
+   The generated `State` initializer takes `_value<ordinal>` parameters and assigns each one to the same ID's field.
+   Hidden Snapshot fields use their layout ID's slot directly. Thus neither public nor hidden state assembly retargets the literal.
+5. The lexical-prefix projection now has `v |-> n`, with every prior ID/value unchanged: exactly `GeneratedExtension(prior, v, n)`.
+   The constructor's pointwise copies make the completed Snapshot projection agree with that final lexical projection.
+   `formalProjectionDeclarations` uses the same layout ID's field route and formal name; its `.int` case emits `TLAValue.int(value)`.
+   This supplies integer value transport at that projection entry. General formal-name namespace interpretation and projection soundness remain owned.
+6. `visitInitialBranch` invokes its `visit` closure once inside `do`. A normally returning literal binding reaches no catch or failure callback.
+   A wholly literal initializer sequence reaches the single Snapshot append, with no model failure and no branch enumeration.
+   `initialOutcomes` maps each Snapshot through the private initializer that copies it into `_execution`; it forwards the same failure array.
+   For mixed sequences this proves only the reached literal child step; branch enumeration, other failures and selected checks keep their own premises.
+
+**TLA leaf constraint.** Let the TLA valuation's field for `v` be `layout.variables[v.ordinal].formalName` under the retained ID/name projection.
+In [the actual module emitter](../../Sources/SwiftTLA/SpecCompilation.swift), the initializer dictionary is keyed by ID.
+The layout loop retrieves that ID's initializer and forms `field = renderer.state(expression)`.
+The numerical argument gives the mathematical value `n` on the right.
+The literal has no fallible sites or children: `orderedFallibleSites` rejects its empty site list, `choiceDefined` finds no choice,
+and `arithmeticSites` finds no arithmetic operation. `evaluationDefined` therefore returns `nil` and no definedness wrapper changes this equality.
+The same absence of sites gives no `expressionEvaluationFailures` record for this literal.
+
+When present for this field's metadata, the emitted Int state predicate is `IF small(field) THEN TRUE ELSE field in targetBounds`.
+At `field = n`, this predicate is true: either `small(n)` is true, or the remaining branch holds by `n`'s representability.
+This argument needs only the literal candidate, not a claim that the fast bound test is sound for every possible value of every constructor.
+If that metadata emits no additional type predicate, the equality still has the same fixed candidate; general declared-type guard coverage is not established here.
+Consequently, for any fixed typed prior and fresh target, the literal equality plus its type predicate allows exactly the extension with `v |-> n`.
+It contributes no initial failure. This derives the same `{n}`/`NoFailure` child row as the native binding.
+
+**Verified mathematical consumer.** Take `allowed[v] = SwiftIntMin..SwiftIntMax` and both literal child rows from these derived candidates.
+`FixedInitializerRetainsItsOnlyCandidate` and `InitializerLeafRetainsCompleteStatesAndFailures` identify that row and its fresh extension.
+`TypedInitializerOutcome` retains `{n}` because `n` is in `allowed[v]`; its failure component is still `NoFailure`.
+Thus the literal position supplies the typed child-equality premise of `TypedInitialRelationsRetainAllStatesAndFailureEvents`,
+whose `SourceTypedConstraintPrefix` conjunct is precisely membership in the allowed type and in that child's candidates.
+The real `Init` emitter joins its per-variable predicates and type predicates by conjunction, independently of their printing order.
+The existing typed-relation theorem consumes the derived literal row when other positions supply their own correspondence.
+Its pinned `dbd268d9` proof receipt and unchanged current module are retained separately from the new literal-composition theorem's failed final invocation.
+This typed parent does not fill that failed invocation or discharge the other constructors' premises.
+
+The removed assumption is opaque native/TLA literal-initializer agreement: the actual binding/assembly and logical predicate now derive the row.
+The result is conditional on the named syntax, namespace, library and TLA interpretation boundaries; no complete six-link row is closed.
+Current full-width TLC execution, selected checking, generic output-checker soundness, complete mixed initializer event histories and whole-language preservation remain open.
+No new evaluator, observer, renderer oracle, theorem, fixture or test execution is introduced by this argument.
+
 ### Source rewrite token classification
 
 `SpecExpressionMacro.expansion` calls `OrderedIntSourceSyntaxCheck.verifyRewrite` after the existing identity rewriter and before builder-witness emission.
