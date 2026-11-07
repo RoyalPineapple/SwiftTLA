@@ -52,6 +52,8 @@ Powersets, integer ranges and function spaces also throw when their collection c
 Call-depth exhaustion and missing checking contexts propagate too.
 This does not mean that a model branch failed.
 Logical out-of-domain function calls remain reached model failures.
+An assumption-only model without parameters has one empty initial state.
+An empty set of initial states represents a different outcome.
 When domain membership does not require enumeration, you can supply a typed initial state to `makeMachine(_:)`.
 
 ## Property checks

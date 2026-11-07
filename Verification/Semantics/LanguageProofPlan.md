@@ -209,23 +209,85 @@ The remaining inventory continues alongside it; it does not justify another unbo
   Preserve original operational errors. Retain logical function-domain failures in both generated and compiled collection.
   Both existing-owner baselines failed for the intended reasons. The focused repair passed 87 tests in twelve suites.
   This is an implemented routing result, not completion of the observation or checking proofs.
+- [x] M0d Check the existing zero-variable initial function with the complete output contract.
+  Distinguish one empty state from no states. The accepted assumption-only baseline exposed a missed corruption.
+  The one-line guard repair passed 56 tests in six existing suites. This is an output-check result, not complete initialization proof.
 - [ ] M0.1 Define complete observations in the existing outcome rules.
   Include state identity, labels, disabled behavior, failure site, payload, preceding bindings and selected outcomes.
   Separate logical domains, enumeration capability, execution limits and model failures.
 - [ ] M0.2 Resolve the failure-set and event-trace relationship.
   Specify source-required order, multiplicity and first-failure selection. State the preservation obligation for every observation projection.
-- [ ] M0.3 State the exact existing pilot domain.
+- [x] M0.3 State the exact existing pilot domain.
   Include parameter-free deterministic Int initialization, literal/read/add expressions, sequential ordered root writes, hidden control and default checking.
 - [ ] M0.4 Map each pilot spelling and placement to its actual parser, builder, compiled constructor and diagnostic route.
   Record accepted forms outside this instance as open. Do not reject them or treat unsupported-checker returns as certificates.
   Include overload selection, constant folding and target-dependent Int bounds.
-- [ ] M0.5 Define the complete-program theorem statement before its component proofs.
+- [x] M0.5 Define the complete-program theorem statement before its component proofs.
   State the relation between internal and source state. Include failure-only and empty-initial outcomes.
 
 Owners: [outcome rules](InitializationOutcomeRules.tla), [initialization histories](InitializationComposition.tla),
 [source witness](../../Sources/SwiftTLAPlugin/OrderedIntSourceSyntaxCheck.swift) and [compiled checks](../../Sources/SwiftTLA/StraightLineAssignmentCheck.swift).
 
 Exit: the pilot theorem has explicit premises and observations. Failure sets cannot silently replace an observable event trace.
+
+### Pilot source domain and program contract 7 November 2026
+
+M0.3 and M0.5 complete definitions only. Their implementation correspondence and the program theorem remain unproved.
+The pilot is an instance of the accepted language, not a new acceptance restriction.
+Every other accepted form remains in M7 and the route inventory.
+
+The source envelope contains one registered scoped `Algorithm`, without parameters, formal imports, refinements, processes or procedures.
+Its body declares at least one Int shared variable before a finite, nonempty sequence of `Do` steps.
+Each declaration is one lexical `let` with `scope.sharedVar(initial: e)`.
+Every initial read refers to an earlier declaration. The initializer dependency graph is therefore acyclic.
+Each step has one qualified, statically identified String-backed enum label and a nonempty sequence of root `Assign(target, to: e)` statements.
+Repeated targets remain allowed. Each right-hand side observes the earlier assignments in that atomic step.
+There are no explicit `Stop`, branch, loop, guard, local binding or other statement forms in this first instance.
+Fallthrough reaches the next step, then the distinct terminal control location and its terminal self-loop.
+
+Expressions use representable integer numerals, optional unary minus on numerals, declared root reads, parentheses and ordered addition.
+The numerals include the supported decimal and radix spellings and separators.
+Closed Swift additions can become literals; state-dependent formal additions retain their checked evaluation rule.
+Other closed arithmetic, bound-member spellings, casts and nominal encodings remain separate routes.
+The source type is standard Swift `Int`, at its full target width. This does not replace it with a smaller range for TLC.
+Source/type/operator binding and the native/TLA integer-capacity links remain proof obligations, not supplied agreement assumptions.
+No initial filter, membership initializer, user property, fairness, constraint or checking modifier belongs to this first instance.
+Default deadlock selection and generated type obligations remain explicit, with the actual request and operational limits retained.
+
+`OrderedIntSourceSyntaxCheck.components` identifies the scoped declarations and pure-assignment `Do` shape.
+Its `value` path, both `orderedIntPlan` overloads and `verifySequentialIntAssignments` are the corresponding implementation owners.
+These guards locate the route; their existence does not prove source, builder, normalization or output correspondence.
+`AlgorithmLowerer.lowerSequential` owns fallthrough, hidden control and the emitted terminal action.
+The zero-variable assumption-only case is a separate initialization base case, outside this pilot envelope.
+The macro rejects a wholly empty model. It accepts an assumption-only model with no variables.
+
+For each source program `p` in that domain, let `C(p)` denote the actual macro, parser, lowerer, resolver and both output routes.
+The desired theorem must derive the following facts, rather than assume equality of source and compiled observations:
+
+1. Source states contain declared values and an abstract control location.
+   The native snapshot and TLA state projections retain all of these identities and values, including terminal control.
+   Public visible fields alone do not replace the hidden-control projection.
+2. Both outputs represent every source initial state and every reached initial failure, without extra outcomes.
+   Sites identify source declarations. Failure payloads retain operand order and the complete preceding binding, including control.
+   Native event histories retain count, position and first-event selection.
+3. For every reachable source state and label, both outputs have exactly the source's complete atomic outcomes.
+   Successful assignments commit in order, preserve unwritten fields and perform the required control transfer.
+   A reached expression failure prevents that step's commit and retains its label, before-state and complete constructor payload.
+   Disabled steps add neither a successor nor a failure. The terminal self-loop and its identity are included explicitly.
+4. Reachability, failure availability and the selected deadlock outcome follow from those derived initials and labeled edges.
+   Operational inability to finish must remain an explicit incomplete result, never a completed verdict inferred from a prefix.
+   Actual Swift selection, TLA failure probes, CFG selectors and checker kernels must supply this connection.
+5. Source and actual program composition satisfy these facts for arbitrary finite declaration, expression and step counts.
+   `ExpressionPlan`, evaluator agreement, correct decoding and equal reachable graphs are conclusions to discharge at compiler uses.
+   They cannot serve as unexplained implementation premises for the program theorem.
+
+The complete observation carrier also includes no initial states with no failure, and no states with reached failures.
+Source deterministic value initialization in this pilot yields one state or one reached failure.
+It cannot justify arbitrary empty-domain cases.
+Empty membership domains and selected false initial filters remain M2/M7 obligations.
+One empty binding is the initialization seed. It is not the empty set of states.
+`InitializationComposition`, `SingleAssignment` and `CheckingSelectionComposition` supply the existing formal consumers.
+M0.1, M0.2, M0.4 and all M1 through M8 proof milestones remain open.
 
 ### Ordered initial observation contract 7 November 2026
 

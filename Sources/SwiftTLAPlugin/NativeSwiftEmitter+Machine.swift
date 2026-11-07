@@ -648,7 +648,6 @@ extension NativeSwiftEmitter {
     private func intInitialOutputSource(_ declaration: DeclSyntax?) throws -> String? {
         // shortcut: other domain/child operations, configuration and invariant selection need their own rules.
         guard program.layout.parameters.isEmpty, program.behavior.initialInvariant == nil,
-              !program.behavior.initializations.isEmpty,
               program.behavior.initializations.count == program.layout.variables.count else { return nil }
         var bindings: [(name: String, type: String, value: String)] = []
         let slots = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
