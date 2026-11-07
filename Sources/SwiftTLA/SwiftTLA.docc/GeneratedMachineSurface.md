@@ -48,6 +48,7 @@ initial states.
 
 `initialOutcomes()` retains successful initial states and reached model failures.
 An attempt to enumerate mathematical `Int` or `Seq(S)` with a nonempty element set throws a capability error.
+Powersets, integer ranges and function spaces also throw when their collection count exceeds native representation limits.
 This does not mean that a model branch failed.
 When domain membership does not require enumeration, you can supply a typed initial state to `makeMachine(_:)`.
 

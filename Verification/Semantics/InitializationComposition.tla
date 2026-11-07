@@ -12,6 +12,90 @@ InitializationResults ==
 InitialSeed ==
     [states |-> {[name \in {} |-> name]}, failures |-> {}]
 
+\* Histories retain order and multiplicity before the existing set projection.
+InitialFailureHistory(count, history) ==
+    /\ count \in Nat
+    /\ history \in [1..count -> InitialFailureEvents]
+
+InitialObservation(stateCount, states, failureCount, failures) ==
+    [stateCount |-> stateCount, stateHistory |-> states,
+     failureCount |-> failureCount, failureHistory |-> failures]
+
+InitialObservationIsTyped(observation) ==
+    /\ observation.stateCount \in Nat
+    /\ observation.stateHistory \in [1..observation.stateCount -> PartialBindings]
+    /\ InitialFailureHistory(observation.failureCount, observation.failureHistory)
+
+InitialFailureSet(count, history) == {history[index] : index \in 1..count}
+InitialSetProjection(observation) ==
+    [states |-> {observation.stateHistory[index] : index \in 1..observation.stateCount},
+     failures |-> InitialFailureSet(observation.failureCount, observation.failureHistory)]
+InitialFirstFailure(count, history) ==
+    IF count = 0 THEN EmptyFirstFailure
+    ELSE [payload |-> history[1].payload, site |-> history[1].site]
+
+SourceFailureHistoryExtension(count, prior, event, next) ==
+    /\ InitialFailureHistory(count, prior)
+    /\ InitialFailureHistory(count + 1, next)
+    /\ next[count + 1] = event
+    /\ \A index \in 1..count : next[index] = prior[index]
+
+THEOREM FailureHistoryExtensionMatchesIndexedAppend ==
+    ASSUME NEW count \in Nat, NEW prior \in [1..count -> InitialFailureEvents],
+           NEW event \in InitialFailureEvents,
+           NEW next \in [1..(count + 1) -> InitialFailureEvents]
+    PROVE SourceFailureHistoryExtension(count, prior, event, next)
+        <=> next = HistoryAppend(prior, count, event)
+    BY SMT DEF SourceFailureHistoryExtension, InitialFailureHistory, HistoryAppend
+
+THEOREM AppendingAnInitialFailurePreservesItsSetAndFirstProjections ==
+    ASSUME NEW count \in Nat, NEW prior \in [1..count -> InitialFailureEvents],
+           NEW event \in InitialFailureEvents
+    PROVE LET next == HistoryAppend(prior, count, event)
+          IN /\ InitialFailureHistory(count + 1, next)
+             /\ InitialFailureSet(count + 1, next) = InitialFailureSet(count, prior) \cup {event}
+             /\ InitialFirstFailure(count + 1, next) =
+                 IF count = 0 THEN [payload |-> event.payload, site |-> event.site]
+                 ELSE InitialFirstFailure(count, prior)
+    BY SMT DEF InitialFailureHistory, InitialFailureSet, InitialFirstFailure, HistoryAppend
+
+THEOREM InitialObservationProjectsToExistingSetResult ==
+    ASSUME NEW observation, InitialObservationIsTyped(observation)
+    PROVE InitialSetProjection(observation) \in InitializationResults
+    BY SMT DEF InitialObservationIsTyped, InitialFailureHistory, InitialSetProjection,
+        InitialFailureSet, InitializationResults
+
+THEOREM TheSameFailureSetAndFirstEventCanHideADroppedOccurrence ==
+    ASSUME NEW event \in InitialFailureEvents
+    PROVE LET empty == [index \in 1..0 |-> index]
+              repeated == [index \in 1..2 |-> event]
+              single == [index \in 1..1 |-> event]
+              source == InitialObservation(0, empty, 2, repeated)
+              dropped == InitialObservation(0, empty, 1, single)
+          IN /\ InitialObservationIsTyped(source) /\ InitialObservationIsTyped(dropped)
+             /\ InitialSetProjection(source) = InitialSetProjection(dropped)
+             /\ InitialFirstFailure(2, repeated) = InitialFirstFailure(1, single)
+             /\ source # dropped
+    BY SMT DEF InitialObservation, InitialObservationIsTyped, InitialFailureHistory,
+        InitialSetProjection, InitialFailureSet, InitialFirstFailure
+
+THEOREM TheSameFailureSetAndFirstEventCanHideReorderedLaterEvents ==
+    ASSUME NEW first \in InitialFailureEvents, NEW second \in InitialFailureEvents,
+           NEW third \in InitialFailureEvents, second # third
+    PROVE LET empty == [index \in 1..0 |-> index]
+              original == [index \in 1..3 |->
+                  IF index = 1 THEN first ELSE IF index = 2 THEN second ELSE third]
+              swapped == [index \in 1..3 |->
+                  IF index = 1 THEN first ELSE IF index = 2 THEN third ELSE second]
+              source == InitialObservation(0, empty, 3, original)
+              reordered == InitialObservation(0, empty, 3, swapped)
+          IN /\ InitialObservationIsTyped(source) /\ InitialObservationIsTyped(reordered)
+             /\ InitialSetProjection(source) = InitialSetProjection(reordered)
+             /\ InitialFirstFailure(3, original) = InitialFirstFailure(3, swapped)
+             /\ source # reordered
+    BY SMT DEF InitialObservation, InitialObservationIsTyped, InitialFailureHistory,
+        InitialSetProjection, InitialFailureSet, InitialFirstFailure
+
 SourceAdvance(previous, key, evaluate) ==
     [states |-> UNION {SourceInitialLeaf(prior, key, evaluate[prior]).states :
                         prior \in previous.states},

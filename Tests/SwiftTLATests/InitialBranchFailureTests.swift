@@ -416,13 +416,43 @@ struct InitialBranchFailureTests {
         }
     }
 
-    @Test("An invalid compiled value shape is not relabeled as a model failure")
+    @Test("Internal errors and collection capacity limits are not relabeled as model failures")
     func rejectsUnmappedFailure() {
         #expect(throws: EvalError.expected(.integer, actual: [])) {
             try _NativeMachineOperations.visitInitialBranch {
                 throw EvalError.expected(.integer, actual: [])
             } onEvaluationFailure: { _ in
                 Issue.record("An internal value-shape error must not become an initial outcome")
+            }
+        }
+        let count = Int.bitWidth - 1
+        let domain = StateExpr.setLiteral((0..<count).map { .int($0) })
+        let cases: [(native: NativeMachineEvaluationError, compiled: EvalError,
+                     expression: StateExpr, operation: () throws -> Void)] = [
+            (.powerSetTooLarge(actualCount: count, maximumCount: Int.bitWidth - 2),
+             .powerSetTooLarge(actualCount: count, maximumCount: Int.bitWidth - 2),
+             .powerSet(domain), { _ = try _NativeMachineOperations.powerSet(Set(0..<count)) }),
+            (.collectionCardinalityOverflow(.integerRange, operands: [0, Int.max]),
+             .collectionCardinalityOverflow(.integerRange, operands: [0, Int.max]),
+             .integerRange(.int(0), .int(Int.max)),
+             { _ = try _NativeMachineOperations.integerRange(0, Int.max) }),
+            (.collectionCardinalityOverflow(.functionSet, operands: [count, 2]),
+             .collectionCardinalityOverflow(.functionSet, operands: [count, 2]),
+             .functionSet(domain, .setLiteral([.int(0), .int(1)])),
+             { _ = try _NativeMachineOperations.functionSet(Set(0..<count), Set([0, 1])) })
+        ]
+        for entry in cases {
+            #expect(throws: entry.native) {
+                try _NativeMachineOperations.visitInitialBranch(entry.operation) { _ in
+                    Issue.record("A native collection capacity limit became a completed model failure")
+                }
+            }
+            #expect(throws: entry.compiled) {
+                try _NativeMachineOperations.visitInitialBranch {
+                    _ = try compiledValue(entry.expression)
+                } onEvaluationFailure: { _ in
+                    Issue.record("A compiled collection capacity limit became a completed model failure")
+                }
             }
         }
     }
