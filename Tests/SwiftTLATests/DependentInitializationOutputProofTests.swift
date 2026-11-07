@@ -557,5 +557,35 @@ struct DependentInitializationOutputProofTests {
                 #expect(diagnostic.path == "native._initialStates.completeIntOutput")
             }
         }
+
+        let specification = try #require(try TLASpecVerifier.findSpec(in: declaration.memberBlock.members))
+        try #require(declaration.description.components(separatedBy: specification.closure.description).count == 2)
+        let assumptionOnlySource = declaration.description.replacingOccurrences(
+            of: specification.closure.description, with: "{ Assume(true) }")
+        let assumptionOnlyDeclaration = try #require(Parser.parse(source: assumptionOnlySource)
+            .statements.first?.item.as(StructDeclSyntax.self))
+        let assumptionOnly = try TLASpecVerifier.parseAndVerify(assumptionOnlyDeclaration)
+        #expect(assumptionOnly.program.layout.variables.isEmpty)
+        #expect(assumptionOnly.program.behavior.initializations.isEmpty)
+        let emptyStateOutcomes = try CompiledRuntime(program: assumptionOnly.program).initialOutcomes()
+        #expect(emptyStateOutcomes.states.count == 1)
+        #expect(emptyStateOutcomes.failures.isEmpty)
+        var assumptionOnlyEmitter = NativeSwiftEmitter(model: assumptionOnly)
+        let emptyStateInitial = try #require(try assumptionOnlyEmitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        try assumptionOnlyEmitter.verifyIntInitialOutput(emptyStateInitial)
+        let appendEmptyState = "result.append(Snapshot(state: State()))"
+        try #require(emptyStateInitial.description.components(separatedBy: appendEmptyState).count == 2)
+        let droppedEmptyState = emptyStateInitial.description.replacingOccurrences(of: appendEmptyState, with: "")
+        try #require(droppedEmptyState != emptyStateInitial.description)
+        let corruptedEmptyState = try #require(Parser.parse(source: droppedEmptyState)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try assumptionOnlyEmitter.verifyIntInitialOutput(corruptedEmptyState)
+            Issue.record("A generated initializer that loses the only empty state was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+        }
     }
 }

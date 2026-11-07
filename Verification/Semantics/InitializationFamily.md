@@ -101,6 +101,33 @@ Sampling, action/checking kernels and general classification correspondence rema
 
 ## Current implementation links
 
+The whole native initial-function check now includes parameter-free assumption-only models with no variables.
+Their initial relation contains one empty binding. An empty state list would lose that binding.
+The existing output owner exercises the accepted source variant and checks its actual compiled outcome and generated function.
+With unchanged production, removing the function's only state append was accepted and reported one test issue.
+The repair removes the check's nonempty-variable guard. Correct generation is unchanged.
+The guarded repair run passed all 56 tests in six existing suites on 1,201 unchanged captured inputs.
+
+The local zero-initializer argument uses documented Swift control flow, arrays and the generated zero-field State/Snapshot constructors.
+Its entry has no parameters, variables, initializers or selected initial invariant.
+
+1. `CompiledRuntime.initialOutcomes` starts with the single pending item `(0, [:])`.
+   Its first pop takes the terminal branch because the initializer count is zero.
+   Mapping the empty layout produces an empty value array. `CompiledState` validates the equal zero counts and retains the runtime identity.
+   The branch appends that state once and returns without adding pending work.
+   No evaluator or invariant runs. The recovery callback is not invoked, and the failure array stays empty.
+2. The emitted initial function declares empty state/failure arrays and executes one outer recovery call.
+   Its body appends exactly one `Snapshot(state: State())`. No binding, membership loop or selected-state filter precedes that append.
+   The reviewed handler returns normally without a callback. The function returns one state and no failure events.
+   The complete template check now covers this declaration instead of returning early.
+3. Projecting the empty value array or generated zero-field state yields the empty binding.
+   Thus the local histories have one empty state and zero failures, with the empty first-failure view.
+   Their set projection is exactly `InitialSeed`, the existing `InitializationHistory` entry at index zero.
+
+This removes the concrete worklist/append premise for that local base case without assuming a matching child evaluator.
+It does not prove general source parsing, token and symbol interpretation, selected filtering, TLA initialization or checking kernels.
+Those links remain open. No new formal theorem or pinned proof execution is claimed by this manual code-case argument.
+
 `StraightLineAssignmentCheck` compares supported Int initializers with actual lowering and resolution.
 It checks initializer kind, constructor, ordered children, literals, state identities and existing binder identities.
 `ProgramResolver` retains source types before resolution, keeping nominal values distinct from raw integer encodings.
