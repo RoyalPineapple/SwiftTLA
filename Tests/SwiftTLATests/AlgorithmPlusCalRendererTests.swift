@@ -385,8 +385,8 @@ struct AlgorithmPlusCalRendererTests {
         }
     }
 
-    @Test("renders procedure parameters with compiled state names")
-    func rendersProcedureParametersWithCompiledStateNames() throws {
+    @Test("renders procedure parameters with compiled state names", arguments: [false, true])
+    func rendersProcedureParametersWithCompiledStateNames(reservingParameterName: Bool) throws {
         let algorithm = Algorithm("Procedures", scoped: { scope in
             let output = scope.sharedVar(_name: "output", initial: 0)
             Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
@@ -400,17 +400,32 @@ struct AlgorithmPlusCalRendererTests {
             Do(ProcedureStep.finished) { Stop() }
         })
 
-        let compilation = try TLASpec("Procedures") { algorithm }.compile()
+        let compilation = try TLASpec("Procedures") {
+            if reservingParameterName { Constant("parameter0", 9) }
+            algorithm
+        }.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        var state = try #require(try runtime.initialStates().first)
+        for label in ["start", "procedure.work.enter"] {
+            let action = try #require(compilation.layout.testActionID(named: label))
+            state = try #require(try runtime.successors(for: action, from: state).first).state
+        }
+        let output = try #require(compilation.layout.testVariableID(named: "output"))
+        #expect(try state.value(for: output) == .integer(8))
         let rendered = try compilation.render().plusCalBundle().root.tla
         let renderedTLA = try compilation.render().tlaBundle.root.tla
+        let parameter = reservingParameterName ? "parameter0__2" : "parameter0"
+        let start = try #require(rendered.range(of: "(*--algorithm Procedures {"))
+        let end = try #require(rendered.range(of: "} *)", range: start.upperBound..<rendered.endIndex))
+        let authored = rendered[start.lowerBound..<end.upperBound]
 
-        #expect(rendered.contains("procedure work(parameter0)"))
-        #expect(rendered.contains("enter:"))
-        #expect(rendered.contains("(parameter0 + offset)"))
-        #expect(rendered.contains("output :="))
-        #expect(rendered.contains("call work(7);"))
-        #expect(rendered.contains("{\n  start:"))
-        #expect(renderedTLA.contains("VARIABLES pc, output, stack, parameter0, offset"))
+        #expect(authored.contains("procedure work(\(parameter))"))
+        #expect(authored.contains("enter:"))
+        #expect(authored.contains("(\(parameter) + offset)"))
+        #expect(authored.contains("output :="))
+        #expect(authored.contains("call work(7);"))
+        #expect(authored.contains("{\n  start:"))
+        #expect(renderedTLA.contains("VARIABLES pc, output, stack, \(parameter), offset"))
     }
 
     @Test("procedure call capture avoids authored binders and retains tail return")

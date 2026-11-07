@@ -319,7 +319,8 @@ package struct CompiledLayout: Hashable, Sendable {
     }
 
     mutating func resolveActionNames(reserving names: Set<String>, preservingDirectNext: Bool) {
-        var used = names.union(["Init", "Next", "Spec", "vars", "StateConstraint", "ActionConstraint", "Terminating"])
+        var used = names.union(["Init", "Next", "Spec", "vars", "StateConstraint", "ActionConstraint"])
+        if actions.contains(where: \.isTermination) { used.insert("Terminating") }
         if preservingDirectNext { used.remove("Next") }
         actions = actions.map { action in
             let stem = action.renderedName

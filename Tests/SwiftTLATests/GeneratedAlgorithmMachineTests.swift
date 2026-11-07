@@ -25,7 +25,8 @@ struct GeneratedAlgorithmMachineTests {
     func terminationNameDoesNotHideAction() throws {
         var machine = try SanitizedActionModel.makeMachine()
         #expect(try machine.enabledActions().contains(.Terminating))
-        #expect(try machine.formalCall(for: .Terminating).name == "Terminating")
+        let call = try machine.formalCall(for: .Terminating)
+        #expect(call.name == "Terminating")
         #expect(try machine.send(.Terminating).after.value == 4)
     }
 

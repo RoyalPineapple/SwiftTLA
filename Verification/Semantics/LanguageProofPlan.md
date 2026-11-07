@@ -124,6 +124,10 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5j Preserve captured state reads in zero-based sequence literals and fills.
   Reuse the existing fresh-name allocator and one shared fill constructor; reserve root parameter names for rendered local binders.
   Retain the existing empty-sequence, membership and failure controls. General binder/source correspondence remains open.
+- [x] I5k Bind authored procedure parameters and their backing state to the same allocated formal name.
+  Preserve parameter/variable IDs, genuine occupants and runtime call values; cover unoccupied and occupied names in the existing owner.
+- [x] I5l Reserve `Terminating` for actual generated or authored termination contexts, preserving a free formal-core action name.
+  Keep ordinary action IDs, enablement and successor values unchanged. General namespace/control correspondence remains open.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -526,6 +530,8 @@ This result supplies a child rule. Complete initializer state assembly remains i
   Its unchanged-production baseline accepted a recovered negative operand; the two-line repair passed 156 tests in six suites. General placement and binding coverage remains open.
   The [grouped constant repair](InitializationFamily.md#grouped-closed-integer-source-values) also restores source-witness recognition for closed prefix negation.
   Its actual two-test baseline accepted a changed radix builder; the shared collector repair passed 156 tests in six suites. Nonconstant prefixes and full L1 remain open.
+  The [closed unary-plus repair](InitializationFamily.md#closed-integer-unary-plus) adds the corresponding identity branch to existing decoding and witness collection.
+  Actual accepted-builder and missed-rejection baselines precede the final 210-test combined pass; general binding and full L1 remain open.
 - [x] L2 State the independent literal outcome and its empty read/failure effects in the existing expression rules.
   `SourceNode` selects `Success(n)` without inspecting state, read keys or histories. The raw-source and [output meaning argument](InitializationFamily.md#native-and-mathematical-tla-integer-literal-meaning) state its empty model read/write/failure effects.
   This defines the leaf's independent meaning; it does not prove parsing, source binding or a complete observation contract.
@@ -979,6 +985,42 @@ The owners cover generated/compiled sequence outcomes, mathematical integers, or
 The whole log is 75,594 bytes, SHA256 `443c0635de9163d1106f41a013c9dbfe4066e059c9c196ac2b995a2edd60d9b5`.
 Only this plan changed afterward. The repair introduces no new model, fixture type, evaluator/checker, API signature, domain bound or resource limit.
 The local literal code-case result has its own reasoning above. Neither result completes E LIT, M0, hosted admission or whole-language preservation.
+
+### Procedure and action name repair checkpoint 7 November 2026
+
+The procedure lowerer derives parameter BinderIDs and backing VariableIDs from the same parameter list.
+Previously, reserving every binder spelling made storage occupy its own alias: an otherwise free `parameter0`
+became `parameter0__2`, while authored PlusCal still used the old binder name.
+The existing renderer owner failed on unchanged production. Its extended occupied/unoccupied cases both executed
+the actual call and independently produced output eight; the final baseline then reported three formal-name issues.
+An earlier test-source compile error executed zero tests and supplies no rejection evidence.
+
+Compilation now excludes only these paired aliases from their own state reservations, allocates storage names once,
+and merges the resulting names into the existing binding table. Other binders and actual declaration occupants remain reserved.
+The pairing preserves IDs and ordinal lookup; unchanged layouts preserve the referenced backing variables.
+Header, authored body and direct-TLA state declarations now agree in both cases.
+This is a scoped implementation argument, not a proof of every procedure, binding or control route.
+
+The unchanged generated-machine owner separately exposed a free formal-core action named `Terminating`
+rendered as `Terminating__2`; enablement and the expected successor value four still passed.
+Action allocation now reserves that name when an actual generated termination action or authored PlusCal context requires it.
+The actual generated termination release rule and all genuine global occupants remain unchanged.
+No public action identity, source label or successor calculation changes.
+
+The final combined guarded run passed 210 tests across 13 suites on 1,201 exact inputs,
+including the actual external consumer. The whole-log SHA256 is
+`b8decb1acccfd249dec3cb0cb830138a9f4b427d2800e5f3f52b59d7d085e09c`.
+Only the existing native-code-generation test owner changed next: its two substring guards had rejected
+legitimate `SwiftTLA.TLAValue` primitive literal-associated type paths, rather than formal-runtime execution.
+Token guards now permit only those three paths and reject raw formal storage and construction.
+Both actual outputs pass; both syntax-valid, occurrence-checked changed controls per owner are rejected.
+The unchanged native baseline ran 26 tests with two issues; its repaired run passed all 26,
+whole-log SHA256 `271bd46920d9438ded99a12a7ab577a0e50f66b4affeacf92a116cb406ec1069`.
+All producer and earlier selected owner bytes remained exact across this test-only change.
+
+These receipts repair the four observed ordinary-CI cases at parent `4e7b1a5f`; they do not replace that failed run.
+General namespace/import/source interpretation, PlusCal translation and checking kernels remain owned obligations.
+I5, I6, every complete six-link row, M0 through M8 and universal preservation remain open.
 
 ## Work discipline and admission
 

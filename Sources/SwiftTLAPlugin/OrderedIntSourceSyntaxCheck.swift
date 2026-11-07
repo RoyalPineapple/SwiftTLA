@@ -298,9 +298,10 @@ enum OrderedIntSourceSyntaxCheck {
         if let group = syntax.as(TupleExprSyntax.self), group.elements.count == 1,
            let element = group.elements.first { return value(element.expression, roots: roots, type: type) }
         if type == .int, let prefix = syntax.as(PrefixOperatorExprSyntax.self),
-           prefix.operator.text == "-",
+           ["+", "-"].contains(prefix.operator.text),
            let operand = value(prefix.expression, roots: roots),
            case .value(.int(let number)) = operand {
+            if prefix.operator.text == "+" { return operand }
             let result = 0.subtractingReportingOverflow(number)
             return result.overflow ? nil : .value(.int(result.partialValue))
         }
