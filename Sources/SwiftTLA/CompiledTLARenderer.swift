@@ -1050,7 +1050,13 @@ struct CompiledTLARenderer {
         }
         let target: String
         switch refinement.operator {
-        case .spec: target = "Spec"
+        case .spec:
+            let abstract = refinement.abstract
+            if abstract.layout.variables.isEmpty, abstract.semantics.behavior.actions.isEmpty,
+               let operation = bindings.sourceOperators["\(instance.namespace)!Spec"] {
+                return "\(refinement.name) == \(try operatorName(operation))"
+            }
+            target = "Spec"
         case .liveSpec: target = "LiveSpec"
         case .liveSpecEquals: target = "LiveSpecEquals"
         }

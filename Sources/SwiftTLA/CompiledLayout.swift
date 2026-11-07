@@ -560,13 +560,16 @@ package struct CompiledLayout: Hashable, Sendable {
 struct CompiledBindingTable: Sendable {
     let binders: [BinderID: String]
     let operatorNames: [OperatorID: String]
+    let sourceOperators: [String: OperatorID]
 
     init(
         operatorNames: [OperatorID: String] = [:],
-        binders: [BinderID: String] = [:]
+        binders: [BinderID: String] = [:],
+        sourceOperators: [String: OperatorID] = [:]
     ) {
         self.binders = binders
         self.operatorNames = operatorNames
+        self.sourceOperators = sourceOperators
     }
 
     func binderName(_ id: BinderID) -> String? { binders[id] }

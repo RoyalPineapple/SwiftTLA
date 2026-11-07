@@ -1213,15 +1213,35 @@ public extension TLASpec {
         for entry in closure.entries where entry.id != closure.root.id {
             try entry.module.validateSourceDeclarationNames()
         }
-        let module = try compileModule(in: closure)
+        var compiledModules: [CompiledModule] = []
+        var exportedOperators: [String: [String: String]] = [:]
+        let moduleDeclarations = Set(closure.entries.flatMap { $0.module.renderedDeclarationNames() })
+        for entry in closure.entries {
+            let source = try entry.id == closure.root.id ? self : entry.module.loweredSourceModel()
+            let context = closure.planContext(for: entry)
+            var visible: [String: String] = [:]
+            for edge in closure.edges where edge.fromModule == entry.module.name {
+                for (name, rendered) in exportedOperators[edge.toModule, default: [:]] {
+                    if case .namedInstance(let namespace, _) = edge.kind {
+                        visible["\(namespace)!\(name)"] = "\(namespace)!\(rendered)"
+                    } else {
+                        visible[name] = rendered
+                    }
+                }
+            }
+            let compiled = try source.compileModule(in: context.closure,
+                incomingModuleParameters: context.incomingModuleParameters, importedOperatorNames: visible,
+                moduleDeclarations: moduleDeclarations)
+            exportedOperators[entry.module.name] = compiled.bindings.sourceOperators.mapValues {
+                compiled.bindings.operatorName($0)!
+            }
+            compiledModules.append(compiled)
+        }
+        let module = compiledModules.removeLast()
+        let imports = compiledModules
         let layout = module.layout
         let semantics = module.semantics
         let identity = compilationIdentity
-        let imports = try closure.entries.filter { $0.id != closure.root.id }.map { entry in
-            let source = try entry.module.loweredSourceModel()
-            let context = closure.planContext(for: entry)
-            return try source.compileModule(in: context.closure, incomingModuleParameters: context.incomingModuleParameters)
-        }
         let provenance = TLAModuleBundle.Provenance.compiled(
             identity: identity,
             ownership: closure.entries.map {
@@ -1285,7 +1305,9 @@ public extension TLASpec {
 
     private func compileModule(
         in closure: FormalModuleClosure,
-        incomingModuleParameters: [FormalModuleReplacement] = []
+        incomingModuleParameters: [FormalModuleReplacement],
+        importedOperatorNames: [String: String],
+        moduleDeclarations: Set<String>
     ) throws -> CompiledModule {
         try validateUnique(variables.map(\.name), code: .duplicateVariable, path: "variables")
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
@@ -1312,7 +1334,7 @@ public extension TLASpec {
         }
         var lowerer = CompiledLowerer(
             spec: self, closure: closure, layout: layout,
-            incomingModuleParameters: incomingModuleParameters
+            incomingModuleParameters: incomingModuleParameters, importedOperatorNames: importedOperatorNames
         )
         var semantics = try lowerer.lower(spec: self)
         let authoredAlgorithm: (plan: CompiledAuthoredPlusCalAlgorithmPlan, declarations: AuthoredPlusCalDeclarationOrder)?
@@ -1331,7 +1353,23 @@ public extension TLASpec {
         let standardModules = Set(extendsModules + [.finiteSets, .sequences]
             + (symmetrySets.isEmpty ? [] : [.tlc])).union(lowerer.requiredStandardModules)
         let importedNames = Set(standardModules.flatMap(\.exportedDeclarationNames))
-        let bindings = lowerer.bindings(reserving: importedNames)
+        var operatorReservations = Set(constants.map(\.name))
+        operatorReservations.formUnion(formalParameters.map(\.name))
+        operatorReservations.formUnion(moduleInstances.map(\.name))
+        operatorReservations.formUnion(generatedModelInstances.map(\.name))
+        operatorReservations.formUnion(symmetrySets.map { "Symm\($0.variableName)" })
+        operatorReservations.formUnion(incomingModuleParameters.map(\.operatorName))
+        operatorReservations.formUnion(semantics.behavior.fairnessProfiles.map(\.operatorName))
+        operatorReservations.formUnion(["Init", "Next", "Spec", "vars"])
+        if authoredAlgorithm != nil { operatorReservations.insert("Terminating") }
+        if semantics.behavior.constraint != nil { operatorReservations.insert("StateConstraint") }
+        if semantics.behavior.actionConstraint != nil { operatorReservations.insert("ActionConstraint") }
+        for (index, scenario) in semantics.behavior.validationScenarios.enumerated() {
+            if scenario.view != nil { operatorReservations.insert("__SwiftTLAView\(index)") }
+            if let postcondition = scenario.postconditionName { operatorReservations.insert(postcondition) }
+        }
+        let bindings = lowerer.bindings(reserving: importedNames, operatorReservations: operatorReservations,
+            avoiding: moduleDeclarations)
         var occupied = renderedDeclarationNames(includingActions: false, includingVariables: false, includingProperties: false)
             .union(importedNames)
             .union(lowerer.modelValueNames)
@@ -1366,7 +1404,8 @@ public extension TLASpec {
         layout.resolveVariableNames(reserving: variableReservations)
         let parameterNames = parameterVariables.mapValues { layout.variables[$0.ordinal].formalName }
         let resolvedBindings = CompiledBindingTable(operatorNames: bindings.operatorNames,
-            binders: bindings.binders.merging(parameterNames) { _, name in name })
+            binders: bindings.binders.merging(parameterNames) { _, name in name },
+            sourceOperators: bindings.sourceOperators)
         occupied.formUnion(layout.variables.map(\.formalName))
         let directNext = layout.actions.count == 1 && layout.actions[0].renderedName == "Next"
             && semantics.behavior.actions.count == 1

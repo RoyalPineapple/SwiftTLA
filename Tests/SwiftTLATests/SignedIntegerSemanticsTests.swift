@@ -141,11 +141,16 @@ import Testing
                     .filter { $0.tokenKind != .endOfFile }
                 try #require(originalTokens.map(\.text) == changedTokens.map(\.text))
                 try #require(originalTokens.map(\.tokenKind) != changedTokens.map(\.tokenKind))
-                let body = try #require(declaration.as(FunctionDeclSyntax.self)?.body)
-                let parts = body.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }
-                try #require(parts.contains {
-                    $0.body?.statements.first?.item.as(VariableDeclSyntax.self)?.hasError == true
-                })
+                try #require(declaration.is(FunctionDeclSyntax.self))
+                let changedOperator = try #require(zip(originalTokens, changedTokens).first {
+                    $0.0.text == "-" && $0.0.tokenKind != $0.1.tokenKind
+                }?.1)
+                try #require(changedOperator.tokenKind == .binaryOperator("-"))
+                var bindingOwner = changedOperator.parent
+                while let node = bindingOwner, !node.is(VariableDeclSyntax.self) {
+                    bindingOwner = node.parent
+                }
+                try #require(bindingOwner?.as(VariableDeclSyntax.self)?.hasError == true)
             }
             do {
                 try verifyGeneratedActionWriteOutput(declaration, action: formalAction.body,

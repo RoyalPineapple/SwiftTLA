@@ -61,6 +61,7 @@ struct CompiledLowerer {
     private let authoredAlgorithm: AlgorithmModel?
     private let reservedRenderedNames: Set<String>
     private let rootOperators: [String: OperatorID]
+    private let importedOperatorIDs: Set<OperatorID>
     private var operatorArities: [OperatorID: Int]
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal: Int
@@ -76,7 +77,8 @@ struct CompiledLowerer {
         spec: TLASpec,
         closure: FormalModuleClosure,
         layout: CompiledLayout,
-        incomingModuleParameters: [FormalModuleReplacement] = []
+        incomingModuleParameters: [FormalModuleReplacement] = [],
+        importedOperatorNames: [String: String] = [:]
     ) {
         self.closure = closure
         self.layout = layout
@@ -104,23 +106,38 @@ struct CompiledLowerer {
         }
         operatorArities = arities
         rootOperators = operators
-        operatorNames = Dictionary(uniqueKeysWithValues: operators.map { ($0.value, $0.key) })
+        importedOperatorIDs = Set(importedOperatorNames.keys.compactMap { operators[$0] })
+        operatorNames = Dictionary(uniqueKeysWithValues: operators.map {
+            ($0.value, importedOperatorNames[$0.key] ?? $0.key)
+        })
         nextOperatorOrdinal = operators.count
     }
 
-    func bindings(reserving importedNames: Set<String>) -> CompiledBindingTable {
+    func bindings(reserving importedNames: Set<String>, operatorReservations: Set<String>,
+        avoiding moduleDeclarations: Set<String>) -> CompiledBindingTable {
         var names = binderNames
+        var operations = operatorNames
         var unavailable = reservedRenderedNames.union(modelValueNames).union(importedNames)
             .union(binderNames.values).union(operatorNames.values)
+            .union(operatorReservations)
+            .union(moduleDeclarations)
+        let importedDeclarations = importedNames.union(importedOperatorIDs.compactMap { operatorNames[$0] })
+        let reservedOperators = operatorReservations.union(importedDeclarations).union(modelValueNames)
+        for (operation, name) in operatorNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
+            where !importedOperatorIDs.contains(operation) && reservedOperators.contains(name) {
+            let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
+            operations[operation] = renamed
+            unavailable.insert(renamed)
+        }
         let parameterIDs = Set(layout.parameters.map(\.binder))
         for (binder, name) in binderNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
-            where modelValueNames.contains(name) || importedNames.contains(name)
+            where modelValueNames.contains(name) || importedDeclarations.contains(name)
                 || (parameterIDs.contains(binder) && reservedRenderedNames.contains(name)) {
             let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
             names[binder] = renamed
             unavailable.insert(renamed)
         }
-        return .init(operatorNames: operatorNames, binders: names)
+        return .init(operatorNames: operations, binders: names, sourceOperators: rootOperators)
     }
 
     private var rootScope: BindingScope {

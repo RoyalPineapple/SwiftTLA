@@ -332,15 +332,15 @@ struct TLAModuleBundleTests {
     }
   }
 
-  @Test("an instance keeps recursive calls inside its namespace")
-  func namedModuleInstanceKeepsRecursiveCallsQualified() throws {
+  @Test("an instance keeps recursive calls and allocated exports inside its namespace", arguments: ["CountDown", "Len", "Spec"])
+  func namedModuleInstanceKeepsRecursiveCallsQualified(name: String) throws {
     let counting = TLASpec("InstanceCounting") {
-      DefineRecursive("CountDown", params: ["number"]) {
+      DefineRecursive(name, params: ["number"]) {
         let number = StateExpr.variable("number")
         return .ifThenElse(
           .equal(number, .int(0)),
           .int(0),
-          .add(.int(1), .recursiveCall("CountDown", [.subtract(number, .int(1))]))
+          .add(.int(1), .recursiveCall(name, [.subtract(number, .int(1))]))
         )
       }
     }
@@ -350,13 +350,20 @@ struct TLAModuleBundleTests {
       math
       Variable(value, 3)
       Action("Stay") { value.stateExpr == 3 }
-      Invariant("CountsDown") { math.call("CountDown", value.stateExpr) == 3 }
+      Invariant("CountsDown") { math.call(name, value.stateExpr) == 3 }
     }
 
     let resolved = try FormalModuleClosure.resolve(root: consumer)
       .linkedOperators.recursiveFunctions
-    #expect(resolved.map(\.name) == ["Math!CountDown"])
-    #expect(try consumer.compile().render().tlaBundle.tla.contains("Math\u{21}CountDown"))
+    #expect(resolved.map(\.name) == ["Math!\(name)"])
+    let compilation = try consumer.compile()
+    let operation = try #require(compilation.bindings.sourceOperators["Math!\(name)"])
+    let formalName = try #require(compilation.bindings.operatorName(operation))
+    let exportedName = try #require(formalName.split(separator: "!").last)
+    #expect(!["Len", "Spec"].contains(String(exportedName)))
+    let bundle = try compilation.render().tlaBundle
+    #expect(bundle.root.tla.contains("\(formalName)("))
+    #expect(try #require(bundle.imports.first).tla.contains("RECURSIVE \(exportedName)("))
     let outcome = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
     guard case .ok = outcome else {
       Issue.record("The checker did not resolve recursive instance calls.")

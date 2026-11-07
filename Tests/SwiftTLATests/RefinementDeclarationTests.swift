@@ -142,22 +142,38 @@ struct RefinementDeclarationTests {
       "Stable": [true], "Progress": [false, true]])
   }
 
-  @Test("direct module rendering follows linked instance declarations")
-  func rendersLinkedTarget() throws {
+  @Test("direct module rendering follows linked behavior or explicit operator targets", arguments: [false, true])
+  func rendersLinkedTarget(library: Bool) throws {
     let state = Var<Int>("state", 0)
     let abstract = TLASpec("Abstract") {
-      Variable(state)
-      Action("stay") { state.stays }
+      if library {
+        FormalDefinition("Spec", parameters: [], body: true)
+      } else {
+        Variable(state)
+        Action("stay") { state.stays }
+      }
     }
     let instance = Instance("C", of: abstract)
     let concrete = TLASpec("Concrete") {
       instance
-      Refinement(_name: "Refines", instance: instance, mappings: [.init(state, from: 0)])
+      Refinement(_name: "Refines", instance: instance, mappings: library ? [] : [.init(state, from: 0)])
     }
 
-    let source = try concrete.compile().render().tlaBundle.tla
-    let instanceRange = try #require(source.range(of: "C == INSTANCE Abstract WITH state <- 0"))
-    let refinementRange = try #require(source.range(of: "Refines == C!Spec"))
+    let bundle = try concrete.compile().render().tlaBundle
+    let source = bundle.root.tla
+    let declaration = library ? "C == INSTANCE Abstract" : "C == INSTANCE Abstract WITH state <- 0"
+    let instanceRange = try #require(source.range(of: declaration))
+    let target: String
+    if library {
+      let imported = try #require(bundle.imports.first).tla
+      let definition = try #require(imported.split(separator: "\n").first { $0.hasSuffix(" == TRUE") })
+      target = String(try #require(definition.split(separator: " ").first))
+      #expect(target != "Spec")
+      #expect(try #require(bundle.imports.first).tla.contains("\(target) == TRUE"))
+    } else {
+      target = "Spec"
+    }
+    let refinementRange = try #require(source.range(of: "Refines == C!\(target)"))
     #expect(instanceRange.lowerBound < refinementRange.lowerBound)
   }
 

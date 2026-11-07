@@ -143,6 +143,11 @@ The proof dependencies above still govern proof closure; they do not block indep
   Apply to outputs with state or named actions. Keep whole-body equality when fairness is empty.
   Retain the existing action-call and configuration checks.
   Nonempty fairness tails, checker soundness and reconstructed export-metadata correspondence remain open.
+- [x] I5r Allocate formal operator names against owning-module standard exports and generated declarations, preserving source IDs through imports and qualified instances.
+  The existing binding table carries resolved exported names; local operators and binders also reserve actual imported aliases.
+  Existing owners cover direct and qualified calls, recursion, explicit refinement targets and a measured lexical capture.
+  Importer-only reserved symbols, constants/model values, opaque imports and general namespace correspondence remain open.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1240,3 +1245,42 @@ This is a structural output-check implementation repair.
 It does not prove fairness preservation, TLA interpretation, arbitrary source correspondence or checking-kernel soundness.
 Selected checking still needs derived equal machine observations and predicates.
 I5, I6, every complete six-link row and the whole-language theorem remain open.
+
+### Formal operator projection and recovery-control checkpoint 7 November 2026
+
+The existing transition owner now exercises ordinary, `Len` and `Spec` operator names.
+Its unchanged-production baseline executed one test with three arguments and two intended name-collision issues.
+The original transition, two-state exploration and invariant/trace outcomes passed.
+This is an emitted-name regression baseline, not hosted TLA-kernel execution or a language proof.
+
+The compiler retains source operator IDs and assigns distinct names for collisions with selected standard exports and generated declarations in the owning module.
+Existing dependency-first module compilation passes actual exported names to direct imports and qualified instances.
+The compiler binding table retains the source-name-to-ID link.
+Explicit library `Spec` refinements use the actual instance-qualified linked ID; generated behavior `Spec` remains the behavior target.
+A first repair attempt stopped during compilation because one combined set expression exceeded Swift's type checker.
+It executed no tests and supplies no rejection credit. Ordinary set unions corrected that expression.
+
+The first executed repair passed 177 tests across nine suites.
+Read-only review then identified a lexical capture risk in its unpublished name projection.
+An extended existing import owner reproduced it: direct imported `Len` and a distinct local `Len_1` both emitted `Len_1`.
+One executed test with three arguments reported one intended issue; native transition/exploration controls and other cases passed.
+Actual imported aliases now participate in the existing operator and binder reservations.
+The expanded guarded repair passed 211 tests across twelve existing suites.
+All 1201 captured inputs remained exact. The build took 1413.56 seconds and selected execution took 204.241 seconds.
+The complete 117436-byte log has SHA256 `f59ea57c51750bede9b7ce64c1e2a4a360c1f3868badf6cd1d54731a964d4a3c`.
+
+Published `06d2855a` ordinary CI independently failed the existing signed-division negative control.
+Its malformed-binding guard assumed that binding was the first generated statement.
+Actual action parts now wrap their bindings in a `do/catch` recovery envelope.
+The guard failed before the spacing corruption checker ran; it establishes no compiler mismatch or rejection result for that case.
+The existing test now follows the changed binary-minus token to its owning recovered variable declaration.
+It retains root function typing, syntax-error checks, token text equality and kind difference, unique mutation, changed input and actual rejection/path checks.
+The guarded existing signed-integer suite passed 14 tests.
+Only that test file changed after the 211-test run; only this plan changed after the 14-test run.
+Exact input sets, complete logs, baseline failures and review receipts are under `.git/swifttla-proof-evidence/formal-operator-symbols-2026-11-07/` in the primary checkout.
+
+No new model, fixture type, checker/evaluator family, public application API, dependency, pin, budget, timeout or accepted-language restriction was added.
+These are implementation and regression results. They do not prove namespace or parser soundness.
+Importer-only reserved symbols, constants/model values, opaque imports, typed explicit-library refinement export and general source/backend correspondence remain owned boundaries.
+Complete events, every complete six-link row, I5, I6 and the whole-language theorem remain open.
+Current hosted admission must be established separately for the final published revision.
