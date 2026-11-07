@@ -1328,13 +1328,14 @@ public extension TLASpec {
             lowerer: &lowerer, layout: layout, semantics: semantics)
         semantics.operators = lowerer.operators
         semantics.operators.resolveDependencies()
-        let bindings = lowerer.bindings
         let parameterVariables = Dictionary(uniqueKeysWithValues:
             (authoredAlgorithm?.plan.procedures ?? []).flatMap { zip($0.parameters, $0.parameterVariables) })
         let standardModules = Set(extendsModules + [.finiteSets, .sequences]
             + (symmetrySets.isEmpty ? [] : [.tlc])).union(lowerer.requiredStandardModules)
+        let importedNames = Set(standardModules.flatMap(\.exportedDeclarationNames))
+        let bindings = lowerer.bindings(reserving: importedNames)
         var occupied = renderedDeclarationNames(includingActions: false, includingVariables: false)
-            .union(standardModules.flatMap(\.exportedDeclarationNames))
+            .union(importedNames)
             .union(lowerer.modelValueNames)
             .union(bindings.binders.filter { parameterVariables[$0.key] == nil }.values)
             .union(bindings.operatorNames.values)

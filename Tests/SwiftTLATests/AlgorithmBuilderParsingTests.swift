@@ -393,25 +393,25 @@ import SwiftTLAMacros
         #expect(!module.contains("Len(input)"))
     }
 
-    @Test("Algorithm parser preserves tuple type through With and quantifier bindings")
-    func parsesBoundTupleCounts() throws {
+    @Test("Algorithm parser preserves tuple type through With and quantifier bindings", arguments: ["tuple", "Len", "Cardinality", "PrintT", "TLCGet"])
+    func parsesBoundTupleCounts(binder: String) throws {
         let source = """
         {
-            Extends(.sequences)
+            \(binder == "TLCGet" ? "Extends(.tlc)" : "")
             let BoundTupleCount = Algorithm(scoped: { scope in
                 let pending = scope.sharedVar(_name: "pending",
                     initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>.literal(1))
                 )
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.advance) {
-                    With(pending) { tuple in
-                        Assign(count, to: tuple.expr.count)
+                    With(pending) { \(binder) in
+                        Assign(count, to: \(binder).expr.count)
                     }
                     Stop()
                 }
                 Invariant("TupleLengths") {
-                    ForAll(in: pending.expr) { tuple in
-                        tuple.expr.count == 1
+                    ForAll(in: pending.expr) { \(binder) in
+                        \(binder).expr.count == 1
                     }
                 }
             })
@@ -421,7 +421,18 @@ import SwiftTLAMacros
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
-        let module = try compile(parsed, named: "BoundTupleCount").render().tlaBundle.tla
+        let compilation = try compile(parsed, named: "BoundTupleCount")
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        let invariant = try #require(compilation.semantics.behavior.invariants.first)
+        #expect(try runtime.invariantHolds(invariant, in: initial))
+        let module = try compilation.render().tlaBundle.tla
+        let predicate = try #require(module.split(separator: "\n").first { $0.hasPrefix("TupleLengths ==") })
+        let quantifier = try #require(predicate.range(of: "\\A "))
+        let formalBinder = try #require(predicate[quantifier.upperBound...].split(separator: " ").first)
+        #expect(!["Len", "Cardinality", "TLCGet"].contains(String(formalBinder)))
+        #expect(predicate.contains("Len(\(formalBinder))"))
+        if binder == "PrintT" { #expect(formalBinder == "PrintT") }
         #expect(module.components(separatedBy: "Len(").count == 3)
     }
 

@@ -108,13 +108,14 @@ struct CompiledLowerer {
         nextOperatorOrdinal = operators.count
     }
 
-    var bindings: CompiledBindingTable {
+    func bindings(reserving importedNames: Set<String>) -> CompiledBindingTable {
         var names = binderNames
-        var unavailable = reservedRenderedNames.union(modelValueNames)
+        var unavailable = reservedRenderedNames.union(modelValueNames).union(importedNames)
             .union(binderNames.values).union(operatorNames.values)
         let parameterIDs = Set(layout.parameters.map(\.binder))
         for (binder, name) in binderNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
-            where modelValueNames.contains(name) || (parameterIDs.contains(binder) && reservedRenderedNames.contains(name)) {
+            where modelValueNames.contains(name) || importedNames.contains(name)
+                || (parameterIDs.contains(binder) && reservedRenderedNames.contains(name)) {
             let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
             names[binder] = renamed
             unavailable.insert(renamed)
