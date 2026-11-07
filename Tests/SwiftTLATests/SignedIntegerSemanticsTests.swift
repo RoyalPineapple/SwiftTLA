@@ -117,6 +117,7 @@ import Testing
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "SignedDivisionOutputModel", program: program))
         let native = try emitter.updateFunction(formalAction, configurationParameters: "")
+        try #require(!native.hasError)
         let writes = try emitter.actionFunctions(formalAction.body).writes
         try verifyGeneratedActionWriteOutput(native, action: formalAction.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
@@ -127,9 +128,25 @@ import Testing
             ("order", "SwiftTLA._NativeMachineOperations.divide(-2, 5)"),
             ("operation", "SwiftTLA._NativeMachineOperations.modulo(5, -2)"),
             ("qualification", "_NativeMachineOperations.divide(5, -2)"),
+            ("operator spacing", "SwiftTLA._NativeMachineOperations.divide(5, - 2)"),
         ] {
             let changed = native.description.replacingOccurrences(of: call, with: changedCall)
-            let declaration = try #require(Parser.parse(source: changed).statements.first?.item.as(DeclSyntax.self))
+            try #require(changed != native.description)
+            let changedTree = Parser.parse(source: changed)
+            let declaration = try #require(changedTree.statements.first?.item.as(DeclSyntax.self))
+            if label == "operator spacing" {
+                try #require(changedTree.hasError)
+                let originalTokens = Array(native.tokens(viewMode: .sourceAccurate))
+                let changedTokens = Array(changedTree.tokens(viewMode: .sourceAccurate))
+                    .filter { $0.tokenKind != .endOfFile }
+                try #require(originalTokens.map(\.text) == changedTokens.map(\.text))
+                try #require(originalTokens.map(\.tokenKind) != changedTokens.map(\.tokenKind))
+                let body = try #require(declaration.as(FunctionDeclSyntax.self)?.body)
+                let parts = body.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }
+                try #require(parts.contains {
+                    $0.body?.statements.first?.item.as(VariableDeclSyntax.self)?.hasError == true
+                })
+            }
             do {
                 try verifyGeneratedActionWriteOutput(declaration, action: formalAction.body,
                     program: program, stateFields: emitter.stateMemberNames, parts: writes)

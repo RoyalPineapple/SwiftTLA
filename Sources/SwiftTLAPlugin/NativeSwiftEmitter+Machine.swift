@@ -2486,7 +2486,8 @@ func verifyGeneratedActionWriteOutput(
         }
         externalScalarNames.insert(name)
     }
-    let visitorTokens = Array(visitor.tokens(viewMode: .sourceAccurate)).map(\.text)
+    let syntaxTokens = Array(visitor.tokens(viewMode: .sourceAccurate))
+    let visitorTokens = syntaxTokens.map(\.text)
     var tokenDepths: [Int] = []
     tokenDepths.reserveCapacity(visitorTokens.count)
     var depth = 0
@@ -2496,6 +2497,7 @@ func verifyGeneratedActionWriteOutput(
         if token == "}" { depth -= 1 }
     }
     var bodies: [Int: [String]] = [:]
+    var firstStatements: [Int: Syntax] = [:]
     var parameters: [Int: [String]] = [:]
     var coveredPartTokens = 0
     for index in visitorTokens.indices where visitorTokens[index] == "func" && tokenDepths[index] == 1 {
@@ -2537,6 +2539,7 @@ func verifyGeneratedActionWriteOutput(
         }
         parameters[id] = names
         bodies[id] = Array(visitorTokens[(open + 1)..<(close - 1)])
+        firstStatements[id] = syntaxTokens[open + 1].parent
         coveredPartTokens += close - index
     }
     let expectedEntry = ["try", "_actionPart0", "(", "_Updates", "(", ")", ",", "emit", ")"]
@@ -3260,6 +3263,20 @@ func verifyGeneratedActionWriteOutput(
         return "token \(index): expected \(expectedToken), actual \(actualToken) " +
             "(expected \(expected.count) tokens, actual \(actual.count))"
     }
+    func requireParsedIntegerScalar(
+        _ value: CompiledExpression, id: Int, parameters: [String], at path: String
+    ) throws {
+        guard value.resultType == .int,
+              directScalarTokens(value, parameters: parameters) != nil ||
+                arithmeticIntTokens(value, parameters: parameters) != nil else { return }
+        guard let statement = firstStatements[id],
+              statement.is(VariableDeclSyntax.self) || statement.is(IfExprSyntax.self),
+              !statement.hasError else {
+            throw invalid(path, "a parsed scalar statement without syntax recovery",
+                firstStatements[id].map { "statement \($0.kind), parser errors \($0.hasError)" }
+                    ?? "missing scalar statement")
+        }
+    }
     for guardNode in guards {
         guard let tokens = bodies[guardNode.id], let bindings = parameters[guardNode.id] else {
             throw invalid("native.action.guard.\(guardNode.id)",
@@ -3328,6 +3345,8 @@ func verifyGeneratedActionWriteOutput(
                 "the child receives inherited and captured values unchanged", "generated child arguments differ")
         }
         let initializer = Array(tokens[3..<(tokens.count - expectedCall.count)])
+        try requireParsedIntegerScalar(value, id: id, parameters: parent,
+            at: "native.action.binding.\(id)")
         let checkedInitializer = checkedValueTokens(value, parameters: parent, actual: initializer)
         if checkedInitializer == nil, requireScalarLeaves || booleanPredicateNodes(value) != nil {
             throw invalid("native.action.binding.\(id)",
@@ -3501,6 +3520,8 @@ func verifyGeneratedActionWriteOutput(
                 throw invalid("native.action.write.\(part.id)",
                     "the compiled assignment target", "a different generated state slot")
             }
+            try requireParsedIntegerScalar(assignment.value, id: part.id, parameters: bindings,
+                at: "native.action.write.\(part.id)")
             let checkedValue = checkedValueTokens(assignment.value, parameters: bindings, actual: actualBody)
             let controlLiteral: Bool = if case .controlLocation = assignment.value.operation { true } else { false }
             let scalarSetLiteral: Bool = if case .value(.set) = assignment.value.operation,
