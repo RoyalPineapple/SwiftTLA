@@ -1,5 +1,3 @@
-import Foundation
-
 /// The operation and binding metadata for a compiled expression.
 package enum CompiledOperation: Hashable, Sendable {
     case value(CompiledValue)
@@ -98,8 +96,9 @@ package enum CompiledOperation: Hashable, Sendable {
 /// One expression representation from lowering through checking and backend execution.
 /// Checking fills the result type and records explicit conversions.
 package struct CompiledExpression: Hashable, Sendable {
-    // Copies retain occurrence identity without recursively owned class instances.
-    private let identity = UUID()
+    private final class Occurrence: Sendable {}
+    // Copies share identity; the token owns no expression children.
+    private let identity = Occurrence()
     package let operation: CompiledOperation
     package let resultType: CompiledValueType
     package let children: [Self]
@@ -112,7 +111,7 @@ package struct CompiledExpression: Hashable, Sendable {
     }
 
     package func hasSameOccurrence(as other: Self) -> Bool {
-        identity == other.identity
+        identity === other.identity
     }
 
     /// The operation before its explicit representation conversion.
@@ -144,8 +143,8 @@ package struct CompiledExpression: Hashable, Sendable {
         return inverted ? !value : value
     }
 
-    package static func == (lhs: Self, rhs: Self) -> Bool { lhs.identity == rhs.identity }
-    package func hash(into hasher: inout Hasher) { hasher.combine(identity) }
+    package static func == (lhs: Self, rhs: Self) -> Bool { lhs.identity === rhs.identity }
+    package func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(identity)) }
 }
 
 extension CompiledExpression {
