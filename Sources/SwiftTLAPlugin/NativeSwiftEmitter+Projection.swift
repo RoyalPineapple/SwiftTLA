@@ -136,11 +136,11 @@ extension NativeSwiftEmitter {
             guard key == .int else { throw unsupported("formal JSON dictionary key type") }
             let member = try formalJSONValue("item", type: element)
             return decode("""
-                var result: [Int: \(try swiftType(element))] = [:]
+                var result: [\(nativeIntType): \(try swiftType(element))] = [:]
                 switch \(value) {
                 case .object(let fields):
                     for (name, item) in fields {
-                        guard let key = Int(name), String(key) == name else { \(invalid) }
+                        guard let key = \(nativeIntType)(name), \(nativeStringType)(key) == name else { \(invalid) }
                         guard result.updateValue(\(member), forKey: key) == nil else { \(invalid) }
                     }
                 case .array(let items):

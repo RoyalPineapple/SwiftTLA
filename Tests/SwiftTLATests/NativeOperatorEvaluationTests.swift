@@ -383,7 +383,7 @@ private struct MissingFunctionKey {
         })
         let swiftProofInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("MissingFunctionKeySwiftVisitor.txt")
-        let expectedVisitor = try String(contentsOf: swiftProofInput, encoding: .utf8)
+        let expectedVisitor = nativeWitnessSource(try String(contentsOf: swiftProofInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }

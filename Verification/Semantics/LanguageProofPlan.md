@@ -536,6 +536,9 @@ This result supplies a child rule. Complete initializer state assembly remains i
 - [x] L3d Derive typed literal transport through actual checking and resolution for the compiled pilot case.
   The [transport argument](InitializationFamily.md#typed-scalar-literal-transport-through-resolution) derives the persistent Int-type invariant and both first-visit/cache-hit literal cases.
   It supplies the scalar evaluator and initializer consumer without assumed checked/resolved literal agreement. Source typing, other scope routes and full L3 remain open.
+- [x] L3e Supply the primitive input type for the unannotated scoped shared literal route.
+  The [source-type argument](InitializationFamily.md#inferred-scalar-source-types-and-native-type-binding) follows normalization, explicit resolved witnesses, layout and the macro's shared resolver.
+  It discharges L3d's `.int` input premise for that route, including occupied scalar names. Other annotations/placements and full L3 remain open.
 - [ ] L4 Prove the accepted Swift literal tokens and TLA integer encoding denote that same `n`.
   Reuse the existing native decoder and signed-radix lemmas. Include zero, negative values and target bounds in the general argument.
 - [x] L4a Retain token text and operator classification in the complete Int initial-output check.
@@ -546,6 +549,11 @@ This result supplies a child rule. Complete initializer state assembly remains i
   The existing division owner executed one test with one accepted malformed negative operand under unchanged production.
   Correct output, unique mutation, token-text equality, kind difference and local recovered-binding guards passed.
   The guarded repair passed 88 tests in seven existing suites. This is implementation closure only; unsupported value routes and general parser soundness remain open.
+- [x] L4c Bind emitted primitive annotations independently of model declarations named Int, Bool, String or Swift.
+  Reuse the library's existing literal-associated types; keep nominal types and exact multi-token output checks.
+  The source baseline executed three wrong-domain failures; the native baseline was a generated compile failure with zero tests.
+  The 324-test diagnostic passed the repaired behavior but failed three old-format expectations. A five-owner follow-up passed 46 tests after test-only migration.
+  The [scoped argument and receipts](InitializationFamily.md#inferred-scalar-source-types-and-native-type-binding) keep library/helper binding, TLA interpretation and full L4 open.
 - [ ] L5 Instantiate the literal child cases in the expression and initializer composition modules.
   Record the exact premises that these results discharge.
 - [ ] L6 Retain the proof inputs and existing owner regressions for the exact implementation revision.

@@ -883,9 +883,15 @@ extension ParserSession {
            let type = typedFacadeType(member.base), type.name == "PartialFunction" {
             return type.renderedSourceName
         }
-        if expression.is(IntegerLiteralExprSyntax.self) || SourceIntegerLiteral.value(expression) != nil { return "Int" }
-        if expression.is(BooleanLiteralExprSyntax.self) { return "Bool" }
-        if expression.is(StringLiteralExprSyntax.self) { return "String" }
+        if expression.is(IntegerLiteralExprSyntax.self) || SourceIntegerLiteral.value(expression) != nil {
+            return sourceTypeResolver.normalizedStateType("Swift.Int", resolved: .int).spelling
+        }
+        if expression.is(BooleanLiteralExprSyntax.self) {
+            return sourceTypeResolver.normalizedStateType("Swift.Bool", resolved: .bool).spelling
+        }
+        if expression.is(StringLiteralExprSyntax.self) {
+            return sourceTypeResolver.normalizedStateType("Swift.String", resolved: .string).spelling
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.arguments.isEmpty,
            call.trailingClosure == nil,

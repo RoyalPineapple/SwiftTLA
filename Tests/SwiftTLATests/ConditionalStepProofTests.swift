@@ -26,7 +26,7 @@ struct ConditionalStepProofTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/GeneratedConditionalStepSwiftWitness.txt")
             .standardizedFileURL
-        let checked = try String(contentsOf: proofInput, encoding: .utf8)
+        let checked = nativeWitnessSource(try String(contentsOf: proofInput, encoding: .utf8))
         let expected = Array(Parser.parse(source: checked).tokens(viewMode: .sourceAccurate))
             .map(\.text).filter { !$0.isEmpty }
         let actual = Array(update.tokens(viewMode: .sourceAccurate))

@@ -359,7 +359,7 @@ struct DependentInitializationOutputProofTests {
         })
         let choiceName = emitter.variable(choice.id)
         let expectedChoiceSource = """
-        ((\(name) == 0) ? Set<Int>([0]) : Set<Int>([0, 1])).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
+        ((\(name) == 0) ? Set<\(nativeIntType)>([0]) : Set<\(nativeIntType)>([0, 1])).sorted(by: { (lhs: \(nativeIntType), rhs: \(nativeIntType)) -> \(nativeBoolType) in
         return lhs < rhs
         })
         """
@@ -395,7 +395,7 @@ struct DependentInitializationOutputProofTests {
         }
 
         let wrongCandidateSource = initialStates.description.replacingOccurrences(
-            of: "Set<Int>([0, 1])).sorted", with: "Set<Int>([0])).sorted")
+            of: "Set<\(nativeIntType)>([0, 1])).sorted", with: "Set<\(nativeIntType)>([0])).sorted")
         #expect(wrongCandidateSource != initialStates.description)
         let wrongCandidate = try #require(Parser.parse(source: wrongCandidateSource).statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
@@ -543,7 +543,7 @@ struct DependentInitializationOutputProofTests {
         try #require(emitted.components(separatedBy: enumeration).count == 2)
         try #require(emitted.components(separatedBy: membership).count == 2)
         for (label, changed) in [
-            ("enumeration", emitted.replacingOccurrences(of: enumeration, with: "Set<Int>()")),
+            ("enumeration", emitted.replacingOccurrences(of: enumeration, with: "Set<\(nativeIntType)>()")),
             ("membership", emitted.replacingOccurrences(of: membership, with: "return { _ in false }")),
             ("earlyReturn", emitted.replacingOccurrences(of: "var result: [Snapshot] = []",
                 with: "var result: [Snapshot] = []\nif _selectedInitial == nil { return InitialEvaluationOutcomes(states: result, failures: []) }")),

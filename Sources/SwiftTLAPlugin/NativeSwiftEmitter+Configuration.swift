@@ -45,7 +45,7 @@ extension NativeSwiftEmitter {
             guard \(try expression(membership, state: "", substitutions: inputs)) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
                     path: \(String(reflecting: "configuration." + parameter.reference.name)),
-                    expected: "a member of the declared parameter domain", actual: String(describing: \(value)))
+                    expected: "a member of the declared parameter domain", actual: \(nativeStringType)(describing: \(value)))
             }
             self.`\(parameter.reference.name)` = \(value)
             """)
@@ -53,7 +53,7 @@ extension NativeSwiftEmitter {
         return try nativeDeclarations("""
         public struct Configuration: Hashable, GeneratedModelFields {
             \(fields)
-            public static var displayNames: [PartialKeyPath<Configuration>: String] {
+            public static var displayNames: [PartialKeyPath<Configuration>: \(nativeStringType)] {
                 [\(displayNames)]
             }
             public static var fieldIdentities: [PartialKeyPath<Configuration>: GeneratedModelFieldIdentity] {

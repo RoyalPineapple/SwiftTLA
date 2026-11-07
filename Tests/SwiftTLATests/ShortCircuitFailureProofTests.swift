@@ -409,7 +409,7 @@ struct ShortCircuitFailureProofTests {
             parts: parts.writes, conditions: parts.conditions)
 
         let changed = visitor.description.replacingOccurrences(
-            of: "Set<Int>([1])", with: "Set<Int>([2])")
+            of: "Set<\(nativeIntType)>([1])", with: "Set<\(nativeIntType)>([2])")
         #expect(changed != visitor.description)
         let wrongVisitor = try #require(Parser.parse(source: changed)
             .statements.first?.item.as(DeclSyntax.self))
@@ -571,8 +571,8 @@ struct ShortCircuitFailureProofTests {
             let name = index == 0
                 ? "ShortCircuitConjunctionSwiftVisitor.txt"
                 : "ShortCircuitDisjunctionSwiftVisitor.txt"
-            let witness = try String(contentsOf: proofDirectory.appendingPathComponent(name),
-                encoding: .utf8)
+            let witness = nativeWitnessSource(try String(contentsOf: proofDirectory.appendingPathComponent(name),
+                encoding: .utf8))
             #expect(tokens(visitor.description) == tokens(witness))
             let reversed = visitor.description.replacingOccurrences(
                 of: index == 0 ? "_NativeMachineOperations.booleanAnd(" : "_NativeMachineOperations.booleanOr(",

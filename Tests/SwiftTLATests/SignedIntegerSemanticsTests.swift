@@ -55,10 +55,10 @@ import Testing
                 })
                 try #require(!declaration.hasError)
                 try emitter.verifyIntInitialOutput(declaration)
-                let binding = "let \(emitter.variable(field)): Int = \(value)"
+                let binding = "let \(emitter.variable(field)): \(nativeIntType) = \(value)"
                 try #require(declaration.description.components(separatedBy: binding).count == 2)
                 let recoveredSource = declaration.description.replacingOccurrences(
-                    of: binding, with: "let \(emitter.variable(field)): Int = - \(value.magnitude)")
+                    of: binding, with: "let \(emitter.variable(field)): \(nativeIntType) = - \(value.magnitude)")
                 try #require(recoveredSource != declaration.description)
                 let recoveredTree = Parser.parse(source: recoveredSource)
                 try #require(recoveredTree.hasError)

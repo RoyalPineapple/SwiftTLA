@@ -42,7 +42,7 @@ struct GeneratedSkipFrameTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/GeneratedSkipFrameSwiftWitness.txt")
             .standardizedFileURL
-        let expected = try String(contentsOf: witness, encoding: .utf8)
+        let expected = nativeWitnessSource(try String(contentsOf: witness, encoding: .utf8))
         let expectedTokens = Array(Parser.parse(source: expected).tokens(viewMode: .sourceAccurate)).map(\.text)
         #expect(Array(Parser.parse(source: swift).tokens(viewMode: .sourceAccurate)).map(\.text)
             == expectedTokens)

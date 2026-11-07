@@ -42,7 +42,7 @@ struct GeneratedGuardedChoiceProofTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/GeneratedGuardedChoiceSwiftWitness.txt")
             .standardizedFileURL
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expected.tokens(viewMode: .sourceAccurate).map(\.text))

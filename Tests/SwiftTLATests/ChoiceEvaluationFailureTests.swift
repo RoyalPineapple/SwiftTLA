@@ -90,7 +90,7 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("OrderedEnumCandidateFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
             == expected.tokens(viewMode: .sourceAccurate).map(\.text))
@@ -273,7 +273,7 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("MixedCandidateDivisionFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         let expectedTokens = expected.tokens(viewMode: .sourceAccurate).map(\.text)
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
@@ -415,7 +415,7 @@ struct ChoiceEvaluationFailureTests {
                 $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
             })
             let witness = semanticFixture(witnessName)
-            let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+            let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
                 .statements.first?.item.as(FunctionDeclSyntax.self))
             #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
                 == expected.tokens(viewMode: .sourceAccurate).map(\.text))
@@ -483,7 +483,7 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("CandidateChoiceFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
             == expected.tokens(viewMode: .sourceAccurate).map(\.text))
@@ -543,7 +543,7 @@ struct ChoiceEvaluationFailureTests {
         let binderPattern = try Regex(#"___binder_SpecParser_[0-9]+_0_2"#)
         let normalized = update.description.replacing(binderPattern, with: "__PROOF_MEMBER__")
         let actualTokens = Parser.parse(source: normalized).tokens(viewMode: .sourceAccurate).map(\.text)
-        let expectedTokens = try Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expectedTokens = try Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expectedTokens)
     }
@@ -596,7 +596,7 @@ struct ChoiceEvaluationFailureTests {
         let normalizedSwift = update.description.replacing(swiftBinder, with: "__PROOF_MEMBER__")
         let swiftWitness = semanticFixture("ConditionalChoiceThenModuloFailureSwiftWitness.txt")
         let actualTokens = Parser.parse(source: normalizedSwift).tokens(viewMode: .sourceAccurate).map(\.text)
-        let expectedTokens = try Parser.parse(source: String(contentsOf: swiftWitness, encoding: .utf8))
+        let expectedTokens = try Parser.parse(source: nativeWitnessSource(String(contentsOf: swiftWitness, encoding: .utf8)))
             .tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expectedTokens)
 
@@ -892,7 +892,7 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("EitherBranchDivisionFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expected.tokens(viewMode: .sourceAccurate).map(\.text))
