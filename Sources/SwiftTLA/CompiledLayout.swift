@@ -106,6 +106,14 @@ package struct CompiledPropertyLayout: Hashable, Sendable {
     package let id: PropertyID
     package let declaration: CompiledDeclaration
     package let reference: PropertyReference?
+    package let formalName: String
+
+    init(id: PropertyID, declaration: CompiledDeclaration, reference: PropertyReference?, formalName: String? = nil) {
+        self.id = id
+        self.declaration = declaration
+        self.reference = reference
+        self.formalName = formalName ?? declaration.name
+    }
 }
 
 struct CompiledProcedureLayout: Hashable, Sendable {
@@ -199,10 +207,10 @@ package struct CompiledLayout: Hashable, Sendable {
     package let checkingRegisters: [CompiledCheckingRegisterLayout]
     package private(set) var variables: [CompiledVariableLayout]
     package private(set) var actions: [CompiledActionLayout]
-    let stateProperties: [CompiledPropertyLayout]
-    let temporalProperties: [CompiledPropertyLayout]
-    let refinementProperties: [CompiledPropertyLayout]
-    let generatedRefinementProperties: [CompiledPropertyLayout]
+    private(set) var stateProperties: [CompiledPropertyLayout]
+    private(set) var temporalProperties: [CompiledPropertyLayout]
+    private(set) var refinementProperties: [CompiledPropertyLayout]
+    private(set) var generatedRefinementProperties: [CompiledPropertyLayout]
     let procedures: [CompiledProcedureLayout]
     package let controlLocations: [CompiledControlLocation]
     let moduleInstances: [CompiledModuleInstanceLayout]
@@ -297,6 +305,28 @@ package struct CompiledLayout: Hashable, Sendable {
         variables.first {
             $0.declaration.origin == .programCounter
         }?.id
+    }
+
+    mutating func resolvePropertyNames(reserving names: Set<String>) {
+        let reserved = names.union(["Init", "Next", "Spec", "vars"])
+        var used = reserved.union(properties.map(\.declaration.name))
+        func resolve(_ property: CompiledPropertyLayout) -> CompiledPropertyLayout {
+            let stem = property.declaration.name
+            var name = stem
+            if reserved.contains(name) {
+                var suffix = 2
+                repeat {
+                    name = "\(stem)__\(suffix)"
+                    suffix += 1
+                } while !used.insert(name).inserted
+            }
+            return .init(id: property.id, declaration: property.declaration,
+                reference: property.reference, formalName: name)
+        }
+        stateProperties = stateProperties.map(resolve)
+        temporalProperties = temporalProperties.map(resolve)
+        refinementProperties = refinementProperties.map(resolve)
+        generatedRefinementProperties = generatedRefinementProperties.map(resolve)
     }
 
     mutating func resolveVariableNames(reserving names: Set<String>) {

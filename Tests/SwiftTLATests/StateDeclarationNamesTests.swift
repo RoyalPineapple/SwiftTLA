@@ -3,8 +3,9 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct StateDeclarationNamesTests {
-    @Test("key-path refinement mappings bind source declarations before formal renaming", arguments: [false, true])
-    func retainsRefinementSourceNames(projecting: Bool) throws {
+    @Test("key-path refinement mappings bind source declarations before formal renaming",
+        arguments: [false, true], ["KeepsSource", "Len", "Spec"])
+    func retainsRefinementSourceNames(projecting: Bool, claimName: String) throws {
         let instance = Instance(_name: "abstract", of: FairRefinementTarget.self) {
             Bind(\FairRefinementTarget.Configuration.N, to: 1)
         }
@@ -12,10 +13,12 @@ struct StateDeclarationNamesTests {
                    mapping: GeneratedModelStateMapping<FairRefinementTarget.State>) throws {
             var source = source
             source.generatedModelInstances.append(instance)
-            source.generatedRefinements.append(Refinement(_name: "KeepsSource", instance: instance) { mapping })
+            source.generatedRefinements.append(Refinement(_name: claimName, instance: instance) { mapping })
             let compilation = try source.compile()
             let variable = try #require(compilation.layout.testVariableID(named: name))
             let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            #expect(program.layout.generatedRefinementProperties.first?.declaration.name == claimName)
+            #expect(!["Len", "Spec"].contains(try #require(program.generatedRefinements.first).name))
             let binding = try #require(program.generatedRefinements.first?.state.first)
             #expect(binding.value.expression.operation == .stateVariable(variable))
             #expect(binding.projected == projecting)

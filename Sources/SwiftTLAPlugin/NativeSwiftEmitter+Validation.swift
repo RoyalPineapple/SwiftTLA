@@ -5,7 +5,7 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     func propertyIdentityDeclarations() throws -> [DeclSyntax] {
         let properties = program.layout.properties
-        let names = properties.map { $0.declaration.name }
+        let names = properties.map(\.formalName)
         let identifiers = properties.map { propertyCases[$0.id]! }
         let cases = identifiers.map { "case \($0)" }.joined(separator: "\n")
         let projections = zip(identifiers, names).map {

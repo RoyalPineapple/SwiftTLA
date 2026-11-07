@@ -61,18 +61,19 @@ public func Symmetry<Member: TLAValueType>(_name: String = "", _ members: ModelP
 }
 
 extension TLASpec {
-  func renderedDeclarationNames(includingActions: Bool = true, includingVariables: Bool = true) -> Set<String> {
+  func renderedDeclarationNames(includingActions: Bool = true, includingVariables: Bool = true,
+    includingProperties: Bool = true) -> Set<String> {
     var names = Set(
       constants.map(\.name)
         + formalParameters.map(\.name)
-        + invariants.map(\.name)
-        + reachabilityProperties.map(\.name)
-        + temporalProperties.map(\.name)
         + recursiveFuncs.map(\.name)
         + formalOperatorDefinitions.map(\.name)
         + moduleInstances.map(\.name)
-        + refinements.map(\.name)
     )
+    if includingProperties {
+      names.formUnion(invariants.map(\.name) + reachabilityProperties.map(\.name)
+        + temporalProperties.map(\.name) + refinements.map(\.name))
+    }
     if includingVariables { names.formUnion(variables.map(\.name)) }
     if includingActions { names.formUnion(actions.map(\.name)) }
     return names

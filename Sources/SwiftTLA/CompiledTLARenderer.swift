@@ -169,6 +169,7 @@ struct CompiledTLARenderer {
     private func stateCaptureName(_ variable: VariableID) throws -> String {
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
             .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.properties.map(\.formalName))
             .union(layout.actions.map(\.renderedName))
         var name = "__\(moduleName)_state\(variable.ordinal)"
         while occupied.contains(name) { name += "_" }
@@ -179,6 +180,7 @@ struct CompiledTLARenderer {
         guard functions.indices.contains(id.ordinal) else { throw missing("resolved function", id.ordinal) }
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
             .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.properties.map(\.formalName))
             .union(layout.actions.map(\.renderedName))
         var name = "__\(moduleName)_resolvedFunction\(id.ordinal)"
         while occupied.contains(name) { name += "_" }
@@ -557,6 +559,7 @@ struct CompiledTLARenderer {
         }
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
             .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.properties.map(\.formalName))
             .union(layout.actions.map(\.renderedName))
         var names: [String] = []
         for stem in ["FailedCandidates", "FirstFailingCandidate", "EarlierCandidate"] {
@@ -833,6 +836,7 @@ struct CompiledTLARenderer {
         let domain = try state(expression.children[1], stateNames: stateNames)
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
             .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.properties.map(\.formalName))
             .union(layout.actions.map(\.renderedName))
             .union(stateNames.values)
         var names: [String] = []
@@ -1073,6 +1077,7 @@ struct CompiledTLARenderer {
         var parts: [String] = []
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
             .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.properties.map(\.formalName))
             .union(layout.actions.map(\.renderedName))
             .union(stateNames.values)
         var nextDivisionName = 0

@@ -136,6 +136,9 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5o Prevent lexical binders from capturing selected standard-module operators.
   Finalize binder names against the same actual import set as states and actions, preserving binder identities.
   Other declaration namespaces, opaque imports and general binding correspondence remain open.
+- [x] I5p Keep source property identities and labels while allocating distinct formal property names.
+  Carry invariant, reachability, temporal and refinement names through behavior, CFG, authored export and native formal projection.
+  Preserve selected property IDs and source-facing descriptions. Other declarations, opaque imports and general binding correspondence remain open.
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1162,4 +1165,41 @@ Only this plan changed after the final diagnostic.
 This repair supplies a compiler-to-rendered-name implementation guard.
 It does not prove arbitrary source scopes, imported operator semantics, general namespace correspondence or TLA checker interpretation.
 Constants, model values, properties, formal operators and opaque import namespaces retain separate obligations.
+I5, I6, every complete six-link row and the whole-language theorem remain open.
+
+### Property declaration projection checkpoint 7 November 2026
+
+The existing property-name owner now compares ordinary, imported-operator and generated-behavior names.
+Its first stateless variant incorrectly required a generated `Spec` definition and is retained as a test-construction failure.
+It supplies no repair credit.
+The corrected scoped-state baseline executed one test with three argument cases and two issues.
+The ordinary `safe` case passed its runtime, label-identity, definition and selection controls.
+`Len` remained a selected imported operator name. `Spec` reached the existing mandatory whole-Spec output rejection.
+These are measured output-boundary failures, not local SANY results or observed runtime value mismatches.
+
+The compiled property layout now separates its source declaration and formal name.
+The existing allocator pattern reserves imported operators, generated behavior, known declarations and helper names.
+It allocates property names before variable and action names, retaining all source identities and property IDs.
+The same names reach invariants, reachability checks, temporal checks and both refinement forms.
+CFG selections and the native formal-property projection use these allocated names.
+Source-facing compilation descriptions, public property cases and display labels retain their source identities.
+Helper allocation also reserves the resulting formal names.
+Authored export still uses source property IDs to select the corresponding compiled definitions.
+Existing declaration checks and the complete Spec output check remain active.
+
+The existing owners cover ordinary names, imported `Len`, generated `Spec` and contextual `Terminating` collisions.
+They retain label identity, predicate values, native name projection, authored placement and formal/generated refinement mappings.
+The first repair launch failed during test compilation because two new cases referenced a plugin-only resolver.
+It executed zero tests and supplies no rejection evidence.
+Those cases now use the existing public render API. Production code remained unchanged for the next run.
+
+The final guarded diagnostic passed 87 tests across eleven existing suites, including the external-consumer checks.
+Its incremental build took 263.76 seconds, followed by 208.981 seconds of selected execution.
+All 1201 captured inputs remained exact through that run. Only this plan changed afterward.
+The complete 36350-byte log has SHA256 `50772cf22280d56c5ef612bb3650f47c3d58ffa0f5b335de21da0e3aedbef66d`.
+Evidence is retained under `.git/swifttla-proof-evidence/property-declaration-symbols-2026-11-07/` in the primary checkout.
+
+No new model, fixture type, checker family, evaluator, dependency, public application API or accepted DSL form was added.
+Constants, model values, formal operators, opaque imports and general namespace correspondence retain open obligations.
+Source and lowering correspondence, checker soundness, imported semantics, complete events and checking kernels remain open.
 I5, I6, every complete six-link row and the whole-language theorem remain open.

@@ -1216,8 +1216,6 @@ public extension TLASpec {
         let module = try compileModule(in: closure)
         let layout = module.layout
         let semantics = module.semantics
-        let compiledRefinements = module.refinements
-        let compiledGeneratedRefinements = module.generatedRefinements
         let identity = compilationIdentity
         let imports = try closure.entries.filter { $0.id != closure.root.id }.map { entry in
             let source = try entry.module.loweredSourceModel()
@@ -1253,10 +1251,10 @@ public extension TLASpec {
             algorithms: sourceAlgorithms.map {
                 .init(name: $0.model.name, displayName: $0.model.displayLabel ?? $0.model.name)
             },
-            invariants: semantics.behavior.invariants.map(\.name),
-            reachabilityProperties: semantics.behavior.reachabilityProperties.map(\.name),
-            temporalProperties: semantics.behavior.temporalProperties.map(\.name),
-            refinements: compiledRefinements.map(\.name) + compiledGeneratedRefinements.map(\.name),
+            invariants: layout.stateProperties.filter { $0.declaration.kind == .invariant }.map(\.declaration.name),
+            reachabilityProperties: layout.stateProperties.filter { $0.declaration.kind == .reachability }.map(\.declaration.name),
+            temporalProperties: layout.temporalProperties.map(\.declaration.name),
+            refinements: (layout.refinementProperties + layout.generatedRefinementProperties).map(\.declaration.name),
             stateConstraint: semantics.behavior.constraint.map { _ in "StateConstraint" },
             actionConstraint: semantics.behavior.actionConstraint.map { _ in "ActionConstraint" },
             procedures: layout.procedures.map {
@@ -1334,14 +1332,14 @@ public extension TLASpec {
             + (symmetrySets.isEmpty ? [] : [.tlc])).union(lowerer.requiredStandardModules)
         let importedNames = Set(standardModules.flatMap(\.exportedDeclarationNames))
         let bindings = lowerer.bindings(reserving: importedNames)
-        var occupied = renderedDeclarationNames(includingActions: false, includingVariables: false)
+        var occupied = renderedDeclarationNames(includingActions: false, includingVariables: false, includingProperties: false)
             .union(importedNames)
             .union(lowerer.modelValueNames)
             .union(bindings.binders.filter { parameterVariables[$0.key] == nil }.values)
             .union(bindings.operatorNames.values)
             .union(symmetrySets.map { "Symm\($0.variableName)" })
             .union(incomingModuleParameters.map(\.operatorName))
-            .union(generatedModelInstances.map(\.name)).union(generatedRefinements.map(\.name))
+            .union(generatedModelInstances.map(\.name))
             .union(semantics.behavior.fairnessProfiles.map(\.operatorName))
         for (index, scenario) in semantics.behavior.validationScenarios.enumerated() {
             if scenario.view != nil { occupied.insert("__SwiftTLAView\(index)") }
@@ -1349,6 +1347,20 @@ public extension TLASpec {
         }
         if semantics.behavior.constraint != nil { occupied.insert("StateConstraint") }
         if semantics.behavior.actionConstraint != nil { occupied.insert("ActionConstraint") }
+        var propertyReservations = occupied
+        if authoredAlgorithm != nil { propertyReservations.insert("Terminating") }
+        layout.resolvePropertyNames(reserving: propertyReservations)
+        let propertyNames = Dictionary(uniqueKeysWithValues: layout.properties.map { ($0.id, $0.formalName) })
+        semantics.behavior.resolvePropertyNames(propertyNames)
+        let resolvedRefinements = refinements.map {
+            CompiledRefinement(id: $0.id, name: propertyNames[$0.id]!, instance: $0.instance,
+                operator: $0.operator, abstract: $0.abstract, variableMappings: $0.variableMappings)
+        }
+        let resolvedGenerated = compiledGenerated.map {
+            CompiledGeneratedModelRefinement(id: $0.id, name: propertyNames[$0.id]!, instanceName: $0.instanceName,
+                targetModelType: $0.targetModelType, behavior: $0.behavior, parameters: $0.parameters, state: $0.state)
+        }
+        occupied.formUnion(propertyNames.values)
         var variableReservations = occupied
         if authoredAlgorithm != nil { variableReservations.insert("Terminating") }
         layout.resolveVariableNames(reserving: variableReservations)
@@ -1368,7 +1380,7 @@ public extension TLASpec {
         try validateAuthoredProperties(algorithm: authoredAlgorithm?.plan, layout: layout)
         return CompiledModule(
             metadata: .init(source: self, modelValueNames: lowerer.modelValueNames), layout: layout, bindings: resolvedBindings, semantics: semantics,
-            refinements: refinements, generatedRefinements: compiledGenerated,
+            refinements: resolvedRefinements, generatedRefinements: resolvedGenerated,
             authoredAlgorithm: authoredAlgorithm,
             requiredStandardModules: lowerer.requiredStandardModules,
             definitionsBeforeInstances: definitionOrder.beforeInstances,
@@ -2196,7 +2208,7 @@ extension CompiledProgram {
             + moduleImports.replacements(for: metadata.imports, moduleNames: moduleNames)
         let modelValues = exportedModelValueNames
         var reserved = Set(layout.declarations.filter { $0.kind != .variable }.map(\.name))
-            .union(layout.variables.map(\.formalName))
+            .union(layout.variables.map(\.formalName)).union(layout.properties.map(\.formalName))
         reserved.formUnion(metadata.constants.map(\.name))
         reserved.formUnion(layout.parameters.map { $0.reference.name })
         reserved.formUnion(layout.moduleInstances.map(\.namespace))
@@ -2596,7 +2608,7 @@ private extension CompiledModuleMetadata {
 
         var occupied = renderer.reservedNames.union(renderer.bindings.binders.values)
             .union(renderer.bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name))
+            .union(layout.declarations.map(\.name)).union(layout.properties.map(\.formalName))
             .union(layout.variables.map(\.formalName))
             .union(layout.actions.map(\.renderedName))
             .union(renderedActions.flatMap(\.calls).map(\.renderedName))
