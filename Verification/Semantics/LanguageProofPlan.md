@@ -524,6 +524,8 @@ This result supplies a child rule. Complete initializer state assembly remains i
 - [ ] L1 Record the accepted source spellings, resolved type and placements covered by this first route.
   The [source rewrite repair](InitializationFamily.md#source-rewrite-token-classification) retains operator classification in the existing recognized path.
   Its unchanged-production baseline accepted a recovered negative operand; the two-line repair passed 156 tests in six suites. General placement and binding coverage remains open.
+  The [grouped constant repair](InitializationFamily.md#grouped-closed-integer-source-values) also restores source-witness recognition for closed prefix negation.
+  Its actual two-test baseline accepted a changed radix builder; the shared collector repair passed 156 tests in six suites. Nonconstant prefixes and full L1 remain open.
 - [x] L2 State the independent literal outcome and its empty read/failure effects in the existing expression rules.
   `SourceNode` selects `Success(n)` without inspecting state, read keys or histories. The raw-source and [output meaning argument](InitializationFamily.md#native-and-mathematical-tla-integer-literal-meaning) state its empty model read/write/failure effects.
   This defines the leaf's independent meaning; it does not prove parsing, source binding or a complete observation contract.

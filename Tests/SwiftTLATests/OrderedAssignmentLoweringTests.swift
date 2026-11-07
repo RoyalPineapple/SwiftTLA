@@ -168,7 +168,7 @@ struct OrderedAssignmentLoweringTests {
         let constantInitialSpec = #spec("OrderedAssignment") {
             let algorithm = Algorithm(scoped: { scope in
                 let first = scope.sharedVar(in: 0...3)
-                let second = scope.sharedVar(initial: 1 + 2)
+                let second = scope.sharedVar(initial: -(-(1 + 2)))
                 Do(OrderedAssignmentStep.`switch`) {
                     Assign(first, to: second + 1)
                     Assign(second, to: first)
@@ -201,7 +201,7 @@ struct OrderedAssignmentLoweringTests {
                     "in: If(first == 0, then: SetExpr<Int>.literal((first + (-3)) / 2, (first + (-3)) % 2, (first + (-3)) / ((-3) / 2)), "
                     + "else: If(first == 1, then: SetExpr<Int>.literal(formalConstant, Expr<Int>(-3) / 2), "
                     + "else: If(first == 2, then: SetExpr<Int>.literal(Expr<Int>(-3) % 2), else: SetExpr<Int>.literal(Expr<Int>(3) % (-2)))))")),
-            (constantInitialSpec, [[0, 3], [1, 3], [2, 3], [3, 3]], nil, ("", "initial: 1 + 2")),
+            (constantInitialSpec, [[0, 3], [1, 3], [2, 3], [3, 3]], nil, ("", "initial: -(-(1 + 2))")),
         ]
         for (specification, expectedStates, expectedFailure, sourceDomain) in domains {
             let program: CompiledProgram
@@ -303,7 +303,7 @@ struct OrderedAssignmentLoweringTests {
         }
         let radixSpec = #spec("ChangedBuilder") {
             let algorithm = Algorithm(scoped: { scope in
-                let value = scope.sharedVar(initial: 0x1)
+                let value = scope.sharedVar(initial: -(-0x1))
                 Do(OrderedAssignmentStep.`switch`) { Assign(value, to: value + 1) }
             })
             algorithm

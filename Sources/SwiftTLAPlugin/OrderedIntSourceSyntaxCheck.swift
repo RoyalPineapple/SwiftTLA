@@ -297,6 +297,13 @@ enum OrderedIntSourceSyntaxCheck {
            let root = roots[name] { return .variable(root) }
         if let group = syntax.as(TupleExprSyntax.self), group.elements.count == 1,
            let element = group.elements.first { return value(element.expression, roots: roots, type: type) }
+        if type == .int, let prefix = syntax.as(PrefixOperatorExprSyntax.self),
+           prefix.operator.text == "-",
+           let operand = value(prefix.expression, roots: roots),
+           case .value(.int(let number)) = operand {
+            let result = 0.subtractingReportingOverflow(number)
+            return result.overflow ? nil : .value(.int(result.partialValue))
+        }
         if type == .set(.int), let call = syntax.as(FunctionCallExprSyntax.self),
            call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty {
             if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "If",
