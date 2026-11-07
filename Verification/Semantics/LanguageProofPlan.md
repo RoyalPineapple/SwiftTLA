@@ -148,6 +148,10 @@ The proof dependencies above still govern proof closure; they do not block indep
   Existing owners cover direct and qualified calls, recursion, explicit refinement targets and a measured lexical capture.
   Importer-only reserved symbols, constants/model values, opaque imports and general namespace correspondence remain open.
 
+- [x] I5s Emit checked Int initialization failure-event sets across supported nondeterministic prefixes.
+  The existing renderer and checker retain all supported value-initializer addition failures with site, operands and full before-prefix. A source variant retains one valid initial state and two distinct failures; the original selected-record behavior and full core/generated bundle equality remain checked.
+  The existing evidence consumer now prepares schema v5 with an actual emitted event-set theorem and an empty-set proof control. Forty focused tests passed; the new pinned proof has not run. This is an implementation/observation result, with order, multiplicity, other failure kinds and generic correspondence still open.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -433,6 +437,7 @@ Exit: actual accepted pilot expressions supply the child theorem premises. No ex
   Derive first-failure selection from the complete observation contract.
 - [ ] M2.4 Prove actual TLA initialization and failure observations correspond to the same source prefixes.
   Complete branch observations cannot rely only on the deterministic selected record.
+  I5s supplies an implemented event-set expression for guarded Int value/add initialization with supported Int domains without modeled arithmetic failure sites. Its actual generic source/Swift/TLA relation and ordered observations still require proof; the prepared v5 deterministic case is separate admission evidence.
 - [ ] M2.5 Prove complete initial function, selected filtering and hidden-state assembly correspond to the logical history.
 - [ ] M2.6 Discharge the evaluator and history premises at `OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures`.
 

@@ -2968,6 +2968,9 @@ private extension CompiledModuleMetadata {
         var initialFailureDeclarations: [String] = []
         var initialFailurePredicates: [String] = []
         var initialFailureRecordExpressions: [String] = []
+        var initialFailureEventExpressions: [String] = []
+        let requiredInitialFailures = StraightLineRenderedActionCheck.requiredInitialIntFailureObservations(
+            behavior, layout: layout)
         var initialFailureRecordEligible = selectedInitialInvariant == nil
         func appendInitialEvaluationFailures(
             _ expression: CompiledExpression,
@@ -2999,6 +3002,7 @@ private extension CompiledModuleMetadata {
             var emitted: [(failure: RenderedEvaluationFailure, relation: String,
                            operandsName: String?, selection: String,
                            operationDeclaration: String?, record: String?)] = []
+            var emittedEventSets: [String] = []
             for failure in failures {
                 let stem: String
                 let operation: String?
@@ -3043,6 +3047,7 @@ private extension CompiledModuleMetadata {
                 var relation = failure.predicate
                 var selection = failure.predicate
                 var record: String?
+                var events: String?
                 if case .overflow(.addition) = failure.kind,
                    let siteOrdinal, let operands = failure.operands {
                     let before = layout.variables.filter { prefixNames[$0.id] != nil }
@@ -3050,7 +3055,11 @@ private extension CompiledModuleMetadata {
                         .map { variable in
                             "[name |-> \(TLAValue.string(variable.formalName)), value |-> \(prefixNames[variable.id]!)]"
                         }.joined(separator: ", ")
-                    record = "(IF \(failure.predicate) THEN [site |-> \(siteOrdinal), kind |-> \"integerOverflow.addition\", operands |-> \(operands), before |-> <<\(before)>>] ELSE FALSE)"
+                    let event = "[site |-> \(siteOrdinal), kind |-> \"integerOverflow.addition\", operands |-> \(operands), before |-> <<\(before)>>]"
+                    record = "(IF \(failure.predicate) THEN \(event) ELSE FALSE)"
+                    if requiredInitialFailures.events {
+                        events = "(IF \(failure.predicate) THEN {\(event)} ELSE {})"
+                    }
                 } else {
                     initialFailureRecordEligible = false
                 }
@@ -3064,6 +3073,7 @@ private extension CompiledModuleMetadata {
                         relation = "(IF \(predicate) THEN \(relation) ELSE FALSE)"
                         selection = "(IF \(predicate) THEN \(selection) ELSE FALSE)"
                         record = record.map { "(IF \(predicate) THEN \($0) ELSE FALSE)" }
+                        events = events.map { "(IF \(predicate) THEN \($0) ELSE {})" }
                     }
                     switch prior.initialization {
                     case .value(let expression):
@@ -3071,12 +3081,16 @@ private extension CompiledModuleMetadata {
                         let bound = "(LET \(binder) == \(value) IN \(relation))"
                         let selected = "(LET \(binder) == \(value) IN \(selection))"
                         record = record.map { "(LET \(binder) == \(value) IN \($0))" }
+                        events = events.map { "(LET \(binder) == \(value) IN \($0))" }
                         let defined = try renderer.evaluationDefined(expression, stateNames: prefixNames)
                         relation = defined
                             .map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
                         selection = defined
                             .map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
-                        if let defined { record = record.map { "(IF \(defined) THEN \($0) ELSE FALSE)" } }
+                        if let defined {
+                            record = record.map { "(IF \(defined) THEN \($0) ELSE FALSE)" }
+                            events = events.map { "(IF \(defined) THEN \($0) ELSE {})" }
+                        }
                     case .memberOf(let expression):
                         initialFailureRecordEligible = false
                         record = nil
@@ -3088,10 +3102,16 @@ private extension CompiledModuleMetadata {
                             .map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
                         selection = defined
                             .map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
+                        events = events.map { "UNION {\($0) : \(binder) \\in \(domain)}" }
+                        if let defined { events = events.map { "(IF \(defined) THEN \($0) ELSE {})" } }
                     }
                 }
                 initialFailurePredicates.append(selection)
                 if let record { initialFailureRecordExpressions.append(record) }
+                if let events {
+                    initialFailureEventExpressions.append(events)
+                    emittedEventSets.append(events)
+                }
                 let parameters = operandsName.map { "(\($0))" } ?? ""
                 let declaration = "\(name)\(parameters) == \(relation)"
                 lines.append(declaration)
@@ -3110,7 +3130,8 @@ private extension CompiledModuleMetadata {
             }
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                 after: prefix, names: prefixNames, emitted: emitted,
-                siteOrdinal: siteOrdinal, layout: layout,
+                siteOrdinal: siteOrdinal,
+                eventSets: requiredInitialFailures.events ? emittedEventSets : nil, layout: layout,
                 binders: renderer.bindings.binders)
         }
         for (index, initialization) in behavior.initializations.enumerated() {
@@ -3161,6 +3182,22 @@ private extension CompiledModuleMetadata {
             initialFailureRecord = name
         } else {
             initialFailureRecord = nil
+        }
+        if requiredInitialFailures.events {
+            guard !initialFailureEventExpressions.isEmpty,
+                  initialFailureEventExpressions.count == initialFailurePredicates.count else {
+                throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                    path: "tla.initialEvaluationFailureEvents",
+                    expected: "one event set for every checked initial failure site",
+                    actual: "an initial failure event set is missing",
+                    nextSafeAction: "Regenerate the TLA+ initial failure event sets.")
+            }
+            var name = "__SwiftTLAInitialFailureEvents"
+            while occupied.contains(name) { name += "_" }
+            occupied.insert(name)
+            let declaration = "\(name) == UNION {\(initialFailureEventExpressions.joined(separator: ", "))}"
+            lines.append(declaration)
+            initialFailureDeclarations.append(declaration)
         }
         if lines.last != "" { lines.append("") }
 
@@ -3227,8 +3264,7 @@ private extension CompiledModuleMetadata {
         try StraightLineRenderedActionCheck.verifyInitialFailureRecord(source,
             name: initialFailureRecord, predicates: initialFailurePredicates,
             records: initialFailureRecordExpressions,
-            required: StraightLineRenderedActionCheck.requiresInitialIntFailureRecord(
-                behavior, layout: layout))
+            required: requiredInitialFailures.selected)
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
         let expectedIntLiterals = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
             variable -> (String, Int)? in

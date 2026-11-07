@@ -131,7 +131,7 @@ struct MathematicalIntegerDomainTests {
                 try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                     after: prefix, names: names,
                     emitted: [(failure, relation, operandsName, selection, operation, nil)],
-                    siteOrdinal: copy.id.ordinal, layout: program.layout)
+                    siteOrdinal: copy.id.ordinal, eventSets: nil, layout: program.layout)
                 let bound = try #require(names[value.id])
                 let typed = StraightLineRenderedActionCheck.initialIntStatePredicate(named: bound)
                 try #require(relation.components(separatedBy: typed).count == 2
@@ -154,7 +154,7 @@ struct MathematicalIntegerDomainTests {
                         try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                             after: prefix, names: names,
                             emitted: [(failure, changedRelation, operandsName, changedSelection, operation, nil)],
-                            siteOrdinal: copy.id.ordinal, layout: program.layout)
+                            siteOrdinal: copy.id.ordinal, eventSets: nil, layout: program.layout)
                         Issue.record("Declared Int initial failure \(label) corruption accepted")
                     } catch let diagnostic as CompilationDiagnostic {
                         #expect(diagnostic.path == "tla.initialEvaluationFailures")

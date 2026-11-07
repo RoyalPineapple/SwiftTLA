@@ -44,7 +44,7 @@ package enum InitialFailureEvidenceError: Error, Equatable {
     case invalidSourceSHA
 }
 
-/// shortcut: one deterministic Int-addition failure, widen after multi-branch failure-set semantics are defined.
+/// shortcut: one deterministic corpus case; extend after generic branch correspondence is established.
 package enum InitialFailureEvidence {
     private static let proofModule = "SwiftTLAInitialFailureProof"
     private static let failureKind = "integerOverflow.addition"
@@ -89,7 +89,7 @@ package enum InitialFailureEvidence {
         let proofBytes = Data(proof.utf8)
         try proofBytes.write(to: proofURL, options: .atomic)
         let report = InitialFailureEvidenceReport(
-            schema: "swifttla.initial-failure-proof-v4", sourceSHA: sourceSHA,
+            schema: "swifttla.initial-failure-proof-v5", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
@@ -116,9 +116,10 @@ package enum InitialFailureEvidence {
         }
         let selected = definitions.filter { $0.hasPrefix("__SwiftTLASelectedInitialFailureRecord") }
         let aggregate = definitions.filter { $0.hasPrefix("__SwiftTLAAnyInitialEvaluationFailure") }
+        let events = definitions.filter { $0.hasPrefix("__SwiftTLAInitialFailureEvents") }
         let failures = definitions.filter { $0.hasPrefix("__SwiftTLAInitialOverflowFailure") }
-        guard selected.count == 1, aggregate.count == 1, !failures.isEmpty,
-              (selected + aggregate + failures).allSatisfy(isIdentifier) else {
+        guard selected.count == 1, aggregate.count == 1, events.count == 1, !failures.isEmpty,
+              (selected + aggregate + events + failures).allSatisfy(isIdentifier) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let failureDefs = failures.joined(separator: ", ")
@@ -139,11 +140,18 @@ package enum InitialFailureEvidence {
         ExpectedOperand1 == \(binaryLiteral(operands[1]))
         ExpectedBefore == <<\(bindings)>>
 
+        ExpectedFailure ==
+          [site |-> \(site), kind |-> "\(failureKind)",
+           operands |-> <<ExpectedOperand0, ExpectedOperand1>>, before |-> ExpectedBefore]
+        ExpectedFailures == {ExpectedFailure}
+
         THEOREM SelectedFailurePayload ==
-          \(selected[0]) =
-            [site |-> \(site), kind |-> "\(failureKind)",
-             operands |-> <<ExpectedOperand0, ExpectedOperand1>>, before |-> ExpectedBefore]
-          BY SMT DEF ExpectedOperand0, ExpectedOperand1, ExpectedBefore, \(selected[0]), \(failureDefs)
+          \(selected[0]) = ExpectedFailure
+          BY SMT DEF ExpectedFailure, ExpectedOperand0, ExpectedOperand1, ExpectedBefore, \(selected[0]), \(failureDefs)
+
+        THEOREM CompleteFailureEvents ==
+          \(events[0]) = ExpectedFailures
+          BY SMT DEF ExpectedFailures, ExpectedFailure, ExpectedOperand0, ExpectedOperand1, ExpectedBefore, \(events[0])
 
         THEOREM InitialFailurePrecedesGraph ==
           /\\ \(aggregate[0])

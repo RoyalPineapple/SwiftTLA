@@ -1939,14 +1939,14 @@ struct OrderedAssignmentLoweringTests {
                 String(header[header.index(after: open)..<close]), selection, operationDeclaration, nil)
         }
         try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(resolvedExpression,
-            after: prefix, names: names, emitted: emitted, siteOrdinal: nil, layout: program.layout)
+            after: prefix, names: names, emitted: emitted, siteOrdinal: nil, eventSets: nil, layout: program.layout)
         var reversedRelations = emitted
         reversedRelations[0].relation = emitted[1].relation
         reversedRelations[1].relation = emitted[0].relation
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(resolvedExpression,
                 after: prefix, names: names, emitted: reversedRelations,
-                siteOrdinal: nil, layout: program.layout)
+                siteOrdinal: nil, eventSets: nil, layout: program.layout)
         }
     }
 

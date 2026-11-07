@@ -478,33 +478,49 @@ enum StraightLineRenderedActionCheck {
         return values.count == 1 ? values[0] : nil
     }
 
-    static func requiresInitialIntFailureRecord(_ behavior: CompiledBehavior,
-                                                layout: CompiledLayout) -> Bool {
+    static func requiredInitialIntFailureObservations(_ behavior: CompiledBehavior,
+                                                      layout: CompiledLayout) -> (selected: Bool, events: Bool) {
         guard layout.parameters.isEmpty, behavior.initialInvariant == nil,
               !behavior.initializations.isEmpty,
-              behavior.initializations.count == layout.variables.count else { return false }
+              behavior.initializations.count == layout.variables.count else { return (false, false) }
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map { ($0.id, $0) })
+        let names = Dictionary(uniqueKeysWithValues: layout.variables.map { ($0.id, $0.formalName) })
         var hasAddition = false
+        var deterministic = true
+        var resolvedTypes = true
         for initialization in behavior.initializations {
-            guard let variable = variables[initialization.variable],
-                  case .value(let expression) = initialization.initialization else { return false }
-            switch expression.operation {
-            case .value(.integer):
-                guard initialIsInt(variable), expression.resultType == .int,
-                      expression.children.isEmpty else { return false }
-            case .controlLocation(let id):
-                guard variable.declaration.origin == .programCounter,
-                      expression.resultType == .controlLocation,
-                      expression.children.isEmpty, layout.controlLocation(id) != nil else { return false }
-            case .stateVariable, .add:
-                guard initialIsInt(variable), expression.resultType == .int,
-                      initialIntPredicate(.value(expression), named: variable.formalName,
-                        layout: layout) != nil else { return false }
-                if case .add = expression.operation { hasAddition = true }
-            default: return false
+            guard let variable = variables[initialization.variable] else { return (false, false) }
+            switch initialization.initialization {
+            case .value(let expression):
+                switch expression.operation {
+                case .value(.integer):
+                    guard initialIsInt(variable),
+                          expression.resultType == .int || expression.resultType == .unknown,
+                          expression.children.isEmpty else { return (false, false) }
+                    resolvedTypes = resolvedTypes && expression.resultType == .int
+                case .controlLocation(let id):
+                    guard variable.declaration.origin == .programCounter,
+                          expression.resultType == .controlLocation || expression.resultType == .unknown,
+                          expression.children.isEmpty, layout.controlLocation(id) != nil else { return (false, false) }
+                    resolvedTypes = resolvedTypes && expression.resultType == .controlLocation
+                case .stateVariable, .add:
+                    guard initialIsInt(variable),
+                          expression.resultType == .int || expression.resultType == .unknown,
+                          initialIntPredicate(.value(expression), named: variable.formalName,
+                            layout: layout) != nil else { return (false, false) }
+                    resolvedTypes = resolvedTypes && expression.resultType == .int
+                    if case .add = expression.operation { hasAddition = true }
+                default: return (false, false)
+                }
+            case .memberOf(let domain):
+                deterministic = false
+                guard initialIsInt(variable),
+                      domain.resultType == .set(.int) || domain.resultType == .unknown,
+                      let tree = initialIntDomain(domain, layout: layout, variables: names, binders: [:]),
+                      tree.sites.isEmpty else { return (false, false) }
             }
         }
-        return hasAddition
+        return (hasAddition && deterministic && resolvedTypes, hasAddition)
     }
 
     static func verifyInitialAdditionFailures(
@@ -515,6 +531,7 @@ enum StraightLineRenderedActionCheck {
                    operandsName: String?, selection: String,
                    operationDeclaration: String?, record: String?)],
         siteOrdinal: Int?,
+        eventSets: [String]?,
         layout: CompiledLayout,
         binders: [BinderID: String] = [:]
     ) throws {
@@ -562,9 +579,11 @@ enum StraightLineRenderedActionCheck {
                 earlier.append((name, variable.formalName, tree.value, tree.sites.isEmpty ? nil : tree.defined, true, isInt))
             }
         }
-        guard emitted.count == tree.sites.count else { throw mismatch() }
+        guard emitted.count == tree.sites.count,
+              eventSets == nil || eventSets?.count == emitted.count else { throw mismatch() }
         var preceding: [String] = []
-        for (site, output) in zip(tree.sites, emitted) {
+        for (index, pair) in zip(tree.sites, emitted).enumerated() {
+            let (site, output) = pair
             guard case .overflow(.addition) = output.failure.kind,
                   let operandsName = output.operandsName,
                   let operation = output.operationDeclaration?.components(separatedBy: " == "),
@@ -581,34 +600,41 @@ enum StraightLineRenderedActionCheck {
             let before = earlier.sorted { $0.token.utf8.lexicographicallyPrecedes($1.token.utf8) }
                 .map { "[name |-> \(TLAValue.string($0.token)), value |-> \($0.name)]" }
                 .joined(separator: ", ")
-            var record = siteOrdinal.map { ordinal in
-                "(IF \(predicate) THEN [site |-> \(ordinal), kind |-> \"integerOverflow.addition\", operands |-> \(site.operands), before |-> <<\(before)>>] ELSE FALSE)"
+            let event = siteOrdinal.map { ordinal in
+                "[site |-> \(ordinal), kind |-> \"integerOverflow.addition\", operands |-> \(site.operands), before |-> <<\(before)>>]"
             }
+            var record = event.map { "(IF \(predicate) THEN \($0) ELSE FALSE)" }
+            var events = eventSets == nil ? nil : event.map { "(IF \(predicate) THEN {\($0)} ELSE {})" }
             for prior in earlier.reversed() {
                 if prior.isInt {
                     let predicate = initialIntStatePredicate(named: prior.name)
                     relation = "(IF \(predicate) THEN \(relation) ELSE FALSE)"
                     selection = "(IF \(predicate) THEN \(selection) ELSE FALSE)"
                     record = record.map { "(IF \(predicate) THEN \($0) ELSE FALSE)" }
+                    events = events.map { "(IF \(predicate) THEN \($0) ELSE {})" }
                 }
                 if prior.membership {
                     relation = "(\\E \(prior.name) \\in \(prior.value): \(relation))"
                     selection = "(\\E \(prior.name) \\in \(prior.value): \(selection))"
                     record = nil
+                    events = events.map { "UNION {\($0) : \(prior.name) \\in \(prior.value)}" }
                 } else {
                     relation = "(LET \(prior.name) == \(prior.value) IN \(relation))"
                     selection = "(LET \(prior.name) == \(prior.value) IN \(selection))"
                     record = record.map { "(LET \(prior.name) == \(prior.value) IN \($0))" }
+                    events = events.map { "(LET \(prior.name) == \(prior.value) IN \($0))" }
                 }
                 if let defined = prior.defined {
                     relation = "(IF \(defined) THEN \(relation) ELSE FALSE)"
                     selection = "(IF \(defined) THEN \(selection) ELSE FALSE)"
                     record = record.map { "(IF \(defined) THEN \($0) ELSE FALSE)" }
+                    events = events.map { "(IF \(defined) THEN \($0) ELSE {})" }
                 }
             }
             guard output.failure.predicate == predicate,
                   output.relation == relation, output.selection == selection,
-                  output.record == record else {
+                  output.record == record,
+                  eventSets == nil || events == eventSets?[index] else {
                 throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                     path: "tla.initialEvaluationFailures",
                     expected: "\(relation) and \(selection)",

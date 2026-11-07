@@ -225,7 +225,7 @@ jobs:
           report = json.loads((case / "preparation.json").read_text())
           native = json.loads((case / "native-initial-failure.json").read_text())
           expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
-          assert report["schema"] == "swifttla.initial-failure-proof-v4"
+          assert report["schema"] == "swifttla.initial-failure-proof-v5"
           assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
           assert report["result"] == "prepared" and report["graphCompared"] is False
           assert (report["site"], report["kind"], report["operands"]) == expected
@@ -256,7 +256,7 @@ jobs:
         id: proof-tool
         with:
           evidence: .build/initial-failure-artifacts/toolchain
-      - name: Prove selected payload in actual generated TLA
+      - name: Prove selected record and failure set in actual generated TLA
         run: |
           set -euo pipefail
           # Pinned TLC cannot evaluate Int.max; TLAPS proves this emitted TLA+ result.
@@ -296,6 +296,19 @@ jobs:
           fi
           grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
             .build/initial-failure-artifacts/wrong-before.log
+          wrong_events=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongEvents.tla
+          test "$(grep -c '^ExpectedFailures ==' "$source_proof")" -eq 1
+          sed -e 's/MODULE SwiftTLAInitialFailureProof/MODULE SwiftTLAInitialFailureWrongEvents/' \
+              -e 's/^ExpectedFailures == .*/ExpectedFailures == {}/' \
+              "$source_proof" > "$wrong_events"
+          ! cmp -s "$source_proof" "$wrong_events"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "$wrong_events" \
+              > .build/initial-failure-artifacts/wrong-events.log 2>&1; then
+            echo 'wrong-events proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-events.log
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -303,7 +316,7 @@ jobs:
           root = Path(".build/initial-failure-artifacts")
           result = json.loads((root / "case" / "preparation.json").read_text())
           result.update(result="proved", proofMethod="TLAPS", wrongPayloadRejected=True,
-                        wrongBeforeRejected=True)
+                        wrongBeforeRejected=True, wrongEventsRejected=True)
           (root / "proof-result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
           PY
       - name: Retain source revision

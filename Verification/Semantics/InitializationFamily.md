@@ -799,6 +799,34 @@ Nondeterministic prefixes do not claim a selected failure record.
 The producer now visits membership domains and retains their definedness before emitting successful initial states.
 Domains without failures no longer consume unused fresh binder names.
 
+## TLA initial failure-event sets
+
+The deterministic selected record already retains a before-prefix and is consumed by schema v4 evidence.
+It cannot describe both failed branches of a nondeterministic initializer prefix.
+The existing renderer now also emits `__SwiftTLAInitialFailureEvents`, with a fresh suffix when necessary, for its guarded Int observation route.
+The existing coverage policy recognizes declared Int literals, reads and checked-add value initializers, optional program-counter initialization and supported Int domains without modeled arithmetic failure sites.
+It handles both unresolved declared types and resolved types; parameters, selected initial invariants, other failure constructors and fallible domain evaluation remain outside this event-set capability. Enumeration capacity and other operational failures remain separate from these model-failure records.
+Other accepted programs retain their existing behavior and coverage limits.
+
+Each reached addition site contributes a singleton record containing its initializer ordinal, kind, ordered operands and complete prior bindings, or an empty set when its predicate does not hold.
+Earlier fixed values bind their existing fresh prefix names. Earlier domains form a union over their candidates.
+Prefix type and definedness conditions guard these sets, so a failure at an earlier initializer prevents records from later initializers on that prefix.
+The final union includes every supported site. The emitted declaration is checked for presence and uniqueness.
+The existing independent addition checker validates the event expressions against the compiled expression and all prior bindings/domains.
+Its explicit optional event input distinguishes checking this observation from the older predicate/selected-record checks; production supplies it whenever the supported event-set capability is required.
+
+The unchanged-producer baseline executed one existing owner: its runtime retained the expected successful sibling and both site-1 overflow events, while the TLA event-set definition was absent.
+The first repair passed the new branch/prefix/site controls but exposed a core-versus-resolved bundle mismatch because coverage required resolved types.
+The shared eligibility correction retains the old selected-record requirement and emits the same event set before and after resolution for known declared Int/control shapes.
+The final diagnostic passed all 40 tests in five existing suites, including the original full bundle-equality guard and the actual evidence consumer.
+No model/fixture type, evaluator, checker family, compatibility spelling, pin, budget, timeout or corpus case was added.
+
+Schema v5 of the existing deterministic evidence consumer prepares `CompleteFailureEvents` against the actual emitted operator and the complete native singleton event set for that existing case.
+The existing pinned job also prepares an occurrence-checked, changed-input empty-set corruption, separate from its operand and before-prefix corruptions.
+These new proof checks have not yet executed. Preparation and regression results do not establish their mathematical conclusions.
+Even a later successful case check does not prove generic source/output correspondence.
+Event order and multiplicity, the serialized-record/partial-binding relation, unsupported initializer/failure constructors, selected invariants and whole accepted-program preservation remain open.
+
 ## Prior initialization evidence at admitted `1fb1dde9`
 
 The canonical owners are `OrderedAssignmentLoweringTests`, `DependentInitializationOutputProofTests` and `InitialBranchFailureTests`.

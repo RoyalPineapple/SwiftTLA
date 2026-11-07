@@ -22,6 +22,91 @@ struct InitialBranchFailureTests {
         #expect(compiled.firstFailure == generated.firstFailure)
         let quotient = try #require(compilation.layout.testVariableID(named: "quotient"))
         #expect(try compiled.states[0].value(for: quotient) == .integer(1))
+
+        let closure = try parseSpecTestClosure("""
+        { scope in
+            let first = scope.sharedVar(in: 0...2)
+            let second = scope.sharedVar(initial: first + 9223372036854775807)
+        }
+        """)
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in:
+            SpecParser.parseSpecClosure(named: "InitialSibling", closure).compile()))
+        let outcomes = try CompiledRuntime(program: program).initialOutcomes()
+        try #require(outcomes.states.count == 1)
+        let first = try #require(TLAStateProjection.Token(validating: "first"))
+        let second = try #require(TLAStateProjection.Token(validating: "second"))
+        let state = try outcomes.states[0].projection(using: program.layout)
+        #expect(state.value(for: first) == .int(0))
+        #expect(state.value(for: second) == .int(.max))
+        try #require(outcomes.failures.count == 2)
+        for (failure, value) in zip(outcomes.failures, [1, 2]) {
+            #expect(failure.site == .initializer(1))
+            #expect(failure.failure == .integerOverflow(.addition, operands: [value, Int.max]))
+            #expect(try failure.formalBindingsBeforeFailure() == TLAStateProjection(validating: [
+                .init(token: first, value: .int(value))
+            ]))
+        }
+        let module = try program.renderModule().renderedModuleSource
+        let eventDeclaration = try #require(module.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAInitialFailureEvents == ")
+        })
+        #expect(!module.contains("__SwiftTLASelectedInitialFailureRecord"))
+        let eventSet = String(eventDeclaration.dropFirst("__SwiftTLAInitialFailureEvents == UNION {".count).dropLast())
+        let relationDeclaration = try #require(module.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAInitialOverflowFailure1(")
+        }).description
+        let parts = relationDeclaration.components(separatedBy: " == ")
+        try #require(parts.count == 2)
+        let header = parts[0]
+        let open = try #require(header.firstIndex(of: "("))
+        let close = try #require(header.lastIndex(of: ")"))
+        let operandsName = String(header[header.index(after: open)..<close])
+        let binderPattern = try NSRegularExpression(pattern: #"\\E ([A-Za-z_][A-Za-z_0-9]*) \\in"#)
+        let match = try #require(binderPattern.firstMatch(in: parts[1],
+            range: NSRange(parts[1].startIndex..<parts[1].endIndex, in: parts[1])))
+        let binderRange = try #require(Range(match.range(at: 1), in: parts[1]))
+        let binder = String(parts[1][binderRange])
+        let prefix = program.behavior.initializations.prefix(1)
+        let names = [prefix[0].variable: binder]
+        guard case .value(let expression) = program.behavior.initializations[1].initialization else {
+            throw InvalidInitialFailureShape.unexpected
+        }
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        let failure = try #require(try renderer.expressionEvaluationFailures(expression, stateNames: names).first)
+        let aggregate = try #require(module.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAAnyInitialEvaluationFailure == ")
+        })
+        let selection = String(aggregate.dropFirst("__SwiftTLAAnyInitialEvaluationFailure == (".count).dropLast())
+        let operation = try #require(module.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAInitialOverflowOperation1 == ")
+        }).description
+        func verifyEvents(_ events: [String]) throws {
+            try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
+                after: prefix, names: names,
+                emitted: [(failure, parts[1], operandsName, selection, operation, nil)],
+                siteOrdinal: 1, eventSets: events, layout: program.layout)
+        }
+        try verifyEvents([eventSet])
+        let before = "before |-> <<[name |-> \"first\", value |-> \(binder)]>>"
+        let corruptions = [
+            ("site", eventSet.replacingOccurrences(of: "site |-> 1", with: "site |-> 0")),
+            ("prefix", eventSet.replacingOccurrences(of: before, with: "before |-> <<>>")),
+            ("branch", eventSet.replacingOccurrences(of: " \\in 0..2}", with: " \\in 0..1}"))
+        ]
+        for (label, corrupted) in corruptions {
+            try #require(corrupted != eventSet)
+            do {
+                try verifyEvents([corrupted])
+                Issue.record("Initial failure event-set corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "tla.initialEvaluationFailures")
+            }
+        }
+        #expect(throws: CompilationDiagnostic.self) { try verifyEvents([]) }
     }
 
     @Test("Rendered dependent division retains its initial failure outcome")
@@ -117,8 +202,8 @@ struct InitialBranchFailureTests {
             }.map { $0.declaration.name })
             #expect(intNames == ["first", "second", "last"])
         }
-        #expect(StraightLineRenderedActionCheck.requiresInitialIntFailureRecord(
-            parsedModel.program.behavior, layout: parsedModel.program.layout))
+        #expect(StraightLineRenderedActionCheck.requiredInitialIntFailureObservations(
+            parsedModel.program.behavior, layout: parsedModel.program.layout).selected)
         let generated = try CheckedAdditionPrefixInitialModel.initialOutcomes()
         #expect(generated.states.isEmpty)
         #expect(generated.firstFailure == .integerOverflow(.addition,
@@ -151,8 +236,8 @@ struct InitialBranchFailureTests {
         }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
             in: sourceCompilation))
-        let requiresRecord = StraightLineRenderedActionCheck.requiresInitialIntFailureRecord(
-            program.behavior, layout: program.layout)
+        let requiresRecord = StraightLineRenderedActionCheck.requiredInitialIntFailureObservations(
+            program.behavior, layout: program.layout).selected
         #expect(requiresRecord)
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineRenderedActionCheck.verifyInitialFailureRecord(rendered,
@@ -256,7 +341,7 @@ struct InitialBranchFailureTests {
         try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
             after: prefix, names: names,
             emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration, record)],
-            siteOrdinal: 3, layout: program.layout)
+            siteOrdinal: 3, eventSets: nil, layout: program.layout)
 
         let secondBinding = "[name |-> \"second\", value |-> \(secondName)]"
         #expect(record.components(separatedBy: secondBinding).count == 2)
@@ -271,7 +356,7 @@ struct InitialBranchFailureTests {
                 try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
                     after: prefix, names: names,
                     emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration, wrongPrefixRecord)],
-                    siteOrdinal: 3, layout: program.layout)
+                    siteOrdinal: 3, eventSets: nil, layout: program.layout)
             }
         }
 
@@ -281,7 +366,7 @@ struct InitialBranchFailureTests {
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(missingOperand,
                 after: prefix, names: names,
                 emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration, record)],
-                siteOrdinal: 3, layout: program.layout)
+                siteOrdinal: 3, eventSets: nil, layout: program.layout)
             Issue.record("A malformed compiled addition escaped the emitted-output check")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.initialEvaluationFailures")
@@ -292,7 +377,7 @@ struct InitialBranchFailureTests {
                 after: prefix, names: names,
                 emitted: [(checkedFailure, relation, operandsName, predicates[1], operationDeclaration,
                     record.replacingOccurrences(of: "site |-> 3", with: "site |-> 2"))],
-                siteOrdinal: 3, layout: program.layout)
+                siteOrdinal: 3, eventSets: nil, layout: program.layout)
             Issue.record("A changed initial failure site escaped the emitted-output check")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.initialEvaluationFailures")
@@ -304,7 +389,7 @@ struct InitialBranchFailureTests {
                 after: prefix, names: names,
                 emitted: [(checkedFailure, relation, operandsName, "FALSE", operationDeclaration, record)],
                 siteOrdinal: 3,
-                layout: program.layout)
+                eventSets: nil, layout: program.layout)
             Issue.record("A changed initial failure selection escaped the emitted-output check")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.initialEvaluationFailures")
@@ -315,7 +400,7 @@ struct InitialBranchFailureTests {
                 emitted: [(checkedFailure, relation, operandsName, predicates[1],
                     operationDeclaration.replacingOccurrences(of: "\"addition\"", with: "\"subtraction\""), record)],
                 siteOrdinal: 3,
-                layout: program.layout)
+                eventSets: nil, layout: program.layout)
             Issue.record("A changed initial overflow kind escaped the emitted-output check")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.initialEvaluationFailures")
@@ -341,7 +426,7 @@ struct InitialBranchFailureTests {
                 after: prefix, names: names,
                 emitted: [(checkedFailure, wrong, operandsName, predicates[1], operationDeclaration, record)],
                 siteOrdinal: 3,
-                layout: program.layout)
+                eventSets: nil, layout: program.layout)
             Issue.record("A later initial failure escaped its checked prefix")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.initialEvaluationFailures")

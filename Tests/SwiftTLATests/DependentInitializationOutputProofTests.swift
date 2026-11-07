@@ -201,7 +201,7 @@ struct DependentInitializationOutputProofTests {
             try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(domain,
                 after: prefix, names: names,
                 emitted: [(failure, relation, operandsName, selection, operation, nil)],
-                siteOrdinal: nil, layout: fallibleProgram.layout)
+                siteOrdinal: nil, eventSets: nil, layout: fallibleProgram.layout)
             for label in ["payload", "prefix", "missingRelation"] {
                 var changedModule = fallibleTLA
                 var emitted: [(failure: RenderedEvaluationFailure, relation: String,
@@ -237,7 +237,7 @@ struct DependentInitializationOutputProofTests {
                 do {
                     try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(domain,
                         after: prefix, names: names, emitted: emitted,
-                        siteOrdinal: nil, layout: fallibleProgram.layout)
+                        siteOrdinal: nil, eventSets: nil, layout: fallibleProgram.layout)
                     Issue.record("Fallible domain TLA corruption accepted: \(label)")
                 } catch let diagnostic as CompilationDiagnostic {
                     #expect(diagnostic.path == "tla.initialEvaluationFailures")
