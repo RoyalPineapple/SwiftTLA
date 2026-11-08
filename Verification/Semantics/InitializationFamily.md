@@ -595,6 +595,15 @@ At index one the read branch supplies `Success(m)` without consulting either his
 That row supplies the read position of the existing checked `TypedInitialRelationsRetainAllStatesAndFailureEvents`.
 Other initializer children still supply their own premises; no complete read/capture family or whole-program theorem follows.
 
+The existing initialization module now contains the unverified candidate
+`ReadyReadInitializersComposeCompleteStatesAndFailures` for arbitrary finite schedules and read positions.
+Its evaluator rows use `SourceFixed(prior[key])` and the independently filtered `GeneratedFixed(prior[key])`.
+The earlier-key premise and the exact prefix domain supply availability; the prior's type supplies membership in `Values`.
+Thus read agreement is derived rather than supplied, before applying the existing complete-history and selected-terminal rules.
+Off-prefix fallback entries only make the evaluator tables total; readiness must exclude them from every scheduled prefix.
+Non-read children and selected checks still supply agreement. This candidate has no pinned-prover receipt yet,
+does not mechanize the source-to-ID argument, and retains the existing set-valued observation limit.
+
 The existing parser/value owner now checks a dependent copied state through both source placements.
 Its domain-dependency sibling checks complete `(limit, choice)` pairs across different limits, rather than only the projection onto choice.
 The focused parser suite passed all 63 tests, including typed-program execution of the copied values and all three correlated branch pairs.

@@ -142,6 +142,121 @@ THEOREM LiteralIntInitializersComposeCompleteStatesAndFailures ==
         <2>. QED BY <2>1, <2>7, <2>8, <2>9, SMT
     <1>. QED BY <1>5, <1>6
 
+\* Fallback entries only totalize unready reads; scheduled prefixes cannot use them.
+ReadyReadInitializerEvaluators(generated, count, positions, readKeys, other) ==
+    [index \in 1..count |-> [prior \in PartialBindings |->
+        IF index \in positions
+        THEN IF readKeys[index] \in DOMAIN prior
+             THEN IF generated THEN GeneratedFixed(prior[readKeys[index]])
+                  ELSE SourceFixed(prior[readKeys[index]])
+             ELSE other[index][prior]
+        ELSE other[index][prior]]]
+
+THEOREM ReadyReadInitializersComposeCompleteStatesAndFailures ==
+    ASSUME NEW count, NEW order, InitializationOrder(count, order),
+           NEW positions \in SUBSET (1..count),
+           NEW readKeys \in [positions -> Keys],
+           \A index \in positions : readKeys[index] \in PrefixKeys(order, index - 1),
+           NEW sourceOther \in [1..count -> [PartialBindings -> InitializerOutcomes]],
+           NEW generatedOther \in [1..count -> [PartialBindings -> InitializerOutcomes]],
+           \A index \in (1..count) \ positions :
+               \A prior \in [PrefixKeys(order, index - 1) -> Values] :
+                   sourceOther[index][prior] = generatedOther[index][prior],
+           NEW sourceChecks \in [PartialBindings -> SelectionOutcomes],
+           NEW generatedChecks \in [PartialBindings -> SelectionOutcomes],
+           \A state \in [Keys -> Values] : sourceChecks[state] = generatedChecks[state]
+    PROVE LET sourceEvaluate == ReadyReadInitializerEvaluators(FALSE, count, positions, readKeys, sourceOther)
+              generatedEvaluate == ReadyReadInitializerEvaluators(TRUE, count, positions, readKeys, generatedOther)
+          IN /\ \E source : InitializationHistory(FALSE, count, order, sourceEvaluate, source)
+             /\ \E generated : InitializationHistory(TRUE, count, order, generatedEvaluate, generated)
+             /\ \A source, generated :
+                 (InitializationHistory(FALSE, count, order, sourceEvaluate, source)
+                  /\ InitializationHistory(TRUE, count, order, generatedEvaluate, generated))
+                 => /\ \A index \in 0..count : source[index] = generated[index]
+                    /\ SourceTerminal(source[count], sourceChecks)
+                        = GeneratedTerminal(generated[count], generatedChecks)
+                    /\ SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
+    PROOF
+    <1>. DEFINE sourceEvaluate == ReadyReadInitializerEvaluators(FALSE, count, positions, readKeys, sourceOther)
+                generatedEvaluate == ReadyReadInitializerEvaluators(TRUE, count, positions, readKeys, generatedOther)
+    <1>1. \A prior \in PartialBindings : \A key \in DOMAIN prior :
+        /\ SourceFixed(prior[key]) = GeneratedFixed(prior[key])
+        /\ SourceFixed(prior[key]) \in InitializerOutcomes
+        <2>. SUFFICES ASSUME NEW prior \in PartialBindings, NEW key \in DOMAIN prior
+                     PROVE /\ SourceFixed(prior[key]) = GeneratedFixed(prior[key])
+                           /\ SourceFixed(prior[key]) \in InitializerOutcomes
+            BY SMT
+        <2>1. prior \in [DOMAIN prior -> Values]
+            BY PartialBindingsHaveSourceTypes
+        <2>2. prior[key] \in Values BY <2>1, SMT
+        <2>. QED BY <2>2, FixedInitializerRetainsItsOnlyCandidate, SMT
+    <1>2. InitializerEvaluators(count, sourceEvaluate)
+          /\ InitializerEvaluators(count, generatedEvaluate)
+        BY <1>1, SMT DEF sourceEvaluate, generatedEvaluate,
+            ReadyReadInitializerEvaluators, InitializerEvaluators
+    <1>3. \A index \in positions :
+        \A prior \in [PrefixKeys(order, index - 1) -> Values] :
+            /\ prior \in PartialBindings
+            /\ readKeys[index] \in DOMAIN prior
+        BY SMT DEF PartialBindings, PrefixKeys, InitializationOrder
+    <1>4. \A index \in 1..count :
+        \A prior \in [PrefixKeys(order, index - 1) -> Values] :
+            sourceEvaluate[index][prior] = generatedEvaluate[index][prior]
+        <2>. SUFFICES ASSUME NEW index \in 1..count,
+                            NEW prior \in [PrefixKeys(order, index - 1) -> Values]
+                     PROVE sourceEvaluate[index][prior] = generatedEvaluate[index][prior]
+            BY SMT
+        <2>1. prior \in PartialBindings
+            BY SMT DEF PartialBindings, PrefixKeys, InitializationOrder
+        <2>2. CASE index \in positions
+            BY <1>1, <1>3, <2>1, <2>2, SMT DEF sourceEvaluate, generatedEvaluate,
+                ReadyReadInitializerEvaluators
+        <2>3. CASE index \notin positions
+            BY <2>1, <2>3, SMT DEF sourceEvaluate, generatedEvaluate,
+                ReadyReadInitializerEvaluators
+        <2>. QED BY <2>2, <2>3, SMT
+    <1>5. /\ \E source : InitializationHistory(FALSE, count, order, sourceEvaluate, source)
+          /\ \E generated : InitializationHistory(TRUE, count, order, generatedEvaluate, generated)
+        BY <1>2, InitializationHistoriesExist, SMT
+    <1>6. \A source, generated :
+        (InitializationHistory(FALSE, count, order, sourceEvaluate, source)
+         /\ InitializationHistory(TRUE, count, order, generatedEvaluate, generated))
+        => /\ \A index \in 0..count : source[index] = generated[index]
+           /\ SourceTerminal(source[count], sourceChecks)
+                = GeneratedTerminal(generated[count], generatedChecks)
+           /\ SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
+        <2>. SUFFICES ASSUME NEW source, NEW generated,
+                      InitializationHistory(FALSE, count, order, sourceEvaluate, source),
+                      InitializationHistory(TRUE, count, order, generatedEvaluate, generated)
+                     PROVE /\ \A index \in 0..count : source[index] = generated[index]
+                           /\ SourceTerminal(source[count], sourceChecks)
+                                = GeneratedTerminal(generated[count], generatedChecks)
+                           /\ SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
+            BY SMT
+        <2>1. \A index \in 0..count : source[index] = generated[index]
+            BY <1>2, <1>4, InitializationHistoriesRetainAllStatesAndFailures, SMT
+        <2>2. count \in Nat /\ PrefixKeys(order, count) = Keys
+            BY SMT DEF InitializationOrder
+        <2>3. source[count] \in InitializationResults
+            BY <2>2, SMT DEF InitializationHistory
+        <2>4. \A index \in 0..count :
+            source[index].states \subseteq [PrefixKeys(order, index) -> Values]
+            BY <1>2, SourceHistoriesBindEveryPrefixKey, SMT
+        <2>5. source[count].states \subseteq [Keys -> Values]
+            BY <2>2, <2>4, SMT
+        <2>6. \A state \in source[count].states :
+            sourceChecks[state] = generatedChecks[state]
+            BY <2>5, SMT
+        <2>7. SourceTerminal(source[count], sourceChecks)
+            = GeneratedTerminal(source[count], generatedChecks)
+            BY <2>3, <2>6, TerminalSelectionRetainsEveryStateAndFailure, SMT
+        <2>8. SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
+            BY <2>5, SMT DEF SourceTerminal, SourceSelectedStates
+        <2>9. generated[count] = source[count]
+            BY <2>1, <2>2, SMT
+        <2>. QED BY <2>1, <2>7, <2>8, <2>9, SMT
+    <1>. QED BY <1>5, <1>6
+
 THEOREM OrderedIntExpressionsSupplyPartialInitializationLeaves ==
     ASSUME IntInitializationDomains, NEW prior \in PartialBindings,
            NEW target \in IntKeys \ (DOMAIN prior),

@@ -410,6 +410,10 @@ Complete these rows in order. Reuse the existing rules and checks.
   The [read-child argument](InitializationFamily.md#root-state-read-initializer-child) follows source handle binding, actual layout lookup, checked/resolved ID transport and mandatory dependency validation.
   It derives current-prefix reads in the compiled runtime and native/TLA output rows, supplying the checked expression and typed-initialization consumers under the named interpretation conditions.
   Its one-node plan and zero-prefix seed derive the checked read rule's premises explicitly. The existing copied-value and branching-correlation owners passed in the 63-test focused parser suite, using typed execution for the copied values. This manual result leaves captures, other placements and full E READ open.
+- [ ] M1.2b Check the concrete ready-read evaluator instance and its complete initialization parent.
+  `ReadyReadInitializersComposeCompleteStatesAndFailures` constructs read rows from the current prior binding and derives readiness from an earlier-key premise.
+  Its proof body supplies the existing history and terminal-selection consumers without an evaluator-agreement premise at read positions. Other constructors and selected checks retain their own agreement premises.
+  This is an unverified proof candidate until the exact changed module passes the pinned prover. Actual source/ID/binding correspondence remains the separate manual argument above; set equality does not establish ordered failure observations.
 - [ ] M1.3 Complete all six links for E ADD.
 - [x] M1.3a Derive the call-free Int addition node case from its established child contracts.
   The [addition-child argument](InitializationFamily.md#checked-addition-initializer-child) follows actual scheduling, checked helper/error transport and TLA expression guards into the checked `CombinedAdditionRule`.
