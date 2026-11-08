@@ -210,6 +210,16 @@ The proof dependencies above still govern proof closure; they do not block indep
   Opaque fingerprints change. Source names, declaration IDs, values and accepted forms remain unchanged.
   This is implementation evidence. General source-key injectivity, source/ID/backend interpretation and all complete six-link proof rows remain open.
 
+- [x] I5ad Preserve closed-constant source names and values through legal output symbols.
+  Allocate physical names in existing output metadata after source reads resolve to literal values.
+  Reuse existing stem and freshness rules across declarations, assumptions, configuration, generated exports, refinements and authored PlusCal.
+  Reserve known imported model-value tokens before parent bindings and aliases. Keep the existing collision guard.
+  Two existing owners reproduced 37 output issues. A parent/child case exposed one additional collision in the first candidate.
+  The expanded repair passed 193 tests in eighteen suites, including the external compiler contract.
+  Source declarations, values, IDs, accepted forms and raw model-value tokens remain unchanged.
+  Identity model-value encoding, later sibling/generated/runtime namespaces and general source/backend/observation correspondence retain separate obligations.
+  This is an implementation result. No complete six-link proof row or whole-language preservation follows.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1616,3 +1626,36 @@ The baseline, inputs, logs and reviews are retained in `.git/swifttla-proof-evid
 These receipts support the implementation repair. They do not prove a general key-injectivity or source/value correspondence theorem.
 Duplicate raw-key meaning, Unicode/string interpretation, source binding, output/helper/kernel semantics and complete observation correspondence retain their separate obligations.
 No mathematical source or protected-checklist bytes changed. No complete six-link row, hosted admission or whole-language preservation follows.
+
+
+### Closed-constant symbol checkpoint 8 November 2026
+
+The existing source guard accepts fairness-prefixed, letterless, predefined and inherited names for closed constants.
+Output metadata printed those names directly into TLA declarations, assumptions and configuration.
+The first baseline against committed `ec224eb0` producers reported 29 output issues across seven tests.
+The expanded baseline included generated behavior names and reported 37 issues. These counts overlap.
+Source names and values, native cardinality results, ordinary names and existing import/refinement controls passed.
+The macro fixture also compiled and executed its generated export. No setup failure supplied these results.
+
+The metadata constructor now allocates physical closed-constant names with the existing stem and freshness functions.
+Source reads already resolve to literal values before this step. The source declarations, values and IDs remain unchanged.
+The existing metadata consumers carry the physical names through direct, typed and generated exports, configuration and authored PlusCal.
+Identity model-value constants retain their raw token. Their general encoding rule remains separate.
+
+The first candidate passed 193 tests in eighteen suites. Review then added a parent/child case in the existing refinement owner.
+A parent `WF_Limit = 3` chose an alias that captured the child model-value token `_WF_Limit`.
+Native initialization passed before the existing export guard rejected that collision.
+This baseline ran one test with one issue against the exact first-candidate producer bytes, rather than committed `ec224eb0` producers.
+
+The module loop now supplies the model-value tokens from previously compiled imports before it allocates parent symbols.
+The source closure visits imports and named instances before it appends each module. The root is its last entry.
+The incremental token union equals the previous final union. It now also supplies each earlier allocation step.
+Bindings and declaration names reserve this prefix. Raw data tokens remain unchanged, and the collision guard remains byte-exact.
+This source argument concerns the known compiled-import frontier. Other sibling, generated-target and runtime-introduced namespaces retain separate obligations.
+
+The corrected guarded run passed 193 tests in eighteen suites after a 1483.52-second build and 229.925-second execution.
+All 1201 captured inputs remained exact. Only this plan changed after that run.
+The complete 125557-byte log has SHA256 `a718ad6f4796b6ef320fd0b7afeccc4727e8d16576b6f10d7a40fc54edbff125`.
+Inputs, baselines, logs and reviews are retained in `.git/swifttla-proof-evidence/constant-declaration-names-2026-11-08/` in the primary checkout.
+These are implementation regression receipts. No local SANY/TLC execution, new theorem, complete proof row or hosted admission follows.
+The mathematical sources and protected language checklist remain unchanged. Whole-language preservation remains unproved.

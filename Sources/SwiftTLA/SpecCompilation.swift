@@ -248,7 +248,7 @@ package struct CompiledGeneratedModelRefinement: Sendable {
     }
 }
 
-/// Source metadata needed by renderers after executable declarations are lowered.
+/// Module metadata needed by renderers after executable declarations are lowered.
 struct CompiledModuleMetadata: Sendable {
     var name: String
     let constants: [ConstantDecl]
@@ -268,10 +268,19 @@ struct CompiledModuleMetadata: Sendable {
         return names.isEmpty ? nil : "CONSTANTS \(names.joined(separator: ", "))"
     }
 
-    init(source: TLASpec, modelValueNames: Set<String>) {
+    init(source: TLASpec, modelValueNames: Set<String>, reserving names: Set<String>) {
         self.modelValueNames = modelValueNames
         name = source.name
-        constants = source.constants
+        var occupied = names.union(source.constants.map(\.name))
+        constants = source.constants.map { constant in
+            // shortcut: identity model-value names need a separate value-encoding rule.
+            guard constant.value != .constant(constant.name) else { return constant }
+            let stem = tlaDeclarationStem(constant.name)
+            guard stem != constant.name || names.contains(stem) else { return constant }
+            let name = StateExpr.freshBoundName(stem, avoiding: occupied)
+            occupied.insert(name)
+            return .init(name, constant.value)
+        }
         formalParameters = source.formalParameters
         extendsModules = source.extendsModules
         imports = source.imports.map(\.name)
@@ -1260,6 +1269,7 @@ public extension TLASpec {
             try entry.module.validateSourceDeclarationNames()
         }
         var compiledModules: [CompiledModule] = []
+        var modelValues: Set<String> = []
         var exportedOperators: [String: [String: String]] = [:]
         let moduleDeclarations = Set(closure.entries.flatMap { $0.module.renderedDeclarationNames() })
         for entry in closure.entries {
@@ -1268,13 +1278,13 @@ public extension TLASpec {
             let visible = source.importedOperatorNames(in: closure, exports: exportedOperators, instances: [])
             let compiled = try source.compileModule(in: context.closure,
                 incomingModuleParameters: context.incomingModuleParameters, importedOperatorNames: visible,
-                moduleDeclarations: moduleDeclarations)
+                moduleDeclarations: moduleDeclarations, knownModelValues: modelValues)
             exportedOperators[entry.module.name] = compiled.bindings.sourceOperators.mapValues {
                 compiled.bindings.operatorName($0)!
             }
             compiledModules.append(compiled)
+            modelValues.formUnion(compiled.metadata.modelValueNames)
         }
-        let modelValues = Set(compiledModules.flatMap { $0.metadata.modelValueNames })
         let instanceNamespaces = Set(compiledModules.flatMap { $0.layout.moduleInstances.map(\.namespace) })
         var unavailable = moduleDeclarations.subtracting(instanceNamespaces).union(modelValues)
         for compiled in compiledModules {
@@ -1411,7 +1421,8 @@ public extension TLASpec {
         in closure: FormalModuleClosure,
         incomingModuleParameters: [FormalModuleReplacement],
         importedOperatorNames: [String: String],
-        moduleDeclarations: Set<String>
+        moduleDeclarations: Set<String>,
+        knownModelValues: Set<String>
     ) throws -> CompiledModule {
         try validateUnique(variables.map(\.name), code: .duplicateVariable, path: "variables")
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
@@ -1473,12 +1484,13 @@ public extension TLASpec {
             if scenario.view != nil { operatorReservations.insert("__SwiftTLAView\(index)") }
             if let postcondition = scenario.postconditionName { operatorReservations.insert(postcondition) }
         }
-        let bindings = lowerer.bindings(reserving: importedNames, operatorReservations: operatorReservations,
+        operatorReservations.formUnion(knownModelValues)
+        let bindings = lowerer.bindings(reserving: importedNames.union(knownModelValues), operatorReservations: operatorReservations,
             avoiding: moduleDeclarations)
         var occupied = renderedDeclarationNames(includingActions: false, includingVariables: false, includingProperties: false)
             .union(importedNames)
             .union(tlaPredefinedIdentifierNames)
-            .union(lowerer.modelValueNames)
+            .union(lowerer.modelValueNames).union(knownModelValues)
             .union(bindings.binders.filter { parameterVariables[$0.key] == nil }.values)
             .union(bindings.operatorNames.values)
             .union(symmetrySets.map { "Symm\($0.variableName)" })
@@ -1523,8 +1535,17 @@ public extension TLASpec {
         }
         layout.resolveActionNames(reserving: actionReservations, preservingDirectNext: directNext)
         try validateAuthoredProperties(algorithm: authoredAlgorithm?.plan, layout: layout)
+        let constantReservations = occupied.subtracting(constants.map(\.name))
+            .union(importedNames).union(tlaPredefinedIdentifierNames)
+            .union(lowerer.modelValueNames).union(knownModelValues)
+            .union(formalParameters.map(\.name)).union(resolvedBindings.binders.values)
+            .union(resolvedBindings.operatorNames.values).union(layout.actions.map(\.renderedName))
+            .union(layout.properties.map(\.formalName)).union(layout.variables.map(\.formalName))
+            .union(["Init", "Next", "Spec", "vars"])
+            .union(authoredAlgorithm == nil ? [] : ["Terminating"])
         return CompiledModule(
-            metadata: .init(source: self, modelValueNames: lowerer.modelValueNames), layout: layout, bindings: resolvedBindings, semantics: semantics,
+            metadata: .init(source: self, modelValueNames: lowerer.modelValueNames,
+                reserving: constantReservations), layout: layout, bindings: resolvedBindings, semantics: semantics,
             refinements: resolvedRefinements, generatedRefinements: resolvedGenerated,
             authoredAlgorithm: authoredAlgorithm,
             requiredStandardModules: lowerer.requiredStandardModules,
