@@ -1105,7 +1105,7 @@ struct CompiledTLARenderer {
 
         func schedule(_ operation: CompiledOperation, _ operands: [CompiledExpression]) throws {
             let syntax = try operation.tlaSyntax(operandCount: operands.count,
-                binderName: binderName)
+                binderName: binderName, recordName: { choiceName("record") })
             for part in syntax.reversed() {
                 switch part {
                 case .text(let text): tasks.append(.text(text))
@@ -1473,7 +1473,8 @@ struct CompiledTLARenderer {
         }
         guard case .recordLiteral(let names) = body.operation,
               names.count == domains.count, names.count == body.children.count,
-              Set(names).count == names.count else { return nil }
+              Set(names).count == names.count,
+              names.allSatisfy(isTLARecordFieldName) else { return nil }
         var fields: [(name: String, domain: CompiledExpression)] = []
         var used: Set<BinderID> = []
         for (name, value) in zip(names, body.children) {
@@ -1627,7 +1628,8 @@ enum TLAExpressionPart: Equatable, Sendable {
 extension CompiledOperation {
     func tlaSyntax(
         operandCount: Int,
-        binderName: (BinderID) throws -> String
+        binderName: (BinderID) throws -> String,
+        recordName: () -> String
     ) throws -> [TLAExpressionPart] {
         if let syntax = tlaOperandSyntax {
             var parts: [TLAExpressionPart] = [.text(syntax.prefix)]
@@ -1667,6 +1669,26 @@ extension CompiledOperation {
             guard fields.count == operandCount else {
                 throw CompiledValueType.diagnostic("rendering.record", "each record field requires one operand")
             }
+            if fields.isEmpty || !fields.allSatisfy(isTLARecordFieldName) {
+                let key = recordName()
+                if fields.isEmpty { return [.text("[\(key) \\in {} |-> TRUE]")] }
+                let values = recordName()
+                let result = recordName()
+                let domain = fields.map { TLAValue.string($0).description }.joined(separator: ", ")
+                // Evaluate each operand once before field selection can make the function lazy.
+                var record: [TLAExpressionPart] = [.text("(CHOOSE \(result) \\in {[\(key) \\in {\(domain)} |-> CASE ")]
+                for (index, field) in fields.enumerated() {
+                    if index > 0 { record.append(.text(" [] ")) }
+                    record.append(.text("(\(key) = \(TLAValue.string(field))) -> \(values)[\(index + 1)]"))
+                }
+                record.append(.text("] : \(values) \\in {<<"))
+                for index in fields.indices {
+                    if index > 0 { record.append(.text(", ")) }
+                    record.append(.operand(index))
+                }
+                record.append(.text(">>}} : TRUE)"))
+                return record
+            }
             var record: [TLAExpressionPart] = [.text("[")]
             for (index, field) in fields.enumerated() {
                 if index > 0 { record.append(.text(", ")) }
@@ -1675,7 +1697,8 @@ extension CompiledOperation {
             record.append(.text("]"))
             parts = record
         case .recordAccess(let field):
-            parts = [.text("("), .operand(0), .text(").\(field)")]
+            parts = [.text("("), .operand(0), .text(isTLARecordFieldName(field)
+                ? ").\(field)" : ")[\(TLAValue.string(field))]")]
         case .functionLiteral(let binder):
             parts = [.text("[\(try binderName(binder)) \\in "), .operand(0), .text(" |-> "), .operand(1), .text("]")]
         case .except:

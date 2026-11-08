@@ -70,18 +70,43 @@ struct NativeCodeGenerationTests {
         }
     }
 
-    @Test("Record construction preserves field names across execution and rendering")
-    func recordFieldNames() throws {
+    @Test("Record construction and access retain keys across execution and TLA rendering", arguments: [
+        ("z", true), ("IF", true), ("WF_", true), ("_", true),
+        ("WF_z", false), ("SF_z", false), ("_1", false)
+    ])
+    func recordFieldNames(field: String, bareField: Bool) throws {
         let record = StateRecordExpression([
-            .init(name: "z", value: .variable("count")),
-            .init(name: "a", value: .int(2))
+            .init(name: field, value: .variable("count")),
+            .init(name: "a", value: .variable("__RecordIdentity_record0"))
         ])
-        let specification = TLASpec(name: "RecordIdentity", variables: [
-            .init(name: "count", initial: .int(0))
+        let domain = StateExpr.unionAll(.setMap(.setMap(.recordLiteral(.init([
+            .init(name: field, value: .variable("second")),
+            .init(name: "a", value: .variable("first"))
+        ])), "second", .value(.set([.int(0), .int(1)]))),
+            "first", .value(.set([.int(0), .int(1)]))))
+        var specification = TLASpec(name: "RecordIdentity", variables: [
+            .init(name: "count", initial: .int(0)),
+            .init(name: "__RecordIdentity_record0", initial: .int(2)),
+            .init(name: "raw", initial: .record(TLARecord([
+                .init(field, .int(0)), .init("a", .constant("__tla_fn_0"))
+            ])))
         ], actions: [], invariants: [
             .init(name: "Equal", body: .equal(.recordLiteral(record), .recordLiteral(record))),
-            .init(name: "Read", body: .equal(.recordAccess(.recordLiteral(record), "z"), .int(0)))
+            .init(name: "Read", body: .equal(.recordAccess(.recordLiteral(record), field), .int(0))),
+            .init(name: "Domain", body: .equal(.cardinality(domain), .int(4)))
         ])
+        if field == "z" {
+            specification.invariants.append(.init(name: "Empty", body: .equal(
+                .recordLiteral(StateRecordExpression(orderedFields: [])), .value(.record(TLARecord([]))))))
+        }
+        if field == "WF_z" {
+            let failing = StateRecordExpression(orderedFields: [
+                .init(name: field, value: .int(0)),
+                .init(name: "a", value: .divide(.int(1), .int(0)))
+            ])
+            specification.invariants.append(.init(name: "StrictRead", body: .equal(
+                .recordAccess(.recordLiteral(failing), field), .int(0))))
+        }
         let compilation = try specification.compile()
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         let predicate = try #require(program.behavior.invariants.first).predicate.expression
@@ -90,24 +115,78 @@ struct NativeCodeGenerationTests {
             Issue.record("Expected resolved record construction")
             return
         }
-        #expect(fields == ["a", "z"])
+        #expect(fields == ["a", field].sorted())
         #expect(constructor.children.map(\.resultType) == [.int, .int])
+        var recordNameIndex = 0
         let syntax = try constructor.operation.tlaSyntax(operandCount: constructor.children.count,
-            binderName: { _ in "unused" })
-        #expect(syntax == [.text("["), .text("a |-> "), .operand(0), .text(", "),
-            .text("z |-> "), .operand(1), .text("]")])
-        var values: [CompiledValue] = [.integer(2), .integer(0)]
+            binderName: { _ in "unused" }, recordName: {
+                defer { recordNameIndex += 1 }
+                return "record\(recordNameIndex)"
+            })
+        let text = syntax.compactMap { part -> String? in
+            if case .text(let value) = part { return value }
+            return nil
+        }.joined()
+        if bareField {
+            #expect(text.contains("\(field) |-> "))
+        } else {
+            #expect(!text.contains("\(field) |-> "))
+            #expect(text.contains("\"\(field)\""))
+            #expect(text.contains("\\in {"))
+        }
+        #expect(syntax.compactMap { part -> Int? in
+            if case .operand(let index) = part { return index }
+            return nil
+        } == Array(fields.indices))
+        var values: [CompiledValue] = fields.map { .integer($0 == "a" ? 2 : 0) }
         try constructor.operation.apply(to: &values, operandCount: 2)
         #expect(values == [.record(CompiledRecord([
             .init(key: .string("a"), value: .integer(2)),
-            .init(key: .string("z"), value: .integer(0))
+            .init(key: .string(field), value: .integer(0))
         ]))])
         let read = try #require(program.behavior.invariants.first { $0.name == "Read" })
         let access = try #require(read.predicate.expression.children.first)
-        #expect(access.operation == .recordAccess(try #require(fields.last)))
+        #expect(access.operation == .recordAccess(field))
         #expect(access.resultType == .int)
         try access.operation.apply(to: &values, operandCount: 1)
         #expect(values == [.integer(0)])
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        for invariant in compilation.semantics.behavior.invariants {
+            if invariant.name == "StrictRead" {
+                #expect(throws: EvalError.divisionByZero) {
+                    try runtime.invariantHolds(invariant, in: initial)
+                }
+            } else {
+                #expect(try runtime.invariantHolds(invariant, in: initial))
+            }
+        }
+        let bundle = try compilation.render().tlaBundle
+        let typed = try program.renderModule().renderedModuleSource
+        for source in [bundle.tla, typed] {
+            if field == "WF_z" {
+                let strict = try #require(source.split(whereSeparator: \.isNewline).first { $0.hasPrefix("StrictRead ==") })
+                #expect(strict.contains("CHOOSE "))
+                #expect(strict.contains("\\in {<<"))
+            }
+            if field == "z" {
+                let empty = try #require(source.split(whereSeparator: \.isNewline).first { $0.hasPrefix("Empty ==") })
+                #expect(empty.components(separatedBy: "\\in {} |-> TRUE]").count - 1 == 2)
+            }
+            if bareField {
+                #expect(source.contains(".\(field)"))
+                #expect(source.contains("\(field): "))
+            } else {
+                #expect(!source.contains("\(field) |-> "))
+                #expect(!source.contains(".\(field)"))
+                #expect(!source.contains("\(field): "))
+                #expect(source.contains("[\"\(field)\"]"))
+                #expect(!source.contains("[__RecordIdentity_record0 \\in"))
+                #expect(source.contains("<<count, __RecordIdentity_record0>>"))
+                #expect(!source.contains("[__tla_fn_0 \\in"))
+                #expect(source.contains(") -> __tla_fn_0"))
+            }
+        }
     }
 
     @Test("Fixed record updates omit unused storage while retaining operand evaluation")

@@ -30,6 +30,13 @@ struct ConfigurationValueExportTests {
          #"[__tla_fn_0 \in {"big", "small"} |-> CASE (__tla_fn_0 = "big") -> 5 [] (__tla_fn_0 = "small") -> 3]"#),
         (.tuple([.int(1), .int(2)]), "<<1, 2>>"), (.tuple([.constant("Jug")]), "<<JugAlias>>"),
         (.record(["count": .int(2)]), "[count |-> 2]"),
+        (.record(["WF_z": .int(1)]), #"[__tla_fn_0 \in {"WF_z"} |-> 1]"#),
+        (.record(["SF_z": .bool(true)]), #"[__tla_fn_0 \in {"SF_z"} |-> TRUE]"#),
+        (.record(["_1": .constant("Jug")]), #"[__tla_fn_0 \in {"_1"} |-> JugAlias]"#),
+        (.record(["field with space": .int(2)]), #"[__tla_fn_0 \in {"field with space"} |-> 2]"#),
+        (.record(TLARecord([])), #"[__tla_fn_0 \in {} |-> TRUE]"#),
+        (.record(["é": .int(2)]), #"[__tla_fn_0 \in {"__SwiftTLA_UTF8_V1__C3A9"} |-> 2]"#),
+        (.record(["e\u{301}": .int(2)]), #"[__tla_fn_0 \in {"__SwiftTLA_UTF8_V1__65CC81"} |-> 2]"#),
         (.record(["Jug": .constant("Jug")]), "[Jug |-> JugAlias]"),
         (.function([.constant("Jug"): .constant("Jug")]), #"[__tla_fn_0 \in {JugAlias} |-> JugAlias]"#),
         (.set([.tuple([.constant("Jug")])]), "{<<JugAlias>>}"), (.int(-1), "-1"),
@@ -49,6 +56,9 @@ struct ConfigurationValueExportTests {
                 #expect(bundle.cfg.contains("CONSTANT Input <- __SwiftTLAParameter__0\n"))
                 #expect(!bundle.cfg.contains("CONSTANT Input ="))
                 #expect(bundle.tla.contains("__SwiftTLAParameter__0 == \(input.expression)\n===="))
+                if input.expression.contains("__SwiftTLA_UTF8_V1__") {
+                    #expect(bundle.usesFormalStringEncoding)
+                }
             }
         }
     }

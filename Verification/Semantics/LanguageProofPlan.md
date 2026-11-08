@@ -196,6 +196,13 @@ The proof dependencies above still govern proof closure; they do not block indep
   Existing owners reproduced prefix, letterless, standard-name and nested import collisions. The guarded repair passed 206 tests in fourteen suites, including the external generated Swift consumer contract.
   This is implementation evidence. General namespace soundness, generated/opaque module contracts, raw values, SANY interpretation and all complete six-link proof rows remain open.
 
+- [x] I5ab Preserve record keys through legal TLA construction, access and configured-value transport.
+  Keep ordinary and keyword field tokens. Use string-keyed function syntax for other unique record keys and the empty record, retaining the original data names.
+  Carry compiled field operands once through an eager tuple before selection; retain existing generic record-set rendering when the bare-field optimization does not apply.
+  Reuse raw function formatting with capture avoidance and mark encoded configuration definitions through the existing formal-string protocol.
+  Existing owners reproduced key, empty-constructor and encoding faults. A separate wrong-candidate baseline exposed the missing eager carrier while native evaluation raised the exact unread-field division-by-zero error.
+  The corrected guarded run passed 171 tests in sixteen suites. This is implementation evidence, not SANY/TLC execution or a complete record proof. Duplicate raw keys, nested function/effectful children, generic projection, source/backend/kernel interpretation and complete observations remain open.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1546,3 +1553,34 @@ This establishes the measured implementation repair, without SANY execution or a
 All mathematical source bytes and the protected language checklist remain unchanged.
 Generated/opaque module contracts, raw values, source/IR/backend interpretation and complete ordered observations remain open.
 No new hosted admission or whole-language preservation follows from this local result.
+
+### Record key encoding checkpoint 8 November 2026
+
+Accepted record fields with fairness-token prefixes or letterless names reached bare TLA field syntax.
+Raw configuration records also printed arbitrary and empty keys without a legal representation or required encoding marker.
+The corrected baseline reported 99 output-contract issues across two existing tests while normal/keyword fields, keys, types, native execution and domain cardinalities passed.
+A separate existing-owner baseline reported 47 issues, including two empty-constructor issues; its other 45 issues overlap the earlier run.
+The first baseline contained eight mistaken optimization-route assertions. Those are retained as test setup mistakes, not compiler fault evidence.
+
+The initial formatting repair passed 171 tests, but source review found an uncovered strictness risk.
+The pinned TLC implementation evaluates a function operand with `KeepLazy` during application, while a record constructor evaluates every field.
+A new case in the existing owner confirmed the exact native division-by-zero error from an unselected field.
+The initial candidate then failed four eager-output contract assertions across direct and typed output.
+That baseline binds the actual initial repair bytes, rather than claiming unchanged committed production.
+No local SANY or TLC execution is claimed by these output-contract assertions.
+
+The corrected compiled representation evaluates operand tuples in a singleton comprehension before constructing the string-keyed function.
+Existing fresh-name allocation supplies the carrier, key and result names. Operand positions occur once and retain their order.
+Raw closed record data reuses function formatting; function binders avoid capture by raw model-value references.
+Ordinary and keyword fields retain their existing token forms. Source admission, source keys, public identities and values remain unchanged.
+Configured definitions use the existing formal-string marker, including byte-distinct Unicode key encodings.
+The existing bridge already canonicalizes nonempty string-keyed functions as records. Its source and pins did not change.
+
+The corrected guarded repair passed 171 tests in sixteen suites after a 1447.45-second build and 2.203-second execution.
+All 1201 captured inputs remained exact. Only this plan changed after that run.
+The complete 116380-byte log has SHA256 `88f4f8122252c66cf23b2446bc30bfd876da9a7c1551e4b913b72aaa2a6cd30b`.
+Inputs, baseline results, pinned source, logs and reviews are retained in `.git/swifttla-proof-evidence/record-field-encoding-2026-11-08/` in the primary checkout.
+These results establish the measured implementation repair under named language/tool interpretation boundaries.
+Duplicate raw-key payloads keep their existing formatting and retain a separate value-contract obligation.
+Nested function/effectful child outcomes, generic Unicode/type projection, complete event correspondence and checker/decoder/kernel soundness remain open.
+All mathematical source bytes and the protected language checklist remain unchanged. No complete six-link record row, new theorem, hosted admission or whole-language preservation follows.

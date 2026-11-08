@@ -35,6 +35,14 @@ func isTLADeclarationName(_ name: String) -> Bool {
     isFormalIdentifier(name) && tlaReservedWords.contains(name) == false
 }
 
+// Record fields allow keywords, unlike declarations; lexer restrictions still apply.
+func isTLARecordFieldName(_ name: String) -> Bool {
+    guard isFormalIdentifier(name) else { return false }
+    if name == "_" || name == "WF_" || name == "SF_" { return true }
+    return !name.hasPrefix("WF_") && !name.hasPrefix("SF_")
+        && name.utf8.contains { (65...90).contains($0) || (97...122).contains($0) }
+}
+
 // Escape lexer restrictions here without changing accepted source names.
 func tlaDeclarationStem(_ name: String) -> String {
     if tlaReservedWords.contains(name) || name.hasPrefix("WF_") || name.hasPrefix("SF_") {
@@ -545,7 +553,7 @@ public struct RenderedSpecification: Sendable {
             }
             let source = String(bundle.root.tla[..<end.lowerBound]) + definitions.joined(separator: "\n")
                 + "\n" + bundle.root.tla[end.lowerBound...]
-            return TLAModuleBundle(root: .init(name: bundle.root.name, tla: source,
+            return TLAModuleBundle(root: .init(name: bundle.root.name, tla: FormalStringEncoding.declare(in: source),
                 cfg: try configuration.render(usesSymmetryReduction: false)),
                 imports: bundle.imports, provenance: bundle.provenance)
         }
