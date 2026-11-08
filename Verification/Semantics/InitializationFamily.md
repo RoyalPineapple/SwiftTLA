@@ -595,20 +595,25 @@ At index one the read branch supplies `Success(m)` without consulting either his
 That row supplies the read position of the existing checked `TypedInitialRelationsRetainAllStatesAndFailureEvents`.
 Other initializer children still supply their own premises; no complete read/capture family or whole-program theorem follows.
 
-The existing initialization module now contains the unverified candidate
+The existing initialization module now contains the checked formal instance
 `ReadyReadInitializersComposeCompleteStatesAndFailures` for arbitrary finite schedules and read positions.
 Its evaluator rows use `SourceFixed(prior[key])` and the independently filtered `GeneratedFixed(prior[key])`.
 The earlier-key premise and the exact prefix domain supply availability; the prior's type supplies membership in `Values`.
 Thus read agreement is derived rather than supplied, before applying the existing complete-history and selected-terminal rules.
 Off-prefix fallback entries only make the evaluator tables total; readiness must exclude them from every scheduled prefix.
-Non-read children and selected checks still supply agreement. This candidate has no pinned-prover receipt yet,
-does not mechanize the source-to-ID argument, and retains the existing set-valued observation limit.
+Non-read children and selected checks still supply agreement.
+The exact `a9815a06` module passed all 368 obligations in the pinned Linux run at `3c3cd1ab`.
+Its complete source, proof log and tool receipts are retained under
+`.git/swifttla-proof-evidence/ready-read-initialization-composition-2026-11-08/hosted-3c3cd1/` in the primary checkout.
+This checks the constructed formal instance and its parent use; it does not mechanize the source-to-ID argument
+and retains the existing set-valued observation limit.
 
 The existing parser/value owner now checks a dependent copied state through both source placements.
 Its domain-dependency sibling checks complete `(limit, choice)` pairs across different limits, rather than only the projection onto choice.
 The focused parser suite passed all 63 tests, including typed-program execution of the copied values and all three correlated branch pairs.
 The literal-only compilation-identity check remains at its original boundary: a copied array may retain an explicit resolved-type witness where the runtime builder retains its Swift spelling, and those metadata representations contribute differently to identity.
-No production repair or new mathematical execution is claimed by this code-case argument.
+Those parser tests are regression evidence for the manual code-case argument.
+The pinned result above separately checks the formal read instance; it does not mechanize that code-case argument.
 Captured parameters, local/procedure/process reads, arbitrary shadowing, all source placements, syntax/library/name/projection interpretation,
 checker kernels and complete mixed failure histories remain open. E READ and all six-link rows remain open.
 

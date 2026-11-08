@@ -171,7 +171,12 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5w Allocate physical operator names without changing source lookup or operator identity.
   Apply the existing stem and collision rules to owned operator IDs, including local recursion and operator-valued formal parameters; escape their accepted keyword spellings.
   Direct and qualified imports retain the callee's allocated names. Three existing owners reproduced 19 emitted-name issues; the repair passed 212 tests in twelve suites.
-  Model-parameter keyword spellings, predefined symbols, explicit module contracts and general namespace/source/backend correspondence remain open.
+  Predefined symbols, explicit module contracts and general namespace/source/backend correspondence remain open. I5x covers model-parameter keyword allocation.
+
+- [x] I5x Preserve accepted model-parameter keyword names while allocating legal formal constants.
+  Reuse the existing reserved-word set in the shared physical stem; keep source admission, parameter references, public names and configuration fields unchanged.
+  The executed baseline reported nine naming issues while accepted-source and label/identity controls passed. The repair passed 217 tests in thirteen suites.
+  This is implementation evidence. Arbitrary name encoding, predefined symbols, explicit contracts and general name correspondence remain open.
 
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
@@ -425,10 +430,11 @@ Complete these rows in order. Reuse the existing rules and checks.
   The [read-child argument](InitializationFamily.md#root-state-read-initializer-child) follows source handle binding, actual layout lookup, checked/resolved ID transport and mandatory dependency validation.
   It derives current-prefix reads in the compiled runtime and native/TLA output rows, supplying the checked expression and typed-initialization consumers under the named interpretation conditions.
   Its one-node plan and zero-prefix seed derive the checked read rule's premises explicitly. The existing copied-value and branching-correlation owners passed in the 63-test focused parser suite, using typed execution for the copied values. This manual result leaves captures, other placements and full E READ open.
-- [ ] M1.2b Check the concrete ready-read evaluator instance and its complete initialization parent.
+- [x] M1.2b Check the concrete ready-read evaluator instance and its complete initialization parent.
   `ReadyReadInitializersComposeCompleteStatesAndFailures` constructs read rows from the current prior binding and derives readiness from an earlier-key premise.
   Its proof body supplies the existing history and terminal-selection consumers without an evaluator-agreement premise at read positions. Other constructors and selected checks retain their own agreement premises.
-  This is an unverified proof candidate until the exact changed module passes the pinned prover. Actual source/ID/binding correspondence remains the separate manual argument above; set equality does not establish ordered failure observations.
+  The exact `a9815a06` module passed all 368 obligations in the pinned Linux run at `3c3cd1ab`; retained source, log, input and tool receipts are under `.git/swifttla-proof-evidence/ready-read-initialization-composition-2026-11-08/hosted-3c3cd1/` in the primary checkout.
+  This checks the constructed formal instance and parent use. Actual source/ID/binding correspondence remains the separate manual argument above; set equality does not establish ordered failure observations. Full M1.2 and whole-language preservation remain open.
 - [ ] M1.3 Complete all six links for E ADD.
 - [x] M1.3a Derive the call-free Int addition node case from its established child contracts.
   The [addition-child argument](InitializationFamily.md#checked-addition-initializer-child) follows actual scheduling, checked helper/error transport and TLA expression guards into the checked `CombinedAdditionRule`.
@@ -1436,3 +1442,29 @@ This repair is unverified until the exact revised module passes the pinned prove
 Existing Swift/test bytes retain the separate 212-test local regression receipt; static checking cannot establish the mathematical result.
 The failure artifact, exact snapshots, tool receipts and log are bound in `/tmp/swifttla-d98c0c-admission/ordinary/math-current-failure-audit.json`.
 The remaining source/IR/backend and ordered-observation obligations, every complete six-link row and whole-language preservation stay open.
+
+
+### Model-parameter keywords and checked read composition checkpoint 8 November 2026
+
+The accepted `#spec` parameter names `IF`, `LET` and `CONSTANTS` retained invalid bare formal names.
+Two existing owners ran on unchanged production: the naming owner reported nine issues,
+while source admission, public-name retention, label-independent identity and existing reference/metadata controls passed.
+The shared physical-stem helper now reuses the existing reserved-word set. Source acceptance predicates are unchanged.
+The guarded repair passed 217 tests across thirteen suites, including existing generated-code consumer contracts.
+All 1201 captured inputs remained exact through execution; only these two documentation files changed afterward.
+The complete 122483-byte log has SHA256 `52d92ab43d3e957cebb563ccf9779a77bbdd7d4e113c9814f4e5ddd28d53ab4e`.
+Exact inputs, baseline, whole log and review receipts are under `.git/swifttla-proof-evidence/model-parameter-keyword-stems-2026-11-08/` in the primary checkout.
+
+Separately, the pinned Linux job `128656680365` on published `3c3cd1ab` proved the complete `a9815a06` initialization module.
+Its 368-obligation result includes the unchanged ready-read theorem and the repaired integer-set proof body.
+The actual 296891-byte diagnostic ZIP, every entry CRC/hash, source snapshots, input hashes, job log and pinned-tool receipts are bound.
+A byte-exact durable copy is retained in the ready-read packet's `hosted-3c3cd1` directory; it is one hosted delivery, not a new capture.
+This closes the scoped formal M1.2b instance: read evaluator equality is derived from earlier-key prefixes and feeds the existing complete set-valued history/terminal parents.
+Other constructors and selected checks still supply correspondence; actual source/ID/type/backend interpretation and event order/multiplicity remain open.
+The hosted proof-input snapshot contains the previous `SpecCompilation.swift`, not this keyword repair; no hosted source execution or admission transfers.
+The ordinary parent is terminal success, but whole parent ROOT audits and full admission remain incomplete. Every complete six-link row and whole-language preservation remain open.
+
+Read-only review of the exact pinned SANY source also identifies the next predefined-symbol boundary.
+Its symbol table rejects redefinitions of built-ins, including `STRING`, `FALSE`, `TRUE` and `BOOLEAN`.
+These source files and Git-blob receipts are retained in this keyword packet's `predefined-symbol-lookahead` directory.
+No regression or repair for that separate allocation boundary is claimed here; raw value encodings and explicit external contracts stay separate.
