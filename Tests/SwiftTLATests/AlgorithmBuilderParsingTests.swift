@@ -808,8 +808,56 @@ import SwiftTLAMacros
         ])
     }
 
-    @Test("Unsupported for-loop body source is diagnosed")
-    func rejectsUnsupportedForLoopBodySource() throws {
+    @Test("Bounded loops preserve static Boolean filters and diagnose unsupported bodies")
+    func preservesStaticLoopFiltersAndRejectsUnsupportedBodies() throws {
+        for (condition, includesBody) in [
+            ("", true), ("true", true), ("false", false),
+            ("(false)", false), ("include", false), ("(include)", false), ("include", true)
+        ] {
+            let built = #spec("FilteredBuilder") { scope in
+                let count = scope.sharedVar(initial: 0)
+                for index in 1...3 where includesBody {
+                    SwiftTLA.Action("step\(index)") { count.becomes(1) }
+                }
+                SwiftTLA.Action("tail") { count.becomes(2) }
+            }
+            let expected = (includesBody ? ["step1", "step2", "step3"] : []) + ["tail"]
+            let expectedValues = (includesBody ? [1, 1, 1] : []) + [2]
+            #expect(built.actions.map(\.name) == expected)
+            let builtCompilation = try built.compile()
+            let builtRuntime = CompiledRuntime(compilation: builtCompilation)
+            let builtInitial = try #require(try builtRuntime.initialStates().first)
+            let builtCount = try #require(builtCompilation.layout.testVariableID(named: "count"))
+            #expect(try builtRuntime.successors(from: builtInitial).map {
+                try $0.state.value(for: builtCount)
+            } == expectedValues.map(CompiledValue.integer))
+
+            let filter = condition.isEmpty ? "" : " where \(condition)"
+            let syntax = Parser.parse(source: """
+            struct FilteredBuilder {
+                static var spec: TLASpec {
+                    #spec("FilteredBuilder") { scope in
+                        let count = scope.sharedVar(initial: 0)
+                        let include = \(includesBody)
+                        for index in 1...3\(filter) {
+                            SwiftTLA.Action("step\\(index)") { count.becomes(1) }
+                        }
+                        SwiftTLA.Action("tail") { count.becomes(2) }
+                    }
+                }
+            }
+            """)
+            let declaration = try #require(syntax.statements.first?.item.as(StructDeclSyntax.self))
+            let verified = try TLASpecVerifier.parseAndVerify(declaration)
+            #expect(verified.program.layout.actions.map { $0.declaration.name } == expected)
+            #expect(verified.api.actions.map(\.swiftIdentifier) == expected)
+            let runtime = CompiledRuntime(program: verified.program)
+            let initial = try #require(try runtime.initialStates().first)
+            let count = try #require(verified.program.layout.testVariableID(named: "count"))
+            #expect(try runtime.successors(from: initial).map {
+                try $0.state.value(for: count)
+            } == expectedValues.map(CompiledValue.integer))
+        }
         let source = """
         {
             for index in 1...1 {

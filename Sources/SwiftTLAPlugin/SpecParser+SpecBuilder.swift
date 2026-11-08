@@ -451,6 +451,20 @@ extension ParserSession {
             return
         }
 
+        if var condition = forStmt.whereClause?.condition {
+            while let tuple = condition.as(TupleExprSyntax.self), tuple.elements.count == 1,
+                  let element = tuple.elements.first, element.label == nil {
+                condition = element.expression
+            }
+            if let literal = condition.as(BooleanLiteralExprSyntax.self), literal.literal.text == "false" {
+                return
+            }
+            if let reference = condition.as(DeclReferenceExprSyntax.self),
+               case .value(.bool(false))? = sourceScope.value(for: reference) {
+                return
+            }
+            // shortcut: other accepted filters need their Swift binding and evaluation rules before lowering.
+        }
         let body = forStmt.body.statements
         for i in range {
             for bodyStmt in body {
