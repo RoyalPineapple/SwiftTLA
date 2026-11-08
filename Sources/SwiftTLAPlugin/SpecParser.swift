@@ -1559,7 +1559,8 @@ final class ParserSession {
                 expectedEnumType: expectedEnumType, expectedType: expectedType,
                 requiresFormalResult: requiresFormalResult)
         }
-        if !requiresFormalResult, let integer = decodeSwiftIntegerValue(expression) {
+        if !requiresFormalResult, isSwiftIntegerSyntax(expression),
+           case .int(let integer)? = decodeSwiftScalarValue(expression) {
             return .value(.int(integer))
         }
         if let integer = decodeSwiftIntegerBound(expression, scope: scope) {
@@ -1734,20 +1735,37 @@ final class ParserSession {
         }
     }
 
-    private func decodeSwiftIntegerValue(_ syntax: ExprSyntax) -> Int? {
-        guard SourceIntegerLiteral.value(syntax) == nil, isSwiftIntegerSyntax(syntax),
-              let expression = decodeStateExpr(syntax) else { return nil }
-        func value(_ expression: StateExpr) -> Int? {
+    func decodeSwiftScalarValue(_ syntax: ExprSyntax, scope: TypedFacadeScope = .empty) -> TLAValue? {
+        let supported = syntax.tokens(viewMode: .sourceAccurate).allSatisfy { token in
+            if case .integerLiteral = token.tokenKind { return true }
+            if case .identifier = token.tokenKind {
+                let reference = DeclReferenceExprSyntax(baseName: token)
+                guard let shape = scope.shape(for: reference),
+                      case .value(let literal)? = scope.value(for: reference) else { return false }
+                switch (shape, literal) {
+                case (.int, .int), (.bool, .bool): return true
+                default: return false
+                }
+            }
+            return ["(", ")", "+", "-", "*", "/", "%", "true", "false", "!", "&&", "||",
+                    "==", "!=", "<", "<=", ">", ">="].contains(token.text)
+        }
+        guard SourceIntegerLiteral.value(syntax) == nil, supported else { return nil }
+        let decoded = scope.isEmpty ? decodeStateExpr(syntax)
+            : decodeTypedFacadeExpr(syntax, scope: scope) ?? decodeTypedFacadeValue(syntax, scope: scope)
+        guard let expression = decoded else { return nil }
+        func value(_ expression: StateExpr) -> TLAValue? {
             switch expression {
-            case .value(.int(let integer)): return integer
+            case .value(.int(let integer)): return .int(integer)
+            case .value(.bool(let boolean)): return .bool(boolean)
             case .negate(let operand):
-                guard let operand = value(operand) else { return nil }
+                guard case .int(let operand)? = value(operand) else { return nil }
                 let result = 0.subtractingReportingOverflow(operand)
-                return result.overflow ? nil : result.partialValue
+                return result.overflow ? nil : .int(result.partialValue)
             case .add(let left, let right), .subtract(let left, let right),
                  .multiply(let left, let right), .divide(let left, let right),
                  .modulo(let left, let right):
-                guard let left = value(left), let right = value(right) else { return nil }
+                guard case .int(let left)? = value(left), case .int(let right)? = value(right) else { return nil }
                 let result: (partialValue: Int, overflow: Bool)
                 switch expression {
                 case .add: result = left.addingReportingOverflow(right)
@@ -1761,7 +1779,39 @@ final class ParserSession {
                     result = left.remainderReportingOverflow(dividingBy: right)
                 default: return nil
                 }
-                return result.overflow ? nil : result.partialValue
+                return result.overflow ? nil : .int(result.partialValue)
+            case .not(let operand):
+                guard case .bool(let operand)? = value(operand) else { return nil }
+                return .bool(!operand)
+            case .and(let left, let right):
+                guard case .bool(let left)? = value(left) else { return nil }
+                guard left else { return .bool(false) }
+                guard case .bool(let right)? = value(right) else { return nil }
+                return .bool(right)
+            case .or(let left, let right):
+                guard case .bool(let left)? = value(left) else { return nil }
+                if left { return .bool(true) }
+                guard case .bool(let right)? = value(right) else { return nil }
+                return .bool(right)
+            case .equal(let left, let right), .notEqual(let left, let right):
+                guard let left = value(left), let right = value(right) else { return nil }
+                switch (left, right) {
+                case (.int, .int), (.bool, .bool):
+                    let equal = left == right
+                    if case .notEqual = expression { return .bool(!equal) }
+                    return .bool(equal)
+                default: return nil
+                }
+            case .lessThan(let left, let right), .lessOrEqual(let left, let right),
+                 .greaterThan(let left, let right), .greaterOrEqual(let left, let right):
+                guard case .int(let left)? = value(left), case .int(let right)? = value(right) else { return nil }
+                switch expression {
+                case .lessThan: return .bool(left < right)
+                case .lessOrEqual: return .bool(left <= right)
+                case .greaterThan: return .bool(left > right)
+                case .greaterOrEqual: return .bool(left >= right)
+                default: return nil
+                }
             default: return nil
             }
         }
@@ -1925,6 +1975,7 @@ final class ParserSession {
               element.label == nil {
             expression = element.expression
         }
+        if expression.is(BooleanLiteralExprSyntax.self) { return .bool }
         if SourceIntegerLiteral.value(expression) != nil || decodeSwiftIntegerBound(expression, scope: scope) != nil {
             return .int
         }

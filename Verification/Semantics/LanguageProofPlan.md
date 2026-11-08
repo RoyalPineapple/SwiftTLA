@@ -233,8 +233,28 @@ The proof dependencies above still govern proof closure; they do not block indep
   Reuse existing tuple syntax and source-scope values, after the existing literal-range guard.
   Preserve unfiltered and true-filter order, following actions and their values. Add no evaluator or source restriction.
   The actual builder/peer baseline reported twelve issues across sixty-three tests. The repair passed 255 tests in twelve suites.
-  Other accepted filter predicates still follow the old unfiltered expansion. This remains an implementation gap, not only a proof obligation.
+  Other accepted filter predicates remained unfiltered at this checkpoint. I5ag extends the implementation coverage.
   Generic filtering/effects, binding/type interpretation, full assembly and Swift/TLA correspondence remain open. No complete six-link row follows.
+
+- [x] I5ag Preserve known per-index primitive predicates during bounded builder-loop assembly.
+  Extend the existing integer constant folder with Boolean values, comparisons and short circuit, retaining Swift checked arithmetic and signed quotient/remainder.
+  Use existing scoped decoding so the loop variable overrides a same-named module constant. Supply missing Boolean-literal shape metadata in the existing type inference.
+  The committed-producer baseline reported 36 issues across twelve cases. A first repair exposed nine issues in three Boolean-alias cases; the corrected repair passed 270 tests in fourteen suites.
+  The primary owner compares 21 predicates with independently selected indices, actual Swift builder registration, peer action/API metadata and compiled successor values, including a following action.
+  Unknown filters retain their accepted path. Unhandled scalar spellings, contextual types, operator binding, effects, traps and full source/IR/backend correspondence remain open. This closes no complete six-link row.
+
+- [ ] I5ah Reconcile custom record witnesses with structural formal identity.
+  Repair graph keys and successor deduplication using resolved fields, including nested values. Reconcile modeled equality and collection-key behavior as separate related routes.
+  Preserve accepted records. Do not replace the obligation with a rejection of existing custom witnesses or a graph-key-only claim.
+
+- [ ] I5ai Preserve string identity across raw enum values and checked string views.
+  Ordinary typed strings already normalize. Raw enum-to-string views still cross into native equality, collections and snapshot identity with different semantics.
+  Preserve explicit raw formal encodings and accepted source. A changed equality operator alone does not complete the boundary.
+
+- [ ] I5aj Preserve fairness enabledness before exploration constraints prune transitions.
+  Carry selected-scope enabledness from actual raw successor traversal through both retained graph routes and independent native validation into the existing kernel interface.
+  Preserve scope projections, source-selected profiles, stopping/failure channels and existing simulation behavior. Do not replay actions to reconstruct enabledness.
+  The source-traced findings and concrete caller review are retained in `.git/swifttla-proof-evidence/main-semantic-audit-2026-11-08/` in the primary checkout. Runtime baselines remain required.
 
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
@@ -285,7 +305,7 @@ tuples and records recursively; a row does not silently replace them with intege
 | R26 Formal functions/imports | FormalDefinition, local recursion/LetIn, registered formal calls, Import/Extends and replacements | Source/module parsing, typed function plans, native/TLA calls | Actual imported-code interpretation and generic function parents open |
 | R27 Instances/refinement | Formal and generated Instance/Refinement, direct/projecting maps, configuration and hidden frames | Existing typed linker, mapping and refinement checkers | Closed-value forwarding repaired; general formal imports, module replacements and refinement proof open |
 | R28 Export/observation | Native machine/projection, direct TLA, authored PlusCal, CFG/profiles and selected initial reconstruction | Existing emitters, bundle closure, codecs and checking kernels | Complete source-to-output/checker soundness remains open |
-| R29 Builder assembly | Named registration, lexical aliases and parser/builder repetition routes | `parseSpecClosure`, `parseForLoop` and result-builder assembly before algorithm lowering | Static Boolean filters repaired below; other accepted filters still expand without filtering. General source assembly remains open. |
+| R29 Builder assembly | Named registration, lexical aliases and parser/builder repetition routes | `parseSpecClosure`, `parseForLoop` and result-builder assembly before algorithm lowering | Known primitive per-index filters are repaired in I5ag; other accepted filters can still expand without filtering. General source assembly remains open. |
 
 I6 next actions are to reconcile exact signatures/type/placement guards within these rows,
 separate actual missing/incorrect routes from implemented-but-unproved ones, and batch measured repairs by owner.
@@ -304,7 +324,8 @@ from enclosing Algorithm control, procedure arities, process populations, regist
 The existing validation lowerer requires complete closed parameter bindings, rejects duplicate/foreign selections,
 restricts simulation expectations and selects symmetry only with applicable checks. These guards do not establish kernel or verdict semantics.
 R29 records a separate assembly obligation: the top-level loop parser expands a literal closed integer range in iteration/body order.
-It omits the body for a known false Boolean filter. Other accepted filters still take the unfiltered path, an unresolved implementation gap.
+It omits the body for the known primitive predicates described in I5ag when their per-index result is false.
+Other accepted filters still take the unfiltered path, an unresolved implementation gap.
 Public result-builder availability alone does not prove that a spelling is accepted by `#spec`.
 I6 remains unchecked. All six proof links for these rows remain open unless an actual derived result is recorded.
 After I5j, the next work package is M0/M1 and the literal/read/addition chain below.
@@ -1728,7 +1749,7 @@ These additional positive controls receive no separate baseline-failure credit.
 No new evaluator, checker, helper, nominal fixture/model type, source rejection, dependency, pin, budget or timeout was added.
 
 This is deliberately a scoped repair, not complete `where` lowering.
-Other accepted predicates retain the existing unfiltered expansion and can still produce incorrect registrations.
+At this checkpoint, other accepted predicates retained the unfiltered expansion and could produce incorrect registrations. I5ag extends that coverage below.
 That is an unresolved implementation boundary, not merely an unfinished mathematical proof.
 Arbitrary predicates and effects need their actual Swift binding and evaluation connection. Full builder/source assembly also remains open.
 The measured source-scope interpretation, generated code, TLA output and checker/kernel connections do not complete a six-link proof row.
@@ -1739,3 +1760,26 @@ Only this plan changed after that run. Its complete 131425-byte log has SHA256 `
 Inputs, baseline, logs and reviews are retained in `.git/swifttla-proof-evidence/static-builder-loop-filters-2026-11-08/` in the primary checkout.
 Mathematical TLA sources and the protected language checklist remain unchanged.
 These are implementation regression receipts, not a new theorem, hosted admission or whole-language preservation proof.
+
+### Scalar builder-loop filter checkpoint 8 November 2026
+
+The existing owner now checks 21 predicates against independent selected indices and actual Swift result-builder execution.
+The peer verifier must retain the same action/API order and compiled successor values, including a trailing action.
+Known Boolean/Int bindings, comparisons, unary negation, short circuit and arithmetic use the existing constant folder.
+Signed quotient/remainder follow Swift rather than the formal arithmetic operators. Scoped decoding keeps a loop variable ahead of a same-named module constant.
+
+On committed `1780afcd` producers, twelve predicate cases produced 36 issues in 63 tests.
+The first repair passed the per-index arithmetic cases but retained three Boolean-alias failures: nine issues in a 270-test run.
+The source type inference omitted Boolean-literal shape metadata. The correction supplies that shape without weakening the folder's primitive-value guard.
+The additional Boolean-equality and module-constant shadowing controls were added after the initial baseline; their credit is limited to the actual later executions.
+
+The guarded correction passed 270 tests in fourteen suites after a 1447.97-second build and 218.140-second execution.
+All 1201 captured inputs stayed exact. The whole 134420-byte log has SHA256 `016c4e9ee96bde10ad5b46594770405e55fd9e2359dc7fc1a3bd23c077b5f04f`.
+The first attempt's outer shell recorder failed after its test run; the failed test summary remains retained. The corrected run retained exit zero through the guarded wrapper.
+Inputs, both failed baselines, whole logs and reviews are retained in `.git/swifttla-proof-evidence/scalar-builder-loop-filters-2026-11-08/` in the primary checkout.
+
+Unknown or unhandled predicates remain accepted and can still assemble incorrect registrations.
+Contextual types, overload binding, other scalar spellings, effects, traps and complete source/builder/output interpretation remain owned boundaries.
+The source-traced main audit adds the separate unchecked I5ah–I5aj repairs. No audited defect is claimed fixed by the filter work.
+No new evaluator, checker, nominal fixture/model, dependency, pin, corpus, resource limit or source rejection was added.
+Mathematical TLA sources and the protected language checklist remain unchanged. These are implementation regression receipts; all six-link rows and universal preservation remain open.

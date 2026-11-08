@@ -463,10 +463,15 @@ extension ParserSession {
                case .value(.bool(false))? = sourceScope.value(for: reference) {
                 return
             }
-            // shortcut: other accepted filters need their Swift binding and evaluation rules before lowering.
         }
         let body = forStmt.body.statements
         for i in range {
+            if let condition = forStmt.whereClause?.condition,
+               case .bool(false)? = decodeSwiftScalarValue(condition,
+                    scope: sourceScope.extending(binding: pattern, to: .int(i), shape: .int)) {
+                continue
+            }
+            // shortcut: opaque, non-scalar or trapping filters still need source-outcome lowering.
             for bodyStmt in body {
                 guard case .expr(let expr) = bodyStmt.item,
                       let fc = expr.as(FunctionCallExprSyntax.self)

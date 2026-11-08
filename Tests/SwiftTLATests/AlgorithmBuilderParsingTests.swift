@@ -808,21 +808,42 @@ import SwiftTLAMacros
         ])
     }
 
-    @Test("Bounded loops preserve static Boolean filters and diagnose unsupported bodies")
-    func preservesStaticLoopFiltersAndRejectsUnsupportedBodies() throws {
-        for (condition, includesBody) in [
-            ("", true), ("true", true), ("false", false),
-            ("(false)", false), ("include", false), ("(include)", false), ("include", true)
-        ] {
+    @Test("Bounded loops preserve scalar filters and diagnose unsupported bodies")
+    func preservesScalarLoopFiltersAndRejectsUnsupportedBodies() throws {
+        let cases: [(condition: String, selected: [Int], matches: (Int) -> Bool)] = [
+            ("", [0, 1, 2, 3], { _ in true }),
+            ("true", [0, 1, 2, 3], { _ in true }),
+            ("false", [], { _ in false }),
+            ("(false)", [], { _ in false }),
+            ("include", [], { _ in false }),
+            ("(include)", [], { _ in false }),
+            ("flag", [0, 1, 2, 3], { _ in true }),
+            ("!flag", [], { _ in !true }),
+            ("flag == include", [], { _ in true == false }),
+            ("flag != include", [0, 1, 2, 3], { _ in true != false }),
+            ("index == 2", [2], { $0 == 2 }),
+            ("index >= 1 && index <= 2", [1, 2], { $0 >= 1 && $0 <= 2 }),
+            ("index == 0 || 6 / index > 2", [0, 1, 2], { $0 == 0 || 6 / $0 > 2 }),
+            ("index != 0 && 6 / index > 1", [1, 2, 3], { $0 != 0 && 6 / $0 > 1 }),
+            ("((index - 3) / 2) == 0", [2, 3], { (($0 - 3) / 2) == 0 }),
+            ("((index - 3) % 2) == (-1)", [0, 2], { (($0 - 3) % 2) == -1 }),
+            ("index % (-2) == 1", [1, 3], { $0 % (-2) == 1 }),
+            ("flag && index >= cutoff", [2, 3], { true && $0 >= 2 }),
+            ("!(index == 2)", [0, 1, 3], { !($0 == 2) }),
+            ("(index + 1) * 2 == 4", [1], { ($0 + 1) * 2 == 4 }),
+            ("`index` == 0", [0], { $0 == 0 })
+        ]
+        for (condition, selected, matches) in cases {
             let built = #spec("FilteredBuilder") { scope in
+                Constant("index", 99)
                 let count = scope.sharedVar(initial: 0)
-                for index in 1...3 where includesBody {
+                for index in 0...3 where matches(index) {
                     SwiftTLA.Action("step\(index)") { count.becomes(1) }
                 }
                 SwiftTLA.Action("tail") { count.becomes(2) }
             }
-            let expected = (includesBody ? ["step1", "step2", "step3"] : []) + ["tail"]
-            let expectedValues = (includesBody ? [1, 1, 1] : []) + [2]
+            let expected = selected.map { "step\($0)" } + ["tail"]
+            let expectedValues = selected.map { _ in 1 } + [2]
             #expect(built.actions.map(\.name) == expected)
             let builtCompilation = try built.compile()
             let builtRuntime = CompiledRuntime(compilation: builtCompilation)
@@ -837,9 +858,12 @@ import SwiftTLAMacros
             struct FilteredBuilder {
                 static var spec: TLASpec {
                     #spec("FilteredBuilder") { scope in
+                        Constant("index", 99)
                         let count = scope.sharedVar(initial: 0)
-                        let include = \(includesBody)
-                        for index in 1...3\(filter) {
+                        let include = false
+                        let flag = true
+                        let cutoff = 2
+                        for index in 0...3\(filter) {
                             SwiftTLA.Action("step\\(index)") { count.becomes(1) }
                         }
                         SwiftTLA.Action("tail") { count.becomes(2) }
