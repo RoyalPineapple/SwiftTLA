@@ -42,6 +42,21 @@ private func typeValueKey(_ value: CompiledValue) -> String {
     }
 }
 
+private func typeValueKey(_ value: TLAValue) -> String {
+    switch value {
+    case .int(let value): return typeKeyNode("int", [String(value)])
+    case .bool(let value): return typeKeyNode("bool", [String(value)])
+    case .string(let value): return typeKeyNode("string", [value])
+    case .constant(let value): return typeKeyNode("constant", [value])
+    case .set(let values): return typeKeyNode("set", values.sorted().map(typeValueKey))
+    case .tuple(let values): return typeKeyNode("tuple", values.map(typeValueKey))
+    case .record(let record):
+        return typeKeyNode("record", record.fields.map { typeKeyNode("field", [$0.name, typeValueKey($0.value)]) })
+    case .function(let values):
+        return typeKeyNode("function", values.keys.sorted().map { typeKeyNode("entry", [typeValueKey($0), typeValueKey(values[$0]!)]) })
+    }
+}
+
 func alphaKey(_ action: ActionExpr) -> String {
     alphaKey(action, bindingNames: [])
 }
@@ -416,7 +431,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
                 }
                 schedule(operands, environment: environment) { "\(operation)[\($0.joined(separator: ","))]" }
             case .sourceIssue(let issue): parts.append("sourceIssue(\(issue))")
-            case .value(let value): parts.append("value(\(value))")
+            case .value(let value): parts.append("value(\(typeValueKey(value)))")
             case .integerSet: parts.append("integerSet")
             case .variable(let name): parts.append("var(\(environment[name] ?? name))")
             case .parameter(let reference): parts.append("parameter(\(reference.name))")

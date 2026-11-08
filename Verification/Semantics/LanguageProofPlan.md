@@ -203,6 +203,13 @@ The proof dependencies above still govern proof closure; they do not block indep
   Existing owners reproduced key, empty-constructor and encoding faults. A separate wrong-candidate baseline exposed the missing eager carrier while native evaluation raised the exact unread-field division-by-zero error.
   The corrected guarded run passed 171 tests in sixteen suites. This is implementation evidence, not SANY/TLC execution or a complete record proof. Duplicate raw keys, nested function/effectful children, generic projection, source/backend/kernel interpretation and complete observations remain open.
 
+- [x] I5ac Preserve literal constructors in source keys and compilation fingerprints.
+  Encode source values with the existing tagged length format, independently of TLA formatting.
+  Retain raw record field order and deterministic set/function ordering without conversion to compiled values.
+  The existing owner reproduced three collisions in both source keys and compiled identities. The repair passed 241 tests in twenty suites.
+  Opaque fingerprints change. Source names, declaration IDs, values and accepted forms remain unchanged.
+  This is implementation evidence. General source-key injectivity, source/ID/backend interpretation and all complete six-link proof rows remain open.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1572,7 +1579,8 @@ No local SANY or TLC execution is claimed by these output-contract assertions.
 The corrected compiled representation evaluates operand tuples in a singleton comprehension before constructing the string-keyed function.
 Existing fresh-name allocation supplies the carrier, key and result names. Operand positions occur once and retain their order.
 Raw closed record data reuses function formatting; function binders avoid capture by raw model-value references.
-Ordinary and keyword fields retain their existing token forms. Source admission, source keys, public identities and values remain unchanged.
+Ordinary and keyword fields retain their existing token forms. Source admission, data keys, public names and values remain unchanged.
+The next checkpoint records the coupled source-fingerprint repair found before publication.
 Configured definitions use the existing formal-string marker, including byte-distinct Unicode key encodings.
 The existing bridge already canonicalizes nonempty string-keyed functions as records. Its source and pins did not change.
 
@@ -1584,3 +1592,27 @@ These results establish the measured implementation repair under named language/
 Duplicate raw-key payloads keep their existing formatting and retain a separate value-contract obligation.
 Nested function/effectful child outcomes, generic Unicode/type projection, complete event correspondence and checker/decoder/kernel soundness remain open.
 All mathematical source bytes and the protected language checklist remain unchanged. No complete six-link record row, new theorem, hosted admission or whole-language preservation follows.
+
+### Source literal identity checkpoint 8 November 2026
+
+Final record review found that source literal keys used TLA formatting instead of value constructors.
+The record formatter made a record and a string-keyed function share the same source key.
+The same problem affected their enclosing tuples. Boolean true also shared its key with the model value `TRUE`.
+The existing compiled-identity owner reproduced all three collisions against committed `33e281c5` producers.
+One executed test reported six issues: each pair collided in both its source key and its compiled specification identity.
+The existing nominal-type and raw-value distinction controls passed. No setup or compiler failure supplied this baseline.
+
+The source literal path now uses an overload of the existing tagged length encoder.
+It visits raw value constructors directly and orders set members and function keys deterministically.
+It preserves stored record fields without conversion to compiled values, which can reorder duplicate-key payloads.
+All existing action, property, temporal and operator-body identity paths consume the corrected literal leaf.
+Opaque compilation fingerprints change. Source names, layout IDs, value data and accepted-source predicates remain unchanged.
+The existing depth and lexical-scope controls retain their structure with the corrected literal encoding.
+
+The guarded repair passed 241 tests in twenty suites after a 1554.02-second build and 229.783-second execution.
+All 1201 captured inputs remained exact. Only this plan changed after that run.
+The complete 133086-byte log has SHA256 `62bfebc0a67f321c6c8d6ef797ffbff10239185dc03f889cae75f8fa0c2edb3c`.
+The baseline, inputs, logs and reviews are retained in `.git/swifttla-proof-evidence/literal-source-keys-2026-11-08/` in the primary checkout.
+These receipts support the implementation repair. They do not prove a general key-injectivity or source/value correspondence theorem.
+Duplicate raw-key meaning, Unicode/string interpretation, source binding, output/helper/kernel semantics and complete observation correspondence retain their separate obligations.
+No mathematical source or protected-checklist bytes changed. No complete six-link row, hosted admission or whole-language preservation follows.

@@ -1241,8 +1241,8 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: [.init(name: "PositiveSum", body: .greaterThan(sum, .int(0)))]
         )
 
-        let expectedKey = (1...64).reduce("value(0)") { key, value in
-            "add(\(key),value(\(value)))"
+        let expectedKey = (1...64).reduce("value(int[1:0])") { key, value in
+            "add(\(key),value(int[\(String(value).utf8.count):\(value)]))"
         }
         let expectedSum = (1...64).reduce("0") { expression, value in
             "(\(expression) + \(value))"
@@ -1258,30 +1258,30 @@ struct CompilerPipelineCanonicalizationTests {
         let values: [(StateExpr, String)] = [
             (
                 .setFilter(.setLiteral([.int(2), .int(1)]), "element", .equal(.variable("element"), .int(1))),
-                "filter(set[value(1),value(2)],@0,equal(var(@0),value(1)))"
+                "filter(set[value(int[1:1]),value(int[1:2])],@0,equal(var(@0),value(int[1:1])))"
             ),
             (
                 .setMap(.add(.variable("element"), .int(1)), "element", .setLiteral([.int(1)])),
-                "map(add(var(@0),value(1)),@0,set[value(1)])"
+                "map(add(var(@0),value(int[1:1])),@0,set[value(int[1:1])])"
             ),
             (
                 .functionLiteral(.setLiteral([.int(1)]), "input", .tupleLiteral([.variable("input"), .int(2)])),
-                "function(set[value(1)],@0,tuple[var(@0),value(2)])"
+                "function(set[value(int[1:1])],@0,tuple[var(@0),value(int[1:2])])"
             ),
             (
                 .forAll(.setLiteral([.int(1)]), "item", .exists(.setLiteral([.int(2)]), "item", .equal(.variable("item"), .int(2)))),
-                "forall(set[value(1)],@0,exists(set[value(2)],@1,equal(var(@1),value(2))))"
+                "forall(set[value(int[1:1])],@0,exists(set[value(int[1:2])],@1,equal(var(@1),value(int[1:2]))))"
             ),
             (
                 .choose(.setLiteral([.int(1)]), "candidate", .equal(.variable("candidate"), .int(1))),
-                "choose(set[value(1)],@0,equal(var(@0),value(1)))"
+                "choose(set[value(int[1:1])],@0,equal(var(@0),value(int[1:1])))"
             ),
             (
                 .recordLiteral(.init([
                     .init(name: "second", value: .caseExpr([.bool(true)], .bool(false))),
                     .init(name: "first", value: .except(.variable("table"), .int(1), .int(2)))
                 ])),
-                "record[first:except(var(table),value(1),value(2)),second:case[value(TRUE)]/value(FALSE)]"
+                "record[first:except(var(table),value(int[1:1]),value(int[1:2])),second:case[value(bool[4:true])]/value(bool[5:false])]"
             ),
             (
                 .foldFunction(
@@ -1289,7 +1289,7 @@ struct CompilerPipelineCanonicalizationTests {
                     initial: .int(0),
                     sequence: .tupleLiteral([.int(1)])
                 ),
-                "fold([@0,@1],add(var(@0),var(@1)),value(0),tuple[value(1)])"
+                "fold([@0,@1],add(var(@0),var(@1)),value(int[1:0]),tuple[value(int[1:1])])"
             ),
             (
                 .operatorApplication(
@@ -1299,11 +1299,11 @@ struct CompilerPipelineCanonicalizationTests {
                         .operator(.lambda(.init(parameters: ["argument"], body: .variable("argument"))))
                     ]
                 ),
-                "apply(lambda([@0],var(@0)),[value(value(1)),operatorLambda([@1],var(@1))])"
+                "apply(lambda([@0],var(@0)),[value(value(int[1:1])),operatorLambda([@1],var(@1))])"
             ),
             (
                 .letValue("value", .int(1), .add(.variable("value"), .int(2))),
-                "letValue(@0,value(1),add(var(@0),value(2)))"
+                "letValue(@0,value(int[1:1]),add(var(@0),value(int[1:2])))"
             ),
             (
                 .letIn(
@@ -1322,7 +1322,7 @@ struct CompilerPipelineCanonicalizationTests {
                     ],
                     .recursiveCall("Walk", [.int(2)])
                 ),
-                "letIn([local(Walk,[@0],set[value(1)],recursive(Walk,subtract(var(@0),value(1)))),local(Identity,[@1],unbounded,var(@1))],recursive(Walk,value(2)))"
+                "letIn([local(Walk,[@0],set[value(int[1:1])],recursive(Walk,subtract(var(@0),value(int[1:1])))),local(Identity,[@1],unbounded,var(@1))],recursive(Walk,value(int[1:2])))"
             )
         ]
 

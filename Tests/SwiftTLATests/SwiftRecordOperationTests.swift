@@ -3,7 +3,7 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct SwiftRecordOperationTests {
-    @Test("record fingerprints include nested field types even when values are empty")
+    @Test("record fingerprints preserve literal kinds and nested field types")
     func fingerprintsResolvedFields() throws {
         func expression(element: CompiledValueType) -> StateExpr {
             .recordLiteral(.init(orderedFields: [.init(name: "items", value: .tupleLiteral([]))],
@@ -20,6 +20,15 @@ struct SwiftRecordOperationTests {
                 invariants: []).compile()
         }
         #expect(try compilation(integers).identity != compilation(booleans).identity)
+        let recordValue = TLAValue.record(["WF_payload": .int(1)])
+        let functionValue = TLAValue.function([.string("WF_payload"): .int(1)])
+        for (left, right) in [(recordValue, functionValue),
+                              (.tuple([recordValue]), .tuple([functionValue])),
+                              (.bool(true), .constant("TRUE"))] {
+            #expect(left != right)
+            #expect(alphaKey(StateExpr.value(left)) != alphaKey(.value(right)))
+            #expect(try compilation(.value(left)).identity != compilation(.value(right)).identity)
+        }
         #expect(alphaKey(expression(element: .nominalRecord("Item", [.init(name: "value", type: .int)])))
             != alphaKey(expression(element: .nominalRecord("Item", [.init(name: "value", type: .bool)]))))
     }
