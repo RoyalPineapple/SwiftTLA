@@ -34,6 +34,23 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
     case invalidRandomSubsetCount(Int)
     case emptyRandomElementDomain
 
+    /// Execution limits and missing context do not establish a model failure.
+    @_documentation(visibility: internal)
+    public var isModelEvaluationFailure: Bool {
+        switch self {
+        case .nonEnumerableIntegerDomain, .nonEnumerableSequenceDomain,
+             .collectionCardinalityOverflow, .powerSetTooLarge,
+             .recursionDepthExceeded, .checkingContextRequired:
+            false
+        case .noMatchingCase, .noSatisfyingChoice, .integerOverflow,
+             .divisionByZero, .negativeModuloDivisor, .indexOutOfBounds,
+             .invalidSequenceDomain, .emptySequence, .functionArgumentOutsideDomain,
+             .tupleIndexOutsideDomain, .recordFieldUnavailable,
+             .invalidRandomSubsetCount, .emptyRandomElementDomain:
+            true
+        }
+    }
+
     public var description: String {
         switch self {
         case .integerOverflow(let operation, let operands):
@@ -132,24 +149,12 @@ public enum _NativeMachineOperations: Sendable {
         do {
             try visit()
         } catch let failure as NativeMachineEvaluationError {
-            switch failure {
-            case .nonEnumerableIntegerDomain, .nonEnumerableSequenceDomain,
-                 .collectionCardinalityOverflow, .powerSetTooLarge,
-                 .recursionDepthExceeded, .checkingContextRequired:
-                throw failure
-            default:
-                onEvaluationFailure(failure)
-            }
+            guard failure.isModelEvaluationFailure else { throw failure }
+            onEvaluationFailure(failure)
         } catch let failure as EvalError {
             guard let native = failure.nativeFailure else { throw failure }
-            switch native {
-            case .nonEnumerableIntegerDomain, .nonEnumerableSequenceDomain,
-                 .collectionCardinalityOverflow, .powerSetTooLarge,
-                 .recursionDepthExceeded, .checkingContextRequired:
-                throw failure
-            default:
-                onEvaluationFailure(native)
-            }
+            guard native.isModelEvaluationFailure else { throw failure }
+            onEvaluationFailure(native)
         }
     }
 
@@ -383,6 +388,7 @@ public enum _NativeMachineOperations: Sendable {
     }
 
     /// Visit independent alternatives, retaining successes and the first model failure.
+    /// Execution limits propagate without visiting later alternatives.
     public static func visitAlternatives<Alternative: Sendable, Update: Sendable>(
         _ alternatives: [Alternative],
         emit: (Update) throws -> Void,
@@ -393,7 +399,7 @@ public enum _NativeMachineOperations: Sendable {
             var updates: [Update] = []
             do {
                 try visit(alternative) { updates.append($0) }
-            } catch let failure as NativeMachineEvaluationError {
+            } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
                 if firstFailure == nil { firstFailure = failure }
             }
             for update in updates { try emit(update) }

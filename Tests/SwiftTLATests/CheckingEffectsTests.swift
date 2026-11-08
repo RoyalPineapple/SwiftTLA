@@ -23,8 +23,7 @@ struct CheckingEffectsTests {
     @Test("Context-free execution cannot silently reset checking registers")
     func requiresRunContext() throws {
         let machine = try OrderedCheckingEffects.makeMachine()
-        #expect(throws: MachineActionEvaluationFailure<OrderedCheckingEffects.Action>(
-            action: .advance, reason: .checkingContextRequired)) { try machine.successors() }
+        #expect(throws: NativeMachineEvaluationError.checkingContextRequired) { try machine.successors() }
         var direct = machine
         #expect(throws: NativeMachineEvaluationError.checkingContextRequired) {
             try _NativeMachineOperations.visitInitialBranch {

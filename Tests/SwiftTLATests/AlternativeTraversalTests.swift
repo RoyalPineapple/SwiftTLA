@@ -464,7 +464,7 @@ struct AlternativeTraversalTests {
         try lowered.body.verifyBranchwiseContinuation(at: "actions.pick.body")
     }
 
-    @Test("Successful updates survive a failing alternative")
+    @Test("Logical failures preserve updates and execution limits stop alternatives")
     func mixedOutcomes() {
         var emitted: [Int] = []
         #expect(throws: NativeMachineEvaluationError.divisionByZero) {
@@ -475,6 +475,31 @@ struct AlternativeTraversalTests {
             }
         }
         #expect(emitted == [0, 0, 1, 2])
+
+        let count = Int.bitWidth - 1
+        let operations: [(NativeMachineEvaluationError, () throws -> Void)] = [
+            (.nonEnumerableIntegerDomain, { _ = try _NativeMachineOperations.integerSet() }),
+            (.nonEnumerableSequenceDomain, { _ = try _NativeMachineOperations.sequenceSet(Set([1])) }),
+            (.powerSetTooLarge(actualCount: count, maximumCount: Int.bitWidth - 2),
+             { _ = try _NativeMachineOperations.powerSet(Set(0..<count)) }),
+            (.collectionCardinalityOverflow(.integerRange, operands: [0, Int.max]),
+             { _ = try _NativeMachineOperations.integerRange(0, Int.max) }),
+            (.collectionCardinalityOverflow(.functionSet, operands: [count, 2]),
+             { _ = try _NativeMachineOperations.functionSet(Set(0..<count), Set([0, 1])) })
+        ]
+        for (failure, operation) in operations {
+            var visited: [Int] = []
+            var emitted: [Int] = []
+            #expect(throws: failure) {
+                try _NativeMachineOperations.visitAlternatives([0, 1], emit: { emitted.append($0) }) { alternative, emit in
+                    visited.append(alternative)
+                    if alternative == 0 { try operation() }
+                    try emit(alternative)
+                }
+            }
+            #expect(visited == [0])
+            #expect(emitted.isEmpty)
+        }
     }
 
     @Test("The Swift alternative kernel matches the proved ordered traversal")

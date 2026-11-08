@@ -52,7 +52,7 @@ public protocol StateMachine: Sendable {
         checking context: inout CheckingContext<CheckingRegisters>,
         _ visit: (Action, Self) throws -> Bool
     ) throws -> Bool
-    /// Visits successes and evaluation failures without discarding later actions.
+    /// Visits successes and model failures without discarding later actions. Execution limits throw.
     func visitValidationOutcomes(
         checking context: inout CheckingContext<CheckingRegisters>,
         _ visit: (Action, Self) throws -> Bool,
@@ -135,9 +135,10 @@ extension StateMachine {
                 }
                 found = found || actionFound
                 if !keepGoing { return found }
-            } catch let failure as MachineActionEvaluationFailure<Action> where !callbackFailed {
+            } catch let failure as MachineActionEvaluationFailure<Action>
+                where !callbackFailed && failure.reason.isModelEvaluationFailure {
                 if try !onEvaluationFailure(failure.action, failure.reason) { return found }
-            } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+            } catch let reason as NativeMachineEvaluationError where !callbackFailed && reason.isModelEvaluationFailure {
                 if try !onEvaluationFailure(action, reason) { return found }
             }
         }

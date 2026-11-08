@@ -919,7 +919,7 @@ extension NativeSwiftEmitter {
                 checkedBody = """
                 do {
                     \(body)
-                } catch let failure as NativeMachineEvaluationError {
+                } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
                     failures.append(failure)
                 }
                 """
@@ -1200,7 +1200,7 @@ extension NativeSwiftEmitter {
                                 throw error
                             }
                         }
-                    } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+                    } catch let reason as NativeMachineEvaluationError where !callbackFailed && reason.isModelEvaluationFailure {
                         failures.append(reason)
                     } catch {
                         throw error
@@ -2401,7 +2401,7 @@ func verifyGeneratedActionRoutingOutput(
                             throw error
                         }
                     }
-                } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+                } catch let reason as NativeMachineEvaluationError where !callbackFailed && reason.isModelEvaluationFailure {
                     failures.append(reason)
                 } catch {
                     throw error
@@ -2591,6 +2591,7 @@ func verifyGeneratedActionWriteOutput(
         parameters[id] = names
         let wrapped = Array(visitorTokens[(open + 1)..<(close - 1)])
         let catchSuffix = ["}", "catch", "let", "failure", "as", "NativeMachineEvaluationError",
+                           "where", "failure", ".", "isModelEvaluationFailure",
                            "{", "failures", ".", "append", "(", "failure", ")", "}"]
         if wrapped == ["return"] {
             infallibleParts.insert(id)

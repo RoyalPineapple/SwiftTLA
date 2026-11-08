@@ -9,7 +9,7 @@ func emit(_ update: _Updates) throws {
     func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     try _actionPart2(updates, { candidate in try _actionPart1(candidate, emit) })
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
@@ -33,7 +33,7 @@ let _arithmetic2: Int = try SwiftTLA._NativeMachineOperations.modulo(_arithmetic
     return try _predicate2()
 }()) else { return }
 try emit(updates)
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
@@ -41,56 +41,56 @@ func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws
 do {
     let ___atomic_0_0 = 1
 try _actionPart3(___atomic_0_0, updates, emit)
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart3(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     try _actionPart5(___atomic_0_0, updates, { candidate in try _actionPart4(___atomic_0_0, candidate, emit) })
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart5(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     try _actionPart7(___atomic_0_0, updates, { candidate in try _actionPart6(___atomic_0_0, candidate, emit) })
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart7(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     try emit(updates)
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart6(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     if let merged = updates.merging(_Updates(_value_result_2: ___atomic_0_0)) { try emit(merged) }
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart4(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     try _actionPart9(___atomic_0_0, updates, { candidate in try _actionPart8(___atomic_0_0, candidate, emit) })
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart9(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     if let merged = updates.merging(_Updates(_value_enabled_0: state.state.enabled)) { try emit(merged) }
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart8(_ ___atomic_0_0: Int, _ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     if let merged = updates.merging(_Updates(_value_divisor_1: state.state.divisor)) { try emit(merged) }
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }

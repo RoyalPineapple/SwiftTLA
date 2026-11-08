@@ -475,6 +475,15 @@ private struct MissingFunctionKey {
             try machine.send(.loop)
         }
         #expect(machine.state == before)
+        var modelFailures = 0
+        #expect(throws: NativeMachineEvaluationError.recursionDepthExceeded(limit)) {
+            try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
+                checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
+                if case .evaluationFailure = event { modelFailures += 1 }
+            }
+        }
+        #expect(modelFailures == 0)
+        #expect(machine.state == before)
     }
 
     @Test("Lambda applications consume the same recursion budget as named calls")

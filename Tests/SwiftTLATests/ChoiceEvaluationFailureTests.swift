@@ -963,6 +963,20 @@ struct ChoiceEvaluationFailureTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.action.failures.0")
         }
+        let classification = " where failure.isModelEvaluationFailure"
+        try #require(rootSource.components(separatedBy: classification).count == 2)
+        let uncheckedSource = update.description.replacingOccurrences(of: rootSource,
+            with: rootSource.replacingOccurrences(of: classification, with: ""))
+        try #require(uncheckedSource != update.description)
+        let unchecked = try #require(Parser.parse(source: uncheckedSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(unchecked, action: action.body,
+                program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("The generated action classified execution limits as model failures")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.failures.0")
+        }
         let reversedOrder = update.description.replacingOccurrences(
             of: "visitAlternatives([false, true]", with: "visitAlternatives([true, false]")
         #expect(reversedOrder != update.description)

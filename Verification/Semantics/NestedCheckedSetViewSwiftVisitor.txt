@@ -9,21 +9,21 @@ func emit(_ update: _Updates) throws {
     func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     try _actionPart2(updates, { candidate in try _actionPart1(candidate, emit) })
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     try _actionPart4(updates, { candidate in try _actionPart3(candidate, emit) })
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart4(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     try _actionPart6(updates, { candidate in try _actionPart5(candidate, emit) })
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
@@ -31,7 +31,7 @@ func _actionPart6(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws
 do {
     guard (state._value_pc_0 == _ControlLocation.location0) else { return }
 try emit(updates)
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
@@ -41,35 +41,35 @@ do {
 switch value {
 default: throw NativeMachineEvaluationError.noMatchingCase } }(element)) }).count) == 0) else { return }
 try emit(updates)
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart3(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     try _actionPart8(updates, { candidate in try _actionPart7(candidate, emit) })
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart8(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     try emit(updates)
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart7(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     if let merged = updates.merging(_Updates(_value_pc_0: _ControlLocation.location1)) { try emit(merged) }
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }
 func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
     if let merged = updates.merging(_Updates(_value_members_1: state.state.members)) { try emit(merged) }
-} catch let failure as NativeMachineEvaluationError {
+} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
 }
 }

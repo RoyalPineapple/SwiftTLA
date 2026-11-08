@@ -220,6 +220,15 @@ The proof dependencies above still govern proof closure; they do not block indep
   Identity model-value encoding, later sibling/generated/runtime namespaces and general source/backend/observation correspondence retain separate obligations.
   This is an implementation result. No complete six-link proof row or whole-language preservation follows.
 
+- [x] I5ae Keep operational action errors out of completed model-failure observations.
+  Share the existing six excluded initial-recovery cases through the existing error enum.
+  Apply that classification to independent alternatives, generated action parts and visitors, and the default machine visitor.
+  Preserve logical failure retention, callback errors, stopping and state rollback. Execution limits propagate in their original error channel.
+  The actual baseline reported twelve issues across two existing owners. The repair passed 172 tests in twenty-two suites.
+  The mandatory output check rejects a removed classification guard. Existing Swift witnesses change only their catch conditions.
+  Full error/source correspondence, complete event sites and prefixes, TLA observations and checker/kernel soundness remain open.
+  This is an implementation result. No complete six-link proof row or whole-language preservation follows.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1659,3 +1668,36 @@ The complete 125557-byte log has SHA256 `a718ad6f4796b6ef320fd0b7afeccc4727e8d16
 Inputs, baselines, logs and reviews are retained in `.git/swifttla-proof-evidence/constant-declaration-names-2026-11-08/` in the primary checkout.
 These are implementation regression receipts. No local SANY/TLC execution, new theorem, complete proof row or hosted admission follows.
 The mathematical sources and protected language checklist remain unchanged. Whole-language preservation remains unproved.
+
+
+### Operational action-error checkpoint 8 November 2026
+
+Initial recovery already excluded enumeration, collection capacity, call-depth and missing-context errors from model failures.
+Generated action recovery and the independent-alternative helper caught every native evaluation error instead.
+The existing recursion owner now exercises the actual validator, rather than only direct execution.
+On unchanged committed `2c5567a2` producers, recursion exhaustion returned an evaluation-failure summary and emitted one model-failure event.
+Five actual capability/capacity operations also visited a later alternative and emitted its update after the earlier branch could not finish.
+The executed baseline ran thirty tests in two suites with twelve issues. Its existing logical-failure, callback and transactional-state controls passed.
+No setup or compiler failure supplied this evidence.
+
+The existing error enum now classifies all its cases explicitly, retaining the six earlier operational exclusions.
+Initial recovery reuses that classification and preserves the original Native or Eval error channel.
+Independent alternatives and generated action parts now catch only model errors.
+The generated outer visitor and default `StateMachine` visitor apply the same distinction while preserving their callback-error guards.
+Operational errors propagate without a completed model-failure observation. Logical failures retain their existing collection and ordering behavior.
+Context-free successor enumeration now propagates its original missing-context error rather than wrapping it as a model action failure.
+No error case, accepted source predicate, execution limit, evaluator or model fixture changed.
+
+The mandatory action output check requires the classification guard and rejects its occurrence-checked removal.
+Thirty-nine existing Swift witness files change only their catch conditions: 389 node guards and one outer guard.
+Reversing those substitutions restores every original witness byte.
+The mathematical TLA sources and protected language checklist remain unchanged.
+The existing default-visitor positive integration passed; its operational filters also have a source-case review, not a new injected-error fixture.
+Full error meaning, source binding, generated symbol interpretation, complete event sites/prefixes and TLA/checker/kernel correspondence remain owned obligations.
+
+The guarded repair passed 172 tests in twenty-two suites after a 1532.99-second build and 6.237-second execution.
+All 1201 captured inputs remained exact. Only this plan changed after that run.
+The complete 109146-byte log has SHA256 `c8f89c87de0e678884d7cb00db9a4cd7873e18b91c5744bdf01fc6192941b1d3`.
+Inputs, baseline, witness migration, logs and reviews are retained in `.git/swifttla-proof-evidence/action-operational-failures-2026-11-08/` in the primary checkout.
+These are local implementation regression receipts. They establish no new mathematical theorem, complete six-link row or hosted admission.
+Whole-language preservation remains unproved.
