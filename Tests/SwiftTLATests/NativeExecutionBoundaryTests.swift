@@ -733,9 +733,41 @@ extension NativeExecutionBoundaryTests {
         _ = try machine.send(.valid)
         _ = try machine.send(.change)
         let before = machine.state
+        #expect(before.record.count == 1)
         #expect(throws: NativeMachineEvaluationError.noMatchingCase) {
             try machine.send(.invalid)
         }
         #expect(machine.state == before)
+
+        let rendered = try CheckedRecordConversion.render()
+        #expect(rendered.intrinsicInvariantNames == ["__SwiftTLAEvaluationOK"])
+        let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CheckedRecordConversion.tla")
+            .standardizedFileURL
+        let emitted = rendered.tlaBundle.root.tla
+        let checked = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(emitted == checked)
+        let cfg = try #require(rendered.tlaBundle(checking: [], checkDeadlock: false).root.cfg)
+        #expect(cfg.contains("INVARIANT __SwiftTLAEvaluationOK\n"))
+
+        let syntax = Parser.parse(source: try String(contentsOfFile: #filePath, encoding: .utf8))
+        let declaration = try #require(syntax.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "CheckedRecordConversion" })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(declaration))
+        let visitor = try #require(emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates2"
+        })
+        let swiftInput = proofInput.deletingLastPathComponent()
+            .appendingPathComponent("CheckedRecordConversionSwiftVisitor.txt")
+        let expectedSwift = try String(contentsOf: swiftInput, encoding: .utf8)
+        func tokens(_ source: String) -> [String] {
+            Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
+        }
+        #expect(tokens(visitor.description) == tokens(expectedSwift))
+        let wrongCase = visitor.description.replacingOccurrences(
+            of: "case 0: return Level.`zero`", with: "case 1: return Level.`zero`")
+        #expect(wrongCase != visitor.description)
+        #expect(tokens(wrongCase) != tokens(expectedSwift))
     }
 }

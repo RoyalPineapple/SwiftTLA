@@ -1,0 +1,35 @@
+private static func _visitUpdates0(from state: Snapshot, checking context: inout CheckingContext<CheckingRegisters>?,
+                                           _ emit: (_Updates) throws -> Void) throws {
+    func _actionPart0(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart2(updates, { candidate in try _actionPart1(candidate, emit) })
+}
+func _actionPart2(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart4(updates, { candidate in try _actionPart3(candidate, emit) })
+}
+func _actionPart4(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart6(updates, { candidate in try _actionPart5(candidate, emit) })
+}
+func _actionPart6(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    guard (state._value_pc_0 == _ControlLocation.location0) else { return }
+try emit(updates)
+}
+func _actionPart5(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    guard ((try (state.state.numbers).map { element in (try { (value: Int) throws -> [Int] in
+switch value {
+default: throw NativeMachineEvaluationError.noMatchingCase } }(element)) }) == [[1]]) else { return }
+try emit(updates)
+}
+func _actionPart3(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try _actionPart8(updates, { candidate in try _actionPart7(candidate, emit) })
+}
+func _actionPart8(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    try emit(updates)
+}
+func _actionPart7(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_pc_0: _ControlLocation.location1)) { try emit(merged) }
+}
+func _actionPart1(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
+    if let merged = updates.merging(_Updates(_value_numbers_1: state.state.numbers)) { try emit(merged) }
+}
+try _actionPart0(_Updates(), emit)
+}
