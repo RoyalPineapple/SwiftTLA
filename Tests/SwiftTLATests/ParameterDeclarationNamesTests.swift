@@ -17,7 +17,8 @@ import Testing
         #expect(try !scenario.render().tlaBundle.tla.contains("Visit limit"))
     }
 
-    @Test("changing a parameter label preserves compiled identity", arguments: ["limit", "IF", "LET", "CONSTANTS"])
+    @Test("changing a parameter label preserves compiled identity",
+        arguments: ["limit", "IF", "LET", "CONSTANTS", "TRUE", "FALSE", "BOOLEAN", "STRING"])
     func labelIsPresentationOnly(name: String) throws {
         func compile(_ label: String) throws -> CompiledSpecification {
             try SpecParser.parseSpecClosure(named: "ParameterIdentity", parseSpecTestClosure("""

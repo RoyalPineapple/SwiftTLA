@@ -92,6 +92,7 @@ struct ParameterResolutionTests {
             ("Init", true), ("Next", true), ("Spec", true),
             ("WF_count", true), ("SF_count", true), ("_1", true),
             ("IF", true), ("LET", true), ("CONSTANTS", true),
+            ("TRUE", true), ("FALSE", true), ("BOOLEAN", true), ("STRING", true),
         ] {
             let reference = ParameterReference(name: name)
             var spec = TLASpec(name: "ParameterNames", variables: [.init(name: "limit", initial: .int(0))],
@@ -104,7 +105,8 @@ struct ParameterResolutionTests {
             let formalName = try #require(program.binderNames[parameter.binder])
             #expect((formalName != name) == needsAlias, "Parameter \(name) must retain a distinct formal name only when needed")
             if let expected = ["WF_count": "_WF_count", "SF_count": "_SF_count", "_1": "v_1",
-                               "IF": "_IF", "LET": "_LET", "CONSTANTS": "_CONSTANTS"][name] {
+                               "IF": "_IF", "LET": "_LET", "CONSTANTS": "_CONSTANTS",
+                               "TRUE": "TRUE_1", "FALSE": "FALSE_1", "BOOLEAN": "BOOLEAN_1", "STRING": "STRING_1"][name] {
                 #expect(formalName == expected)
             }
             let module = try program.renderModule()

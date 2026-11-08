@@ -171,12 +171,18 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5w Allocate physical operator names without changing source lookup or operator identity.
   Apply the existing stem and collision rules to owned operator IDs, including local recursion and operator-valued formal parameters; escape their accepted keyword spellings.
   Direct and qualified imports retain the callee's allocated names. Three existing owners reproduced 19 emitted-name issues; the repair passed 212 tests in twelve suites.
-  Predefined symbols, explicit module contracts and general namespace/source/backend correspondence remain open. I5x covers model-parameter keyword allocation.
+  I5x covers model-parameter keywords. I5y covers predefined names in allocated declarations and binders. Explicit contracts and general namespace/source/backend correspondence remain open.
 
 - [x] I5x Preserve accepted model-parameter keyword names while allocating legal formal constants.
   Reuse the existing reserved-word set in the shared physical stem; keep source admission, parameter references, public names and configuration fields unchanged.
   The executed baseline reported nine naming issues while accepted-source and label/identity controls passed. The repair passed 217 tests in thirteen suites.
-  This is implementation evidence. Arbitrary name encoding, predefined symbols, explicit contracts and general name correspondence remain open.
+  This is implementation evidence. I5y covers predefined names in allocated declarations and binders. Arbitrary value encoding, explicit contracts and general name correspondence remain open.
+
+- [x] I5y Reserve predefined TLA names during physical declaration and binder allocation.
+  Reuse existing collision allocators for actions, properties, model parameters, lexical binders and owned operators. Preserve state aliases and imported callee names.
+  Source admission, public names, identities and raw values remain unchanged. Nine baseline tests reported 49 naming issues; separate raw-value controls passed.
+  The guarded repair passed 240 tests in fourteen suites, including external Swift consumers. Constants/model values and explicit module contracts retain separate encoding obligations.
+  This is implementation evidence. General namespace correspondence, SANY interpretation and all complete six-link proof rows remain open.
 
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
@@ -1468,3 +1474,19 @@ Read-only review of the exact pinned SANY source also identifies the next predef
 Its symbol table rejects redefinitions of built-ins, including `STRING`, `FALSE`, `TRUE` and `BOOLEAN`.
 These source files and Git-blob receipts are retained in this keyword packet's `predefined-symbol-lookahead` directory.
 No regression or repair for that separate allocation boundary is claimed here; raw value encodings and explicit external contracts stay separate.
+
+### Predefined declaration allocation checkpoint 8 November 2026
+
+Pinned SANY source rejects declarations that redefine `STRING`, `FALSE`, `TRUE` or `BOOLEAN`.
+Nine existing tests reproduced 49 naming issues on unchanged `d50b52fe` production.
+Source identities, values, action enablement, import capture, recursion and reached-trace controls passed.
+A separate positive baseline retained integer and raw model-value arguments through lexical shadowing.
+
+The shared allocation paths now reserve these four names. Source validation and raw-value validation remain byte-exact.
+The guarded repair passed 240 tests in fourteen suites after a 1461.19-second build and 237.277-second execution.
+All 1201 captured inputs remained exact. Only this plan changed after that run.
+The complete 130809-byte log has SHA256 `2dcb56fe5259f9a62aa9fbf8a9465b1f005c4df52285295c2aebdd9a7ee5ab7d`.
+Inputs, baselines, pinned source receipts and results are retained in `.git/swifttla-proof-evidence/predefined-symbol-allocation-2026-11-08/` in the primary checkout.
+This removes measured declaration collisions. It does not prove namespace soundness or execute SANY.
+Raw values, explicit module contracts, module/instance names and general encoding remain separate owned boundaries.
+All mathematical source bytes remain unchanged. No new theorem, hosted admission or whole-language preservation follows from this repair.

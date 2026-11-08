@@ -37,7 +37,7 @@ struct StateDeclarationNamesTests {
     @Test("state fields keep Swift identity when formal behavior names are occupied")
     func retainsFieldsNamedAfterBehavior() throws {
         let lexicalStems = ["WF_count": "_WF_count", "SF_count": "_SF_count", "_1": "v_1"]
-        for name in ["Init", "Next", "Spec", "TRUE", "FALSE", "Len", "Cardinality", "Int", "Nat", "PrintT", "RandomSubset",
+        for name in ["Init", "Next", "Spec", "TRUE", "FALSE", "BOOLEAN", "STRING", "Len", "Cardinality", "Int", "Nat", "PrintT", "RandomSubset",
                      "WF_count", "SF_count", "_1"] {
             let sibling = lexicalStems[name] ?? (name == "Spec" ? "Spec__2" : "count")
             let formalName = lexicalStems[name].map { "\($0)__2" }

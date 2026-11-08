@@ -149,14 +149,16 @@ struct CompiledSpecificationRendererTests {
             }
         }
         for names in [["Spec"], ["Init"], ["count"], ["Next", "advance"], ["Next"],
-                      ["WF_count"], ["SF_count"], ["_1"], ["WF_count", "_WF_count"], ["_1", "v_1"]] {
+                      ["WF_count"], ["SF_count"], ["_1"], ["WF_count", "_WF_count"], ["_1", "v_1"],
+                      ["TRUE"], ["FALSE"], ["BOOLEAN"], ["STRING"], ["TRUE", "TRUE__2"]] {
             let varied = try TLASpec(name: "ResolvedActionNames", variables: [
                 .init(name: "count", initial: .int(0))
             ], constants: [.init("Spec__2", .constant("Spec__2"))],
                 actions: names.map { .init(name: $0, body: .unchanged(.named("count"))) },
                 invariants: [.init(name: "CanAdvance", body: .enabledAction(names[0]))]).compile()
             let formalNames = Set(varied.layout.actions.map(\.renderedName))
-            #expect(formalNames.isDisjoint(with: ["Init", "Spec", "count", "Spec__2", "WF_count", "SF_count", "_1"]))
+            #expect(formalNames.isDisjoint(with: ["Init", "Spec", "count", "Spec__2", "WF_count", "SF_count", "_1",
+                                                 "TRUE", "FALSE", "BOOLEAN", "STRING"]))
             #expect(varied.layout.actions.map(\.declaration.name) == names)
             if names.count > 1 { #expect(!formalNames.contains("Next")) }
             let runtime = CompiledRuntime(compilation: varied)

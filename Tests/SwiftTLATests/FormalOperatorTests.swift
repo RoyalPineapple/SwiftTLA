@@ -203,8 +203,9 @@ struct FormalOperatorTests {
     )
   }
 
-  @Test("formal value parameters shadow state variables")
-  func formalParametersAreLexicallyScoped() throws {
+  @Test("formal value parameters shadow state variables without changing values",
+    arguments: [TLAValue.int(4), .constant("TRUE"), .constant("FALSE"), .constant("BOOLEAN"), .constant("STRING")])
+  func formalParametersAreLexicallyScoped(value: TLAValue) throws {
     let identity = FormalOperatorDefinition(
       name: "identity",
       parameters: [.value("value")],
@@ -212,11 +213,11 @@ struct FormalOperatorTests {
     )
     let expression = StateExpr.operatorApplication(
       .reference("identity", arity: 1),
-      [.value(.int(4))]
+      [.value(.value(value))]
     )
 
     #expect(
-      try compiledValue(expression, values: [("value", .int(99))], formalOperators: [identity]) == .int(4)
+      try compiledValue(expression, values: [("value", .int(99))], formalOperators: [identity]) == value
     )
   }
 
@@ -237,7 +238,8 @@ struct FormalOperatorTests {
 
   @Test("exploration and emitted calls retain specification-owned operator identity", arguments: [
     ("applyTwice", "operation"), ("Len", "operation"), ("Spec", "operation"),
-    ("WF_step", "WF_operation"), ("SF_step", "SF_operation"), ("_1", "_2"), ("applyTwice", "IF")
+    ("WF_step", "WF_operation"), ("SF_step", "SF_operation"), ("_1", "_2"), ("applyTwice", "IF"),
+    ("TRUE", "TRUE"), ("FALSE", "FALSE"), ("BOOLEAN", "BOOLEAN"), ("STRING", "STRING")
   ])
   func appliesFormalOperatorAtTheTransitionBoundary(name: String, parameterName: String) throws {
     let applyTwice = FormalOperatorDefinition(
@@ -281,7 +283,8 @@ struct FormalOperatorTests {
     let operation = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
     let formalName = try #require(compilation.bindings.operatorName(operation))
     #expect(compilation.bindings.sourceOperators[name] == operation)
-    if let expected = ["WF_step": "_WF_step", "SF_step": "_SF_step", "_1": "v_1"][name] {
+    if let expected = ["WF_step": "_WF_step", "SF_step": "_SF_step", "_1": "v_1",
+                       "TRUE": "TRUE_1", "FALSE": "FALSE_1", "BOOLEAN": "BOOLEAN_1", "STRING": "STRING_1"][name] {
       #expect(formalName == expected)
     }
     let definition = try #require(compilation.semantics.operators[operation])
@@ -292,7 +295,8 @@ struct FormalOperatorTests {
     }
     #expect(arity == 1)
     let formalParameterName = try #require(compilation.bindings.operatorName(parameter))
-    if let expected = ["WF_operation": "_WF_operation", "SF_operation": "_SF_operation", "_2": "v_2", "IF": "_IF"][parameterName] {
+    if let expected = ["WF_operation": "_WF_operation", "SF_operation": "_SF_operation", "_2": "v_2", "IF": "_IF",
+                       "TRUE": "TRUE_2", "FALSE": "FALSE_2", "BOOLEAN": "BOOLEAN_2", "STRING": "STRING_2"][parameterName] {
       #expect(formalParameterName == expected)
     }
     #expect(rendered.contains("\(formalName)(\(formalParameterName)(_),"))
@@ -313,7 +317,7 @@ struct FormalOperatorTests {
   }
 
   @Test("imported and instance-qualified formal calls retain exported operator names",
-    arguments: ["applyTwice", "Len", "Spec", "WF_step", "SF_step", "_1"])
+    arguments: ["applyTwice", "Len", "Spec", "WF_step", "SF_step", "_1", "TRUE", "FALSE", "BOOLEAN", "STRING"])
   func resolvesImportedFormalOperators(name: String) throws {
     let increment = FormalOperator.lambda(FormalLambda(
       parameters: ["value"],
@@ -350,7 +354,11 @@ struct FormalOperatorTests {
               LocalOperator("Spec_1_1", parameters: [], body: .int(0)),
               LocalOperator("_WF_step", parameters: [], body: .int(0)),
               LocalOperator("_SF_step", parameters: [], body: .int(0)),
-              LocalOperator("v_1", parameters: [], body: .int(0))
+              LocalOperator("v_1", parameters: [], body: .int(0)),
+              LocalOperator("TRUE_1", parameters: [], body: .int(0)),
+              LocalOperator("FALSE_1", parameters: [], body: .int(0)),
+              LocalOperator("BOOLEAN_1", parameters: [], body: .int(0)),
+              LocalOperator("STRING_1", parameters: [], body: .int(0))
             ],
               .operatorApplication(
                 .reference(reference, arity: 2),
@@ -373,7 +381,8 @@ struct FormalOperatorTests {
       let formalName = try #require(compilation.bindings.operatorName(operation))
       let exportedName = try #require(formalName.split(separator: "!").last)
       #expect(!["Len", "Spec"].contains(String(exportedName)))
-      if let expected = ["WF_step": "_WF_step", "SF_step": "_SF_step", "_1": "v_1"][name] {
+      if let expected = ["WF_step": "_WF_step", "SF_step": "_SF_step", "_1": "v_1",
+                         "TRUE": "TRUE_1", "FALSE": "FALSE_1", "BOOLEAN": "BOOLEAN_1", "STRING": "STRING_1"][name] {
         #expect(String(exportedName) == expected)
       }
       #expect(!compilation.moduleMetadata.modelValueNames.contains(formalName),

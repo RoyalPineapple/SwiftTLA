@@ -45,7 +45,8 @@ struct NativeCodeGenerationTests {
     @Test("Bound parameters retain source APIs and valid emitted declaration names")
     func preservesBindingNames() throws {
         for (sourceName, expected) in [("amount", "amount"), ("WF_amount", "_WF_amount"),
-                                       ("SF_amount", "_SF_amount"), ("_1", "v_1")] {
+                                       ("SF_amount", "_SF_amount"), ("_1", "v_1"),
+                                       ("TRUE", "TRUE_1"), ("FALSE", "FALSE_1"), ("BOOLEAN", "BOOLEAN_1"), ("STRING", "STRING_1")] {
             let compilation = try TLASpec(name: "BindingNames", variables: [
                 .init(name: "count", initial: .int(0))
             ], actions: [.init(name: "advance", body: .assign(.named("count"), .variable(sourceName)),

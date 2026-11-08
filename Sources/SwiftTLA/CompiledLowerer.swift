@@ -2505,7 +2505,7 @@ struct CompiledLowerer {
         while isPlusCalDeclarationName(preferredRenderedName) == false {
             preferredRenderedName = "_\(preferredRenderedName)"
         }
-        var unavailableNames = reservedRenderedNames
+        var unavailableNames = reservedRenderedNames.union(tlaPredefinedIdentifierNames)
         unavailableNames.formUnion(layout.parameters.compactMap { binderNames[$0.binder] })
         unavailableNames.formUnion(scope.values.values.compactMap { binderNames[$0] })
         unavailableNames.formUnion(scope.operators.values.compactMap { operatorNames[$0] })

@@ -20,7 +20,7 @@ struct PropertyDeclarationNamesTests {
     }
 
     @Test("refinement binding names supply distinct identities despite equal labels",
-        arguments: ["firstClaim", "Len", "Spec", "WF_claim", "SF_claim", "_1"])
+        arguments: ["firstClaim", "Len", "Spec", "WF_claim", "SF_claim", "_1", "TRUE", "FALSE", "BOOLEAN", "STRING"])
     func derivesRefinementNames(name: String) throws {
         let first = try labelledRefinements("label: \"Shared label\"", firstName: name).compile()
         let second = try labelledRefinements("label: \"Changed label\"", firstName: name).compile()
@@ -28,7 +28,8 @@ struct PropertyDeclarationNamesTests {
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: first))
         #expect(program.layout.refinementProperties.map(\.declaration.name) == [name, "secondClaim"])
         #expect(program.refinements.map(\.name).allSatisfy { !["Len", "Spec"].contains($0) })
-        if let expected = ["WF_claim": "_WF_claim", "SF_claim": "_SF_claim", "_1": "v_1"][name] {
+        if let expected = ["WF_claim": "_WF_claim", "SF_claim": "_SF_claim", "_1": "v_1",
+                           "TRUE": "TRUE__2", "FALSE": "FALSE__2", "BOOLEAN": "BOOLEAN__2", "STRING": "STRING__2"][name] {
             #expect(program.refinements.first?.name == expected)
         }
         #expect(Set(program.refinements.map(\.id)).count == 2)

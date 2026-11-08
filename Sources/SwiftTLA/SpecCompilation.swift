@@ -22,6 +22,9 @@ private let tlaReservedWords: Set<String> = [
     "UNION", "USE", "VARIABLE", "VARIABLES", "WF_", "WITH", "WITNESS"
 ]
 
+// Reserve these in allocations without restricting source names or raw values.
+let tlaPredefinedIdentifierNames: Set<String> = ["TRUE", "FALSE", "BOOLEAN", "STRING"]
+
 private let plusCalReservedWords: Set<String> = [
     "algorithm", "assert", "await", "begin", "call", "define", "do", "either", "else",
     "elsif", "end", "fair", "goto", "if", "macro", "or", "print", "procedure", "process",
@@ -1414,6 +1417,7 @@ public extension TLASpec {
         operatorReservations.formUnion(incomingModuleParameters.map(\.operatorName))
         operatorReservations.formUnion(semantics.behavior.fairnessProfiles.map(\.operatorName))
         operatorReservations.formUnion(["Init", "Next", "Spec", "vars"])
+        operatorReservations.formUnion(tlaPredefinedIdentifierNames)
         if authoredAlgorithm != nil { operatorReservations.insert("Terminating") }
         if semantics.behavior.constraint != nil { operatorReservations.insert("StateConstraint") }
         if semantics.behavior.actionConstraint != nil { operatorReservations.insert("ActionConstraint") }
@@ -1425,6 +1429,7 @@ public extension TLASpec {
             avoiding: moduleDeclarations)
         var occupied = renderedDeclarationNames(includingActions: false, includingVariables: false, includingProperties: false)
             .union(importedNames)
+            .union(tlaPredefinedIdentifierNames)
             .union(lowerer.modelValueNames)
             .union(bindings.binders.filter { parameterVariables[$0.key] == nil }.values)
             .union(bindings.operatorNames.values)

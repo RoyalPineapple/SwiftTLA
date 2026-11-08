@@ -330,7 +330,7 @@ package struct CompiledLayout: Hashable, Sendable {
     }
 
     mutating func resolveVariableNames(reserving names: Set<String>) {
-        let reserved = names.union(["Init", "Next", "Spec", "TRUE", "FALSE", "BOOLEAN", "STRING"])
+        let reserved = names.union(["Init", "Next", "Spec"]).union(tlaPredefinedIdentifierNames)
         var used = reserved.union(variables.map(\.declaration.name))
         variables = variables.map { variable in
             let stem = tlaDeclarationStem(variable.declaration.name)

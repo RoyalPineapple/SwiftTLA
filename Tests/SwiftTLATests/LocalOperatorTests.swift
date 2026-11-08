@@ -581,7 +581,8 @@ struct LocalOperatorTests {
     #expect(try spec.compile().render().tlaBundle.tla.contains("IN AddOne(41)"))
   }
 
-  @Test("compiled rendering declares recursive LET operators", arguments: ["SumTo", "WF_sum", "SF_sum", "_1"])
+  @Test("compiled rendering declares recursive LET operators",
+    arguments: ["SumTo", "WF_sum", "SF_sum", "_1", "TRUE", "FALSE", "BOOLEAN", "STRING"])
   func rendersRecursiveLetOperatorDeclaration(name: String) throws {
     let sumTo = LocalOperator(
       name,
@@ -597,7 +598,8 @@ struct LocalOperatorTests {
     }
 
     let compilation = try spec.compile()
-    let expected = ["WF_sum": "_WF_sum", "SF_sum": "_SF_sum", "_1": "v_1"][name] ?? name
+    let expected = ["WF_sum": "_WF_sum", "SF_sum": "_SF_sum", "_1": "v_1",
+                    "TRUE": "TRUE_1", "FALSE": "FALSE_1", "BOOLEAN": "BOOLEAN_1", "STRING": "STRING_1"][name] ?? name
     #expect(try compilation.render().tlaBundle.tla.contains("LET RECURSIVE \(expected)(_)"))
     #expect(try compiledValue(.letIn([sumTo], .recursiveCall(name, [.int(4)]))) == .int(10))
 
