@@ -124,8 +124,10 @@ struct CompiledLowerer {
         let importedDeclarations = importedNames.union(importedOperatorIDs.compactMap { operatorNames[$0] })
         let reservedOperators = operatorReservations.union(importedDeclarations).union(modelValueNames)
         for (operation, name) in operatorNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
-            where !importedOperatorIDs.contains(operation) && reservedOperators.contains(name) {
-            let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
+            where !importedOperatorIDs.contains(operation) {
+            let preferred = tlaDeclarationStem(isTLADeclarationName(name) ? name : "_\(name)")
+            guard reservedOperators.contains(name) || preferred != name else { continue }
+            let renamed = StateExpr.freshBoundName(preferred, avoiding: unavailable)
             operations[operation] = renamed
             unavailable.insert(renamed)
         }

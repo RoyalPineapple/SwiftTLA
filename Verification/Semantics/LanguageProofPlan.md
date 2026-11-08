@@ -168,6 +168,11 @@ The proof dependencies above still govern proof closure; they do not block indep
   Reuse existing collision handling; leave source admission unchanged. Five existing owners reproduced 35 emitted-name issues before the repair.
   The guarded repair passed 181 tests in nine suites. Operator, module, constant/model-value, record-payload and explicit external-contract namespaces remain separate owned boundaries; general name correspondence remains open.
 
+- [x] I5w Allocate physical operator names without changing source lookup or operator identity.
+  Apply the existing stem and collision rules to owned operator IDs, including local recursion and operator-valued formal parameters; escape their accepted keyword spellings.
+  Direct and qualified imports retain the callee's allocated names. Three existing owners reproduced 19 emitted-name issues; the repair passed 212 tests in twelve suites.
+  Model-parameter keyword spellings, predefined symbols, explicit module contracts and general namespace/source/backend correspondence remain open.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1398,3 +1403,20 @@ No new model or fixture type, checker/evaluator family, public API, dependency, 
 This is a measured implementation repair, not a parser/kernel proof or hosted admission.
 Module, free-constant/model-value, opaque import, operator, record-payload and explicit external-contract naming remain separate owned boundaries.
 The ready-read composition candidate remains unverified; every complete six-link row and whole-language preservation remain open.
+
+
+### Operator declaration lexical boundary checkpoint 8 November 2026
+
+Three existing tests reproduced 19 emitted-name issues on unchanged `d98c0c5c` production.
+The cases cover owned definitions, operator-valued parameters, direct/qualified imports and local recursion.
+Source IDs, higher-order values, the reached invariant trace, import capture guards and recursive results passed their controls.
+The existing binding-table finalization now reuses the physical stem, keyword escape and occupied-name allocator.
+Imported IDs retain the actual callee export name; source lookup and executable operator IDs remain unchanged.
+
+The guarded repair passed 212 tests in twelve suites after a 1447.63-second build and 196.574-second execution.
+All 1201 captured inputs remained exact. The complete log and its SHA256 are retained in
+`.git/swifttla-proof-evidence/tla-operator-stems-2026-11-08/repair-1-result.json` in the primary checkout.
+Only this plan changed afterward. No model/fixture type, checker/evaluator family, public API, source restriction or tool/resource setting changed.
+This removes measured emitted-name counterexamples; it is not a SANY/TLC execution, namespace soundness proof or hosted admission.
+Model-parameter keyword spellings, predefined symbols, explicit module contracts, value encodings and generic correspondence remain separate obligations.
+The ready-read theorem still requires its exact pinned result; every complete six-link row and whole-language preservation remain open.

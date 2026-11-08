@@ -235,15 +235,18 @@ struct FormalOperatorTests {
     #expect(try compiledValue(expression, formalOperators: [first]) == .int(42))
   }
 
-  @Test("exploration and emitted calls retain specification-owned operator identity", arguments: ["applyTwice", "Len", "Spec"])
-  func appliesFormalOperatorAtTheTransitionBoundary(name: String) throws {
+  @Test("exploration and emitted calls retain specification-owned operator identity", arguments: [
+    ("applyTwice", "operation"), ("Len", "operation"), ("Spec", "operation"),
+    ("WF_step", "WF_operation"), ("SF_step", "SF_operation"), ("_1", "_2"), ("applyTwice", "IF")
+  ])
+  func appliesFormalOperatorAtTheTransitionBoundary(name: String, parameterName: String) throws {
     let applyTwice = FormalOperatorDefinition(
       name: name,
-      parameters: [.operator("operation", arity: 1), .value("initial")],
+      parameters: [.operator(parameterName, arity: 1), .value("initial")],
       body: .operatorApplication(
-        .reference("operation", arity: 1),
+        .reference(parameterName, arity: 1),
         [.value(.operatorApplication(
-          .reference("operation", arity: 1),
+          .reference(parameterName, arity: 1),
           [.value(.variable("initial"))]
         ))]
       )
@@ -277,6 +280,22 @@ struct FormalOperatorTests {
     let rendered = try compilation.render().tlaBundle.root.tla
     let operation = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
     let formalName = try #require(compilation.bindings.operatorName(operation))
+    #expect(compilation.bindings.sourceOperators[name] == operation)
+    if let expected = ["WF_step": "_WF_step", "SF_step": "_SF_step", "_1": "v_1"][name] {
+      #expect(formalName == expected)
+    }
+    let definition = try #require(compilation.semantics.operators[operation])
+    let firstParameter = try #require(definition.parameters.first)
+    guard case .operator(let parameter, let arity) = firstParameter else {
+      Issue.record("Expected the declared operator parameter")
+      return
+    }
+    #expect(arity == 1)
+    let formalParameterName = try #require(compilation.bindings.operatorName(parameter))
+    if let expected = ["WF_operation": "_WF_operation", "SF_operation": "_SF_operation", "_2": "v_2", "IF": "_IF"][parameterName] {
+      #expect(formalParameterName == expected)
+    }
+    #expect(rendered.contains("\(formalName)(\(formalParameterName)(_),"))
     #expect(!["Len", "Spec"].contains(formalName))
     #expect(rendered.contains("\(formalName)("))
     #expect(rendered.split(separator: "\n").filter { $0.hasPrefix("Spec ==") }.count == 1)
@@ -293,7 +312,8 @@ struct FormalOperatorTests {
     #expect(try exploration.outcome.diagnostic?.trace.map { try value("counter", in: $0.state) } == [.int(0), .int(2), .int(4)])
   }
 
-  @Test("imported and instance-qualified formal calls retain exported operator names", arguments: ["applyTwice", "Len", "Spec"])
+  @Test("imported and instance-qualified formal calls retain exported operator names",
+    arguments: ["applyTwice", "Len", "Spec", "WF_step", "SF_step", "_1"])
   func resolvesImportedFormalOperators(name: String) throws {
     let increment = FormalOperator.lambda(FormalLambda(
       parameters: ["value"],
@@ -327,7 +347,10 @@ struct FormalOperatorTests {
             .named("counter"),
             .letIn([
               LocalOperator("Len_1", parameters: [], body: .int(0)),
-              LocalOperator("Spec_1_1", parameters: [], body: .int(0))
+              LocalOperator("Spec_1_1", parameters: [], body: .int(0)),
+              LocalOperator("_WF_step", parameters: [], body: .int(0)),
+              LocalOperator("_SF_step", parameters: [], body: .int(0)),
+              LocalOperator("v_1", parameters: [], body: .int(0))
             ],
               .operatorApplication(
                 .reference(reference, arity: 2),
@@ -350,6 +373,9 @@ struct FormalOperatorTests {
       let formalName = try #require(compilation.bindings.operatorName(operation))
       let exportedName = try #require(formalName.split(separator: "!").last)
       #expect(!["Len", "Spec"].contains(String(exportedName)))
+      if let expected = ["WF_step": "_WF_step", "SF_step": "_SF_step", "_1": "v_1"][name] {
+        #expect(String(exportedName) == expected)
+      }
       #expect(!compilation.moduleMetadata.modelValueNames.contains(formalName),
         "An imported operator alias must stay distinct from the caller's model value")
       #expect(bundle.root.tla.contains("CONSTANTS Spec_1"))
