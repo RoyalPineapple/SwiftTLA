@@ -147,6 +147,22 @@ struct TLAModuleBundleTests {
 
     #expect(bundle.imports.map(\.name) == ["Folds"])
     #expect(bundle.root.tla.contains("Folding == INSTANCE Folds"))
+    for (name, expected) in [("Folding", "Folding"), ("TRUE", "TRUE_1"), ("FALSE", "FALSE_1"),
+                             ("BOOLEAN", "BOOLEAN_1"), ("STRING", "STRING_1"),
+                             ("WF_Folding", "_WF_Folding"), ("_1", "v_1")] {
+      let parsed = SpecParser.parseSpecClosure(named: "NamedInstance",
+        try parseClosure("{ Instance(\"\(name)\", of: Folds.module) }"))
+      #expect(parsed.diagnostics.isEmpty)
+      #expect(parsed.moduleInstances.map(\.name) == [name])
+      var source = InstancedFormalModuleGeneratedModel.spec
+      source.moduleInstances = parsed.moduleInstances
+      let compilation = try source.compile()
+      #expect(compilation.layout.moduleInstances.map(\.namespace) == [name])
+      let rendered = try compilation.render()
+      for bundle in [rendered.tlaBundle, try rendered.plusCalBundle()] {
+        #expect(bundle.root.tla.contains("\(expected) == INSTANCE Folds"))
+      }
+    }
   }
 
   @Test("the parser preserves qualified ZSequences calls")
@@ -301,8 +317,12 @@ struct TLAModuleBundleTests {
     #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
   }
 
-  @Test("a named instance stays a separate source module")
-  func namedModuleInstanceIsBundled() throws {
+  @Test("a named instance retains source identity and a distinct emitted namespace", arguments: [
+    ("Math", "Math"), ("Init", "Init_1"), ("Next", "Next_1"), ("Spec", "Spec_1"), ("vars", "vars_1"),
+    ("Len", "Len_1"), ("TRUE", "TRUE_1"), ("FALSE", "FALSE_1"), ("BOOLEAN", "BOOLEAN_1"), ("STRING", "STRING_1"),
+    ("WF_Math", "_WF_Math"), ("SF_Math", "_SF_Math"), ("_1", "v_1")
+  ])
+  func namedModuleInstanceIsBundled(name: String, expected: String) throws {
     let arithmetic = TLASpec("InstanceArithmetic") {
       DefineRecursive("Twice", params: ["value"]) {
         StateExpr.variable("value") * 2
@@ -310,16 +330,20 @@ struct TLAModuleBundleTests {
     }
     let value = Var<Int>("value", 1)
     let consumer = TLASpec("UsesInstanceArithmetic") {
-      let math = Instance("Math", of: arithmetic)
+      let math = Instance(name, of: arithmetic)
       math
       Variable(value, 1)
       Action("Stay") { value.stateExpr == 1 }
       Invariant("ValueIsTwoTimesOne") { math.call("Twice", value.stateExpr) == 2 }
     }
 
-    let bundle = try consumer.compile().render().tlaBundle
-    #expect(bundle.tla.contains("Math == INSTANCE InstanceArithmetic"))
-    #expect(bundle.tla.contains("ValueIsTwoTimesOne == (Math!Twice(value) = 2)"), "Rendered module: \(bundle.tla)")
+    let compilation = try consumer.compile()
+    #expect(compilation.layout.moduleInstances.map(\.namespace) == [name])
+    let operation = try #require(compilation.bindings.sourceOperators["\(name)!Twice"])
+    #expect(compilation.bindings.operatorName(operation) == "\(expected)!Twice")
+    let bundle = try compilation.render().tlaBundle
+    #expect(bundle.tla.contains("\(expected) == INSTANCE InstanceArithmetic"))
+    #expect(bundle.tla.contains("ValueIsTwoTimesOne == (\(expected)!Twice(value) = 2)"), "Rendered module: \(bundle.tla)")
     #expect(!bundle.tla.contains("EXTENDS Integers, FiniteSets, Sequences, InstanceArithmetic"))
     #expect(bundle.imports.map(\.name) == ["InstanceArithmetic"])
     let importedModule = try #require(bundle.imports.first)
@@ -332,8 +356,11 @@ struct TLAModuleBundleTests {
     }
   }
 
-  @Test("an instance keeps recursive calls and allocated exports inside its namespace", arguments: ["CountDown", "Len", "Spec"])
-  func namedModuleInstanceKeepsRecursiveCallsQualified(name: String) throws {
+  @Test("an instance keeps recursive calls and allocated exports inside its namespace", arguments: [
+    ("CountDown", "Math", "Local", "Math"), ("Len", "Math", "Local", "Math"), ("Spec", "Math", "Local", "Math"),
+    ("CountDown", "TRUE", "TRUE_1", "TRUE_2"), ("CountDown", "WF_Math", "_WF_Math", "_WF_Math_1")
+  ])
+  func namedModuleInstanceKeepsRecursiveCallsQualified(name: String, namespace: String, occupied: String, expected: String) throws {
     let counting = TLASpec("InstanceCounting") {
       DefineRecursive(name, params: ["number"]) {
         let number = StateExpr.variable("number")
@@ -346,19 +373,25 @@ struct TLAModuleBundleTests {
     }
     let value = Var<Int>("value", 3)
     let consumer = TLASpec("UsesInstanceCounting") {
-      let math = Instance("Math", of: counting)
+      let math = Instance(namespace, of: counting)
       math
       Variable(value, 3)
       Action("Stay") { value.stateExpr == 3 }
-      Invariant("CountsDown") { math.call(name, value.stateExpr) == 3 }
+      Invariant("CountsDown") {
+        StateExpr.letIn([LocalOperator(occupied, parameters: [], body: .int(99))],
+          .and(math.call(name, value.stateExpr) == 3,
+            .equal(.operatorApplication(.reference(occupied, arity: 0), []), .int(99))))
+      }
     }
 
     let resolved = try FormalModuleClosure.resolve(root: consumer)
       .linkedOperators.recursiveFunctions
-    #expect(resolved.map(\.name) == ["Math!\(name)"])
+    #expect(resolved.map(\.name) == ["\(namespace)!\(name)"])
     let compilation = try consumer.compile()
-    let operation = try #require(compilation.bindings.sourceOperators["Math!\(name)"])
+    #expect(compilation.layout.moduleInstances.map(\.namespace) == [namespace])
+    let operation = try #require(compilation.bindings.sourceOperators["\(namespace)!\(name)"])
     let formalName = try #require(compilation.bindings.operatorName(operation))
+    #expect(formalName.hasPrefix("\(expected)!"))
     let exportedName = try #require(formalName.split(separator: "!").last)
     #expect(!["Len", "Spec"].contains(String(exportedName)))
     let bundle = try compilation.render().tlaBundle

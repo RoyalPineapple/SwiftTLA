@@ -275,7 +275,7 @@ struct CompiledModuleMetadata: Sendable {
 
 fileprivate struct CompiledModule: Sendable {
     let metadata: CompiledModuleMetadata
-    let layout: CompiledLayout
+    var layout: CompiledLayout
     var bindings: CompiledBindingTable
     let semantics: CompiledSemantics
     let refinements: [CompiledRefinement]
@@ -1231,7 +1231,7 @@ public extension TLASpec {
         for entry in closure.entries {
             let source = try entry.id == closure.root.id ? self : entry.module.loweredSourceModel()
             let context = closure.planContext(for: entry)
-            let visible = source.importedOperatorNames(in: closure, exports: exportedOperators)
+            let visible = source.importedOperatorNames(in: closure, exports: exportedOperators, instances: [])
             let compiled = try source.compileModule(in: context.closure,
                 incomingModuleParameters: context.incomingModuleParameters, importedOperatorNames: visible,
                 moduleDeclarations: moduleDeclarations)
@@ -1241,8 +1241,11 @@ public extension TLASpec {
             compiledModules.append(compiled)
         }
         let modelValues = Set(compiledModules.flatMap { $0.metadata.modelValueNames })
-        var unavailable = moduleDeclarations.union(modelValues)
+        let instanceNamespaces = Set(compiledModules.flatMap { $0.layout.moduleInstances.map(\.namespace) })
+        var unavailable = moduleDeclarations.subtracting(instanceNamespaces).union(modelValues)
         for compiled in compiledModules {
+            unavailable.formUnion(compiled.metadata.constants.map(\.name))
+            unavailable.formUnion(compiled.metadata.formalParameters.map(\.name))
             unavailable.formUnion(compiled.bindings.operatorNames.values)
             unavailable.formUnion(compiled.bindings.binders.values)
             unavailable.formUnion(compiled.layout.variables.map(\.formalName))
@@ -1260,11 +1263,21 @@ public extension TLASpec {
                 if let postcondition = scenario.postconditionName { unavailable.insert(postcondition) }
             }
         }
+        var instanceReservations = unavailable.union(tlaPredefinedIdentifierNames)
+            .union(["Init", "Next", "Spec", "vars", "StateConstraint", "ActionConstraint", "Terminating"])
+        unavailable.formUnion(instanceReservations)
+        unavailable.formUnion(instanceNamespaces)
+        // Allocate after every module's bindings and values are known to avoid alias capture.
+        for index in compiledModules.indices {
+            compiledModules[index].layout.resolveModuleInstanceNames(reserving: instanceReservations, avoiding: &unavailable)
+            instanceReservations.formUnion(compiledModules[index].layout.moduleInstances.map(\.formalName))
+        }
         exportedOperators.removeAll(keepingCapacity: true)
         for index in compiledModules.indices {
             let compiled = compiledModules[index]
             var names = compiled.bindings.operatorNames
-            for (source, rendered) in closure.entries[index].module.importedOperatorNames(in: closure, exports: exportedOperators) {
+            for (source, rendered) in closure.entries[index].module.importedOperatorNames(in: closure,
+                exports: exportedOperators, instances: compiled.layout.moduleInstances) {
                 if let operation = compiled.bindings.sourceOperators[source] { names[operation] = rendered }
             }
             let owned = Array(compiled.semantics.operators.formalDefinitionIDs.prefix(compiled.metadata.formalDefinitionCount))
@@ -1345,12 +1358,13 @@ public extension TLASpec {
     }
 
     private func importedOperatorNames(in closure: FormalModuleClosure,
-        exports: [String: [String: String]]) -> [String: String] {
+        exports: [String: [String: String]], instances: [CompiledModuleInstanceLayout]) -> [String: String] {
         var visible: [String: String] = [:]
         for edge in closure.edges where edge.fromModule == name {
             for (source, rendered) in exports[edge.toModule, default: [:]] {
                 if case .namedInstance(let namespace, _) = edge.kind {
-                    visible["\(namespace)!\(source)"] = "\(namespace)!\(rendered)"
+                    let formalName = instances.first { $0.namespace == namespace }?.formalName ?? namespace
+                    visible["\(namespace)!\(source)"] = "\(formalName)!\(rendered)"
                 } else {
                     visible[source] = rendered
                 }
@@ -2368,14 +2382,14 @@ extension CompiledProgram {
             mappings += constants.map { "\($0.name) <- \($0.value)" }
             mappings += refinement.abstract.exportedModelValueNames.subtracting(constants.map(\.name)).sorted()
                 .map { "\($0) <- \($0)" }
-            instances.append("\(instance.namespace) == INSTANCE \(importedName)" + (mappings.isEmpty ? "" : " WITH " + mappings.joined(separator: ", ")))
+            instances.append("\(instance.formalName) == INSTANCE \(importedName)" + (mappings.isEmpty ? "" : " WITH " + mappings.joined(separator: ", ")))
             for (offset, replacement) in abstract.moduleReplacements.enumerated() {
                 let forwarded = "\(importedName)__Configuration\(offset)"
-                instances.append("\(forwarded) == \(instance.namespace)!\(replacement.definitionName)")
+                instances.append("\(forwarded) == \(instance.formalName)!\(replacement.definitionName)")
                 replacements.append(.init(moduleName: replacement.moduleName,
                     operatorName: replacement.operatorName, definitionName: forwarded))
             }
-            renderedRefinements.append("\(refinement.name) == \(instance.namespace)!Spec")
+            renderedRefinements.append("\(refinement.name) == \(instance.formalName)!Spec")
             imports.append(.init(name: importedName, tla: abstract.renderedModuleSource))
             imports += abstract.imports
             ownership.append(.init(moduleName: importedName, owningRoot: owningRoot, structuralPath: path))

@@ -184,6 +184,12 @@ The proof dependencies above still govern proof closure; they do not block indep
   The guarded repair passed 240 tests in fourteen suites, including external Swift consumers. Constants/model values and explicit module contracts retain separate encoding obligations.
   This is implementation evidence. General namespace correspondence, SANY interpretation and all complete six-link proof rows remain open.
 
+- [x] I5z Allocate physical formal-instance namespaces while retaining source handles and IDs.
+  Reuse the existing stem and collision allocator after all module bindings and model values are known. Keep source lookup and structural provenance unchanged.
+  Carry allocated names through qualified calls, both refinement exporters, imported configuration forwarding and authored PlusCal declarations.
+  Existing owners reproduced naming, output-guard and lexical-capture failures. The guarded repair passed 207 tests in fourteen suites, including the external consumer contract.
+  Module names, generated-instance contracts, raw values and general namespace/source/backend interpretation remain open. This closes no complete six-link proof row.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1490,3 +1496,24 @@ Inputs, baselines, pinned source receipts and results are retained in `.git/swif
 This removes measured declaration collisions. It does not prove namespace soundness or execute SANY.
 Raw values, explicit module contracts, module/instance names and general encoding remain separate owned boundaries.
 All mathematical source bytes remain unchanged. No new theorem, hosted admission or whole-language preservation follows from this repair.
+
+### Formal instance namespace checkpoint 8 November 2026
+
+Accepted instance names were copied directly into TLA declarations and qualified calls.
+The unchanged compiler produced 58 failures across four existing tests, including output-guard rejections for `Init`, `Next` and `Spec` collisions.
+A separate recursive-call baseline reported two incorrect prefixes while its execution and local-value controls passed.
+The authored-output baseline reported twelve naming failures across direct TLA and PlusCal output.
+These baseline runs overlap and are not additive coverage totals.
+
+The existing instance layout now retains its source namespace and a separate allocated formal name.
+The final closure pass chooses names after bindings and model values are known, preserving occupied sibling and lexical names.
+Qualified exports and both refinement paths use the allocated name. Lookup keys, IDs, canonical source encoding and provenance paths retain the source name.
+Source and raw-value validation remain unchanged. The repair adds no model, fixture type, checker, evaluator or public API.
+
+The guarded repair passed 207 tests in fourteen suites after a 1467.57-second build and 218.295-second execution.
+All 1201 captured inputs remained exact. Only this plan changed after that run.
+The complete 124152-byte log has SHA256 `1806b94b269f58db7872acd8b5588ca3be9abd229a608d335a3da24c0e498510`.
+Inputs, baselines, logs and reviews are retained in `.git/swifttla-proof-evidence/module-instance-names-2026-11-08/` in the primary checkout.
+These local results establish the measured implementation repair. General namespace soundness and SANY interpretation remain separate owned boundaries.
+Module names, generated-instance contracts and raw-value encoding remain separate owned boundaries.
+All mathematical source bytes remain unchanged. Source/IR/backend interpretation, complete ordered observations and whole-language preservation remain open.

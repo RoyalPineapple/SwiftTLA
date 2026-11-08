@@ -1060,7 +1060,7 @@ struct CompiledTLARenderer {
         case .liveSpec: target = "LiveSpec"
         case .liveSpecEquals: target = "LiveSpecEquals"
         }
-        return "\(refinement.name) == \(instance.namespace)!\(target)"
+        return "\(refinement.name) == \(instance.formalName)!\(target)"
     }
 
     func formalModuleReplacement(_ replacement: CompiledFormalModuleReplacement) throws -> String {
@@ -1075,7 +1075,7 @@ struct CompiledTLARenderer {
             "\($0.parameter) <- \(try state($0.value))"
         }.joined(separator: ", ")
         let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
-        return "\(layout.namespace) == INSTANCE \(moduleNames[layout.moduleName] ?? layout.moduleName)\(withClause)"
+        return "\(layout.formalName) == INSTANCE \(moduleNames[layout.moduleName] ?? layout.moduleName)\(withClause)"
     }
 
     func state(_ expression: CompiledExpression, stateNames: [VariableID: String] = [:]) throws -> String {

@@ -190,6 +190,7 @@ package struct CompiledControlLocation: Hashable, Sendable {
 struct CompiledModuleInstanceLayout: Hashable, Sendable {
     let id: ModuleInstanceID
     let namespace: String
+    let formalName: String
     let moduleName: String
 }
 
@@ -213,7 +214,7 @@ package struct CompiledLayout: Hashable, Sendable {
     private(set) var generatedRefinementProperties: [CompiledPropertyLayout]
     let procedures: [CompiledProcedureLayout]
     package let controlLocations: [CompiledControlLocation]
-    let moduleInstances: [CompiledModuleInstanceLayout]
+    private(set) var moduleInstances: [CompiledModuleInstanceLayout]
     let declarations: [CompiledDeclaration]
 
     init(source spec: TLASpec) {
@@ -290,6 +291,7 @@ package struct CompiledLayout: Hashable, Sendable {
             .init(
                 id: .init(ordinal: $0.offset),
                 namespace: $0.element.name,
+                formalName: $0.element.name,
                 moduleName: $0.element.module.name
             )
         }
@@ -372,6 +374,17 @@ package struct CompiledLayout: Hashable, Sendable {
         variables.first {
             $0.declaration.origin == .procedureStack
         }?.id
+    }
+
+    mutating func resolveModuleInstanceNames(reserving names: Set<String>, avoiding occupied: inout Set<String>) {
+        moduleInstances = moduleInstances.map { instance in
+            let stem = tlaDeclarationStem(instance.namespace)
+            let name = names.contains(instance.namespace) || stem != instance.namespace
+                ? StateExpr.freshBoundName(stem, avoiding: occupied) : instance.namespace
+            occupied.insert(name)
+            return .init(id: instance.id, namespace: instance.namespace, formalName: name,
+                moduleName: instance.moduleName)
+        }
     }
 
     func moduleInstanceID(named namespace: String) -> ModuleInstanceID? {

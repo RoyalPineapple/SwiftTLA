@@ -142,8 +142,15 @@ struct RefinementDeclarationTests {
       "Stable": [true], "Progress": [false, true]])
   }
 
-  @Test("direct module rendering follows linked behavior or explicit operator targets", arguments: [false, true])
-  func rendersLinkedTarget(library: Bool) throws {
+  @Test("direct module rendering follows linked behavior or explicit operator targets", arguments: [
+    (false, "C", "C"), (true, "C", "C"), (false, "TRUE", "TRUE_1"), (true, "TRUE", "TRUE_1"),
+    (false, "FALSE", "FALSE_1"), (true, "FALSE", "FALSE_1"),
+    (false, "BOOLEAN", "BOOLEAN_1"), (true, "BOOLEAN", "BOOLEAN_1"),
+    (false, "STRING", "STRING_1"), (true, "STRING", "STRING_1"),
+    (false, "Len", "Len_1"), (true, "Len", "Len_1"),
+    (false, "WF_C", "_WF_C"), (true, "WF_C", "_WF_C"), (false, "_1", "v_1"), (true, "_1", "v_1")
+  ])
+  func rendersLinkedTarget(library: Bool, name: String, expected: String) throws {
     let state = Var<Int>("state", 0)
     let abstract = TLASpec("Abstract") {
       if library {
@@ -153,7 +160,7 @@ struct RefinementDeclarationTests {
         Action("stay") { state.stays }
       }
     }
-    let instance = Instance("C", of: abstract)
+    let instance = Instance(name, of: abstract)
     let concrete = TLASpec("Concrete") {
       instance
       Refinement(_name: "Refines", instance: instance, mappings: library ? [] : [.init(state, from: 0)])
@@ -161,7 +168,7 @@ struct RefinementDeclarationTests {
 
     let bundle = try concrete.compile().render().tlaBundle
     let source = bundle.root.tla
-    let declaration = library ? "C == INSTANCE Abstract" : "C == INSTANCE Abstract WITH state <- 0"
+    let declaration = library ? "\(expected) == INSTANCE Abstract" : "\(expected) == INSTANCE Abstract WITH state <- 0"
     let instanceRange = try #require(source.range(of: declaration))
     let target: String
     if library {
@@ -173,7 +180,7 @@ struct RefinementDeclarationTests {
     } else {
       target = "Spec"
     }
-    let refinementRange = try #require(source.range(of: "Refines == C!\(target)"))
+    let refinementRange = try #require(source.range(of: "Refines == \(expected)!\(target)"))
     #expect(instanceRange.lowerBound < refinementRange.lowerBound)
   }
 
