@@ -311,14 +311,14 @@ package struct CompiledLayout: Hashable, Sendable {
         let reserved = names.union(["Init", "Next", "Spec", "vars"])
         var used = reserved.union(properties.map(\.declaration.name))
         func resolve(_ property: CompiledPropertyLayout) -> CompiledPropertyLayout {
-            let stem = property.declaration.name
+            let stem = tlaDeclarationStem(property.declaration.name)
             var name = stem
-            if reserved.contains(name) {
+            if reserved.contains(name) || stem != property.declaration.name {
                 var suffix = 2
-                repeat {
+                while !used.insert(name).inserted {
                     name = "\(stem)__\(suffix)"
                     suffix += 1
-                } while !used.insert(name).inserted
+                }
             }
             return .init(id: property.id, declaration: property.declaration,
                 reference: property.reference, formalName: name)
@@ -333,14 +333,14 @@ package struct CompiledLayout: Hashable, Sendable {
         let reserved = names.union(["Init", "Next", "Spec", "TRUE", "FALSE", "BOOLEAN", "STRING"])
         var used = reserved.union(variables.map(\.declaration.name))
         variables = variables.map { variable in
-            let stem = variable.declaration.name
+            let stem = tlaDeclarationStem(variable.declaration.name)
             var name = stem
-            if reserved.contains(name) {
+            if reserved.contains(name) || stem != variable.declaration.name {
                 var suffix = 2
-                repeat {
+                while !used.insert(name).inserted {
                     name = "\(stem)__\(suffix)"
                     suffix += 1
-                } while !used.insert(name).inserted
+                }
             }
             return .init(id: variable.id, declaration: variable.declaration, displayLabel: variable.displayLabel,
                 generatedSwiftType: variable.generatedSwiftType, resolvedValueType: variable.resolvedValueType,
@@ -540,7 +540,7 @@ package struct CompiledLayout: Hashable, Sendable {
                 }
             }.joined()
             let candidate = raw.isEmpty ? "Action" : (raw.first?.isNumber == true ? "_\(raw)" : raw)
-            let stem = isTLADeclarationName(candidate) ? candidate : "_\(candidate)"
+            let stem = tlaDeclarationStem(isTLADeclarationName(candidate) ? candidate : "_\(candidate)")
             var renderedName = stem.isEmpty ? "Action" : stem
             var suffix = 2
             while !used.insert(renderedName).inserted {

@@ -32,6 +32,13 @@ func isTLADeclarationName(_ name: String) -> Bool {
     isFormalIdentifier(name) && tlaReservedWords.contains(name) == false
 }
 
+// Escape lexer restrictions here without changing accepted source names.
+func tlaDeclarationStem(_ name: String) -> String {
+    if name.hasPrefix("WF_") || name.hasPrefix("SF_") { return "_\(name)" }
+    if name.utf8.contains(where: { (65...90).contains($0) || (97...122).contains($0) }) { return name }
+    return "v\(name)"
+}
+
 func isPlusCalDeclarationName(_ name: String) -> Bool {
     isTLADeclarationName(name) && plusCalReservedWords.contains(name) == false
 }

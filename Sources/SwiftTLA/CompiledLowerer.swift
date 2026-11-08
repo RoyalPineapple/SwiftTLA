@@ -133,8 +133,10 @@ struct CompiledLowerer {
         for (binder, name) in binderNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
             where modelValueNames.contains(name) || importedDeclarations.contains(name)
                 || (parameterIDs.contains(binder)
-                    && (reservedRenderedNames.contains(name) || operatorReservations.contains(name))) {
-            let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
+                    && (reservedRenderedNames.contains(name) || operatorReservations.contains(name)
+                        || tlaDeclarationStem(name) != name)) {
+            let preferred = parameterIDs.contains(binder) ? tlaDeclarationStem(name) : name
+            let renamed = StateExpr.freshBoundName(preferred, avoiding: unavailable)
             names[binder] = renamed
             unavailable.insert(renamed)
         }
@@ -2497,7 +2499,7 @@ struct CompiledLowerer {
         let binder = BinderID(ordinal: nextBinderOrdinal)
         nextBinderOrdinal += 1
         knownBinderNames.insert(name)
-        var preferredRenderedName = exactRenderedName ?? name
+        var preferredRenderedName = exactRenderedName ?? tlaDeclarationStem(name)
         while isPlusCalDeclarationName(preferredRenderedName) == false {
             preferredRenderedName = "_\(preferredRenderedName)"
         }

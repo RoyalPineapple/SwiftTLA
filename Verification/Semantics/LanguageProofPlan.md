@@ -163,6 +163,11 @@ The proof dependencies above still govern proof closure; they do not block indep
   Other lists retain the existing Init/Next/frame check only. The executed baseline accepted 30 changed clauses; the final existing-owner regression rejects them and passed 49 tests in seven suites.
   This repairs an output-check gap. Generic fairness meaning, source/metadata correspondence and checker soundness remain open.
 
+- [x] I5v Allocate legal TLA declaration names for accepted fairness-token prefixes and letterless identifiers.
+  Preserve source identities, Swift names and values while allocating state, action, property, runtime-parameter and ordinary value-binder names.
+  Reuse existing collision handling; leave source admission unchanged. Five existing owners reproduced 35 emitted-name issues before the repair.
+  The guarded repair passed 181 tests in nine suites. Operator, module, constant/model-value, record-payload and explicit external-contract namespaces remain separate owned boundaries; general name correspondence remains open.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1367,3 +1372,29 @@ Only this plan changed afterward. Exact inputs, baseline, logs and review receip
 No fixture type, registered model, renderer, evaluator, checker family, dependency, pin, budget or timeout was added or changed.
 These are implementation and regression results. Fairness semantics, actual source/metadata interpretation,
 checker soundness, every complete six-link row, hosted admission and whole-language preservation remain open.
+
+
+### TLA declaration lexical boundary checkpoint 8 November 2026
+
+The exact pinned TLA JavaCC grammar separates `WF_` and `SF_` fairness tokens from identifiers.
+An underscore-led identifier must also contain an ASCII letter.
+Existing source admission accepts names such as `WF_count`, `SF_count` and `_1`.
+Five existing owners reproduced 35 invalid emitted-name observations while their source identity, API and runtime-value controls passed.
+This baseline compiled and executed; it was not an observed SANY/TLC process failure.
+
+The compiler now derives physical declaration stems at the existing allocation sites and reuses their collision handling.
+State and property aliases reserve source names; action and binder allocation retains its existing occupied-name rules.
+Source admission, declaration IDs, Swift field names, public action-binding labels and parameter references remain unchanged.
+The procedure exact-name path remains linked to its backing state allocation.
+
+The guarded repair passed 181 tests across nine existing suites, including lexical scope, formal operators,
+procedure calls, canonicalization, generated-code metadata and existing external-consumer contracts.
+All 1201 captured Git payloads remained exact through execution. The build took 1506.73 seconds; execution took 201.779 seconds.
+The complete 113181-byte log has SHA256 `213f55e11bec46c083a188ba31343e6387c2132806537cbbe11396d4c0adf78c`.
+Only this plan changed afterward. Baseline, exact pinned grammar, captured inputs and complete logs are retained under
+`.git/swifttla-proof-evidence/tla-declaration-stems-2026-11-08/` in the primary checkout.
+
+No new model or fixture type, checker/evaluator family, public API, dependency, pin, budget, timeout or source restriction was introduced.
+This is a measured implementation repair, not a parser/kernel proof or hosted admission.
+Module, free-constant/model-value, opaque import, operator, record-payload and explicit external-contract naming remain separate owned boundaries.
+The ready-read composition candidate remains unverified; every complete six-link row and whole-language preservation remain open.

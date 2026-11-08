@@ -42,19 +42,31 @@ struct NativeCodeGenerationTests {
         }
     }
 
-    @Test("Native bindings retain resolved declaration names")
+    @Test("Bound parameters retain source APIs and valid emitted declaration names")
     func preservesBindingNames() throws {
-        let compilation = try TLASpec(name: "BindingNames", variables: [
-            .init(name: "count", initial: .int(0))
-        ], actions: [.init(name: "advance", body: .assign(.named("count"), .variable("amount")),
-            bindings: [.init(name: "amount", values: [.int(1)])])], invariants: []).compile()
-        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
-        let parameter = try #require(program.behavior.actions.first?.bindings.first?.binder)
-        let name = try #require(compilation.bindings.binderName(parameter))
-        #expect(program.binderNames[parameter] == name)
-        var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "BindingNames", program: program))
-        let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
-        #expect(generated.contains("_\(name)_\(parameter.ordinal)"))
+        for (sourceName, expected) in [("amount", "amount"), ("WF_amount", "_WF_amount"),
+                                       ("SF_amount", "_SF_amount"), ("_1", "v_1")] {
+            let compilation = try TLASpec(name: "BindingNames", variables: [
+                .init(name: "count", initial: .int(0))
+            ], actions: [.init(name: "advance", body: .assign(.named("count"), .variable(sourceName)),
+                bindings: [.init(name: sourceName, values: [.int(1), .int(2)])])], invariants: []).compile()
+            let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            let parameter = try #require(program.behavior.actions.first?.bindings.first?.binder)
+            let name = try #require(compilation.bindings.binderName(parameter))
+            #expect(name == expected)
+            #expect(program.binderNames[parameter] == name)
+            let api = try GeneratedMachineAPI(layout: program.layout, actions: program.behavior.actions)
+            #expect(api.actions.first?.bindings.first?.swiftIdentifier == sourceName)
+            #expect(api.actions.first?.bindings.first?.isPublic == true)
+            let runtime = CompiledRuntime(compilation: compilation)
+            let initial = try #require(try runtime.initialStates().first)
+            let count = try #require(compilation.layout.testVariableID(named: "count"))
+            #expect(Set(try runtime.successors(from: initial).map { try $0.state.value(for: count) })
+                == [.integer(1), .integer(2)])
+            var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "BindingNames", program: program))
+            let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
+            #expect(generated.contains("_\(name)_\(parameter.ordinal)"))
+        }
     }
 
     @Test("Record construction preserves field names across execution and rendering")
