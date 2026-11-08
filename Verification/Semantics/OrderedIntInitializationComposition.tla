@@ -603,9 +603,17 @@ THEOREM IntegerSetConstructorSuppliesEveryTypedInitialState ==
         <2>. QED BY <2>2, <2>4 DEF GeneratedIntDomainInitialLeaf, GeneratedTypedInitialLeaf
     <1>3. GeneratedIntDomainInitialLeaf(prior, target, SourceDomain(Int))
             = GeneratedIntegerSetInitialLeaf(prior, target)
-        BY <1>1, SMT DEF GeneratedIntDomainInitialLeaf, GeneratedTypedInitialLeaf,
-            TypedInitializerOutcome, SourceDomain, GeneratedIntegerSetInitialLeaf,
-            IntInitializationDomains
+        PROOF
+        <2>1. TypedInitializerOutcome(SwiftIntMin..SwiftIntMax, SourceDomain(Int))
+                = SourceDomain(SwiftIntMin..SwiftIntMax)
+            BY SMT DEF TypedInitializerOutcome, SourceDomain, IntInitializationDomains
+        <2>2. GeneratedIntDomainInitialLeaf(prior, target, SourceDomain(Int))
+                = GeneratedInitialLeaf(prior, target, SourceDomain(SwiftIntMin..SwiftIntMax))
+            BY <2>1, SMT DEF GeneratedIntDomainInitialLeaf, GeneratedTypedInitialLeaf
+        <2>3. GeneratedIntegerSetInitialLeaf(prior, target)
+                = GeneratedInitialLeaf(prior, target, SourceDomain(SwiftIntMin..SwiftIntMax))
+            BY <1>1, SMT DEF GeneratedIntegerSetInitialLeaf, SourceDomain
+        <2>. QED BY <2>2, <2>3, SMT
     <1>4. SourceIntegerSetInitialLeaf(prior, target)
             = GeneratedIntegerSetInitialLeaf(prior, target)
         BY <1>1, <1>2, <1>3, SMT DEF SourceIntegerSetInitialLeaf

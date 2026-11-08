@@ -1420,3 +1420,19 @@ Only this plan changed afterward. No model/fixture type, checker/evaluator famil
 This removes measured emitted-name counterexamples; it is not a SANY/TLC execution, namespace soundness proof or hosted admission.
 Model-parameter keyword spellings, predefined symbols, explicit module contracts, value encodings and generic correspondence remain separate obligations.
 The ready-read theorem still requires its exact pinned result; every complete six-link row and whole-language preservation remain open.
+
+
+### Measured integer-set proof-body repair 8 November 2026
+
+Published `d98c0c5c` ordinary CI failed its pinned proof job.
+The complete source-bound diagnostic artifact reports one undischarged obligation out of 359 in `OrderedIntInitializationComposition`:
+`IntegerSetConstructorSuppliesEveryTypedInitialState`, step `<1>3`, line 606.
+The failing statement is inherited unchanged from `bac1d6cd` and lies outside the added ready-read block.
+The module failed; no checked ready-read result or candidate admission follows from the other obligations.
+
+The repair changes only that proof body. It makes the typed interval outcome and both generated-leaf substitutions explicit.
+The theorem statement, premises, existing definitions, ready-read block, prover settings, pins, budgets and timeouts remain unchanged.
+This repair is unverified until the exact revised module passes the pinned prover.
+Existing Swift/test bytes retain the separate 212-test local regression receipt; static checking cannot establish the mathematical result.
+The failure artifact, exact snapshots, tool receipts and log are bound in `/tmp/swifttla-d98c0c-admission/ordinary/math-current-failure-audit.json`.
+The remaining source/IR/backend and ordered-observation obligations, every complete six-link row and whole-language preservation stay open.
