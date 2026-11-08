@@ -128,6 +128,7 @@ struct SampledFairTemporalModel {
             advance
             stay
             WeakFairness(advance)
+            Constraint(value == 0)
             let EventuallyOne = Temporal()
             EventuallyOne(.eventually(value == 1))
             let sampled = Validation {}.checking(only: [EventuallyOne])

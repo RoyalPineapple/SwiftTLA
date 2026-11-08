@@ -4,7 +4,7 @@ import Testing
 
 @Suite(.serialized)
 struct LivenessCheckerTests {
-  @Test("fairness ignores changes outside its projection, including conditional properties", arguments: [false, true])
+  @Test("projected and supplied fairness enabledness survives conditional properties", arguments: [false, true])
   func projectedEnabledness(_ strong: Bool) throws {
     let transitions: [Int: [GraphEdge<Int, Int>]] = [
       0: [.init(source: 0, action: 1, target: 1)],
@@ -27,6 +27,14 @@ struct LivenessCheckerTests {
       fairness: [(scope: 1, isStrong: strong)], matches: { $0 == $1 },
       actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
     #expect(try wholeState.analyze(eventually, initialStates: [0], renderScope: { _ in "whole" }).status == .satisfied)
+    let supplied = LivenessChecker<Int, Int, Int>(states: [0], transitions: [0: []],
+      fairness: [(scope: 1, isStrong: strong)], matches: { $0 == $1 },
+      actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 }, enabledness: [1: [0: true]])
+    for property in [eventually, .conditional({ _, _ in true }, then: eventually, else: .always { _, _ in true })] {
+      let result = try supplied.analyze(property, initialStates: [0], renderScope: { _ in "supplied" })
+      #expect(result.status == .satisfied)
+      #expect(result.enabledActions == ["supplied": [0: true]])
+    }
   }
 
   @Test("projection-stuttering edges cannot discharge an enabled fairness obligation", arguments: [false, true])

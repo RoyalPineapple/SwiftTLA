@@ -67,7 +67,7 @@ extension NativeSwiftEmitter {
                 case \(index):
                     return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
                         checking: checking, stopOnViolation: stopOnViolation,
-                        stopOnReachability: stopOnReachability,
+                        stopOnReachability: stopOnReachability, fairness: fairness,
                         identity: { machine, level in \(identity) }, emit: emit)
                 """)
                 viewProjections.append("""
@@ -172,20 +172,22 @@ extension NativeSwiftEmitter {
             }
             public func runValidation(initialMachines: [Machine], maximumStates: \(nativeIntType), checking: ModelChecks<Property>,
                 stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
+                fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
                 emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
                 try runValidation(initialOutcomes: .init(states: initialMachines, failures: []),
                     maximumStates: maximumStates, checking: checking,
-                    stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability, emit: emit)
+                    stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
             }
             public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: \(nativeIntType),
                 checking: ModelChecks<Property>, stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
+                fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
                 emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
                 switch selectedView {
                 \(viewRuns.joined(separator: "\n"))
                 case nil:
                     return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
                         checking: checking, stopOnViolation: stopOnViolation,
-                        stopOnReachability: stopOnReachability, emit: emit)
+                        stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
                 default: throw ExplorationError.configurationMismatch
                 }
             }
@@ -250,12 +252,13 @@ func verifyOrderedIntValidationOutput(_ declarations: [DeclSyntax], model: Macro
         """), matches(actual("runValidation", firstParameter: "initialOutcomes"), expected: """
         public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: \(nativeIntType),
             checking: ModelChecks<Property>, stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
+            fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
             emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
             switch selectedView {
             case nil:
                 return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
                     checking: checking, stopOnViolation: stopOnViolation,
-                    stopOnReachability: stopOnReachability, emit: emit)
+                    stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
             default: throw ExplorationError.configurationMismatch
             }
         }

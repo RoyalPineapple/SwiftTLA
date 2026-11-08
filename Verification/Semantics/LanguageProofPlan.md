@@ -251,10 +251,12 @@ The proof dependencies above still govern proof closure; they do not block indep
   Ordinary typed strings already normalize. Raw enum-to-string views still cross into native equality, collections and snapshot identity with different semantics.
   Preserve explicit raw formal encodings and accepted source. A changed equality operator alone does not complete the boundary.
 
-- [ ] I5aj Preserve fairness enabledness before exploration constraints prune transitions.
-  Carry selected-scope enabledness from actual raw successor traversal through both retained graph routes and independent native validation into the existing kernel interface.
-  Preserve scope projections, source-selected profiles, stopping/failure channels and existing simulation behavior. Do not replay actions to reconstruct enabledness.
-  The source-traced findings and concrete caller review are retained in `.git/swifttla-proof-evidence/main-semantic-audit-2026-11-08/` in the primary checkout. Runtime baselines remain required.
+- [x] I5aj Carry raw fairness enabledness through constrained exploration and checking.
+  Actual successor traversal now retains selected-scope enabledness before pruning, through both graph routes, scenario dispatch and independent native validation. Conditional temporal checks retain the supplied data.
+  Complete graphs retain fairness for later refinement queries; requested query errors keep their original error, decisive safety/model failures keep priority, and incomplete summaries expose no complete fairness data. No action replay reconstructs enabledness.
+  The published-producer baseline reported wrong verdicts in both graph APIs; the existing kernel owner separately exposed dropped conditional enabledness. Review reproduced and corrected a delayed-refinement regression before publication.
+  The final guarded run passed 139 tests in sixteen suites with all 1201 captured inputs exact. Receipts are in `.git/swifttla-proof-evidence/constraint-fairness-enabledness-2026-11-08/` in the primary checkout.
+  Handwritten scenario overrides must accept and forward the new fairness parameter. Projection meaning/evaluation, view quotient adequacy, record/string identity and source/TLA/kernel correspondence remain open; this wiring repair completes no six-link proof row.
 
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
@@ -1780,6 +1782,6 @@ Inputs, both failed baselines, whole logs and reviews are retained in `.git/swif
 
 Unknown or unhandled predicates remain accepted and can still assemble incorrect registrations.
 Contextual types, overload binding, other scalar spellings, effects, traps and complete source/builder/output interpretation remain owned boundaries.
-The source-traced main audit adds the separate unchecked I5ah–I5aj repairs. No audited defect is claimed fixed by the filter work.
+These filter receipts do not address the separate I5ah–I5aj findings from the source-traced main audit.
 No new evaluator, checker, nominal fixture/model, dependency, pin, corpus, resource limit or source rejection was added.
 Mathematical TLA sources and the protected language checklist remain unchanged. These are implementation regression receipts; all six-link rows and universal preservation remain open.

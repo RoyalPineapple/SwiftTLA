@@ -76,8 +76,21 @@ struct NativeRefinementCheckingTests {
 
     @Test("concrete fairness establishes abstract progress")
     func acceptsFairRefinement() throws {
-        let graph = try ReachabilityGraph(initialMachines: FairConcreteRefinement.initialMachines(), maximumStates: 3)
+        let initial = try FairConcreteRefinement.initialMachines()
+        let graph = try ReachabilityGraph(initialMachines: initial, maximumStates: 3)
         #expect(graph.refinementFailures.isEmpty)
+        var deferred = try ReachabilityGraph(initialMachines: initial, maximumStates: 3,
+            checking: .init(properties: [], checkDeadlock: false))
+        let machine = try #require(initial.first)
+        let failures = try machine.refinementFailures(in: &deferred, checking: [.Refines])
+        #expect(failures.isEmpty)
+        var failedQuery = try ReachabilityGraph(initialMachines: initial, maximumStates: 3,
+            checking: .init(properties: [], checkDeadlock: false), behavior: .specification,
+            fairness: [(name: "Next", isStrong: false, matches: { _ in true },
+                        changes: { _, _ in throw NativeMachineEvaluationError.noMatchingCase })])
+        #expect(throws: NativeMachineEvaluationError.noMatchingCase) {
+            _ = try machine.refinementFailures(in: &failedQuery, checking: [.Refines])
+        }
     }
 
     @Test("abstract enabledness includes successors missing from the concrete graph")

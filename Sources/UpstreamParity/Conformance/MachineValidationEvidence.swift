@@ -38,7 +38,9 @@ package enum MachineValidationEvidence {
         scenario: Scenario, initialMachines: [Scenario.Machine], caseID: String,
         maximumStates: Int, stopOnViolation: Bool,
         stopOnReachability: Bool = false,
-        checking: ModelChecks<Scenario.Property>? = nil, to output: URL,
+        checking: ModelChecks<Scenario.Property>? = nil,
+        fairness: [MachineFairnessCondition<Scenario.Machine.Snapshot, Scenario.Machine.Action>] = [],
+        to output: URL,
         observe: ((MachineValidationEvent<Scenario.Machine>) throws -> Void)? = nil
     ) throws -> MachineValidationSummary<Scenario.Property> {
         let startedAt = DispatchTime.now().uptimeNanoseconds
@@ -110,7 +112,7 @@ package enum MachineValidationEvidence {
         let result = try scenario.runValidation(initialMachines: initialMachines,
             maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability
+            stopOnReachability: stopOnReachability, fairness: fairness
         ) { event in
             switch event {
             case .state(let id, let snapshot, let isInitial, let predecessor, _):

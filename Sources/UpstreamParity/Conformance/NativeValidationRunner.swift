@@ -93,6 +93,12 @@ package enum NativeValidationRunner {
             throw NativeValidationRunnerError.unavailable("decisive mode requires one selected safety check")
         }
         let needsGraph = !scenario.checking.properties.intersection(temporal.union(refinement)).isEmpty
+        var fairness: [MachineFairnessCondition<Scenario.Machine.Snapshot, Scenario.Machine.Action>] = []
+        var fairnessFailure: (any Error)?
+        if needsGraph && scenario.behavior == .specification {
+            do { fairness = try scenario.fairnessConditions(on: first) }
+            catch { fairnessFailure = error }
+        }
         var capture = MachineValidationGraphCapture<Scenario.Machine>()
         let observe: ((MachineValidationEvent<Scenario.Machine>) throws -> Void)? = needsGraph ? { event in
             try capture.observe(event)
@@ -103,6 +109,7 @@ package enum NativeValidationRunner {
             maximumStates: maximumStates, stopOnViolation: decisive,
             stopOnReachability: decisive,
             checking: .init(properties: safety, checkDeadlock: scenario.checking.checkDeadlock),
+            fairness: fairness,
             to: directory.appendingPathComponent("machine.bin.gz"), observe: observe)
         switch (scenario.checkingMode, batch.completion) {
         case (.exhaustive, .exhausted),
@@ -118,10 +125,12 @@ package enum NativeValidationRunner {
         var temporalResults: [Scenario.Property: TemporalAnalysis<Scenario.Machine.Snapshot, Scenario.Machine.Action?>] = [:]
         var refinementFailures: [Scenario.Property: RefinementFailure<Scenario.Machine.Snapshot, Scenario.Machine.Action>] = [:]
         if needsGraph {
-            let fairness = scenario.behavior == .specification
-                ? try scenario.fairnessConditions(on: first) : []
+            if let fairnessFailure { throw fairnessFailure }
+            guard let enabledness = batch.fairnessEnabledness else {
+                throw NativeValidationRunnerError.unavailable("fairness enabledness")
+            }
             var complete = try MachineValidationGraph(machine: first, capture: capture,
-                behavior: scenario.behavior, fairness: fairness)
+                behavior: scenario.behavior, fairness: fairness, enabledness: enabledness)
             temporalResults = try complete.temporalResults(checking: scenario.checking.properties)
             refinementFailures = try first.validationRefinementFailures(
                 in: &complete, checking: scenario.checking.properties)

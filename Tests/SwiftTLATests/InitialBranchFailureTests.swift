@@ -442,6 +442,7 @@ struct InitialBranchFailureTests {
         #expect(!emitted)
         #expect(result.initialStates == 0 && result.states == 0 && result.edges == 0)
         #expect(result.firstEvaluationFailure == .integerOverflow(.addition, operands: [3, Int.max]))
+        #expect(result.fairnessEnabledness == nil)
         #expect(result.completion == .evaluationFailure(.integerOverflow(.addition,
             operands: [3, Int.max])))
     }
