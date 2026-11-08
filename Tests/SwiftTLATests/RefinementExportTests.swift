@@ -4,11 +4,14 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct RefinementExportTests {
-    @Test("imported concrete constants and model values receive explicit substitutions")
-    func bindsImportedConstants() throws {
+    @Test("imported concrete constants and model values receive explicit substitutions", arguments: [
+        ("ConcreteConstants", "v_1"), ("v_1", "v_1_1")
+    ])
+    func bindsImportedConstants(rootName: String, expectedImport: String) throws {
         enum Step: String, CaseIterable { case stay }
         let value = Var<Int>("value")
         let abstract = TLASpec("AbstractConstants") {
+            Import(TLASpec("_1") {})
             Constant("Limit", -2)
             Constant("Marker", TLAValue.constant("Token"))
             Variable(value, 0)
@@ -22,7 +25,7 @@ struct RefinementExportTests {
         #expect(direct.tla.contains("\(limitDefinition) == -2\n"))
         #expect(!direct.cfg.contains("CONSTANT Limit ="))
         let instance = Instance("Abstract", of: abstract)
-        let source = TLASpec("ConcreteConstants") {
+        let source = TLASpec(rootName) {
             Algorithm("Loop", scoped: { scope in
                 let state = scope.sharedVar(_name: "value", initial: 0)
                 While(Step.stay, true) { Assign(state, to: state) }
@@ -32,6 +35,9 @@ struct RefinementExportTests {
         }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: source.compile()))
         let module = try program.renderModule()
+        #expect(module.imports.contains { $0.name == expectedImport })
+        let imported = try #require(module.imports.first { $0.name == "\(rootName)__Refinement0" })
+        #expect(imported.tla.contains("EXTENDS Integers, FiniteSets, Sequences, \(expectedImport)\n"))
         #expect(module.renderedModuleSource.contains("CONSTANTS Token\n"))
         #expect(module.renderedModuleSource.contains("Limit <- -2"))
         #expect(module.renderedModuleSource.contains("Marker <- Token"))
@@ -40,7 +46,7 @@ struct RefinementExportTests {
         #expect(try #require(module.imports.first).tla.contains("CONSTANTS Limit, Marker, Token\n"))
         let plusCal = try #require(try program.renderAuthoredPlusCal(declarations: module))
         #expect(plusCal.contains("CONSTANTS Token\n"))
-        #expect(plusCal.contains("Abstract == INSTANCE ConcreteConstants__Refinement0"))
+        #expect(plusCal.contains("Abstract == INSTANCE \(rootName)__Refinement0"))
         #expect(plusCal.contains("Limit <- -2"))
         #expect(plusCal.contains("Marker <- Token"))
         #expect(plusCal.contains("Token <- Token"))

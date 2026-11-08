@@ -19,7 +19,7 @@ private struct ImportedFormalModuleGeneratedModel {
   enum Step: String, CaseIterable { case keep }
 
   static var spec: TLASpec {
-    #spec("ImportedFormalModuleGeneratedModel") {
+    #spec("WF_ImportedFormalModuleGeneratedModel") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2))
       let importedFormalModuleGeneratedModel = Algorithm(label: "ImportedFormalModuleGeneratedModel", scoped: { scope in
         let value = scope.sharedVar(_name: "value", initial: 0)
@@ -94,12 +94,42 @@ struct TLAModuleBundleTests {
     }
   }
 
-  @Test("#spec compilation preserves its imported module")
-  func compiledSpecRetainsImportedModule() throws {
-    let bundle = try ImportedFormalModuleGeneratedModel.spec.compile().render().tlaBundle
-
-    #expect(bundle.imports.map(\.name) == ["ZSequences"])
-    #expect(try #require(bundle.root.cfg).contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
+  @Test("#spec compilation preserves source identity and legal module-file names", arguments: [
+    ("ImportedFormalModuleGeneratedModel", "ImportedFormalModuleGeneratedModel"),
+    ("WF_Import", "_WF_Import_1"), ("SF_Import", "_SF_Import"), ("_1", "v_1"), ("Sequences", "Sequences_1")
+  ])
+  func compiledSpecRetainsImportedModule(name: String, expected: String) throws {
+    if name == "ImportedFormalModuleGeneratedModel" {
+      #expect(try ImportedFormalModuleGeneratedModel.spec.compile().description.name == "WF_ImportedFormalModuleGeneratedModel")
+      let generated = try ImportedFormalModuleGeneratedModel.render()
+      #expect(generated.tlaBundle.root.name == "_WF_ImportedFormalModuleGeneratedModel")
+      #expect(generated.tlaBundle.root.tla.hasPrefix("---- MODULE _WF_ImportedFormalModuleGeneratedModel ----\n"))
+    }
+    var source = ImportedFormalModuleGeneratedModel.spec
+    source.name = name
+    if name == "WF_Import" { source.imports.append(TLASpec("_WF_Import") {}) }
+    let compilation = try source.compile()
+    #expect(compilation.description.name == name)
+    let rendered = try compilation.render()
+    let imports = name == "WF_Import" ? ["ZSequences", "_WF_Import"] : ["ZSequences"]
+    for bundle in [rendered.tlaBundle, try rendered.plusCalBundle()] {
+      #expect(bundle.root.name == expected)
+      #expect(bundle.root.tla.hasPrefix("---- MODULE \(expected) ----\n"))
+      #expect(bundle.imports.map(\.name) == imports)
+      #expect(try #require(bundle.root.cfg).contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
+      let extendsLine = try #require(bundle.root.tla.split(whereSeparator: \.isNewline).first { $0.hasPrefix("EXTENDS ") })
+      let modules = extendsLine.dropFirst("EXTENDS ".count).split(separator: ",")
+        .map { $0.trimmingCharacters(in: .whitespaces) }
+      #expect(modules.contains("Sequences"))
+      if name == "Sequences" { #expect(!modules.contains(expected)) }
+      try bundle.validateDeclaredClosure()
+    }
+    let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+    #expect(program.moduleName == name)
+    let module = try program.renderModule()
+    #expect(module.renderedModuleSource.hasPrefix("---- MODULE \(expected) ----\n"))
+    #expect(try #require(try program.renderAuthoredPlusCal(declarations: module))
+      .hasPrefix("---- MODULE \(expected) ----\n"))
   }
 
   @Test("the parser records imports for builder fidelity")
@@ -291,9 +321,12 @@ struct TLAModuleBundleTests {
     #expect(try CompiledRuntime(compilation: ordinarySet.compile()).initialStates().count == 2)
   }
 
-  @Test("an import remains a source dependency and links its operators during compilation")
-  func importedOperatorIsBundledAndExecutable() throws {
-    let arithmetic = TLASpec("FormalArithmetic") {
+  @Test("an import retains source identity while allocating legal file and dependency names", arguments: [
+    ("FormalArithmetic", "FormalArithmetic"), ("WF_Arithmetic", "_WF_Arithmetic"),
+    ("SF_Arithmetic", "_SF_Arithmetic"), ("_1", "v_1"), ("Sequences", "Sequences_1")
+  ])
+  func importedOperatorIsBundledAndExecutable(name: String, expected: String) throws {
+    let arithmetic = TLASpec(name) {
       DefineRecursive("Twice", params: ["value"]) {
         StateExpr.variable("value") * 2
       }
@@ -307,11 +340,15 @@ struct TLAModuleBundleTests {
       }
     }
 
-    #expect(try consumer.compile().render().tlaBundle.tla.contains("EXTENDS Integers, FiniteSets, Sequences, FormalArithmetic"))
-    #expect(!(try consumer.compile().render().tlaBundle.tla.contains("Twice(value) ==")))
-    let bundle = try consumer.compile().render().tlaBundle
-    #expect(bundle.imports.map { $0.name } == ["FormalArithmetic"])
+    let compilation = try consumer.compile()
+    #expect(compilation.description.imports.map(\.name) == [name])
+    let bundle = try compilation.render().tlaBundle
+    #expect(bundle.tla.contains("EXTENDS Integers, FiniteSets, Sequences, \(expected)"))
+    #expect(!bundle.tla.contains("Twice(value) =="))
+    #expect(bundle.imports.map(\.name) == [expected])
+    #expect(try #require(bundle.imports.first).tla.hasPrefix("---- MODULE \(expected) ----\n"))
     #expect(bundle.imports.first?.tla.contains("Twice(") == true)
+    try bundle.validateDeclaredClosure()
     let exploration = try ModelChecker(compilation: consumer.compile(), configuration: .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).explore()
     #expect(exploration.isComplete)
     #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])

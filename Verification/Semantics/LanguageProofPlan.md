@@ -190,6 +190,12 @@ The proof dependencies above still govern proof closure; they do not block indep
   Existing owners reproduced naming, output-guard and lexical-capture failures. The guarded repair passed 207 tests in fourteen suites, including the external consumer contract.
   Module names, generated-instance contracts, raw values and general namespace/source/backend interpretation remain open. This closes no complete six-link proof row.
 
+- [x] I5aa Allocate module-file names consistently across headers, references and export metadata.
+  Reuse the existing stem and freshness allocator for root and imported user modules, reserving standard module names and enclosing refinement files.
+  Preserve public source names, compilation identity and structural provenance paths. Carry physical names through TLA, authored PlusCal, generated Swift exports, configuration references and ownership/dependency records.
+  Existing owners reproduced prefix, letterless, standard-name and nested import collisions. The guarded repair passed 206 tests in fourteen suites, including the external generated Swift consumer contract.
+  This is implementation evidence. General namespace soundness, generated/opaque module contracts, raw values, SANY interpretation and all complete six-link proof rows remain open.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1517,3 +1523,26 @@ Inputs, baselines, logs and reviews are retained in `.git/swifttla-proof-evidenc
 These local results establish the measured implementation repair. General namespace soundness and SANY interpretation remain separate owned boundaries.
 Module names, generated-instance contracts and raw-value encoding remain separate owned boundaries.
 All mathematical source bytes remain unchanged. Source/IR/backend interpretation, complete ordered observations and whole-language preservation remain open.
+
+### Module-file naming checkpoint 8 November 2026
+
+Accepted module names with `WF_` or `SF_` prefixes, letterless names and names shared with standard modules reached inconsistent file, header and reference output.
+The existing owners reproduced 38 naming failures across two tests on unchanged `547fff13` production.
+A separate nested-import baseline reproduced four naming failures in one test with two argument cases.
+Source identities, ordinary names, native imported execution, configuration and closure controls passed.
+The earlier 27-issue baseline overlaps the 38-issue run; these are not additive coverage totals.
+A test setup error and the first repair's scope error each executed zero tests and supply no rejection credit.
+
+The existing module allocator now assigns physical root and user-import names while retaining source names and identities.
+Standard library references keep their canonical names. Enclosing and earlier refinement module files constrain child allocation.
+Direct TLA, authored PlusCal, actual generated Swift export metadata, configuration forwarding and bundle provenance consume the returned physical names.
+The repair uses three existing producer files and two existing test owners, with no new fixture type, checker, evaluator or public API.
+
+The guarded repair passed 206 tests in fourteen suites after a 1476.23-second build and 212.910-second execution.
+All 1201 captured inputs remained exact. Only this plan changed after that run.
+The complete 128815-byte log has SHA256 `d380f7e422cbd49422eee94a355e50b106ea7ccc2b415565947f8c4082c305eb`.
+Inputs, baselines, logs and review receipts are retained in `.git/swifttla-proof-evidence/module-file-names-2026-11-08/` in the primary checkout.
+This establishes the measured implementation repair, without SANY execution or a general namespace theorem.
+All mathematical source bytes and the protected language checklist remain unchanged.
+Generated/opaque module contracts, raw values, source/IR/backend interpretation and complete ordered observations remain open.
+No new hosted admission or whole-language preservation follows from this local result.

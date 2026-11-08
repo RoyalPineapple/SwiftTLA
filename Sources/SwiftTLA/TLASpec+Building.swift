@@ -328,9 +328,13 @@ extension CompiledModuleMetadata {
       + (declarations.actionConstraint.map { [$0] } ?? [])
       + renderedProperties
       + (try authoredPlusCalSymmetry(layout: layout, parameterNames: parameterNames))
+    var metadata = self
+    metadata.name = declarations.moduleName
+    // Standard modules keep their canonical names; only user imports use the allocation map.
+    metadata.imports = imports.map { declarations.moduleNames[$0] ?? $0 }
     let module = AuthoredPlusCalModule(
-      name: name,
-      extendsModules: authoredPlusCalExtends + requiredModules.map(\.rawValue).sorted().filter { !authoredPlusCalExtends.contains($0) },
+      name: metadata.name,
+      extendsModules: metadata.authoredPlusCalExtends + requiredModules.map(\.rawValue).sorted().filter { !metadata.authoredPlusCalExtends.contains($0) },
       constants: constantDeclaration(including: parameterNames).map { [$0] } ?? [],
       preludeDeclarations: prelude,
       algorithm: plusCalAlgorithm,

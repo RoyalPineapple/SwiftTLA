@@ -131,6 +131,8 @@ package struct RenderedModule: Sendable, Equatable {
     package var imports: [TLAModuleFile] = []
     package var importedOwnership: [TLAModuleBundle.OwnershipEntry] = []
     package var dependencies: [TLAModuleBundle.ModuleDependency] = []
+    package let moduleName: String
+    let moduleNames: [String: String]
     package let renderedModuleSource: String
     package let constantValues: [ConstantDecl]
     let evaluationFailureDeclarations: [String]
@@ -310,14 +312,25 @@ struct CompiledModuleImports: Sendable {
         return selected
     }
 
-    fileprivate func names(for directImports: [String], namespace: String?, configured: Bool) -> [String: String] {
+    fileprivate func names(for directImports: [String], rootName: String,
+        namespace: Bool, configured: Bool, reserving reservedNames: Set<String>) -> [String: String] {
         let selected = selectedNames(directImports)
         let needsNamespace = configured || modules.contains {
             selected.contains($0.metadata.name) && !$0.semantics.formalModuleReplacements.isEmpty
         }
-        return Dictionary(uniqueKeysWithValues: selected.sorted().enumerated().map { offset, name in
-            (name, needsNamespace ? namespace.map { "\($0)__Import\(offset)" } ?? name : name)
-        })
+        let standardNames = Set(StandardModule.allCases.map(\.rawValue))
+        var occupied = Set(modules.map { $0.metadata.name }).union(standardNames).union(reservedNames)
+        let formalRoot = StateExpr.freshBoundName(tlaDeclarationStem(rootName), avoiding: occupied)
+        occupied.insert(formalRoot)
+        var names = [root: formalRoot]
+        for (offset, name) in selected.sorted().enumerated() {
+            let preferred = needsNamespace && namespace ? "\(formalRoot)__Import\(offset)" : tlaDeclarationStem(name)
+            let formalName = preferred == name && !standardNames.contains(name)
+                ? name : StateExpr.freshBoundName(preferred, avoiding: occupied)
+            occupied.insert(formalName)
+            names[name] = formalName
+        }
+        return names
     }
 
     fileprivate func replacements(for directImports: [String], moduleNames: [String: String]) -> [TLCModuleReplacement] {
@@ -381,26 +394,39 @@ public struct CompiledSpecification: Sendable {
                 nextSafeAction: "Render through the generated model's typed export.")
         }
         let metadata = module.metadata
-        let rootModule = try metadata.renderModule(module)
+        let moduleNames = moduleImports.names(for: imports.map { $0.metadata.name },
+            rootName: metadata.name, namespace: false, configured: false, reserving: [])
+        let rootModule = try metadata.renderModule(module, moduleNames: moduleNames)
         guard rootModule.symbolicActions.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
                 path: "export.\(metadata.name).actions",
                 expected: "configured action invocation metadata", actual: "symbolic action domains",
                 nextSafeAction: "Export through the generated model with its typed configuration.")
         }
+        guard case .compiled(let identity, let ownership, let dependencies) = provenance else {
+            preconditionFailure("Compiler-owned modules require compiled provenance")
+        }
+        let renderedProvenance = TLAModuleBundle.Provenance.compiled(identity: identity,
+            ownership: ownership.map {
+                .init(moduleName: moduleNames[$0.moduleName] ?? $0.moduleName,
+                    owningRoot: moduleNames[$0.owningRoot] ?? $0.owningRoot, structuralPath: $0.structuralPath)
+            }, dependencies: dependencies.map {
+                .init(importingModule: moduleNames[$0.importingModule] ?? $0.importingModule,
+                    importedModule: moduleNames[$0.importedModule] ?? $0.importedModule, structuralPath: $0.structuralPath)
+            })
         let renderedBundle = TLAModuleBundle(
-            root: .init(name: metadata.name, tla: rootModule.renderedModuleSource, cfg: try rootModule.configuration.render(usesSymmetryReduction: false)),
+            root: .init(name: rootModule.moduleName, tla: rootModule.renderedModuleSource, cfg: try rootModule.configuration.render(usesSymmetryReduction: false)),
             imports: try imports.map { imported in
-                let plan = try imported.metadata.renderModule(imported)
-                return .init(name: imported.metadata.name, tla: plan.renderedModuleSource, cfg: nil)
+                let plan = try imported.metadata.renderModule(imported, moduleNames: moduleNames)
+                return .init(name: plan.moduleName, tla: plan.renderedModuleSource, cfg: nil)
             },
-            provenance: provenance
+            provenance: renderedProvenance
         )
         try renderedBundle.validateDeclaredClosure()
-        let renderer = CompiledTLARenderer(moduleName: metadata.name,
+        let renderer = CompiledTLARenderer(moduleName: rootModule.moduleName,
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)).union(metadata.formalParameters.map(\.name)),
             layout: module.layout, bindings: module.bindings,
-            operators: module.semantics.operators, actions: module.semantics.behavior.actions, functions: [],
+            operators: module.semantics.operators, actions: module.semantics.behavior.actions, functions: [], moduleNames: moduleNames,
             parameterDomains: module.semantics.behavior.parameterDomains)
         let algorithm = try module.authoredAlgorithm.map { authored in
             try metadata.authoredPlusCalModule(
@@ -411,10 +437,10 @@ public struct CompiledSpecification: Sendable {
         }
         let plusCalBundle = try algorithm.map { algorithm in
             let bundle = TLAModuleBundle(
-                root: .init(name: metadata.name,
+                root: .init(name: rootModule.moduleName,
                     tla: try AlgorithmPlusCalRenderer(module: algorithm, formalRenderer: renderer).render(),
                     cfg: renderedBundle.root.cfg),
-                imports: renderedBundle.imports, provenance: provenance
+                imports: renderedBundle.imports, provenance: renderedProvenance
             )
             try bundle.validateDeclaredClosure()
             return bundle
@@ -2261,10 +2287,11 @@ extension CompiledProgram {
         }
         var metadata = moduleMetadata
         metadata.modelValueNames = exportedModelValueNames
-        let renderer = CompiledTLARenderer(moduleName: metadata.name,
+        let renderer = CompiledTLARenderer(moduleName: declarations.moduleName,
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions, enums: enums, parameterDomains: behavior.parameterDomains)
+            actions: behavior.actions, functions: functions, enums: enums, moduleNames: declarations.moduleNames,
+            parameterDomains: behavior.parameterDomains)
         let constants = metadata.constants.sorted { $0.name < $1.name }.map { "ASSUME \($0.name) = \($0.value)" }
         let prelude = try constants + renderer.resolvedFunctionDefinitions()
             + formalModuleReplacements.map(renderer.formalModuleReplacement) + renderer.assumptions(behavior)
@@ -2286,14 +2313,17 @@ extension CompiledProgram {
     }
 
     package func renderModule() throws -> RenderedModule {
-        try renderModule(named: moduleName, owningRoot: moduleName, structuralPath: [])
+        try renderModule(named: moduleName, owningRoot: moduleName, structuralPath: [], reserving: [])
     }
 
     package func renderGeneratedModelValue(_ value: CompiledStateQuery) throws -> String {
-        let renderer = CompiledTLARenderer(moduleName: moduleName,
+        let moduleNames = moduleImports.names(for: moduleMetadata.imports,
+            rootName: moduleName, namespace: false, configured: !formalModuleReplacements.isEmpty, reserving: [])
+        let renderer = CompiledTLARenderer(moduleName: moduleNames[moduleMetadata.name]!,
             reservedNames: exportedModelValueNames.union(moduleMetadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions, enums: enums, parameterDomains: behavior.parameterDomains)
+            actions: behavior.actions, functions: functions, enums: enums, moduleNames: moduleNames,
+            parameterDomains: behavior.parameterDomains)
         return try renderer.state(value.expression)
     }
 
@@ -2304,7 +2334,8 @@ extension CompiledProgram {
         }
     }
 
-    private func renderModule(named name: String, owningRoot: String, structuralPath: [String]) throws -> RenderedModule {
+    private func renderModule(named name: String, owningRoot: String, structuralPath: [String],
+        reserving reservedModuleNames: Set<String>) throws -> RenderedModule {
         guard moduleMetadata.formalParameters.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
                 path: "export.\(moduleMetadata.name)", expected: "a resolved standalone module",
@@ -2312,9 +2343,12 @@ extension CompiledProgram {
                 nextSafeAction: "Resolve the complete module closure before typed export.")
         }
         var metadata = moduleMetadata
-        metadata.name = name
         let moduleNames = moduleImports.names(for: metadata.imports,
-            namespace: structuralPath.isEmpty ? nil : name, configured: !formalModuleReplacements.isEmpty)
+            rootName: name, namespace: !structuralPath.isEmpty, configured: !formalModuleReplacements.isEmpty,
+            reserving: reservedModuleNames)
+        metadata.name = moduleNames[moduleMetadata.name]!
+        let renderedName = metadata.name
+        let renderedOwner = structuralPath.isEmpty ? renderedName : owningRoot
         var replacements = formalModuleReplacements.map { $0.configuration(moduleNames: moduleNames) }
             + moduleImports.replacements(for: metadata.imports, moduleNames: moduleNames)
         let modelValues = exportedModelValueNames
@@ -2336,15 +2370,18 @@ extension CompiledProgram {
             }
         }
         metadata.modelValueNames = modelValues
-        let renderer = CompiledTLARenderer(moduleName: name,
+        let renderer = CompiledTLARenderer(moduleName: renderedName,
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions, enums: enums, parameterDomains: behavior.parameterDomains)
+            actions: behavior.actions, functions: functions, enums: enums, moduleNames: moduleNames,
+            parameterDomains: behavior.parameterDomains)
         var imports: [TLAModuleFile] = []
         var ownership: [TLAModuleBundle.OwnershipEntry] = []
         var dependencies: [TLAModuleBundle.ModuleDependency] = []
         var instances: [String] = []
         var renderedRefinements: [String] = []
+        var nestedModuleNames = Set(moduleImports.modules.map { $0.metadata.name })
+            .union(moduleNames.values).union(reservedModuleNames)
         for refinement in refinements {
             guard let instance = layout.moduleInstances.first(where: { $0.id == refinement.instance }) else {
                 throw CompilationDiagnostic(code: .unresolvedRefinementInstance, stage: .rendering,
@@ -2356,9 +2393,12 @@ extension CompiledProgram {
                     path: "export.\(name).refinements.\(refinement.name)", expected: "a resolved specification target",
                     actual: "\(refinement.operator)", nextSafeAction: "Resolve the target behavior before typed export.")
             }
-            let importedName = "\(name)__Refinement\(instance.id.ordinal)"
+            let importedName = "\(renderedName)__Refinement\(instance.id.ordinal)"
             let path = structuralPath + [instance.namespace]
-            let abstract = try refinement.abstract.renderModule(named: importedName, owningRoot: owningRoot, structuralPath: path)
+            let abstract = try refinement.abstract.renderModule(named: importedName, owningRoot: renderedOwner,
+                structuralPath: path, reserving: nestedModuleNames)
+            nestedModuleNames.insert(abstract.moduleName)
+            nestedModuleNames.formUnion(abstract.imports.map(\.name))
             guard refinement.abstract.layout.variables.count == refinement.variableMappings.count else {
                 throw CompilationDiagnostic(code: .incompleteRefinementMapping, stage: .rendering,
                     path: "export.\(name).refinements.\(refinement.name)", expected: "one resolved mapping per abstract variable",
@@ -2382,19 +2422,19 @@ extension CompiledProgram {
             mappings += constants.map { "\($0.name) <- \($0.value)" }
             mappings += refinement.abstract.exportedModelValueNames.subtracting(constants.map(\.name)).sorted()
                 .map { "\($0) <- \($0)" }
-            instances.append("\(instance.formalName) == INSTANCE \(importedName)" + (mappings.isEmpty ? "" : " WITH " + mappings.joined(separator: ", ")))
+            instances.append("\(instance.formalName) == INSTANCE \(abstract.moduleName)" + (mappings.isEmpty ? "" : " WITH " + mappings.joined(separator: ", ")))
             for (offset, replacement) in abstract.moduleReplacements.enumerated() {
-                let forwarded = "\(importedName)__Configuration\(offset)"
+                let forwarded = "\(abstract.moduleName)__Configuration\(offset)"
                 instances.append("\(forwarded) == \(instance.formalName)!\(replacement.definitionName)")
                 replacements.append(.init(moduleName: replacement.moduleName,
                     operatorName: replacement.operatorName, definitionName: forwarded))
             }
             renderedRefinements.append("\(refinement.name) == \(instance.formalName)!Spec")
-            imports.append(.init(name: importedName, tla: abstract.renderedModuleSource))
+            imports.append(.init(name: abstract.moduleName, tla: abstract.renderedModuleSource))
             imports += abstract.imports
-            ownership.append(.init(moduleName: importedName, owningRoot: owningRoot, structuralPath: path))
+            ownership.append(.init(moduleName: abstract.moduleName, owningRoot: renderedOwner, structuralPath: path))
             ownership += abstract.importedOwnership
-            dependencies.append(.init(importingModule: name, importedModule: importedName, structuralPath: path))
+            dependencies.append(.init(importingModule: renderedName, importedModule: abstract.moduleName, structuralPath: path))
             dependencies += abstract.dependencies
         }
         var uniqueReplacements: [TLCModuleReplacement] = []
@@ -2427,7 +2467,7 @@ extension CompiledProgram {
         result.importedOwnership = ownership
         result.dependencies = dependencies
         try moduleImports.append(to: &result, directImports: metadata.imports, moduleNames: moduleNames,
-            rootName: name, owningRoot: owningRoot, structuralPath: structuralPath)
+            rootName: renderedName, owningRoot: renderedOwner, structuralPath: structuralPath)
         var uniqueImports: [TLAModuleFile] = []
         for imported in result.imports {
             if let existing = uniqueImports.first(where: { $0.name == imported.name }) {
@@ -2449,7 +2489,7 @@ extension CompiledProgram {
 }
 
 private extension CompiledModuleMetadata {
-    func renderModule(_ module: CompiledModule, moduleNames: [String: String] = [:]) throws -> RenderedModule {
+    func renderModule(_ module: CompiledModule, moduleNames: [String: String]) throws -> RenderedModule {
         var metadata = self
         metadata.name = moduleNames[name] ?? name
         metadata.imports = imports.map { moduleNames[$0] ?? $0 }
@@ -2615,6 +2655,7 @@ private extension CompiledModuleMetadata {
             evaluationInvariant: directOutput.evaluationInvariant,
             configuration: renderedConfiguration, renderer: renderer)
         return RenderedModule(
+            moduleName: name, moduleNames: renderer.moduleNames,
             renderedModuleSource: directOutput.source, constantValues: constants,
             evaluationFailureDeclarations: directOutput.evaluationFailureDeclarations,
             initialEvaluationFailure: directOutput.initialFailureAggregate,

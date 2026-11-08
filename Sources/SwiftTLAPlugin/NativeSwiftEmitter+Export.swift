@@ -119,7 +119,7 @@ extension NativeSwiftEmitter {
             body = """
             \(actionMetadata)
             \(obligationMetadata)
-            \(generatedLinks.isEmpty ? "let" : "var") _rendered = try RenderedSpecification(_generatedModule: \(String(reflecting: program.moduleName)),
+            \(generatedLinks.isEmpty ? "let" : "var") _rendered = try RenderedSpecification(_generatedModule: \(String(reflecting: module.moduleName)),
                 source: \(String(reflecting: module.renderedModuleSource)),
                 compilationIdentity: \(String(reflecting: program.identity.value)),
                 declarations: [\(declarations.joined(separator: ", "))],
