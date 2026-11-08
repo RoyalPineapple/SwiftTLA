@@ -132,7 +132,8 @@ struct CompiledLowerer {
         let parameterIDs = Set(layout.parameters.map(\.binder))
         for (binder, name) in binderNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
             where modelValueNames.contains(name) || importedDeclarations.contains(name)
-                || (parameterIDs.contains(binder) && reservedRenderedNames.contains(name)) {
+                || (parameterIDs.contains(binder)
+                    && (reservedRenderedNames.contains(name) || operatorReservations.contains(name))) {
             let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
             names[binder] = renamed
             unavailable.insert(renamed)

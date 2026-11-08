@@ -27,8 +27,11 @@ extension NativeSwiftEmitter {
         let displayNames = parameters.map {
             "\\Configuration.`\($0.reference.name)`: \(String(reflecting: $0.reference.displayLabel ?? $0.reference.name))"
         }.joined(separator: ",\n")
-        let formalNames = parameters.map {
-            "\\Configuration.`\($0.reference.name)`: .init(swiftName: \(String(reflecting: $0.reference.name)), formalName: \(String(reflecting: $0.reference.name)))"
+        let formalNames = try parameters.map { parameter in
+            guard let formalName = program.binderNames[parameter.binder] else {
+                throw unsupported("unresolved configuration parameter: \(parameter.reference.name)")
+            }
+            return "\\Configuration.`\(parameter.reference.name)`: .init(swiftName: \(String(reflecting: parameter.reference.name)), formalName: \(String(reflecting: formalName)))"
         }.joined(separator: ",\n")
         var body: [String] = []
         for parameter in parameters {

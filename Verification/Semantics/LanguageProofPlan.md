@@ -154,6 +154,10 @@ The proof dependencies above still govern proof closure; they do not block indep
   The existing renderer and checker retain supported value and membership-domain addition failures with site, operands and full before-prefix. Lazy domain branches preserve their valid sibling. The public compiled and resolved exports produce matching complete TLA modules for the existing domain variants.
   The final diagnostic passed 103 tests in six existing suites, including changed-input guards and actual event-loss rejections. Schema v5 prepares an emitted event-set theorem and an empty-set proof control; their execution requires separate evidence. Order, multiplicity, other failure kinds and generic correspondence remain open.
 
+- [x] I5t Keep runtime parameter constants distinct from generated declarations and project their actual formal names into generated configuration metadata.
+  Reuse the existing declaration reservations and binder IDs. Source parameter identities, Swift configuration fields and ordinary names remain unchanged.
+  The existing owner reproduced both generated-name collisions and stale metadata for allocated aliases. The repair passed 30 tests in eight existing suites, including external-consumer contracts. General namespace and source/backend correspondence remain open.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -1315,3 +1319,22 @@ These are implementation and regression results. They do not prove namespace or 
 Importer-only reserved symbols, constants/model values, opaque imports, typed explicit-library refinement export and general source/backend correspondence remain owned boundaries.
 Complete events, every complete six-link row, I5, I6 and the whole-language theorem remain open.
 Current hosted admission must be established separately for the final published revision.
+
+### Parameter export and metadata checkpoint 8 November 2026
+
+The existing parameter-resolution owner reproduced two boundaries on unchanged production:
+runtime parameters named `Init`, `Next` or `Spec` retained generated declaration names,
+and configuration field identities for allocated `limit` and `Len` aliases retained their source names.
+The final baseline executed one test with six cases and eight intended issues.
+The compiler now uses its existing generated-declaration reservations for runtime parameters;
+the configuration emitter obtains each formal name from the same resolved binder table as export.
+It preserves source references and Swift configuration fields and rejects missing formal bindings.
+
+The guarded repair passed 30 tests across eight existing suites, including configuration execution,
+PlusCal export, assumptions and external generated-refinement/parameter contracts.
+All 1201 captured inputs remained exact. Only this plan changed after execution.
+The complete 78616-byte log has SHA256 `7bfc96639bd8372c102b1e121f0036f618343cc359b38ef1bae585be62d05713`.
+Baselines, input hashes and review receipts are retained under
+`.git/swifttla-proof-evidence/parameter-generated-names-2026-11-07/` in the primary checkout.
+This is implementation and regression evidence. Namespace soundness, actual source/backend correspondence,
+every complete six-link row and whole-language preservation remain open; hosted admission is separate.
