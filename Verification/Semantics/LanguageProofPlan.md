@@ -142,7 +142,7 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5q Check Init, stuttering Next and the complete frame for emitted base and fairness-profile specifications.
   Apply to outputs with state or named actions. Keep whole-body equality when fairness is empty.
   Retain the existing action-call and configuration checks.
-  Nonempty fairness tails, checker soundness and reconstructed export-metadata correspondence remain open.
+  Projected, bound and mixed unsupported fairness tails, checker soundness and reconstructed export-metadata correspondence remain open. I5u checks the simple unprojected family.
 - [x] I5r Allocate formal operator names against owning-module standard exports and generated declarations, preserving source IDs through imports and qualified instances.
   The existing binding table carries resolved exported names; local operators and binders also reserve actual imported aliases.
   Existing owners cover direct and qualified calls, recursion, explicit refinement targets and a measured lexical capture.
@@ -157,6 +157,11 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [x] I5t Keep runtime parameter constants distinct from generated declarations and project their actual formal names into generated configuration metadata.
   Reuse the existing declaration reservations and binder IDs. Source parameter identities, Swift configuration fields and ordinary names remain unchanged.
   The existing owner reproduced both generated-name collisions and stale metadata for allocated aliases. The repair passed 30 tests in eight existing suites, including external-consumer contracts. General namespace and source/backend correspondence remain open.
+
+- [x] I5u Check complete unprojected fairness clauses for Next, unbound actions and unbound action groups.
+  When every clause in a base or profile specification has these forms, derive its strength, full frame, action identities and clause list directly from typed metadata.
+  Other lists retain the existing Init/Next/frame check only. The executed baseline accepted 30 changed clauses; the final existing-owner regression rejects them and passed 49 tests in seven suites.
+  This repairs an output-check gap. Generic fairness meaning, source/metadata correspondence and checker soundness remain open.
 
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
@@ -1342,3 +1347,23 @@ Baselines, input hashes and review receipts are retained under
 `.git/swifttla-proof-evidence/parameter-generated-names-2026-11-07/` in the primary checkout.
 This is implementation and regression evidence. Namespace soundness, actual source/backend correspondence,
 every complete six-link row and whole-language preservation remain open; hosted admission is separate.
+
+### Simple fairness output checkpoint 8 November 2026
+
+The unchanged checker accepted 30 altered clauses across weak and strong Next, action and action-group cases.
+The executed baseline compiled and ran one test; correct-output, unique-occurrence and changed-input controls passed.
+This measured output-guard acceptance, not an observed incorrect renderer result or checking verdict.
+The shared mandatory checker now derives the supported clauses from typed strength, layout action IDs and the complete state frame.
+It does not call the renderer to construct its expected fairness text.
+It compares the complete body only when every clause has a supported unprojected, unbound form.
+Projected, parameterized, each-action, expanded-call and mixed unsupported tails retain their earlier prefix check and remain open.
+
+The first diagnostic passed 50 tests in seven suites. Test-only consolidation then removed duplicate inline model setup
+and moved the same six cases and 30 corruptions into the existing resolved-action-name owner.
+The final guarded diagnostic passed 49 tests in seven suites; all 1201 captured inputs remained exact.
+Its complete 11696-byte log has SHA256 `a4dd7ca2a61f2e60cfd7e956b8708c11d6676c5e4d1e9c701907141dd085d319`.
+Only this plan changed afterward. Exact inputs, baseline, logs and review receipts are retained under
+`.git/swifttla-proof-evidence/simple-fairness-output-2026-11-08/` in the primary checkout.
+No fixture type, registered model, renderer, evaluator, checker family, dependency, pin, budget or timeout was added or changed.
+These are implementation and regression results. Fairness semantics, actual source/metadata interpretation,
+checker soundness, every complete six-link row, hosted admission and whole-language preservation remain open.

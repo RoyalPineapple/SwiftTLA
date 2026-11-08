@@ -108,9 +108,9 @@ struct CompiledSpecificationRendererTests {
         #expect(try renderer.state(empty) == "{}")
     }
 
-    @Test("Enabledness references use the resolved action declaration name")
+    @Test("Resolved action names reach enabledness, Next and simple fairness")
     func rendersResolvedActionNames() throws {
-        let compilation = try TLASpec(name: "ResolvedActionNames", variables: [
+        let spec = TLASpec(name: "ResolvedActionNames", variables: [
             .init(name: "count", initial: .int(0))
         ], actions: [
             .init(name: "advance-step", body: .unchanged(.named("count"))),
@@ -118,7 +118,8 @@ struct CompiledSpecificationRendererTests {
         ], invariants: [
             .init(name: "CanAdvance", body: .enabledAction("advance-step")),
             .init(name: "CanAlsoAdvance", body: .enabledAction("advance_step"))
-        ]).compile()
+        ])
+        let compilation = try spec.compile()
         let rendered = try compilation.render().tlaBundle.tla
         #expect(rendered.contains("advance_step =="))
         #expect(rendered.contains("advance_step__2 =="))
@@ -165,6 +166,43 @@ struct CompiledSpecificationRendererTests {
                 #expect(output.contains("CanAdvance == ENABLED \(actionName)\n"))
             } catch {
                 Issue.record("Valid action names \(names) failed their TLA export: \(error)")
+            }
+        }
+        let conditions: [FairnessCondition] = [
+            .weakFairnessNext, .strongFairnessNext,
+            .weakFairness("advance-step"), .strongFairness("advance-step"),
+            .weakFairnessActionGroup(["advance-step", "advance_step"]),
+            .strongFairnessActionGroup(["advance-step", "advance_step"]),
+        ]
+        for fairness in conditions {
+            var varied = spec
+            varied.fairness = [fairness]
+            let compilation = try varied.compile()
+            let module = try compilation.render().tlaBundle.tla
+            try StraightLineRenderedActionCheck.verifyFiniteInvocations(compilation.semantics.behavior,
+                layout: compilation.layout, binders: compilation.bindings.binders, module: module)
+            let prefix = "Spec ==\n  /\\ Init\n  /\\ [][Next]_count\n"
+            let parts = module.components(separatedBy: prefix)
+            try #require(parts.count == 2)
+            let clause = try #require(parts.last?.components(separatedBy: "\n\n").first)
+            try #require(!clause.contains("\n"))
+            try #require(clause.contains(fairness.isStrong ? "SF_" : "WF_"))
+            try #require(module.components(separatedBy: clause).count == 2)
+            for replacement in [
+                clause.replacingOccurrences(of: fairness.isStrong ? "SF_" : "WF_",
+                    with: fairness.isStrong ? "WF_" : "SF_"),
+                clause.replacingOccurrences(of: "_count", with: "_unownedFrame"),
+                "  /\\ TRUE", "", clause + "\n" + clause,
+            ] {
+                let changed = module.replacingOccurrences(of: clause, with: replacement)
+                try #require(changed != module)
+                do {
+                    try StraightLineRenderedActionCheck.verifyFiniteInvocations(compilation.semantics.behavior,
+                        layout: compilation.layout, binders: compilation.bindings.binders, module: changed)
+                    Issue.record("A changed fairness clause was accepted: \(fairness)")
+                } catch let diagnostic as CompilationDiagnostic {
+                    #expect(diagnostic.path == "tla.Spec")
+                }
             }
         }
     }

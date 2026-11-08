@@ -1480,19 +1480,42 @@ enum StraightLineRenderedActionCheck {
         let lines = module.components(separatedBy: "\n")
         let names = layout.variables.map(\.formalName)
         let frame = names.count == 1 ? names[0] : "<<\(names.joined(separator: ", "))>>"
-        let specifications = [("Spec", !behavior.fairness.isEmpty)]
-            + behavior.fairnessProfiles.map { ($0.operatorName, !$0.fairness.isEmpty) }
-        // shortcut: nonempty fairness tails stay unchecked, extend with independent fairness constructor rules.
-        for (name, hasFairness) in specifications {
-            let expected = ["\(name) ==", "  /\\ Init", "  /\\ [][Next]_\(frame)"]
+        func unboundActionName(_ id: ActionID) -> String? {
+            guard behavior.actions.indices.contains(id.ordinal), layout.actions.indices.contains(id.ordinal),
+                  behavior.actions[id.ordinal].bindings.isEmpty else { return nil }
+            return layout.actions[id.ordinal].renderedName
+        }
+        let specifications = [("Spec", behavior.fairness)]
+            + behavior.fairnessProfiles.map { ($0.operatorName, $0.fairness) }
+        // shortcut: projected and bound fairness tails still need independent constructor rules.
+        for (name, fairness) in specifications {
+            let prefix = ["\(name) ==", "  /\\ Init", "  /\\ [][Next]_\(frame)"]
+            let clauses = fairness.compactMap { condition -> String? in
+                guard condition.projection == nil else { return nil }
+                let action: String
+                switch condition.scope {
+                case .next: action = "Next"
+                case .action(let id):
+                    guard let name = unboundActionName(id) else { return nil }
+                    action = name
+                case .actionGroup(let ids):
+                    let names = ids.compactMap(unboundActionName)
+                    guard !names.isEmpty, names.count == ids.count else { return nil }
+                    action = "(" + names.joined(separator: " \\/ ") + ")"
+                default: return nil
+                }
+                return "  /\\ \(condition.isStrong ? "SF" : "WF")_\(frame)(\(action))"
+            }
+            let complete = clauses.count == fairness.count
+            let expected = prefix + clauses
             let starts = lines.indices.filter { lines[$0] == "\(name) ==" || lines[$0].hasPrefix("\(name) == ") }
             guard starts.count == 1, let start = starts.first, start + 1 < lines.count,
                   let end = lines[(start + 1)...].firstIndex(of: ""),
-                  lines[start..<end].starts(with: expected),
-                  hasFairness || Array(lines[start..<end]) == expected else {
+                  lines[start..<end].starts(with: prefix),
+                  !complete || Array(lines[start..<end]) == expected else {
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
-                    path: "tla.\(name)", expected: "the compiled Init, stuttering Next and complete state frame",
-                    actual: "the emitted \(name) changes its initial predicate, next relation or state frame",
+                    path: "tla.\(name)", expected: "the compiled Init, stuttering Next, complete state frame and checked fairness clauses",
+                    actual: "the emitted \(name) changes its behavior or a checked fairness clause",
                     nextSafeAction: "Report this TLA+ behavior emission failure.")
             }
         }
