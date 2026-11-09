@@ -317,8 +317,17 @@ The proof dependencies above still govern proof closure; they do not block indep
   Three baseline tests produced four intended output issues on committed `16b91ca6` producers. The actual source export retained both integer arms and its fallback; native priority and the existing five-state graph passed.
   The repair passed 177 tests in nineteen suites, including the external typed client. Eighty distinct control/import tests in seven more suites passed on the same 1201 input bytes.
   Receipts are in `.git/swifttla-proof-evidence/ordered-case-export-2026-11-09/` in the primary checkout.
-  Two earlier fixture compile failures executed no tests. A separate executed witness exposed silently dropped inferred `Expr(...)` case operands; that decoder route and raw record `.count` decoding remain open.
+  Two earlier fixture compile failures executed no tests. A separate executed witness exposed silently dropped inferred `Expr(...)` case operands. I5al repairs the known scalar route; other decoder routes and raw record `.count` decoding remain open.
   Under the ordered Core contract, the output now uses explicit selection. Source/IR interpretation, complete no-match/failure observations, imported CASE meaning, parser resources and checker kernels still require correspondence results. No complete six-link proof row follows.
+
+- [x] I5al Preserve inferred scalar `Expr(...)` operands during source decoding.
+  The shared wrapper decoder now recognizes inferred and explicit constructor spellings through the existing grammar-name helper.
+  It decodes the child in the existing scope and retains the explicit generic enum fallback. No separate case evaluator or accepted-form restriction was added.
+  Four baseline tests executed 21 argument cases on committed `7e772912` producers. Eight issues showed omitted integer case values/defaults and failed Boolean/string decoding; direct values and explicit generic wrappers passed.
+  The guarded repair passed 224 tests in 20 suites, including actual external typed-client execution and compile-negative contracts. All 1201 captured inputs stayed exact.
+  The existing source fixture now wraps its first case value, qualified second value and fallback with inferred constructors. Its expected TLA definition, native checks and five-state graph remain unchanged.
+  Receipts are in `.git/swifttla-proof-evidence/inferred-expression-operands-2026-11-09/` in the primary checkout.
+  Context-dependent wrapper type recovery, other undecodable case operands, source-name binding, raw record `.count` decoding and parser resources remain open. Generic source/IR/backend and complete observation correspondence are unproved; no complete six-link row follows.
 
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
@@ -344,7 +353,7 @@ tuples and records recursively; a row does not silently replace them with intege
 | R01 Scalars | Integer spellings and signs, Bool/String literals, enum cases and bounds | `SourceIntegerLiteral`, `decodeEnumCase`, `decodeSwiftIntegerBound`; expression child rules | Literal regressions exist; source binding, representation and kernel correspondence open |
 | R02 Reads | Scoped state/parameter/local reads, captures and bound values | `TypedFacadeScope`, layout IDs, binder scopes; `OrderedIntExpressionRule` read cases | Root Int initializer binding/availability has a scoped code-case argument below; arbitrary lexical ownership, captures and full correspondence remain open |
 | R03 Arithmetic | Plain Swift constant folding separately from typed formal `+ - * / %` and `integerDivided` | `decodeSwiftIntegerValue` versus formal operation lowering; `OrderedArithmeticFailures` | Overload/placement reconciliation and full target-Int/backend range open |
-| R04 Boolean/conditional | `!`, `&&`, `||`, comparisons, supported conditional expressions and `StateExpr.firstMatch` | Lazy children, skipped failures; Boolean and conditional composition rules | Ordered case export repaired under I5ak; inferred facade operand decoding, actual source/output and complete evaluation observations remain open |
+| R04 Boolean/conditional | `!`, `&&`, `||`, comparisons, supported conditional expressions and `StateExpr.firstMatch` | Lazy children, skipped failures; Boolean and conditional composition rules | Ordered case export and known inferred scalar operands repaired under I5ak/I5al; other decoding, actual source/output and complete evaluation observations remain open |
 | R05 Set construction | Closed Swift/SetExpr values separately from `SetExpr.literal` queries | `decodeTypedSetValue` versus `decodeTypedSetLiteral`; membership/Boolean parents | Purity, occurrence identity and admitted element types need explicit guards |
 | R06 Set operations | Membership, subset, union/intersection/difference, cardinality, subsets, flattening and Sum | Typed collection methods, binders and finite-domain kernels | Parent rules and failure/order correspondence incomplete |
 | R07 Bound expressions | Filtering, mapping, flatMapping, ForAll/Exists, expression Select and formal choice | Typed closure scope versus algorithm Choose; expression/Boolean consumers | Choice order, no-match and nested failures retain open links |

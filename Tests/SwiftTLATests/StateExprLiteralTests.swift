@@ -16,14 +16,16 @@ import SwiftTLAMacros
         #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression("1_000")) == .int(1_000))
     }
 
-    @Test func parseBools() throws {
-        #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression("true")) == .value(.bool(true)))
-        #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression("false")) == .value(.bool(false)))
+    @Test(arguments: [("true", true), ("false", false), ("Expr(true).stateExpr", true),
+        ("SwiftTLA.Expr(false).stateExpr", false), ("Expr<Bool>(false).stateExpr", false)])
+    func parseBools(_ source: String, _ expected: Bool) throws {
+        #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression(source)) == .value(.bool(expected)))
     }
 
-    @Test func parseStrings() throws {
-        #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression("\"hello\"")) == .value(.string("hello")))
-        #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression("\"left\"")) == .value(.string("left")))
-        #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression("\"\"")) == .value(.string("")))
+    @Test(arguments: [("\"hello\"", "hello"), ("\"left\"", "left"), ("\"\"", ""),
+        ("Expr(\"hello\").stateExpr", "hello"), ("SwiftTLA.Expr(\"\").stateExpr", ""),
+        ("Expr<String>(\"left\").stateExpr", "left")])
+    func parseStrings(_ source: String, _ expected: String) throws {
+        #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression(source)) == .value(.string(expected)))
     }
 }

@@ -110,9 +110,9 @@ struct GeneratedSwiftRecord {
             }
             Invariant("OrderedCaseSelection") {
                 Expr<Int>(StateExpr.firstMatch(
-                    (when: (previousCount <= 0).stateExpr, then: 1),
-                    (when: (previousCount <= 0).stateExpr, then: 2),
-                    fallback: 0)) == 1
+                    (when: (previousCount <= 0).stateExpr, then: Expr(1).stateExpr),
+                    (when: (previousCount <= 0).stateExpr, then: SwiftTLA.Expr(2).stateExpr),
+                    fallback: Expr(0).stateExpr)) == 1
             }
             Invariant("RecordSymbolicDomain") {
                 Functions(from: IntRange(0, through: 99), to: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)))

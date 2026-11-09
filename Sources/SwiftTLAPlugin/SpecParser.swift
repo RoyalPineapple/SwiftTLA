@@ -1012,16 +1012,16 @@ final class ParserSession {
             guard arguments.count == argumentArray.elements.count else { return nil }
             return .operatorApplication(operation, arguments)
         }
-        // `Expr<T>` is a phantom type wrapper. Its one value argument follows
+        // `Expr` is a phantom wrapper with an inferred or explicit type. Its value follows
         // the formal-expression parser path, including canonical formal
         // operator application spelling.
         if let call = expression.as(FunctionCallExprSyntax.self),
-           let type = typedFacadeType(call.calledExpression),
-           type.name == "Expr",
+           compilerGrammarName(in: call.calledExpression) == "Expr",
            call.arguments.count == 1,
            let value = call.arguments.first?.expression {
+            let enumType = typedFacadeType(call.calledExpression)?.terminalArgumentName(at: 0)
             return decodeTypedFacadeValue(value, scope: scope)
-                ?? type.terminalArgumentName(at: 0).flatMap { typeName in
+                ?? enumType.flatMap { typeName in
                     guard let member = value.as(MemberAccessExprSyntax.self),
                           member.base == nil,
                           let formalValue = enumDefinition(named: typeName)?
