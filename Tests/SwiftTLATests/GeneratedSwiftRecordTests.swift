@@ -30,7 +30,7 @@ struct GeneratedSwiftRecordTests {
         #expect(try machine.violatedInvariants(checking: [.Bounded], atLevel: 1).isEmpty)
         for property: GeneratedSwiftRecord.Property in [.RecordCardinality, .RecordForAll, .RecordExists, .RecordMapping, .RecordSelection,
             .RecordFilterDomain, .RecordMapDomain, .RecordUnionDomain, .RecordIntersectionDomain,
-            .RecordDifferenceDomain, .RecordFlattenedDomain, .RecordSymbolicDomain] {
+            .RecordDifferenceDomain, .RecordFlattenedDomain, .RecordConditionalDomain, .RecordSymbolicDomain] {
             #expect(try machine.violatedInvariants(checking: [property], atLevel: 1).isEmpty)
         }
         let candidates = try machine.successors(for: .advance)
@@ -40,6 +40,7 @@ struct GeneratedSwiftRecordTests {
             #expect(candidate.state.packet.ready)
             #expect(candidate.state.history.map(\.count) == [input])
             #expect(candidate.state.previousCount == 0)
+            #expect(try candidate.violatedInvariants(checking: [.RecordConditionalDomain], atLevel: 2).isEmpty)
             #expect(try candidate.violatedInvariants(checking: [.Bounded], atLevel: 2)
                 == (input == 1 ? [] : [.Bounded]))
         }

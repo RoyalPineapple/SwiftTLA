@@ -318,6 +318,8 @@ struct NativeSwiftEmitter {
         let members: String
         var prelude = ""
         switch node.operation {
+        case .ifThenElse:
+            members = "(\(try emit(node.children[0])) ? \(try retained(node.children[1])) : \(try retained(node.children[2])))"
         case .setLiteral:
             members = "[\(try node.children.map { try emit($0) }.joined(separator: ", "))]"
         case .value(.set(let values)):

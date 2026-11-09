@@ -98,6 +98,16 @@ struct GeneratedSwiftRecord {
                 }.cardinality == 3
                     && IntRange(1, through: 2).flatMapping { _ in SetExpr<Packet>.literal(Packet(count: 1, ready: false)) }.cardinality == 1
             }
+            Invariant("RecordConditionalDomain") {
+                If(packet.count == 0,
+                    then: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)),
+                    else: If(packet.count != 0,
+                        then: SetExpr<Packet>.literal(Packet(count: 3, ready: false), Packet(count: 4, ready: false)),
+                        else: SetExpr<Packet>.literal(Packet.expression(count: Expr<Int>(1) / (packet.count - packet.count), ready: false)))).cardinality == 2
+                    && If(packet.count == 0,
+                        then: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 1, ready: false)),
+                        else: SetExpr<Packet>.literal()).cardinality == If(packet.count == 0, then: 1, else: 0)
+            }
             Invariant("RecordSymbolicDomain") {
                 Functions(from: IntRange(0, through: 99), to: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)))
                     .union(Functions(from: IntRange(0, through: 99), to: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))))
