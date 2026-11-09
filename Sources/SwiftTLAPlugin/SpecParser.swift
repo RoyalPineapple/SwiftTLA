@@ -182,6 +182,10 @@ final class ParserSession {
             bindings.contains { $0.sourceName == name }
         }
 
+        func merging(_ local: Self) -> Self {
+            Self(bindings: bindings.filter { !local.containsBinding(named: $0.sourceName) } + local.bindings)
+        }
+
         private init(bindings: [Binding]) {
             self.bindings = bindings
         }
@@ -460,7 +464,7 @@ final class ParserSession {
            let upperExpression = decodeStateExpr(upper) {
             return .integerRange(lowerExpression, upperExpression)
         }
-        if let typedFacadeExpr = decodeTypedFacadeExpr(expression, scope: .empty) {
+        if let typedFacadeExpr = decodeTypedFacadeExpr(expression, scope: sourceScope) {
             return typedFacadeExpr
         }
         if let subscriptCall = expression.as(SubscriptCallExprSyntax.self),
@@ -1644,8 +1648,11 @@ final class ParserSession {
         let formalMember = expression.as(MemberAccessExprSyntax.self)
             ?? expression.as(FunctionCallExprSyntax.self)?.calledExpression.as(MemberAccessExprSyntax.self)
         if terminalTypeName(in: formalMember?.base) == "StateExpr" {
+            let outerSourceScope = sourceScope
+            sourceScope = sourceScope.merging(scope)
+            defer { sourceScope = outerSourceScope }
             if formalMember?.declName.baseName.sourceIdentifierName == "operatorApplication" {
-                return decodeTypedFacadeExpr(expression, scope: scope, expectedEnumType: expectedEnumType)
+                return decodeTypedFacadeExpr(expression, scope: sourceScope, expectedEnumType: expectedEnumType)
             }
             return decodeStateExpr(expression)
         }
@@ -1976,8 +1983,22 @@ final class ParserSession {
             expression = element.expression
         }
         if expression.is(BooleanLiteralExprSyntax.self) { return .bool }
+        if expression.is(StringLiteralExprSyntax.self) { return .string }
         if SourceIntegerLiteral.value(expression) != nil || decodeSwiftIntegerBound(expression, scope: scope) != nil {
             return .int
+        }
+        if let array = expression.as(ArrayExprSyntax.self), let first = array.elements.first,
+           let element = typedFacadeValueType(first.expression, scope: scope),
+           array.elements.allSatisfy({ typedFacadeValueType($0.expression, scope: scope) == element }) {
+            return .array(element)
+        }
+        if let dictionary = expression.as(DictionaryExprSyntax.self),
+           case .elements(let entries) = dictionary.content, let first = entries.first,
+           let key = typedFacadeValueType(first.key, scope: scope),
+           let value = typedFacadeValueType(first.value, scope: scope),
+           entries.allSatisfy({ typedFacadeValueType($0.key, scope: scope) == key
+               && typedFacadeValueType($0.value, scope: scope) == value }) {
+            return .dictionary(key, value)
         }
         let integerOperations = ["+", "-", "*", "/", "%"]
         if let sequence = expression.as(SequenceExprSyntax.self) {

@@ -36,7 +36,7 @@ struct GeneratedSwiftRecordTests {
         let caseName = try #require(GeneratedSwiftRecord.formalPropertyNames[.OrderedCaseSelection])
         let caseDefinition = try #require(try GeneratedSwiftRecord.render().tlaBundle.tla
             .split(separator: "\n").first { $0.hasPrefix(caseName + " ==") })
-        #expect(caseDefinition.contains("(IF (previousCount <= 0) THEN 1 ELSE CASE (previousCount <= 0) -> 2 [] OTHER -> 0)"))
+        #expect(caseDefinition.contains("(IF ((packet).count >= 0) THEN 1 ELSE CASE ((packet).count >= 0) -> 2 [] OTHER -> 0)"))
         let candidates = try machine.successors(for: .advance)
         #expect(candidates.map { $0.state.packet.count }.sorted() == [1, 1, 2, 2])
         for candidate in candidates {
