@@ -1708,12 +1708,15 @@ extension CompiledOperation {
             guard branchOperands >= 2, branchOperands.isMultiple(of: 2) else {
                 throw CompiledValueType.diagnostic("rendering.case", "CASE requires condition/value pairs and an optional default")
             }
-            var branches: [TLAExpressionPart] = [.text("CASE ")]
-            for index in stride(from: 0, to: branchOperands, by: 2) {
-                if index > 0 { branches.append(.text(" [] ")) }
-                branches += [.operand(index), .text(" -> "), .operand(index + 1)]
+            // Overlapping TLA CASE arms do not guarantee the first matching value.
+            var branches: [TLAExpressionPart] = []
+            for index in stride(from: 0, to: branchOperands - 2, by: 2) {
+                branches += [.text("(IF "), .operand(index), .text(" THEN "),
+                    .operand(index + 1), .text(" ELSE ")]
             }
+            branches += [.text("CASE "), .operand(branchOperands - 2), .text(" -> "), .operand(branchOperands - 1)]
             if hasOtherwise { branches += [.text(" [] OTHER -> "), .operand(branchOperands)] }
+            if branchOperands > 2 { branches.append(.text(String(repeating: ")", count: branchOperands / 2 - 1))) }
             parts = branches
         case .forAll(let binder):
             parts = [.text("(\\A \(try binderName(binder)) \\in "), .operand(0), .text(" : "), .operand(1), .text(")")]

@@ -308,6 +308,18 @@ The proof dependencies above still govern proof closure; they do not block indep
   The final guarded run passed 139 tests in sixteen suites with all 1201 captured inputs exact. Receipts are in `.git/swifttla-proof-evidence/constraint-fairness-enabledness-2026-11-08/` in the primary checkout.
   Handwritten scenario overrides must accept and forward the new fairness parameter. Projection meaning/evaluation, view quotient adequacy, record/string identity and source/TLA/kernel correspondence remain open; this wiring repair completes no six-link proof row.
 
+- [x] I5ak Encode ordered case selection explicitly in TLA output.
+  The shared `caseExpr` renderer now emits nested `IF` expressions before a final single-arm `CASE`.
+  Earlier true guards select their value. The final arm retains the existing fallback or no-match form.
+  Single-arm output and malformed-arity validation remain unchanged. Every operand appears once, in its original order.
+  Raw overlapping TLA `CASE` arms permit more than one matching value; TLC's first-match behavior can conceal that export gap.
+  The source argument is bound to [the TLA+ CASE discussion](https://github.com/tlaplus/rfcs/issues/26), rather than inferred from TLC parity.
+  Three baseline tests produced four intended output issues on committed `16b91ca6` producers. The actual source export retained both integer arms and its fallback; native priority and the existing five-state graph passed.
+  The repair passed 177 tests in nineteen suites, including the external typed client. Eighty distinct control/import tests in seven more suites passed on the same 1201 input bytes.
+  Receipts are in `.git/swifttla-proof-evidence/ordered-case-export-2026-11-09/` in the primary checkout.
+  Two earlier fixture compile failures executed no tests. A separate executed witness exposed silently dropped inferred `Expr(...)` case operands; that decoder route and raw record `.count` decoding remain open.
+  Under the ordered Core contract, the output now uses explicit selection. Source/IR interpretation, complete no-match/failure observations, imported CASE meaning, parser resources and checker kernels still require correspondence results. No complete six-link proof row follows.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 
@@ -332,7 +344,7 @@ tuples and records recursively; a row does not silently replace them with intege
 | R01 Scalars | Integer spellings and signs, Bool/String literals, enum cases and bounds | `SourceIntegerLiteral`, `decodeEnumCase`, `decodeSwiftIntegerBound`; expression child rules | Literal regressions exist; source binding, representation and kernel correspondence open |
 | R02 Reads | Scoped state/parameter/local reads, captures and bound values | `TypedFacadeScope`, layout IDs, binder scopes; `OrderedIntExpressionRule` read cases | Root Int initializer binding/availability has a scoped code-case argument below; arbitrary lexical ownership, captures and full correspondence remain open |
 | R03 Arithmetic | Plain Swift constant folding separately from typed formal `+ - * / %` and `integerDivided` | `decodeSwiftIntegerValue` versus formal operation lowering; `OrderedArithmeticFailures` | Overload/placement reconciliation and full target-Int/backend range open |
-| R04 Boolean/conditional | `!`, `&&`, `||`, comparisons and supported conditional expressions | Lazy children, skipped failures; Boolean and conditional composition rules | Actual source/output and complete evaluation observations unproved |
+| R04 Boolean/conditional | `!`, `&&`, `||`, comparisons, supported conditional expressions and `StateExpr.firstMatch` | Lazy children, skipped failures; Boolean and conditional composition rules | Ordered case export repaired under I5ak; inferred facade operand decoding, actual source/output and complete evaluation observations remain open |
 | R05 Set construction | Closed Swift/SetExpr values separately from `SetExpr.literal` queries | `decodeTypedSetValue` versus `decodeTypedSetLiteral`; membership/Boolean parents | Purity, occurrence identity and admitted element types need explicit guards |
 | R06 Set operations | Membership, subset, union/intersection/difference, cardinality, subsets, flattening and Sum | Typed collection methods, binders and finite-domain kernels | Parent rules and failure/order correspondence incomplete |
 | R07 Bound expressions | Filtering, mapping, flatMapping, ForAll/Exists, expression Select and formal choice | Typed closure scope versus algorithm Choose; expression/Boolean consumers | Choice order, no-match and nested failures retain open links |

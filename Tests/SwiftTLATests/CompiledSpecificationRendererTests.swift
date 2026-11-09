@@ -299,7 +299,10 @@ struct CompiledSpecificationRendererTests {
             (.setMap(binder), ["item + 1", "Items"], "{item + 1 : item \\in Items}"),
             (.forAll(binder), ["Items", "item > 0"], "(\\A item \\in Items : item > 0)"),
             (.functionLiteral(binder), ["Items", "item + 1"], "[item \\in Items |-> item + 1]"),
-            (.caseExpr(hasOtherwise: true), ["a", "b", "c", "d", "e"], "CASE a -> b [] c -> d [] OTHER -> e"),
+            (.caseExpr(hasOtherwise: true), ["a", "b", "c", "d", "e"], "(IF a THEN b ELSE CASE c -> d [] OTHER -> e)"),
+            (.caseExpr(hasOtherwise: false), ["a", "b", "c", "d"], "(IF a THEN b ELSE CASE c -> d)"),
+            (.caseExpr(hasOtherwise: true), ["a", "b", "c", "d", "e", "f", "g"], "(IF a THEN b ELSE (IF c THEN d ELSE CASE e -> f [] OTHER -> g))"),
+            (.caseExpr(hasOtherwise: false), ["a", "b"], "CASE a -> b"),
             (.except, ["table", "key", "value"], "[table EXCEPT ![key] = value]"),
             (.foldFunction([binder]), ["body", "initial", "sequence"], "FoldFunction(LAMBDA item : body, initial, sequence)"),
             (.letValue(binder), ["value", "body"], "(LET item == value IN body)")

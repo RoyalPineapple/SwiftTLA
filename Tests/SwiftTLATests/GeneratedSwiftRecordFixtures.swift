@@ -108,6 +108,12 @@ struct GeneratedSwiftRecord {
                         then: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 1, ready: false)),
                         else: SetExpr<Packet>.literal()).cardinality == If(packet.count == 0, then: 1, else: 0)
             }
+            Invariant("OrderedCaseSelection") {
+                Expr<Int>(StateExpr.firstMatch(
+                    (when: (previousCount <= 0).stateExpr, then: 1),
+                    (when: (previousCount <= 0).stateExpr, then: 2),
+                    fallback: 0)) == 1
+            }
             Invariant("RecordSymbolicDomain") {
                 Functions(from: IntRange(0, through: 99), to: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)))
                     .union(Functions(from: IntRange(0, through: 99), to: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))))

@@ -30,9 +30,13 @@ struct GeneratedSwiftRecordTests {
         #expect(try machine.violatedInvariants(checking: [.Bounded], atLevel: 1).isEmpty)
         for property: GeneratedSwiftRecord.Property in [.RecordCardinality, .RecordForAll, .RecordExists, .RecordMapping, .RecordSelection,
             .RecordFilterDomain, .RecordMapDomain, .RecordUnionDomain, .RecordIntersectionDomain,
-            .RecordDifferenceDomain, .RecordFlattenedDomain, .RecordConditionalDomain, .RecordSymbolicDomain] {
+            .RecordDifferenceDomain, .RecordFlattenedDomain, .RecordConditionalDomain, .OrderedCaseSelection, .RecordSymbolicDomain] {
             #expect(try machine.violatedInvariants(checking: [property], atLevel: 1).isEmpty)
         }
+        let caseName = try #require(GeneratedSwiftRecord.formalPropertyNames[.OrderedCaseSelection])
+        let caseDefinition = try #require(try GeneratedSwiftRecord.render().tlaBundle.tla
+            .split(separator: "\n").first { $0.hasPrefix(caseName + " ==") })
+        #expect(caseDefinition.contains("(IF (previousCount <= 0) THEN 1 ELSE CASE (previousCount <= 0) -> 2 [] OTHER -> 0)"))
         let candidates = try machine.successors(for: .advance)
         #expect(candidates.map { $0.state.packet.count }.sorted() == [1, 1, 2, 2])
         for candidate in candidates {
@@ -40,6 +44,7 @@ struct GeneratedSwiftRecordTests {
             #expect(candidate.state.packet.ready)
             #expect(candidate.state.history.map(\.count) == [input])
             #expect(candidate.state.previousCount == 0)
+            #expect(try candidate.violatedInvariants(checking: [.OrderedCaseSelection], atLevel: 2).isEmpty)
             #expect(try candidate.violatedInvariants(checking: [.RecordConditionalDomain], atLevel: 2).isEmpty)
             #expect(try candidate.violatedInvariants(checking: [.Bounded], atLevel: 2)
                 == (input == 1 ? [] : [.Bounded]))
