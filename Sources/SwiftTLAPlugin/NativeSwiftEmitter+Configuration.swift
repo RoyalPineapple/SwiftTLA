@@ -53,7 +53,7 @@ extension NativeSwiftEmitter {
             self.`\(parameter.reference.name)` = \(value)
             """)
         }
-        return try nativeDeclarations("""
+        var declarations = try nativeDeclarations("""
         public struct Configuration: Hashable, GeneratedModelFields {
             \(fields)
             public static var displayNames: [PartialKeyPath<Configuration>: \(nativeStringType)] {
@@ -68,5 +68,9 @@ extension NativeSwiftEmitter {
         }
         \(includeStoredConfiguration ? "public let configuration: Configuration" : "")
         """)
+        try addStructuralIdentity(to: &declarations, fields: parameters.map {
+            (name: $0.reference.name, type: program.bindingTypes[$0.binder]!)
+        })
+        return declarations
     }
 }

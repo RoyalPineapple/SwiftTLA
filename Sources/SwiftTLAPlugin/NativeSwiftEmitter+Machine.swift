@@ -107,9 +107,6 @@ extension NativeSwiftEmitter {
             let declaration = program.layout.variables[variable.id.ordinal]
             return "\\State.\(variable.swiftIdentifier): .init(swiftName: \(String(reflecting: variable.swiftIdentifier)), formalName: \(String(reflecting: declaration.formalName)))"
         }.joined(separator: ",\n")
-        let stateIdentity = try structuralStateIdentityMembers(fields: api.variables.map {
-            (name: $0.swiftIdentifier, type: program.variableTypes[$0.id]!)
-        })
         var stateDeclarations = try nativeDeclarations("""
         public struct State: Hashable, GeneratedModelFields {
             \(stateFields)
@@ -131,22 +128,9 @@ extension NativeSwiftEmitter {
             public let after: State
         }
         """)
-        if !stateIdentity.isEmpty {
-            guard var state = stateDeclarations.first?.as(StructDeclSyntax.self),
-                  stateIdentity.count == 2,
-                  stateIdentity.allSatisfy({ $0.is(FunctionDeclSyntax.self) && !$0.hasError }) else {
-                let missing = stateIdentity.flatMap { $0.tokens(viewMode: .all) }
-                    .filter { $0.presence == .missing }.prefix(8).map { String(describing: $0.tokenKind) }
-                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
-                    path: "native.State.identity", expected: "two complete generated equality and hashing methods",
-                    actual: "members=\(stateIdentity.count), missing tokens=\(missing)",
-                    nextSafeAction: "Report this native code generation failure.")
-            }
-            for member in stateIdentity {
-                state.memberBlock.members.append(MemberBlockItemSyntax(decl: member))
-            }
-            stateDeclarations[0] = DeclSyntax(state)
-        }
+        try addStructuralIdentity(to: &stateDeclarations, fields: api.variables.map {
+            (name: $0.swiftIdentifier, type: program.variableTypes[$0.id]!)
+        })
         try verifyGeneratedStateConstructorOutput(stateDeclarations.first, fields: try api.variables.map {
             (name: $0.swiftIdentifier, type: try swiftType(program.variableTypes[$0.id]!),
              ordinal: $0.id.ordinal, formalName: program.layout.variables[$0.id.ordinal].formalName)
@@ -196,7 +180,29 @@ extension NativeSwiftEmitter {
         return declarations
     }
 
-    private func structuralStateIdentityMembers(fields: [(name: String, type: CompiledValueType)]) throws -> [DeclSyntax] {
+    func addStructuralIdentity(
+        to declarations: inout [DeclSyntax], fields: [(name: String, type: CompiledValueType)]
+    ) throws {
+        let identity = try structuralIdentityMembers(fields: fields)
+        guard !identity.isEmpty else { return }
+        guard var value = declarations.first?.as(StructDeclSyntax.self),
+              identity.count == 2,
+              identity.allSatisfy({ $0.is(FunctionDeclSyntax.self) && !$0.hasError }) else {
+            let missing = identity.flatMap { $0.tokens(viewMode: .all) }
+                .filter { $0.presence == .missing }.prefix(8).map { String(describing: $0.tokenKind) }
+            let name = declarations.first?.as(StructDeclSyntax.self)?.name.text ?? "value"
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                path: "native.\(name).identity", expected: "two complete generated equality and hashing methods",
+                actual: "members=\(identity.count), missing tokens=\(missing)",
+                nextSafeAction: "Report this native code generation failure.")
+        }
+        for member in identity {
+            value.memberBlock.members.append(MemberBlockItemSyntax(decl: member))
+        }
+        declarations[0] = DeclSyntax(value)
+    }
+
+    private func structuralIdentityMembers(fields: [(name: String, type: CompiledValueType)]) throws -> [DeclSyntax] {
         guard fields.contains(where: { containsNominalRecord($0.type) }) else { return [] }
         let hasherType = "SwiftTLA._NativeMachineOperations.StateHasher"
         var types: [CompiledValueType] = []
@@ -289,7 +295,7 @@ extension NativeSwiftEmitter {
                     hashBody = "switch value {\n" + type.unionAlternatives!.enumerated().map {
                         "case .\(unionCase(type, index: $0.offset))(let payload): hasher.combine(\($0.offset)); \(hash($0.element, "payload", into: "hasher"))"
                     }.joined(separator: "\n") + "\n}"
-                default: throw unsupported("record state identity")
+                default: throw unsupported("record identity")
                 }
             }
             let name = try swiftType(type)

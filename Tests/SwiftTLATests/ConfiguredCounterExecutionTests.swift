@@ -68,5 +68,29 @@ struct ConfiguredCounterExecutionTests {
         #expect(throws: ExplorationError.configurationMismatch) {
             try ReachabilityGraph(initialMachines: machines, maximumStates: 10)
         }
+
+        let first = try SymbolicRecordConstructionModel.Configuration(start: .init(value: 1))
+        let same = try SymbolicRecordConstructionModel.Configuration(start: .init(value: 1))
+        let second = try SymbolicRecordConstructionModel.Configuration(start: .init(value: 2))
+        #expect(first.start == second.start)
+        #expect(first.start.tlaValue != second.start.tlaValue)
+        #expect(first == same)
+        #expect(first != second)
+        #expect(Set([first, same, second]).count == 2)
+        let firstMachine = try SymbolicRecordConstructionModel.makeMachine(configuration: first)
+        let sameMachine = try SymbolicRecordConstructionModel.makeMachine(configuration: same)
+        let secondMachine = try SymbolicRecordConstructionModel.makeMachine(configuration: second)
+        #expect(firstMachine.state.packet.payload.value == 1)
+        #expect(secondMachine.state.packet.payload.value == 2)
+        #expect(firstMachine.hasSameConfiguration(as: sameMachine))
+        #expect(!firstMachine.hasSameConfiguration(as: secondMachine))
+        let recordMachines = [firstMachine, secondMachine]
+        #expect(throws: ExplorationError.configurationMismatch) {
+            try ReachabilityGraph(initialMachines: recordMachines, maximumStates: 10)
+        }
+        #expect(throws: ExplorationError.configurationMismatch) {
+            try MachineValidator.run(initialMachines: recordMachines, maximumStates: 10,
+                checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { _ in }
+        }
     }
 }
