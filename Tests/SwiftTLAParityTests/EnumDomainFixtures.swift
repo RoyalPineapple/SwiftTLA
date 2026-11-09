@@ -7,6 +7,8 @@ struct IntEnumToggleModel {
     case idle = 0
     case active = 1
 
+    static func == (lhs: Self, rhs: Self) -> Bool { true }
+    func hash(into hasher: inout Hasher) { hasher.combine(0) }
     static var defaultValue: Self { .idle }
     static let finiteValues = allCases
   }

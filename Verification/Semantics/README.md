@@ -2836,12 +2836,13 @@ visitor; a changed-case control breaks the Swift pin.
 `CheckedRecordConversionProof.tla` imports that exact module and proves the
 independent initial-state, complete labeled-step, checked-view failure, and
 selected `__SwiftTLAEvaluationOK` rules under the source record-domain
-assumption. Its omitted-guard control adds an invalid edge. All nine TLAPS
-obligations pass locally. This closes this named record-narrowing fixture's
-source-to-output links under the trusted Swift compiler/runtime, macro parser,
-token pin, TLAPS backend, and typed-record premise. It does not prove the
-general checked-view emitter, nested or effectful projections, other source
-value shapes, or a hosted TLC/native failure-verdict comparison.
+assumption. Its omitted-guard control adds an invalid edge. The historical
+TLAPS receipt covers nine obligations for the unchanged TLA+ module.
+The current Swift visitor compares encoded enum ranks after the checked view.
+The complete token comparison and its changed-case control pass in the focused run.
+The generic Swift rank helper and source/type interpretation remain owned proof boundaries.
+This result does not prove the general checked-view emitter, nested projections,
+other source value shapes, or hosted TLC/native verdict correspondence.
 
 The accepted `IncompatibleCheckedRecordView` model asks for a record view of
 an `Int` state value. Its independent source rule reports `noMatchingCase`

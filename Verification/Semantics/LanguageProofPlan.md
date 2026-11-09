@@ -290,6 +290,11 @@ The proof dependencies above still govern proof closure; they do not block indep
   Formal-tool JSON equality now reuses byte-exact string identity for values and object keys, recursively through arrays and objects. The generated enum initial-reconstruction path retains the same decoder and schema.
   The existing owners reproduced nine issues in eight baseline tests, including acceptance of a composed JSON string for a decomposed raw enum tag. Exact raw reconstruction remains positive; the repair passed 59 tests in 12 suites and the existing separate-package typed client.
   Receipts are in `.git/swifttla-proof-evidence/formal-json-string-identity-2026-11-09/` in the primary checkout. Foundation/Dictionary key retention before this boundary remains open; this repair does not establish native String-view or collection identity.
+  Known source enums now use ranks of distinct formal values in generated identity and the shared nominal comparison paths. Equal encoded aliases share a rank.
+  The existing owners reproduced sixteen issues in three baseline tests. The final focused run passed 155 tests in eighteen suites, including the external typed client.
+  The comparison binds both operands with their resolved Swift types. Generated identity methods start on new lines, so the complete union output remains valid Swift. The exact record visitor witness retains its changed-case rejection control.
+  Receipts are in `.git/swifttla-proof-evidence/source-enum-identity-2026-11-09/` in the primary checkout. Intermediate failures remain explicit and receive no all-pass credit.
+  Native stored collections, raw string views, opaque names, mixed-tag quantifier domains and general source/backend/helper/checker correspondence remain open. This repair closes no complete six-link proof row.
   Raw enum-to-string views still cross native equality, collections and snapshot identity with different semantics. Nominal alias reconstitution, source/core conformance meaning and Unicode/version alignment remain owned boundaries. A changed encoder or equality operator alone does not complete this task or a six-link proof row.
 
 - [x] I5aj Carry raw fairness enabledness through constrained exploration and checking.

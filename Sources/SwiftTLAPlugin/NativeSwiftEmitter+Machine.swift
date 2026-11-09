@@ -75,7 +75,7 @@ extension NativeSwiftEmitter {
         }, includingPublicState: true)
         machineDeclarations[snapshotIndex] = snapshotDeclarations[0]
         try verifyGeneratedSnapshotOutput(machineDeclarations[snapshotIndex], hiddenFields: hiddenFields,
-            structuralIdentity: hiddenVariables.contains { containsNominalRecord(program.variableTypes[$0.id]!) })
+            structuralIdentity: hiddenVariables.contains { containsSourceNominal(program.variableTypes[$0.id]!) })
         try verifyGeneratedValidationDelegationOutput(machineDeclarations.first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "visitValidationOutcomes"
         })
@@ -209,7 +209,7 @@ extension NativeSwiftEmitter {
                 nextSafeAction: "Report this native code generation failure.")
         }
         for member in identity {
-            block.members.append(MemberBlockItemSyntax(decl: member))
+            block.members.append(MemberBlockItemSyntax(decl: member.with(\.leadingTrivia, .newlines(1))))
         }
         if var value = first?.as(StructDeclSyntax.self) {
             value.memberBlock = block
@@ -224,8 +224,8 @@ extension NativeSwiftEmitter {
         fields: [(name: String, type: CompiledValueType)],
         cases: [(name: String, types: [CompiledValueType])], includingPublicState: Bool
     ) throws -> [DeclSyntax] {
-        guard fields.contains(where: { containsNominalRecord($0.type) })
-                || cases.contains(where: { $0.types.contains(where: containsNominalRecord) }) else { return [] }
+        guard fields.contains(where: { containsSourceNominal($0.type) })
+                || cases.contains(where: { $0.types.contains(where: containsSourceNominal) }) else { return [] }
         let bodies = try structuralIdentityBodies(fields: fields, cases: cases,
             includingPublicState: includingPublicState)
         return try nativeDeclarations("""
@@ -259,10 +259,10 @@ extension NativeSwiftEmitter {
             return result
         }
         func equal(_ type: CompiledValueType, _ lhs: String, _ rhs: String) -> String {
-            containsNominalRecord(type) ? "_identityEqual\(index(type))(\(lhs), \(rhs))" : "(\(lhs) == \(rhs))"
+            containsSourceNominal(type) ? "_identityEqual\(index(type))(\(lhs), \(rhs))" : "(\(lhs) == \(rhs))"
         }
         func hash(_ type: CompiledValueType, _ value: String, into hasher: String) -> String {
-            containsNominalRecord(type)
+            containsSourceNominal(type)
                 ? "_identityHash\(index(type))(\(value), into: &\(hasher))" : "\(hasher).combine(\(value))"
         }
         let equality: String
@@ -307,6 +307,10 @@ extension NativeSwiftEmitter {
                 hashBody = members.map { hash($0.type, "value.`" + $0.name + "`", into: "hasher") }.joined(separator: "\n")
             } else {
                 switch type {
+                case .named(let name):
+                    let rank = "func rank(_ value: \(try swiftType(type))) -> \(nativeIntType) { switch value { \(try enumRankCases(name)) } }"
+                    equalityBody = rank + "\nreturn rank(lhs) == rank(rhs)"
+                    hashBody = rank + "\nhasher.combine(rank(value))"
                 case .tuple(let elements):
                     equalityBody = elements.enumerated().map {
                         "guard \(equal($0.element, "lhs." + fieldName(type, index: $0.offset), "rhs." + fieldName(type, index: $0.offset))) else { return false }"
@@ -473,7 +477,7 @@ extension NativeSwiftEmitter {
         let merges = try program.layout.variables.map { slot in
             let name = variable(slot.id)
             let type = program.variableTypes[slot.id]!
-            if containsNominalRecord(type) {
+            if containsSourceNominal(type) {
                 return """
                 guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.\(name), other.\(name), equivalent: { lhs, rhs in
                     let _mergeEqual_\(name) = \(try structuralEquivalence(type))
@@ -501,7 +505,7 @@ extension NativeSwiftEmitter {
             declarations.first, slots: program.layout.variables.map { variable($0.id) },
             recordTypes: Dictionary(uniqueKeysWithValues: try program.layout.variables.compactMap { slot -> (String, String)? in
                 let type = program.variableTypes[slot.id]!
-                return containsNominalRecord(type) ? (variable(slot.id), try swiftType(type)) : nil
+                return containsSourceNominal(type) ? (variable(slot.id), try swiftType(type)) : nil
             }))
         try verifyGeneratedUpdateApplyOutput(
             declarations.first,
@@ -543,7 +547,7 @@ extension NativeSwiftEmitter {
                 code += "let \(name): \(try swiftType(type)) = \(try self.expression(expression, state: ""))\n"
                 code += "evaluatingInitializerOrdinal = nil\n"
                 if let field = stateMemberNames[initialization.variable] {
-                    if containsNominalRecord(type) {
+                    if containsSourceNominal(type) {
                         let order = "_initialValueOrder\(initialization.variable.ordinal)"
                         code += "let \(order) = \(try crossOrdering(type, type))\n"
                         code += "if _selectedInitial == nil || !(\(order)(_selectedInitial!.\(field), \(name)) || \(order)(\(name), _selectedInitial!.\(field))) {\n"
@@ -580,7 +584,7 @@ extension NativeSwiftEmitter {
                         exhaustive = "try SwiftTLA._NativeMachineOperations.randomSubsetInitialSupport(upTo: \(name)_sampleLimit, from: \(domain))"
                     }
                     candidateSource = "(_sampleRandomSubset ? (\(sample)) : (\(exhaustive))).sorted(by: \(try ordering(type)))"
-                } else if let members = try recordSetElements(expression, state: "") {
+                } else if let members = try nominalSetElements(expression, state: "") {
                     candidateSource = "\(members).sorted(by: \(try crossOrdering(type, type)))"
                 } else {
                     candidateSource = "\(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))"
@@ -758,7 +762,7 @@ extension NativeSwiftEmitter {
             switch initialization.initialization {
             case .value:
                 let type = program.variableTypes[initialization.variable]!
-                if containsNominalRecord(type) {
+                if containsSourceNominal(type) {
                     let order = "_initialValueOrder\(initialization.variable.ordinal)"
                     required = [
                         "let \(order) = { (lhs: \(try swiftType(type)), rhs: \(try swiftType(type))) -> \(nativeBoolType) in",
@@ -1220,7 +1224,7 @@ extension NativeSwiftEmitter {
     }
 
     mutating func actionDomain(_ binding: CompiledActionBinding, state: String) throws -> String {
-        if let members = try recordSetElements(binding.domain, state: state) { return members }
+        if let members = try nominalSetElements(binding.domain, state: state) { return members }
         if let members = binding.literalMembers {
             return "[\(try members.map { try literal($0, as: program.bindingTypes[binding.binder]!) }.joined(separator: ", "))]"
         }
@@ -1317,7 +1321,7 @@ extension NativeSwiftEmitter {
             for (binding, apiBinding) in zip(action.bindings, api.bindings) {
                 let name = binder(binding.binder)
                 let type = program.bindingTypes[binding.binder]!
-                let recordMembers = try recordSetElements(binding.domain, state: "_execution.")
+                let recordMembers = try nominalSetElements(binding.domain, state: "_execution.")
                 let domain = try recordMembers ?? actionDomain(binding, state: "_execution.")
                 if apiBinding.isPublic {
                     pattern.append("\(apiBinding.swiftIdentifier): let \(name)")

@@ -290,26 +290,27 @@ struct NativeSwiftEmitter {
         return "({ (value: \(try swiftType(source))) -> \(try swiftType(destination)) in\nswitch value { \(cases) } })(\(value))"
     }
 
-    func containsNominalRecord(_ type: CompiledValueType) -> Bool {
+    func containsSourceNominal(_ type: CompiledValueType) -> Bool {
         var pending = [type]
         while let value = pending.popLast() {
             if case .nominalRecord = value { return true }
+            if case .named(let name) = value, program.enums.cases[name] != nil { return true }
             pending.append(contentsOf: value.components)
         }
         return false
     }
 
-    mutating func recordSetElements(
+    mutating func nominalSetElements(
         _ node: CompiledExpression, state: String, substitutions: [BinderID: String] = [:],
         activeFunctions: Set<ResolvedFunctionID> = []
     ) throws -> String? {
-        guard case .set(let element) = node.resultType, containsNominalRecord(element),
+        guard case .set(let element) = node.resultType, containsSourceNominal(element),
               !hasSymbolicMembership(node) else { return nil }
         func emit(_ value: CompiledExpression) throws -> String {
             try self.expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         }
         func retained(_ value: CompiledExpression) throws -> String {
-            if let members = try recordSetElements(value, state: state, substitutions: substitutions,
+            if let members = try nominalSetElements(value, state: state, substitutions: substitutions,
                 activeFunctions: activeFunctions) { return members }
             guard case .set(let member) = value.resultType else { throw unsupported("record domain") }
             return "[\(try swiftType(member))](\(try emit(value)))"
@@ -347,7 +348,7 @@ struct NativeSwiftEmitter {
             members = "(try \(try retained(mapped.children[1])).sorted(by: \(try ordering(input))).flatMap { (\(binder(binding)): \(try swiftType(input))) throws -> [\(try swiftType(element))] in \(try retained(mapped.children[0])) })"
         default: return nil
         }
-        // shortcut: finite record domains scan retained members; use compiler-owned hashed keys if large domains dominate.
+        // shortcut: finite nominal domains scan retained members; use compiler-owned hashed keys if large domains dominate.
         return """
         (try { () throws -> [\(try swiftType(element))] in
             let _recordOrder = \(try crossOrdering(element, element))
@@ -366,6 +367,13 @@ struct NativeSwiftEmitter {
         """
     }
 
+    func enumRankCases(_ name: String) throws -> String {
+        guard let members = program.enums.cases[name] else { throw unsupported("ordering opaque type \(name)") }
+        let values = Set(members.map(\.value)).sorted()
+        let ranks = Dictionary(uniqueKeysWithValues: values.enumerated().map { ($0.element, $0.offset) })
+        return members.map { "case .`\($0.name)`: return \(ranks[$0.value]!)" }.joined(separator: "\n")
+    }
+
     /// Emits a native comparator matching CompiledValue's structural order.
     func ordering(_ type: CompiledValueType) throws -> String {
         let name = try swiftType(type)
@@ -379,10 +387,8 @@ struct NativeSwiftEmitter {
             let cases = members.indices.map { "case .\(finiteCaseName(members, index: $0)): return \($0)" }.joined(separator: "\n")
             body = "func rank(_ value: \(name)) -> \(nativeIntType) { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
         case .named(let name):
-            if let members = program.enums.cases[name] {
-                let cases = members.enumerated().map { "case .`\($0.element.name)`: return \($0.offset)" }.joined(separator: "\n")
-                body = "func rank(_ value: \(name)) -> \(nativeIntType) { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
-            } else { throw unsupported("ordering opaque type \(name)") }
+            let cases = try enumRankCases(name)
+            body = "func rank(_ value: \(name)) -> \(nativeIntType) { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
         case .array(let element):
             body = "return lhs.lexicographicallyPrecedes(rhs, by: \(try ordering(element)))"
         case .set(let element):
@@ -840,15 +846,15 @@ struct NativeSwiftEmitter {
         func binary(_ operation: String) throws -> String {
             "(\(try emit(0)) \(operation) \(try emit(1)))"
         }
-        func recordEquality(negated: Bool) throws -> String? {
-            guard containsNominalRecord(childType(0)) || containsNominalRecord(childType(1)) else { return nil }
+        func nominalEquality(negated: Bool) throws -> String? {
+            guard containsSourceNominal(childType(0)) || containsSourceNominal(childType(1)) else { return nil }
             let forward = try crossOrdering(childType(0), childType(1))
             let reverse = childType(0) == childType(1)
                 ? "_recordOrder" : try crossOrdering(childType(1), childType(0))
             return """
             (try { () throws -> \(nativeBoolType) in
-                let _recordLeft = \(try emit(0))
-                let _recordRight = \(try emit(1))
+                let _recordLeft: \(try swiftType(childType(0))) = \(try emit(0))
+                let _recordRight: \(try swiftType(childType(1))) = \(try emit(1))
                 let _recordOrder = \(forward)
                 return \(negated ? "" : "!")(_recordOrder(_recordLeft, _recordRight) || (\(reverse))(_recordRight, _recordLeft))
             }())
@@ -910,7 +916,7 @@ struct NativeSwiftEmitter {
         case .assertView:
             return try checkedView(emit(0), from: childType(0), to: node.resultType)
         case .equal:
-            if let structural = try recordEquality(negated: false) { return structural }
+            if let structural = try nominalEquality(negated: false) { return structural }
             if let optimized = try domainRangeEquality(
                 domain: node.children[0], range: node.children[1], domainFirst: true
             ) { return optimized }
@@ -919,7 +925,7 @@ struct NativeSwiftEmitter {
             ) { return optimized }
             return try binary("==")
         case .notEqual:
-            if let structural = try recordEquality(negated: true) { return structural }
+            if let structural = try nominalEquality(negated: true) { return structural }
             return try binary("!=")
         case .lessThan: return try binary("<")
         case .lessOrEqual: return try binary("<=")
@@ -951,7 +957,7 @@ struct NativeSwiftEmitter {
             try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         }
         func members(_ index: Int) throws -> String {
-            try recordSetElements(node.children[index], state: state,
+            try nominalSetElements(node.children[index], state: state,
                 substitutions: substitutions, activeFunctions: activeFunctions) ?? emit(index)
         }
         func quantifier(_ binding: BinderID, all: Bool) throws -> String {
@@ -992,7 +998,7 @@ struct NativeSwiftEmitter {
             default: throw unsupported("tuple literal")
             }
         case .in:
-            if let members = try recordSetElements(node.children[1], state: state,
+            if let members = try nominalSetElements(node.children[1], state: state,
                 substitutions: substitutions, activeFunctions: activeFunctions) {
                 guard case .set(let element) = node.children[1].resultType else { throw unsupported("record membership") }
                 let order = try crossOrdering(element, childType(0))
@@ -1231,7 +1237,7 @@ struct NativeSwiftEmitter {
                 activeFunctions: activeFunctions, membershipFunctions: membershipFunctions)
             body = "\(value)\n\(result.declaration)\nreturn \(result.call)"
         default:
-            if let members = try recordSetElements(node, state: state,
+            if let members = try nominalSetElements(node, state: state,
                 substitutions: substitutions, activeFunctions: activeFunctions) {
                 body = """
                 let members = \(members)

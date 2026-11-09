@@ -224,7 +224,7 @@ struct GeneratedAtomicUpdateProofTests {
         let recordTypes = Dictionary(uniqueKeysWithValues: try recordEmitter.program.layout.variables.compactMap {
             slot -> (String, String)? in
             let type = recordEmitter.program.variableTypes[slot.id]!
-            return recordEmitter.containsNominalRecord(type) ? (recordEmitter.variable(slot.id), try recordEmitter.swiftType(type)) : nil
+            return recordEmitter.containsSourceNominal(type) ? (recordEmitter.variable(slot.id), try recordEmitter.swiftType(type)) : nil
         })
         try verifyGeneratedUpdateMergeOutput(recordUpdates, slots: recordSlots, recordTypes: recordTypes)
         let recordSlot = try #require(recordTypes.keys.first)

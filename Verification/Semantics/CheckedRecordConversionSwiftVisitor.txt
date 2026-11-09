@@ -37,9 +37,18 @@ try emit(updates)
 }
 func _actionPart5(_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws {
 do {
-    guard ((try { (value: CheckedRecordConversion.IntegerRecord) throws -> NativeRecord0 in NativeRecord0(count: (try { (value: Int) throws -> Level in
+    guard (try { () throws -> Bool in
+        let _recordLeft: Level = (try { (value: CheckedRecordConversion.IntegerRecord) throws -> NativeRecord0 in NativeRecord0(count: (try { (value: Int) throws -> Level in
 switch value { case 0: return Level.`zero`
-default: throw NativeMachineEvaluationError.noMatchingCase } }(value.`count`))) }(state.state.record)).`count` == Level.`zero`) else { return }
+default: throw NativeMachineEvaluationError.noMatchingCase } }(value.`count`))) }(state.state.record)).`count`
+        let _recordRight: Level = Level.`zero`
+        let _recordOrder = { (lhs: Level, rhs: Level) -> Bool in
+            func leftRank(_ value: Level) -> Int { switch value { case .`zero`: return 0 } }
+            func rightRank(_ value: Level) -> Int { switch value { case .`zero`: return 0 } }
+            return leftRank(lhs) < rightRank(rhs)
+        }
+        return !(_recordOrder(_recordLeft, _recordRight) || (_recordOrder)(_recordRight, _recordLeft))
+    }()) else { return }
 try emit(updates)
 } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
     failures.append(failure)
