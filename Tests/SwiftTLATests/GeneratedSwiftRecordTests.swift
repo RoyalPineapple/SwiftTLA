@@ -20,23 +20,29 @@ struct GeneratedSwiftRecordTests {
         }
     }
 
-    @Test("ordinary Swift records execute through generated typed transitions")
-    func executesRecordTransition() throws {
-        var machine = try GeneratedSwiftRecord.makeMachine()
+    @Test("ordinary Swift record choices retain values and report ambiguous actions")
+    func executesRecordChoices() throws {
+        let machine = try GeneratedSwiftRecord.makeMachine()
         let different = GeneratedSwiftRecord.Packet(count: 9, ready: false)
         #expect(machine.state.packet == different)
         #expect(machine.state.packet.tlaValue != different.tlaValue)
         #expect(machine.state.packet.count == 0 && !machine.state.packet.ready)
         #expect(try machine.violatedInvariants(checking: [.Bounded], atLevel: 1).isEmpty)
-        let transition = try machine.send(.advance)
-        #expect(transition.before.packet.count == 0 && !transition.before.packet.ready)
-        #expect(transition.after.packet.count == 1 && transition.after.packet.ready)
-        #expect(transition.before.previousCount == -1)
-        #expect(transition.after.previousCount == 0)
-        #expect(try machine.violatedInvariants(checking: [.Bounded], atLevel: 2).isEmpty)
-        #expect(machine.state.packet.count == transition.after.packet.count)
-        #expect(machine.state.packet.ready == transition.after.packet.ready)
-        #expect(machine.state.previousCount == transition.after.previousCount)
+        let candidates = try machine.successors(for: .advance)
+        #expect(candidates.map { $0.state.packet.count }.sorted() == [1, 2])
+        for candidate in candidates {
+            let input = candidate.state.packet.count
+            #expect(candidate.state.packet.ready)
+            #expect(candidate.state.history.map(\.count) == [input])
+            #expect(candidate.state.previousCount == 0)
+            #expect(try candidate.violatedInvariants(checking: [.Bounded], atLevel: 2)
+                == (input == 1 ? [] : [.Bounded]))
+        }
+        var unchanged = machine
+        #expect(throws: GeneratedMachineError.ambiguousAction) { try unchanged.send(.advance) }
+        #expect(unchanged.state.packet.count == 0 && !unchanged.state.packet.ready)
+        #expect(unchanged.state.previousCount == -1)
+        #expect(unchanged.state.history.map(\.count) == [0])
     }
 
     @Test("record expression fields retain their Swift field types")

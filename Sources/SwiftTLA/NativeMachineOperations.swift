@@ -138,6 +138,8 @@ public struct InitialEvaluationOutcomes<State: Sendable>: Sendable {
 /// Value operations emitted by the native machine generator.
 @_documentation(visibility: internal)
 public enum _NativeMachineOperations: Sendable {
+    public typealias StateHasher = Swift.Hasher
+
     public static let maximumRecursiveDepth = 4_096
 
     /// Handle a model failure within one initial branch without abandoning other branches.

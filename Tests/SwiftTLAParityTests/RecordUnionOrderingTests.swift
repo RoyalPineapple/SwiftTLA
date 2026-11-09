@@ -103,6 +103,10 @@ struct RecordUnionOrderingTests {
         let values = machines.map(\.state.value)
         #expect(values.count == 6)
         #expect(Set(values).count == 6)
+        let graph = try ReachabilityGraph(initialMachines: machines, maximumStates: 12)
+        #expect(graph.initialStates.count == 6)
+        #expect(graph.transitions.count == 12)
+        #expect(graph.safetyViolations.isEmpty && graph.deadlockedStates.isEmpty)
         let formal = values.map { CompiledValue(formal: $0.tlaValue) }
         #expect(formal == formal.sorted())
         for var machine in machines {

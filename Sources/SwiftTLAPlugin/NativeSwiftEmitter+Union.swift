@@ -121,6 +121,9 @@ extension NativeSwiftEmitter {
             if left == right { return try ordering(left) }
         default: break
         }
+        if left == right, case .finite(let members) = left, members == Set(members).sorted() {
+            return try ordering(left)
+        }
         func closure(_ body: String) throws -> String {
             "{ (lhs: \(try swiftType(left)), rhs: \(try swiftType(right))) -> \(nativeBoolType) in\n\(body)\n}"
         }

@@ -107,7 +107,10 @@ extension NativeSwiftEmitter {
             let declaration = program.layout.variables[variable.id.ordinal]
             return "\\State.\(variable.swiftIdentifier): .init(swiftName: \(String(reflecting: variable.swiftIdentifier)), formalName: \(String(reflecting: declaration.formalName)))"
         }.joined(separator: ",\n")
-        let stateDeclarations = try nativeDeclarations("""
+        let stateIdentity = try structuralStateIdentityMembers(fields: api.variables.map {
+            (name: $0.swiftIdentifier, type: program.variableTypes[$0.id]!)
+        })
+        var stateDeclarations = try nativeDeclarations("""
         public struct State: Hashable, GeneratedModelFields {
             \(stateFields)
             public static var displayNames: [PartialKeyPath<State>: \(nativeStringType)] {
@@ -128,6 +131,22 @@ extension NativeSwiftEmitter {
             public let after: State
         }
         """)
+        if !stateIdentity.isEmpty {
+            guard var state = stateDeclarations.first?.as(StructDeclSyntax.self),
+                  stateIdentity.count == 2,
+                  stateIdentity.allSatisfy({ $0.is(FunctionDeclSyntax.self) && !$0.hasError }) else {
+                let missing = stateIdentity.flatMap { $0.tokens(viewMode: .all) }
+                    .filter { $0.presence == .missing }.prefix(8).map { String(describing: $0.tokenKind) }
+                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+                    path: "native.State.identity", expected: "two complete generated equality and hashing methods",
+                    actual: "members=\(stateIdentity.count), missing tokens=\(missing)",
+                    nextSafeAction: "Report this native code generation failure.")
+            }
+            for member in stateIdentity {
+                state.memberBlock.members.append(MemberBlockItemSyntax(decl: member))
+            }
+            stateDeclarations[0] = DeclSyntax(state)
+        }
         try verifyGeneratedStateConstructorOutput(stateDeclarations.first, fields: try api.variables.map {
             (name: $0.swiftIdentifier, type: try swiftType(program.variableTypes[$0.id]!),
              ordinal: $0.id.ordinal, formalName: program.layout.variables[$0.id.ordinal].formalName)
@@ -175,6 +194,131 @@ extension NativeSwiftEmitter {
         declarations += try valueTypeDeclarations()
         declarations += try choiceCacheDeclarations()
         return declarations
+    }
+
+    private func structuralStateIdentityMembers(fields: [(name: String, type: CompiledValueType)]) throws -> [DeclSyntax] {
+        guard fields.contains(where: { containsNominalRecord($0.type) }) else { return [] }
+        let hasherType = "SwiftTLA._NativeMachineOperations.StateHasher"
+        var types: [CompiledValueType] = []
+        var indices: [CompiledValueType: Int] = [:]
+        func index(_ type: CompiledValueType) -> Int {
+            if let known = indices[type] { return known }
+            let result = types.count
+            indices[type] = result
+            types.append(type)
+            return result
+        }
+        func equal(_ type: CompiledValueType, _ lhs: String, _ rhs: String) -> String {
+            containsNominalRecord(type) ? "_identityEqual\(index(type))(\(lhs), \(rhs))" : "(\(lhs) == \(rhs))"
+        }
+        func hash(_ type: CompiledValueType, _ value: String, into hasher: String) -> String {
+            containsNominalRecord(type)
+                ? "_identityHash\(index(type))(\(value), into: &\(hasher))" : "\(hasher).combine(\(value))"
+        }
+        let equality = fields.map { equal($0.type, "lhs.`" + $0.name + "`", "rhs.`" + $0.name + "`") }.joined(separator: " && ")
+        let hashing = fields.map { hash($0.type, "self.`" + $0.name + "`", into: "hasher") }.joined(separator: "\n")
+        var equalityHelpers: [String] = []
+        var hashHelpers: [String] = []
+        var cursor = 0
+        while cursor < types.count {
+            let type = types[cursor]
+            let equalityBody: String
+            let hashBody: String
+            if let members = type.recordFields {
+                equalityBody = members.map {
+                    "guard \(equal($0.type, "lhs.`" + $0.name + "`", "rhs.`" + $0.name + "`")) else { return false }"
+                }.joined(separator: "\n") + "\nreturn true"
+                hashBody = members.map { hash($0.type, "value.`" + $0.name + "`", into: "hasher") }.joined(separator: "\n")
+            } else {
+                switch type {
+                case .tuple(let elements):
+                    equalityBody = elements.enumerated().map {
+                        "guard \(equal($0.element, "lhs." + fieldName(type, index: $0.offset), "rhs." + fieldName(type, index: $0.offset))) else { return false }"
+                    }.joined(separator: "\n") + "\nreturn true"
+                    hashBody = elements.enumerated().map {
+                        hash($0.element, "value." + fieldName(type, index: $0.offset), into: "hasher")
+                    }.joined(separator: "\n")
+                case .array(let element):
+                    equalityBody = "return lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { pair in \(equal(element, "pair.0", "pair.1")) }"
+                    hashBody = "hasher.combine(value.count); for element in value { \(hash(element, "element", into: "hasher")) }"
+                case .set(let element):
+                    equalityBody = """
+                    guard lhs.count == rhs.count else { return false }
+                    var remaining = rhs.map { $0 }
+                    for a in lhs {
+                        guard let index = remaining.firstIndex(where: { b in \(equal(element, "a", "b")) }) else { return false }
+                        remaining.remove(at: index)
+                    }
+                    return true
+                    """
+                    hashBody = """
+                    var unorderedHash = 0
+                    for element in value {
+                        var memberHasher = \(hasherType)()
+                        \(hash(element, "element", into: "memberHasher"))
+                        unorderedHash ^= memberHasher.finalize()
+                    }
+                    hasher.combine(value.count)
+                    hasher.combine(unorderedHash)
+                    """
+                case .dictionary(let key, let value):
+                    equalityBody = """
+                    guard lhs.count == rhs.count else { return false }
+                    var remaining = rhs.map { $0 }
+                    for a in lhs {
+                        guard let index = remaining.firstIndex(where: { b in \(equal(key, "a.key", "b.key")) && \(equal(value, "a.value", "b.value")) }) else { return false }
+                        remaining.remove(at: index)
+                    }
+                    return true
+                    """
+                    hashBody = """
+                    var unorderedHash = 0
+                    for entry in value {
+                        var memberHasher = \(hasherType)()
+                        \(hash(key, "entry.key", into: "memberHasher"))
+                        \(hash(value, "entry.value", into: "memberHasher"))
+                        unorderedHash ^= memberHasher.finalize()
+                    }
+                    hasher.combine(value.count)
+                    hasher.combine(unorderedHash)
+                    """
+                case .oneOf, .union:
+                    equalityBody = "switch (lhs, rhs) {\n" + type.unionAlternatives!.enumerated().map {
+                        "case (.\(unionCase(type, index: $0.offset))(let a), .\(unionCase(type, index: $0.offset))(let b)): return \(equal($0.element, "a", "b"))"
+                    }.joined(separator: "\n") + "\ndefault: return false\n}"
+                    hashBody = "switch value {\n" + type.unionAlternatives!.enumerated().map {
+                        "case .\(unionCase(type, index: $0.offset))(let payload): hasher.combine(\($0.offset)); \(hash($0.element, "payload", into: "hasher"))"
+                    }.joined(separator: "\n") + "\n}"
+                default: throw unsupported("record state identity")
+                }
+            }
+            let name = try swiftType(type)
+            equalityHelpers.append("""
+            func _identityEqual\(cursor)(_ lhs: \(name), _ rhs: \(name)) -> \(nativeBoolType) {
+                \(equalityBody)
+            }
+            """)
+            hashHelpers.append("""
+            func _identityHash\(cursor)(_ value: \(name), into hasher: inout \(hasherType)) {
+                \(hashBody)
+            }
+            """)
+            cursor += 1
+        }
+        // shortcut: structural set/map equality scans members; use compiler-owned collection keys if profiling shows this dominates.
+        let equalityDeclaration = """
+        public static func == (lhs: Self, rhs: Self) -> \(nativeBoolType) {
+            \(equalityHelpers.joined(separator: "\n"))
+            return \(equality)
+        }
+        """
+        let hashDeclaration = """
+        public func hash(into hasher: inout \(hasherType)) {
+            \(hashHelpers.joined(separator: "\n"))
+            \(hashing)
+        }
+        """
+        return try nativeDeclarations(equalityDeclaration) + nativeDeclarations(hashDeclaration)
     }
 
     func valueTypeDeclarations() throws -> [DeclSyntax] {

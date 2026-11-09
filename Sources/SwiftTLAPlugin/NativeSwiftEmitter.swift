@@ -290,6 +290,15 @@ struct NativeSwiftEmitter {
         return "({ (value: \(try swiftType(source))) -> \(try swiftType(destination)) in\nswitch value { \(cases) } })(\(value))"
     }
 
+    func containsNominalRecord(_ type: CompiledValueType) -> Bool {
+        var pending = [type]
+        while let value = pending.popLast() {
+            if case .nominalRecord = value { return true }
+            pending.append(contentsOf: value.components)
+        }
+        return false
+    }
+
     /// Emits a native comparator matching CompiledValue's structural order.
     func ordering(_ type: CompiledValueType) throws -> String {
         let name = try swiftType(type)
@@ -765,13 +774,7 @@ struct NativeSwiftEmitter {
             "(\(try emit(0)) \(operation) \(try emit(1)))"
         }
         func recordEquality(negated: Bool) throws -> String? {
-            var pending = [childType(0), childType(1)]
-            var containsRecord = false
-            while let type = pending.popLast() {
-                if case .nominalRecord = type { containsRecord = true; break }
-                pending.append(contentsOf: type.components)
-            }
-            guard containsRecord else { return nil }
+            guard containsNominalRecord(childType(0)) || containsNominalRecord(childType(1)) else { return nil }
             let forward = try crossOrdering(childType(0), childType(1))
             let reverse = childType(0) == childType(1)
                 ? "_recordOrder" : try crossOrdering(childType(1), childType(0))
