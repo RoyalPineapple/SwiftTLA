@@ -28,6 +28,9 @@ struct GeneratedSwiftRecordTests {
         #expect(machine.state.packet.tlaValue != different.tlaValue)
         #expect(machine.state.packet.count == 0 && !machine.state.packet.ready)
         #expect(try machine.violatedInvariants(checking: [.Bounded], atLevel: 1).isEmpty)
+        for property: GeneratedSwiftRecord.Property in [.RecordCardinality, .RecordForAll, .RecordExists, .RecordMapping, .RecordSelection] {
+            #expect(try machine.violatedInvariants(checking: [property], atLevel: 1).isEmpty)
+        }
         let candidates = try machine.successors(for: .advance)
         #expect(candidates.map { $0.state.packet.count }.sorted() == [1, 1, 2, 2])
         for candidate in candidates {

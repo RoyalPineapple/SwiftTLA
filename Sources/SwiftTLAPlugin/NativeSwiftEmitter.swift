@@ -916,6 +916,10 @@ struct NativeSwiftEmitter {
         func emit(_ index: Int) throws -> String {
             try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         }
+        func members(_ index: Int) throws -> String {
+            try recordSetElements(node.children[index], state: state,
+                substitutions: substitutions, activeFunctions: activeFunctions) ?? emit(index)
+        }
         func quantifier(_ binding: BinderID, all: Bool) throws -> String {
             guard case .set(let element) = childType(0) else { throw unsupported("quantifier domain") }
             let method = all ? "allSatisfy" : "contains"
@@ -935,7 +939,7 @@ struct NativeSwiftEmitter {
                 }())
                 """
             }
-            let domain = try emit(0)
+            let domain = try members(0)
             let predicate = try emit(1)
             return "(try \(domain).sorted(by: \(try ordering(element))).\(method) { (\(binder(binding)): \(try swiftType(element))) throws -> \(nativeBoolType) in \(predicate) })"
         }
@@ -1009,7 +1013,7 @@ struct NativeSwiftEmitter {
             return "(\(try emit(0)).intersection(\(try emit(1))))"
         case .setDifference:
             return "(\(try emit(0)).subtracting(\(try emit(1))))"
-        case .cardinality: return "(\(try emit(0)).count)"
+        case .cardinality: return "(\(try members(0)).count)"
         case .integerRange: return "(try SwiftTLA._NativeMachineOperations.integerRange(\(try emit(0)), \(try emit(1))))"
         case .setFilter(let binding):
             guard case .set(let element) = node.resultType else { throw unsupported("set filter") }
@@ -1017,13 +1021,13 @@ struct NativeSwiftEmitter {
         case .setMap(let binding):
             guard case .set(let element) = node.resultType else { throw unsupported("set map") }
             guard case .set(let input) = childType(1) else { throw unsupported("set map domain") }
-            return "Set<\(try swiftType(element))>(try \(try emit(1)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> \(try swiftType(element)) in \(try emit(0)) })"
+            return "Set<\(try swiftType(element))>(try \(try members(1)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> \(try swiftType(element)) in \(try emit(0)) })"
         case .forAll(let binding): return try quantifier(binding, all: true)
         case .exists(let binding): return try quantifier(binding, all: false)
         case .choose(let binding):
             let element = node.resultType
             let order = try ordering(element)
-            return "(try SwiftTLA._NativeMachineOperations.choose(\(try emit(0)).sorted(by: \(order))) { \(binder(binding)) in \(try emit(1)) })"
+            return "(try SwiftTLA._NativeMachineOperations.choose(\(try members(0)).sorted(by: \(order))) { \(binder(binding)) in \(try emit(1)) })"
         case .sequenceFromSet:
             guard case .set(let element) = childType(0) else { throw unsupported("sequence from set") }
             return "(\(try emit(0)).sorted(by: \(try ordering(element))))"

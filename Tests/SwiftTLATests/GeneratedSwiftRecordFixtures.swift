@@ -49,6 +49,28 @@ struct GeneratedSwiftRecord {
                 })
             }
             generatedSwiftRecord
+            Invariant("RecordCardinality") {
+                SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false),
+                    Packet(count: 1, ready: false)).cardinality == 2
+            }
+            Invariant("RecordForAll") {
+                !ForAll(in: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { $0.count == 1 }
+                    && !ForAll(in: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { $0.count == 2 }
+                    && ForAll(in: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { $0.count > 0 }
+            }
+            Invariant("RecordExists") {
+                Exists(in: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { $0.count == 1 }
+                    && Exists(in: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { $0.count == 2 }
+                    && !Exists(in: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { $0.count == 3 }
+            }
+            Invariant("RecordMapping") {
+                SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)).mapping { $0.count }.cardinality == 2
+                    && SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)).mapping { _ in 1 }.cardinality == 1
+            }
+            Invariant("RecordSelection") {
+                Select(from: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { candidate in candidate.count == 1 } == Packet(count: 1, ready: false)
+                    && Select(from: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { candidate in candidate.count == 2 } == Packet(count: 2, ready: false)
+            }
             Invariant("Bounded") {
                 packet.count <= 1 && archive.cardinality == 2
                     && If(packet.ready,
