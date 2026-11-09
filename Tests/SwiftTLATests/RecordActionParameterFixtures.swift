@@ -15,6 +15,14 @@ struct RecordActionParameterModel {
     static var spec: TLASpec {
         #spec("RecordActionParameterModel") { scope in
             let packet = scope.sharedVar(in: SetExpr<Packet>.literal(Packet(count: 0, ready: false), Packet(count: 0, ready: false)))
+            SwiftTLA.Action("conflicting") {
+                packet.becomes(Packet(count: 1, ready: false))
+                packet.becomes(Packet(count: 2, ready: false))
+            }
+            SwiftTLA.Action("matching") {
+                packet.becomes(Packet(count: 1, ready: false))
+                packet.becomes(Packet(count: 1, ready: false))
+            }
             Do(Step.construct, over: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false), Packet(count: 1, ready: false))) { input in
                 Assign(packet, to: Packet.expression(count: input.count, ready: false))
             }

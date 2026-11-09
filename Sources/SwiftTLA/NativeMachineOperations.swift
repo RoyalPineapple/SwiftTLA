@@ -162,10 +162,11 @@ public enum _NativeMachineOperations: Sendable {
 
     @inlinable
     public static func mergeUpdate<Value: Equatable & Sendable>(
-        _ current: inout Value?, _ incoming: Value?
+        _ current: inout Value?, _ incoming: Value?,
+        equivalent: @Sendable (Value, Value) -> Bool = { $0 == $1 }
     ) -> Bool {
         guard let incoming else { return true }
-        if let current, current != incoming { return false }
+        if let current, !equivalent(current, incoming) { return false }
         current = incoming
         return true
     }

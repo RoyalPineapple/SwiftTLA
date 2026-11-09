@@ -660,6 +660,27 @@ struct NativeCodeGenerationTests {
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedSnapshotOutput(wrong, hiddenFields: hiddenFields)
         }
+
+        let recordSource = Parser.parse(source: try String(contentsOf: fixture.deletingLastPathComponent()
+            .appendingPathComponent("GeneratedSwiftRecordFixtures.swift"), encoding: .utf8))
+        let recordDeclaration = try #require(recordSource.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "GeneratedSwiftRecord" })
+        let record = try TLASpecVerifier.parseAndVerify(recordDeclaration)
+        var recordEmitter = NativeSwiftEmitter(model: record)
+        let recordMembers = try recordEmitter.machineMembers()
+        let recordSnapshot = try #require(recordMembers.first { $0.as(StructDeclSyntax.self)?.name.text == "Snapshot" })
+        let recordHidden = try record.program.layout.variables.filter { recordEmitter.stateMemberNames[$0.id] == nil }
+            .map { (name: recordEmitter.variable($0.id), type: try recordEmitter.swiftType(record.program.variableTypes[$0.id]!)) }
+        try verifyGeneratedSnapshotOutput(recordSnapshot, hiddenFields: recordHidden, structuralIdentity: true)
+        let stateField = "public let state: State"
+        try #require(recordSnapshot.description.components(separatedBy: stateField).count - 1 == 1)
+        let missingPublicState = recordSnapshot.description.replacingOccurrences(of: stateField, with: "")
+        #expect(missingPublicState != recordSnapshot.description)
+        let missingPublic = Parser.parse(source: missingPublicState).statements.first?.item.as(DeclSyntax.self)
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedSnapshotOutput(missingPublic, hiddenFields: recordHidden, structuralIdentity: true)
+        }
     }
     @Test("Finite union state preserves declared Swift alternatives without anonymous replacement")
     func finiteUnionPreservesDeclaredTypes() throws {

@@ -218,6 +218,30 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedUpdateMergeOutput(wrongMergeMember, slots: [firstSlot, secondSlot])
         }
+        let recordEmitter = NativeSwiftEmitter(model: try swiftRecordModel())
+        let recordUpdates = try #require(try recordEmitter.updateDeclarations().first)
+        let recordSlots = recordEmitter.program.layout.variables.map { recordEmitter.variable($0.id) }
+        let recordTypes = Dictionary(uniqueKeysWithValues: try recordEmitter.program.layout.variables.compactMap {
+            slot -> (String, String)? in
+            let type = recordEmitter.program.variableTypes[slot.id]!
+            return recordEmitter.containsNominalRecord(type) ? (recordEmitter.variable(slot.id), try recordEmitter.swiftType(type)) : nil
+        })
+        try verifyGeneratedUpdateMergeOutput(recordUpdates, slots: recordSlots, recordTypes: recordTypes)
+        let recordSlot = try #require(recordTypes.keys.first)
+        try #require(recordTypes.count == 1)
+        let relation = "return _mergeEqual_\(recordSlot)(lhs, rhs)"
+        try #require(recordUpdates.description.components(separatedBy: relation).count - 1 == 1)
+        let ignoredIncoming = recordUpdates.description.replacingOccurrences(
+            of: relation, with: "return _mergeEqual_\(recordSlot)(lhs, lhs)")
+        #expect(ignoredIncoming != recordUpdates.description)
+        let ignoredMerge = Parser.parse(source: ignoredIncoming).statements.first?.item.as(DeclSyntax.self)
+        do {
+            try verifyGeneratedUpdateMergeOutput(ignoredMerge, slots: recordSlots, recordTypes: recordTypes)
+            Issue.record("A record-update compatibility relation that ignores the incoming value was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._Updates.merging")
+        }
+
         let firstField = try #require(bindings["__PROOF_FIRST_FIELD__"])
         let secondField = try #require(bindings["__PROOF_SECOND_FIELD__"])
         let projectionTokens = try #require(member(named: "__swifttlaFormalProjectionTokens", in: members))

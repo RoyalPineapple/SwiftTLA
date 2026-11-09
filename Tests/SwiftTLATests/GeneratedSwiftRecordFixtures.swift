@@ -29,18 +29,24 @@ struct GeneratedSwiftRecord {
                 Packet(count: 0, ready: false), Packet(count: 1, ready: true)
             ]))
             let generatedSwiftRecord = Algorithm(label: "GeneratedSwiftRecord") {
-                Do(Step.advance) {
-                    let saved = packet
-                    When(saved.count == 0)
-                    With(IntRange(1, through: 2)) { input in
-                        Assign(packet, to: Packet.expression(count: input, ready: true))
-                        Assign(history, to: SequenceMapping(length: 1) { _ in
-                            Packet.expression(count: input, ready: true)
-                        })
+                Each(Set<Int>([0]), scoped: { _, process in
+                    let localPacket = process.localVar(initial: Packet(count: 0, ready: false))
+                    Do(Step.advance) {
+                        let saved = packet
+                        When(saved.count == 0)
+                        With(IntRange(1, through: 2)) { input in
+                            Assign(packet, to: Packet.expression(count: input, ready: true))
+                            Assign(history, to: SequenceMapping(length: 1) { _ in
+                                Packet.expression(count: input, ready: true)
+                            })
+                            With(IntRange(1, through: 2)) { hidden in
+                                Assign(localPacket, to: Packet.expression(count: hidden, ready: false))
+                            }
+                        }
+                        Assign(previousCount, to: saved.count)
+                        Stop()
                     }
-                    Assign(previousCount, to: saved.count)
-                    Stop()
-                }
+                })
             }
             generatedSwiftRecord
             Invariant("Bounded") {

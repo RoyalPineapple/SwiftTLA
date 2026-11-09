@@ -35,7 +35,7 @@ extension NativeSwiftEmitter {
         let registerInitializers = try zip(registers, registerNames).map { register, name in
             "\(name): \(try expression(program.behavior.checkingRegisterInitializations[register.id]!))"
         }.joined(separator: ", ")
-        let machineDeclarations = try nativeDeclarations("""
+        var machineDeclarations = try nativeDeclarations("""
         public struct CheckingRegisters: Sendable {
             \(registerFields)
         }
@@ -66,9 +66,16 @@ extension NativeSwiftEmitter {
         }
         private var _execution: Snapshot
         """)
-        try verifyGeneratedSnapshotOutput(machineDeclarations.first {
+        guard let snapshotIndex = machineDeclarations.firstIndex(where: {
             $0.as(StructDeclSyntax.self)?.name.text == "Snapshot"
-        }, hiddenFields: hiddenFields)
+        }) else { throw unsupported("missing snapshot declaration") }
+        var snapshotDeclarations = [machineDeclarations[snapshotIndex]]
+        try addStructuralIdentity(to: &snapshotDeclarations, fields: hiddenVariables.map {
+            (name: variable($0.id), type: program.variableTypes[$0.id]!)
+        }, includingPublicState: true)
+        machineDeclarations[snapshotIndex] = snapshotDeclarations[0]
+        try verifyGeneratedSnapshotOutput(machineDeclarations[snapshotIndex], hiddenFields: hiddenFields,
+            structuralIdentity: hiddenVariables.contains { containsNominalRecord(program.variableTypes[$0.id]!) })
         try verifyGeneratedValidationDelegationOutput(machineDeclarations.first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "visitValidationOutcomes"
         })
@@ -182,9 +189,10 @@ extension NativeSwiftEmitter {
 
     func addStructuralIdentity(
         to declarations: inout [DeclSyntax], fields: [(name: String, type: CompiledValueType)] = [],
-        cases: [(name: String, types: [CompiledValueType])] = []
+        cases: [(name: String, types: [CompiledValueType])] = [], includingPublicState: Bool = false
     ) throws {
-        let identity = try structuralIdentityMembers(fields: fields, cases: cases)
+        let identity = try structuralIdentityMembers(fields: fields, cases: cases,
+            includingPublicState: includingPublicState)
         guard !identity.isEmpty else { return }
         let first = declarations.first
         guard var block = first?.as(StructDeclSyntax.self)?.memberBlock
@@ -214,10 +222,32 @@ extension NativeSwiftEmitter {
 
     private func structuralIdentityMembers(
         fields: [(name: String, type: CompiledValueType)],
-        cases: [(name: String, types: [CompiledValueType])]
+        cases: [(name: String, types: [CompiledValueType])], includingPublicState: Bool
     ) throws -> [DeclSyntax] {
         guard fields.contains(where: { containsNominalRecord($0.type) })
                 || cases.contains(where: { $0.types.contains(where: containsNominalRecord) }) else { return [] }
+        let bodies = try structuralIdentityBodies(fields: fields, cases: cases,
+            includingPublicState: includingPublicState)
+        return try nativeDeclarations("""
+        public static func == (lhs: Self, rhs: Self) -> \(nativeBoolType) {
+            \(bodies.equality)
+        }
+        public func hash(into hasher: inout SwiftTLA._NativeMachineOperations.StateHasher) {
+            \(bodies.hashing)
+        }
+        """)
+    }
+
+    private func structuralEquivalence(_ type: CompiledValueType) throws -> String {
+        let bodies = try structuralIdentityBodies(fields: [], cases: [], includingPublicState: false, value: type)
+        return "{ (lhs: \(try swiftType(type)), rhs: \(try swiftType(type))) -> \(nativeBoolType) in\n\(bodies.equality)\n}"
+    }
+
+    private func structuralIdentityBodies(
+        fields: [(name: String, type: CompiledValueType)],
+        cases: [(name: String, types: [CompiledValueType])], includingPublicState: Bool,
+        value: CompiledValueType? = nil
+    ) throws -> (equality: String, hashing: String) {
         let hasherType = "SwiftTLA._NativeMachineOperations.StateHasher"
         var types: [CompiledValueType] = []
         var indices: [CompiledValueType: Int] = [:]
@@ -237,11 +267,15 @@ extension NativeSwiftEmitter {
         }
         let equality: String
         let hashing: String
-        if cases.isEmpty {
-            equality = "return " + fields.map {
+        if let value {
+            equality = "return " + equal(value, "lhs", "rhs")
+            hashing = hash(value, "value", into: "hasher")
+        } else if cases.isEmpty {
+            equality = "return " + (includingPublicState ? "(lhs.state == rhs.state) && " : "") + fields.map {
                 equal($0.type, "lhs.`" + $0.name + "`", "rhs.`" + $0.name + "`")
             }.joined(separator: " && ")
-            hashing = fields.map { hash($0.type, "self.`" + $0.name + "`", into: "hasher") }.joined(separator: "\n")
+            hashing = (includingPublicState ? "hasher.combine(state)\n" : "")
+                + fields.map { hash($0.type, "self.`" + $0.name + "`", into: "hasher") }.joined(separator: "\n")
         } else {
             func pattern(_ name: String, _ types: [CompiledValueType], _ prefix: String) -> String {
                 "." + name + (types.isEmpty ? "" : "(" + types.indices.map { "let \(prefix)\($0)" }.joined(separator: ", ") + ")")
@@ -348,19 +382,8 @@ extension NativeSwiftEmitter {
             cursor += 1
         }
         // shortcut: structural set/map equality scans members; use compiler-owned collection keys if profiling shows this dominates.
-        let equalityDeclaration = """
-        public static func == (lhs: Self, rhs: Self) -> \(nativeBoolType) {
-            \(equalityHelpers.joined(separator: "\n"))
-            \(equality)
-        }
-        """
-        let hashDeclaration = """
-        public func hash(into hasher: inout \(hasherType)) {
-            \(hashHelpers.joined(separator: "\n"))
-            \(hashing)
-        }
-        """
-        return try nativeDeclarations(equalityDeclaration) + nativeDeclarations(hashDeclaration)
+        return (equality: equalityHelpers.joined(separator: "\n") + "\n" + equality,
+            hashing: hashHelpers.joined(separator: "\n") + "\n" + hashing)
     }
 
     func valueTypeDeclarations() throws -> [DeclSyntax] {
@@ -447,8 +470,17 @@ extension NativeSwiftEmitter {
 
     func updateDeclarations() throws -> [DeclSyntax] {
         let fields = try program.layout.variables.map { "var \(variable($0.id)): \(try swiftType(program.variableTypes[$0.id]!))? = nil" }.joined(separator: "\n")
-        let merges = program.layout.variables.map { slot in
+        let merges = try program.layout.variables.map { slot in
             let name = variable(slot.id)
+            let type = program.variableTypes[slot.id]!
+            if containsNominalRecord(type) {
+                return """
+                guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.\(name), other.\(name), equivalent: { lhs, rhs in
+                    let _mergeEqual_\(name) = \(try structuralEquivalence(type))
+                    return _mergeEqual_\(name)(lhs, rhs)
+                }) else { return nil }
+                """
+            }
             return "guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.\(name), other.\(name)) else { return nil }"
         }.joined(separator: "\n")
         let updated = executionState { "\(variable($0)) ?? \(stateValue($0))" }
@@ -466,7 +498,11 @@ extension NativeSwiftEmitter {
         }
         """)
         try verifyGeneratedUpdateMergeOutput(
-            declarations.first, slots: program.layout.variables.map { variable($0.id) })
+            declarations.first, slots: program.layout.variables.map { variable($0.id) },
+            recordTypes: Dictionary(uniqueKeysWithValues: try program.layout.variables.compactMap { slot -> (String, String)? in
+                let type = program.variableTypes[slot.id]!
+                return containsNominalRecord(type) ? (variable(slot.id), try swiftType(type)) : nil
+            }))
         try verifyGeneratedUpdateApplyOutput(
             declarations.first,
             publicFields: model.api.variables.map {
@@ -2191,8 +2227,31 @@ func verifyGeneratedInitialBindings(
 }
 
 func verifyGeneratedSnapshotOutput(
-    _ declaration: DeclSyntax?, hiddenFields: [(name: String, type: String)]
+    _ declaration: DeclSyntax?, hiddenFields: [(name: String, type: String)],
+    structuralIdentity: Bool = false
 ) throws {
+    var checked = declaration
+    if structuralIdentity, var snapshot = declaration?.as(StructDeclSyntax.self) {
+        let methods = snapshot.memberBlock.members.compactMap { $0.decl.as(FunctionDeclSyntax.self) }
+        let expectedMethods = Parser.parse(source: """
+        public static func == (lhs: Self, rhs: Self) -> \(nativeBoolType) {}
+        public func hash(into hasher: inout SwiftTLA._NativeMachineOperations.StateHasher) {}
+        """).statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }
+        let headers = (methods + expectedMethods).map { method -> [String] in
+            var signature = method
+            signature.body = nil
+            return signature.tokens(viewMode: .sourceAccurate).map(\.text)
+        }
+        if methods.count == 2, expectedMethods.count == 2, methods.allSatisfy({ !$0.hasError }),
+           Array(headers.prefix(2)) == Array(headers.suffix(2)) {
+            snapshot.memberBlock.members = snapshot.memberBlock.members.filter {
+                !$0.decl.is(FunctionDeclSyntax.self)
+            }
+            checked = DeclSyntax(snapshot)
+        } else {
+            checked = nil
+        }
+    }
     let fields = hiddenFields.map { "let \($0.name): \($0.type)" }.joined(separator: "\n")
     let expected = Parser.parse(source: """
     public struct Snapshot: Hashable, Sendable {
@@ -2200,13 +2259,13 @@ func verifyGeneratedSnapshotOutput(
         \(fields)
     }
     """).statements.first?.item.as(StructDeclSyntax.self)
-    let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+    let actualTokens = checked.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
     let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
     guard actualTokens == expectedTokens else {
         throw CompilationDiagnostic(
             code: .unsupportedGeneratedValueShape, stage: .validation,
             path: "native.Snapshot",
-            expected: "the public state and every hidden field with compiler-synthesized identity",
+            expected: "the public state and every hidden field, plus typed structural identity when required",
             actual: "the generated snapshot declaration differs from the checked rule",
             nextSafeAction: "Report this native code generation failure."
         )
@@ -2263,24 +2322,72 @@ func verifyGeneratedStateConstructorOutput(
     }
 }
 
-func verifyGeneratedUpdateMergeOutput(_ declaration: DeclSyntax?, slots: [String]) throws {
+func verifyGeneratedUpdateMergeOutput(
+    _ declaration: DeclSyntax?, slots: [String], recordTypes: [String: String] = [:]
+) throws {
     let merge = declaration?.as(StructDeclSyntax.self)?.memberBlock.members.compactMap {
         $0.decl.as(FunctionDeclSyntax.self)
     }.first { $0.name.text == "merging" }
+    var actual = merge.map { Array($0.tokens(viewMode: .sourceAccurate)) } ?? []
+    var ordersMatch = Set(recordTypes.keys).isSubset(of: Set(slots))
+    var orderFailure = ""
+    for slot in slots where recordTypes[slot] != nil {
+        let type = recordTypes[slot]!
+        let prefix = Parser.parse(source:
+            "let _mergeEqual_\(slot) = { (lhs: \(type), rhs: \(type)) -> \(nativeBoolType) in")
+            .tokens(viewMode: .sourceAccurate).map(\.text).filter { !$0.isEmpty }
+        let positions = actual.indices.filter { index in
+            index + prefix.count <= actual.count
+                && actual[index..<(index + prefix.count)].map(\.text).elementsEqual(prefix)
+        }
+        guard positions.count == 1, let start = positions.first else {
+            ordersMatch = false
+            orderFailure = "slot=\(slot), prefixes=\(positions.count), expected=\(prefix.prefix(30))"
+            break
+        }
+        let body = start + prefix.count
+        var cursor = body
+        var depth = 1
+        while cursor < actual.count, depth > 0 {
+            if actual[cursor].tokenKind == .leftBrace { depth += 1 }
+            if actual[cursor].tokenKind == .rightBrace { depth -= 1 }
+            cursor += 1
+        }
+        guard depth == 0 else { ordersMatch = false; break }
+        // Comparator interpretation remains separate from the exact surrounding merge rule.
+        actual.removeSubrange(body..<(cursor - 1))
+    }
     var expected = ["func", "merging", "(", "_", "other", ":", "Self", ")", "->", "Self", "?", "{",
                     "var", "result", "=", "self"]
     for slot in slots {
-        expected += ["guard", "SwiftTLA", ".", "_NativeMachineOperations", ".", "mergeUpdate", "(", "&", "result", ".",
-                     slot, ",", "other", ".", slot, ")", "else", "{", "return", "nil", "}"]
+        if let type = recordTypes[slot] {
+            let source = """
+            guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.\(slot), other.\(slot), equivalent: { lhs, rhs in
+                let _mergeEqual_\(slot) = { (lhs: \(type), rhs: \(type)) -> \(nativeBoolType) in }
+                return _mergeEqual_\(slot)(lhs, rhs)
+            }) else { return nil }
+            """
+            expected += Parser.parse(source: source).tokens(viewMode: .sourceAccurate)
+                .map(\.text).filter { !$0.isEmpty }
+        } else {
+            expected += ["guard", "SwiftTLA", ".", "_NativeMachineOperations", ".", "mergeUpdate", "(", "&", "result", ".",
+                         slot, ",", "other", ".", slot, ")", "else", "{", "return", "nil", "}"]
+        }
     }
     expected += ["return", "result", "}"]
-    guard let merge,
-          Array(merge.tokens(viewMode: .sourceAccurate)).map(\.text) == expected else {
+    let actualText = actual.map(\.text)
+    guard let merge, !merge.hasError, ordersMatch, actualText == expected else {
+        let mismatch = zip(actualText, expected).enumerated().first { $0.element.0 != $0.element.1 }?.offset ?? min(actualText.count, expected.count)
+        let scope = merge?.detached
+        let missing = scope?.tokens(viewMode: .all).filter { $0.presence == .missing } ?? []
+        let source = Array((scope?.description ?? "missing").utf8)
+        let offset = min(missing.first?.position.utf8Offset ?? 0, source.count)
+        let excerpt = String(decoding: source[max(0, offset - 280)..<min(source.count, offset + 280)], as: UTF8.self)
         throw CompilationDiagnostic(
             code: .unsupportedGeneratedValueShape, stage: .validation,
             path: "native._Updates.merging",
-            expected: "one mergeUpdate call per compiled state slot in declaration order",
-            actual: "the generated merge method differs from the checked rule",
+            expected: "one mergeUpdate call per compiled slot with its resolved record relation when required",
+            actual: "orders=\(ordersMatch) \(orderFailure); parserError=\(merge?.hasError ?? true), missing=\(missing.prefix(8).map { String(describing: $0.tokenKind) }), excerpt=\(excerpt), scopeTail=\(merge?.description.suffix(240) ?? "missing"), mismatch=\(mismatch), actual=\(Array(actualText.dropFirst(max(0, mismatch - 8)).prefix(40))), expected=\(Array(expected.dropFirst(max(0, mismatch - 8)).prefix(40)))",
             nextSafeAction: "Report this native code generation failure."
         )
     }

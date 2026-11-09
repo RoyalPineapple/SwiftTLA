@@ -56,27 +56,37 @@ struct SymbolicRecordConstructionTests {
             }
         })
         let candidates = try machine.actionCandidates()
-        #expect(candidates.count == 4)
-        #expect(Set(try candidates.map { try machine.formalCall(for: $0) }) == expectedCalls)
+        #expect(candidates.count == 6)
+        #expect(Set(try candidates.map { try machine.formalCall(for: $0) }) == expectedCalls.union([
+            .init(name: "conflicting"), .init(name: "matching")
+        ]))
         let successors = try machine.successors()
-        #expect(successors.count == 4)
-        #expect(successors.map { $0.machine.state.packet.count }.sorted() == [1, 1, 2, 2])
+        #expect(successors.count == 5)
+        #expect(successors.map { $0.machine.state.packet.count }.sorted() == [1, 1, 1, 2, 2])
+        #expect(try machine.successors(for: .matching).map { $0.state.packet.count } == [1])
         let graph = try ReachabilityGraph(initialMachines: [machine], maximumStates: 10)
         #expect(graph.transitions.keys.map { $0.state.packet.count }.sorted() == [0, 1, 2])
         #expect(graph.safetyViolations.isEmpty)
         for edges in graph.transitions.values {
-            #expect(edges.count == 4)
-            #expect(Set(try edges.map { try machine.formalCall(for: $0.action) }) == expectedCalls)
+            #expect(edges.count == 5)
+            #expect(Set(try edges.map { try machine.formalCall(for: $0.action) }) == expectedCalls.union([
+                .init(name: "matching")
+            ]))
             for edge in edges {
-                #expect(try machine.formalCall(for: edge.action).arguments ==
-                    [.record(["count": .int(edge.target.state.packet.count), "ready": .bool(false)])])
+                if edge.action == .matching {
+                    #expect(edge.target.state.packet.count == 1)
+                } else {
+                    #expect(try machine.formalCall(for: edge.action).arguments ==
+                        [.record(["count": .int(edge.target.state.packet.count), "ready": .bool(false)])])
+                }
                 #expect(!edge.target.state.packet.ready)
             }
         }
 
         for action in [
             RecordActionParameterModel.Action.construct(input: .init(count: 3, ready: false)),
-            .update(input: .init(count: 3, ready: false))
+            .update(input: .init(count: 3, ready: false)),
+            .conflicting
         ] {
             var selected = machine
             let before = selected.snapshot
