@@ -80,6 +80,9 @@ struct ConfiguredCounterExecutionTests {
         let firstMachine = try SymbolicRecordConstructionModel.makeMachine(configuration: first)
         let sameMachine = try SymbolicRecordConstructionModel.makeMachine(configuration: same)
         let secondMachine = try SymbolicRecordConstructionModel.makeMachine(configuration: second)
+        #expect(throws: GeneratedMachineStateDiagnostic.self) {
+            try SymbolicRecordConstructionModel.Configuration(start: .init(value: 9))
+        }
         #expect(firstMachine.state.packet.payload.value == 1)
         #expect(secondMachine.state.packet.payload.value == 2)
         #expect(firstMachine.hasSameConfiguration(as: sameMachine))

@@ -20,7 +20,13 @@ struct SymbolicRecordConstructionTests {
                 [.record(["count": .int(input), "ready": .bool(false)])])
         }
 
-        let machine = try RecordActionParameterModel.makeMachine()
+        let initials = try RecordActionParameterModel.initialMachines()
+        #expect(initials.count == 1)
+        let machine = try #require(initials.first)
+        #expect(machine.state.packet.count == 0 && !machine.state.packet.ready)
+        #expect(throws: GeneratedMachineError.invalidInitialState) {
+            try RecordActionParameterModel.makeMachine(.init(packet: .init(count: 3, ready: false)))
+        }
         let first = RecordActionParameterModel.Action.construct(input: .init(count: 1, ready: false))
         let same = RecordActionParameterModel.Action.construct(input: .init(count: 1, ready: false))
         let second = RecordActionParameterModel.Action.construct(input: .init(count: 2, ready: false))
@@ -43,6 +49,42 @@ struct SymbolicRecordConstructionTests {
         #expect(cachedCalls[first] == firstCall)
         #expect(cachedCalls[second] == secondCall)
         #expect(cachedCalls[update] == updateCall)
+
+        let expectedCalls = Set(["construct", "update"].flatMap { name in
+            [1, 2].map { count in
+                FormalActionCall(name: name, arguments: [.record(["count": .int(count), "ready": .bool(false)])])
+            }
+        })
+        let candidates = try machine.actionCandidates()
+        #expect(candidates.count == 4)
+        #expect(Set(try candidates.map { try machine.formalCall(for: $0) }) == expectedCalls)
+        let successors = try machine.successors()
+        #expect(successors.count == 4)
+        #expect(successors.map { $0.machine.state.packet.count }.sorted() == [1, 1, 2, 2])
+        let graph = try ReachabilityGraph(initialMachines: [machine], maximumStates: 10)
+        #expect(graph.transitions.keys.map { $0.state.packet.count }.sorted() == [0, 1, 2])
+        #expect(graph.safetyViolations.isEmpty)
+        for edges in graph.transitions.values {
+            #expect(edges.count == 4)
+            #expect(Set(try edges.map { try machine.formalCall(for: $0.action) }) == expectedCalls)
+            for edge in edges {
+                #expect(try machine.formalCall(for: edge.action).arguments ==
+                    [.record(["count": .int(edge.target.state.packet.count), "ready": .bool(false)])])
+                #expect(!edge.target.state.packet.ready)
+            }
+        }
+
+        for action in [
+            RecordActionParameterModel.Action.construct(input: .init(count: 3, ready: false)),
+            .update(input: .init(count: 3, ready: false))
+        ] {
+            var selected = machine
+            let before = selected.snapshot
+            #expect(try !selected.isEnabled(action))
+            #expect(try selected.successors(for: action).isEmpty)
+            #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try selected.send(action) }
+            #expect(selected.snapshot == before)
+        }
     }
 
     @Test("Symbolic record constructors preserve nested Swift values and parameter bindings")

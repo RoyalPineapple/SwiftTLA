@@ -538,6 +538,8 @@ extension NativeSwiftEmitter {
                         exhaustive = "try SwiftTLA._NativeMachineOperations.randomSubsetInitialSupport(upTo: \(name)_sampleLimit, from: \(domain))"
                     }
                     candidateSource = "(_sampleRandomSubset ? (\(sample)) : (\(exhaustive))).sorted(by: \(try ordering(type)))"
+                } else if let members = try recordSetElements(expression, state: "") {
+                    candidateSource = "\(members).sorted(by: \(try crossOrdering(type, type)))"
                 } else {
                     candidateSource = "\(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))"
                 }
@@ -1167,6 +1169,7 @@ extension NativeSwiftEmitter {
     }
 
     mutating func actionDomain(_ binding: CompiledActionBinding, state: String) throws -> String {
+        if let members = try recordSetElements(binding.domain, state: state) { return members }
         if let members = binding.literalMembers {
             return "[\(try members.map { try literal($0, as: program.bindingTypes[binding.binder]!) }.joined(separator: ", "))]"
         }
@@ -1279,7 +1282,21 @@ extension NativeSwiftEmitter {
                 }
                 formalArguments.append(try formalValue(argumentValue, type: type))
                 if apiBinding.isPublic {
-                    visitorValidations.append("guard \(domain).contains(\(name)) else { return [] }")
+                    let finiteRecordDomain: Bool = containsNominalRecord(type) && {
+                        switch binding.domain.operation {
+                        case .setLiteral, .value(.set): return true
+                        default: return false
+                        }
+                    }()
+                    let membership: String
+                    if finiteRecordDomain {
+                        let candidate = CompiledExpression(operation: .boundValue(binding.binder), resultType: type, children: [])
+                        membership = try expression(.init(operation: .in, resultType: .bool, children: [candidate, binding.domain]),
+                            state: "_execution.", substitutions: [binding.binder: name])
+                    } else {
+                        membership = "\(domain).contains(\(name))"
+                    }
+                    visitorValidations.append("guard \(membership) else { return [] }")
                     invocation.append("\(name): \(name)")
                     loops += "for \(name) in \(domain) {\n"
                     closing += "}\n"

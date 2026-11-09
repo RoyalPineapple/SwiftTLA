@@ -14,8 +14,8 @@ struct RecordActionParameterModel {
 
     static var spec: TLASpec {
         #spec("RecordActionParameterModel") { scope in
-            let packet = scope.sharedVar(initial: Packet(count: 0, ready: false))
-            Do(Step.construct, over: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { input in
+            let packet = scope.sharedVar(in: SetExpr<Packet>.literal(Packet(count: 0, ready: false), Packet(count: 0, ready: false)))
+            Do(Step.construct, over: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false), Packet(count: 1, ready: false))) { input in
                 Assign(packet, to: Packet.expression(count: input.count, ready: false))
             }
             Do(Step.update, over: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { input in

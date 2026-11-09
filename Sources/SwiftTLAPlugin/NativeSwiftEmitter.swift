@@ -299,6 +299,39 @@ struct NativeSwiftEmitter {
         return false
     }
 
+    mutating func recordSetElements(
+        _ node: CompiledExpression, state: String, substitutions: [BinderID: String] = [:],
+        activeFunctions: Set<ResolvedFunctionID> = []
+    ) throws -> String? {
+        guard case .set(let element) = node.resultType, containsNominalRecord(element) else { return nil }
+        let members: [String]
+        switch node.operation {
+        case .setLiteral:
+            members = try node.children.map {
+                try self.expression($0, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            }
+        case .value(.set(let values)):
+            members = try values.sorted().map { try literal($0, as: element) }
+        default: return nil
+        }
+        // shortcut: finite record domains scan retained members; use compiler-owned hashed keys if large domains dominate.
+        return """
+        (try { () throws -> [\(try swiftType(element))] in
+            let _recordMembers: [\(try swiftType(element))] = [\(members.joined(separator: ", "))]
+            let _recordOrder = \(try crossOrdering(element, element))
+            var _recordUnique: [\(try swiftType(element))] = []
+            for _recordMember in _recordMembers {
+                if !_recordUnique.contains(where: { _recordPrior in
+                    !(_recordOrder(_recordPrior, _recordMember) || _recordOrder(_recordMember, _recordPrior))
+                }) {
+                    _recordUnique.append(_recordMember)
+                }
+            }
+            return _recordUnique
+        }())
+        """
+    }
+
     /// Emits a native comparator matching CompiledValue's structural order.
     func ordering(_ type: CompiledValueType) throws -> String {
         let name = try swiftType(type)
@@ -921,6 +954,22 @@ struct NativeSwiftEmitter {
             default: throw unsupported("tuple literal")
             }
         case .in:
+            if let members = try recordSetElements(node.children[1], state: state,
+                substitutions: substitutions, activeFunctions: activeFunctions) {
+                guard case .set(let element) = node.children[1].resultType else { throw unsupported("record membership") }
+                let order = try crossOrdering(element, childType(0))
+                let reverse = element == childType(0) ? "_recordOrder" : try crossOrdering(childType(0), element)
+                return """
+                (try { () throws -> \(nativeBoolType) in
+                    let _recordDomain = \(members)
+                    let _recordCandidate = \(try emit(0))
+                    let _recordOrder = \(order)
+                    return _recordDomain.contains { _recordMember in
+                        !(_recordOrder(_recordMember, _recordCandidate) || (\(reverse))(_recordCandidate, _recordMember))
+                    }
+                }())
+                """
+            }
             if hasSymbolicMembership(node.children[1]) {
                 let ownsDepth = !hasDepthScope
                 hasDepthScope = true
@@ -1144,7 +1193,18 @@ struct NativeSwiftEmitter {
                 activeFunctions: activeFunctions, membershipFunctions: membershipFunctions)
             body = "\(value)\n\(result.declaration)\nreturn \(result.call)"
         default:
-            body = "let members = \(try emit(node))\nreturn { members.contains($0) }"
+            if let members = try recordSetElements(node, state: state,
+                substitutions: substitutions, activeFunctions: activeFunctions) {
+                body = """
+                let members = \(members)
+                let order = \(try crossOrdering(element, element))
+                return { candidate in
+                    members.contains { member in !(order(member, candidate) || order(candidate, member)) }
+                }
+                """
+            } else {
+                body = "let members = \(try emit(node))\nreturn { members.contains($0) }"
+            }
         }
         return ("func \(name)() throws -> (\(predicateType)) {\n\(body)\n}", "try \(name)()")
     }
