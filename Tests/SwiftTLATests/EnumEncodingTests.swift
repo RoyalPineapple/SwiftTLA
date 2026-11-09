@@ -34,6 +34,13 @@ struct EnumEncodingTests {
         let text = try #require(machines.first { $0.state.value == .text })
         let token = try #require(TLAStateProjection.Token(validating: "value"))
         #expect(try text.formalProjection(of: text.snapshot).value(for: token) == .string("e\u{301}"))
+        let exactJSON = try TLAJSONStateProjection(validatingJSON: ["chosen": 7, "value": "e\u{301}"])
+        let exact = try #require(try text.selectedInitialMachine(from: exactJSON))
+        #expect(exact.state.value == .text)
+        #expect(exact.state.chosen == 7)
+        #expect(try exact.formalProjection(of: exact.snapshot).value(for: token) == .string("e\u{301}"))
+        let wrongJSON = try TLAJSONStateProjection(validatingJSON: ["chosen": 7, "value": "é"])
+        #expect(try text.selectedInitialMachine(from: wrongJSON) == nil)
         let bundle = try scenario.render().tlaBundle
         #expect(bundle.tla.contains("CONSTANTS d1, d2"))
         #expect(bundle.tla.contains(TLAValue.string("e\u{301}").description))

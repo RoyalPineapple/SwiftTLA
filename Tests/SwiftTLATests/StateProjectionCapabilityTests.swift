@@ -42,6 +42,26 @@ struct StateProjectionCapabilityTests {
         #expect(state.value(for: missing) == nil)
         #expect(state.entries.map(\.token.description) == ["count", "mode"])
         #expect(state.description == "count = 2, mode = \"idle\"")
+
+        let composed = TLAJSONValue.string("é")
+        let decomposed = TLAJSONValue.string("e\u{301}")
+        #expect("é" == "e\u{301}")
+        for (left, right) in [
+            (composed, decomposed),
+            (.array([composed]), .array([decomposed])),
+            (.object(["text": composed]), .object(["text": decomposed])),
+            (.object(["é": .integer(1)]), .object(["e\u{301}": .integer(1)])),
+            (.integer(1), .boolean(true)), (.array([]), .object([:])),
+            (.array([.integer(1), .integer(2)]), .array([.integer(2), .integer(1)])),
+            (.object(["one": .integer(1)]), .object(["one": .integer(1), "two": .integer(2)]))
+        ] {
+            #expect(left != right)
+            #expect(right != left)
+        }
+        #expect(TLAJSONValue.string("é") == .string("é"))
+        #expect(TLAJSONValue.array([.integer(1), decomposed]) == .array([.integer(1), .string("e\u{301}")]))
+        #expect(TLAJSONValue.object(["one": .integer(1), "two": .array([decomposed])])
+            == .object(["two": .array([.string("e\u{301}")]), "one": .integer(1)]))
     }
 
 }

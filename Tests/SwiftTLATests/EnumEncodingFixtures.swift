@@ -17,8 +17,13 @@ struct EncodedEnumDomain {
     enum Step: String, CaseIterable { case select }
     static var spec: TLASpec {
         #spec("EncodedEnumDomain") { scope in
+            Extends(.randomization)
+            let chosen = scope.sharedVar(in: RandomSubset(upTo: 1, from: SetExpr<Int>.literal(7)))
             let value = scope.sharedVar(in: Datum.all)
-            Do(Step.select, over: Datum.all) { next in Assign(value, to: next) }
+            Do(Step.select, over: Datum.all) { next in
+                Assign(value, to: next)
+                Assign(chosen, to: chosen)
+            }
             let all = Validation(label: "All") {}
             all
         }
