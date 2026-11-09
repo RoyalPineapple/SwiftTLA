@@ -246,6 +246,11 @@ The proof dependencies above still govern proof closure; they do not block indep
 - [ ] I5ah Reconcile custom record witnesses with structural formal identity.
   Repair graph keys and successor deduplication using resolved fields, including nested values. Reconcile modeled equality and collection-key behavior as separate related routes.
   Preserve accepted records. Do not replace the obligation with a rejection of existing custom witnesses or a graph-key-only claim.
+  Modeled `==`/`!=` now bind each operand once and reuse structural comparison over resolved fields, including nested collections, instead of invoking nominal record witnesses.
+  The existing custom-witness record owner reproduced three false-invariant issues in five executed tests. The repair passed 50 tests in nine suites, including actual initial/reached predicates, a nested sequence, transitions, complete two-state checking and external-client contracts.
+  Existing cross-type comparison now descends through same-type composites and sorts nested set/map members structurally; finite cases compare their encoded values. This cannot recover members already collapsed by native storage.
+  Receipts are in `.git/swifttla-proof-evidence/record-predicate-identity-2026-11-09/` in the primary checkout.
+  Snapshot/State/configuration/action hashing, graph and successor identity, native collection storage, parallel-update merging and selected-initializer filtering remain open. The implementation repair closes no complete six-link row.
 
 - [ ] I5ai Preserve string identity across raw enum values and checked string views.
   Default String-enum extraction now uses the inherited canonical string encoding. Explicit `.string(rawValue)` and `.constant(rawValue)` keep their raw encodings.

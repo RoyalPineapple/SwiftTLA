@@ -17,14 +17,14 @@ struct GeneratedRecordCheckingTests {
             var machine = initial
             for step in try graph.trace(to: source).dropFirst() {
                 _ = try machine.send(#require(step.action))
-                #expect(machine.snapshot == step.state)
+                #expect(try machine.formalProjection(of: machine.snapshot) == initial.formalProjection(of: step.state))
             }
-            #expect(machine.snapshot == source)
+            #expect(try machine.formalProjection(of: machine.snapshot) == initial.formalProjection(of: source))
             #expect(try Set(machine.enabledActions()) == Set(edges.map(\.action)))
             for edge in edges {
                 var successor = machine
                 _ = try successor.send(edge.action)
-                #expect(successor.snapshot == edge.target)
+                #expect(try successor.formalProjection(of: successor.snapshot) == initial.formalProjection(of: edge.target))
             }
         }
 

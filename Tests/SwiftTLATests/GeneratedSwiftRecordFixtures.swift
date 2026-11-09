@@ -6,6 +6,9 @@ struct GeneratedSwiftRecord {
     struct Packet: Hashable, Sendable {
         let count: Int
         let ready: Bool
+
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.ready == rhs.ready }
+        func hash(into hasher: inout Hasher) { hasher.combine(ready) }
     }
 
     struct UnusedHelper {
@@ -29,7 +32,13 @@ struct GeneratedSwiftRecord {
                 }
             }
             generatedSwiftRecord
-            Invariant("Bounded") { packet.count <= 1 }
+            Invariant("Bounded") {
+                packet.count <= 1
+                    && If(packet.ready,
+                        then: packet != Packet(count: 9, ready: true)
+                            && SequenceMapping(length: 1) { _ in packet } != [Packet(count: 9, ready: true)],
+                        else: !(packet == Packet(count: 9, ready: false)))
+            }
         }
     }
 }

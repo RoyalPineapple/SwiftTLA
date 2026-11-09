@@ -115,8 +115,12 @@ extension NativeSwiftEmitter {
         return "switch (lhs, rhs) { \(cases.joined(separator: "\n")) }"
     }
 
-    private func crossOrdering(_ left: CompiledValueType, _ right: CompiledValueType) throws -> String {
-        if left == right { return try ordering(left) }
+    func crossOrdering(_ left: CompiledValueType, _ right: CompiledValueType) throws -> String {
+        switch left {
+        case .int, .bool, .string, .modelValue, .controlLocation:
+            if left == right { return try ordering(left) }
+        default: break
+        }
         func closure(_ body: String) throws -> String {
             "{ (lhs: \(try swiftType(left)), rhs: \(try swiftType(right))) -> \(nativeBoolType) in\n\(body)\n}"
         }
@@ -162,7 +166,7 @@ extension NativeSwiftEmitter {
             let cases = try values.map { item in
                 let result: String
                 if let value = try? literal(item.value, as: other) {
-                    result = "(\(try ordering(other)))(\(fromLeft ? value : valueName), \(fromLeft ? valueName : value))"
+                    result = "(\(try crossOrdering(other, other)))(\(fromLeft ? value : valueName), \(fromLeft ? valueName : value))"
                 } else {
                     guard rank != String(item.value.orderingKind) else {
                         throw unsupported("ordering finite value against incompatible composite shape")
@@ -184,13 +188,13 @@ extension NativeSwiftEmitter {
         switch (left, right) {
         case (.array(let a), .array(let b)), (.set(let a), .set(let b)):
             let isSet: Bool = if case .set = left { true } else { false }
-            let lhs = isSet ? "lhs.sorted(by: \(try ordering(a)))" : "lhs"
-            let rhs = isSet ? "rhs.sorted(by: \(try ordering(b)))" : "rhs"
+            let lhs = isSet ? "lhs.sorted(by: \(try crossOrdering(a, a)))" : "lhs"
+            let rhs = isSet ? "rhs.sorted(by: \(try crossOrdering(b, b)))" : "rhs"
             return try closure("for (a, b) in zip(\(lhs), \(rhs)) { \(try compare("a", a, "b", b)) }; return lhs.count < rhs.count")
         case (.dictionary(let ak, let av), .dictionary(let bk, let bv)):
             return try closure("""
-            let a = lhs.sorted { (\(try ordering(ak)))($0.key, $1.key) }
-            let b = rhs.sorted { (\(try ordering(bk)))($0.key, $1.key) }
+            let a = lhs.sorted { (\(try crossOrdering(ak, ak)))($0.key, $1.key) }
+            let b = rhs.sorted { (\(try crossOrdering(bk, bk)))($0.key, $1.key) }
             for (x, y) in zip(a, b) {
                 \(try compare("x.key", ak, "y.key", bk))
                 \(try compare("x.value", av, "y.value", bv))

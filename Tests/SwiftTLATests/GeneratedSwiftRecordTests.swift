@@ -23,13 +23,20 @@ struct GeneratedSwiftRecordTests {
     @Test("ordinary Swift records execute through generated typed transitions")
     func executesRecordTransition() throws {
         var machine = try GeneratedSwiftRecord.makeMachine()
-        #expect(machine.state.packet == .init(count: 0, ready: false))
+        let different = GeneratedSwiftRecord.Packet(count: 9, ready: false)
+        #expect(machine.state.packet == different)
+        #expect(machine.state.packet.tlaValue != different.tlaValue)
+        #expect(machine.state.packet.count == 0 && !machine.state.packet.ready)
+        #expect(try machine.violatedInvariants(checking: [.Bounded], atLevel: 1).isEmpty)
         let transition = try machine.send(.advance)
-        #expect(transition.before.packet == .init(count: 0, ready: false))
-        #expect(transition.after.packet == .init(count: 1, ready: true))
+        #expect(transition.before.packet.count == 0 && !transition.before.packet.ready)
+        #expect(transition.after.packet.count == 1 && transition.after.packet.ready)
         #expect(transition.before.previousCount == -1)
         #expect(transition.after.previousCount == 0)
-        #expect(machine.state == transition.after)
+        #expect(try machine.violatedInvariants(checking: [.Bounded], atLevel: 2).isEmpty)
+        #expect(machine.state.packet.count == transition.after.packet.count)
+        #expect(machine.state.packet.ready == transition.after.packet.ready)
+        #expect(machine.state.previousCount == transition.after.previousCount)
     }
 
     @Test("record expression fields retain their Swift field types")
@@ -42,11 +49,13 @@ struct GeneratedSwiftRecordTests {
     }
 
     @Test("generated record conversion validates every key and value")
-    func validatesFormalConversion() {
+    func validatesFormalConversion() throws {
         typealias Packet = GeneratedSwiftRecord.Packet
         let packet = Packet(count: 3, ready: true)
-        #expect(Packet(formalValue: packet.tlaValue) == packet)
-        #expect(Packet.defaultValue == .init(count: 0, ready: false))
+        #expect(packet.tlaValue == .record(["count": .int(3), "ready": .bool(true)]))
+        let decoded = try #require(Packet(formalValue: .record(["count": .int(3), "ready": .bool(true)])))
+        #expect(decoded.count == 3 && decoded.ready)
+        #expect(Packet.defaultValue.count == 0 && !Packet.defaultValue.ready)
         #expect(Packet(formalValue: .record(["count": .int(3)])) == nil)
         #expect(Packet(formalValue: .record(["count": .bool(true), "ready": .bool(true)])) == nil)
         #expect(Packet(formalValue: .record(["count": .int(3), "ready": .bool(true), "extra": .int(0)])) == nil)

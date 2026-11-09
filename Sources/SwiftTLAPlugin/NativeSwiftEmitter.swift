@@ -764,6 +764,26 @@ struct NativeSwiftEmitter {
         func binary(_ operation: String) throws -> String {
             "(\(try emit(0)) \(operation) \(try emit(1)))"
         }
+        func recordEquality(negated: Bool) throws -> String? {
+            var pending = [childType(0), childType(1)]
+            var containsRecord = false
+            while let type = pending.popLast() {
+                if case .nominalRecord = type { containsRecord = true; break }
+                pending.append(contentsOf: type.components)
+            }
+            guard containsRecord else { return nil }
+            let forward = try crossOrdering(childType(0), childType(1))
+            let reverse = childType(0) == childType(1)
+                ? "_recordOrder" : try crossOrdering(childType(1), childType(0))
+            return """
+            (try { () throws -> \(nativeBoolType) in
+                let _recordLeft = \(try emit(0))
+                let _recordRight = \(try emit(1))
+                let _recordOrder = \(forward)
+                return \(negated ? "" : "!")(_recordOrder(_recordLeft, _recordRight) || (\(reverse))(_recordRight, _recordLeft))
+            }())
+            """
+        }
         func domainRangeEquality(
             domain: CompiledExpression, range: CompiledExpression, domainFirst: Bool
         ) throws -> String? {
@@ -820,6 +840,7 @@ struct NativeSwiftEmitter {
         case .assertView:
             return try checkedView(emit(0), from: childType(0), to: node.resultType)
         case .equal:
+            if let structural = try recordEquality(negated: false) { return structural }
             if let optimized = try domainRangeEquality(
                 domain: node.children[0], range: node.children[1], domainFirst: true
             ) { return optimized }
@@ -827,7 +848,9 @@ struct NativeSwiftEmitter {
                 domain: node.children[1], range: node.children[0], domainFirst: false
             ) { return optimized }
             return try binary("==")
-        case .notEqual: return try binary("!=")
+        case .notEqual:
+            if let structural = try recordEquality(negated: true) { return structural }
+            return try binary("!=")
         case .lessThan: return try binary("<")
         case .lessOrEqual: return try binary("<=")
         case .greaterThan: return try binary(">")
