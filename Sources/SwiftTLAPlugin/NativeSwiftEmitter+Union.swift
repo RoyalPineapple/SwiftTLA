@@ -78,7 +78,7 @@ extension NativeSwiftEmitter {
     func finiteViewMembers(_ type: CompiledValueType) -> [CompiledValue] {
         switch type {
         case .finite(let members): return members
-        case .named(let name): return program.enums.cases[name]?.map(\.value) ?? []
+        case .named(let name): return (program.enums.domains[name] ?? []).sorted()
         case .union(let alternatives): return Array(Set(alternatives.flatMap(finiteViewMembers))).sorted()
         case .oneOf(let first, let second): return Array(Set(finiteViewMembers(first) + finiteViewMembers(second))).sorted()
         default: return []

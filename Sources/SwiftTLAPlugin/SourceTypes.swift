@@ -323,7 +323,13 @@ final class SourceTypeResolver {
         }
         let view: FormalValueShape
         if let declaration = metadata.enums.first(where: { $0.typeName == name && $0.isFiniteDomain }) {
-            view = .finite(typeName: identity, values: declaration.finiteValues)
+            var values = declaration.finiteValues
+            if Set(declaration.cases.map(\.value)).count < declaration.cases.count {
+                // Normalized aliases denote one finite-view member.
+                var seen: Set<TLAValue> = []
+                values = values.filter { seen.insert($0).inserted }
+            }
+            view = .finite(typeName: identity, values: values)
         } else {
             view = .unsupported(name)
         }

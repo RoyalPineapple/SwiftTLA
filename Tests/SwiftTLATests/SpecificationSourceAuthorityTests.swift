@@ -377,13 +377,21 @@ struct SpecificationSourceAuthorityTests {
         for (initializer, count) in [("[.second, Self.first]", 2), ("[]", 0), ("allCases", 2)] {
             let declaration = try declaration("""
             enum Phase: String, CaseIterable, FiniteTLAValueDomain {
-                case first, second
+                case first = "e\u{301}", second = "é"
                 static let finiteValues: [Self] = \(initializer)
+            }
+            static var spec: TLASpec {
+                #spec("AliasDomain") { scope in
+                    let phase = scope.sharedVar(initial: Phase.first)
+                    Invariant("Allowed") { phase.assuming(Phase.self) == Phase.first }
+                }
             }
             """)
             let enums = try TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members)
             let domain = try #require(enums.first?.finiteValues)
             #expect(domain.count == count)
+            #expect(enums.first?.cases.map(\.name) == ["first", "second"])
+            if count > 0 { _ = try TLASpecVerifier.parseAndVerify(declaration) }
         }
     }
 

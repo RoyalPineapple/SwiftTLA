@@ -31,10 +31,10 @@ struct IntEnumToggleModel {
 @TLAModel
 struct StringEnumToggleModel {
   enum Status: String, CaseIterable, FiniteTLAValueDomain, StateExprConvertible {
-    case on, off
+    case on = "e\u{301}", off, alias = "é"
 
     static var defaultValue: Self { .on }
-    static let finiteValues = allCases
+    static let finiteValues: [Self] = [.on, .off]
   }
 
   enum Step: String, CaseIterable { case toggle }
@@ -49,7 +49,10 @@ struct StringEnumToggleModel {
         }
       }
       algorithm
-      Invariant("TypeOK") { status == Status.on || status == Status.off }
+      Invariant("TypeOK") {
+        (status == Status.on || status == Status.off)
+          && status.assuming(String.self).assuming(Status.self) == status
+      }
     }
   }
 }

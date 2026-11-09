@@ -4,7 +4,7 @@ import SwiftTLAMacros
 @TLAModel
 struct EncodedEnumDomain {
     enum Datum: String, CaseIterable, FiniteTLAValueDomain {
-        case first = "d1", second = "d2", text = "d1_OF_DATUM"
+        case first = "d1", second = "d2", text = "e\u{301}"
         static var defaultValue: Self { .first }
         static let finiteValues = allCases
         var tlaValue: TLAValue {

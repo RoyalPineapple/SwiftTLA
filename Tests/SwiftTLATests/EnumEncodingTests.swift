@@ -28,11 +28,15 @@ struct EnumEncodingTests {
             }
         }
         #expect(EncodedEnumDomain.Datum(formalValue: .string("d1")) == nil)
-        #expect(EncodedEnumDomain.Datum(formalValue: .constant("d1_OF_DATUM")) == nil)
+        #expect(EncodedEnumDomain.Datum(formalValue: .constant("e\u{301}")) == nil)
+        #expect(EncodedEnumDomain.Datum.text.tlaValue == .string("e\u{301}"))
+        #expect(EncodedEnumDomain.Datum.text.tlaValue != .string("é"))
+        let text = try #require(machines.first { $0.state.value == .text })
+        let token = try #require(TLAStateProjection.Token(validating: "value"))
+        #expect(try text.formalProjection(of: text.snapshot).value(for: token) == .string("e\u{301}"))
         let bundle = try scenario.render().tlaBundle
         #expect(bundle.tla.contains("CONSTANTS d1, d2"))
-        #expect(bundle.tla.contains("\"d1_OF_DATUM\""))
-        #expect(!bundle.cfg.contains("CONSTANT d1_OF_DATUM"))
+        #expect(bundle.tla.contains(TLAValue.string("e\u{301}").description))
         let graph = try scenario.explore(maximumStates: 3)
         #expect(graph.transitions.count == 3)
     }

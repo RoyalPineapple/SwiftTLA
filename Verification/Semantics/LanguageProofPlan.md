@@ -248,8 +248,11 @@ The proof dependencies above still govern proof closure; they do not block indep
   Preserve accepted records. Do not replace the obligation with a rejection of existing custom witnesses or a graph-key-only claim.
 
 - [ ] I5ai Preserve string identity across raw enum values and checked string views.
-  Ordinary typed strings already normalize. Raw enum-to-string views still cross into native equality, collections and snapshot identity with different semantics.
-  Preserve explicit raw formal encodings and accepted source. A changed equality operator alone does not complete the boundary.
+  Default String-enum extraction now uses the inherited canonical string encoding. Explicit `.string(rawValue)` and `.constant(rawValue)` keep their raw encodings.
+  Declaration uniqueness still checks the prior raw spellings for defaults, retaining Unicode aliases and all case names. Finite views use the distinct encoded members without changing public finite-shape or core-domain validation policy.
+  The committed-producer baseline reported three projection/decoder/Init issues in 34 tests. Review exposed an introduced alias rejection; its correction passed 85 tests in seven suites, including actual typed alias projection, view round trip and transition, plus an explicit raw-string control.
+  Receipts are in `.git/swifttla-proof-evidence/default-enum-string-identity-2026-11-09/` in the primary checkout. Initial test-authoring compilation failure has zero semantic rejection credit.
+  Raw enum-to-string views still cross native equality, collections and snapshot identity with different semantics. Nominal alias reconstitution, source/core conformance meaning and Unicode/version alignment remain owned boundaries. A changed encoder or equality operator alone does not complete this task or a six-link proof row.
 
 - [x] I5aj Carry raw fairness enabledness through constrained exploration and checking.
   Actual successor traversal now retains selected-scope enabledness before pruning, through both graph routes, scenario dispatch and independent native validation. Conditional temporal checks retain the supplied data.
