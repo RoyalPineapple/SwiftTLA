@@ -6,14 +6,43 @@ struct SymbolicRecordConstructionTests {
     @Test("Action arguments construct and update ordinary Swift record fields")
     func executesRecordActionArguments() throws {
         for input in [1, 2] {
+            let argument = RecordActionParameterModel.Packet(count: input, ready: false)
             var constructed = try RecordActionParameterModel.makeMachine()
-            #expect(try constructed.send(.construct(input: input)).after.packet ==
-                .init(count: input, ready: false))
+            let construction = try constructed.send(.construct(input: argument))
+            #expect(construction.after.packet.count == input && !construction.after.packet.ready)
+            #expect(try constructed.formalCall(for: construction.action).arguments ==
+                [.record(["count": .int(input), "ready": .bool(false)])])
 
             var updated = try RecordActionParameterModel.makeMachine()
-            #expect(try updated.send(.update(input: input)).after.packet ==
-                .init(count: input, ready: false))
+            let update = try updated.send(.update(input: argument))
+            #expect(update.after.packet.count == input && !update.after.packet.ready)
+            #expect(try updated.formalCall(for: update.action).arguments ==
+                [.record(["count": .int(input), "ready": .bool(false)])])
         }
+
+        let machine = try RecordActionParameterModel.makeMachine()
+        let first = RecordActionParameterModel.Action.construct(input: .init(count: 1, ready: false))
+        let same = RecordActionParameterModel.Action.construct(input: .init(count: 1, ready: false))
+        let second = RecordActionParameterModel.Action.construct(input: .init(count: 2, ready: false))
+        let update = RecordActionParameterModel.Action.update(input: .init(count: 1, ready: false))
+        let firstCall = try machine.formalCall(for: first)
+        let secondCall = try machine.formalCall(for: second)
+        let updateCall = try machine.formalCall(for: update)
+        #expect(firstCall.arguments == [.record(["count": .int(1), "ready": .bool(false)])])
+        #expect(secondCall.arguments == [.record(["count": .int(2), "ready": .bool(false)])])
+        #expect(firstCall.name == secondCall.name && firstCall.name != updateCall.name)
+        #expect(first == same)
+        #expect(first != second)
+        #expect(first != update)
+        #expect(Set([first, same, second, update]).count == 3)
+        var cachedCalls: [RecordActionParameterModel.Action: FormalActionCall] = [:]
+        cachedCalls[first] = firstCall
+        cachedCalls[second] = secondCall
+        cachedCalls[update] = updateCall
+        #expect(cachedCalls.count == 3)
+        #expect(cachedCalls[first] == firstCall)
+        #expect(cachedCalls[second] == secondCall)
+        #expect(cachedCalls[update] == updateCall)
     }
 
     @Test("Symbolic record constructors preserve nested Swift values and parameter bindings")

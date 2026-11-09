@@ -181,29 +181,43 @@ extension NativeSwiftEmitter {
     }
 
     func addStructuralIdentity(
-        to declarations: inout [DeclSyntax], fields: [(name: String, type: CompiledValueType)]
+        to declarations: inout [DeclSyntax], fields: [(name: String, type: CompiledValueType)] = [],
+        cases: [(name: String, types: [CompiledValueType])] = []
     ) throws {
-        let identity = try structuralIdentityMembers(fields: fields)
+        let identity = try structuralIdentityMembers(fields: fields, cases: cases)
         guard !identity.isEmpty else { return }
-        guard var value = declarations.first?.as(StructDeclSyntax.self),
+        let first = declarations.first
+        guard var block = first?.as(StructDeclSyntax.self)?.memberBlock
+                ?? first?.as(EnumDeclSyntax.self)?.memberBlock,
               identity.count == 2,
               identity.allSatisfy({ $0.is(FunctionDeclSyntax.self) && !$0.hasError }) else {
             let missing = identity.flatMap { $0.tokens(viewMode: .all) }
                 .filter { $0.presence == .missing }.prefix(8).map { String(describing: $0.tokenKind) }
-            let name = declarations.first?.as(StructDeclSyntax.self)?.name.text ?? "value"
+            let name = first?.as(StructDeclSyntax.self)?.name.text
+                ?? first?.as(EnumDeclSyntax.self)?.name.text ?? "value"
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
                 path: "native.\(name).identity", expected: "two complete generated equality and hashing methods",
                 actual: "members=\(identity.count), missing tokens=\(missing)",
                 nextSafeAction: "Report this native code generation failure.")
         }
         for member in identity {
-            value.memberBlock.members.append(MemberBlockItemSyntax(decl: member))
+            block.members.append(MemberBlockItemSyntax(decl: member))
         }
-        declarations[0] = DeclSyntax(value)
+        if var value = first?.as(StructDeclSyntax.self) {
+            value.memberBlock = block
+            declarations[0] = DeclSyntax(value)
+        } else if var value = first?.as(EnumDeclSyntax.self) {
+            value.memberBlock = block
+            declarations[0] = DeclSyntax(value)
+        }
     }
 
-    private func structuralIdentityMembers(fields: [(name: String, type: CompiledValueType)]) throws -> [DeclSyntax] {
-        guard fields.contains(where: { containsNominalRecord($0.type) }) else { return [] }
+    private func structuralIdentityMembers(
+        fields: [(name: String, type: CompiledValueType)],
+        cases: [(name: String, types: [CompiledValueType])]
+    ) throws -> [DeclSyntax] {
+        guard fields.contains(where: { containsNominalRecord($0.type) })
+                || cases.contains(where: { $0.types.contains(where: containsNominalRecord) }) else { return [] }
         let hasherType = "SwiftTLA._NativeMachineOperations.StateHasher"
         var types: [CompiledValueType] = []
         var indices: [CompiledValueType: Int] = [:]
@@ -221,8 +235,30 @@ extension NativeSwiftEmitter {
             containsNominalRecord(type)
                 ? "_identityHash\(index(type))(\(value), into: &\(hasher))" : "\(hasher).combine(\(value))"
         }
-        let equality = fields.map { equal($0.type, "lhs.`" + $0.name + "`", "rhs.`" + $0.name + "`") }.joined(separator: " && ")
-        let hashing = fields.map { hash($0.type, "self.`" + $0.name + "`", into: "hasher") }.joined(separator: "\n")
+        let equality: String
+        let hashing: String
+        if cases.isEmpty {
+            equality = "return " + fields.map {
+                equal($0.type, "lhs.`" + $0.name + "`", "rhs.`" + $0.name + "`")
+            }.joined(separator: " && ")
+            hashing = fields.map { hash($0.type, "self.`" + $0.name + "`", into: "hasher") }.joined(separator: "\n")
+        } else {
+            func pattern(_ name: String, _ types: [CompiledValueType], _ prefix: String) -> String {
+                "." + name + (types.isEmpty ? "" : "(" + types.indices.map { "let \(prefix)\($0)" }.joined(separator: ", ") + ")")
+            }
+            equality = "switch (lhs, rhs) {\n" + cases.map { value in
+                let comparisons = value.types.enumerated().map {
+                    equal($0.element, "_lhs\($0.offset)", "_rhs\($0.offset)")
+                }.joined(separator: " && ")
+                return "case (\(pattern(value.name, value.types, "_lhs")), \(pattern(value.name, value.types, "_rhs"))): return \(comparisons.isEmpty ? "true" : comparisons)"
+            }.joined(separator: "\n") + (cases.count > 1 ? "\ndefault: return false" : "") + "\n}"
+            hashing = "switch self {\n" + cases.enumerated().map { offset, value in
+                let payload = value.types.enumerated().map {
+                    hash($0.element, "_value\($0.offset)", into: "hasher")
+                }.joined(separator: "\n")
+                return "case \(pattern(value.name, value.types, "_value")): hasher.combine(\(offset))\n\(payload)"
+            }.joined(separator: "\n") + "\n}"
+        }
         var equalityHelpers: [String] = []
         var hashHelpers: [String] = []
         var cursor = 0
@@ -315,7 +351,7 @@ extension NativeSwiftEmitter {
         let equalityDeclaration = """
         public static func == (lhs: Self, rhs: Self) -> \(nativeBoolType) {
             \(equalityHelpers.joined(separator: "\n"))
-            return \(equality)
+            \(equality)
         }
         """
         let hashDeclaration = """
@@ -376,21 +412,27 @@ extension NativeSwiftEmitter {
     }
 
     func actionDeclarations() throws -> [DeclSyntax] {
+        var identityCases: [(name: String, types: [CompiledValueType])] = []
         let cases = try model.api.actions.map { api in
             let action = program[api.compiledAction]
             guard action.bindings.count == api.bindings.count else {
                 throw unsupported("action binding layout")
             }
-            let parameters = try zip(action.bindings, api.bindings).filter { $0.1.isPublic }.map { binding, apiBinding in
+            let bindings = zip(action.bindings, api.bindings).filter { $0.1.isPublic }
+            identityCases.append((name: api.swiftIdentifier,
+                types: bindings.map { program.bindingTypes[$0.0.binder]! }))
+            let parameters = try bindings.map { binding, apiBinding in
                 "\(apiBinding.swiftIdentifier): \(try swiftType(program.bindingTypes[binding.binder]!))"
             }.joined(separator: ", ")
             return "case \(api.swiftIdentifier)" + (parameters.isEmpty ? "" : "(\(parameters))")
         }.joined(separator: "\n")
-        return try nativeDeclarations("""
+        var declarations = try nativeDeclarations("""
         public enum Action: Hashable, Sendable {
             \(cases)
         }
         """)
+        try addStructuralIdentity(to: &declarations, cases: identityCases)
+        return declarations
     }
 
     private func executionState(values: (VariableID) -> String) -> String {
