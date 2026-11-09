@@ -196,6 +196,31 @@ private struct ReachableInvariantFailure {
             _ = try CartesianInitialSelection.makeMachine(.init(left: 9, right: 3))
             Issue.record("A selection outside the formal initial domain must fail")
         } catch GeneratedMachineError.invalidInitialState {}
+
+        let records = try GeneratedSwiftRecord.initialMachines()
+        #expect(records.count == 1)
+        let original = try #require(records.first)
+        let state = original.state
+        #expect(try GeneratedSwiftRecord.makeMachine(state).snapshot == original.snapshot)
+        let reordered = GeneratedSwiftRecord.State(packet: state.packet, previousCount: state.previousCount,
+            history: state.history, archive: [.init(count: 1, ready: true), .init(count: 0, ready: false)])
+        #expect(reordered == state)
+        #expect(try GeneratedSwiftRecord.makeMachine(reordered).snapshot == original.snapshot)
+        let wrongPacket = GeneratedSwiftRecord.State(packet: .init(count: 9, ready: false),
+            previousCount: state.previousCount, history: state.history, archive: state.archive)
+        let wrongHistory = GeneratedSwiftRecord.State(packet: state.packet, previousCount: state.previousCount,
+            history: [.init(count: 9, ready: false)], archive: state.archive)
+        let wrongArchive = GeneratedSwiftRecord.State(packet: state.packet, previousCount: state.previousCount,
+            history: state.history, archive: [.init(count: 9, ready: false), .init(count: 1, ready: true)])
+        #expect(wrongPacket.packet == state.packet)
+        #expect(wrongHistory.history == state.history)
+        #expect(wrongArchive.archive == state.archive)
+        for requested in [wrongPacket, wrongHistory, wrongArchive] {
+            #expect(requested != state)
+            #expect(throws: GeneratedMachineError.invalidInitialState) {
+                try GeneratedSwiftRecord.makeMachine(requested)
+            }
+        }
     }
 
     @Test("empty initial domains reject both implicit and explicit construction")

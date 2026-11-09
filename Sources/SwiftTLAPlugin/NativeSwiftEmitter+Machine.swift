@@ -507,7 +507,13 @@ extension NativeSwiftEmitter {
                 code += "let \(name): \(try swiftType(type)) = \(try self.expression(expression, state: ""))\n"
                 code += "evaluatingInitializerOrdinal = nil\n"
                 if let field = stateMemberNames[initialization.variable] {
-                    code += "if _selectedInitial == nil || _selectedInitial!.\(field) == \(name) {\n"
+                    if containsNominalRecord(type) {
+                        let order = "_initialValueOrder\(initialization.variable.ordinal)"
+                        code += "let \(order) = \(try crossOrdering(type, type))\n"
+                        code += "if _selectedInitial == nil || !(\(order)(_selectedInitial!.\(field), \(name)) || \(order)(\(name), _selectedInitial!.\(field))) {\n"
+                    } else {
+                        code += "if _selectedInitial == nil || _selectedInitial!.\(field) == \(name) {\n"
+                    }
                     closing = "}\n" + closing
                 }
             case .memberOf(let expression):
@@ -715,7 +721,16 @@ extension NativeSwiftEmitter {
             let required: [String]
             switch initialization.initialization {
             case .value:
-                required = ["if _selectedInitial == nil || _selectedInitial!.\(field) == \(name) {"]
+                let type = program.variableTypes[initialization.variable]!
+                if containsNominalRecord(type) {
+                    let order = "_initialValueOrder\(initialization.variable.ordinal)"
+                    required = [
+                        "let \(order) = { (lhs: \(try swiftType(type)), rhs: \(try swiftType(type))) -> \(nativeBoolType) in",
+                        "if _selectedInitial == nil || !(\(order)(_selectedInitial!.\(field), \(name)) || \(order)(\(name), _selectedInitial!.\(field))) {",
+                    ]
+                } else {
+                    required = ["if _selectedInitial == nil || _selectedInitial!.\(field) == \(name) {"]
+                }
             case .memberOf(let expression):
                 let eligible: String
                 if case .randomSubset = expression.computation.operation {

@@ -531,6 +531,27 @@ struct DependentInitializationOutputProofTests {
             }
         }
 
+        let record = try swiftRecordModel()
+        var recordEmitter = NativeSwiftEmitter(model: record)
+        let recordInitial = try #require(try recordEmitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        try recordEmitter.verifyInitialSelection(recordInitial, expectedMembershipSources: [:])
+        let packet = try #require(record.program.layout.variables.first { $0.declaration.name == "packet" })
+        let selectedPacket = "_selectedInitial!.packet"
+        try #require(recordInitial.description.components(separatedBy: selectedPacket).count - 1 == 2)
+        let ignoredSelection = recordInitial.description.replacingOccurrences(
+            of: selectedPacket, with: recordEmitter.variable(packet.id))
+        #expect(ignoredSelection != recordInitial.description)
+        let ignoredSelectionDeclaration = try #require(Parser.parse(source: ignoredSelection)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try recordEmitter.verifyInitialSelection(ignoredSelectionDeclaration, expectedMembershipSources: [:])
+            Issue.record("A record initializer that compares the candidate with itself was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.selection.\(recordEmitter.variable(packet.id))")
+        }
+
         let namedSource = try String(contentsOf: fixture, encoding: .utf8)
             .replacingOccurrences(of: "enum Step: String, CaseIterable { case finish }",
                 with: "enum Seed: Int, CaseIterable { case zero = 0, one = 1 }\n    enum Step: String, CaseIterable { case finish }")
