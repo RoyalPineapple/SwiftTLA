@@ -701,6 +701,39 @@ struct NativeSwiftEmitter {
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         switch id.operation {
+        case .checkingRegister, .setCheckingRegister, .integerSet, .checkingLevel,
+             .checkingDiameter, .stutteringStep, .printT, .nextState:
+            return try contextExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate:
+            return try arithmeticExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .value, .stateVariable, .boundValue, .controlLocation, .enabledAction,
+             .assertView, .convert, .equal, .notEqual,
+             .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and,
+             .or, .not, .ifThenElse:
+            return try scalarExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .setLiteral, .tupleLiteral, .in, .subset, .union,
+             .intersection, .setDifference, .cardinality, .integerRange, .setFilter,
+             .setMap, .forAll, .exists, .choose, .sequenceFromSet, .sequenceFromFunction,
+             .powerSet, .sequenceSet, .unionAll, .functionSet, .randomSubset, .randomElement, .setSum:
+            return try collectionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .foldFunction, .sequenceSelect, .tupleAccess, .tupleDynamicAccess, .tupleRemoving, .tuplePrefix,
+             .tupleLength, .tupleHead, .tupleTail, .tupleAppend, .tupleConcatenate:
+            return try sequenceExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .domain, .functionLiteral, .functionApply:
+            return try functionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .except, .recordLiteral, .recordAccess:
+            return try aggregateExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .caseExpr, .letValue, .call:
+            return try controlExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .operatorReference, .operatorApplication, .letIn, .checkedCall: throw unsupported("operator call must be resolved before native emission")
+        }
+    }
+
+    private mutating func contextExpression(
+        _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<ResolvedFunctionID>
+    ) throws -> String {
+        switch id.operation {
         case .checkingRegister(let register), .setCheckingRegister(let register):
             guard let context = checkingContextName else {
                 return "(try { () throws -> \(try swiftType(id.resultType)) in throw NativeMachineEvaluationError.checkingContextRequired }())"
@@ -740,28 +773,7 @@ struct NativeSwiftEmitter {
             guard state != "nextState." else { throw unsupported("nested successor-state read") }
             return try expression(id.children[0], state: "nextState.", substitutions: substitutions,
                 activeFunctions: activeFunctions)
-        case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate:
-            return try arithmeticExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .value, .stateVariable, .boundValue, .controlLocation, .enabledAction,
-             .assertView, .convert, .equal, .notEqual,
-             .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and,
-             .or, .not, .ifThenElse:
-            return try scalarExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .setLiteral, .tupleLiteral, .in, .subset, .union,
-             .intersection, .setDifference, .cardinality, .integerRange, .setFilter,
-             .setMap, .forAll, .exists, .choose, .sequenceFromSet, .sequenceFromFunction,
-             .powerSet, .sequenceSet, .unionAll, .functionSet, .randomSubset, .randomElement, .setSum:
-            return try collectionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .foldFunction, .sequenceSelect, .tupleAccess, .tupleDynamicAccess, .tupleRemoving, .tuplePrefix,
-             .tupleLength, .tupleHead, .tupleTail, .tupleAppend, .tupleConcatenate:
-            return try sequenceExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .domain, .functionLiteral, .functionApply:
-            return try functionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .except, .recordLiteral, .recordAccess:
-            return try aggregateExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .caseExpr, .letValue, .call:
-            return try controlExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .operatorReference, .operatorApplication, .letIn, .checkedCall: throw unsupported("operator call must be resolved before native emission")
+        default: throw unsupported("contextExpression operation")
         }
     }
 

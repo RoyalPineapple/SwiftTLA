@@ -340,6 +340,31 @@ The proof dependencies above still govern proof closure; they do not block indep
   Receipts are in `.git/swifttla-proof-evidence/raw-expression-source-scope-2026-11-09/` in the primary checkout. One earlier test-authoring compile failure executed no tests and supplies no rejection credit.
   General accepted grammar, shape recovery, binder allocation/hygiene, raw-core interpretation, backend/helpers, complete failures and checker/composition proofs remain open. This closes no complete six-link row.
 
+- [x] I5an Preserve known `Expr` wrapper shapes before source member and selector queries.
+  The existing type helper uses an explicit wrapper argument type when present, otherwise the concrete operand shape.
+  Inferred and qualified record fields, sequence members, dictionary keys and nested record queries keep their meaning.
+  On committed `302ad42b` producers, four tests in two suites ran seventeen table arguments and reported eight query errors.
+  The same nine expressions compiled and evaluated correctly through the public Swift API, supplying a positive source-spelling control.
+  The existing macro fixture now also checks wrappers around live state and sequence reads; its intended native outcomes and five-state graph remain unchanged.
+  The corrected run passed 319 tests in twenty-five suites, including the original snapshot owner and external positive/negative clients.
+  Thirty-one distinct context-caller tests in seven more suites passed on the same 1201 captured inputs.
+  General contextual inference, opaque aliases, binding/overload interpretation, value conversion and source/IR/Swift/TLA/helper/kernel composition remain open.
+  These implementation receipts close no complete six-link row.
+
+- [x] I5ao Reduce repeated native dispatcher stack storage for ordinary expression traversal.
+  The expanded existing snapshot integration exposed two real SIGBUS stack-guard failures in native emission.
+  Both runs compiled and executed tests; their 311 and 295 pass markers do not establish a completed selected run or external-client success.
+  A leaf/Boolean dispatcher rewrite did not prevent the failure and was removed. A binder-only hypothesis was never executed.
+  Read-only inspection of the failed local object identified a 16096-byte dispatcher allocation repeated through the expression tree.
+  The existing context-dependent cases now occupy one private emitter method. Their bodies and the remaining routes stay byte-exact.
+  The current macro-tool object allocates 1904 bytes in the dispatcher, excluding separate prologue save areas.
+  The original snapshot crash owner, all query cases, and the distinct context-caller checks passed under the unchanged guard and resource limits.
+  The 319-test run built in 1720.91 seconds and completed in 212.816 seconds; its external client took 207.993 seconds.
+  Its complete 155863-byte log has SHA256 `a39c2b1c846e57fdfd4f8d0ba8f34656da52eb1bb64575d7fba072452cc07b8d`.
+  Inputs, both failed runs, crash reports, object observations, current logs and reviews are retained in `.git/swifttla-proof-evidence/inferred-expression-query-types-2026-11-09/` in the primary checkout.
+  These are local regression and resource observations. General resource bounds, emitted-code equivalence and whole-language preservation still require proof.
+  The protected checklist, mathematical TLA, corpus, workflows, dependencies, pins, budgets and timeouts remain unchanged.
+
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.
   Keep remaining implementation omissions separate from unfinished formal arguments.
 

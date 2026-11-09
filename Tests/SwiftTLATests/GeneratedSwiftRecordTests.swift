@@ -57,12 +57,27 @@ struct GeneratedSwiftRecordTests {
     }
 
     @Test("record expression fields retain their Swift field types")
-    func readsTypedFields() {
+    func readsTypedFields() throws {
         let record = Expr<GeneratedSwiftRecord.Packet>(.variable("packet"))
         let count: Expr<Int> = record.count
         let ready: Expr<Bool> = record.ready
         #expect(count.stateExpr == .recordAccess(.variable("packet"), "count"))
         #expect(ready.stateExpr == .recordAccess(.variable("packet"), "ready"))
+
+        typealias Packet = GeneratedSwiftRecord.Packet
+        let counts: [Expr<Int>] = [
+            Expr(Packet(count: 7, ready: false)).count,
+            SwiftTLA.Expr(Packet(count: 7, ready: false)).count,
+            Expr<Packet>(Packet(count: 7, ready: false)).count,
+            Expr([1, 2]).count,
+            Expr([0: 1]).keys.cardinality,
+            SwiftTLA.Expr([0: 1]).keys.cardinality,
+            Expr<[Int: Int]>([0: 1]).keys.cardinality,
+            Expr([Packet(count: 7, ready: false)]).head().count,
+            Expr([0: Packet(count: 7, ready: false)])[0].count
+        ]
+        #expect(try counts.map { try compiledValue($0.stateExpr) }
+            == [.int(7), .int(7), .int(7), .int(2), .int(1), .int(1), .int(1), .int(7), .int(7)])
     }
 
     @Test("generated record conversion validates every key and value")

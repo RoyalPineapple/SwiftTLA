@@ -2053,6 +2053,13 @@ final class ParserSession {
             }
         }
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
+        if compilerGrammarName(in: call.calledExpression) == "Expr",
+           call.arguments.count == 1, let value = call.arguments.first?.expression {
+            if let type = typedFacadeType(call.calledExpression)?.argument(at: 0) {
+                return typedFacadeValueType(type)
+            }
+            return typedFacadeValueType(value, scope: scope)
+        }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            member.declName.baseName.sourceIdentifierName == "assuming",
            member.base != nil,

@@ -113,6 +113,15 @@ struct GeneratedSwiftRecord {
                     (when: (packet.count >= 0).stateExpr, then: Expr(1).stateExpr),
                     (when: (packet.count >= 0).stateExpr, then: SwiftTLA.Expr(2).stateExpr),
                     fallback: Expr(0).stateExpr)) == 1
+                    && Expr(Packet(count: 7, ready: false)).count == 7
+                    && SwiftTLA.Expr(Packet(count: 7, ready: false)).count == 7
+                    && Expr<Packet>(packet.stateExpr).count == packet.count
+                    && Expr([1, 2]).count == 2
+                    && Expr([0: 1]).keys.cardinality == 1
+                    && SwiftTLA.Expr([0: 1]).keys.cardinality == 1
+                    && Expr<[Int: Int]>([0: 1]).keys.cardinality == 1
+                    && Expr<[Packet]>(history.stateExpr).head().count == packet.count
+                    && Expr([0: Packet(count: 7, ready: false)])[0].count == 7
             }
             Invariant("RecordSymbolicDomain") {
                 Functions(from: IntRange(0, through: 99), to: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)))

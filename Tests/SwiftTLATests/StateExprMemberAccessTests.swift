@@ -24,7 +24,9 @@ import SwiftTLAMacros
     }
 
     @Test("Raw expression members retain source shapes and local shadowing",
-        arguments: ["record", "array", "dictionary", "dictionaryString", "dictionaryNested", "dictionaryContext", "boundInteger", "boundRecord"])
+        arguments: ["record", "array", "dictionary", "dictionaryString", "dictionaryNested", "dictionaryContext", "boundInteger", "boundRecord",
+            "wrappedRecord", "wrappedQualifiedRecord", "wrappedExplicitRecord", "wrappedArray", "wrappedDictionary",
+            "wrappedQualifiedDictionary", "wrappedExplicitDictionary", "wrappedSequenceRecord", "wrappedDictionaryRecord"])
     func scopedRawMembers(_ kind: String) throws {
         let source = Parser.parse(source: try String(contentsOf: URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().appendingPathComponent("GeneratedSwiftRecordFixtures.swift"), encoding: .utf8))
@@ -33,6 +35,15 @@ import SwiftTLAMacros
         let metadata = try TLASpecVerifier.sourceTypes(in: model.memberBlock.members, enums: [])
         let member: String
         switch kind {
+        case "wrappedRecord": member = "Expr(Packet(count: 7, ready: false)).count"
+        case "wrappedQualifiedRecord": member = "SwiftTLA.Expr(Packet(count: 7, ready: false)).count"
+        case "wrappedExplicitRecord": member = "Expr<Packet>(Packet(count: 7, ready: false)).count"
+        case "wrappedArray": member = "Expr([1, 2]).count"
+        case "wrappedDictionary": member = "Expr([0: 1]).keys.cardinality"
+        case "wrappedQualifiedDictionary": member = "SwiftTLA.Expr([0: 1]).keys.cardinality"
+        case "wrappedExplicitDictionary": member = "Expr<[Int: Int]>([0: 1]).keys.cardinality"
+        case "wrappedSequenceRecord": member = "Expr([Packet(count: 7, ready: false)]).head().count"
+        case "wrappedDictionaryRecord": member = "Expr([0: Packet(count: 7, ready: false)])[0].count"
         case "record", "boundRecord": member = "packet.count"
         case "array": member = "history.count"
         case "boundInteger": member = "packet.expr"
@@ -43,7 +54,10 @@ import SwiftTLAMacros
         let lookup = kind == "dictionaryContext"
             ? "let lookup: SharedVariable<[Int: Int]> = scope.sharedVar(_name: \"storedLookup\", initial: [:])"
             : "let lookup = scope.sharedVar(_name: \"storedLookup\", initial: \(lookupInitial))"
-        let selected = "Expr<Int>(StateExpr.firstMatch((when: (\(member) >= 0).stateExpr, then: 1), fallback: 0)) == 1"
+        let wrapped = kind.hasPrefix("wrapped")
+        let expectedCount = kind.contains("Record") ? 7 : kind == "wrappedArray" ? 2 : 1
+        let condition = wrapped ? "\(member) == \(expectedCount)" : "\(member) >= 0"
+        let selected = "Expr<Int>(StateExpr.firstMatch((when: (\(condition)).stateExpr, then: 1), fallback: 0)) == 1"
         let quantified = kind.hasPrefix("bound")
         let predicate = kind == "boundInteger"
             ? "ForAll(in: IntRange(1, through: 2)) { packet in \(selected) }"
@@ -65,7 +79,9 @@ import SwiftTLAMacros
         func expected(_ value: StateExpr) -> StateExpr {
             .equal(.caseExpr([.greaterOrEqual(value, .int(0)), .int(1)], .int(0)), .int(1))
         }
-        if quantified {
+        if wrapped {
+            #expect(try compiledValue(body) == .bool(true))
+        } else if quantified {
             guard case .forAll(let domain, let binder, let predicate) = body else {
                 Issue.record("Expected the source quantifier and its local binding")
                 return
