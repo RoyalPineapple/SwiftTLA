@@ -1317,7 +1317,8 @@ extension NativeSwiftEmitter {
             for (binding, apiBinding) in zip(action.bindings, api.bindings) {
                 let name = binder(binding.binder)
                 let type = program.bindingTypes[binding.binder]!
-                let domain = try actionDomain(binding, state: "_execution.")
+                let recordMembers = try recordSetElements(binding.domain, state: "_execution.")
+                let domain = try recordMembers ?? actionDomain(binding, state: "_execution.")
                 if apiBinding.isPublic {
                     pattern.append("\(apiBinding.swiftIdentifier): let \(name)")
                     actionArguments.append("\(apiBinding.swiftIdentifier): \(name)")
@@ -1333,14 +1334,8 @@ extension NativeSwiftEmitter {
                 }
                 formalArguments.append(try formalValue(argumentValue, type: type))
                 if apiBinding.isPublic {
-                    let finiteRecordDomain: Bool = containsNominalRecord(type) && {
-                        switch binding.domain.operation {
-                        case .setLiteral, .value(.set): return true
-                        default: return false
-                        }
-                    }()
                     let membership: String
-                    if finiteRecordDomain {
+                    if recordMembers != nil {
                         let candidate = CompiledExpression(operation: .boundValue(binding.binder), resultType: type, children: [])
                         membership = try expression(.init(operation: .in, resultType: .bool, children: [candidate, binding.domain]),
                             state: "_execution.", substitutions: [binding.binder: name])

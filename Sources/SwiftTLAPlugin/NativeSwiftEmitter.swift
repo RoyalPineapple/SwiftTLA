@@ -303,22 +303,56 @@ struct NativeSwiftEmitter {
         _ node: CompiledExpression, state: String, substitutions: [BinderID: String] = [:],
         activeFunctions: Set<ResolvedFunctionID> = []
     ) throws -> String? {
-        guard case .set(let element) = node.resultType, containsNominalRecord(element) else { return nil }
-        let members: [String]
+        guard case .set(let element) = node.resultType, containsNominalRecord(element),
+              !hasSymbolicMembership(node) else { return nil }
+        func emit(_ value: CompiledExpression) throws -> String {
+            try self.expression(value, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        }
+        func retained(_ value: CompiledExpression) throws -> String {
+            if let members = try recordSetElements(value, state: state, substitutions: substitutions,
+                activeFunctions: activeFunctions) { return members }
+            guard case .set(let member) = value.resultType else { throw unsupported("record domain") }
+            return "[\(try swiftType(member))](\(try emit(value)))"
+        }
+        let members: String
+        var prelude = ""
         switch node.operation {
         case .setLiteral:
-            members = try node.children.map {
-                try self.expression($0, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-            }
+            members = "[\(try node.children.map { try emit($0) }.joined(separator: ", "))]"
         case .value(.set(let values)):
-            members = try values.sorted().map { try literal($0, as: element) }
+            members = "[\(try values.sorted().map { try literal($0, as: element) }.joined(separator: ", "))]"
+        case .setFilter(let binding):
+            let previousType = nativeBinderTypes.updateValue(element, forKey: binding)
+            defer { nativeBinderTypes[binding] = previousType }
+            members = "(try \(try retained(node.children[0])).sorted(by: \(try ordering(element))).filter { (\(binder(binding)): \(try swiftType(element))) throws -> \(nativeBoolType) in \(try emit(node.children[1])) })"
+        case .setMap(let binding):
+            guard case .set(let input) = node.children[1].resultType else { throw unsupported("record map domain") }
+            let previousType = nativeBinderTypes.updateValue(input, forKey: binding)
+            defer { nativeBinderTypes[binding] = previousType }
+            members = "(try \(try retained(node.children[1])).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> \(try swiftType(element)) in \(try emit(node.children[0])) })"
+        case .union, .intersection, .setDifference:
+            prelude = "let _recordLeft = \(try retained(node.children[0]))\nlet _recordRight = \(try retained(node.children[1]))"
+            if case .union = node.operation {
+                members = "_recordLeft + _recordRight"
+            } else {
+                let negate = if case .setDifference = node.operation { "!" } else { "" }
+                members = "_recordLeft.filter { _recordMember in \(negate)_recordRight.contains(where: { _recordOther in !(_recordOrder(_recordMember, _recordOther) || _recordOrder(_recordOther, _recordMember)) }) }"
+            }
+        case .unionAll:
+            let mapped = node.children[0]
+            guard case .setMap(let binding) = mapped.operation,
+                  case .set(let input) = mapped.children[1].resultType else { return nil }
+            let previousType = nativeBinderTypes.updateValue(input, forKey: binding)
+            defer { nativeBinderTypes[binding] = previousType }
+            members = "(try \(try retained(mapped.children[1])).sorted(by: \(try ordering(input))).flatMap { (\(binder(binding)): \(try swiftType(input))) throws -> [\(try swiftType(element))] in \(try retained(mapped.children[0])) })"
         default: return nil
         }
         // shortcut: finite record domains scan retained members; use compiler-owned hashed keys if large domains dominate.
         return """
         (try { () throws -> [\(try swiftType(element))] in
-            let _recordMembers: [\(try swiftType(element))] = [\(members.joined(separator: ", "))]
             let _recordOrder = \(try crossOrdering(element, element))
+            \(prelude)
+            let _recordMembers: [\(try swiftType(element))] = \(members)
             var _recordUnique: [\(try swiftType(element))] = []
             for _recordMember in _recordMembers {
                 if !_recordUnique.contains(where: { _recordPrior in

@@ -17,6 +17,7 @@ struct GeneratedSwiftRecord {
     }
 
     typealias Swift = UnusedHelper
+    typealias Array = UnusedHelper
 
     enum Step: String, CaseIterable { case advance }
 
@@ -70,6 +71,40 @@ struct GeneratedSwiftRecord {
             Invariant("RecordSelection") {
                 Select(from: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { candidate in candidate.count == 1 } == Packet(count: 1, ready: false)
                     && Select(from: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { candidate in candidate.count == 2 } == Packet(count: 2, ready: false)
+            }
+            Invariant("RecordFilterDomain") {
+                SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)).filtering { value in value.count > 0 }.cardinality == 2
+                    && SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)).filtering { value in value.count > 2 }.isEmpty
+            }
+            Invariant("RecordMapDomain") {
+                IntRange(1, through: 3).mapping { value in Packet.expression(count: value % 2, ready: false) }.cardinality == 2
+                    && IntRange(1, through: 3).mapping { _ in Packet(count: 1, ready: false) }.cardinality == 1
+            }
+            Invariant("RecordUnionDomain") {
+                SetExpr<Packet>.literal(Packet(count: 1, ready: false)).union(SetExpr<Packet>.literal(Packet(count: 2, ready: false))).cardinality == 2
+                    && SetExpr<Packet>.literal(Packet(count: 1, ready: false)).union(SetExpr<Packet>.literal(Packet(count: 1, ready: false))).cardinality == 1
+            }
+            Invariant("RecordIntersectionDomain") {
+                SetExpr<Packet>.literal(Packet(count: 1, ready: false)).intersection(SetExpr<Packet>.literal(Packet(count: 2, ready: false))).isEmpty
+                    && SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)).intersection(SetExpr<Packet>.literal(Packet(count: 2, ready: false))).mapping { value in value.count }.cardinality == 1
+            }
+            Invariant("RecordDifferenceDomain") {
+                SetExpr<Packet>.literal(Packet(count: 1, ready: false)).subtracting(SetExpr<Packet>.literal(Packet(count: 2, ready: false))).cardinality == 1
+                    && SetExpr<Packet>.literal(Packet(count: 1, ready: false)).subtracting(SetExpr<Packet>.literal(Packet(count: 1, ready: false))).isEmpty
+            }
+            Invariant("RecordFlattenedDomain") {
+                IntRange(1, through: 2).flatMapping { value in
+                    SetExpr<Packet>.literal(Packet.expression(count: value, ready: false), Packet.expression(count: value + 1, ready: false))
+                }.cardinality == 3
+                    && IntRange(1, through: 2).flatMapping { _ in SetExpr<Packet>.literal(Packet(count: 1, ready: false)) }.cardinality == 1
+            }
+            Invariant("RecordSymbolicDomain") {
+                Functions(from: IntRange(0, through: 99), to: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)))
+                    .union(Functions(from: IntRange(0, through: 99), to: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))))
+                    .contains(Dictionary<Int, Packet>.mapping(over: IntRange(0, through: 99)) { _ in Packet(count: 1, ready: false) })
+                    && !Functions(from: IntRange(0, through: 99), to: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)))
+                    .union(Functions(from: IntRange(0, through: 99), to: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))))
+                    .contains(Dictionary<Int, Packet>.mapping(over: IntRange(0, through: 99)) { _ in Packet(count: 3, ready: false) })
             }
             Invariant("Bounded") {
                 packet.count <= 1 && archive.cardinality == 2

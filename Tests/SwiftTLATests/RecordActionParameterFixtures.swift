@@ -14,7 +14,7 @@ struct RecordActionParameterModel {
 
     static var spec: TLASpec {
         #spec("RecordActionParameterModel") { scope in
-            let packet = scope.sharedVar(in: SetExpr<Packet>.literal(Packet(count: 0, ready: false), Packet(count: 0, ready: false)))
+            let packet = scope.sharedVar(in: SetExpr<Packet>.literal(Packet(count: 0, ready: false), Packet(count: 0, ready: false)).filtering { value in value.count == 0 })
             SwiftTLA.Action("conflicting") {
                 packet.becomes(Packet(count: 1, ready: false))
                 packet.becomes(Packet(count: 2, ready: false))
@@ -23,10 +23,10 @@ struct RecordActionParameterModel {
                 packet.becomes(Packet(count: 1, ready: false))
                 packet.becomes(Packet(count: 1, ready: false))
             }
-            Do(Step.construct, over: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false), Packet(count: 1, ready: false))) { input in
+            Do(Step.construct, over: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false), Packet(count: 1, ready: false)).filtering { value in value.count > 0 }.mapping { value in value.expr }) { input in
                 Assign(packet, to: Packet.expression(count: input.count, ready: false))
             }
-            Do(Step.update, over: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { input in
+            Do(Step.update, over: SetExpr<Packet>.literal(Packet(count: 1, ready: false)).union(SetExpr<Packet>.literal(Packet(count: 2, ready: false)))) { input in
                 Assign(packet.count, to: input.count)
             }
         }
