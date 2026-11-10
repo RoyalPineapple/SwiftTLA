@@ -188,6 +188,8 @@ private enum ExpressionCheckTask {
     case sequenceContext(element: CompiledValueType, source: CompiledExpression)
     case sequenceValue(CompiledExpression, expected: CompiledValueType)
     case finishSequenceConstruction(expected: CompiledValueType)
+    case membership(expected: CompiledValueType)
+    case finishMembership(expected: CompiledValueType)
     case comparison(expected: CompiledValueType)
     case subset(expected: CompiledValueType)
     case setOperands(CompiledExpression, CompiledExpression, expected: CompiledValueType)
@@ -722,15 +724,6 @@ package struct CompiledTypeChecker: Sendable {
         return result
     }
 
-    private mutating func checkMembership(value: CompiledExpression, domain: CompiledExpression, expected: CompiledValueType) throws -> CheckedType {
-        let checkedDomain = try checkOperand(domain, expected: .set(.unknown))
-        let checkedValue = try checkOperand(value)
-        let context = try Self.operandContext(element(checkedDomain.resultType), checkedValue.resultType)
-        let children = try [refineOperand(checkedValue, from: value, expected: context),
-                            refineOperand(checkedDomain, from: domain, expected: .set(context))]
-        return try checkedType(.bool, expected: expected, children: children)
-    }
-
     /// Selects contextual type information without admitting a conversion. Both
     /// expressions must subsequently prove that they can inhabit this shape.
     private static func operandContext(_ lhs: CompiledValueType, _ rhs: CompiledValueType) throws -> CompiledValueType {
@@ -1179,7 +1172,7 @@ package struct CompiledTypeChecker: Sendable {
             catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
             if case .checked(let result) = check { return checkedOccurrence(expression, annotation: result) }
             return try checkWorklist(startingWith: .boundValue(id, check, expected: expected))
-        case .caseExpr, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .except, .recordAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving, .tuplePrefix, .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral, .cardinality, .powerSet, .sequenceSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate, .operatorApplication, .functionApply:
+        case .in, .caseExpr, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .except, .recordAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving, .tuplePrefix, .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral, .cardinality, .powerSet, .sequenceSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate, .operatorApplication, .functionApply:
             return try checkWorklist(startingWith: .check(expression, expected: expected))
         default: break
         }
@@ -1534,6 +1527,14 @@ package struct CompiledTypeChecker: Sendable {
                         pending.append(contentsOf: [
                             .finish(expected: expected), .result(.int),
                             .discard, .retainOperand(0), .check(operand, expected: .int),
+                        ])
+                    case .in:
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(contentsOf: [
+                            .membership(expected: expected),
+                            .retainOperand(0), .check(expression.children[0], expected: .unknown),
+                            .retainOperand(1), .check(expression.children[1], expected: .set(.unknown)),
                         ])
                     case .equal, .notEqual, .subset:
                         let lhs = expression.children[0]
@@ -2066,6 +2067,29 @@ package struct CompiledTypeChecker: Sendable {
                         .retainOperand(1), .check(rhs, expected: context),
                         .discard, .retainOperand(0), .check(lhs, expected: context),
                     ])
+                case .membership(let expected):
+                    guard let value = results.popLast(), let domain = results.popLast(),
+                          let expression = ancestors.last, let operands = operandFrames.last else {
+                        throw CompiledValueType.diagnostic("checking", "missing checked membership operands")
+                    }
+                    let context = try Self.operandContext(element(domain), value)
+                    pending.append(.finishMembership(expected: expected))
+                    for (index, target) in [(0, context), (1, CompiledValueType.set(context))].reversed() {
+                        if operands[index]?.resultType != target {
+                            pending.append(contentsOf: [
+                                .discard, .retainOperand(index),
+                                .check(expression.children[index], expected: target),
+                            ])
+                        }
+                    }
+                case .finishMembership(let expected):
+                    guard let operands = operandFrames.last,
+                          let value = operands[0], let domain = operands[1] else {
+                        throw CompiledValueType.diagnostic("checking", "missing refined membership operands")
+                    }
+                    let checked = try checkedType(.bool, expected: expected, children: [value, domain])
+                    results.append(checked.type)
+                    try finish(checked, in: &self, refineOperands: false)
                 case .comparison(let expected), .subset(let expected):
                     guard let context = results.popLast() else {
                         throw CompiledValueType.diagnostic("checking", "missing checked comparison operands")
@@ -2487,11 +2511,6 @@ package struct CompiledTypeChecker: Sendable {
             else { result = try CompiledValueType.merge(existing, expected); variables[id] = result }
         case .controlLocation: result = .controlLocation
         case .enabledAction: result = .bool
-        case .in:
-            let value = expression.children[0]
-            let domain = expression.children[1]
-
-            return try checkMembership(value: value, domain: domain, expected: expected)
         case .randomSubset:
             let count = try checkOperand(expression.children[0], expected: .int)
             let domain = try checkOperand(expression.children[1], expected: expected == .unknown ? .set(.unknown) : expected)

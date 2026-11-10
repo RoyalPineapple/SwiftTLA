@@ -168,10 +168,66 @@ derived children. It takes synchronized visit histories and derives their final
 node payloads, ordered children and selected source root through the existing
 construction theorems. Non-expression rows use concrete source/generated fixed-seed
 constructors, so their agreement is derived rather than supplied.
-Its observation consumer uses
+The working revision replaces its supplied total generated-expression history
+with `ReachedCheckedPostorderExecution`: values exist only for completed
+operations, and the next operation either fails or the final value is returned.
+`CompletedSyntaxVisitIdentifiesTheFirstReachedFailure` couples the first failure
+in emitted postorder with the source-root failure. Folding children retains the
+first failed child in left/right order, including when a later subtree has a
+different potential failure. `CompletedSyntaxVisitRetainsTheReachedCheckedOutcome`
+then derives the source outcome from checked operations on already stored operands.
+It supplies no evaluator-agreement premise. The total generated history needed
+by the older child interface is now constructed as ghost proof data, rather than
+received as a description of executed output.
+
+The working observation consumer uses
 `SingletonInitialObservationsRetainOrderMultiplicityAndFirstFailure` to recover
-ordered histories from equal set projections when their lengths are at most one.
-These added proof bodies have not yet passed the pinned proof checker.
+ordered histories from equal set projections. Its length bounds are derived by
+`SingleBranchInitializationDerivesItsObservationBounds` from one live branch,
+state replacement on success, one failure append on error, and no later step
+after that error. Bounds are no longer supplied separately.
+`SingleBranchObservationsSupplyTheirSetInitializationHistory` also derives the
+endpoint set projections; the consumer no longer receives them as assumptions.
+Instantiating the operational histories with actual decoded outputs remains an
+implementation obligation. A singleton set alone cannot establish these bounds.
+The working parent now also constructs a shared operational history. It derives
+the deterministic candidate-or-failure property from its expression children and
+fixed seeds, then invokes
+`DeterministicReachableInitializersConstructTheirOrderedObservations`.
+The finite-prefix proof replaces the one live state on success, appends the
+immutable prefix and site on failure, and keeps every later observation unchanged.
+Reachable child agreement makes that same history a generated history. Thus the
+parent's ordered-observation conclusion no longer depends on histories existing
+only inside the antecedent of an implication. This new proof body is unverified.
+Pinned b489 CI proved the singleton observation bridge and left two source-node
+and five parent-instantiation obligations unproved. Their working body repairs
+make count/index domains and imported-instance facts explicit. The later
+reached-execution and single-branch additions remain unverified.
+
+The source/control trace also exposed a real hidden-seed rendering gap.
+Existing validation admits ASCII control identifiers, including names beginning
+with the formal string-codec marker. The old control renderer quoted such names
+directly, while the actual failure-prefix checker required the protected literal.
+The existing source-to-output owner reproduced that rejection after a valid
+ordinary-label baseline. The shared renderer now uses the existing TLA string
+encoder. No name restriction or output-check weakening is introduced. Its focused
+existing owner now passes, including the ordinary-label baseline and accepted
+marker name. This is regression evidence, not proof credit for the control association.
+
+The native initializer generator now assembles its nested scopes with the existing
+SwiftSyntax builders, instead of reparsing one deeply nested function string.
+Complete prefix statements are parsed separately; a reverse fold wraps each suffix
+in the same selection or branch scope. Existing output checks still validate the
+whole function, initializer expressions, failure recovery, and final assembly.
+The four focused output-owner suites pass on that producer. A separate initializer
+owner exposed recursive membership type checking; membership now uses the existing
+compiler worklist with domain-first checking, value-first refinement, and the same
+final Boolean type check. That exact owner passes. The final producer also passes
+the combined 106 tests in 13 suites and all seven demo-caller tests in two suites.
+These runs retain their complete logs and exact source inputs; they do not prove
+the new mathematical bodies or establish hosted admission. The syntax-builder
+fold and physical scope/helper/field interpretation remain owned correspondence
+obligations.
 
 The physical visitor has a manual loop-simulation argument for this fragment.
 A leaf appends its payload and new index. Expansion pushes the parent, right and
@@ -186,7 +242,7 @@ remain separate boundaries; the manual loop argument does not assume a valid
 emitted plan.
 
 The physical visitor/source-tree mapping, existence of independent syntax
-meanings, actual Swift/TLA history equations, reachable-prefix typing,
+meanings, actual Swift/TLA reached-operation equations, reachable-prefix typing,
 control-seed encoding, and the at-most-one bounds for actual output remain
 owned obligations of the final theorem. The new consumer states those limits
 explicitly; it does not discharge them by assuming evaluator agreement or

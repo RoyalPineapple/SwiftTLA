@@ -385,12 +385,16 @@ THEOREM VisitedSourceSyntaxSuppliesReadyInitializerChildren ==
                 source == Expressions!EmittedSourceSyntaxHistory(emitted, meaning)
                 bound == (DOMAIN prior) \cap IntKeys
                 state == Expressions!CompleteIntBindings(bound, PartialIntProjection(prior))
+    <1>0. Expressions!IntegerDomain
+        BY SMT DEF IntInitializationDomains, Expressions!IntegerDomain
+    <1>. USE <1>0
     <1>1. state \in [IntKeys -> SwiftIntMin..SwiftIntMax]
         BY Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
             DEF state, bound, IntInitializationDomains, Expressions!IntegerDomain
     <1>2. Expressions!ExpressionPlan(plan.count, plan.kinds, plan.literals,
         plan.reads, plan.left, plan.right, state)
-        BY <1>1, Expressions!SourceMatchedNodesSupplyTheTypedExpressionPlan, SMT DEF plan
+        BY <1>1, Expressions!SourceMatchedNodesSupplyTheTypedExpressionPlan, SMT
+            DEF plan, Expressions!ExtractedNodePlan
     <1>3. Expressions!PartialExpressionPlan(plan.count, plan.kinds, plan.literals,
         plan.reads, plan.left, plan.right, bound, PartialIntProjection(prior))
         BY <1>2, SMT DEF plan, state, bound, Expressions!PartialExpressionPlan
@@ -398,7 +402,7 @@ THEOREM VisitedSourceSyntaxSuppliesReadyInitializerChildren ==
                  plan.reads, plan.left, plan.right, PartialIntProjection(prior), source)
           /\ source[plan.count] = meaning[emitted.origins[emitted.count]]
         BY Expressions!MatchedPostorderNodesRetainIndependentSourceSyntaxMeaning, SMT
-            DEF source, plan
+            DEF source, plan, Expressions!ExtractedNodePlan
     <1>5. IntInitializerChildren(plan, prior, source, generated)
         BY <1>3, <1>4, SMT DEF IntInitializerChildren, bound, plan
     <1>6. SourceIntInitializerOutcome(source[plan.count])
@@ -565,7 +569,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
     ASSUME IntInitializationDomains,
            NEW count, NEW order, NEW sourceEvaluate, NEW generatedEvaluate,
            NEW source, NEW generated, NEW views, NEW roots, NEW visits,
-           NEW meanings, NEW generatedExpressions, NEW positions \in SUBSET (1..count),
+           NEW meanings, NEW executions, NEW positions \in SUBSET (1..count),
            NEW seeds \in [(1..count) \ positions -> Values],
            InitializationOrder(count, order),
            InitializerEvaluators(count, sourceEvaluate), InitializerEvaluators(count, generatedEvaluate),
@@ -582,6 +586,9 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                       /\ Expressions!SynchronizedNodeHistory(visit.steps, roots[index], views[index],
                              visit.heights, visit.pendings, visit.currents, visit.emissions)
                       /\ visit.heights[visit.steps] = 0
+                      /\ \A step \in 1..visit.steps :
+                             visit.pendings[step - 1][visit.heights[step - 1]].node
+                                 \in DOMAIN views[index].kinds
                       /\ Expressions!TypedVisitedSourceInputs(views[index], emitted)
                       /\ {emitted.origins[node] : node \in 1..emitted.count}
                              \subseteq DOMAIN views[index].kinds
@@ -589,23 +596,23 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                              meanings[index][prior])
                       /\ Expressions!ExpressionReadKeys(plan.count, plan.kinds, plan.reads)
                              \subseteq (DOMAIN prior) \cap IntKeys
-                      /\ Expressions!GeneratedExpressionHistory(plan.count, plan.kinds, plan.literals,
-                             plan.reads, plan.left, plan.right, PartialIntProjection(prior),
-                             generatedExpressions[index][prior])
+                      /\ Expressions!ReachedCheckedPostorderExecution(plan, PartialIntProjection(prior),
+                             executions[index][prior])
                       /\ sourceEvaluate[index][prior] =
                              SourceIntInitializerOutcome(meanings[index][prior][roots[index]])
                       /\ generatedEvaluate[index][prior] =
-                             GeneratedIntInitializerOutcome(generatedExpressions[index][prior][plan.count])
+                             GeneratedIntInitializerOutcome(executions[index][prior].outcome)
                ELSE /\ sourceEvaluate[index][prior] = SourceFixed(seeds[index])
                     /\ generatedEvaluate[index][prior] = GeneratedFixed(seeds[index])
     PROVE /\ \A index \in 0..count : source[index] = generated[index]
+          /\ \E observations :
+              /\ SingleBranchInitialObservationHistory(count, order, sourceEvaluate, observations)
+              /\ SingleBranchInitialObservationHistory(count, order, generatedEvaluate, observations)
           /\ \A sourceObservation, generatedObservation :
-              (InitialObservationIsTyped(sourceObservation)
-               /\ InitialObservationIsTyped(generatedObservation)
-               /\ sourceObservation.stateCount <= 1 /\ generatedObservation.stateCount <= 1
-               /\ sourceObservation.failureCount <= 1 /\ generatedObservation.failureCount <= 1
-               /\ InitialSetProjection(sourceObservation) = source[count]
-               /\ InitialSetProjection(generatedObservation) = generated[count])
+              ((\E observations : SingleBranchInitialObservationHistory(count, order, sourceEvaluate, observations)
+                    /\ sourceObservation = observations[count])
+               /\ (\E observations : SingleBranchInitialObservationHistory(count, order, generatedEvaluate, observations)
+                    /\ generatedObservation = observations[count]))
               => /\ InitialObservation(sourceObservation.stateCount, sourceObservation.stateHistory,
                          sourceObservation.failureCount, sourceObservation.failureHistory)
                        = InitialObservation(generatedObservation.stateCount, generatedObservation.stateHistory,
@@ -619,6 +626,13 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                     Expressions!ExtractedNodePlan(emissions[index], order[index])]
                 sourceExpressions == [index \in positions |-> [prior \in PartialBindings |->
                     Expressions!EmittedSourceSyntaxHistory(emissions[index], meanings[index][prior])]]
+                generatedExpressions == [index \in positions |-> [prior \in PartialBindings |->
+                    CHOOSE history : Expressions!GeneratedExpressionHistory(plans[index].count,
+                        plans[index].kinds, plans[index].literals, plans[index].reads,
+                        plans[index].left, plans[index].right, PartialIntProjection(prior), history)]]
+    <1>0. Expressions!IntegerDomain
+        BY SMT DEF IntInitializationDomains, Expressions!IntegerDomain
+    <1>. USE <1>0
     <1>1. \A index \in 1..count : \A prior \in source[index - 1].states :
         IF index \in positions
         THEN /\ order[index] \in IntKeys
@@ -643,39 +657,144 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
         <2>0. prior \in PartialBindings
             BY SMT DEF InitializationHistory, InitializationResults, InitializationOrder
         <2>1. CASE index \in positions
+            <3>0a. Expressions!SynchronizedNodeHistory(visits[index].steps, roots[index], views[index],
+                visits[index].heights, visits[index].pendings, visits[index].currents, visits[index].emissions)
+                  /\ visits[index].heights[visits[index].steps] = 0
+                BY <2>1, SMT
+            <3>0b. \A step \in 0..visits[index].steps :
+                /\ Expressions!NodeEmissionArrays(visits[index].emissions[step])
+                /\ Expressions!AllNodePayloadsMatchSource(views[index], visits[index].emissions[step])
+                BY <3>0a, Expressions!SynchronizedNodeHistoryPreservesEverySourcePayload, SMT
             <3>0. /\ Expressions!NodeEmissionArrays(emissions[index])
                   /\ emissions[index].count > 0
                   /\ emissions[index].origins[emissions[index].count] = roots[index]
                   /\ Expressions!AllNodePayloadsMatchSource(views[index], emissions[index])
-                BY <2>1, Expressions!SynchronizedNodeHistoryPreservesEverySourcePayload,
+                BY <2>1, <3>0a, <3>0b,
                     Expressions!SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
                     DEF emissions, Expressions!SynchronizedNodeHistory, Expressions!PendingVisitHistory
-            <3>1. IntInitializerChildren(plans[index], prior,
+            <3>1. Expressions!PartialExpressionPlan(plans[index].count, plans[index].kinds,
+                plans[index].literals, plans[index].reads, plans[index].left, plans[index].right,
+                (DOMAIN prior) \cap IntKeys, PartialIntProjection(prior))
+                BY <2>1, <3>0, Expressions!SourceMatchedNodesSupplyTheTypedExpressionPlan,
+                    Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
+                    DEF plans, IntInitializationDomains, Expressions!IntegerDomain,
+                        Expressions!PartialExpressionPlan
+            <3>2. \E history : Expressions!GeneratedExpressionHistory(plans[index].count,
+                plans[index].kinds, plans[index].literals, plans[index].reads,
+                plans[index].left, plans[index].right, PartialIntProjection(prior), history)
+                BY <3>1, Expressions!PartialOrderedIntExpressionsPreserveValueAndFailure, SMT
+                    DEF IntInitializationDomains, Expressions!IntegerDomain
+            <3>3. Expressions!GeneratedExpressionHistory(plans[index].count,
+                plans[index].kinds, plans[index].literals, plans[index].reads,
+                plans[index].left, plans[index].right, PartialIntProjection(prior),
+                generatedExpressions[index][prior])
+                BY <2>1, <2>0, <3>2, SMT DEF generatedExpressions
+            <3>4. /\ IntInitializerChildren(plans[index], prior,
                 sourceExpressions[index][prior], generatedExpressions[index][prior])
-                BY <2>0, <2>1, <3>0, VisitedSourceSyntaxSuppliesReadyInitializerChildren, SMT
+                  /\ SourceIntInitializerOutcome(meanings[index][prior][roots[index]])
+                         = GeneratedIntInitializerOutcome(generatedExpressions[index][prior][plans[index].count])
+                BY <2>0, <2>1, <3>0, <3>3, VisitedSourceSyntaxSuppliesReadyInitializerChildren, SMT
                     DEF emissions, plans, sourceExpressions
-            <3>. QED BY <2>1, <3>0, <3>1, SMT DEF emissions, plans, sourceExpressions,
+            <3>5. meanings[index][prior][roots[index]] = executions[index][prior].outcome
+                BY <2>1, Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT
+                    DEF IntInitializationDomains, Expressions!IntegerDomain
+            <3>6. sourceExpressions[index][prior][plans[index].count] \in Expressions!ExpressionOutcomes
+                BY <3>4, Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
+                    DEF IntInitializerChildren, Expressions!PartialExpressionPlan,
+                        Expressions!ExpressionPlan, IntInitializationDomains, Expressions!IntegerDomain
+            <3>7. SourceIntInitializerOutcome(meanings[index][prior][roots[index]])
+                    = GeneratedIntInitializerOutcome(executions[index][prior].outcome)
+                BY <2>0, <2>1, <3>0, <3>5, <3>6, IntExpressionOutcomesSupplyInitializerOutcomes, SMT
+                    DEF plans, sourceExpressions, Expressions!ExtractedNodePlan,
+                        Expressions!EmittedSourceSyntaxHistory
+            <3>. QED BY <2>0, <2>1, <3>0, <3>4, <3>7, SMT DEF emissions, plans, sourceExpressions,
                 Expressions!ExtractedNodePlan, Expressions!EmittedSourceSyntaxHistory
         <2>2. CASE index \notin positions
             BY <2>2, FixedInitializerRetainsItsOnlyCandidate, SMT
         <2>. QED BY <2>1, <2>2, SMT
     <1>2. \A index \in 0..count : source[index] = generated[index]
         BY <1>1, OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures, SMT
-    <1>3. \A sourceObservation, generatedObservation :
-        (InitialObservationIsTyped(sourceObservation) /\ InitialObservationIsTyped(generatedObservation)
-         /\ sourceObservation.stateCount <= 1 /\ generatedObservation.stateCount <= 1
-         /\ sourceObservation.failureCount <= 1 /\ generatedObservation.failureCount <= 1
-         /\ InitialSetProjection(sourceObservation) = source[count]
-         /\ InitialSetProjection(generatedObservation) = generated[count])
+    <1>2a. \A index \in 1..count : \A prior \in source[index - 1].states :
+        sourceEvaluate[index][prior] = generatedEvaluate[index][prior]
+        BY <1>1, IntInitializerChildrenSupplyOutcomeAgreement, SMT
+    <1>2b. \A index \in 1..count : \A prior \in source[index - 1].states :
+        sourceEvaluate[index][prior].firstFailure = NoFailure
+            => \E value \in Values : sourceEvaluate[index][prior].candidates = {value}
+        <2>. SUFFICES ASSUME NEW index \in 1..count, NEW prior \in source[index - 1].states
+                     PROVE sourceEvaluate[index][prior].firstFailure = NoFailure
+                         => \E value \in Values : sourceEvaluate[index][prior].candidates = {value}
+            BY SMT
+        <2>1. CASE index \in positions
+            <3>1. sourceExpressions[index][prior][plans[index].count]
+                    \in Expressions!ExpressionOutcomes
+                BY <1>1, <2>1, Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
+                    DEF IntInitializerChildren, Expressions!PartialExpressionPlan,
+                        Expressions!ExpressionPlan, IntInitializationDomains, Expressions!IntegerDomain
+            <3>. QED BY <1>1, <2>1, <3>1, SMT
+                DEF SourceIntInitializerOutcome, Expressions!ExpressionOutcomes,
+                    SourceFixed, SourceFailed, IntInitializationDomains
+        <2>2. CASE index \notin positions
+            BY <2>2, SMT DEF SourceFixed
+        <2>. QED BY <2>1, <2>2, SMT
+    <1>2c. PICK observations :
+        /\ SingleBranchInitialObservationHistory(count, order, sourceEvaluate, observations)
+        /\ \A index \in 0..count : InitialSetProjection(observations[index]) = source[index]
+        BY <1>2b, DeterministicReachableInitializersConstructTheirOrderedObservations
+    <1>2d. \A index \in 0..count :
+        /\ InitialObservationIsTyped(observations[index])
+        /\ observations[index].stateCount <= 1 /\ observations[index].failureCount <= 1
+        /\ observations[index].stateCount + observations[index].failureCount = 1
+        BY <1>2c, SingleBranchInitializationDerivesItsObservationBounds
+    <1>2e. SingleBranchInitialObservationHistory(count, order, generatedEvaluate, observations)
+        BY <1>2a, <1>2c, <1>2d, SMT
+            DEF SingleBranchInitialObservationHistory, SingleBranchInitialObservationStep,
+                InitialSetProjection, InitializationOrder
+    <1>2f. \E observations :
+        /\ SingleBranchInitialObservationHistory(count, order, sourceEvaluate, observations)
+        /\ SingleBranchInitialObservationHistory(count, order, generatedEvaluate, observations)
+        BY <1>2c, <1>2e, SMT
+    <1>3. \A isGenerated \in BOOLEAN : \A observations :
+        LET evaluate == IF isGenerated THEN generatedEvaluate ELSE sourceEvaluate
+            actual == IF isGenerated THEN generated ELSE source
+        IN SingleBranchInitialObservationHistory(count, order, evaluate, observations)
+           => /\ InitialSetProjection(observations[count]) = actual[count]
+              /\ InitialObservationIsTyped(observations[count])
+              /\ observations[count].stateCount <= 1 /\ observations[count].failureCount <= 1
+        <2>. SUFFICES ASSUME NEW isGenerated \in BOOLEAN, NEW observations,
+                             SingleBranchInitialObservationHistory(count, order,
+                                 IF isGenerated THEN generatedEvaluate ELSE sourceEvaluate, observations)
+                     PROVE LET actual == IF isGenerated THEN generated ELSE source
+                           IN /\ InitialSetProjection(observations[count]) = actual[count]
+                              /\ InitialObservationIsTyped(observations[count])
+                              /\ observations[count].stateCount <= 1 /\ observations[count].failureCount <= 1
+            BY SMT
+        <2>. DEFINE evaluate == IF isGenerated THEN generatedEvaluate ELSE sourceEvaluate
+                    actual == IF isGenerated THEN generated ELSE source
+                    projected == [index \in 0..count |-> InitialSetProjection(observations[index])]
+        <2>1. InitializationHistory(isGenerated, count, order, evaluate, projected)
+            BY SingleBranchObservationsSupplyTheirSetInitializationHistory, SMT DEF evaluate, projected
+        <2>2. InitializationHistory(isGenerated, count, order, evaluate, actual)
+            BY SMT DEF evaluate, actual
+        <2>3. \A index \in 0..count : projected[index] = actual[index]
+            BY <2>1, <2>2, InitializationHistoryIsUnique
+        <2>4. /\ InitialObservationIsTyped(observations[count])
+              /\ observations[count].stateCount <= 1 /\ observations[count].failureCount <= 1
+            BY SingleBranchInitializationDerivesItsObservationBounds, SMT DEF evaluate, InitializationOrder
+        <2>. QED BY <2>3, <2>4, SMT DEF actual, projected, InitializationOrder
+    <1>4. \A sourceObservation, generatedObservation :
+        ((\E observations : SingleBranchInitialObservationHistory(count, order, sourceEvaluate, observations)
+              /\ sourceObservation = observations[count])
+         /\ (\E observations : SingleBranchInitialObservationHistory(count, order, generatedEvaluate, observations)
+              /\ generatedObservation = observations[count]))
         => /\ InitialObservation(sourceObservation.stateCount, sourceObservation.stateHistory,
                    sourceObservation.failureCount, sourceObservation.failureHistory)
                  = InitialObservation(generatedObservation.stateCount, generatedObservation.stateHistory,
                      generatedObservation.failureCount, generatedObservation.failureHistory)
            /\ InitialFirstFailure(sourceObservation.failureCount, sourceObservation.failureHistory)
                  = InitialFirstFailure(generatedObservation.failureCount, generatedObservation.failureHistory)
-        BY <1>2, SingletonInitialObservationsRetainOrderMultiplicityAndFirstFailure, SMT
+        BY <1>2, <1>3, SingletonInitialObservationsRetainOrderMultiplicityAndFirstFailure, SMT
             DEF InitializationOrder, InitialObservation
-    <1>. QED BY <1>2, <1>3
+    <1>. QED BY <1>2, <1>2f, <1>4
 
 THEOREM ChangingAReadChangesTheFixedInitializerCandidate ==
     ASSUME NEW first \in Values, NEW second \in Values, first # second

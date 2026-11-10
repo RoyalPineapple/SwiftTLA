@@ -227,6 +227,12 @@ struct NativeSwiftEmitter {
             }
             return "_ModelValue.\(caseName)"
         case (.controlLocation(let id), .controlLocation): return "_ControlLocation.location\(id.ordinal)"
+        default: return try aggregateLiteral(value, as: type)
+        }
+    }
+
+    private func aggregateLiteral(_ value: CompiledValue, as type: CompiledValueType) throws -> String {
+        switch (value, type) {
         case (.set(let values), .set(let element)):
             return "\(try swiftType(type))([\(try values.sorted().map { try literal($0, as: element) }.joined(separator: ", "))])"
         case (.tuple(let values), .array(let element)):
@@ -727,10 +733,16 @@ struct NativeSwiftEmitter {
             return try contextExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate:
             return try arithmeticExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .value, .stateVariable, .boundValue, .controlLocation, .enabledAction,
+        case .value(let value): return try literal(value, as: id.resultType)
+        case .stateVariable(let variable): return stateValue(variable, prefix: state)
+        case .controlLocation(let location): return "_ControlLocation.location\(location.ordinal)"
+        case .and, .or, .not:
+            return try booleanExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .ifThenElse:
+            return try conditionalExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        case .boundValue, .enabledAction,
              .assertView, .convert, .equal, .notEqual,
-             .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and,
-             .or, .not, .ifThenElse:
+             .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual:
             return try scalarExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .setLiteral, .tupleLiteral, .in, .subset, .union,
              .intersection, .setDifference, .cardinality, .integerRange, .setFilter,
@@ -924,9 +936,6 @@ struct NativeSwiftEmitter {
             """
         }
         switch expression {
-        case .value(let value): return try literal(value, as: node.resultType)
-        case .stateVariable(let id):
-            return stateValue(id, prefix: state)
         case .boundValue(let id):
             if state == "nextState.", let binding = successorBindings[id] {
                 return try self.expression(binding.value, state: state, substitutions: binding.substitutions,
@@ -941,7 +950,6 @@ struct NativeSwiftEmitter {
                     from: sourceType ?? node.resultType, to: node.resultType)
             }
             return try projected(binder(id), from: sourceType ?? node.resultType, to: node.resultType)
-        case .controlLocation(let id): return "_ControlLocation.location\(id.ordinal)"
         case .enabledAction(let id):
             guard !state.isEmpty else { throw unsupported("enabledness without a state") }
             let snapshot = state.hasSuffix(".") ? String(state.dropLast()) : state
@@ -968,19 +976,21 @@ struct NativeSwiftEmitter {
         case .lessOrEqual: return try binary("<=")
         case .greaterThan: return try binary(">")
         case .greaterOrEqual: return try binary(">=")
-        case .and, .or:
-            return try booleanExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .not:
-            return try booleanExpression(id, state: state, substitutions: substitutions,
-                activeFunctions: activeFunctions)
-        case .ifThenElse:
-            if node.resultType == .bool {
-                return try booleanExpression(id, state: state, substitutions: substitutions,
-                    activeFunctions: activeFunctions)
-            }
-            return "(\(try emit(0)) ? \(try emit(1)) : \(try emit(2)))"
         default: throw unsupported("scalarExpression operation")
         }
+    }
+
+    private mutating func conditionalExpression(
+        _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<ResolvedFunctionID>
+    ) throws -> String {
+        if id.resultType == .bool {
+            return try booleanExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        }
+        func emit(_ index: Int) throws -> String {
+            try expression(id.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        }
+        return "(\(try emit(0)) ? \(try emit(1)) : \(try emit(2)))"
     }
 
     private mutating func collectionExpression(

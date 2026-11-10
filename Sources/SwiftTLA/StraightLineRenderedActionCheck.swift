@@ -850,7 +850,7 @@ enum StraightLineRenderedActionCheck {
                 case .controlLocation(let id):
                     guard let name = layout.controlLocation(id)?.formalName,
                           isFormalIdentifier(name) else { try unsupported(); return }
-                    expected.append("\"\(name)\"")
+                    expected.append(TLAValue.string(name).description)
                 default: try unsupported(); return
                 }
             case .action(let node):
@@ -955,7 +955,7 @@ enum StraightLineRenderedActionCheck {
            case .controlLocation(let location) = condition.children[1].operation,
            let variableName = layout.variables.first(where: { $0.id == id })?.formalName,
            let locationName = layout.controlLocation(location)?.formalName {
-            selection = "(\(variableName) = \"\(locationName)\")"
+            selection = "(\(variableName) = \(TLAValue.string(locationName).description))"
             body = guardedBody
         }
         if case .and(let assignment, let tail) = body, controlWrite(tail) { body = assignment }

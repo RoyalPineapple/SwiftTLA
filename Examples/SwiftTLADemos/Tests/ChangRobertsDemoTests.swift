@@ -6,7 +6,7 @@ struct ChangRobertsDemoTests {
     @Test("message state preserves the authored Swift record and validates formal fields")
     func preservesMessageRecord() throws {
         let machine = try ChangRoberts.makeMachine()
-        let messages: Set<ChangRoberts.Message> = machine.state.messages
+        let messages = machine.state.messages
         let message = ChangRoberts.Message(candidate: 12, from: .five, to: .six)
         #expect(messages.contains(message))
         #expect(ChangRoberts.Message(formalValue: message.tlaValue) == message)

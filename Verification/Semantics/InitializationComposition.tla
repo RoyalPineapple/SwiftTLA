@@ -579,6 +579,85 @@ THEOREM ExtendedBindingsKeepSourceTypes ==
         BY <1>1, SMT DEF GeneratedExtension
     <1>. QED BY <1>2, <1>3, SMT DEF PartialBindings
 
+\* One straight-line branch replaces its live state or appends its one failure.
+SingleBranchInitialObservationStep(before, key, evaluate, after) ==
+    IF before.stateCount = 0 THEN after = before
+    ELSE /\ before.stateCount = 1
+         /\ LET prior == before.stateHistory[1]
+                outcome == evaluate[prior]
+            IN /\ key \notin DOMAIN prior
+               /\ IF outcome.firstFailure # NoFailure THEN
+                      after = InitialObservation(0, [index \in 1..0 |-> index],
+                          before.failureCount + 1, HistoryAppend(before.failureHistory, before.failureCount,
+                              [before |-> prior, site |-> key, payload |-> outcome.firstFailure]))
+                  ELSE \E value \in Values :
+                      /\ outcome.candidates = {value}
+                      /\ after = InitialObservation(1,
+                             [index \in 1..1 |-> GeneratedExtension(prior, key, value)],
+                             before.failureCount, before.failureHistory)
+
+SingleBranchInitialObservationHistory(count, order, evaluate, observations) ==
+    /\ count \in Nat
+    /\ observations[0] = InitialObservation(1,
+           [index \in 1..1 |-> [key \in {} |-> key]], 0, [index \in 1..0 |-> index])
+    /\ \A index \in 1..count : SingleBranchInitialObservationStep(
+           observations[index - 1], order[index], evaluate[index], observations[index])
+
+THEOREM SingleBranchInitializationDerivesItsObservationBounds ==
+    ASSUME NEW count, NEW order, NEW evaluate, NEW observations,
+           InitializationOrder(count, order), InitializerEvaluators(count, evaluate),
+           SingleBranchInitialObservationHistory(count, order, evaluate, observations)
+    PROVE /\ \A index \in 0..count :
+              /\ InitialObservationIsTyped(observations[index])
+              /\ observations[index].stateCount <= 1
+              /\ observations[index].failureCount <= 1
+              /\ observations[index].stateCount + observations[index].failureCount = 1
+          /\ \A index \in 1..count : observations[index - 1].stateCount = 0
+                 => observations[index] = observations[index - 1]
+    PROOF
+    <1>. DEFINE bounded(index) ==
+        /\ InitialObservationIsTyped(observations[index])
+        /\ observations[index].stateCount <= 1
+        /\ observations[index].failureCount <= 1
+        /\ observations[index].stateCount + observations[index].failureCount = 1
+    <1>1. bounded(0)
+        BY SMT DEF bounded, SingleBranchInitialObservationHistory, InitialObservation,
+            InitialObservationIsTyped, InitialFailureHistory, PartialBindings
+    <1>2. \A index \in 1..count :
+        ((\A earlier \in 0..(index - 1) : bounded(earlier)) => bounded(index))
+        <2>. SUFFICES ASSUME NEW index \in 1..count,
+                             \A earlier \in 0..(index - 1) : bounded(earlier)
+                     PROVE bounded(index)
+            BY SMT
+        <2>. DEFINE before == observations[index - 1]
+                    after == observations[index]
+        <2>1. bounded(index - 1)
+              /\ SingleBranchInitialObservationStep(before, order[index], evaluate[index], after)
+            BY SMT DEF before, after, SingleBranchInitialObservationHistory
+        <2>2. CASE before.stateCount = 0
+            BY <2>1, <2>2, SMT DEF bounded, SingleBranchInitialObservationStep, before, after
+        <2>3. CASE before.stateCount # 0
+            <3>1. /\ before.stateCount = 1 /\ before.failureCount = 0
+                  /\ before.stateHistory[1] \in PartialBindings
+                  /\ order[index] \in Keys
+                  /\ evaluate[index][before.stateHistory[1]] \in InitializerOutcomes
+                BY <2>1, <2>3, SMT DEF bounded, before, InitialObservationIsTyped,
+                    InitialFailureHistory, InitializerEvaluators, InitializationOrder
+            <3>2. CASE evaluate[index][before.stateHistory[1]].firstFailure # NoFailure
+                BY <2>1, <2>3, <3>1, <3>2, SMT DEF bounded, before, after,
+                    SingleBranchInitialObservationStep, InitialObservation, InitialObservationIsTyped,
+                    InitialFailureHistory, InitialFailureEvents, InitializerOutcomes, HistoryAppend
+            <3>3. CASE evaluate[index][before.stateHistory[1]].firstFailure = NoFailure
+                BY <2>1, <2>3, <3>1, <3>3, ExtendedBindingsKeepSourceTypes, SMT
+                    DEF bounded, before, after, SingleBranchInitialObservationStep, InitialObservation,
+                        InitialObservationIsTyped, InitialFailureHistory
+            <3>. QED BY <3>2, <3>3, SMT
+        <2>. QED BY <2>2, <2>3, SMT
+    <1>3. \A index \in 0..count : bounded(index)
+        BY <1>1, <1>2, FiniteIndexedPrefixProperty, SMT DEF SingleBranchInitialObservationHistory
+    <1>. QED BY <1>3, SMT DEF bounded, SingleBranchInitialObservationHistory,
+        SingleBranchInitialObservationStep
+
 THEOREM InitializerLeavesKeepSourceTypes ==
     ASSUME NEW prior \in PartialBindings, NEW key \in Keys,
            NEW outcome \in InitializerOutcomes
@@ -598,6 +677,79 @@ THEOREM InitializerLeavesKeepSourceTypes ==
         BY SMT DEF SourceInitialFailures, GeneratedInitialFailures
     <1>. QED BY <1>2, <1>3, <1>4, <1>5, SMT
         DEF SourceInitialLeaf, GeneratedInitialLeaf, InitializationResults
+
+THEOREM SingleBranchObservationsSupplyTheirSetInitializationHistory ==
+    ASSUME NEW count, NEW order, NEW evaluate, NEW observations,
+           InitializationOrder(count, order), InitializerEvaluators(count, evaluate),
+           SingleBranchInitialObservationHistory(count, order, evaluate, observations)
+    PROVE \A generated \in BOOLEAN : InitializationHistory(generated, count, order, evaluate,
+        [index \in 0..count |-> InitialSetProjection(observations[index])])
+    PROOF
+    <1>. DEFINE projected == [index \in 0..count |-> InitialSetProjection(observations[index])]
+    <1>1. \A index \in 0..count :
+        /\ InitialObservationIsTyped(observations[index])
+        /\ observations[index].stateCount <= 1 /\ observations[index].failureCount <= 1
+        /\ observations[index].stateCount + observations[index].failureCount = 1
+        BY SingleBranchInitializationDerivesItsObservationBounds
+    <1>2. projected \in [0..count -> InitializationResults] /\ projected[0] = InitialSeed
+        BY <1>1, InitialObservationProjectsToExistingSetResult, SMT
+            DEF projected, SingleBranchInitialObservationHistory, InitialSetProjection,
+                InitialObservation, InitialFailureSet, InitialSeed, InitializationOrder
+    <1>3. \A index \in 1..count :
+        /\ projected[index] = SourceAdvance(projected[index - 1], order[index], evaluate[index])
+        /\ projected[index] = GeneratedAdvance(projected[index - 1], order[index], evaluate[index])
+        <2>. SUFFICES ASSUME NEW index \in 1..count
+                     PROVE /\ projected[index] = SourceAdvance(projected[index - 1], order[index], evaluate[index])
+                           /\ projected[index] = GeneratedAdvance(projected[index - 1], order[index], evaluate[index])
+            BY SMT
+        <2>. DEFINE before == observations[index - 1]
+                    after == observations[index]
+        <2>1. SingleBranchInitialObservationStep(before, order[index], evaluate[index], after)
+            BY SMT DEF SingleBranchInitialObservationHistory, before, after
+        <2>2. CASE before.stateCount = 0
+            BY <1>1, <2>1, <2>2, SMT DEF before, after, projected,
+                SingleBranchInitialObservationStep, InitialSetProjection, InitialFailureSet,
+                SourceAdvance, GeneratedAdvance
+        <2>3. CASE before.stateCount # 0
+            <3>. DEFINE prior == before.stateHistory[1]
+                        outcome == evaluate[index][prior]
+            <3>1. /\ before.stateCount = 1 /\ before.failureCount = 0
+                  /\ prior \in PartialBindings /\ order[index] \in Keys \ (DOMAIN prior)
+                  /\ outcome \in InitializerOutcomes
+                BY <1>1, <2>1, <2>3, SMT DEF before, prior, outcome,
+                    SingleBranchInitialObservationStep, InitialObservationIsTyped,
+                    InitializerEvaluators, InitializationOrder
+            <3>2. SourceInitialLeaf(prior, order[index], outcome)
+                    = GeneratedInitialLeaf(prior, order[index], outcome)
+                BY <3>1, PartialBindingsHaveSourceTypes, InitializerLeafRetainsCompleteStatesAndFailures, SMT
+            <3>3. CASE outcome.firstFailure # NoFailure
+                BY <3>1, <3>2, <3>3, <2>1, SMT DEF projected, before, after, prior, outcome,
+                    SingleBranchInitialObservationStep, InitialSetProjection, InitialFailureSet,
+                    InitialObservation, HistoryAppend, InitializerOutcomes,
+                    SourceAdvance, GeneratedAdvance, SourceInitialLeaf, GeneratedInitialLeaf,
+                    GeneratedInitialStates, GeneratedInitialFailures
+            <3>4. CASE outcome.firstFailure = NoFailure
+                BY <3>1, <3>2, <3>4, <2>1, SMT DEF projected, before, after, prior, outcome,
+                    SingleBranchInitialObservationStep, InitialSetProjection, InitialFailureSet,
+                    InitialObservation, SourceAdvance, GeneratedAdvance,
+                    SourceInitialLeaf, GeneratedInitialLeaf, GeneratedInitialStates, GeneratedInitialFailures
+            <3>. QED BY <3>3, <3>4, SMT
+        <2>. QED BY <2>2, <2>3, SMT
+    <1>. QED BY <1>2, <1>3, SMT DEF InitializationHistory, InitializationAdvance, projected
+
+THEOREM InitializationHistoryIsUnique ==
+    ASSUME NEW count, NEW order, NEW evaluate, NEW generated \in BOOLEAN,
+           InitializationOrder(count, order), NEW first, NEW second,
+           InitializationHistory(generated, count, order, evaluate, first),
+           InitializationHistory(generated, count, order, evaluate, second)
+    PROVE \A index \in 0..count : first[index] = second[index]
+    PROOF
+    <1>. DEFINE agrees(index) == first[index] = second[index]
+    <1>1. agrees(0) BY SMT DEF agrees, InitializationHistory
+    <1>2. \A index \in 1..count :
+        ((\A earlier \in 0..(index - 1) : agrees(earlier)) => agrees(index))
+        BY SMT DEF agrees, InitializationHistory
+    <1>. QED BY <1>1, <1>2, FiniteIndexedPrefixProperty, SMT DEF agrees, InitializationOrder
 
 THEOREM InitializationAdvanceIsTyped ==
     ASSUME NEW previous \in InitializationResults, NEW key \in Keys,
@@ -697,6 +849,120 @@ THEOREM SourceHistoriesBindEveryPrefixKey ==
     <1>4. \A index \in 0..count : P(index)
         BY <1>0, <1>3, FiniteIndexedPrefixProperty
     <1>. QED BY <1>4 DEF P
+
+THEOREM DeterministicReachableInitializersConstructTheirOrderedObservations ==
+    ASSUME NEW count, NEW order, NEW evaluate, NEW history,
+           InitializationOrder(count, order), InitializerEvaluators(count, evaluate),
+           InitializationHistory(FALSE, count, order, evaluate, history),
+           \A index \in 1..count : \A prior \in history[index - 1].states :
+               evaluate[index][prior].firstFailure = NoFailure
+                   => \E value \in Values : evaluate[index][prior].candidates = {value}
+    PROVE \E observations :
+        /\ SingleBranchInitialObservationHistory(count, order, evaluate, observations)
+        /\ \A index \in 0..count : InitialSetProjection(observations[index]) = history[index]
+    PROOF
+    <1>. DEFINE valid(length, observations) ==
+        /\ SingleBranchInitialObservationHistory(length, order, evaluate, observations)
+        /\ \A index \in 0..length :
+            /\ InitialObservationIsTyped(observations[index])
+            /\ observations[index].stateCount <= 1
+            /\ observations[index].failureCount <= 1
+            /\ observations[index].stateCount + observations[index].failureCount = 1
+            /\ InitialSetProjection(observations[index]) = history[index]
+    <1>. DEFINE constructed(length) == \E observations : valid(length, observations)
+    <1>0. count \in Nat
+          /\ \A index \in 0..count :
+                 history[index].states \subseteq [PrefixKeys(order, index) -> Values]
+        BY SourceHistoriesBindEveryPrefixKey, SMT DEF InitializationOrder
+    <1>1. constructed(0)
+        <2>. DEFINE seed == InitialObservation(1,
+                         [index \in 1..1 |-> [key \in {} |-> key]],
+                         0, [index \in 1..0 |-> index])
+                    observations == [index \in 0..0 |-> seed]
+        <2>1. valid(0, observations)
+            BY SMT DEF valid, observations, seed, SingleBranchInitialObservationHistory,
+                InitialObservation, InitialObservationIsTyped, InitialFailureHistory,
+                InitialSetProjection, InitialFailureSet, InitializationHistory, InitialSeed, PartialBindings
+        <2>. QED BY <2>1, SMT DEF constructed
+    <1>2. \A index \in 1..count :
+        ((\A earlier \in 0..(index - 1) : constructed(earlier)) => constructed(index))
+        <2>. SUFFICES ASSUME NEW index \in 1..count,
+                             \A earlier \in 0..(index - 1) : constructed(earlier)
+                     PROVE constructed(index)
+            BY SMT
+        <2>0. index \in Nat /\ index >= 1 /\ index - 1 \in 0..(index - 1)
+            BY <1>0, SMT
+        <2>. USE <2>0
+        <2>1. PICK previous : valid(index - 1, previous)
+            BY SMT DEF constructed
+        <2>. DEFINE before == previous[index - 1]
+                    prior == before.stateHistory[1]
+                    outcome == evaluate[index][prior]
+                    value == CHOOSE candidate \in Values : outcome.candidates = {candidate}
+                    after == IF before.stateCount = 0 THEN before
+                        ELSE IF outcome.firstFailure # NoFailure
+                        THEN InitialObservation(0, [position \in 1..0 |-> position],
+                            before.failureCount + 1,
+                            HistoryAppend(before.failureHistory, before.failureCount,
+                                [before |-> prior, site |-> order[index], payload |-> outcome.firstFailure]))
+                        ELSE InitialObservation(1,
+                            [position \in 1..1 |-> GeneratedExtension(prior, order[index], value)],
+                            before.failureCount, before.failureHistory)
+        <2>2. /\ SingleBranchInitialObservationStep(before, order[index], evaluate[index], after)
+              /\ InitialObservationIsTyped(after)
+              /\ after.stateCount <= 1 /\ after.failureCount <= 1
+              /\ after.stateCount + after.failureCount = 1
+              /\ InitialSetProjection(after) = history[index]
+            <3>1. CASE before.stateCount = 0
+                BY <2>1, <3>1, SMT DEF valid, before, after,
+                    SingleBranchInitialObservationStep, InitialSetProjection, InitialFailureSet,
+                    InitializationHistory, InitializationAdvance, SourceAdvance
+            <3>2. CASE before.stateCount # 0
+                <4>1. /\ before.stateCount = 1 /\ before.failureCount = 0
+                      /\ prior \in PartialBindings /\ prior \in history[index - 1].states
+                      /\ DOMAIN prior = PrefixKeys(order, index - 1)
+                      /\ order[index] \in Keys \ (DOMAIN prior)
+                      /\ outcome \in InitializerOutcomes
+                    BY <1>0, <2>1, <3>2, SMT
+                        DEF valid, before, prior, outcome, InitialObservationIsTyped,
+                            InitialFailureHistory, InitialSetProjection, InitialFailureSet,
+                            InitializationOrder, PrefixKeys, InitializerEvaluators
+                <4>2. SourceInitialLeaf(prior, order[index], outcome)
+                        = GeneratedInitialLeaf(prior, order[index], outcome)
+                    BY <4>1, PartialBindingsHaveSourceTypes,
+                        InitializerLeafRetainsCompleteStatesAndFailures, SMT
+                <4>3. CASE outcome.firstFailure # NoFailure
+                    BY <2>1, <3>2, <4>1, <4>2, <4>3, SMT
+                        DEF valid, before, prior, outcome, after,
+                            SingleBranchInitialObservationStep, InitialObservation,
+                            InitialObservationIsTyped, InitialFailureHistory, InitialFailureEvents,
+                            InitialSetProjection, InitialFailureSet, HistoryAppend, InitializerOutcomes,
+                            InitializationHistory, InitializationAdvance, SourceAdvance,
+                            SourceInitialLeaf, GeneratedInitialLeaf, GeneratedInitialStates,
+                            GeneratedInitialFailures
+                <4>4. CASE outcome.firstFailure = NoFailure
+                    <5>1. value \in Values /\ outcome.candidates = {value}
+                        BY <4>1, <4>4, SMT DEF value, outcome
+                    <5>2. GeneratedExtension(prior, order[index], value) \in PartialBindings
+                        BY <4>1, <5>1, ExtendedBindingsKeepSourceTypes
+                    <5>. QED BY <2>1, <3>2, <4>1, <4>2, <4>4, <5>1, <5>2, SMT
+                        DEF valid, before, prior, outcome, after,
+                            SingleBranchInitialObservationStep, InitialObservation,
+                            InitialObservationIsTyped, InitialFailureHistory,
+                            InitialSetProjection, InitialFailureSet, InitializerOutcomes,
+                            InitializationHistory, InitializationAdvance, SourceAdvance,
+                            SourceInitialLeaf, GeneratedInitialLeaf, GeneratedInitialStates,
+                            GeneratedInitialFailures
+                <4>. QED BY <4>3, <4>4, SMT
+            <3>. QED BY <3>1, <3>2, SMT
+        <2>. DEFINE extended == [position \in 0..index |->
+                    IF position = index THEN after ELSE previous[position]]
+        <2>3. valid(index, extended)
+            BY <2>1, <2>2, SMT DEF valid, extended, before, SingleBranchInitialObservationHistory
+        <2>. QED BY <2>3, SMT DEF constructed
+    <1>3. \A index \in 0..count : constructed(index)
+        BY <1>0, <1>1, <1>2, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>0, <1>3, SMT DEF constructed, valid
 
 THEOREM InitializerAdvancesPreserveAllBranches ==
     ASSUME NEW bound \in SUBSET Keys, NEW previous \in InitializationResults,

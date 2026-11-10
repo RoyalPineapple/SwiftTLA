@@ -467,6 +467,21 @@ struct OrderedAssignmentLoweringTests {
             sourceTypes: .init(enums: enums))
         #expect(parsed.diagnostics.isEmpty)
         try OrderedIntSourceSyntaxCheck.verify(original, parsed: parsed, enums: enums)
+        for (label, literal) in [
+            ("copy", "\"copy\""),
+            ("__SwiftTLA_UTF8_V1__C3A9", #""__SwiftTLA_UTF8_V1__5F5F5377696674544C415F555446385F56315F5F43334139""#),
+        ] {
+            try #require(isPlusCalDeclarationName(label))
+            let labels = [parserTestEnum("Step", cases: ["copy": .string(label),
+                "finish": .string("finish")])]
+            let labeled = SpecParser.parseSpecClosure(named: "OrderedInt", original,
+                sourceTypes: .init(enums: labels))
+            try #require(labeled.diagnostics.isEmpty)
+            try OrderedIntSourceSyntaxCheck.verify(original, parsed: labeled, enums: labels)
+            let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: labeled.compile()))
+            let output = try program.renderModule().renderedModuleSource
+            #expect(output.contains("pc = \(literal)"))
+        }
         let unused = source.replacingOccurrences(of: "algorithm\n",
             with: "let ignored = Algorithm(scoped: { scope in\n"
                 + "    let value = scope.sharedVar(initial: 4)\n"

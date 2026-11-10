@@ -12,10 +12,10 @@ extension NativeSwiftEmitter {
         }
     }
 
-    mutating func machineMembers(nested: Bool = false) throws -> [DeclSyntax] {
+    private mutating func machineStateDeclarations(
+        configurationParameters: String, configurationArguments: String
+    ) throws -> [DeclSyntax] {
         let api = model.api
-        let configurationParameters = machineParameters
-        let configurationArguments = machineArguments
         let appendedParameters = configurationParameters.isEmpty ? "" : ", \(configurationParameters)"
         let appendedArguments = configurationArguments.isEmpty ? "" : ", \(configurationArguments)"
         var declarations: [DeclSyntax] = []
@@ -143,6 +143,17 @@ extension NativeSwiftEmitter {
              ordinal: $0.id.ordinal, formalName: program.layout.variables[$0.id.ordinal].formalName)
         })
         declarations += stateDeclarations
+        return declarations
+    }
+
+    mutating func machineMembers(nested: Bool = false) throws -> [DeclSyntax] {
+        let api = model.api
+        let configurationParameters = machineParameters
+        let configurationArguments = machineArguments
+        let appendedParameters = configurationParameters.isEmpty ? "" : ", \(configurationParameters)"
+        let appendedArguments = configurationArguments.isEmpty ? "" : ", \(configurationArguments)"
+        var declarations = try machineStateDeclarations(configurationParameters: configurationParameters,
+            configurationArguments: configurationArguments)
         declarations += try formalProjectionDeclarations()
         declarations += try actionDeclarations()
         declarations += try updateDeclarations()
@@ -594,10 +605,17 @@ extension NativeSwiftEmitter {
         return "{ \(capture)try TLAStateProjection(validating: [\(entries.joined(separator: ", "))]) }"
     }
 
-    mutating func initialDeclarations(parameters: String, arguments: String) throws -> [DeclSyntax] {
-        let hasRandomSubset = hasRandomSubsetInitializer
-        var code = "var result: [Snapshot] = []\nvar failures: [InitialEvaluationFailure] = []\nvar evaluatingInitializerOrdinal: \(nativeIntType)?\nvar evaluatingInitialBindings: @Sendable () throws -> TLAStateProjection = { try TLAStateProjection(validating: []) }\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
-        var closing = ""
+    private enum InitialScope {
+        case selection(prefix: String, condition: String)
+        case branch(prefix: String, variable: String, candidates: String)
+    }
+
+    private mutating func initialStateSource(arguments: String) throws -> (
+        code: String, scopes: [InitialScope], loops: [String: String],
+        candidates: [String: String], membership: [String: String]
+    ) {
+        var code = ""
+        var scopes: [InitialScope] = []
         var expectedLoops: [String: String] = [:]
         var expectedCandidateSources: [String: String] = [:]
         var expectedMembershipSources: [String: String] = [:]
@@ -611,14 +629,16 @@ extension NativeSwiftEmitter {
                 code += "let \(name): \(try swiftType(type)) = \(try self.expression(expression, state: ""))\n"
                 code += "evaluatingInitializerOrdinal = nil\n"
                 if let field = stateMemberNames[initialization.variable] {
+                    let condition: String
                     if containsSourceNominal(type) {
                         let order = "_initialValueOrder\(initialization.variable.ordinal)"
                         code += "let \(order) = \(try crossOrdering(type, type))\n"
-                        code += "if _selectedInitial == nil || !(\(order)(_selectedInitial!.\(field), \(name)) || \(order)(\(name), _selectedInitial!.\(field))) {\n"
+                        condition = "_selectedInitial == nil || !(\(order)(_selectedInitial!.\(field), \(name)) || \(order)(\(name), _selectedInitial!.\(field)))"
                     } else {
-                        code += "if _selectedInitial == nil || _selectedInitial!.\(field) == \(name) {\n"
+                        condition = "_selectedInitial == nil || _selectedInitial!.\(field) == \(name)"
                     }
-                    closing = "}\n" + closing
+                    scopes.append(.selection(prefix: code, condition: condition))
+                    code = ""
                 }
             case .memberOf(let expression):
                 code += "evaluatingInitializerOrdinal = \(initialization.variable.ordinal)\n"
@@ -655,6 +675,7 @@ extension NativeSwiftEmitter {
                 } else {
                     candidateSource = "\(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))"
                 }
+                let candidates: String
                 if let field = stateMemberNames[initialization.variable] {
                     let membershipDomain = randomSubsetOperands?.domain ?? expression
                     let membership = CompiledExpression(operation: .in, resultType: .bool, children: [
@@ -677,23 +698,14 @@ extension NativeSwiftEmitter {
                         return \(eligible)
                         }
                     )
-                    for \(name) in \(name)Candidates {
-                    evaluatingInitializerOrdinal = nil
-                    try SwiftTLA._NativeMachineOperations.visitInitialBranch({
-
                     """
+                    candidates = "\(name)Candidates"
                 } else {
                     expectedLoops[name] = candidateSource
-                    code += "for \(name) in \(candidateSource) {\nevaluatingInitializerOrdinal = nil\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
+                    candidates = candidateSource
                 }
-                closing = """
-                }, onEvaluationFailure: { failure in
-                    failures.append(.init(
-                        site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
-                        failure: failure, projectingBefore: evaluatingInitialBindings))
-                })
-                }
-                """ + closing
+                scopes.append(.branch(prefix: code, variable: name, candidates: candidates))
+                code = ""
             }
         }
         if let selected = program.behavior.initialInvariant {
@@ -704,23 +716,78 @@ extension NativeSwiftEmitter {
         } else {
             code += "result.append(\(executionState(values: variable)))\n"
         }
-        code += closing
-        code += """
-        }, onEvaluationFailure: { failure in
+        return (code, scopes, expectedLoops, expectedCandidateSources, expectedMembershipSources)
+    }
+
+    private func initialBranch(_ body: CodeBlockItemListSyntax) throws -> CodeBlockItemSyntax {
+        let parsed = Parser.parse(source: """
+        try SwiftTLA._NativeMachineOperations.visitInitialBranch({}, onEvaluationFailure: { failure in
             failures.append(.init(
                 site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
-        return InitialEvaluationOutcomes(states: result, failures: failures)
-        """
+        """)
+        guard var item = parsed.statements.first,
+              var attempt = item.item.as(TryExprSyntax.self),
+              var call = attempt.expression.as(FunctionCallExprSyntax.self),
+              var argument = call.arguments.first,
+              var closure = argument.expression.as(ClosureExprSyntax.self) else {
+            throw unsupported("initial branch declaration")
+        }
+        closure.statements = body
+        argument.expression = ExprSyntax(closure)
+        call.arguments[call.arguments.startIndex] = argument
+        attempt.expression = ExprSyntax(call)
+        item.item = .expr(ExprSyntax(attempt))
+        return item
+    }
+
+    private func initialBody(_ source: String, scopes: [InitialScope]) throws -> CodeBlockItemListSyntax {
+        var body = Parser.parse(source: source).statements
+        for scope in scopes.reversed() {
+            let prefix: String
+            let statement: CodeBlockItemSyntax
+            switch scope {
+            case .selection(let source, let condition):
+                prefix = source
+                let selection = try IfExprSyntax("if \(raw: condition)") { body }
+                statement = CodeBlockItemSyntax(item: .expr(ExprSyntax(selection)))
+            case .branch(let source, let variable, let candidates):
+                prefix = source
+                let branch = try initialBranch(body).with(\.leadingTrivia, .newlines(1))
+                let loop = try ForStmtSyntax("for \(raw: variable) in \(raw: candidates)") {
+                    ExprSyntax("evaluatingInitializerOrdinal = nil")
+                    branch
+                }
+                statement = CodeBlockItemSyntax(item: .stmt(StmtSyntax(loop)))
+            }
+            body = CodeBlockItemListSyntax(Array(Parser.parse(source: prefix).statements)
+                + [statement.with(\.leadingTrivia, .newlines(1))])
+        }
+        return body
+    }
+
+    mutating func initialDeclarations(parameters: String, arguments: String) throws -> [DeclSyntax] {
+        let source = try initialStateSource(arguments: arguments)
+        let hasRandomSubset = hasRandomSubsetInitializer
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
         let appendedArguments = arguments.isEmpty ? "" : ", " + arguments
         let samplingParameter = hasRandomSubset ? ", _sampleRandomSubset: \(nativeBoolType) = false" : ""
-        var declarations = try nativeDeclarations("""
-        private static func _initialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> InitialEvaluationOutcomes<Snapshot> {
-            \(code)
+        let body = try initialBody(source.code, scopes: source.scopes)
+        let prefix = Parser.parse(source: """
+        var result: [Snapshot] = []
+        var failures: [InitialEvaluationFailure] = []
+        var evaluatingInitializerOrdinal: \(nativeIntType)?
+        var evaluatingInitialBindings: @Sendable () throws -> TLAStateProjection = { try TLAStateProjection(validating: []) }
+        """).statements
+        let branch = try initialBranch(body).with(\.leadingTrivia, .newlines(1))
+        let returning = Parser.parse(source: "return InitialEvaluationOutcomes(states: result, failures: failures)")
+            .statements.map { $0.with(\.leadingTrivia, .newlines(1)) }
+        let statements = CodeBlockItemListSyntax(Array(prefix) + [branch] + returning)
+        let initial = try FunctionDeclSyntax("private static func _initialStates(_selectedInitial: State? = nil\(raw: samplingParameter)\(raw: appendedParameters)) throws -> InitialEvaluationOutcomes<Snapshot>") {
+            statements
         }
-        """)
+        var declarations = [DeclSyntax(initial)]
         declarations += try nativeDeclarations("""
         private static func _completedInitialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
             let outcome = try _initialStates(_selectedInitial: _selectedInitial\(hasRandomSubset ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
@@ -755,6 +822,20 @@ extension NativeSwiftEmitter {
             }
             """)
         }
+        try verifyInitialDeclarations(declarations, expectedLoops: source.loops,
+            expectedCandidateSources: source.candidates, expectedMembershipSources: source.membership,
+            hasRandomSubset: hasRandomSubset)
+        if hasRandomSubset {
+            declarations += try selectedInitialDeclarations(arguments: arguments)
+        }
+        return declarations
+    }
+
+    private func verifyInitialDeclarations(
+        _ declarations: [DeclSyntax], expectedLoops: [String: String],
+        expectedCandidateSources: [String: String], expectedMembershipSources: [String: String],
+        hasRandomSubset: Bool
+    ) throws {
         let initialSlots = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
             ($0.id, variable($0.id))
         })
@@ -803,10 +884,6 @@ extension NativeSwiftEmitter {
         try verifyIntInitialOutput(declarations.first)
         try verifyGeneratedInitialConstruction(declarations, configured: !program.layout.parameters.isEmpty,
             sampled: hasRandomSubset)
-        if hasRandomSubset {
-            declarations += try selectedInitialDeclarations(arguments: arguments)
-        }
-        return declarations
     }
 
     func verifyInitialSelection(
