@@ -650,11 +650,15 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             BY SMT DEF typedPrefix
         <2>0. index \in Nat /\ index >= 1 /\ typedPrefix(index - 1)
             BY SMT DEF InitializationOrder
-        <2>1. PICK prior \in source[index - 1].states,
-                   value \in sourceEvaluate[index][prior].candidates :
-            SourceExtension(prior, order[index], value, after)
+        <2>1a. PICK prior \in source[index - 1].states :
+            \E value \in sourceEvaluate[index][prior].candidates :
+                SourceExtension(prior, order[index], value, after)
             BY SMT DEF InitializationHistory, InitializationAdvance, SourceAdvance,
                 SourceInitialLeaf, SourceInitialStates
+        <2>1. PICK value \in sourceEvaluate[index][prior].candidates :
+            /\ prior \in source[index - 1].states
+            /\ SourceExtension(prior, order[index], value, after)
+            BY <2>1a
         <2>2. prior \in PartialBindings
               /\ PartialIntProjection(prior)
                      \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]

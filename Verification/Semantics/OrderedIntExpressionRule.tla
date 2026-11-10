@@ -1602,8 +1602,24 @@ THEOREM CompletedSyntaxVisitIdentifiesTheFirstReachedFailure ==
                              meaning[current.terms[current.height]])
                     BY <2>1, <3>1, <3>4, SMT DEF WellFormedVisitFrame,
                         WellFormedVisitPrefix, VisitFrameExit, SourceSyntaxHistory
-                <4>. QED BY <2>1, <2>1a, <3>1, <3>2, <4>1, AppendingARootRetainsTheFirstFailure,
-                    FoldingOrderedChildrenRetainsTheFirstFailure, SMT
+                <4>2. /\ EveryRootSucceeded(next.count, next.origins, meaning)
+                          <=> (EveryRootSucceeded(emitted.count, emitted.origins, meaning)
+                               /\ meaning[frame.node].ok)
+                      /\ \A outcome : FirstRootFailureIs(next.count, next.origins, meaning, outcome)
+                          <=> (FirstRootFailureIs(emitted.count, emitted.origins, meaning, outcome)
+                               \/ (EveryRootSucceeded(emitted.count, emitted.origins, meaning)
+                                   /\ ~meaning[frame.node].ok /\ outcome = meaning[frame.node]))
+                    BY <2>1a, <3>2, AppendingARootRetainsTheFirstFailure, SMT
+                <4>3. /\ EveryRootSucceeded(nextCurrent.height, nextCurrent.terms, meaning)
+                          <=> (EveryRootSucceeded(current.height, current.terms, meaning)
+                               /\ meaning[frame.node].ok)
+                      /\ \A outcome : FirstRootFailureIs(nextCurrent.height, nextCurrent.terms, meaning, outcome)
+                          <=> (FirstRootFailureIs(current.height, current.terms, meaning, outcome)
+                               \/ (EveryRootSucceeded(current.height, current.terms, meaning)
+                                   /\ ~meaning[frame.node].ok /\ outcome = meaning[frame.node]))
+                    BY <4>1, FoldingOrderedChildrenRetainsTheFirstFailure, SMT
+                        DEF FoldVisitPrefix, VisitPrefix
+                <4>. QED BY <2>1, <4>2, <4>3, SMT
                     DEF holds, VisitFailureProjection, FoldVisitPrefix, VisitPrefix,
                         frame, emitted, current, next, nextCurrent
             <3>. QED BY <3>3, <3>4, SMT
@@ -2505,7 +2521,20 @@ THEOREM ReachedCheckedOperationsRetainEverySuccessfulSourcePrefix ==
             BY <1>2, <2>1, SMT
         <2>. QED BY <2>2, SMT DEF agrees, ReachedCheckedPostorderExecution
     <1>5. \A index \in 0..execution.completed : agrees(index)
-        BY <1>0, <1>3, <1>4, FiniteIndexedPrefixProperty
+        <2>. DEFINE P(length) ==
+            \A index \in 0..execution.completed : index <= length => agrees(index)
+        <2>1. P(0) BY <1>3, SMT DEF P
+        <2>2. ASSUME NEW length \in Nat, P(length)
+              PROVE P(length + 1)
+            <3>. SUFFICES ASSUME length + 1 \in 1..execution.completed
+                         PROVE agrees(length + 1)
+                BY P(length), SMT DEF P
+            <3>1. \A earlier \in 0..length : agrees(earlier)
+                BY P(length), SMT DEF P
+            <3>. QED BY <1>4, <3>1, SMT
+        <2>3. \A length \in Nat : P(length)
+            BY <2>1, <2>2, NatInduction
+        <2>. QED BY <1>0, <2>3, SMT DEF P
     <1>6. \A index \in 1..execution.completed : source[index] = Success(execution.values[index])
         BY <1>0, <1>5, SMT DEF agrees
     <1>7. execution.completed = plan.count => execution.outcome = source[plan.count]

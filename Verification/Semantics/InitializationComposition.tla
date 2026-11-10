@@ -701,6 +701,8 @@ THEOREM SingleBranchObservationsSupplyTheirSetInitializationHistory ==
     PROOF
     <1>. DEFINE projected == [index \in 0..count |-> InitialSetProjection(observations[index])]
     <1>0. count \in Nat /\ 0 \in 0..count BY SMT DEF InitializationOrder
+    <1>0a. 1..0 = {} /\ 1..1 = {1} BY SMT
+    <1>. USE <1>0a
     <1>1. \A index \in 0..count :
         /\ InitialObservationIsTyped(observations[index])
         /\ observations[index].stateCount <= 1 /\ observations[index].failureCount <= 1
@@ -738,8 +740,13 @@ THEOREM SingleBranchObservationsSupplyTheirSetInitializationHistory ==
             <3>1. after = before /\ projected[index - 1].states = {}
                 BY <2>0, <2>1, <2>2, SMT
                     DEF SingleBranchInitialObservationStep, InitialSetProjection
-            <3>. QED BY <2>0, <3>1, SMT
-                DEF SourceAdvance, GeneratedAdvance, InitialSetProjection
+            <3>2. projected[index] = projected[index - 1]
+                BY <2>0, <3>1, SMT
+            <3>3. projected[index - 1] =
+                [states |-> {}, failures |-> projected[index - 1].failures]
+                BY <2>0, <3>1, SMT DEF InitialSetProjection
+            <3>. QED BY <3>1, <3>2, <3>3, SMT
+                DEF SourceAdvance, GeneratedAdvance
         <2>3. CASE before.stateCount # 0
             <3>. DEFINE prior == before.stateHistory[1]
                         outcome == evaluate[index][prior]
@@ -750,10 +757,20 @@ THEOREM SingleBranchObservationsSupplyTheirSetInitializationHistory ==
                     SingleBranchInitialObservationStep, InitialObservationIsTyped,
                     InitialFailureHistory, InitializerEvaluators, InitializationOrder
             <3>1a. projected[index - 1] = [states |-> {prior}, failures |-> {}]
-                BY <2>0, <3>1, SMT DEF InitialSetProjection, InitialFailureSet, prior
+                <4>1. {before.stateHistory[position] : position \in 1..before.stateCount} = {prior}
+                    BY <3>1, SMT DEF prior
+                <4>2. InitialFailureSet(before.failureCount, before.failureHistory) = {}
+                    BY <3>1, SMT DEF InitialFailureSet
+                <4>. QED BY <2>0, <4>1, <4>2 DEF InitialSetProjection
             <3>2. SourceInitialLeaf(prior, order[index], outcome)
                     = GeneratedInitialLeaf(prior, order[index], outcome)
                 BY <3>1, PartialBindingsHaveSourceTypes, InitializerLeafRetainsCompleteStatesAndFailures, SMT
+            <3>2a. /\ SourceAdvance(projected[index - 1], order[index], evaluate[index])
+                          = SourceInitialLeaf(prior, order[index], outcome)
+                   /\ GeneratedAdvance(projected[index - 1], order[index], evaluate[index])
+                          = GeneratedInitialLeaf(prior, order[index], outcome)
+                BY <3>1a, SMT DEF SourceAdvance, GeneratedAdvance, outcome,
+                    SourceInitialLeaf, GeneratedInitialLeaf
             <3>3. CASE outcome.firstFailure # NoFailure
                 <4>. DEFINE event == [before |-> prior, site |-> order[index], payload |-> outcome.firstFailure]
                 <4>1. event \in InitialFailureEvents
@@ -763,12 +780,14 @@ THEOREM SingleBranchObservationsSupplyTheirSetInitializationHistory ==
                 <4>2. InitialFailureSet(1, HistoryAppend(before.failureHistory, 0, event)) = {event}
                     BY <4>1, AppendingAnInitialFailurePreservesItsSetAndFirstProjections, SMT
                         DEF InitialFailureSet
+                <4>2a. after = InitialObservation(0, [position \in 1..0 |-> position],
+                    1, HistoryAppend(before.failureHistory, 0, event))
+                    BY <2>1, <3>1, <3>3, SMT
+                        DEF SingleBranchInitialObservationStep, event, prior, outcome
                 <4>3. projected[index] = [states |-> {}, failures |-> {event}]
-                    BY <2>0, <2>1, <3>1, <3>3, <4>2, SMT
-                        DEF SingleBranchInitialObservationStep, InitialSetProjection, InitialObservation,
-                            event, prior, outcome
-                <4>. QED BY <3>1, <3>1a, <3>2, <3>3, <4>3, SMT
-                    DEF event, outcome, SourceAdvance, GeneratedAdvance, InitializerOutcomes,
+                    BY <2>0, <4>2, <4>2a, SMT DEF InitialSetProjection, InitialObservation
+                <4>. QED BY <3>1, <3>2, <3>2a, <3>3, <4>3, SMT
+                    DEF event, outcome, InitializerOutcomes,
                         SourceInitialLeaf, GeneratedInitialLeaf, GeneratedInitialStates, GeneratedInitialFailures
             <3>4. CASE outcome.firstFailure = NoFailure
                 <4>1. PICK value \in Values :
@@ -779,10 +798,12 @@ THEOREM SingleBranchObservationsSupplyTheirSetInitializationHistory ==
                     BY <2>1, <3>1, <3>4, SMT DEF SingleBranchInitialObservationStep, prior, outcome
                 <4>2. projected[index] =
                     [states |-> {GeneratedExtension(prior, order[index], value)}, failures |-> {}]
-                    BY <2>0, <3>1, <4>1, SMT
-                        DEF InitialSetProjection, InitialFailureSet, InitialObservation
-                <4>. QED BY <3>1a, <3>2, <3>4, <4>1, <4>2, SMT
-                    DEF outcome, SourceAdvance, GeneratedAdvance, SourceInitialLeaf,
+                    <5>1. after.stateCount = 1 /\ after.failureCount = 0
+                          /\ after.stateHistory[1] = GeneratedExtension(prior, order[index], value)
+                        BY <3>1, <4>1, SMT DEF InitialObservation
+                    <5>. QED BY <2>0, <5>1, SMT DEF InitialSetProjection, InitialFailureSet
+                <4>. QED BY <3>2, <3>2a, <3>4, <4>1, <4>2, SMT
+                    DEF outcome, SourceInitialLeaf,
                         GeneratedInitialLeaf, GeneratedInitialStates, GeneratedInitialFailures
             <3>. QED BY <3>3, <3>4, SMT
         <2>. QED BY <2>2, <2>3, SMT
@@ -934,6 +955,8 @@ THEOREM DeterministicReachableInitializersConstructTheirOrderedObservations ==
           /\ \A index \in 0..count :
                  history[index].states \subseteq [PrefixKeys(order, index) -> Values]
         BY SourceHistoriesBindEveryPrefixKey, SMT DEF InitializationOrder
+    <1>0a. 1..0 = {} /\ 1..1 = {1} BY SMT
+    <1>. USE <1>0a
     <1>1. constructed(0)
         <2>. DEFINE seed == InitialObservation(1,
                          [index \in 1..1 |-> [key \in {} |-> key]],
@@ -979,6 +1002,8 @@ THEOREM DeterministicReachableInitializersConstructTheirOrderedObservations ==
                /\ before.stateCount + before.failureCount = 1
                /\ InitialSetProjection(before) = history[index - 1]
             BY <2>0, <2>1, SMT DEF valid, before
+        <2>1b. history[index] = SourceAdvance(history[index - 1], order[index], evaluate[index])
+            BY <2>0, SMT DEF InitializationHistory, InitializationAdvance
         <2>2. /\ SingleBranchInitialObservationStep(before, order[index], evaluate[index], after)
               /\ InitialObservationIsTyped(after)
               /\ after.stateCount <= 1 /\ after.failureCount <= 1
@@ -988,16 +1013,19 @@ THEOREM DeterministicReachableInitializersConstructTheirOrderedObservations ==
                 <4>1. after = before /\ history[index - 1].states = {}
                     BY <2>1a, <3>1, SMT DEF after, InitialSetProjection
                 <4>2. history[index] = history[index - 1]
-                    BY <2>1a, <4>1, SMT DEF InitializationHistory, InitializationAdvance,
-                        SourceAdvance, InitialSetProjection
+                    BY <2>1a, <2>1b, <4>1, SMT DEF SourceAdvance, InitialSetProjection
                 <4>. QED BY <2>1a, <3>1, <4>1, <4>2, SMT
                     DEF SingleBranchInitialObservationStep
             <3>2. CASE before.stateCount # 0
                 <4>0a. /\ before.stateCount = 1 /\ before.failureCount = 0
                        /\ prior \in PartialBindings
                        /\ history[index - 1] = [states |-> {prior}, failures |-> {}]
-                    BY <2>1a, <3>2, SMT DEF prior, InitialObservationIsTyped,
-                        InitialFailureHistory, InitialSetProjection, InitialFailureSet
+                    <5>1. before.stateCount = 1 /\ before.failureCount = 0
+                          /\ prior \in PartialBindings
+                        BY <2>1a, <3>2, SMT DEF prior, InitialObservationIsTyped, InitialFailureHistory
+                    <5>2. InitialSetProjection(before) = [states |-> {prior}, failures |-> {}]
+                        BY <5>1, SMT DEF prior, InitialSetProjection, InitialFailureSet
+                    <5>. QED BY <2>1a, <5>1, <5>2
                 <4>0b. DOMAIN prior = PrefixKeys(order, index - 1)
                     BY <1>0, <2>0, <4>0a, SMT
                 <4>0c. order[index] \in Keys \ (DOMAIN prior)
@@ -1014,6 +1042,8 @@ THEOREM DeterministicReachableInitializersConstructTheirOrderedObservations ==
                         = GeneratedInitialLeaf(prior, order[index], outcome)
                     BY <4>1, PartialBindingsHaveSourceTypes,
                         InitializerLeafRetainsCompleteStatesAndFailures, SMT
+                <4>2a. history[index] = GeneratedInitialLeaf(prior, order[index], outcome)
+                    BY <2>1b, <4>0a, <4>2, SMT DEF SourceAdvance, outcome, SourceInitialLeaf
                 <4>3. CASE outcome.firstFailure # NoFailure
                     <5>. DEFINE event == [before |-> prior, site |-> order[index],
                                          payload |-> outcome.firstFailure]
@@ -1032,11 +1062,11 @@ THEOREM DeterministicReachableInitializersConstructTheirOrderedObservations ==
                           /\ after.stateCount = 0 /\ after.failureCount = 1
                           /\ InitialSetProjection(after) = [states |-> {}, failures |-> {event}]
                         BY <5>2, <5>3, SMT
-                            DEF InitialObservation, InitialObservationIsTyped, InitialSetProjection
+                            DEF InitialObservation, InitialObservationIsTyped, InitialSetProjection,
+                                InitialFailureHistory
                     <5>5. history[index] = [states |-> {}, failures |-> {event}]
-                        BY <4>0a, <4>2, <4>3, SMT DEF InitializationHistory, InitializationAdvance,
-                            SourceAdvance, outcome, event, InitializerOutcomes,
-                            SourceInitialLeaf, GeneratedInitialLeaf, GeneratedInitialStates, GeneratedInitialFailures
+                        BY <4>1, <4>2a, <4>3, SMT DEF event, InitializerOutcomes,
+                            GeneratedInitialLeaf, GeneratedInitialStates, GeneratedInitialFailures
                     <5>. QED BY <4>1, <4>3, <5>3, <5>4, <5>5, SMT
                         DEF SingleBranchInitialObservationStep, prior, outcome, event
                 <4>4. CASE outcome.firstFailure = NoFailure
@@ -1056,8 +1086,7 @@ THEOREM DeterministicReachableInitializersConstructTheirOrderedObservations ==
                             InitialObservationIsTyped, InitialSetProjection, InitialFailureSet
                     <5>5. history[index] =
                         [states |-> {GeneratedExtension(prior, order[index], value)}, failures |-> {}]
-                        BY <4>0a, <4>2, <4>4, <5>1, SMT DEF InitializationHistory, InitializationAdvance,
-                            SourceAdvance, outcome, SourceInitialLeaf, GeneratedInitialLeaf,
+                        BY <4>2a, <4>4, <5>1, SMT DEF GeneratedInitialLeaf,
                             GeneratedInitialStates, GeneratedInitialFailures
                     <5>. QED BY <4>1, <4>4, <5>1, <5>3, <5>4, <5>5, SMT
                         DEF SingleBranchInitialObservationStep, prior, outcome

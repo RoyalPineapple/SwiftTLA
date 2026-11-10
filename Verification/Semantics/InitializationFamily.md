@@ -219,13 +219,17 @@ Int binding. The parent then uses the derived projection type for its child rule
 Its remaining fixed-row premise says that an Int key has an Int seed; actual
 control keys are outside the Int-key set. The physical layout/type association
 and this new proof body still require verification.
-Pinned f329 CI no longer reports the earlier source-to-postorder meaning lemma
-among its failures. It leaves nine reached-expression obligations and thirteen
-single-branch history obligations unproved. The initialization parent's proof
-does not parse, so that module executed no obligations. The working repairs
-expose count/index domains, typed append results, singleton projections and
-live/dead branch facts, and correct the parent conjunction's continuation
-indentation. These bodies and the new prefix-typing derivation remain unverified.
+Pinned 0aaa CI leaves two reached-expression obligations and thirteen
+single-branch history obligations unproved. Its parent fails before proof
+checking because a bounded witness declaration refers to `prior` before it is
+in scope. The earlier source-to-postorder meaning lemma is not among the
+reported failures; this does not close its physical compiler interpretation.
+The working repairs split that witness into sequential choices, separate
+append and fold projections, and use explicit natural-number induction for the
+reached-operation prefix. Observation proofs expose empty/singleton domains,
+the single live leaf, and the typed failure append before advancing history.
+The theorem statements, premises, definitions, tool pins and budgets are
+unchanged. These proof bodies and the prefix-typing derivation remain unverified.
 The retained failed run does not establish theorem falsity or compiler agreement.
 
 The source/control trace also exposed a real hidden-seed rendering gap.
@@ -559,8 +563,14 @@ The owners are [native emission](../../Sources/SwiftTLAPlugin/NativeSwiftEmitter
 The arithmetic interface is documented Swift [decimal conversion](https://developer.apple.com/documentation/swift/string/init%28_%3Aradix%3Auppercase%3A%29)
 and [signed remainder and unary negation](https://github.com/swiftlang/swift-book/blob/main/TSPL.docc/LanguageGuide/BasicOperators.md).
 
-**Native leaf.** The pilot has no resolved function calls. `expressionValues` starts empty; its only writes occur in
-`recursiveBody`, reached through resolved function emission. That path is absent here, so a pilot literal cannot be replaced by a cached name.
+**Native leaf.** The initializer expression has no resolved function calls.
+`expressionValues` starts empty. Its only entry writes are in `recursiveBody`'s
+`.resume` branch, which saves the dictionary and restores it with `defer`, also
+restoring it before emitting the next body. Every other branch preserves the
+entry dictionary. Induction over completed emitter calls therefore preserves
+the initially empty cache through earlier action/function emission, including
+throwing exits. A pilot literal cannot be replaced by a cached name. This cache
+fact does not require unrelated parts of the model to contain no functions.
 `expression` reaches `expressionBody`, whose value branch calls `literal` with the stored value and `.int` type.
 The union, finite and nominal branches cannot intercept `.int`.
 For `n != Int.min`, the emitted text is the standard decimal representation of `n`.
