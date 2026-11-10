@@ -475,7 +475,7 @@ struct NativeCodeGenerationTests {
         let union = CompiledValueType.union([.int, record])
         let declarations = NativeTypeDeclarations(types: [union, record, union], literals: [], namedDomains: [:])
         #expect(declarations.records == [record])
-        #expect(declarations.unions == [[.int, record]])
+        #expect(declarations.unions == [union])
         #expect(declarations.finiteValues == [[.integer(1), .string("missing")]])
         #expect(declarations.names.count == 3)
     }

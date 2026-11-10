@@ -27,13 +27,13 @@ struct GeneratedRecordCheckingTests {
         let initialState = initial.state
         let changedHistory = GeneratedSwiftRecord.State(packet: initialState.packet,
             previousCount: initialState.previousCount,
-            history: [GeneratedSwiftRecord.Packet(count: 9, ready: false)], archive: initialState.archive)
+            history: [GeneratedSwiftRecord.Packet(count: 9, ready: false)], archive: initialState.archive, lookup: initialState.lookup)
         let changedArchive = GeneratedSwiftRecord.State(packet: initialState.packet,
             previousCount: initialState.previousCount, history: initialState.history,
-            archive: [GeneratedSwiftRecord.Packet(count: 9, ready: false), .init(count: 1, ready: true)])
+            archive: [GeneratedSwiftRecord.Packet(count: 9, ready: false), .init(count: 1, ready: false)], lookup: initialState.lookup)
         let sameState = GeneratedSwiftRecord.State(packet: initialState.packet,
             previousCount: initialState.previousCount, history: initialState.history,
-            archive: [.init(count: 1, ready: true), .init(count: 0, ready: false)])
+            archive: [.init(count: 1, ready: false), .init(count: 0, ready: false)], lookup: initialState.lookup)
         #expect(initialState == sameState)
         for changed in [changedHistory, changedArchive] {
             #expect(initialState != changed)

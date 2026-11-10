@@ -61,13 +61,13 @@ extension NativeSwiftEmitter {
         }
         switch (source, target) {
         case (.set(let input), .set(let output)):
-            return "Set<\(try swiftType(output))>(try (\(value)).map { element in \(try checkedView("element", from: input, to: output)) })"
+            return "\(try swiftType(target))(try (\(value)).map { element in \(try checkedView("element", from: input, to: output)) })"
         case (.array(let input), .array(let output)):
             return "(try (\(value)).map { element in \(try checkedView("element", from: input, to: output)) })"
         case (.dictionary(let sourceKey, let sourceValue), .dictionary(let targetKey, let targetValue)):
             let key = try checkedView("entry.key", from: sourceKey, to: targetKey)
             let item = try checkedView("entry.value", from: sourceValue, to: targetValue)
-            return "Dictionary<\(try swiftType(targetKey)), \(try swiftType(targetValue))>(uniqueKeysWithValues: try (\(value)).map { entry in (\(key), \(item)) })"
+            return "\(try dictionaryConstructor(target))(uniqueKeysWithValues: try (\(value)).map { entry in (\(key), \(item)) })"
         case (.tuple(let inputs), .tuple(let outputs)) where inputs.count == outputs.count:
             return try checkedFields(value, from: source, to: target, inputs: inputs, outputs: outputs)
         default:

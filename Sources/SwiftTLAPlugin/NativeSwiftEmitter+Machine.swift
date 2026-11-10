@@ -392,6 +392,58 @@ extension NativeSwiftEmitter {
 
     func valueTypeDeclarations() throws -> [DeclSyntax] {
         var declarations: [DeclSyntax] = []
+        var publicTypes: Set<CompiledValueType> = []
+        var storedTypes: Set<CompiledValueType> = []
+        var stored: [CompiledValueType] = []
+        var pending: [CompiledValueType] = []
+        var programs = [program]
+        var visitedPrograms: Set<CompilationIdentity> = []
+        while let source = programs.popLast() {
+            guard visitedPrograms.insert(source.identity).inserted else { continue }
+            let api = try GeneratedMachineAPI(layout: source.layout, actions: source.behavior.actions)
+            pending += api.variables.compactMap { source.variableTypes[$0.id] }
+            pending += source.layout.parameters.compactMap { source.bindingTypes[$0.binder] }
+            pending += source.checkingRegisterTypes.values
+            stored += source.variableTypes.values
+            for action in api.actions {
+                pending += zip(source[action.compiledAction].bindings, action.bindings).compactMap {
+                    $0.1.isPublic ? source.bindingTypes[$0.0.binder] : nil
+                }
+            }
+            programs += source.refinements.map(\.abstract)
+        }
+        while let type = pending.popLast() {
+            guard publicTypes.insert(type).inserted else { continue }
+            pending += type.components
+        }
+        while let type = stored.popLast() {
+            guard storedTypes.insert(type).inserted else { continue }
+            stored += type.components
+        }
+        func access(_ type: CompiledValueType) -> String {
+            publicTypes.contains(type) ? "public " : storedTypes.contains(type) ? "" : "private "
+        }
+        for (index, element) in typeDeclarations.identityElements.enumerated() {
+            var identityEmitter = self
+            // The policy's Element alias must not capture a source enum named Element.
+            identityEmitter.sourceNominalPrefix = model.typeName
+            let bodies = try identityEmitter.structuralIdentityBodies(fields: [], cases: [], includingPublicState: false, value: element)
+            let exposed = publicTypes.contains(element)
+            let typeAccess = access(element)
+            let memberAccess = exposed ? "public " : ""
+            declarations += try nativeDeclarations("""
+            @_documentation(visibility: internal)
+            \(typeAccess)enum _SetIdentity\(index): SwiftTLA._NativeSetIdentity {
+                \(memberAccess)typealias Element = \(try identityEmitter.swiftType(element))
+                \(memberAccess)static func equal(_ lhs: Element, _ rhs: Element) -> \(nativeBoolType) {
+                    \(bodies.equality)
+                }
+                \(memberAccess)static func hash(_ value: Element, into hasher: inout SwiftTLA._NativeMachineOperations.StateHasher) {
+                    \(bodies.hashing)
+                }
+            }
+            """)
+        }
         let modelValues = typeDeclarations.modelValueCases.sorted { $0.key < $1.key }
         if !modelValues.isEmpty {
             declarations += try nativeDeclarations("""
@@ -401,32 +453,44 @@ extension NativeSwiftEmitter {
             }
             """)
         }
-        for (index, alternatives) in typeDeclarations.unions.enumerated() {
+        for (index, type) in typeDeclarations.unions.enumerated() {
+            guard let alternatives = type.unionAlternatives else { throw unsupported("native union alternatives") }
+            let typeAccess = access(type)
             let cases = try alternatives.enumerated().map {
-                "case alternative\($0.offset + 1)(\(try swiftType($0.element)))"
+                "case \(unionCase(type, index: $0.offset))(\(try swiftType($0.element)))"
             }.joined(separator: "\n")
-            declarations += try nativeDeclarations("""
-            public enum NativeUnion\(index): Hashable, Sendable {
+            var value = try nativeDeclarations("""
+            \(typeAccess)enum NativeUnion\(index): Hashable, Sendable {
                 \(cases)
             }
             """)
+            try addStructuralIdentity(to: &value, cases: alternatives.enumerated().map {
+                (name: unionCase(type, index: $0.offset), types: [$0.element])
+            })
+            declarations += value
         }
         for (index, type) in typeDeclarations.records.enumerated() {
             let elements: [CompiledValueType]
             switch type {
             case .tuple(let items): elements = items
-            case .record(let fields): elements = fields.map(\.type)
+            case .record(let fields), .nominalRecord(_, let fields): elements = fields.map(\.type)
             default: throw unsupported("record declaration")
             }
-            let fields = try elements.enumerated().map { "public let \(fieldName(type, index: $0.offset)): \(try swiftType($0.element))" }.joined(separator: "\n")
+            let memberAccess = publicTypes.contains(type) ? "public " : ""
+            let fields = try elements.enumerated().map { "\(memberAccess)let \(fieldName(type, index: $0.offset)): \(try swiftType($0.element))" }.joined(separator: "\n")
             let parameters = try elements.enumerated().map { "\(fieldName(type, index: $0.offset)) _field\($0.offset): \(try swiftType($0.element))" }.joined(separator: ", ")
             let assignments = elements.indices.map { "self.\(fieldName(type, index: $0)) = _field\($0)" }.joined(separator: "\n")
-            declarations += try nativeDeclarations("""
-            public struct NativeRecord\(index): Hashable, Sendable {
+            let typeAccess = access(type)
+            var value = try nativeDeclarations("""
+            \(typeAccess)struct NativeRecord\(index): Hashable, Sendable {
                 \(fields)
-                public init(\(parameters)) { \(assignments) }
+                \(memberAccess)init(\(parameters)) { \(assignments) }
             }
             """)
+            try addStructuralIdentity(to: &value, fields: elements.enumerated().map {
+                (name: fieldName(type, index: $0.offset, escaped: false), type: $0.element)
+            })
+            declarations += value
         }
         for (index, members) in typeDeclarations.finiteValues.enumerated() {
             declarations += try nativeDeclarations("""
@@ -577,8 +641,10 @@ extension NativeSwiftEmitter {
                        case .set(.dictionary) = expression.computation.resultType {
                         let from = try self.expression(operands.domain.children[0], state: "")
                         let to = try self.expression(operands.domain.children[1], state: "")
-                        sample = "try SwiftTLA._NativeMachineOperations.randomFunctionSubset(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
-                        exhaustive = "try SwiftTLA._NativeMachineOperations.randomFunctionInitialSupport(upTo: \(name)_sampleLimit, from: \(from), to: \(to))"
+                        let forming = containsSourceNominal(expression.computation.resultType)
+                            ? ", forming: \(try swiftType(expression.computation.resultType)).self" : ""
+                        sample = "try SwiftTLA._NativeMachineOperations.randomFunctionSubset(upTo: \(name)_sampleLimit, from: \(from), to: \(to)\(forming))"
+                        exhaustive = "try SwiftTLA._NativeMachineOperations.randomFunctionInitialSupport(upTo: \(name)_sampleLimit, from: \(from), to: \(to)\(forming))"
                     } else {
                         sample = "try SwiftTLA._NativeMachineOperations.randomSubset(upTo: \(name)_sampleLimit, from: \(domain))"
                         exhaustive = "try SwiftTLA._NativeMachineOperations.randomSubsetInitialSupport(upTo: \(name)_sampleLimit, from: \(domain))"

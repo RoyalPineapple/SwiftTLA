@@ -19,9 +19,9 @@ public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStri
 /// Validated state at the explicit native-to-TLA serialization boundary.
 public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
     @_documentation(visibility: internal)
-    public static func losslessSet<Element: Hashable & Sendable>(
-        _ source: Set<Element>, project: (Element) throws -> TLAValue
-    ) throws -> TLAValue {
+    public static func losslessSet<Source: Collection & Sendable>(
+        _ source: Source, project: (Source.Element) throws -> TLAValue
+    ) throws -> TLAValue where Source.Element: Sendable {
         let values = try source.map(project)
         let projected = Set(values)
         guard projected.count == source.count else {

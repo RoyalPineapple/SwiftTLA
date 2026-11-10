@@ -34,6 +34,7 @@ struct NativeSwiftEmitter {
     var checkingLevelName: String?
     var checkingDiameterName: String?
     var printTOutputName: String?
+    var sourceNominalPrefix: String?
 
     init(model: MacroCompilation, sharedTypes: NativeTypeDeclarations? = nil) {
         self.model = model
@@ -108,9 +109,12 @@ struct NativeSwiftEmitter {
         case .string: return nativeStringType
         case .modelValue: return "_ModelValue"
         case .controlLocation: return "_ControlLocation"
-        case .named(let name): return name
-        case .oneOf(let first, let second): return "OneOf<\(try swiftType(first)), \(try swiftType(second))>"
-        case .nominalRecord(let name, _): return name
+        case .named(let name):
+            return sourceNominalPrefix.map { name.contains(".") ? name : "\($0).`\(name)`" } ?? name
+        case .oneOf(let first, let second):
+            if let name = typeDeclarations.names[type] { return name }
+            return "OneOf<\(try swiftType(first)), \(try swiftType(second))>"
+        case .nominalRecord(let name, _): return typeDeclarations.names[type] ?? name
         case .tuple(let elements) where NativeTypeDeclarations.usesPublicTuple(type):
             let name = elements.count == 2 ? "Pair" : elements.count == 3 ? "Triple" : "Quintuple"
             return "\(name)<\(try elements.map(swiftType).joined(separator: ", "))>"
@@ -119,11 +123,27 @@ struct NativeSwiftEmitter {
                 throw unsupported("missing resolved type declaration")
             }
             return name
-        case .set(let element): return "Set<\(try swiftType(element))>"
+        case .set(let element):
+            if containsSourceNominal(element), let index = typeDeclarations.identityElements.firstIndex(of: element) {
+                return "SwiftTLA._NativeSet<_SetIdentity\(index)>"
+            }
+            return "Set<\(try swiftType(element))>"
         case .array(let element): return "[\(try swiftType(element))]"
-        case .dictionary(let key, let value): return "[\(try swiftType(key)): \(try swiftType(value))]"
+        case .dictionary(let key, let value):
+            if containsSourceNominal(key),
+               let keyIndex = typeDeclarations.identityElements.firstIndex(of: key),
+               let valueIndex = typeDeclarations.identityElements.firstIndex(of: value) {
+                return "SwiftTLA._NativeDictionary<_SetIdentity\(keyIndex), _SetIdentity\(valueIndex)>"
+            }
+            return "[\(try swiftType(key)): \(try swiftType(value))]"
         case .unknown: throw unsupported("unresolved value type")
         }
+    }
+
+    func dictionaryConstructor(_ type: CompiledValueType, inferred: Bool = false) throws -> String {
+        guard case .dictionary(let key, let value) = type else { throw unsupported("dictionary constructor") }
+        if containsSourceNominal(key) { return try swiftType(type) }
+        return inferred ? "Dictionary" : "Dictionary<\(try swiftType(key)), \(try swiftType(value))>"
     }
 
     func variable(_ id: VariableID) -> String { variableNames[id]! }
@@ -207,16 +227,16 @@ struct NativeSwiftEmitter {
             return "_ModelValue.\(caseName)"
         case (.controlLocation(let id), .controlLocation): return "_ControlLocation.location\(id.ordinal)"
         case (.set(let values), .set(let element)):
-            return "Set<\(try swiftType(element))>([\(try values.sorted().map { try literal($0, as: element) }.joined(separator: ", "))])"
+            return "\(try swiftType(type))([\(try values.sorted().map { try literal($0, as: element) }.joined(separator: ", "))])"
         case (.tuple(let values), .array(let element)):
             return "[\(try values.map { try literal($0, as: element) }.joined(separator: ", "))]"
-        case (.tuple(let values), .dictionary(let key, let element)) where values.isEmpty:
-            return "[\(try swiftType(key)): \(try swiftType(element))]()"
+        case (.tuple(let values), .dictionary) where values.isEmpty:
+            return "\(try swiftType(type))()"
         case (.tuple(let values), .tuple(let elements)) where values.count == elements.count:
             let name = try swiftType(type)
             return "\(name)(\(try values.indices.map { index in "\(fieldName(type, index: index, escaped: false)): \(try literal(values[index], as: elements[index]))" }.joined(separator: ", ")))"
         case (.function(let values), .dictionary(let key, let element)):
-            if values.isEmpty { return "[\(try swiftType(key)): \(try swiftType(element))]()" }
+            if values.isEmpty { return "\(try swiftType(type))()" }
             return "[\(try values.keys.sorted().map { "\(try literal($0, as: key)): \(try literal(values[$0]!, as: element))" }.joined(separator: ", "))]"
         case (.record(let value), .record(let fields)), (.record(let value), .nominalRecord(_, let fields)):
             guard value.fields.map(\.key) == fields.map({ CompiledValue.string($0.name) }).sorted() else {
@@ -251,10 +271,10 @@ struct NativeSwiftEmitter {
            case .dictionary(let targetKey, let targetValue) = destination {
             let key = try projected("entry.key", from: sourceKey, to: targetKey)
             let item = try projected("entry.value", from: sourceValue, to: targetValue)
-            return "Dictionary<\(try swiftType(targetKey)), \(try swiftType(targetValue))>(uniqueKeysWithValues: (\(value)).map { entry in (\(key), \(item)) })"
+            return "\(try dictionaryConstructor(destination))(uniqueKeysWithValues: (\(value)).map { entry in (\(key), \(item)) })"
         }
         if case .set(let input) = source, case .set(let output) = destination {
-            return "Set<\(try swiftType(output))>((\(value)).map { element in \(try projected("element", from: input, to: output)) })"
+            return "\(try swiftType(destination))((\(value)).map { element in \(try projected("element", from: input, to: output)) })"
         }
         if case .array(let input) = source, case .array(let output) = destination {
             return "(\(value)).map { element in \(try projected("element", from: input, to: output)) }"
@@ -999,14 +1019,14 @@ struct NativeSwiftEmitter {
         }
         switch expression {
         case .setLiteral:
-            guard case .set(let element) = node.resultType else { throw unsupported("set literal") }
-            return "Set<\(try swiftType(element))>([\(try node.children.indices.map { try emit($0) }.joined(separator: ", "))])"
+            guard case .set = node.resultType else { throw unsupported("set literal") }
+            return "\(try swiftType(node.resultType))([\(try node.children.indices.map { try emit($0) }.joined(separator: ", "))])"
         case .tupleLiteral:
             let result = node.resultType
             switch result {
             case .array: return "[\(try node.children.indices.map { try emit($0) }.joined(separator: ", "))]"
-            case .dictionary(let key, let element) where node.children.isEmpty:
-                return "[\(try swiftType(key)): \(try swiftType(element))]()"
+            case .dictionary where node.children.isEmpty:
+                return "\(try swiftType(node.resultType))()"
             case .tuple:
                 return "\(try swiftType(result))(\(try node.children.indices.map { index in "\(fieldName(result, index: index, escaped: false)): \(try emit(index))" }.joined(separator: ", ")))"
             default: throw unsupported("tuple literal")
@@ -1071,11 +1091,11 @@ struct NativeSwiftEmitter {
         case .integerRange: return "(try SwiftTLA._NativeMachineOperations.integerRange(\(try emit(0)), \(try emit(1))))"
         case .setFilter(let binding):
             guard case .set(let element) = node.resultType else { throw unsupported("set filter") }
-            return "Set<\(try swiftType(element))>(try \(try emit(0)).sorted(by: \(try ordering(element))).filter { (\(binder(binding)): \(try swiftType(element))) throws -> \(nativeBoolType) in \(try emit(1)) })"
+            return "\(try swiftType(node.resultType))(try \(try emit(0)).sorted(by: \(try ordering(element))).filter { (\(binder(binding)): \(try swiftType(element))) throws -> \(nativeBoolType) in \(try emit(1)) })"
         case .setMap(let binding):
             guard case .set(let element) = node.resultType else { throw unsupported("set map") }
             guard case .set(let input) = childType(1) else { throw unsupported("set map domain") }
-            return "Set<\(try swiftType(element))>(try \(try members(1)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> \(try swiftType(element)) in \(try emit(0)) })"
+            return "\(try swiftType(node.resultType))(try \(try members(1)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> \(try swiftType(element)) in \(try emit(0)) })"
         case .forAll(let binding): return try quantifier(binding, all: true)
         case .exists(let binding): return try quantifier(binding, all: false)
         case .choose(let binding):
@@ -1087,20 +1107,26 @@ struct NativeSwiftEmitter {
             return "(\(try emit(0)).sorted(by: \(try ordering(element))))"
         case .sequenceFromFunction:
             return "(try SwiftTLA._NativeMachineOperations.sequenceElements(\(try emit(0))))"
-        case .powerSet: return "(try SwiftTLA._NativeMachineOperations.powerSet(\(try emit(0))))"
-        case .sequenceSet: return "(try SwiftTLA._NativeMachineOperations.sequenceSet(\(try emit(0))))"
+        case .powerSet:
+            let forming = containsSourceNominal(node.resultType) ? ", forming: \(try swiftType(node.resultType)).self" : ""
+            return "(try SwiftTLA._NativeMachineOperations.powerSet(\(try emit(0))\(forming)))"
+        case .sequenceSet:
+            let forming = containsSourceNominal(node.resultType) ? ", forming: \(try swiftType(node.resultType)).self" : ""
+            return "(try SwiftTLA._NativeMachineOperations.sequenceSet(\(try emit(0))\(forming)))"
         case .unionAll:
-            guard case .set(let element) = node.resultType else { throw unsupported("UNION result") }
-            return "(\(try emit(0)).reduce(into: Set<\(try swiftType(element))>()) { $0.formUnion($1) })"
+            guard case .set = node.resultType else { throw unsupported("UNION result") }
+            return "(\(try emit(0)).reduce(into: \(try swiftType(node.resultType))()) { $0.formUnion($1) })"
         case .functionSet:
-            return "(try SwiftTLA._NativeMachineOperations.functionSet(\(try emit(0)), \(try emit(1))))"
+            let forming = containsSourceNominal(node.resultType) ? ", forming: \(try swiftType(node.resultType)).self" : ""
+            return "(try SwiftTLA._NativeMachineOperations.functionSet(\(try emit(0)), \(try emit(1))\(forming)))"
         case .randomSubset:
             if case .functionSet = node.children[1].operation,
                case .set(.dictionary) = node.resultType {
                 let functionSet = node.children[1]
                 let domain = try self.expression(functionSet.children[0], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
                 let range = try self.expression(functionSet.children[1], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-                return "(try SwiftTLA._NativeMachineOperations.randomFunctionSubset(upTo: \(try emit(0)), from: \(domain), to: \(range)))"
+                let forming = containsSourceNominal(node.resultType) ? ", forming: \(try swiftType(node.resultType)).self" : ""
+                return "(try SwiftTLA._NativeMachineOperations.randomFunctionSubset(upTo: \(try emit(0)), from: \(domain), to: \(range)\(forming)))"
             }
             return "(try SwiftTLA._NativeMachineOperations.randomSubset(upTo: \(try emit(0)), from: \(try emit(1))))"
         case .randomElement:
@@ -1173,7 +1199,7 @@ struct NativeSwiftEmitter {
             let domain = \(try emit(node.children[0]))
             \(range.declaration)
             let contains = \(range.call)
-            return { candidate in Set(candidate.keys) == domain && candidate.values.allSatisfy(contains) }
+            return { candidate in \(try swiftType(node.children[0].resultType))(candidate.keys) == domain && candidate.values.allSatisfy(contains) }
             """
         case .ifThenElse:
             let first = try predicate(node.children[1])
@@ -1387,7 +1413,7 @@ struct NativeSwiftEmitter {
         switch expression {
         case .domain:
             switch childType(0) {
-            case .dictionary: return "Set(\(try emit(0)).keys)"
+            case .dictionary: return "\(try swiftType(node.resultType))(\(try emit(0)).keys)"
             case .array: return "SwiftTLA._NativeMachineOperations.sequenceDomain(\(try emit(0)))"
             case .tuple(let values):
                 let domain = values.isEmpty ? "Set<\(nativeIntType)>()" : "Set(1...\(values.count))"
@@ -1406,7 +1432,7 @@ struct NativeSwiftEmitter {
             }
         case .functionLiteral(let binding):
             guard case .dictionary(let input, let result) = node.resultType else { throw unsupported("function literal") }
-            return "Dictionary(uniqueKeysWithValues: try \(try emit(0)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> (\(try swiftType(input)), \(try swiftType(result))) in (\(binder(binding)), \(try emit(1))) })"
+            return "\(try dictionaryConstructor(node.resultType, inferred: true))(uniqueKeysWithValues: try \(try emit(0)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> (\(try swiftType(input)), \(try swiftType(result))) in (\(binder(binding)), \(try emit(1))) })"
         case .functionApply:
             let argument = node.children[1].operation
             let result = node.resultType

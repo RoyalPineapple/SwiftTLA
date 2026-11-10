@@ -284,7 +284,7 @@ The proof dependencies above still govern proof closure; they do not block indep
   Two baseline tests reproduced six issues, including spurious initial and reached invariant failures. The repair passed 162 tests in 19 suites and the external typed client.
   The unchanged five-state graph reports only its intended Bounded failures. Duplicate and empty controls pass, and the nested unselected division-by-zero branch produces no error.
   Receipts are in `.git/swifttla-proof-evidence/conditional-nominal-domains-2026-11-09/` in the primary checkout. Direct storage, unsupported child calls, symbolic conditional membership and general control/helper correspondence remain open.
-  Native collection storage and other selected-domain/collection-consumer routes remain open. Native leaf String/enum/view identity, general identity-method interpretation and graph/checker mathematical correspondence also remain owned. This identity work closes no complete six-link row.
+  I5ap below repairs storage for resolved nominal set members and function keys. Raw String views/storage, unhandled consumers, general identity-method interpretation and graph/checker mathematical correspondence remain owned. This identity work closes no complete six-link row.
 
 - [ ] I5ai Preserve string identity across raw enum values and checked string views.
   Default String-enum extraction now uses the inherited canonical string encoding. Explicit `.string(rawValue)` and `.constant(rawValue)` keep their raw encodings.
@@ -363,6 +363,17 @@ The proof dependencies above still govern proof closure; they do not block indep
   Its complete 155863-byte log has SHA256 `a39c2b1c846e57fdfd4f8d0ba8f34656da52eb1bb64575d7fba072452cc07b8d`.
   Inputs, both failed runs, crash reports, object observations, current logs and reviews are retained in `.git/swifttla-proof-evidence/inferred-expression-query-types-2026-11-09/` in the primary checkout.
   These are local regression and resource observations. General resource bounds, emitted-code equivalence and whole-language preservation still require proof.
+
+- [x] I5ap Preserve resolved nominal identity in stored native sets and function keys.
+  Generated collection policies reuse resolved-field equality and hashing. A typed set retains its elements; a typed dictionary keeps the standard Dictionary behind a compiler-owned key wrapper.
+  The existing function-space, random-function, update, lookup, domain, projection and reconstruction routes use those carriers. Primitive-only storage retains its existing representation and guards.
+  Existing record/union layouts handle nested adapted collections. Public and private generated helpers follow their actual interfaces, including embedded refinements. Repository callers migrate concrete collection expectations; the separate-package typed client validates the public surface.
+  The stored-set baseline ran twenty tests with ten issues; the subsequent function-key baseline ran twenty tests with two issues. Both used actual generated execution and checking, not source snapshots alone.
+  The final run passed 260 tests in 35 suites, including both original regressions, the five-state record graph, enum-key updates, the four-state/four-edge function graph, configured Dijkstra, actors and the external typed client.
+  Its complete 75816-byte log has SHA256 `e8880ff96e1e4119382efe403903e0d5d251fc24546b0b8a7beff0da25d691c9`; all 1203 input payloads remained exact. The external client passed in 190.471 seconds.
+  Receipts are in `.git/swifttla-proof-evidence/stored-nominal-set-retention-2026-11-09/` and `.git/swifttla-proof-evidence/native-dictionary-key-retention-2026-11-10/` in the primary checkout. Introduced compilation failures ran zero tests and earn no semantic rejection credit.
+  This changes generated collection field types; application callers with explicit Swift Set/Dictionary annotations may need migration. Structural set membership remains a linear scan.
+  Record operands in SetExpr data constructors, raw string views/storage, source/IR/output/helper interpretation and checker composition remain open. These local implementation receipts close no complete six-link row or whole-language theorem.
   The protected checklist, mathematical TLA, corpus, workflows, dependencies, pins, budgets and timeouts remain unchanged.
 
 - [ ] I6 Reconcile implementation coverage with the accepted-constructor inventory.

@@ -257,17 +257,29 @@ public enum _NativeMachineOperations: Sendable {
     }
 
     public static func sequenceSet<Element: Hashable & Sendable>(_ values: Set<Element>) throws -> Set<[Element]> {
+        try sequenceSet(values, forming: Set<[Element]>.self)
+    }
+
+    public static func sequenceSet<Values: Collection & Sendable, Result: SetAlgebra & Sendable>(
+        _ values: Values, forming: Result.Type
+    ) throws -> Result where Values.Element: Sendable, Result.Element == [Values.Element] {
         guard values.isEmpty else { throw NativeMachineEvaluationError.nonEnumerableSequenceDomain }
-        return [[]]
+        return Result([[]])
     }
 
     public static func powerSet<Element: Hashable & Sendable>(_ values: Set<Element>) throws -> Set<Set<Element>> {
+        try powerSet(values, forming: Set<Set<Element>>.self)
+    }
+
+    public static func powerSet<Values: Collection & SetAlgebra & Sendable, Result: SetAlgebra & Sendable>(
+        _ values: Values, forming: Result.Type
+    ) throws -> Result where Result.Element == Values {
         guard values.count < Int.bitWidth - 1 else {
             throw NativeMachineEvaluationError.powerSetTooLarge(actualCount: values.count, maximumCount: Int.bitWidth - 2)
         }
         let members = Array(values)
-        return Set((0..<(1 << members.count)).map { mask in
-            Set(members.enumerated().compactMap { index, member in
+        return Result((0..<(1 << members.count)).map { mask in
+            Values(members.enumerated().compactMap { index, member in
                 mask & (1 << index) == 0 ? nil : member
             })
         })
@@ -276,18 +288,26 @@ public enum _NativeMachineOperations: Sendable {
     public static func functionSet<Key: Hashable & Sendable, Value: Hashable & Sendable>(
         _ domain: Set<Key>, _ range: Set<Value>
     ) throws -> Set<[Key: Value]> {
+        try functionSet(domain, range, forming: Set<[Key: Value]>.self)
+    }
+
+    public static func functionSet<Domain: Collection & Sendable, Range: Collection & Sendable, Result: SetAlgebra & Sendable>(
+        _ domain: Domain, _ range: Range, forming: Result.Type
+    ) throws -> Result where Domain.Element: Sendable, Range.Element: Sendable,
+        Result.Element: _NativeFunctionStorage & Sendable,
+        Result.Element.Key == Domain.Element, Result.Element.Value == Range.Element {
         try validateFunctionSetCardinality(domainCount: domain.count, rangeCount: range.count)
-        var functions: [[Key: Value]] = [[:]]
+        var functions: [Result.Element] = [.init()]
         for key in domain {
             functions = functions.flatMap { partial in
                 range.map { value in
                     var next = partial
-                    next[key] = value
+                    next.updateValue(value, forKey: key)
                     return next
                 }
             }
         }
-        return Set(functions)
+        return Result(functions)
     }
 
     public static func randomSubset<Element: Hashable & Sendable>(
@@ -295,6 +315,29 @@ public enum _NativeMachineOperations: Sendable {
     ) throws -> Set<Element> {
         try validateRandomSubsetCount(count)
         return Set(values.shuffled().prefix(count))
+    }
+
+    public static func randomSubset<Identity: _NativeSetIdentity>(
+        upTo count: Int, from values: _NativeSet<Identity>
+    ) throws -> _NativeSet<Identity> {
+        try validateRandomSubsetCount(count)
+        return _NativeSet(values.shuffled().prefix(count))
+    }
+
+    public static func randomSubsetInitialSupport<Identity: _NativeSetIdentity>(
+        upTo count: Int, from values: _NativeSet<Identity>
+    ) throws -> _NativeSet<Identity> {
+        try validateRandomSubsetCount(count)
+        return count == 0 ? [] : values
+    }
+
+    public static func randomElement<Identity: _NativeSetIdentity>(
+        from values: _NativeSet<Identity>
+    ) throws -> Identity.Element {
+        guard let value = values.randomElement() else {
+            throw NativeMachineEvaluationError.emptyRandomElementDomain
+        }
+        return value
     }
 
     public static func randomSubsetInitialSupport<Element: Hashable & Sendable>(
@@ -307,8 +350,16 @@ public enum _NativeMachineOperations: Sendable {
     public static func randomFunctionInitialSupport<Key: Hashable & Sendable, Value: Hashable & Sendable>(
         upTo count: Int, from domain: Set<Key>, to range: Set<Value>
     ) throws -> Set<[Key: Value]> {
+        try randomFunctionInitialSupport(upTo: count, from: domain, to: range, forming: Set<[Key: Value]>.self)
+    }
+
+    public static func randomFunctionInitialSupport<Domain: Collection & Sendable, Range: Collection & Sendable, Result: SetAlgebra & Sendable>(
+        upTo count: Int, from domain: Domain, to range: Range, forming: Result.Type
+    ) throws -> Result where Domain.Element: Sendable, Range.Element: Sendable,
+        Result.Element: _NativeFunctionStorage & Sendable,
+        Result.Element.Key == Domain.Element, Result.Element.Value == Range.Element {
         try validateRandomSubsetCount(count)
-        guard count > 0 else { return [] }
+        guard count > 0 else { return Result() }
         let maximum = 1_000_000
         var cardinality = 1
         for _ in domain {
@@ -323,7 +374,7 @@ public enum _NativeMachineOperations: Sendable {
             throw ExplorationError.initialStateLimitExceeded(
                 actualCount: cardinality, maximumCount: maximum)
         }
-        return try functionSet(domain, range)
+        return try functionSet(domain, range, forming: forming)
     }
 
     public static func validateRandomSubsetCount(_ count: Int) throws {
@@ -342,10 +393,18 @@ public enum _NativeMachineOperations: Sendable {
     public static func randomFunctionSubset<Key: Hashable & Sendable, Value: Hashable & Sendable>(
         upTo count: Int, from domain: Set<Key>, to range: Set<Value>
     ) throws -> Set<[Key: Value]> {
+        try randomFunctionSubset(upTo: count, from: domain, to: range, forming: Set<[Key: Value]>.self)
+    }
+
+    public static func randomFunctionSubset<Domain: Collection & Sendable, Range: Collection & Sendable, Result: SetAlgebra & Collection & Sendable>(
+        upTo count: Int, from domain: Domain, to range: Range, forming: Result.Type
+    ) throws -> Result where Domain.Element: Sendable, Range.Element: Sendable,
+        Result.Element: _NativeFunctionStorage & Sendable,
+        Result.Element.Key == Domain.Element, Result.Element.Value == Range.Element {
         try validateRandomSubsetCount(count)
-        guard count > 0 else { return [] }
-        guard !domain.isEmpty else { return [[:]] }
-        guard !range.isEmpty else { return [] }
+        guard count > 0 else { return Result() }
+        guard !domain.isEmpty else { return Result([Result.Element()]) }
+        guard !range.isEmpty else { return Result() }
 
         var cardinality = 1
         var exceedsCount = false
@@ -362,16 +421,16 @@ public enum _NativeMachineOperations: Sendable {
             }
         }
         if !exceedsCount {
-            return try functionSet(domain, range)
+            return try functionSet(domain, range, forming: forming)
         }
 
         let keys = Array(domain)
         let values = Array(range)
-        var chosen: Set<[Key: Value]> = []
+        var chosen = Result()
         while chosen.count < count {
             try Task<Never, Never>.checkCancellation()
-            var function: [Key: Value] = [:]
-            for key in keys { function[key] = values.randomElement()! }
+            var function = Result.Element()
+            for key in keys { function.updateValue(values.randomElement()!, forKey: key) }
             chosen.insert(function)
         }
         return chosen
@@ -527,11 +586,34 @@ public enum _NativeMachineOperations: Sendable {
         return value
     }
 
+    public static func functionValue<KeyIdentity: _NativeSetIdentity, ValueIdentity: _NativeSetIdentity>(
+        _ function: _NativeDictionary<KeyIdentity, ValueIdentity>, at key: KeyIdentity.Element
+    ) throws -> ValueIdentity.Element {
+        guard let value = function[key] else { throw NativeMachineEvaluationError.functionArgumentOutsideDomain }
+        return value
+    }
+
     public static func functionDomain<Key: Hashable & Sendable, Value: Sendable>(_ function: [Key: Value]) -> Set<Key> {
         Set(function.keys)
     }
 
+    public static func functionDomain<KeyIdentity: _NativeSetIdentity, ValueIdentity: _NativeSetIdentity>(
+        _ function: _NativeDictionary<KeyIdentity, ValueIdentity>
+    ) -> _NativeSet<KeyIdentity> {
+        function.keys
+    }
+
     public static func functionUpdated<Key: Hashable & Sendable, Value: Sendable>(_ function: [Key: Value], at key: Key, to value: Value) -> [Key: Value] {
+        guard function[key] != nil else { return function }
+        var updated = function
+        updated[key] = value
+        return updated
+    }
+
+    public static func functionUpdated<KeyIdentity: _NativeSetIdentity, ValueIdentity: _NativeSetIdentity>(
+        _ function: _NativeDictionary<KeyIdentity, ValueIdentity>, at key: KeyIdentity.Element,
+        to value: ValueIdentity.Element
+    ) -> _NativeDictionary<KeyIdentity, ValueIdentity> {
         guard function[key] != nil else { return function }
         var updated = function
         updated[key] = value

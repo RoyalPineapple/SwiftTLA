@@ -116,7 +116,7 @@ extension NativeSwiftEmitter {
             return decode("""
                 guard case .array(let items) = \(value) else { \(invalid) }
                 let members = try items.map { item in \(member) }
-                let result = Set(members)
+                let result = \(try swiftType(type))(members)
                 guard result.count == members.count else { \(invalid) }
                 return result
                 """)

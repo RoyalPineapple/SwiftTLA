@@ -203,18 +203,18 @@ private struct ReachableInvariantFailure {
         let state = original.state
         #expect(try GeneratedSwiftRecord.makeMachine(state).snapshot == original.snapshot)
         let reordered = GeneratedSwiftRecord.State(packet: state.packet, previousCount: state.previousCount,
-            history: state.history, archive: [.init(count: 1, ready: true), .init(count: 0, ready: false)])
+            history: state.history, archive: [.init(count: 1, ready: false), .init(count: 0, ready: false)], lookup: state.lookup)
         #expect(reordered == state)
         #expect(try GeneratedSwiftRecord.makeMachine(reordered).snapshot == original.snapshot)
         let wrongPacket = GeneratedSwiftRecord.State(packet: .init(count: 9, ready: false),
-            previousCount: state.previousCount, history: state.history, archive: state.archive)
+            previousCount: state.previousCount, history: state.history, archive: state.archive, lookup: state.lookup)
         let wrongHistory = GeneratedSwiftRecord.State(packet: state.packet, previousCount: state.previousCount,
-            history: [.init(count: 9, ready: false)], archive: state.archive)
+            history: [.init(count: 9, ready: false)], archive: state.archive, lookup: state.lookup)
         let wrongArchive = GeneratedSwiftRecord.State(packet: state.packet, previousCount: state.previousCount,
-            history: state.history, archive: [.init(count: 9, ready: false), .init(count: 1, ready: true)])
+            history: state.history, archive: [.init(count: 9, ready: false), .init(count: 1, ready: false)], lookup: state.lookup)
         #expect(wrongPacket.packet == state.packet)
         #expect(wrongHistory.history == state.history)
-        #expect(wrongArchive.archive == state.archive)
+        #expect(wrongArchive.archive != state.archive)
         for requested in [wrongPacket, wrongHistory, wrongArchive] {
             #expect(requested != state)
             #expect(throws: GeneratedMachineError.invalidInitialState) {

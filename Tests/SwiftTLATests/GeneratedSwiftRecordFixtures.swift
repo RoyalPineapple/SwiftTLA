@@ -26,9 +26,10 @@ struct GeneratedSwiftRecord {
             let packet = scope.sharedVar(_name: "packet", initial: Packet(count: 0, ready: false))
             let previousCount = scope.sharedVar(_name: "previousCount", initial: -1)
             let history = scope.sharedVar(initial: [Packet(count: 0, ready: false)])
-            let archive = scope.sharedVar(initial: Set<Packet>([
-                Packet(count: 0, ready: false), Packet(count: 1, ready: true)
-            ]))
+            let archive = scope.sharedVar(initial: SetExpr<Packet>.literal(
+                Packet(count: 0, ready: false), Packet(count: 1, ready: false)
+            ))
+            let lookup = scope.sharedVar(initial: Dictionary<Packet, Int>.mapping(over: archive) { value in value.count })
             let generatedSwiftRecord = Algorithm(label: "GeneratedSwiftRecord") {
                 Each(Set<Int>([0]), scoped: { _, process in
                     let localPacket = process.localVar(initial: Packet(count: 0, ready: false))
@@ -44,6 +45,8 @@ struct GeneratedSwiftRecord {
                                 Assign(localPacket, to: Packet.expression(count: hidden, ready: false))
                             }
                         }
+                        Assign(archive, to: archive.union(SetExpr<Packet>.literal(Packet(count: 1, ready: false))))
+                        Assign(lookup[Packet(count: 0, ready: false)], to: lookup[Packet(count: 0, ready: false)] + 1)
                         Assign(previousCount, to: saved.count)
                         Stop()
                     }
@@ -53,6 +56,11 @@ struct GeneratedSwiftRecord {
             Invariant("RecordCardinality") {
                 SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false),
                     Packet(count: 1, ready: false)).cardinality == 2
+                    && Subsets(of: archive).cardinality == 4
+                    && Functions(from: IntRange(0, through: 0), to: archive).cardinality == 2
+                    && Functions(from: archive, to: SetExpr<Int>.literal(0, 1)).cardinality == 4
+                    && lookup.keys.cardinality == 2
+                    && lookup[Packet(count: 1, ready: false)] == 1
             }
             Invariant("RecordForAll") {
                 !ForAll(in: SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { $0.count == 1 }
@@ -75,10 +83,12 @@ struct GeneratedSwiftRecord {
             Invariant("RecordFilterDomain") {
                 SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)).filtering { value in value.count > 0 }.cardinality == 2
                     && SetExpr<Packet>.literal(Packet(count: 1, ready: false), Packet(count: 2, ready: false)).filtering { value in value.count > 2 }.isEmpty
+                    && archive.filtering { value in value.count > 0 }.cardinality == 1
             }
             Invariant("RecordMapDomain") {
                 IntRange(1, through: 3).mapping { value in Packet.expression(count: value % 2, ready: false) }.cardinality == 2
                     && IntRange(1, through: 3).mapping { _ in Packet(count: 1, ready: false) }.cardinality == 1
+                    && archive.mapping { value in Packet.expression(count: value.count + 1, ready: false) }.cardinality == 2
             }
             Invariant("RecordUnionDomain") {
                 SetExpr<Packet>.literal(Packet(count: 1, ready: false)).union(SetExpr<Packet>.literal(Packet(count: 2, ready: false))).cardinality == 2

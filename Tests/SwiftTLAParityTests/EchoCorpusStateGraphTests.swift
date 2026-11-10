@@ -20,7 +20,7 @@ struct EchoCorpusStateGraphTests {
     func configuredChecking() throws {
         let scenario = try #require(EchoModel.validationScenarios().first)
         #expect(scenario.name == "MCEcho")
-        #expect(scenario.configuration.Node == Set<EchoModel.NodeID>([.a, .b, .c]))
+        #expect(scenario.configuration.Node == [.a, .b, .c])
         #expect(scenario.configuration.initiator == .a)
         #expect(scenario.configuration.R.contains(.init(first: .a, second: .b)))
         #expect(!scenario.configuration.R.contains(.init(first: .a, second: .a)))
@@ -47,7 +47,7 @@ struct EchoCorpusStateGraphTests {
         ]
         let alternateRelation = try ReachabilityGraph(
             initialMachines: EchoModel.initialMachines(configuration: .init(
-                Node: scenario.configuration.Node, initiator: .a, R: chain)),
+                Node: scenario.configuration.Node, initiator: .a, R: .init(chain))),
             maximumStates: 1_000
         )
         #expect(alternateRelation.safetyViolations.isEmpty)
@@ -103,9 +103,9 @@ struct EchoCorpusStateGraphTests {
         let complete = scenario.configuration.R
         let selfLoop = complete.union([Pair<EchoModel.NodeID, EchoModel.NodeID>(first: .a, second: .a)])
         let asymmetric = complete.subtracting([Pair<EchoModel.NodeID, EchoModel.NodeID>(first: .b, second: .a)])
-        let disconnected: Set<Pair<EchoModel.NodeID, EchoModel.NodeID>> = [
+        let disconnected = type(of: complete).init([
             .init(first: .a, second: .b), .init(first: .b, second: .a)
-        ]
+        ])
         for relation in [selfLoop, asymmetric, disconnected] {
             let configuration = try EchoModel.Configuration(
                 Node: scenario.configuration.Node, initiator: .a, R: relation

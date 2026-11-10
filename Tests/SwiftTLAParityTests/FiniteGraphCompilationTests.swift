@@ -38,7 +38,7 @@ struct FiniteGraphCompilationTests {
   func dispatchesElevatorArguments() throws {
     var machine = try MultiCarElevator.makeMachine()
     _ = try machine.send(.request(person: .bob, floor: .top, direction: .down))
-    let typedCalls: Set<MultiCarElevator.Call> = machine.state.calls
+    let typedCalls = machine.state.calls
     #expect(typedCalls == [MultiCarElevator.Call(person: .bob, floor: .top, direction: .down)])
     _ = try machine.send(.assign(person: .bob, car: .carB, direction: .down))
     _ = try machine.send(.move(car: .carB, direction: .down, floor: .middle))

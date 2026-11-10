@@ -22,7 +22,31 @@ struct GeneratedSwiftRecordTests {
 
     @Test("ordinary Swift record choices retain values and report ambiguous actions")
     func executesRecordChoices() throws {
+        let authoredArchive = SetExpr(GeneratedSwiftRecord.Packet(count: 0, ready: false),
+            GeneratedSwiftRecord.Packet(count: 1, ready: false))
+        #expect(authoredArchive.elements.map(\.count).sorted() == [0, 1])
         let machine = try GeneratedSwiftRecord.makeMachine()
+        #expect(machine.state.archive.map(\.count).sorted() == [0, 1])
+        let sameArchive = type(of: machine.state.archive).init([
+            GeneratedSwiftRecord.Packet(count: 1, ready: false), .init(count: 0, ready: false)])
+        #expect(Set([sameArchive, machine.state.archive]).count == 1)
+        #expect(machine.state.archive.contains(.init(count: 1, ready: false)))
+        #expect(!machine.state.archive.contains(.init(count: 9, ready: false)))
+        var archive = machine.state.archive
+        #expect(!archive.insert(.init(count: 1, ready: false)).inserted)
+        #expect(archive.remove(.init(count: 0, ready: false))?.count == 0)
+        #expect(archive.count == 1 && archive.first?.count == 1)
+        #expect(archive.update(with: .init(count: 1, ready: false))?.count == 1)
+        #expect(archive.symmetricDifference(machine.state.archive).map(\.count) == [0])
+        #expect(machine.state.lookup.count == 2)
+        #expect(machine.state.lookup[.init(count: 0, ready: false)] == 0)
+        #expect(machine.state.lookup[.init(count: 1, ready: false)] == 1)
+        #expect(machine.state.lookup[.init(count: 9, ready: false)] == nil)
+        var lookup = machine.state.lookup
+        #expect(lookup.updateValue(9, forKey: .init(count: 0, ready: false)) == 0)
+        #expect(lookup[.init(count: 1, ready: false)] == 1)
+        #expect(lookup.removeValue(forKey: .init(count: 0, ready: false)) == 9)
+        #expect(lookup.count == 1 && lookup.keys.contains(.init(count: 1, ready: false)))
         let different = GeneratedSwiftRecord.Packet(count: 9, ready: false)
         #expect(machine.state.packet == different)
         #expect(machine.state.packet.tlaValue != different.tlaValue)
@@ -43,6 +67,10 @@ struct GeneratedSwiftRecordTests {
             let input = candidate.state.packet.count
             #expect(candidate.state.packet.ready)
             #expect(candidate.state.history.map(\.count) == [input])
+            #expect(candidate.state.archive.map(\.count).sorted() == [0, 1])
+            #expect(candidate.state.lookup.count == 2)
+            #expect(candidate.state.lookup[.init(count: 0, ready: false)] == 1)
+            #expect(candidate.state.lookup[.init(count: 1, ready: false)] == 1)
             #expect(candidate.state.previousCount == 0)
             #expect(try candidate.violatedInvariants(checking: [.OrderedCaseSelection], atLevel: 2).isEmpty)
             #expect(try candidate.violatedInvariants(checking: [.RecordConditionalDomain], atLevel: 2).isEmpty)
