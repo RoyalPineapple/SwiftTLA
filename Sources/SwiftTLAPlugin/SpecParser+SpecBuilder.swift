@@ -912,9 +912,9 @@ extension ParserSession {
             return sourceTypeResolver.normalizedStateType("Swift.String", resolved: .string).spelling
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.arguments.isEmpty,
            call.trailingClosure == nil,
-           let constructor = typedFacadeType(call.calledExpression) {
+           let constructor = typedFacadeType(call.calledExpression),
+           call.arguments.isEmpty || constructor.name == "SetExpr" {
             switch constructor.name {
             case "SetExpr", "TupleExpr", "ZeroBasedSequence":
                 return constructor.renderedSourceName

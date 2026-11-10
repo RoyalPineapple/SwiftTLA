@@ -54,6 +54,144 @@ That result is historical evidence.
 
 ## Independent source rules
 
+### Deterministic Int compiler theorem: source contract
+
+The current delivery target is an implementation-linked theorem for the
+literal/read/checked-add initialization family. The complete theorem is open.
+The plan and output-check theorems below do not supply its implementation links.
+
+A program has a finite ordered list of fresh Int declarations. An initializer
+can contain Int literals, reads of earlier declarations and checked additions,
+with arbitrary finite nesting. The source placements are scoped root declarations
+and the shared-declaration prefix of one registered sequential Algorithm.
+The implemented independent source-check instance recognizes closures containing
+these declarations and direct `Do` expressions. Other control forms and property
+declaration contexts retain their acceptance; their mandatory source-check
+coverage remains open.
+For this instance, Int and the SwiftTLA constructors have their standard,
+unshadowed bindings. Parameters, membership initialization, initial selections,
+constraints, procedures and process-local state remain separate proof instances.
+Other accepted DSL forms keep their acceptance and remain open.
+
+The source grammar distinguishes ordinary Swift values from formal expressions.
+An integer token, `Int.min`, `Int.max`, or a parenthesized ordinary value is a
+Swift value. Ordinary additions evaluate before the builder constructs an
+initializer. Their normal result is one literal. A read of a shared-variable
+handle is formal; `Expr(q)` lifts an ordinary value into a formal expression.
+An addition with a formal operand is checked model arithmetic. It must retain
+its addition node even when both mathematical operands are literals.
+An ordinary Swift overflow is not a reached model-initialization failure.
+
+Define the source expression result before consulting compiler output. For an
+available prefix `rho`, use the following rules, with the native Int bounds:
+
+```
+eval(literal(n), rho) = success(n)
+eval(read(i), rho)    = success(rho[user(i)])
+eval(add(l, r), rho):
+    left = eval(l, rho)
+    if left failed: return left
+    right = eval(r, rho)
+    if right failed: return right
+    if Int.min <= left.value + right.value <= Int.max:
+        return success(left.value + right.value)
+    return overflow(addition, [left.value, right.value])
+```
+
+These are independent mathematical rules. `SourceAdd` and `SourceCombine` in
+`OrderedIntExpressionRule` express their checked-add cases. The left-failure
+branch does not evaluate the right child. Evaluation stops at the first failed
+primitive operation; a total ghost history is not an executed-node trace.
+For a finite source tree, structural induction constructs this result before
+any emitted plan is consulted. Literals and available reads return immediately;
+an addition applies the induction hypothesis to each reached child, then checks
+the bounded sum. Induction over the finite declaration list constructs the
+source initialization result. This is the source existence argument, not a
+claim that every arbitrary record satisfying a history equation is a syntax tree.
+
+Use logical keys `user(i)` for source declarations and a separate control-owner
+key for hidden control. Root initialization starts with the empty binding.
+For a sequential Algorithm, `AlgorithmLowering` prepends a program counter only
+when the source control envelope needs one. Its seed is the first source step's
+location. An Algorithm with no steps or a control-free loop has no such seed.
+The source-to-layout encoding of this choice still requires derivation in the
+complete initialization theorem.
+
+At declaration `i`, evaluate its expression under the current successful prefix.
+On success, bind `user(i)` and continue. On failure, append exactly one record
+containing declaration `i`, the failure kind, ordered operands and that immutable
+prefix. Leave `user(i)` absent and stop initialization. Thus a successful source
+run has one complete state and no failures. A failed run has no complete state
+and a singleton ordered failure list. This rule includes hidden control in the
+prefix; its encoding cannot be hidden in an "other evaluators agree" premise.
+
+For `a := 7; b := a; c := b + 1`, the user bindings are `7, 7, 8`.
+For `a := Int.max; b := a + 1`, the event belongs to `b`, has operands
+`[Int.max, 1]`, retains `a`, and omits `b`. Source declaration identity must be
+derived from the actual layout-to-source mapping; a compiled variable ordinal
+is not assumed to be that identity.
+
+The required conclusion is equality of this source result, decoded actual Swift
+initialization, and decoded actual TLA/CFG initialization. It includes complete
+states, failure lists, first-failure selection and skipped-child behavior.
+The physical visitor must derive the expression plan and its ordered children.
+The physical output and helper arguments must derive the child outcomes consumed
+by `OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures`.
+For this deterministic instance, singleton failures can bridge ordered lists to
+the parent's failure sets, once uniqueness and physical event retention are proved.
+The complete implementation-linked parent instance remains open; regression runs supply
+no mathematical credit for them.
+
+### Current implementation and mathematical consumer
+
+The current source witness checks the supported root and registered-Algorithm
+initializer routes independently. The lowerer no longer gates their structural
+check on an Algorithm program counter. Resolution checks every resolved Int
+initializer through the existing owner. The shared ordinary-scalar decoder now
+recognizes unshadowed integer bounds within ordinary arithmetic. Explicit
+`Expr` operands and state reads keep their formal checked-add route.
+The guarded focused run passed 233 tests in 22 suites, including the external
+generated-code client. These are regression receipts, not hosted admission or
+a completed compiler theorem.
+
+The new candidate `SourceSyntaxHistory` defines expression outcomes on source
+syntax identities before an emitted plan exists.
+`MatchedPostorderNodesRetainIndependentSourceSyntaxMeaning` transports those
+outcomes through source-matched node payloads and ordered child identities.
+`VisitedSourceSyntaxSuppliesReadyInitializerChildren` derives the partial plan
+and the existing initializer child contract from those facts and available
+typed prefix reads. It does not accept plan validity as a premise.
+
+`VisitedSourceSyntaxInvokesTheCompleteInitializationParent` invokes
+`OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures` with those
+derived children. It takes synchronized visit histories and derives their final
+node payloads, ordered children and selected source root through the existing
+construction theorems. Non-expression rows use concrete source/generated fixed-seed
+constructors, so their agreement is derived rather than supplied.
+Its observation consumer uses
+`SingletonInitialObservationsRetainOrderMultiplicityAndFirstFailure` to recover
+ordered histories from equal set projections when their lengths are at most one.
+These added proof bodies have not yet passed the pinned proof checker.
+
+The physical visitor has a manual loop-simulation argument for this fragment.
+A leaf appends its payload and new index. Expansion pushes the parent, right and
+left onto the LIFO work array. Completion consumes the last two root indices in
+left/right order. Ghost source prefixes and origins identify these transitions
+with the existing synchronized model; they require no runtime observer.
+Assign weight one to leaves and expanded parents, and weight
+`weight(left) + weight(right) + 2` to an unexpanded addition. Each iteration
+decreases total pending weight by one, establishing finite completion.
+The source-view/read-key association and full mechanical Swift interpretation
+remain separate boundaries; the manual loop argument does not assume a valid
+emitted plan.
+
+The physical visitor/source-tree mapping, existence of independent syntax
+meanings, actual Swift/TLA history equations, reachable-prefix typing,
+control-seed encoding, and the at-most-one bounds for actual output remain
+owned obligations of the final theorem. The new consumer states those limits
+explicitly; it does not discharge them by assuming evaluator agreement or
+claiming that a source/output checker is sound.
+
 The constructor rules define fixed, domain and failed outcomes separately from generated adapters.
 An empty successful domain has no candidates and no failure.
 A failed domain has no candidates and retains its complete payload.

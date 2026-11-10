@@ -65,6 +65,37 @@ THEOREM InitialObservationProjectsToExistingSetResult ==
     BY SMT DEF InitialObservationIsTyped, InitialFailureHistory, InitialSetProjection,
         InitialFailureSet, InitializationResults
 
+\* A deterministic run cannot hide a duplicate or a permutation in its set projection.
+THEOREM SingletonInitialObservationsRetainOrderMultiplicityAndFirstFailure ==
+    ASSUME NEW source, NEW generated,
+           InitialObservationIsTyped(source), InitialObservationIsTyped(generated),
+           source.stateCount <= 1, generated.stateCount <= 1,
+           source.failureCount <= 1, generated.failureCount <= 1,
+           InitialSetProjection(source) = InitialSetProjection(generated)
+    PROVE /\ source.stateCount = generated.stateCount
+          /\ source.stateHistory = generated.stateHistory
+          /\ source.failureCount = generated.failureCount
+          /\ source.failureHistory = generated.failureHistory
+          /\ InitialFirstFailure(source.failureCount, source.failureHistory)
+              = InitialFirstFailure(generated.failureCount, generated.failureHistory)
+    PROOF
+    <1>1. /\ source.stateCount \in 0..1 /\ generated.stateCount \in 0..1
+          /\ source.failureCount \in 0..1 /\ generated.failureCount \in 0..1
+        BY SMT DEF InitialObservationIsTyped, InitialFailureHistory
+    <1>2. source.stateCount = generated.stateCount
+        BY <1>1, SMT DEF InitialSetProjection
+    <1>3. source.stateCount = 1 => source.stateHistory[1] = generated.stateHistory[1]
+        BY <1>1, <1>2, SMT DEF InitialSetProjection
+    <1>4. source.stateHistory = generated.stateHistory
+        BY <1>1, <1>2, <1>3, SMT DEF InitialObservationIsTyped
+    <1>5. source.failureCount = generated.failureCount
+        BY <1>1, SMT DEF InitialSetProjection, InitialFailureSet
+    <1>6. source.failureCount = 1 => source.failureHistory[1] = generated.failureHistory[1]
+        BY <1>1, <1>5, SMT DEF InitialSetProjection, InitialFailureSet
+    <1>7. source.failureHistory = generated.failureHistory
+        BY <1>1, <1>5, <1>6, SMT DEF InitialObservationIsTyped, InitialFailureHistory
+    <1>. QED BY <1>2, <1>4, <1>5, <1>7, SMT
+
 THEOREM TheSameFailureSetAndFirstEventCanHideADroppedOccurrence ==
     ASSUME NEW event \in InitialFailureEvents
     PROVE LET empty == [index \in 1..0 |-> index]

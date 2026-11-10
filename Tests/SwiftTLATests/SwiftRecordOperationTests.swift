@@ -62,6 +62,32 @@ struct SwiftRecordOperationTests {
         #expect(formal.renderedModuleSource.contains("count |->"))
         #expect(formal.renderedModuleSource.contains("ready |->"))
         #expect(!formal.renderedModuleSource.contains("RecordMachine.Packet"))
+
+        typealias Packet = GeneratedSwiftRecord.Packet
+        let authored = SetExpr(Packet(count: 1, ready: false), Packet(count: 2, ready: false),
+            Packet(count: 1, ready: false))
+        #expect(authored.elements.map(\.count).sorted() == [1, 2])
+        #expect(try compiledValue(authored.cardinality.stateExpr) == .int(2))
+        let selected = Select(from: authored) { $0.count == 2 }
+        #expect(try compiledValue(selected.stateExpr) == .record(["count": .int(2), "ready": .bool(false)]))
+        for spelling in ["SetExpr<Packet>.literal", "SetExpr<Packet>"] {
+            for predicate in ["candidate in candidate.count == 2", "$0.count == 2"] {
+                do {
+                    let selected = try swiftRecordModel(replacement:
+                        "Select(from: \(spelling)(Packet(count: 1, ready: false), Packet(count: 2, ready: false))) { \(predicate) }")
+                    let variable = try #require(selected.program.layout.variables.first { $0.declaration.name == "packet" })
+                    #expect(selected.program.variableTypes[variable.id] == expected)
+                    var selectedEmitter = NativeSwiftEmitter(model: selected)
+                    #expect(try !selectedEmitter.machineMembers().isEmpty)
+                } catch {
+                    Issue.record("\(spelling), \(predicate): \(error)")
+                }
+            }
+        }
+        #expect(throws: SourceParseDiagnostic.self) {
+            try swiftRecordModel(replacement:
+                "Select(from: SetExpr<Packet>(Packet.expression(count: packet.count, ready: true))) { candidate in true }")
+        }
     }
 
     @Test("Swift record constructors reject wrong identities, fields, and field types", arguments: [

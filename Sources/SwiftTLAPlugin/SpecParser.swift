@@ -718,13 +718,12 @@ final class ParserSession {
               let candidates = decodeTypedFacadeValue(candidatesSyntax, scope: scope),
               let closure = call.trailingClosure
                 ?? call.arguments.first(where: { $0.label?.text == "matching" })?.expression.as(ClosureExprSyntax.self),
-              closureParameterNames(in: closure).count == 1,
-              let parameter = closureParameterNames(in: closure).first,
+              closureParameterNames(in: closure).count == 1 || closure.signature?.parameterClause == nil,
               closure.statements.count == 1,
               case .expr(let predicateSyntax) = closure.statements.first?.item,
               let predicate = decodeTypedFacadeValue(
                 predicateSyntax,
-                scope: scope.extending(binding: parameter, to: .variable(canonicalBinding),
+                scope: scope.extending(binding: closureParameterNames(in: closure).first ?? "$0", to: .variable(canonicalBinding),
                     shape: typedFacadeValueType(candidatesSyntax, scope: scope)?.selectedElement)
               )
         else { return nil }
@@ -888,6 +887,7 @@ final class ParserSession {
             switch prefix.operator.text {
             case "!": return .not(operand)
             case "-": return negated(operand)
+            case "+" where isSwiftIntegerSyntax(expression, scope: scope): return operand
             default: return nil
             }
         }
@@ -1563,8 +1563,8 @@ final class ParserSession {
                 expectedEnumType: expectedEnumType, expectedType: expectedType,
                 requiresFormalResult: requiresFormalResult)
         }
-        if !requiresFormalResult, isSwiftIntegerSyntax(expression),
-           case .int(let integer)? = decodeSwiftScalarValue(expression) {
+        if !requiresFormalResult, isSwiftIntegerSyntax(expression, scope: scope),
+           case .int(let integer)? = decodeSwiftScalarValue(expression, scope: scope) {
             return .value(.int(integer))
         }
         if let integer = decodeSwiftIntegerBound(expression, scope: scope) {
@@ -1735,15 +1735,37 @@ final class ParserSession {
         return Self.terminalTypeName(type) != "Int"
     }
 
-    private func isSwiftIntegerSyntax(_ syntax: ExprSyntax) -> Bool {
-        syntax.tokens(viewMode: .sourceAccurate).allSatisfy { token in
-            if case .integerLiteral = token.tokenKind { return true }
-            return ["(", ")", "+", "-", "*", "/", "%"].contains(token.text)
+    private func isSwiftIntegerSyntax(_ syntax: ExprSyntax, scope: TypedFacadeScope = .empty) -> Bool {
+        if syntax.is(IntegerLiteralExprSyntax.self) || decodeSwiftIntegerBound(syntax, scope: scope) != nil {
+            return true
         }
+        if let group = syntax.as(TupleExprSyntax.self), group.elements.count == 1,
+           let element = group.elements.first, element.label == nil {
+            return isSwiftIntegerSyntax(element.expression, scope: scope)
+        }
+        if let prefix = syntax.as(PrefixOperatorExprSyntax.self), ["+", "-"].contains(prefix.operator.text) {
+            return isSwiftIntegerSyntax(prefix.expression, scope: scope)
+        }
+        let elements: [ExprSyntax]
+        if let infix = syntax.as(InfixOperatorExprSyntax.self) {
+            elements = [infix.leftOperand, infix.operator, infix.rightOperand]
+        } else if let sequence = syntax.as(SequenceExprSyntax.self) {
+            elements = Array(sequence.elements)
+        } else { return false }
+        return !elements.isEmpty && elements.count % 2 == 1
+            && stride(from: 0, to: elements.count, by: 2).allSatisfy {
+                isSwiftIntegerSyntax(elements[$0], scope: scope)
+            }
+            && stride(from: 1, to: elements.count, by: 2).allSatisfy {
+                elements[$0].as(BinaryOperatorExprSyntax.self).map {
+                    ["+", "-", "*", "/", "%"].contains($0.operator.text)
+                } == true
+            }
     }
 
     func decodeSwiftScalarValue(_ syntax: ExprSyntax, scope: TypedFacadeScope = .empty) -> TLAValue? {
-        let supported = syntax.tokens(viewMode: .sourceAccurate).allSatisfy { token in
+        let supported = isSwiftIntegerSyntax(syntax, scope: scope)
+            || syntax.tokens(viewMode: .sourceAccurate).allSatisfy { token in
             if case .integerLiteral = token.tokenKind { return true }
             if case .identifier = token.tokenKind {
                 let reference = DeclReferenceExprSyntax(baseName: token)
@@ -1758,8 +1780,8 @@ final class ParserSession {
                     "==", "!=", "<", "<=", ">", ">="].contains(token.text)
         }
         guard SourceIntegerLiteral.value(syntax) == nil, supported else { return nil }
-        let decoded = scope.isEmpty ? decodeStateExpr(syntax)
-            : decodeTypedFacadeExpr(syntax, scope: scope) ?? decodeTypedFacadeValue(syntax, scope: scope)
+        let decoded = decodeTypedFacadeExpr(syntax, scope: scope)
+            ?? decodeTypedFacadeValue(syntax, scope: scope, requiresFormalResult: true)
         guard let expression = decoded else { return nil }
         func value(_ expression: StateExpr) -> TLAValue? {
             switch expression {
@@ -2376,7 +2398,10 @@ final class ParserSession {
             guard case .value(let value) = element else { return nil }
             return value
         }
-        guard values.count == elements.count else { return nil }
+        guard values.count == elements.count else {
+            guard elements.allSatisfy({ $0.freeVariableNames.isEmpty }) else { return nil }
+            return .setLiteral(elements)
+        }
         return .value(.set(Set(values)))
     }
 

@@ -13,15 +13,7 @@ extension CompiledProgram {
         for original in inputs.semantics.behavior.initializations {
             let name = inputs.layout.variables[original.variable.ordinal].declaration.name
             let path = "variables.\(name).initialization"
-            let isLiteralInt: Bool
-            if case .value(let expression) = original.initialization,
-               case .value(.integer) = expression.operation, expression.children.isEmpty {
-                isLiteralInt = true
-            } else {
-                isLiteralInt = false
-            }
-            if variableTypes[original.variable] == .int &&
-                (inputs.authoredAlgorithm != nil || isLiteralInt) {
+            if variableTypes[original.variable] == .int {
                 try StraightLineAssignmentCheck.verifyResolvedInitialIntExpression(
                     original.initialization, checked: checkedInitializations[original.variable],
                     resolved: resolvedInitializations[original.variable], at: path)

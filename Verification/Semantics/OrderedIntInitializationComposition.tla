@@ -361,6 +361,51 @@ THEOREM IntReadDependenciesSupplyReadyInitializerChildren ==
         BY <1>8, IntInitializerChildrenSupplyOutcomeAgreement, SMT
     <1>. QED BY <1>8, <1>9, SMT
 
+THEOREM VisitedSourceSyntaxSuppliesReadyInitializerChildren ==
+    ASSUME IntInitializationDomains, NEW prior \in PartialBindings,
+           PartialIntProjection(prior) \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax],
+           NEW view, NEW emitted, NEW meaning, NEW generated, NEW fallbackRead \in IntKeys,
+           Expressions!NodeEmissionArrays(emitted), emitted.count > 0,
+           Expressions!AllNodePayloadsMatchSource(view, emitted),
+           Expressions!TypedVisitedSourceInputs(view, emitted),
+           {emitted.origins[index] : index \in 1..emitted.count} \subseteq DOMAIN view.kinds,
+           Expressions!SourceSyntaxHistory(view, PartialIntProjection(prior), meaning),
+           LET plan == Expressions!ExtractedNodePlan(emitted, fallbackRead)
+           IN /\ Expressions!ExpressionReadKeys(plan.count, plan.kinds, plan.reads)
+                     \subseteq (DOMAIN prior) \cap IntKeys
+              /\ Expressions!GeneratedExpressionHistory(plan.count, plan.kinds, plan.literals,
+                     plan.reads, plan.left, plan.right, PartialIntProjection(prior), generated)
+    PROVE LET plan == Expressions!ExtractedNodePlan(emitted, fallbackRead)
+              source == Expressions!EmittedSourceSyntaxHistory(emitted, meaning)
+          IN /\ IntInitializerChildren(plan, prior, source, generated)
+             /\ SourceIntInitializerOutcome(meaning[emitted.origins[emitted.count]])
+                     = GeneratedIntInitializerOutcome(generated[plan.count])
+    PROOF
+    <1>. DEFINE plan == Expressions!ExtractedNodePlan(emitted, fallbackRead)
+                source == Expressions!EmittedSourceSyntaxHistory(emitted, meaning)
+                bound == (DOMAIN prior) \cap IntKeys
+                state == Expressions!CompleteIntBindings(bound, PartialIntProjection(prior))
+    <1>1. state \in [IntKeys -> SwiftIntMin..SwiftIntMax]
+        BY Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
+            DEF state, bound, IntInitializationDomains, Expressions!IntegerDomain
+    <1>2. Expressions!ExpressionPlan(plan.count, plan.kinds, plan.literals,
+        plan.reads, plan.left, plan.right, state)
+        BY <1>1, Expressions!SourceMatchedNodesSupplyTheTypedExpressionPlan, SMT DEF plan
+    <1>3. Expressions!PartialExpressionPlan(plan.count, plan.kinds, plan.literals,
+        plan.reads, plan.left, plan.right, bound, PartialIntProjection(prior))
+        BY <1>2, SMT DEF plan, state, bound, Expressions!PartialExpressionPlan
+    <1>4. /\ Expressions!SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
+                 plan.reads, plan.left, plan.right, PartialIntProjection(prior), source)
+          /\ source[plan.count] = meaning[emitted.origins[emitted.count]]
+        BY Expressions!MatchedPostorderNodesRetainIndependentSourceSyntaxMeaning, SMT
+            DEF source, plan
+    <1>5. IntInitializerChildren(plan, prior, source, generated)
+        BY <1>3, <1>4, SMT DEF IntInitializerChildren, bound, plan
+    <1>6. SourceIntInitializerOutcome(source[plan.count])
+            = GeneratedIntInitializerOutcome(generated[plan.count])
+        BY <1>5, IntInitializerChildrenSupplyOutcomeAgreement
+    <1>. QED BY <1>4, <1>5, <1>6, SMT
+
 IntDependencyPlans(intValueTargets, plans, construction, sourceDependencies, generatedDependencies) ==
     \A target \in Keys :
         IF target \in intValueTargets THEN
@@ -514,6 +559,123 @@ THEOREM OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures ==
         BY <1>2, TerminalSelectionRetainsEveryStateAndFailure, SMT
             DEF InitializationHistory, InitializationOrder
     <1>. QED BY <1>2, <1>3, <1>4, SMT DEF SourceTerminal, SourceSelectedStates
+
+\* Syntax meanings supply the source history; control rows are concrete fixed seeds.
+THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
+    ASSUME IntInitializationDomains,
+           NEW count, NEW order, NEW sourceEvaluate, NEW generatedEvaluate,
+           NEW source, NEW generated, NEW views, NEW roots, NEW visits,
+           NEW meanings, NEW generatedExpressions, NEW positions \in SUBSET (1..count),
+           NEW seeds \in [(1..count) \ positions -> Values],
+           InitializationOrder(count, order),
+           InitializerEvaluators(count, sourceEvaluate), InitializerEvaluators(count, generatedEvaluate),
+           InitializationHistory(FALSE, count, order, sourceEvaluate, source),
+           InitializationHistory(TRUE, count, order, generatedEvaluate, generated),
+           \A index \in 1..count : \A prior \in source[index - 1].states :
+               IF index \in positions THEN
+                   LET visit == visits[index]
+                       emitted == visit.emissions[visit.steps]
+                       plan == Expressions!ExtractedNodePlan(emitted, order[index])
+                   IN /\ order[index] \in IntKeys
+                      /\ PartialIntProjection(prior)
+                             \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
+                      /\ Expressions!SynchronizedNodeHistory(visit.steps, roots[index], views[index],
+                             visit.heights, visit.pendings, visit.currents, visit.emissions)
+                      /\ visit.heights[visit.steps] = 0
+                      /\ Expressions!TypedVisitedSourceInputs(views[index], emitted)
+                      /\ {emitted.origins[node] : node \in 1..emitted.count}
+                             \subseteq DOMAIN views[index].kinds
+                      /\ Expressions!SourceSyntaxHistory(views[index], PartialIntProjection(prior),
+                             meanings[index][prior])
+                      /\ Expressions!ExpressionReadKeys(plan.count, plan.kinds, plan.reads)
+                             \subseteq (DOMAIN prior) \cap IntKeys
+                      /\ Expressions!GeneratedExpressionHistory(plan.count, plan.kinds, plan.literals,
+                             plan.reads, plan.left, plan.right, PartialIntProjection(prior),
+                             generatedExpressions[index][prior])
+                      /\ sourceEvaluate[index][prior] =
+                             SourceIntInitializerOutcome(meanings[index][prior][roots[index]])
+                      /\ generatedEvaluate[index][prior] =
+                             GeneratedIntInitializerOutcome(generatedExpressions[index][prior][plan.count])
+               ELSE /\ sourceEvaluate[index][prior] = SourceFixed(seeds[index])
+                    /\ generatedEvaluate[index][prior] = GeneratedFixed(seeds[index])
+    PROVE /\ \A index \in 0..count : source[index] = generated[index]
+          /\ \A sourceObservation, generatedObservation :
+              (InitialObservationIsTyped(sourceObservation)
+               /\ InitialObservationIsTyped(generatedObservation)
+               /\ sourceObservation.stateCount <= 1 /\ generatedObservation.stateCount <= 1
+               /\ sourceObservation.failureCount <= 1 /\ generatedObservation.failureCount <= 1
+               /\ InitialSetProjection(sourceObservation) = source[count]
+               /\ InitialSetProjection(generatedObservation) = generated[count])
+              => /\ InitialObservation(sourceObservation.stateCount, sourceObservation.stateHistory,
+                         sourceObservation.failureCount, sourceObservation.failureHistory)
+                       = InitialObservation(generatedObservation.stateCount, generatedObservation.stateHistory,
+                           generatedObservation.failureCount, generatedObservation.failureHistory)
+                 /\ InitialFirstFailure(sourceObservation.failureCount, sourceObservation.failureHistory)
+                       = InitialFirstFailure(generatedObservation.failureCount,
+                           generatedObservation.failureHistory)
+    PROOF
+    <1>. DEFINE emissions == [index \in positions |-> visits[index].emissions[visits[index].steps]]
+                plans == [index \in positions |->
+                    Expressions!ExtractedNodePlan(emissions[index], order[index])]
+                sourceExpressions == [index \in positions |-> [prior \in PartialBindings |->
+                    Expressions!EmittedSourceSyntaxHistory(emissions[index], meanings[index][prior])]]
+    <1>1. \A index \in 1..count : \A prior \in source[index - 1].states :
+        IF index \in positions
+        THEN /\ order[index] \in IntKeys
+             /\ IntInitializerChildren(plans[index], prior,
+                    sourceExpressions[index][prior], generatedExpressions[index][prior])
+             /\ sourceEvaluate[index][prior] =
+                    SourceIntInitializerOutcome(sourceExpressions[index][prior][plans[index].count])
+             /\ generatedEvaluate[index][prior] =
+                    GeneratedIntInitializerOutcome(generatedExpressions[index][prior][plans[index].count])
+        ELSE sourceEvaluate[index][prior] = generatedEvaluate[index][prior]
+        <2>. SUFFICES ASSUME NEW index \in 1..count, NEW prior \in source[index - 1].states
+                     PROVE IF index \in positions
+                         THEN /\ order[index] \in IntKeys
+                              /\ IntInitializerChildren(plans[index], prior,
+                                     sourceExpressions[index][prior], generatedExpressions[index][prior])
+                              /\ sourceEvaluate[index][prior] = SourceIntInitializerOutcome(
+                                     sourceExpressions[index][prior][plans[index].count])
+                              /\ generatedEvaluate[index][prior] = GeneratedIntInitializerOutcome(
+                                     generatedExpressions[index][prior][plans[index].count])
+                         ELSE sourceEvaluate[index][prior] = generatedEvaluate[index][prior]
+            BY SMT
+        <2>0. prior \in PartialBindings
+            BY SMT DEF InitializationHistory, InitializationResults, InitializationOrder
+        <2>1. CASE index \in positions
+            <3>0. /\ Expressions!NodeEmissionArrays(emissions[index])
+                  /\ emissions[index].count > 0
+                  /\ emissions[index].origins[emissions[index].count] = roots[index]
+                  /\ Expressions!AllNodePayloadsMatchSource(views[index], emissions[index])
+                BY <2>1, Expressions!SynchronizedNodeHistoryPreservesEverySourcePayload,
+                    Expressions!SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
+                    DEF emissions, Expressions!SynchronizedNodeHistory, Expressions!PendingVisitHistory
+            <3>1. IntInitializerChildren(plans[index], prior,
+                sourceExpressions[index][prior], generatedExpressions[index][prior])
+                BY <2>0, <2>1, <3>0, VisitedSourceSyntaxSuppliesReadyInitializerChildren, SMT
+                    DEF emissions, plans, sourceExpressions
+            <3>. QED BY <2>1, <3>0, <3>1, SMT DEF emissions, plans, sourceExpressions,
+                Expressions!ExtractedNodePlan, Expressions!EmittedSourceSyntaxHistory
+        <2>2. CASE index \notin positions
+            BY <2>2, FixedInitializerRetainsItsOnlyCandidate, SMT
+        <2>. QED BY <2>1, <2>2, SMT
+    <1>2. \A index \in 0..count : source[index] = generated[index]
+        BY <1>1, OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures, SMT
+    <1>3. \A sourceObservation, generatedObservation :
+        (InitialObservationIsTyped(sourceObservation) /\ InitialObservationIsTyped(generatedObservation)
+         /\ sourceObservation.stateCount <= 1 /\ generatedObservation.stateCount <= 1
+         /\ sourceObservation.failureCount <= 1 /\ generatedObservation.failureCount <= 1
+         /\ InitialSetProjection(sourceObservation) = source[count]
+         /\ InitialSetProjection(generatedObservation) = generated[count])
+        => /\ InitialObservation(sourceObservation.stateCount, sourceObservation.stateHistory,
+                   sourceObservation.failureCount, sourceObservation.failureHistory)
+                 = InitialObservation(generatedObservation.stateCount, generatedObservation.stateHistory,
+                     generatedObservation.failureCount, generatedObservation.failureHistory)
+           /\ InitialFirstFailure(sourceObservation.failureCount, sourceObservation.failureHistory)
+                 = InitialFirstFailure(generatedObservation.failureCount, generatedObservation.failureHistory)
+        BY <1>2, SingletonInitialObservationsRetainOrderMultiplicityAndFirstFailure, SMT
+            DEF InitializationOrder, InitialObservation
+    <1>. QED BY <1>2, <1>3
 
 THEOREM ChangingAReadChangesTheFixedInitializerCandidate ==
     ASSUME NEW first \in Values, NEW second \in Values, first # second

@@ -82,6 +82,8 @@ struct SpecificationSourceAuthorityTests {
         ("Pair<Int, String>.literal(1, \"one\")", "Pair<Int, String>"),
         ("ZeroBasedSequence<Int>.filled(with: 0, count: 2)", "ZeroBasedSequence<Int>"),
         ("SetExpr<Int>()", "SetExpr<Int>"),
+        ("SetExpr<Int>(1, 2)", "SetExpr<Int>"),
+        ("SwiftTLA.SetExpr<Mode>(Mode.idle)", "SwiftTLA.SetExpr<Mode>"),
         ("Mode.idle", "Mode"),
         ("OneOf<Int, String>.first(1)", "OneOf<Int, String>"),
         ("1", "Int"),

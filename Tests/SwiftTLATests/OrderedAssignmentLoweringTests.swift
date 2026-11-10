@@ -647,6 +647,76 @@ struct OrderedAssignmentLoweringTests {
             }
         }
 
+        let rootCases: [(String, Int, Int?)] = [
+            ("7", 7, nil), ("3 + 4", 7, nil),
+            ("+(-(-(3 + 4)))", 7, nil),
+            ("Int.max", Int.max, 2), ("Int.max + -1", Int.max - 1, nil),
+            ("+Int.max", Int.max, 2),
+            ("Expr(7)", 7, nil), ("Expr(3 + 4)", 7, nil),
+            ("Expr(Int.max + -1)", Int.max - 1, nil),
+            ("Expr(1) + (Expr(2) + 4)", 7, nil),
+            ("Expr(Int.max) + 1", 0, 0),
+            ("Expr(Int.max) + 1 + (Expr(Int.min) + -1)", 0, 0)
+        ]
+        for (first, initialValue, failureSite) in rootCases {
+            let rootSource = """
+            { scope in
+                let first = scope.sharedVar(initial: \(first))
+                let second = scope.sharedVar(initial: first)
+                let third = scope.sharedVar(initial: second + 1)
+            }
+            """
+            let rootSyntax = try parseSpecTestClosure(rootSource)
+            let rootParsed = SpecParser.parseSpecClosure(named: "OrderedInt", rootSyntax)
+            try #require(rootParsed.diagnostics.isEmpty)
+            let rootProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: rootParsed.compile()))
+            let rootOutcomes = try CompiledRuntime(program: rootProgram).initialOutcomes()
+            if let failureSite {
+                #expect(rootOutcomes.states.isEmpty)
+                #expect(rootOutcomes.failures.count == 1)
+                #expect(rootOutcomes.firstFailure == .integerOverflow(.addition, operands: [Int.max, 1]))
+                let failure = try #require(rootOutcomes.failures.first)
+                #expect(failure.site == .initializer(failureSite))
+                let before = try failure.formalBindingsBeforeFailure()
+                if failureSite == 2 {
+                    #expect(before == (try TLAStateProjection(validating: [
+                        .init(token: try #require(TLAStateProjection.Token(validating: "first")), value: .int(Int.max)),
+                        .init(token: try #require(TLAStateProjection.Token(validating: "second")), value: .int(Int.max))
+                    ])))
+                } else {
+                    #expect(before == (try TLAStateProjection(validating: [])))
+                }
+            } else {
+                try #require(rootOutcomes.states.count == 1)
+                #expect(try rootProgram.layout.variables.map {
+                    try rootOutcomes.states[0].value(for: $0.id)
+                } == [.integer(initialValue), .integer(initialValue), .integer(initialValue + 1)])
+            }
+            do {
+                try OrderedIntSourceSyntaxCheck.verify(rootSyntax, parsed: rootParsed, enums: [])
+                _ = try rootProgram.renderModule()
+                var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "OrderedInt", program: rootProgram))
+                _ = try emitter.machineMembers()
+            } catch {
+                Issue.record("Valid root initializer \(first) failed its compiler boundary: \(error)")
+                continue
+            }
+            for (from, to) in [
+                ("initial: \(first)", "initial: 8"),
+                ("initial: first)", "initial: first + 1)"),
+                ("initial: second + 1)", "initial: 1 + second)")
+            ] {
+                try #require(rootSource.components(separatedBy: from).count == 2)
+                let alteredSource = rootSource.replacingOccurrences(of: from, with: to)
+                try #require(alteredSource != rootSource)
+                let altered = SpecParser.parseSpecClosure(named: "OrderedInt", try parseSpecTestClosure(alteredSource))
+                try #require(altered.diagnostics.isEmpty)
+                #expect(throws: CompilationDiagnostic.self) {
+                    try OrderedIntSourceSyntaxCheck.verify(rootSyntax, parsed: altered, enums: [])
+                }
+            }
+        }
+
     }
 
     private enum Symbol: Equatable {

@@ -1337,6 +1337,57 @@ THEOREM SuccessfulSynchronizedVisitSuppliesItsExpressionPlan ==
         BY <1>1, <1>2, SourceMatchedNodesSupplyTheTypedExpressionPlan
     <1>. QED BY <1>1, <1>2, <1>3 DEF ExtractedNodePlan
 
+\* Source meaning is indexed by syntax nodes, before an emitted plan exists.
+SourceSyntaxHistory(view, state, meaning) ==
+    /\ DOMAIN meaning = DOMAIN view.kinds
+    /\ \A node \in DOMAIN view.kinds : meaning[node] =
+        IF view.kinds[node] = "literal" THEN Success(view.literals[node])
+        ELSE IF view.kinds[node] = "read" THEN Success(state[view.reads[node]])
+        ELSE SourceCombine(meaning[view.left[node]], meaning[view.right[node]])
+
+EmittedSourceSyntaxHistory(emitted, meaning) ==
+    [index \in 0..emitted.count |->
+        IF index = 0 THEN Success(0) ELSE meaning[emitted.origins[index]]]
+
+THEOREM MatchedPostorderNodesRetainIndependentSourceSyntaxMeaning ==
+    ASSUME NEW view, NEW emitted, NEW state, NEW meaning,
+           NodeEmissionArrays(emitted), emitted.count > 0,
+           AllNodePayloadsMatchSource(view, emitted),
+           {emitted.origins[index] : index \in 1..emitted.count} \subseteq DOMAIN view.kinds,
+           SourceSyntaxHistory(view, state, meaning), NEW fallbackRead \in Keys
+    PROVE LET plan == ExtractedNodePlan(emitted, fallbackRead)
+              history == EmittedSourceSyntaxHistory(emitted, meaning)
+          IN /\ SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
+                    plan.reads, plan.left, plan.right, state, history)
+             /\ history[plan.count] = meaning[emitted.origins[emitted.count]]
+    PROOF
+    <1>. DEFINE plan == ExtractedNodePlan(emitted, fallbackRead)
+                history == EmittedSourceSyntaxHistory(emitted, meaning)
+    <1>1. \A index \in 1..emitted.count :
+        history[index] = SourceNode(index, plan.kinds, plan.literals,
+            plan.reads, plan.left, plan.right, state, history)
+        <2>. SUFFICES ASSUME NEW index \in 1..emitted.count
+                     PROVE history[index] = SourceNode(index, plan.kinds, plan.literals,
+                         plan.reads, plan.left, plan.right, state, history)
+            BY SMT
+        <2>1. emitted.origins[index] \in DOMAIN view.kinds
+              /\ NodePayloadMatchesSource(view, emitted, index)
+            BY SMT DEF AllNodePayloadsMatchSource
+        <2>2. emitted.nodes[index].kind \in {"literal", "read", "add"}
+            BY <2>1 DEF NodePayloadMatchesSource
+        <2>3. CASE emitted.nodes[index].kind = "literal"
+            BY <2>1, <2>3, SMT DEF history, plan, EmittedSourceSyntaxHistory,
+                ExtractedNodePlan, SourceNode, SourceSyntaxHistory, NodePayloadMatchesSource
+        <2>4. CASE emitted.nodes[index].kind = "read"
+            BY <2>1, <2>4, SMT DEF history, plan, EmittedSourceSyntaxHistory,
+                ExtractedNodePlan, SourceNode, SourceSyntaxHistory, NodePayloadMatchesSource
+        <2>5. CASE emitted.nodes[index].kind = "add"
+            BY <2>1, <2>5, SMT DEF history, plan, EmittedSourceSyntaxHistory,
+                ExtractedNodePlan, SourceNode, SourceSyntaxHistory, NodePayloadMatchesSource
+        <2>. QED BY <2>2, <2>3, <2>4, <2>5, SMT
+    <1>. QED BY <1>1, SMT DEF history, plan, EmittedSourceSyntaxHistory,
+        ExtractedNodePlan, SourceExpressionHistory
+
 \* This is the exact unique-name count guard used by the initializer checker.
 LayoutNamesFS == INSTANCE FiniteSetTheorems
 LayoutNameRange(ids, names) == {names[id] : id \in ids}

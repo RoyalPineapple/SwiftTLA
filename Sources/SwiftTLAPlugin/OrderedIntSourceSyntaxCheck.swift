@@ -6,11 +6,21 @@ import SwiftTLA
 enum OrderedIntSourceSyntaxCheck {
     private typealias Component = _OrderedIntSourceComponent
 
-    static func verify(_ syntax: ClosureExprSyntax, parsed: TLASpec, enums: [SourceEnum]) throws {
+    static func verify(_ syntax: ClosureExprSyntax, parsed: TLASpec, enums: [SourceEnum],
+                       sourceTypes: SourceTypeMetadata? = nil) throws {
         let registered = Set(syntax.statements.compactMap { item -> String? in
             guard case .expr(let expression) = item.item else { return nil }
             return expression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
         })
+        let primitiveNames = ["Int", "Swift", "SwiftTLA", "Expr"]
+        let unshadowed = !primitiveNames.contains { name in
+            enums.contains { $0.typeName == name }
+                || sourceTypes?.structs[name] != nil || sourceTypes?.aliases[name] != nil
+        }
+        if unshadowed, let expected = intInitializers(in: syntax) {
+            try verifyInitializers(expected, actual: parsed.variables.map { ($0.name, $0.initialization) },
+                path: "variables.authoredIntInitializers")
+        }
         for item in syntax.statements {
             guard case .decl(let declaration) = item.item,
                   let variable = declaration.as(VariableDeclSyntax.self),
@@ -19,9 +29,20 @@ enum OrderedIntSourceSyntaxCheck {
                   let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
                   registered.contains(name),
                   let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm",
-                  let expected = components(of: call, enums: enums) else { continue }
+                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm" else { continue }
             let matches = parsed.sourceAlgorithms.filter { $0.model.name == name }
+            if unshadowed,
+               let body = call.arguments.first(where: { $0.label?.text == "scoped" })?
+                .expression.as(ClosureExprSyntax.self), let expected = intInitializers(in: body) {
+                guard matches.count == 1 else { throw drift(name) }
+                let actual = matches[0].model.components.compactMap { component -> (String, VariableInitialization)? in
+                    guard case .shared(let state) = component else { return nil }
+                    return (state.root, state.initialization)
+                }
+                try verifyInitializers(expected, actual: actual,
+                    path: "algorithms.\(name).authoredSyntax")
+            }
+            guard let expected = components(of: call, enums: enums) else { continue }
             guard matches.count == 1, matches[0].model.matchesOrderedIntSource(expected) else {
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape,
                     stage: .validation, path: "algorithms.\(name).authoredSyntax",
@@ -30,6 +51,114 @@ enum OrderedIntSourceSyntaxCheck {
                     nextSafeAction: "Report this #spec syntax-to-source-model translation failure.")
             }
         }
+    }
+
+    private static func verifyInitializers(_ expected: [Component],
+                                          actual: [(String, VariableInitialization)], path: String) throws {
+        guard expected.count == actual.count, zip(expected, actual).allSatisfy({ source, actual in
+            guard case .variable(let root, let initialization) = source else { return false }
+            return root == actual.0 && initialization == actual.1
+        }) else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation, path: path,
+                expected: "the authored deterministic Int initializers in declaration and operand order",
+                actual: "the parsed initializers change a declaration, value, read, or checked addition",
+                nextSafeAction: "Report this #spec initialization translation failure.")
+        }
+    }
+
+    private static func intInitializers(in syntax: ClosureExprSyntax) -> [Component]? {
+        guard let scope = scopeName(of: syntax) else { return nil }
+        var roots: [String: String] = [:]
+        var result: [Component] = []
+        for item in syntax.statements {
+            if case .expr(let expression) = item.item,
+               expression.as(FunctionCallExprSyntax.self)?.calledExpression
+                .as(DeclReferenceExprSyntax.self)?.baseName.text == "Do" { continue }
+            guard case .decl(let declaration) = item.item,
+                  let variable = declaration.as(VariableDeclSyntax.self),
+                  variable.bindingSpecifier.text == "let", variable.bindings.count == 1,
+                  let binding = variable.bindings.first,
+                  let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
+                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+                  let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+                  member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == scope,
+                  member.declName.baseName.sourceIdentifierName == "sharedVar",
+                  call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+                  call.arguments.allSatisfy({ ["_name", "label", "initial"].contains($0.label?.text ?? "") }),
+                  call.arguments.filter({ $0.label?.text == "initial" }).count == 1,
+                  let initial = call.arguments.first(where: { $0.label?.text == "initial" }),
+                  let value = initializerValue(initial.expression, roots: roots)?.value else { return nil }
+            let root: String
+            if let argument = call.arguments.first(where: { $0.label?.text == "_name" }) {
+                guard let name = argument.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else { return nil }
+                root = name
+            } else { root = name }
+            guard roots.updateValue(root, forKey: name) == nil else { return nil }
+            let initialization: VariableInitialization
+            if case .value(.int(let number)) = value { initialization = .value(.int(number)) }
+            else { initialization = .expression(value) }
+            result.append(.variable(root: root, initialization: initialization))
+        }
+        return result
+    }
+
+    private static func initializerValue(_ syntax: ExprSyntax, roots: [String: String])
+        -> (value: StateExpr, formal: Bool)? {
+        if let number = integer(syntax) { return (.value(.int(number)), false) }
+        if let name = syntax.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
+           let root = roots[name] {
+            return (.variable(root), true)
+        }
+        if let prefix = syntax.as(PrefixOperatorExprSyntax.self),
+           ["+", "-"].contains(prefix.operator.text),
+           let operand = initializerValue(prefix.expression, roots: roots), !operand.formal,
+           case .value(.int(let number)) = operand.value {
+            if prefix.operator.text == "+" { return operand }
+            let negative = 0.subtractingReportingOverflow(number)
+            return negative.overflow ? nil : (.value(.int(negative.partialValue)), false)
+        }
+        if let member = syntax.as(MemberAccessExprSyntax.self),
+           ["Int", "Swift.Int"].contains(member.base?.tokens(viewMode: .sourceAccurate)
+                .map(\.sourceIdentifierName).joined() ?? "") {
+            switch member.declName.baseName.sourceIdentifierName {
+            case "min": return (.value(.int(Int.min)), false)
+            case "max": return (.value(.int(Int.max)), false)
+            default: return nil
+            }
+        }
+        if let group = syntax.as(TupleExprSyntax.self), group.elements.count == 1,
+           let element = group.elements.first, element.label == nil {
+            return initializerValue(element.expression, roots: roots)
+        }
+        if let call = syntax.as(FunctionCallExprSyntax.self),
+           ["Expr", "SwiftTLA.Expr", "Expr<Int>", "SwiftTLA.Expr<Int>",
+            "Expr<Swift.Int>", "SwiftTLA.Expr<Swift.Int>"].contains(call.calledExpression
+                .tokens(viewMode: .sourceAccurate).map(\.sourceIdentifierName).joined()),
+           call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil,
+           call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+           let operand = initializerValue(argument.expression, roots: roots), !operand.formal {
+            return (operand.value, true)
+        }
+        let operands: [ExprSyntax]
+        if let infix = syntax.as(InfixOperatorExprSyntax.self) {
+            operands = [infix.leftOperand, infix.operator, infix.rightOperand]
+        } else if let sequence = syntax.as(SequenceExprSyntax.self) {
+            operands = Array(sequence.elements)
+        } else { return nil }
+        guard operands.count >= 3, operands.count % 2 == 1,
+              stride(from: 1, to: operands.count, by: 2).allSatisfy({
+                  operands[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "+"
+              }) else { return nil }
+        let split = operands.count - 2
+        let left = ExprSyntax(SequenceExprSyntax(elements: ExprListSyntax(operands[..<split])))
+        let leftSyntax = split == 1 ? operands[0] : left
+        guard let lhs = initializerValue(leftSyntax, roots: roots),
+              let rhs = initializerValue(operands[split + 1], roots: roots) else { return nil }
+        if lhs.formal || rhs.formal { return (.add(lhs.value, rhs.value), true) }
+        guard case .value(.int(let first)) = lhs.value,
+              case .value(.int(let second)) = rhs.value else { return nil }
+        let sum = first.addingReportingOverflow(second)
+        return sum.overflow ? nil : (.value(.int(sum.partialValue)), false)
     }
 
     static func verifyRewrite(_ source: ClosureExprSyntax, rewritten: ClosureExprSyntax) throws {
