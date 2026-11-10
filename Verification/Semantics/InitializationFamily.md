@@ -150,7 +150,19 @@ check on an Algorithm program counter. Resolution checks every resolved Int
 initializer through the existing owner. The shared ordinary-scalar decoder now
 recognizes unshadowed integer bounds within ordinary arithmetic. Explicit
 `Expr` operands and state reads keep their formal checked-add route.
-The guarded focused run passed 233 tests in 22 suites, including the external
+The macro first calls the existing `parsed.compile()` gate, which raises retained
+parser diagnostics before lowering. It then checks source correspondence before
+resolving typed inputs and returning generated metadata. Every successful return
+therefore crosses both gates. This order preserves the original declaration
+diagnostic when parsing failed; an incomplete parsed model is not compared as
+though it were a successful translation. The f329 ordinary run reproduced that
+diagnostic-precedence regression in the existing raw-formal-state owner.
+The repaired gate passes 86 tests in four source/lowering/output suites. A
+separate current run passes 60 connected support-name, atomic-witness, failure
+and external-client tests in five suites; both demo owners pass seven tests.
+All captured producer bytes remain exact during those runs. The new mathematical
+bodies remain unverified.
+The earlier source-coverage run passed 233 tests in 22 suites, including the external
 generated-code client. These are regression receipts, not hosted admission or
 a completed compiler theorem.
 

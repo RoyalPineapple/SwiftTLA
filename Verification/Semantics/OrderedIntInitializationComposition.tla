@@ -670,7 +670,8 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                     BY <2>1, <2>2, <3>1,
                         Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT
                         DEF visit, emitted, plan, execution, IntInitializationDomains
-                <4>2. emitted.count > 0 /\ plan.count = emitted.count
+                <4>2. /\ emitted.count \in Nat \ {0}
+                      /\ plan.count = emitted.count /\ plan.count \in Nat /\ plan.count > 0
                     BY <2>1, <3>1, Expressions!SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
                         DEF visit, emitted, plan, Expressions!ExtractedNodePlan
                 <4>3. /\ execution.outcome.ok
@@ -726,7 +727,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                 /\ Expressions!AllNodePayloadsMatchSource(views[index], visits[index].emissions[step])
                 BY <3>0a, Expressions!SynchronizedNodeHistoryPreservesEverySourcePayload, SMT
             <3>0. /\ Expressions!NodeEmissionArrays(emissions[index])
-                  /\ emissions[index].count > 0
+                  /\ emissions[index].count \in Nat \ {0} /\ emissions[index].count > 0
                   /\ emissions[index].origins[emissions[index].count] = roots[index]
                   /\ Expressions!AllNodePayloadsMatchSource(views[index], emissions[index])
                 BY <2>1, <3>0a, <3>0b,
