@@ -23,9 +23,15 @@ struct EncodedEnumDomain {
             let nominal = scope.parameter(as: Datum.self, in: SetExpr<Datum>.literal(Datum.first, Datum.second))
             let chosen = scope.sharedVar(in: RandomSubset(upTo: 1, from: SetExpr<Int>.literal(7)))
             let value = scope.sharedVar(in: Datum.all)
+            let rawText = scope.sharedVar(initial: Expr(Datum.text).assuming(String.self))
+            let texts = scope.sharedVar(initial: SetExpr<String>.literal(
+                Expr(Datum.text).assuming(String.self), Expr("é")))
             Do(Step.select, over: Datum.all) { next in
                 Assign(value, to: next)
                 Assign(chosen, to: chosen)
+                Assign(rawText, to: If(next == Datum.text, then: next.assuming(String.self),
+                    else: Expr(Datum.text).assuming(String.self)))
+                Assign(texts, to: texts.union(SetExpr<String>.literal(rawText)))
             }
             Invariant("DistinctTags") {
                 If(value == Datum.first,
@@ -35,6 +41,10 @@ struct EncodedEnumDomain {
                         else: value == Datum.text && value != Datum.first && value != Datum.second))
             }
             Invariant("ParameterMember") { nominal == Datum.first || nominal == Datum.second }
+            Invariant("RawTextPreserved") {
+                Dictionary<String, Int>.mapping(over: texts) { _ in 1 }.keys.cardinality == 2
+                    && texts.cardinality == 2 && rawText != "é"
+            }
             let all = Validation(label: "All") { Bind(nominal, to: Datum.first) }
             all
         }

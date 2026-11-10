@@ -610,10 +610,11 @@ struct GeneratedAtomicUpdateProofTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }
-        let invertedInequality = source.replacingOccurrences(
-            of: "state.state.left != \"beta\"",
-            with: "state.state.left == \"beta\"")
-        #expect(invertedInequality != source)
+        let inequality = "state.state.left != SwiftTLA._NativeString(formalString: \"beta\")"
+        try #require(source.components(separatedBy: inequality).count == 2)
+        let invertedInequality = source.replacingOccurrences(of: inequality,
+            with: "state.state.left == SwiftTLA._NativeString(formalString: \"beta\")")
+        try #require(invertedInequality != source)
         let inequalityMutant = try #require(Parser.parse(source: invertedInequality)
             .statements.first?.item.as(DeclSyntax.self))
         do {

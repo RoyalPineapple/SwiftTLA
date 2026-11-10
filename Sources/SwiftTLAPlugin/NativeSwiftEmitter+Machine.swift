@@ -3140,7 +3140,7 @@ func verifyGeneratedActionWriteOutput(
                       parameters.contains(name) else { return nil }
                 return name
             case .value(.string(let value)):
-                return String(reflecting: value)
+                return "SwiftTLA._NativeString(formalString: \(String(reflecting: value)))"
             default: return nil
             }
         }

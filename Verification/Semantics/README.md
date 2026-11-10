@@ -472,10 +472,12 @@ independent source rule. Its inverted-equality and inverted-inequality controls
 each disable the enabled initial step; omitting the guard wrongly enables the
 unequal-String initial state. All 23 obligations pass locally.
 
-The concrete byte encoder and Unicode normalization remain trusted boundaries:
-the output link assumes Swift `String` equality and Foundation normalization
-agree on the same Unicode version. Raw imported TLA+ values remain byte-exact,
-so an imported String operation reaching generated Swift needs a separate link.
+Generated modeled strings now retain explicit formal bytes in `_NativeString`;
+ordinary source construction still uses canonical normalization. Equality,
+ordering and collection identity reuse the existing byte-exact formal rules.
+The concrete byte encoder, source normalization, carrier implementation and
+their output interpretation remain owned correspondence boundaries, including
+Unicode-version alignment. Regression checks do not establish those links.
 The canonical-Unicode choice below has local TLAPS proof but no hosted admission;
 dynamic String-valued `CHOOSE` and arbitrary Unicode String programs remain
 outside the fidelity theorem until those links and TLC's Unicode handling are
@@ -660,10 +662,11 @@ TLA+ outputs to agree and the generated module to equal the proved
 `EnumSelectionProof.tla` therefore covers this emitted TLA+ instance through
 that exact-output, alpha-renaming test; `GeneratedSelectionProofTests` pins the
 complete emitted Swift choice cache and update function to
-`GeneratedStringSelectionSwiftWitness.txt`. Generated Swift now calls the same
-canonical formal String order used by compiled values. Interpreting Swift's
-`String` equality and Foundation normalization, `Result`, `choose`, and update
-merge remains a trusted runtime boundary.
+`GeneratedStringSelectionSwiftWitness.txt`. Generated Swift now stores
+`_NativeString` values and calls their formal byte order. The carrier preserves
+explicit raw encodings; ordinary source literals retain canonical normalization.
+Interpreting that representation, normalization, `Result`, `choose`, and update
+merge remains an owned runtime boundary.
 This link covers the two ASCII literals, not arbitrary or dynamic String
 domains, Unicode equivalence, or every accepted compound value type.
 

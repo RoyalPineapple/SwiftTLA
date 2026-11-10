@@ -30,7 +30,7 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
     case emptySequence
     case functionArgumentOutsideDomain
     case tupleIndexOutsideDomain(Int)
-    case recordFieldUnavailable(String)
+    case recordFieldUnavailable(_NativeString)
     case invalidRandomSubsetCount(Int)
     case emptyRandomElementDomain
 

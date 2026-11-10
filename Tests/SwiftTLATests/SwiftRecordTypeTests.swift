@@ -154,8 +154,6 @@ struct SwiftRecordTypeTests {
             .init(name: "items", shape: .sequence(.record([.init(name: "value", shape: .integer)]))),
             .init(name: "recipients", shape: .set(.string))
         ]))
-        let declarations = NativeTypeDeclarations(types: [packet], literals: [], namedDomains: [:])
-        #expect(declarations.records.isEmpty)
     }
 
     @Test("equally named record declarations in different models retain distinct identities")

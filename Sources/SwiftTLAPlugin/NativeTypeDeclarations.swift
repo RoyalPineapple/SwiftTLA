@@ -30,7 +30,13 @@ struct NativeTypeDeclarations: Sendable {
     private static func supportsPublicValueType(_ type: CompiledValueType) -> Bool {
         switch type {
         case .int, .bool, .string, .named: return true
-        case .nominalRecord(_, let fields): return fields.allSatisfy { supportsPublicValueType($0.type) }
+        case .nominalRecord(_, let fields):
+            var pending = fields.map(\.type)
+            while let field = pending.popLast() {
+                if field == .string { return false }
+                pending.append(contentsOf: field.components)
+            }
+            return fields.allSatisfy { supportsPublicValueType($0.type) }
         case .oneOf(let first, let second):
             return supportsPublicValueType(first) && supportsPublicValueType(second)
         case .dictionary(let key, let value):

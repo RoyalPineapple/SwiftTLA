@@ -111,7 +111,7 @@ extension EvalError {
         case .emptySequence: .emptySequence
         case .recursionDepthExceeded(let limit): .recursionDepthExceeded(limit)
         case .tupleIndexOutsideDomain(.integer(let index)): .tupleIndexOutsideDomain(index)
-        case .recordFieldUnavailable(.string(let field)): .recordFieldUnavailable(field)
+        case .recordFieldUnavailable(.string(let field)): .recordFieldUnavailable(.init(formalString: field))
         case .functionArgumentOutsideDomain: .functionArgumentOutsideDomain
         case .recursiveArgumentOutsideDomain: .functionArgumentOutsideDomain
         default: nil
@@ -137,7 +137,7 @@ extension NativeMachineEvaluationError {
         case .indexOutOfBounds(let index, let count): .indexOutOfBounds(index, count)
         case .emptySequence: .emptySequence
         case .tupleIndexOutsideDomain(let index): .tupleIndexOutsideDomain(.integer(index))
-        case .recordFieldUnavailable(let field): .recordFieldUnavailable(.string(field))
+        case .recordFieldUnavailable(let field): .recordFieldUnavailable(.string(field.formalString))
         case .checkingContextRequired, .functionArgumentOutsideDomain, .invalidSequenceDomain,
              .invalidRandomSubsetCount, .emptyRandomElementDomain: nil
         }

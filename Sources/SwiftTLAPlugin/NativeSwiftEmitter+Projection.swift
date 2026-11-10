@@ -38,7 +38,7 @@ extension NativeSwiftEmitter {
         switch type {
         case .int: return "TLAValue.int(\(value))"
         case .bool: return "TLAValue.bool(\(value))"
-        case .string: return "TLAValue.canonicalSwiftString(\(value))"
+        case .string: return "TLAValue.string(\(value).formalString)"
         case .modelValue: return "TLAValue.constant(\(value).rawValue)"
         case .controlLocation:
             return switching(program.layout.controlLocations.map {
@@ -97,7 +97,7 @@ extension NativeSwiftEmitter {
         case .bool:
             return decode("guard case .boolean(let result) = \(value) else { \(invalid) }; return result")
         case .string:
-            return decode("guard case .string(let result) = \(value) else { \(invalid) }; return result")
+            return decode("guard case .string(let result) = \(value) else { \(invalid) }; return SwiftTLA._NativeString(formalString: result)")
         case .modelValue:
             return decode("guard case .string(let name) = \(value), let result = _ModelValue(rawValue: name) else { \(invalid) }; return result")
         case .named(let name):

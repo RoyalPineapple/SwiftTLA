@@ -10,6 +10,7 @@ let nativeStringTypeTokens = ["SwiftTLA", ".", "TLAValue", ".", "StringLiteralTy
 let nativeIntType = nativeIntTypeTokens.joined()
 let nativeBoolType = nativeBoolTypeTokens.joined()
 let nativeStringType = nativeStringTypeTokens.joined()
+let nativeStringValueType = "SwiftTLA._NativeString"
 
 /// Translates the resolved compiler program into typed Swift expressions.
 /// This object exists only while expanding the macro.
@@ -106,7 +107,7 @@ struct NativeSwiftEmitter {
         switch type {
         case .int: return nativeIntType
         case .bool: return nativeBoolType
-        case .string: return nativeStringType
+        case .string: return nativeStringValueType
         case .modelValue: return "_ModelValue"
         case .controlLocation: return "_ControlLocation"
         case .named(let name):
@@ -219,7 +220,7 @@ struct NativeSwiftEmitter {
         switch (value, type) {
         case (.integer(let value), .int): return value == Int.min ? "\(nativeIntType).min" : String(value)
         case (.boolean(let value), .bool): return String(value)
-        case (.string(let value), .string): return String(reflecting: value)
+        case (.string(let value), .string): return "\(nativeStringValueType)(formalString: \(String(reflecting: value)))"
         case (.constant(let value), .modelValue):
             guard let caseName = typeDeclarations.modelValueCases[value] else {
                 throw unsupported("unresolved model value")
@@ -402,7 +403,7 @@ struct NativeSwiftEmitter {
         let body: String
         switch type {
         case .int: body = "return lhs < rhs"
-        case .string: body = "return TLAValue.canonicalSwiftString(lhs) < TLAValue.canonicalSwiftString(rhs)"
+        case .string: body = "return lhs < rhs"
         case .bool: body = "return !lhs && rhs"
         case .controlLocation, .modelValue: body = "return lhs.rawValue < rhs.rawValue"
         case .finite(let members):
@@ -788,7 +789,9 @@ struct NativeSwiftEmitter {
             guard let printTOutputName else { throw unsupported("PrintT outside generated evaluation") }
             let value = try expression(id.children[0], state: state, substitutions: substitutions,
                 activeFunctions: activeFunctions)
-            return "(try { () throws -> \(nativeBoolType) in let printed = \(value); \(printTOutputName).append(printed.tlaValue); return true }())"
+            let projected = containsSourceNominal(id.children[0].resultType)
+                ? try formalValue("printed", type: id.children[0].resultType) : "printed.tlaValue"
+            return "(try { () throws -> \(nativeBoolType) in let printed = \(value); \(printTOutputName).append(\(projected)); return true }())"
         case .nextState:
             guard state != "nextState." else { throw unsupported("nested successor-state read") }
             return try expression(id.children[0], state: "nextState.", substitutions: substitutions,
@@ -1419,15 +1422,17 @@ struct NativeSwiftEmitter {
                 let domain = values.isEmpty ? "Set<\(nativeIntType)>()" : "Set(1...\(values.count))"
                 return "(try { () throws -> Set<\(nativeIntType)> in _ = \(try emit(0)); return \(domain) }())"
             case .record(let fields), .nominalRecord(_, let fields):
-                let domain = "Set<\(nativeStringType)>([\(fields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
-                return "(try { () throws -> Set<\(nativeStringType)> in _ = \(try emit(0)); return \(domain) }())"
+                let resultType = try swiftType(node.resultType)
+                let domain = "\(resultType)([\(try fields.map { try literal(.string($0.name), as: .string) }.joined(separator: ", "))])"
+                return "(try { () throws -> \(resultType) in _ = \(try emit(0)); return \(domain) }())"
             case .oneOf(let first, let second):
                 guard let firstFields = first.recordFields, let secondFields = second.recordFields else {
                     throw unsupported("DOMAIN")
                 }
-                let firstDomain = "Set<\(nativeStringType)>([\(firstFields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
-                let secondDomain = "Set<\(nativeStringType)>([\(secondFields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
-                return "(try { () throws -> Set<\(nativeStringType)> in switch \(try emit(0)) { case .first(_): return \(firstDomain); case .second(_): return \(secondDomain) } }())"
+                let resultType = try swiftType(node.resultType)
+                let firstDomain = "\(resultType)([\(try firstFields.map { try literal(.string($0.name), as: .string) }.joined(separator: ", "))])"
+                let secondDomain = "\(resultType)([\(try secondFields.map { try literal(.string($0.name), as: .string) }.joined(separator: ", "))])"
+                return "(try { () throws -> \(resultType) in switch \(try emit(0)) { case .first(_): return \(firstDomain); case .second(_): return \(secondDomain) } }())"
             default: throw unsupported("DOMAIN")
             }
         case .functionLiteral(let binding):
@@ -1454,10 +1459,10 @@ struct NativeSwiftEmitter {
                 }
             case .record(let fields), .nominalRecord(_, let fields):
                 if case .value(.string(let name)) = argument {
-                    if let index = fields.firstIndex(where: { $0.name == name }) { access = "return _functionValue.\(fieldName(source, index: index))" }
+                    if let index = fields.firstIndex(where: { $0.name.utf8.elementsEqual(name.utf8) }) { access = "return _functionValue.\(fieldName(source, index: index))" }
                     else { access = "throw NativeMachineEvaluationError.recordFieldUnavailable(_functionArgument)" }
                 } else {
-                    let cases = fields.indices.map { "case \(String(reflecting: fields[$0].name)): return _functionValue.\(fieldName(source, index: $0))" }.joined(separator: "\n")
+                    let cases = try fields.indices.map { "case \(try literal(.string(fields[$0].name), as: .string)): return _functionValue.\(fieldName(source, index: $0))" }.joined(separator: "\n")
                     access = "switch _functionArgument { \(cases)\ndefault: throw NativeMachineEvaluationError.recordFieldUnavailable(_functionArgument) }"
                 }
             default: throw unsupported("function application")
@@ -1502,7 +1507,7 @@ struct NativeSwiftEmitter {
             case .record(let fields), .nominalRecord(_, let fields):
                 let selected: Int?
                 if case .value(.string(let name)) = key {
-                    selected = fields.firstIndex { $0.name == name }
+                    selected = fields.firstIndex { $0.name.utf8.elementsEqual(name.utf8) }
                 } else {
                     selected = nil
                 }
@@ -1519,8 +1524,8 @@ struct NativeSwiftEmitter {
                     retainsOriginal = selected == nil || fields.count > 1
                     evaluatesKey = false
                 } else {
-                    let branches = fields.indices.map { index in
-                        "case \(String(reflecting: fields[index].name)): \(replacing(index))"
+                    let branches = try fields.indices.map { index in
+                        "case \(try literal(.string(fields[index].name), as: .string)): \(replacing(index))"
                     }.joined(separator: "\n")
                     update = "switch _updatedKey {\n\(branches)\ndefault: return _originalValue\n}"
                 }
