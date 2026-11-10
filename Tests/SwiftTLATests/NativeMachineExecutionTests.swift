@@ -4,6 +4,10 @@ import SwiftTLAMacros
 
 @TLAModel
 private struct DescribedIntegerState {
+    typealias InitialEvaluationOutcomes = Int
+    typealias InitialEvaluationFailure = Int
+    typealias TLAStateProjection = Int
+    typealias TLAValue = Int
     enum Int: Swift.Int, SwiftTLA.FiniteTLAValueDomain, Swift.CustomStringConvertible {
         case low = 1, high = 2
         static var defaultValue: Self { .low }
@@ -105,13 +109,16 @@ private struct AmbiguousExecutionChoice {
 
 @Suite("Generated transition contracts")
 struct NativeMachineExecutionTests {
-    @Test("Occupied scalar names preserve integer enum encoding and primitive machine state")
+    @Test("Occupied scalar and support names preserve generated initialization and formal projection")
     func describedEnumsPreserveFormalEncoding() throws {
         typealias Rank = DescribedIntegerState.Int
         #expect(Rank.low.description == "Low priority")
         #expect(Rank.low.tlaValue == .int(1))
         #expect(Rank(formalValue: Rank.low.tlaValue) == .low)
         let rank = try #require(TLAStateProjection.Token(validating: "rank"))
+        let outcomes = try DescribedIntegerState.initialOutcomes()
+        #expect(outcomes.states.count == 1)
+        #expect(outcomes.failures.isEmpty)
         var machine = try DescribedIntegerState.makeMachine()
         let initialLiteral: Swift.Int = machine.state.literal
         #expect(initialLiteral == 1)

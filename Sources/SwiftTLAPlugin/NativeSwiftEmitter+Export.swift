@@ -60,7 +60,7 @@ extension NativeSwiftEmitter {
                 }
                 let name = String(reflecting: program.layout.actions[id.ordinal].renderedName)
                 actionMetadata += "\n" + loops.joined(separator: "\n") + "\n" + """
-                let _arguments: [TLAValue] = [\(arguments.joined(separator: ", "))]
+                let _arguments: [SwiftTLA.TLAValue] = [\(arguments.joined(separator: ", "))]
                 _actions.append(RenderedAction(sourceName: \(name), arguments: _arguments,
                     renderedName: FormalActionCall(name: \(name), arguments: _arguments).description))
                 """ + String(repeating: "\n}", count: loops.count)

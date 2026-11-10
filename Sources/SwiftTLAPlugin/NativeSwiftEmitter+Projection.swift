@@ -15,16 +15,16 @@ extension NativeSwiftEmitter {
                 value: try formalValue(route, type: program.variableTypes[variable.id]!))
         }
         let tokens = fields.map { field in
-            "TLAStateProjection.Token(validating: \(String(reflecting: field.formalName)))!"
+            "SwiftTLA.TLAStateProjection.Token(validating: \(String(reflecting: field.formalName)))!"
         }.joined(separator: ", ")
         let entries = fields.enumerated().map { index, field in
             ".init(token: Self.__swifttlaFormalProjectionTokens[\(index)], value: \(field.value))"
         }.joined(separator: ",\n")
         let declarations = [DeclSyntax(stringLiteral: """
-        private static let __swifttlaFormalProjectionTokens: [TLAStateProjection.Token] = [\(tokens)]
+        private static let __swifttlaFormalProjectionTokens: [SwiftTLA.TLAStateProjection.Token] = [\(tokens)]
         """), DeclSyntax(stringLiteral: """
-        public func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection {
-            try TLAStateProjection(validating: [\(entries)])
+        public func formalProjection(of snapshot: Snapshot) throws -> SwiftTLA.TLAStateProjection {
+            try SwiftTLA.TLAStateProjection(validating: [\(entries)])
         }
         """)]
         try verifyGeneratedFormalProjectionOutput(declarations, fields: fields)
@@ -33,13 +33,13 @@ extension NativeSwiftEmitter {
 
     func formalValue(_ value: String, type: CompiledValueType) throws -> String {
         func switching(_ cases: [String]) -> String {
-            "try { () throws -> TLAValue in switch \(value) {\n\(cases.joined(separator: "\n"))\n} }()"
+            "try { () throws -> SwiftTLA.TLAValue in switch \(value) {\n\(cases.joined(separator: "\n"))\n} }()"
         }
         switch type {
-        case .int: return "TLAValue.int(\(value))"
-        case .bool: return "TLAValue.bool(\(value))"
-        case .string: return "TLAValue.string(\(value).formalString)"
-        case .modelValue: return "TLAValue.constant(\(value).rawValue)"
+        case .int: return "SwiftTLA.TLAValue.int(\(value))"
+        case .bool: return "SwiftTLA.TLAValue.bool(\(value))"
+        case .string: return "SwiftTLA.TLAValue.string(\(value).formalString)"
+        case .modelValue: return "SwiftTLA.TLAValue.constant(\(value).rawValue)"
         case .controlLocation:
             return switching(program.layout.controlLocations.map {
                 "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.formalName)))"
@@ -58,22 +58,22 @@ extension NativeSwiftEmitter {
                 "case .\(unionCase(type, index: $0.offset))(let payload): return \(try formalValue("payload", type: $0.element))"
             })
         case .set(let element):
-            return "try TLAStateProjection.losslessSet(\(value)) { (element) throws -> TLAValue in \(try formalValue("element", type: element)) }"
+            return "try SwiftTLA.TLAStateProjection.losslessSet(\(value)) { (element) throws -> SwiftTLA.TLAValue in \(try formalValue("element", type: element)) }"
         case .array(let element):
-            return "TLAValue.tuple(try \(value).map { (element) throws -> TLAValue in \(try formalValue("element", type: element)) })"
+            return "SwiftTLA.TLAValue.tuple(try \(value).map { (element) throws -> SwiftTLA.TLAValue in \(try formalValue("element", type: element)) })"
         case .tuple(let elements):
             let values = try elements.enumerated().map {
                 try formalValue(value + "." + fieldName(type, index: $0.offset), type: $0.element)
             }
-            return "TLAValue.tuple([\(values.joined(separator: ", "))])"
+            return "SwiftTLA.TLAValue.tuple([\(values.joined(separator: ", "))])"
         case .record(let fields), .nominalRecord(_, let fields):
             let values = try fields.enumerated().map {
                 ".init(\(String(reflecting: $0.element.name)), \(try formalValue(value + "." + fieldName(type, index: $0.offset), type: $0.element.type)))"
             }
-            return "TLAValue.record(TLARecord([\(values.joined(separator: ", "))]))"
+            return "SwiftTLA.TLAValue.record(TLARecord([\(values.joined(separator: ", "))]))"
         case .dictionary(let key, let element):
             return """
-            TLAValue.function(try \(value).reduce(into: [TLAValue: TLAValue]()) { result, entry in
+            SwiftTLA.TLAValue.function(try \(value).reduce(into: [SwiftTLA.TLAValue: SwiftTLA.TLAValue]()) { result, entry in
                 let key = \(try formalValue("entry.key", type: key))
                 let value = \(try formalValue("entry.value", type: element))
                 guard result.updateValue(value, forKey: key) == nil else {
@@ -190,16 +190,16 @@ extension NativeSwiftEmitter {
     func renderedLiteral(_ value: TLAValue) -> String {
         func emit(_ value: TLAValue) -> String {
             switch value {
-            case .int(let value): return "TLAValue.int(\(value == Int.min ? "Int.min" : String(value)))"
-            case .bool(let value): return "TLAValue.bool(\(value))"
-            case .string(let value): return "TLAValue.string(\(String(reflecting: value)))"
-            case .constant(let value): return "TLAValue.constant(\(String(reflecting: value)))"
-            case .set(let values): return "TLAValue.set([\(values.sorted().map(emit).joined(separator: ", "))])"
-            case .tuple(let values): return "TLAValue.tuple([\(values.map(emit).joined(separator: ", "))])"
-            case .record(let fields): return "TLAValue.record(TLARecord([\(fields.fields.map { ".init(\(String(reflecting: $0.name)), \(emit($0.value)))" }.joined(separator: ", "))]))"
+            case .int(let value): return "SwiftTLA.TLAValue.int(\(value == Int.min ? "Int.min" : String(value)))"
+            case .bool(let value): return "SwiftTLA.TLAValue.bool(\(value))"
+            case .string(let value): return "SwiftTLA.TLAValue.string(\(String(reflecting: value)))"
+            case .constant(let value): return "SwiftTLA.TLAValue.constant(\(String(reflecting: value)))"
+            case .set(let values): return "SwiftTLA.TLAValue.set([\(values.sorted().map(emit).joined(separator: ", "))])"
+            case .tuple(let values): return "SwiftTLA.TLAValue.tuple([\(values.map(emit).joined(separator: ", "))])"
+            case .record(let fields): return "SwiftTLA.TLAValue.record(TLARecord([\(fields.fields.map { ".init(\(String(reflecting: $0.name)), \(emit($0.value)))" }.joined(separator: ", "))]))"
             case .function(let values):
                 let entries = values.sorted { $0.key < $1.key }.map { "\(emit($0.key)): \(emit($0.value))" }
-                return "TLAValue.function([\(entries.isEmpty ? ":" : entries.joined(separator: ", "))])"
+                return "SwiftTLA.TLAValue.function([\(entries.isEmpty ? ":" : entries.joined(separator: ", "))])"
             }
         }
         return emit(value)
@@ -222,10 +222,10 @@ func verifyGeneratedFormalProjectionOutput(
         )
     }
     let tokenValues = fields.map {
-        "TLAStateProjection.Token(validating: \(String(reflecting: $0.formalName)))!"
+        "SwiftTLA.TLAStateProjection.Token(validating: \(String(reflecting: $0.formalName)))!"
     }.joined(separator: ", ")
     let expectedTokens = Parser.parse(source: """
-    private static let __swifttlaFormalProjectionTokens: [TLAStateProjection.Token] = [\(tokenValues)]
+    private static let __swifttlaFormalProjectionTokens: [SwiftTLA.TLAStateProjection.Token] = [\(tokenValues)]
     """).statements.first?.item
     guard declarations.count == 2, let expectedTokens,
           tokens(declarations[0]) == tokens(expectedTokens) else {
@@ -247,8 +247,8 @@ func verifyGeneratedFormalProjectionOutput(
         ".init(token: Self.__swifttlaFormalProjectionTokens[\(index)], value: \(field.value))"
     }.joined(separator: ",\n")
     let expectedFunction = Parser.parse(source: """
-    public func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection {
-        try TLAStateProjection(validating: [\(expectedEntries)])
+    public func formalProjection(of snapshot: Snapshot) throws -> SwiftTLA.TLAStateProjection {
+        try SwiftTLA.TLAStateProjection(validating: [\(expectedEntries)])
     }
     """).statements.first?.item
     guard let expectedFunction, tokens(declarations[1]) == tokens(expectedFunction) else {

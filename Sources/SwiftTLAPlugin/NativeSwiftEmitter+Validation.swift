@@ -72,8 +72,8 @@ extension NativeSwiftEmitter {
                 """)
                 viewProjections.append("""
                 case \(index):
-                    return try TLAStateProjection(validating: [
-                        .init(token: TLAStateProjection.Token(validating: "View")!,
+                    return try SwiftTLA.TLAStateProjection(validating: [
+                        .init(token: SwiftTLA.TLAStateProjection.Token(validating: "View")!,
                               value: \(try formalValue(projected, type: view.resultType)))])
                 """)
             }
@@ -149,7 +149,7 @@ extension NativeSwiftEmitter {
                 }
             }
 
-            public func initialOutcomes() throws -> InitialEvaluationOutcomes<Machine> {
+            public func initialOutcomes() throws -> SwiftTLA.InitialEvaluationOutcomes<Machine> {
                 \(hasRandomSubset ? "if case .simulation = checkingMode { return try .init(states: \(model.typeName).sampledInitialMachines(\(arguments)), failures: []) }" : "")
                 return try \(model.typeName).initialOutcomes(\(arguments))
             }
@@ -178,7 +178,7 @@ extension NativeSwiftEmitter {
                     maximumStates: maximumStates, checking: checking,
                     stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
             }
-            public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: \(nativeIntType),
+            public func runValidation(initialOutcomes: SwiftTLA.InitialEvaluationOutcomes<Machine>, maximumStates: \(nativeIntType),
                 checking: ModelChecks<Property>, stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
                 fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
                 emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
@@ -192,7 +192,7 @@ extension NativeSwiftEmitter {
                 }
             }
             public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
-                atLevel level: \(nativeIntType)) throws -> TLAStateProjection {
+                atLevel level: \(nativeIntType)) throws -> SwiftTLA.TLAStateProjection {
                 switch selectedView {
                 \(viewProjections.joined(separator: "\n"))
                 case nil:
@@ -246,11 +246,11 @@ func verifyOrderedIntValidationOutput(_ declarations: [DeclSyntax], model: Macro
             == Array(expected.tokens(viewMode: .sourceAccurate)).map(\.text)
     }
     guard matches(actual("initialOutcomes"), expected: """
-        public func initialOutcomes() throws -> InitialEvaluationOutcomes<Machine> {
+        public func initialOutcomes() throws -> SwiftTLA.InitialEvaluationOutcomes<Machine> {
             return try \(modelName).initialOutcomes(\(arguments))
         }
         """), matches(actual("runValidation", firstParameter: "initialOutcomes"), expected: """
-        public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: \(nativeIntType),
+        public func runValidation(initialOutcomes: SwiftTLA.InitialEvaluationOutcomes<Machine>, maximumStates: \(nativeIntType),
             checking: ModelChecks<Property>, stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
             fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
             emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {

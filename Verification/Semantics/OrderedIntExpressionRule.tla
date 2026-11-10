@@ -1525,6 +1525,13 @@ THEOREM CompletedSyntaxVisitIdentifiesTheFirstReachedFailure ==
               <=> (~meaning[root].ok /\ outcome = meaning[root])
     PROOF
     <1>. DEFINE holds(step) == VisitFailureProjection(emissions[step], currents[step], meaning)
+    <1>0. steps \in Nat
+        BY SMT DEF SynchronizedNodeHistory, PendingVisitHistory
+    <1>0a. \A step \in 0..steps :
+        /\ NodeEmissionArrays(emissions[step])
+        /\ NodeRootsMatchVisitPrefix(emissions[step], currents[step])
+        /\ AllNodePayloadsMatchSource(view, emissions[step])
+        BY SynchronizedNodeHistoryPreservesEverySourcePayload
     <1>1. \A step \in 0..steps : PendingVisitContract(heights[step], pendings[step], currents[step],
         PushVisitPrefix(EmptyVisitPrefix, root), view.left, view.right)
         BY PendingVisitHistoryPreservesTheSourceRootContext, SMT DEF SynchronizedNodeHistory
@@ -1542,14 +1549,26 @@ THEOREM CompletedSyntaxVisitIdentifiesTheFirstReachedFailure ==
                     current == currents[step - 1]
                     next == emissions[step]
                     nextCurrent == currents[step]
+        <2>0. step \in Nat /\ step - 1 \in 0..steps
+              /\ step - 1 \in 0..(step - 1)
+              /\ heights[step - 1] > 0
+            BY <1>0, SMT DEF SynchronizedNodeHistory, PendingVisitHistory, PendingVisitStep
         <2>1. holds(step - 1) /\ frame.node \in DOMAIN view.kinds
               /\ PendingVisitContract(heights[step - 1], pendings[step - 1], current,
                      PushVisitPrefix(EmptyVisitPrefix, root), view.left, view.right)
               /\ PendingVisitStep(view.kinds, view.left, view.right, heights[step - 1],
                      pendings[step - 1], current, heights[step], pendings[step], nextCurrent)
               /\ NodeEmissionStep(view, frame, emitted, next)
-            BY <1>1, SMT DEF frame, emitted, current, next, nextCurrent,
+            BY <1>1, <2>0, SMT DEF frame, emitted, current, next, nextCurrent,
                 SynchronizedNodeHistory, PendingVisitHistory
+        <2>1a. /\ NodeEmissionArrays(emitted)
+               /\ NodeRootsMatchVisitPrefix(emitted, current)
+               /\ emitted.count \in Nat /\ current.height \in Nat
+               /\ frame.prefix = current
+               /\ WellFormedVisitFrame(frame, view.left, view.right)
+            BY <1>0a, <2>0, <2>1, SMT
+                DEF emitted, current, frame, PendingVisitContract,
+                    NodeEmissionArrays, NodeRootsMatchVisitPrefix
         <2>2. CASE ~frame.expanded /\ view.kinds[frame.node] = "add"
             BY <2>1, <2>2, SMT DEF holds, NodeEmissionStep, PendingVisitStep,
                 frame, emitted, current, next, nextCurrent
@@ -1562,7 +1581,7 @@ THEOREM CompletedSyntaxVisitIdentifiesTheFirstReachedFailure ==
                   /\ NodeRootsMatchVisitPrefix(emitted, current)
                   /\ ((frame.expanded /\ view.kinds[frame.node] = "add")
                       \/ (~frame.expanded /\ view.kinds[frame.node] \in {"literal", "read"}))
-                BY <2>1, <2>3, SynchronizedNodeHistoryPreservesEverySourcePayload, SMT
+                BY <2>0, <2>1, <2>1a, <2>3, SMT
                     DEF frame, emitted, current, next, nextCurrent,
                         PendingVisitContract, PendingVisitStep, NodeEmissionStep
             <3>2. /\ next.count = emitted.count + 1
@@ -1572,7 +1591,7 @@ THEOREM CompletedSyntaxVisitIdentifiesTheFirstReachedFailure ==
                 <4>1. nextCurrent = PushVisitPrefix(current, frame.node) /\ meaning[frame.node].ok
                     BY <2>1, <3>1, <3>3, SMT
                         DEF VisitFrameExit, SourceSyntaxHistory, Success
-                <4>. QED BY <2>1, <3>1, <3>2, <4>1, AppendingARootRetainsTheFirstFailure, SMT
+                <4>. QED BY <2>1, <2>1a, <3>1, <3>2, <4>1, AppendingARootRetainsTheFirstFailure, SMT
                     DEF holds, VisitFailureProjection, PushVisitPrefix, VisitPrefix,
                         frame, emitted, current, next, nextCurrent
             <3>4. CASE frame.expanded
@@ -1583,7 +1602,7 @@ THEOREM CompletedSyntaxVisitIdentifiesTheFirstReachedFailure ==
                              meaning[current.terms[current.height]])
                     BY <2>1, <3>1, <3>4, SMT DEF WellFormedVisitFrame,
                         WellFormedVisitPrefix, VisitFrameExit, SourceSyntaxHistory
-                <4>. QED BY <2>1, <3>1, <3>2, <4>1, AppendingARootRetainsTheFirstFailure,
+                <4>. QED BY <2>1, <2>1a, <3>1, <3>2, <4>1, AppendingARootRetainsTheFirstFailure,
                     FoldingOrderedChildrenRetainsTheFirstFailure, SMT
                     DEF holds, VisitFailureProjection, FoldVisitPrefix, VisitPrefix,
                         frame, emitted, current, next, nextCurrent
@@ -2436,6 +2455,10 @@ THEOREM ReachedCheckedOperationsRetainEverySuccessfulSourcePrefix ==
                   /\ ~source[execution.completed + 1].ok)
     PROOF
     <1>. DEFINE agrees(index) == index > 0 => source[index] = Success(execution.values[index])
+    <1>0. /\ plan.count \in Nat /\ plan.count >= 1
+          /\ execution.completed \in Nat /\ execution.completed <= plan.count
+        BY SMT DEF PartialExpressionPlan, ExpressionPlan, ReachedCheckedPostorderExecution
+    <1>. USE <1>0
     <1>1. \A index \in 1..plan.count :
         /\ plan.kinds[index] \in {"literal", "read", "add"}
         /\ (plan.kinds[index] = "add" =>
@@ -2450,27 +2473,60 @@ THEOREM ReachedCheckedOperationsRetainEverySuccessfulSourcePrefix ==
                                  source[earlier] = Success(execution.values[earlier])
                      PROVE source[index] = CheckedPostorderOperation(plan, state, execution.values, index)
             BY SMT
+        <2>0. /\ index \in 1..plan.count
+              /\ \A earlier \in 1..(index - 1) : earlier \in 1..execution.completed
+            BY <1>0, SMT
         <2>1. CASE plan.kinds[index] = "add"
             <3>1. /\ source[plan.left[index]] = Success(execution.values[plan.left[index]])
                   /\ source[plan.right[index]] = Success(execution.values[plan.right[index]])
                   /\ InRange(execution.values[plan.left[index]])
                   /\ InRange(execution.values[plan.right[index]])
-                BY <1>1, <2>1, SMT DEF ReachedCheckedPostorderExecution, InRange
+                BY <1>1, <2>0, <2>1, SMT DEF ReachedCheckedPostorderExecution, InRange
             <3>2. SourceAdd(execution.values[plan.left[index]], execution.values[plan.right[index]])
                     = GeneratedAdd(execution.values[plan.left[index]], execution.values[plan.right[index]])
                 BY <3>1, CheckedAdditionRule, SMT DEF InRange
-            <3>. QED BY <2>1, <3>1, <3>2, SMT
+            <3>. QED BY <2>0, <2>1, <3>1, <3>2, SMT
                 DEF SourceExpressionHistory, SourceNode, SourceCombine, Success, CheckedPostorderOperation
         <2>2. CASE plan.kinds[index] # "add"
-            BY <1>1, <2>2, SMT DEF SourceExpressionHistory, SourceNode, CheckedPostorderOperation
+            BY <1>1, <2>0, <2>2, SMT DEF SourceExpressionHistory, SourceNode, CheckedPostorderOperation
         <2>. QED BY <2>1, <2>2, SMT
     <1>3. agrees(0) BY SMT DEF agrees
     <1>4. \A index \in 1..execution.completed :
         ((\A earlier \in 0..(index - 1) : agrees(earlier)) => agrees(index))
-        BY <1>2, SMT DEF agrees, ReachedCheckedPostorderExecution
+        <2>. SUFFICES ASSUME NEW index \in 1..execution.completed,
+                             \A earlier \in 0..(index - 1) : agrees(earlier)
+                     PROVE agrees(index)
+            BY SMT
+        <2>1. /\ index \in 1..(execution.completed + 1) /\ index <= plan.count
+              /\ \A earlier \in 1..(index - 1) :
+                     source[earlier] = Success(execution.values[earlier])
+            BY <1>0, SMT DEF agrees
+        <2>2. source[index] = CheckedPostorderOperation(plan, state, execution.values, index)
+            BY <1>2, <2>1, SMT
+        <2>. QED BY <2>2, SMT DEF agrees, ReachedCheckedPostorderExecution
     <1>5. \A index \in 0..execution.completed : agrees(index)
-        BY <1>3, <1>4, FiniteIndexedPrefixProperty, SMT DEF ReachedCheckedPostorderExecution
-    <1>. QED BY <1>2, <1>5, SMT DEF agrees, ReachedCheckedPostorderExecution
+        BY <1>0, <1>3, <1>4, FiniteIndexedPrefixProperty
+    <1>6. \A index \in 1..execution.completed : source[index] = Success(execution.values[index])
+        BY <1>0, <1>5, SMT DEF agrees
+    <1>7. execution.completed = plan.count => execution.outcome = source[plan.count]
+        BY <1>0, <1>6, SMT DEF ReachedCheckedPostorderExecution
+    <1>8. execution.completed < plan.count =>
+        /\ source[execution.completed + 1] = execution.outcome
+        /\ ~source[execution.completed + 1].ok
+        <2>. SUFFICES ASSUME execution.completed < plan.count
+                     PROVE /\ source[execution.completed + 1] = execution.outcome
+                           /\ ~source[execution.completed + 1].ok
+            BY SMT
+        <2>1. /\ execution.completed + 1 \in 1..(execution.completed + 1)
+              /\ execution.completed + 1 <= plan.count
+              /\ \A earlier \in 1..((execution.completed + 1) - 1) :
+                     source[earlier] = Success(execution.values[earlier])
+            BY <1>0, <1>6, SMT
+        <2>2. source[execution.completed + 1]
+                = CheckedPostorderOperation(plan, state, execution.values, execution.completed + 1)
+            BY <1>2, <2>1, SMT
+        <2>. QED BY <2>2, SMT DEF ReachedCheckedPostorderExecution
+    <1>. QED BY <1>6, <1>7, <1>8
 
 THEOREM CompletedSyntaxVisitRetainsTheReachedCheckedOutcome ==
     ASSUME NEW steps, NEW root, NEW view, NEW heights, NEW pendings, NEW currents, NEW emissions,
@@ -2489,12 +2545,21 @@ THEOREM CompletedSyntaxVisitRetainsTheReachedCheckedOutcome ==
     <1>. DEFINE emitted == emissions[steps]
                 plan == ExtractedNodePlan(emitted, fallbackRead)
                 source == EmittedSourceSyntaxHistory(emitted, meaning)
-    <1>1. /\ NodeEmissionArrays(emitted) /\ emitted.count > 0
+    <1>0. steps \in Nat /\ steps \in 0..steps
+        BY SMT DEF SynchronizedNodeHistory, PendingVisitHistory
+    <1>0a. \A step \in 0..steps :
+        /\ NodeEmissionArrays(emissions[step])
+        /\ AllNodePayloadsMatchSource(view, emissions[step])
+        BY SynchronizedNodeHistoryPreservesEverySourcePayload, SMT
+    <1>1. /\ NodeEmissionArrays(emitted) /\ emitted.count \in Nat \ {0}
           /\ AllNodePayloadsMatchSource(view, emitted)
           /\ emitted.origins[emitted.count] = root
-        BY SynchronizedNodeHistoryPreservesEverySourcePayload,
+        BY <1>0, <1>0a,
             SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
-            DEF emitted, SynchronizedNodeHistory, PendingVisitHistory
+            DEF emitted
+    <1>1a. /\ plan.count = emitted.count /\ plan.count \in Nat /\ plan.count >= 1
+           /\ source[plan.count] = meaning[root]
+        BY <1>1, SMT DEF plan, source, ExtractedNodePlan, EmittedSourceSyntaxHistory
     <1>2. PartialExpressionPlan(plan.count, plan.kinds, plan.literals, plan.reads,
         plan.left, plan.right, bound, state)
         BY <1>1, SourceMatchedNodesSupplyTheTypedExpressionPlan,
@@ -2512,13 +2577,19 @@ THEOREM CompletedSyntaxVisitRetainsTheReachedCheckedOutcome ==
         BY <1>2, <1>3, ReachedCheckedOperationsRetainEverySuccessfulSourcePrefix
             DEF plan, emitted
     <1>5. CASE execution.completed = plan.count
-        BY <1>1, <1>4, <1>5, SMT DEF source, plan, EmittedSourceSyntaxHistory, ExtractedNodePlan
+        BY <1>1a, <1>4, <1>5, SMT
     <1>6. CASE execution.completed < plan.count
-        <2>1. FirstRootFailureIs(emitted.count, emitted.origins, meaning, execution.outcome)
-            BY <1>4, <1>6, SMT DEF FirstRootFailureIs, source, plan,
+        <2>0. /\ execution.completed \in Nat
+              /\ execution.completed + 1 \in 1..emitted.count
+              /\ meaning[emitted.origins[execution.completed + 1]] = execution.outcome
+              /\ ~execution.outcome.ok
+              /\ \A earlier \in 1..execution.completed : meaning[emitted.origins[earlier]].ok
+            BY <1>1a, <1>4, <1>6, SMT DEF source, plan,
                 EmittedSourceSyntaxHistory, ExtractedNodePlan, Success, ReachedCheckedPostorderExecution
+        <2>1. FirstRootFailureIs(emitted.count, emitted.origins, meaning, execution.outcome)
+            BY <2>0, SMT DEF FirstRootFailureIs
         <2>. QED BY <2>1, CompletedSyntaxVisitIdentifiesTheFirstReachedFailure, SMT DEF emitted
-    <1>. QED BY <1>5, <1>6, SMT DEF ReachedCheckedPostorderExecution, plan, emitted
+    <1>. QED BY <1>1a, <1>5, <1>6, SMT DEF ReachedCheckedPostorderExecution
 
 \* Enumeration width is a capability; it does not restrict logical members.
 SourceIntRangeMembers(lower, upper) ==

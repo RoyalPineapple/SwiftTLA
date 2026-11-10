@@ -571,6 +571,8 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
            NEW source, NEW generated, NEW views, NEW roots, NEW visits,
            NEW meanings, NEW executions, NEW positions \in SUBSET (1..count),
            NEW seeds \in [(1..count) \ positions -> Values],
+           \A index \in (1..count) \ positions :
+               order[index] \in IntKeys => seeds[index] \in SwiftIntMin..SwiftIntMax,
            InitializationOrder(count, order),
            InitializerEvaluators(count, sourceEvaluate), InitializerEvaluators(count, generatedEvaluate),
            InitializationHistory(FALSE, count, order, sourceEvaluate, source),
@@ -581,8 +583,6 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                        emitted == visit.emissions[visit.steps]
                        plan == Expressions!ExtractedNodePlan(emitted, order[index])
                    IN /\ order[index] \in IntKeys
-                      /\ PartialIntProjection(prior)
-                             \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
                       /\ Expressions!SynchronizedNodeHistory(visit.steps, roots[index], views[index],
                              visit.heights, visit.pendings, visit.currents, visit.emissions)
                       /\ visit.heights[visit.steps] = 0
@@ -633,6 +633,66 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
     <1>0. Expressions!IntegerDomain
         BY SMT DEF IntInitializationDomains, Expressions!IntegerDomain
     <1>. USE <1>0
+    <1>. DEFINE typedPrefix(index) ==
+        \A prior \in source[index].states :
+            PartialIntProjection(prior) \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
+    <1>0n. count \in Nat BY SMT DEF InitializationOrder
+    <1>. USE <1>0n
+    <1>0a. typedPrefix(0)
+        BY SMT DEF typedPrefix, PartialIntProjection, InitializationHistory, InitialSeed
+    <1>0b. \A index \in 1..count :
+        ((\A earlier \in 0..(index - 1) : typedPrefix(earlier)) => typedPrefix(index))
+        <2>. SUFFICES ASSUME NEW index \in 1..count,
+                             \A earlier \in 0..(index - 1) : typedPrefix(earlier),
+                             NEW after \in source[index].states
+                     PROVE PartialIntProjection(after)
+                         \in [(DOMAIN after) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
+            BY SMT DEF typedPrefix
+        <2>0. index \in Nat /\ index >= 1 /\ typedPrefix(index - 1)
+            BY SMT DEF InitializationOrder
+        <2>1. PICK prior \in source[index - 1].states,
+                   value \in sourceEvaluate[index][prior].candidates :
+            SourceExtension(prior, order[index], value, after)
+            BY SMT DEF InitializationHistory, InitializationAdvance, SourceAdvance,
+                SourceInitialLeaf, SourceInitialStates
+        <2>2. prior \in PartialBindings
+              /\ PartialIntProjection(prior)
+                     \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
+            BY <2>0, <2>1, SMT DEF typedPrefix, InitializationHistory,
+                InitializationResults, InitializationOrder
+        <2>3. order[index] \in IntKeys => value \in SwiftIntMin..SwiftIntMax
+            <3>1. CASE index \in positions
+                <4>. DEFINE visit == visits[index]
+                            emitted == visit.emissions[visit.steps]
+                            plan == Expressions!ExtractedNodePlan(emitted, order[index])
+                            execution == executions[index][prior]
+                <4>1. meanings[index][prior][roots[index]] = execution.outcome
+                    BY <2>1, <2>2, <3>1,
+                        Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT
+                        DEF visit, emitted, plan, execution, IntInitializationDomains
+                <4>2. emitted.count > 0 /\ plan.count = emitted.count
+                    BY <2>1, <3>1, Expressions!SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
+                        DEF visit, emitted, plan, Expressions!ExtractedNodePlan
+                <4>3. /\ execution.outcome.ok
+                      /\ value = execution.outcome.value
+                    BY <2>1, <3>1, <4>1, SMT
+                        DEF SourceIntInitializerOutcome, SourceFixed, SourceFailed, execution
+                <4>4. /\ execution.completed = plan.count
+                      /\ execution.outcome = Expressions!Success(execution.values[plan.count])
+                      /\ execution.values \in [1..plan.count -> SwiftIntMin..SwiftIntMax]
+                    BY <2>1, <3>1, <4>3, SMT
+                        DEF visit, emitted, plan, execution, Expressions!ReachedCheckedPostorderExecution
+                <4>. QED BY <4>2, <4>3, <4>4, SMT DEF Expressions!Success
+            <3>2. CASE index \notin positions
+                BY <2>1, <3>2, SMT DEF SourceFixed
+            <3>. QED BY <3>1, <3>2, SMT
+        <2>. QED BY <2>1, <2>2, <2>3, SMT DEF PartialIntProjection, SourceExtension
+    <1>0c. \A index \in 0..count : typedPrefix(index)
+        BY <1>0n, <1>0a, <1>0b, FiniteIndexedPrefixProperty
+    <1>0d. \A index \in 1..count : \A prior \in source[index - 1].states :
+        PartialIntProjection(prior) \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
+        BY <1>0c, SMT DEF typedPrefix, InitializationOrder
+    <1>. USE <1>0d
     <1>1. \A index \in 1..count : \A prior \in source[index - 1].states :
         IF index \in positions
         THEN /\ order[index] \in IntKeys
@@ -690,7 +750,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                 generatedExpressions[index][prior])
                 BY <2>1, <2>0, <3>2, SMT DEF generatedExpressions
             <3>4. /\ IntInitializerChildren(plans[index], prior,
-                sourceExpressions[index][prior], generatedExpressions[index][prior])
+                         sourceExpressions[index][prior], generatedExpressions[index][prior])
                   /\ SourceIntInitializerOutcome(meanings[index][prior][roots[index]])
                          = GeneratedIntInitializerOutcome(generatedExpressions[index][prior][plans[index].count])
                 BY <2>0, <2>1, <3>0, <3>3, VisitedSourceSyntaxSuppliesReadyInitializerChildren, SMT

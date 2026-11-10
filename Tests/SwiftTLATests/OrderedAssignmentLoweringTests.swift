@@ -2046,10 +2046,11 @@ struct OrderedAssignmentLoweringTests {
         })
         try emitter.verifyIntInitialOutput(original)
 
-        let marker = "var failures: [InitialEvaluationFailure] = []"
+        let marker = "var failures: [SwiftTLA.InitialEvaluationFailure] = []"
+        try #require(original.description.components(separatedBy: marker).count == 2)
         let wrong = original.description.replacingOccurrences(of: marker, with: """
         \(marker)
-        if true { return InitialEvaluationOutcomes(states: [], failures: []) }
+        if true { return SwiftTLA.InitialEvaluationOutcomes(states: [], failures: []) }
         """)
         #expect(wrong != original.description)
         let declaration = try #require(Parser.parse(source: wrong)

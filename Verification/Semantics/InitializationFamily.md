@@ -199,10 +199,22 @@ immutable prefix and site on failure, and keeps every later observation unchange
 Reachable child agreement makes that same history a generated history. Thus the
 parent's ordered-observation conclusion no longer depends on histories existing
 only inside the antecedent of an implication. This new proof body is unverified.
-Pinned b489 CI proved the singleton observation bridge and left two source-node
-and five parent-instantiation obligations unproved. Their working body repairs
-make count/index domains and imported-instance facts explicit. The later
-reached-execution and single-branch additions remain unverified.
+The next working change also removes the supplied Int-range invariant for every
+reachable prefix. Induction starts at the empty binding. A successful expression
+row obtains its bounded value from the reached-operation theorem; a fixed row
+uses its constructor's scalar type fact. Source extension preserves every earlier
+Int binding. The parent then uses the derived projection type for its child rules.
+Its remaining fixed-row premise says that an Int key has an Int seed; actual
+control keys are outside the Int-key set. The physical layout/type association
+and this new proof body still require verification.
+Pinned f329 CI no longer reports the earlier source-to-postorder meaning lemma
+among its failures. It leaves nine reached-expression obligations and thirteen
+single-branch history obligations unproved. The initialization parent's proof
+does not parse, so that module executed no obligations. The working repairs
+expose count/index domains, typed append results, singleton projections and
+live/dead branch facts, and correct the parent conjunction's continuation
+indentation. These bodies and the new prefix-typing derivation remain unverified.
+The retained failed run does not establish theorem falsity or compiler agreement.
 
 The source/control trace also exposed a real hidden-seed rendering gap.
 Existing validation admits ASCII control identifiers, including names beginning
@@ -242,7 +254,7 @@ remain separate boundaries; the manual loop argument does not assume a valid
 emitted plan.
 
 The physical visitor/source-tree mapping, existence of independent syntax
-meanings, actual Swift/TLA reached-operation equations, reachable-prefix typing,
+meanings, actual Swift/TLA reached-operation equations, physical prefix-type association,
 control-seed encoding, and the at-most-one bounds for actual output remain
 owned obligations of the final theorem. The new consumer states those limits
 explicitly; it does not discharge them by assuming evaluator agreement or
@@ -486,6 +498,22 @@ Primitive state fields, control raw values, arithmetic temporaries, predicates a
 The independent output checks require their complete token sequences; they do not accept arbitrary type spellings.
 This removes the unoccupied scalar-name premise for those emitted annotations. General helper/module namespace binding remains owned.
 
+The current support-name probe extends the existing occupied-name model with aliases
+for `InitialEvaluationOutcomes`, `InitialEvaluationFailure`, `TLAStateProjection`
+and `TLAValue`. On unchanged `f329c36b` production, compilation binds the generated
+outcome and projection signatures to those aliases and fails. No test executes;
+this is a compiler binding failure, not a runtime rejection or proof receipt.
+The working repair qualifies these four types through `SwiftTLA` in generated
+initialization, projection, validation and export code. Existing independent
+templates and corruption controls require the qualified spellings, including the
+same exact callback/capture grammar. The occupied-name owner and external typed
+client now pass on that producer. The combined run executes 158 tests: 157 pass
+and one stored Swift witness comparison fails because its support names are
+stale. After exactly seven witness qualifications, all 23 tests in that owner
+pass. This is not a claimed passing rerun of all 158 tests. The alias baseline
+and repaired execution are regression evidence. No accepted source form is
+removed; library module binding and other helper/operator associations remain owned.
+
 The source baseline executed the existing owner and reported three wrong nominal-domain resolutions.
 The native baseline failed generated-code compilation before any test executed; it is not a runtime rejection receipt.
 A source-only repair exposed a stack-guard SIGBUS in the existing recursive CASE type path.
@@ -521,7 +549,7 @@ and [signed remainder and unary negation](https://github.com/swiftlang/swift-boo
 
 **Native leaf.** The pilot has no resolved function calls. `expressionValues` starts empty; its only writes occur in
 `recursiveBody`, reached through resolved function emission. That path is absent here, so a pilot literal cannot be replaced by a cached name.
-`expression` reaches `scalarExpression`, whose value branch calls `literal` with the stored value and `.int` type.
+`expression` reaches `expressionBody`, whose value branch calls `literal` with the stored value and `.int` type.
 The union, finite and nominal branches cannot intercept `.int`.
 For `n != Int.min`, the emitted text is the standard decimal representation of `n`.
 A negative value in this branch has representable positive magnitude, so the corresponding standard unary-minus expression is defined and equals `n`.
@@ -677,7 +705,7 @@ The owners are [the emitter name table](../../Sources/SwiftTLAPlugin/NativeSwift
    The decimal ordinal is the suffix after the final underscore. Equal slot strings therefore imply equal ordinals and equal IDs.
    Sanitizing two source names to the same text cannot merge their slots. This derives slot separation for this parameter-free route.
    It does not prove general collision freedom against parameters, callbacks or arbitrary surrounding declarations.
-2. `initialDeclarations` enumerates the actual initializer array and selects both type and slot with that entry's ID.
+2. `initialStateSource`, called by `initialDeclarations`, enumerates the actual initializer array and selects both type and slot with that entry's ID.
    Its value case emits `let slot: nativeIntType = literal(n)` and resets the evaluating-site marker afterward.
    The existing numerical argument supplies exactly `n`, including the primitive `.min` spelling at the lower bound.
    The immutable binding extends the lexical prefix once and leaves every preceding binding unchanged.
@@ -765,7 +793,7 @@ The evaluator's state-variable operation calls `variableValue(rID)`, which retur
 For prior Int payload `m`, the actual result is therefore `.integer(m)` with no read-specific model failure.
 The target value case copies the prior map and updates only the fresh target, as in the literal argument.
 
-The native initializer emits the same ID's slot: `initialDeclarations` calls expression emission with an empty state prefix,
+The native initializer emits the same ID's slot: `initialStateSource` calls expression emission with an empty state prefix,
 and the state-variable branch calls `stateValue(rID, prefix: "")`, which selects `variable(rID)`.
 The previously derived slot/constructor/projection relation supplies `m` at that slot in each reached lexical prefix.
 No resolved function emission populates the native expression-value cache in this route.
@@ -842,7 +870,12 @@ left failure is propagated without evaluating right; successful left followed by
 For the first case the mathematical unused second outcome may be `Success(0)`; no executed right-child history is required.
 The checked `CombinedAdditionRule` consumes these child range facts and proves the same result as `GeneratedCombine`.
 
-**TLA expression row.** Ordered fallible-site collection appends left sites, right sites, then the parent addition site.
+**TLA expression row.** Pure literal/read/add trees take the `arithmeticSites` fallback:
+`orderedFallibleSites` returns nil because this fragment has no special failure,
+choice or lazy branch. The fallback visits children in stored order, appending
+each addition after its children. It therefore lists left sites, right sites,
+then the parent addition site. `expressionEvaluationFailures` passes preceding
+site guards to `preceded`; `arithmeticDefined` uses that same list for definedness.
 The parent site carries `<<lhs, rhs>>` and the small-operands/exact signed bound guard of `GeneratedAddDefined`.
 `GeneratedAddGuardMatchesSource` proves that guard equivalent to representability for the two in-range child values.
 Earlier-site guards gate later failures, preserving the first reached expression failure under the stated TLA name/operator interpretation conditions.

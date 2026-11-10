@@ -602,7 +602,7 @@ extension NativeSwiftEmitter {
             return ".init(token: Self.__swifttlaFormalProjectionTokens[\(entry.variable.ordinal)], value: \(value))"
         }
         let capture = captures.isEmpty ? "" : "[" + captures.joined(separator: ", ") + "] in "
-        return "{ \(capture)try TLAStateProjection(validating: [\(entries.joined(separator: ", "))]) }"
+        return "{ \(capture)try SwiftTLA.TLAStateProjection(validating: [\(entries.joined(separator: ", "))]) }"
     }
 
     private enum InitialScope {
@@ -723,7 +723,7 @@ extension NativeSwiftEmitter {
         let parsed = Parser.parse(source: """
         try SwiftTLA._NativeMachineOperations.visitInitialBranch({}, onEvaluationFailure: { failure in
             failures.append(.init(
-                site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
         """)
@@ -776,15 +776,15 @@ extension NativeSwiftEmitter {
         let body = try initialBody(source.code, scopes: source.scopes)
         let prefix = Parser.parse(source: """
         var result: [Snapshot] = []
-        var failures: [InitialEvaluationFailure] = []
+        var failures: [SwiftTLA.InitialEvaluationFailure] = []
         var evaluatingInitializerOrdinal: \(nativeIntType)?
-        var evaluatingInitialBindings: @Sendable () throws -> TLAStateProjection = { try TLAStateProjection(validating: []) }
+        var evaluatingInitialBindings: @Sendable () throws -> SwiftTLA.TLAStateProjection = { try SwiftTLA.TLAStateProjection(validating: []) }
         """).statements
         let branch = try initialBranch(body).with(\.leadingTrivia, .newlines(1))
-        let returning = Parser.parse(source: "return InitialEvaluationOutcomes(states: result, failures: failures)")
+        let returning = Parser.parse(source: "return SwiftTLA.InitialEvaluationOutcomes(states: result, failures: failures)")
             .statements.map { $0.with(\.leadingTrivia, .newlines(1)) }
         let statements = CodeBlockItemListSyntax(Array(prefix) + [branch] + returning)
-        let initial = try FunctionDeclSyntax("private static func _initialStates(_selectedInitial: State? = nil\(raw: samplingParameter)\(raw: appendedParameters)) throws -> InitialEvaluationOutcomes<Snapshot>") {
+        let initial = try FunctionDeclSyntax("private static func _initialStates(_selectedInitial: State? = nil\(raw: samplingParameter)\(raw: appendedParameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Snapshot>") {
             statements
         }
         var declarations = [DeclSyntax(initial)]
@@ -794,9 +794,9 @@ extension NativeSwiftEmitter {
             if let failure = outcome.firstFailure { throw failure }
             return outcome.states
         }
-        public static func initialOutcomes(\(parameters)) throws -> InitialEvaluationOutcomes<Self> {
+        public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
             let outcome = try _initialStates(\(arguments))
-            return InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) },
+            return SwiftTLA.InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) },
                 failures: outcome.failures)
         }
         public static func initialMachines(\(parameters)) throws -> [Self] {
@@ -983,7 +983,7 @@ extension NativeSwiftEmitter {
                 return """
                 }, onEvaluationFailure: { failure in
                     failures.append(.init(
-                        site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                        site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
                         failure: failure, projectingBefore: evaluatingInitialBindings))
                 })
                 }
@@ -996,10 +996,10 @@ extension NativeSwiftEmitter {
         let suffix = append + "\n" + closing + """
         }, onEvaluationFailure: { failure in
             failures.append(.init(
-                site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
-        return InitialEvaluationOutcomes(states: result, failures: failures)
+        return SwiftTLA.InitialEvaluationOutcomes(states: result, failures: failures)
         }
         """
         let expected = Array(Parser.parse(source: suffix).tokens(viewMode: .sourceAccurate))
@@ -1124,7 +1124,7 @@ extension NativeSwiftEmitter {
         let hiddenFields = program.layout.variables.filter { visible[$0.id] == nil }.map {
             ", \(variable($0.id)): \(variable($0.id))"
         }.joined()
-        var body = "var result: [Snapshot] = []\nvar failures: [InitialEvaluationFailure] = []\nvar evaluatingInitializerOrdinal: \(nativeIntType)?\nvar evaluatingInitialBindings: @Sendable () throws -> TLAStateProjection = { try TLAStateProjection(validating: []) }\n"
+        var body = "var result: [Snapshot] = []\nvar failures: [SwiftTLA.InitialEvaluationFailure] = []\nvar evaluatingInitializerOrdinal: \(nativeIntType)?\nvar evaluatingInitialBindings: @Sendable () throws -> SwiftTLA.TLAStateProjection = { try SwiftTLA.TLAStateProjection(validating: []) }\n"
         body += "try SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
         var closing = ""
         for (index, pair) in zip(program.behavior.initializations, bindings).enumerated() {
@@ -1134,17 +1134,17 @@ extension NativeSwiftEmitter {
             let entries = prefix.map { prior, binding -> String in
                 let value: String
                 if binding.type == nativeIntType {
-                    value = "TLAValue.int(\(binding.name))"
+                    value = "SwiftTLA.TLAValue.int(\(binding.name))"
                 } else {
                     let cases = program.layout.controlLocations.map {
                         "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.formalName)))"
                     }.joined(separator: "\n")
-                    value = "try { () throws -> TLAValue in switch \(binding.name) {\n\(cases)\n} }()"
+                    value = "try { () throws -> SwiftTLA.TLAValue in switch \(binding.name) {\n\(cases)\n} }()"
                 }
                 return ".init(token: Self.__swifttlaFormalProjectionTokens[\(prior.variable.ordinal)], value: \(value))"
             }
             let capture = captures.isEmpty ? "" : "[" + captures.joined(separator: ", ") + "] in "
-            body += "evaluatingInitialBindings = { \(capture)try TLAStateProjection(validating: [\(entries.joined(separator: ", "))]) }\n"
+            body += "evaluatingInitialBindings = { \(capture)try SwiftTLA.TLAStateProjection(validating: [\(entries.joined(separator: ", "))]) }\n"
             body += "evaluatingInitializerOrdinal = \(initialization.variable.ordinal)\n"
             switch initialization.initialization {
             case .value:
@@ -1180,7 +1180,7 @@ extension NativeSwiftEmitter {
                 closing = """
                 }, onEvaluationFailure: { failure in
                     failures.append(.init(
-                        site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                        site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
                         failure: failure, projectingBefore: evaluatingInitialBindings))
                 })
                 }
@@ -1192,14 +1192,14 @@ extension NativeSwiftEmitter {
         body += """
         }, onEvaluationFailure: { failure in
             failures.append(.init(
-                site: evaluatingInitializerOrdinal.map(InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
-        return InitialEvaluationOutcomes(states: result, failures: failures)
+        return SwiftTLA.InitialEvaluationOutcomes(states: result, failures: failures)
         """
         guard nextPredicate == predicateNames.count else { throw intInitialOutputMismatch() }
         return """
-        private static func _initialStates(_selectedInitial: State? = nil) throws -> InitialEvaluationOutcomes<Snapshot> {
+        private static func _initialStates(_selectedInitial: State? = nil) throws -> SwiftTLA.InitialEvaluationOutcomes<Snapshot> {
             \(body)
         }
         """
@@ -1965,9 +1965,9 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
         if let failure = outcome.firstFailure { throw failure }
         return outcome.states
     }
-    public static func initialOutcomes(\(parameters)) throws -> InitialEvaluationOutcomes<Self> {
+    public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
         let outcome = try _initialStates(\(arguments))
-        return InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) },
+        return SwiftTLA.InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) },
             failures: outcome.failures)
     }
     public static func initialMachines(\(parameters)) throws -> [Self] {
@@ -2786,7 +2786,7 @@ func verifyGeneratedActionRoutingOutput(
             throw invalid("native.action.route.\(name)", "the complete bound successor route for compiled action \(route.id)")
         }
         let values = route.bindings.map { binding in
-            "TLAValue.\(binding.type == .int ? "int" : "bool")(\(binding.name))"
+            "SwiftTLA.TLAValue.\(binding.type == .int ? "int" : "bool")(\(binding.name))"
         }.joined(separator: ", ")
         let formal = "return FormalActionCall(name: \(String(reflecting: route.formalName)), arguments: [\(values)])"
         guard labeled[name]?.pattern == tokens(pattern),
