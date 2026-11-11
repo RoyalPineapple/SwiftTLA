@@ -286,12 +286,22 @@ jobs:
           assert wrong != proof and wrong.count(module) == 1
           wrong = wrong.replace(module, "MODULE SwiftTLAInitialFailureWrongLayout", 1)
           (case / "generated-tla" / "SwiftTLAInitialFailureWrongLayout.tla").write_text(wrong)
+          seeds = [line for line in proof_lines if line.startswith("ActualControlSeeds == ")]
+          assert len(seeds) == 1
+          seed_value = 'value |-> "stay"'
+          assert seeds[0].count(seed_value) == 1
+          changed = seeds[0].replace(seed_value, 'value |-> "changed-control-seed"')
+          assert changed != seeds[0]
+          wrong = proof.replace(seeds[0], changed, 1)
+          assert wrong != proof and wrong.count(module) == 1
+          wrong = wrong.replace(module, "MODULE SwiftTLAInitialFailureWrongControlSeed", 1)
+          (case / "generated-tla" / "SwiftTLAInitialFailureWrongControlSeed.tla").write_text(wrong)
           PY
       - uses: ./.github/actions/setup-pinned-tlaps
         id: proof-tool
         with:
           evidence: .build/initial-failure-artifacts/toolchain
-      - name: Prove selected record and failure set in actual generated TLA
+      - name: Prove complete initialization and actual failure observations
         run: |
           set -euo pipefail
           # Pinned TLC cannot evaluate Int.max; TLAPS proves this emitted TLA+ result.
@@ -373,6 +383,16 @@ jobs:
           fi
           grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
             .build/initial-failure-artifacts/wrong-layout.log
+          wrong_seed=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongControlSeed.tla
+          test -s "$wrong_seed"
+          ! cmp -s "$source_proof" "$wrong_seed"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_seed" \
+              > .build/initial-failure-artifacts/wrong-control-seed.log 2>&1; then
+            echo 'wrong-control-seed proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-control-seed.log
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -381,7 +401,7 @@ jobs:
           result = json.loads((root / "case" / "preparation.json").read_text())
           result.update(result="proved", proofMethod="TLAPS", wrongPayloadRejected=True,
                         wrongBeforeRejected=True, wrongEventsRejected=True, wrongLoweringRejected=True,
-                        wrongLayoutRejected=True)
+                        wrongLayoutRejected=True, wrongControlSeedRejected=True)
           (root / "proof-result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
           PY
       - name: Retain source revision

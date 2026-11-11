@@ -102,6 +102,7 @@ struct InitialFailureEvidenceTests {
         #expect(preparation["controlSeedsSHA256"] as? String == SHA256.hex(Data(seeds.utf8)))
         #expect(proofText.contains("ProofInitialization!OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures"))
         #expect(proofText.contains("ProofInitialization!DeterministicReachableInitializersConstructTheirOrderedObservations"))
+        #expect(proofText.contains("THEOREM CompleteInitializationMatchesActualOutputs =="))
     }
 
     @Test("Invalid source provenance is refused before output")

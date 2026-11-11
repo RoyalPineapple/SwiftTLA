@@ -334,10 +334,10 @@ package enum InitialFailureEvidence {
           /\\ ProofInitialization!IntInitializationDomains
           /\\ ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
           /\\ \\A row \\in DOMAIN ActualLayout :
-         /\\ ProofNames[ActualLayout[row].declaration] = ActualLayout[row].name
-         /\\ ProofOrdinals[ActualLayout[row].declaration] = ActualLayout[row].ordinal
-         /\\ \\A other \\in DOMAIN ActualLayout :
-                ActualLayout[row].ordinal = ActualLayout[other].ordinal => row = other
+                 /\\ ProofNames[ActualLayout[row].declaration] = ActualLayout[row].name
+                 /\\ ProofOrdinals[ActualLayout[row].declaration] = ActualLayout[row].ordinal
+                 /\\ \\A other \\in DOMAIN ActualLayout :
+                        ActualLayout[row].ordinal = ActualLayout[other].ordinal => row = other
           BY ProofIntegerBounds, ProofInitialSentinels, SMT
             DEF ActualLayout, ActualInitializationOrder, ProofCount, ProofOrder, ProofOrdinalKey,
               ProofAllKeys, ProofLayoutIndex, ProofNames, ProofOrdinals, ProofIntSlots, ProofIntKeys,
@@ -404,47 +404,47 @@ package enum InitialFailureEvidence {
 
         THEOREM ActualPrefixRecordsInvokeInitializationDecoder ==
           /\\ \\A position \\in 1..ProofCount : \\A prior \\in [ProofPrefixKeys(position) -> ProofValues] :
-        /\\ ProofInitialization!RenderedInitialPrefixOrder(position - 1, ProofPrefixOrder(position), prior)
-        /\\ ProofInitialization!DecodedRenderedPrefixEntries(
-               ProofInitialization!RenderedInitialPrefixEntries(
-                 position - 1, ProofPrefixOrder(position), ProofNames, prior), ProofNames) = prior
-        /\\ \\A target \\in ProofAllKeys :
-               ProofInitialization!DecodedRenderedInitializerSite(ProofOrdinals[target], ProofOrdinals) = target
+                /\\ ProofInitialization!RenderedInitialPrefixOrder(position - 1, ProofPrefixOrder(position), prior)
+                /\\ ProofInitialization!DecodedRenderedPrefixEntries(
+                       ProofInitialization!RenderedInitialPrefixEntries(
+                         position - 1, ProofPrefixOrder(position), ProofNames, prior), ProofNames) = prior
+                /\\ \\A target \\in ProofAllKeys :
+                       ProofInitialization!DecodedRenderedInitializerSite(ProofOrdinals[target], ProofOrdinals) = target
           /\\ \\A row \\in DOMAIN SourceInitializers : \\E position \\in 1..ProofCount :
-        /\\ ProofOrder[position] = SourceInitializers[row][1]
-        /\\ ProofPrefixIntNames(position) = ProofBoundKeys(row)
-        /\\ \\A state \\in [ProofPrefixIntNames(position) -> ProofIntMin..ProofIntMax] :
-               \\E source, generated :
-                 /\\ SourcePlanHistory(SourceInitializers[row][2], state, source)
-                 /\\ LoweredPlanHistory(LoweredInitializers[row][2], state, generated)
-                 /\\ \\A index \\in 0..SourceInitializers[row][2].count :
-                        ProofInitialization!Expressions!OutcomeAgrees(source, generated, index)
+                /\\ ProofOrder[position] = SourceInitializers[row][1]
+                /\\ ProofPrefixIntNames(position) = ProofBoundKeys(row)
+                /\\ \\A state \\in [ProofPrefixIntNames(position) -> ProofIntMin..ProofIntMax] :
+                       \\E source, generated :
+                         /\\ SourcePlanHistory(SourceInitializers[row][2], state, source)
+                         /\\ LoweredPlanHistory(LoweredInitializers[row][2], state, generated)
+                         /\\ \\A index \\in 0..SourceInitializers[row][2].count :
+                                ProofInitialization!Expressions!OutcomeAgrees(source, generated, index)
           PROOF
           <1>1. ProofInitialization!RenderedInitialRecordLayout(ProofNames, ProofOrdinals)
             BY ActualLayoutSuppliesInitializationDecoderInputs, SMT
           <1>2. \\A position \\in 1..ProofCount :
-          /\\ ProofPrefixKeys(position) \\subseteq ProofAllKeys /\\ position - 1 \\in Nat
-          /\\ ProofPrefixOrder(position) \\in [1..(position - 1) -> ProofPrefixKeys(position)]
-          /\\ {ProofPrefixOrder(position)[index] : index \\in 1..(position - 1)} = ProofPrefixKeys(position)
-          /\\ \\A prefixLeftIndex, prefixRightIndex \\in 1..(position - 1) :
-                 ProofPrefixOrder(position)[prefixLeftIndex] = ProofPrefixOrder(position)[prefixRightIndex]
-                   => prefixLeftIndex = prefixRightIndex
+                  /\\ ProofPrefixKeys(position) \\subseteq ProofAllKeys /\\ position - 1 \\in Nat
+                  /\\ ProofPrefixOrder(position) \\in [1..(position - 1) -> ProofPrefixKeys(position)]
+                  /\\ {ProofPrefixOrder(position)[index] : index \\in 1..(position - 1)} = ProofPrefixKeys(position)
+                  /\\ \\A prefixLeftIndex, prefixRightIndex \\in 1..(position - 1) :
+                         ProofPrefixOrder(position)[prefixLeftIndex] = ProofPrefixOrder(position)[prefixRightIndex]
+                           => prefixLeftIndex = prefixRightIndex
             BY SMT DEF ActualInitializationOrder, ActualPrefixOrders, ActualLayout, ProofCount, ProofOrder,
               ProofOrdinalKey, ProofPrefixOrder, ProofPrefixKeys, ProofAllKeys
           <1>3. \\A position \\in 1..ProofCount : \\A prior \\in [ProofPrefixKeys(position) -> ProofValues] :
-          /\\ prior \\in ProofInitialization!PartialBindings
-          /\\ ProofInitialization!RenderedInitialPrefixOrder(position - 1, ProofPrefixOrder(position), prior)
+                  /\\ prior \\in ProofInitialization!PartialBindings
+                  /\\ ProofInitialization!RenderedInitialPrefixOrder(position - 1, ProofPrefixOrder(position), prior)
             BY <1>2, SMT DEF ProofInitialization!PartialBindings, ProofInitialization!RenderedInitialPrefixOrder
           <1>4. \\A position \\in 1..ProofCount : \\A prior \\in [ProofPrefixKeys(position) -> ProofValues] :
-          /\\ ProofInitialization!DecodedRenderedPrefixEntries(
-                 ProofInitialization!RenderedInitialPrefixEntries(
-                   position - 1, ProofPrefixOrder(position), ProofNames, prior), ProofNames) = prior
-          /\\ \\A target \\in ProofAllKeys :
-                 ProofInitialization!DecodedRenderedInitializerSite(ProofOrdinals[target], ProofOrdinals) = target
+                  /\\ ProofInitialization!DecodedRenderedPrefixEntries(
+                         ProofInitialization!RenderedInitialPrefixEntries(
+                           position - 1, ProofPrefixOrder(position), ProofNames, prior), ProofNames) = prior
+                  /\\ \\A target \\in ProofAllKeys :
+                         ProofInitialization!DecodedRenderedInitializerSite(ProofOrdinals[target], ProofOrdinals) = target
             BY <1>1, <1>3, ProofInitialization!RenderedInitialPrefixAndSiteDecodingRetainsEveryIdentity, SMT
           <1>5. \\A row \\in DOMAIN SourceInitializers : \\E position \\in 1..ProofCount :
-          /\\ ProofOrder[position] = SourceInitializers[row][1]
-          /\\ ProofPrefixIntNames(position) = ProofBoundKeys(row)
+                  /\\ ProofOrder[position] = SourceInitializers[row][1]
+                  /\\ ProofPrefixIntNames(position) = ProofBoundKeys(row)
             BY SMT DEF ActualLayout, ActualInitializationOrder, ProofCount, ProofOrder, ProofOrdinalKey,
               SourceInitializers, ProofPrefixIntNames, ProofPrefixKeys, ProofIntSlots, ProofBoundKeys
           <1>. QED BY <1>3, <1>4, <1>5, InitializerPlansInvokeCheckedExpressionParent, SMT
@@ -473,42 +473,42 @@ package enum InitialFailureEvidence {
         THEOREM ActualInitializerExpressionsSupplyTheirParents ==
           \\A position \\in ProofIntPositions : \\A prior \\in ProofInitialization!PartialBindings :
             /\\ ProofInitialization!Expressions!PartialExpressionPlan(ProofPlans[position].count,
-           ProofPlans[position].kinds, ProofPlans[position].literals, ProofPlans[position].reads,
-           ProofPlans[position].left, ProofPlans[position].right,
-           ProofPrefixIntNames(position), ProofReadState(position, prior))
+                   ProofPlans[position].kinds, ProofPlans[position].literals, ProofPlans[position].reads,
+                   ProofPlans[position].left, ProofPlans[position].right,
+                   ProofPrefixIntNames(position), ProofReadState(position, prior))
             /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofSourceExpressions[position][prior])
             /\\ LoweredPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
             /\\ \\A index \\in 0..ProofPlans[position].count :
-           /\\ ProofInitialization!Expressions!OutcomeAgrees(ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior], index)
-           /\\ ProofSourceExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
-           /\\ ProofGeneratedExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
+                   /\\ ProofInitialization!Expressions!OutcomeAgrees(ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior], index)
+                   /\\ ProofSourceExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
+                   /\\ ProofGeneratedExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
           PROOF
           <1>. SUFFICES ASSUME NEW position \\in ProofIntPositions, NEW prior \\in ProofInitialization!PartialBindings
-               PROVE /\\ ProofInitialization!Expressions!PartialExpressionPlan(ProofPlans[position].count,
-                            ProofPlans[position].kinds, ProofPlans[position].literals, ProofPlans[position].reads,
-                            ProofPlans[position].left, ProofPlans[position].right,
-                            ProofPrefixIntNames(position), ProofReadState(position, prior))
-                     /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofSourceExpressions[position][prior])
-                     /\\ LoweredPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
-                     /\\ \\A index \\in 0..ProofPlans[position].count :
-                            /\\ ProofInitialization!Expressions!OutcomeAgrees(ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior], index)
-                            /\\ ProofSourceExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
-                            /\\ ProofGeneratedExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
+                       PROVE /\\ ProofInitialization!Expressions!PartialExpressionPlan(ProofPlans[position].count,
+                                    ProofPlans[position].kinds, ProofPlans[position].literals, ProofPlans[position].reads,
+                                    ProofPlans[position].left, ProofPlans[position].right,
+                                    ProofPrefixIntNames(position), ProofReadState(position, prior))
+                             /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofSourceExpressions[position][prior])
+                             /\\ LoweredPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
+                             /\\ \\A index \\in 0..ProofPlans[position].count :
+                                    /\\ ProofInitialization!Expressions!OutcomeAgrees(ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior], index)
+                                    /\\ ProofSourceExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
+                                    /\\ ProofGeneratedExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
             BY SMT
           <1>0. /\\ ProofSourceRow(position) \\in DOMAIN SourceInitializers
-        /\\ ProofPlans[position] = SourceInitializers[ProofSourceRow(position)][2]
-        /\\ ProofPrefixIntNames(position) = ProofBoundKeys(ProofSourceRow(position))
+                /\\ ProofPlans[position] = SourceInitializers[ProofSourceRow(position)][2]
+                /\\ ProofPrefixIntNames(position) = ProofBoundKeys(ProofSourceRow(position))
             BY SMT DEF ProofSourceRow, ProofPlans, ProofIntPositions, ProofOrder, ProofCount,
               ProofOrdinalKey, ActualInitializationOrder, ActualLayout, SourceInitializers,
               ProofPrefixIntNames, ProofPrefixKeys, ProofIntSlots, ProofBoundKeys
           <1>1. ProofReadState(position, prior) \\in [ProofBoundKeys(ProofSourceRow(position)) -> ProofIntMin..ProofIntMax]
             BY <1>0, ProofIntegerBounds, SMT DEF ProofReadState
           <1>2. \\E source, generated :
-          /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), source)
-          /\\ LoweredPlanHistory(ProofLoweredPlans[position], ProofReadState(position, prior), generated)
+                  /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), source)
+                  /\\ LoweredPlanHistory(ProofLoweredPlans[position], ProofReadState(position, prior), generated)
             BY <1>0, <1>1, InitializerPlansInvokeCheckedExpressionParent, SMT DEF ProofLoweredPlans
           <1>3. /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofSourceExpressions[position][prior])
-        /\\ LoweredPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
+                /\\ LoweredPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
             BY <1>2, SourceInitializersMatchLoweredIR, SMT
               DEF ProofSourceExpressions, ProofGeneratedExpressions, ProofLoweredPlans, ProofPlans
           <1>4. ProofInitialization!Expressions!PartialExpressionPlan(ProofPlans[position].count,
@@ -517,12 +517,12 @@ package enum InitialFailureEvidence {
               ProofPrefixIntNames(position), ProofReadState(position, prior))
             BY <1>0, <1>1, ActualLayoutSuppliesInitializationDecoderInputs, ProofIntegerBounds, SMT
               DEF ProofPlans, ProofSourceRow, SourceInitializers, ProofBoundKeys, ProofIntKeys,
-        ProofInitialization!Expressions!PartialExpressionPlan, ProofInitialization!Expressions!ExpressionPlan,
-        ProofInitialization!Expressions!ExpressionReadKeys, ProofInitialization!Expressions!CompleteIntBindings
+                ProofInitialization!Expressions!PartialExpressionPlan, ProofInitialization!Expressions!ExpressionPlan,
+                ProofInitialization!Expressions!ExpressionReadKeys, ProofInitialization!Expressions!CompleteIntBindings
           <1>5. \\A index \\in 0..ProofPlans[position].count :
-          /\\ ProofInitialization!Expressions!OutcomeAgrees(ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior], index)
-          /\\ ProofSourceExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
-          /\\ ProofGeneratedExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
+                  /\\ ProofInitialization!Expressions!OutcomeAgrees(ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior], index)
+                  /\\ ProofSourceExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
+                  /\\ ProofGeneratedExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
             BY <1>3, <1>4, ProofInitialization!Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
               DEF SourcePlanHistory, LoweredPlanHistory
           <1>. QED BY <1>3, <1>4, <1>5, SMT
@@ -532,38 +532,38 @@ package enum InitialFailureEvidence {
           /\\ ProofInitialization!InitializerEvaluators(ProofCount, ProofEvaluate(TRUE))
           /\\ ProofEvaluate(FALSE) = ProofEvaluate(TRUE)
           /\\ \\A position \\in ProofIntPositions : \\A prior \\in ProofInitialization!PartialBindings :
-         ProofEvaluate(FALSE)[position][prior].candidates \\subseteq ProofIntMin..ProofIntMax
+                 ProofEvaluate(FALSE)[position][prior].candidates \\subseteq ProofIntMin..ProofIntMax
           /\\ \\A position \\in 1..ProofCount : \\A prior \\in ProofInitialization!PartialBindings :
-         ProofEvaluate(FALSE)[position][prior].firstFailure = ProofNoFailure
-           => \\E value \\in ProofValues : ProofEvaluate(FALSE)[position][prior].candidates = {value}
+                 ProofEvaluate(FALSE)[position][prior].firstFailure = ProofNoFailure
+                   => \\E value \\in ProofValues : ProofEvaluate(FALSE)[position][prior].candidates = {value}
           PROOF
           <1>0. /\\ ProofCount \\in Nat /\\ ProofIntPositions \\subseteq 1..ProofCount
-        /\\ \\A position \\in (1..ProofCount) \\ ProofIntPositions : ProofControlSeed(position) \\in ProofValues
-        /\\ \\A position \\in ProofIntPositions : ProofPlans[position].count \\in Nat
+                /\\ \\A position \\in (1..ProofCount) \\ ProofIntPositions : ProofControlSeed(position) \\in ProofValues
+                /\\ \\A position \\in ProofIntPositions : ProofPlans[position].count \\in Nat
             BY SMT DEF ProofCount, ActualInitializationOrder, ProofIntPositions, ProofControlSeed,
               ActualControlSeeds, ActualLayout, ProofOrdinalKey, ProofOrder, ProofIntSlots, ProofValues,
               ProofPlans, ProofSourceRow, SourceInitializers
           <1>1. \\A position \\in ProofIntPositions : \\A prior \\in ProofInitialization!PartialBindings :
-          /\\ ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
-               = ProofInitialization!GeneratedIntInitializerOutcome(ProofGeneratedExpressions[position][prior][ProofPlans[position].count])
-          /\\ ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
-               \\in ProofInitialization!InitializerOutcomes
+                  /\\ ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
+                       = ProofInitialization!GeneratedIntInitializerOutcome(ProofGeneratedExpressions[position][prior][ProofPlans[position].count])
+                  /\\ ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
+                       \\in ProofInitialization!InitializerOutcomes
             BY <1>0, ActualInitializerExpressionsSupplyTheirParents, ActualLayoutSuppliesInitializationDecoderInputs,
               ProofInitialization!IntExpressionOutcomesSupplyInitializerOutcomes, SMT
               DEF ProofInitialization!Expressions!OutcomeAgrees
           <1>2. \\A position \\in (1..ProofCount) \\ ProofIntPositions :
-          /\\ ProofInitialization!SourceFixed(ProofControlSeed(position)) = ProofInitialization!GeneratedFixed(ProofControlSeed(position))
-          /\\ ProofInitialization!SourceFixed(ProofControlSeed(position)) \\in ProofInitialization!InitializerOutcomes
+                  /\\ ProofInitialization!SourceFixed(ProofControlSeed(position)) = ProofInitialization!GeneratedFixed(ProofControlSeed(position))
+                  /\\ ProofInitialization!SourceFixed(ProofControlSeed(position)) \\in ProofInitialization!InitializerOutcomes
             BY <1>0, ProofInitialization!FixedInitializerRetainsItsOnlyCandidate, SMT
           <1>3. \\A position \\in ProofIntPositions : \\A prior \\in ProofInitialization!PartialBindings :
-          /\\ ProofEvaluate(FALSE)[position][prior].candidates \\subseteq ProofIntMin..ProofIntMax
-          /\\ (ProofEvaluate(FALSE)[position][prior].firstFailure = ProofNoFailure
-               => \\E value \\in ProofValues : ProofEvaluate(FALSE)[position][prior].candidates = {value})
+                  /\\ ProofEvaluate(FALSE)[position][prior].candidates \\subseteq ProofIntMin..ProofIntMax
+                  /\\ (ProofEvaluate(FALSE)[position][prior].firstFailure = ProofNoFailure
+                       => \\E value \\in ProofValues : ProofEvaluate(FALSE)[position][prior].candidates = {value})
             BY <1>0, <1>1, ActualInitializerExpressionsSupplyTheirParents, ProofInitialSentinels,
               ActualLayoutSuppliesInitializationDecoderInputs, SMT
               DEF ProofEvaluate, ProofInitialization!SourceIntInitializerOutcome, ProofInitialization!SourceFixed,
-        ProofInitialization!SourceFailed, ProofInitialization!Expressions!ExpressionOutcomes, ProofValues,
-        ProofInitialization!IntInitializationDomains
+                ProofInitialization!SourceFailed, ProofInitialization!Expressions!ExpressionOutcomes, ProofValues,
+                ProofInitialization!IntInitializationDomains
           <1>. QED BY <1>0, <1>1, <1>2, <1>3, SMT
             DEF ProofEvaluate, ProofInitialization!InitializerEvaluators, ProofInitialization!SourceFixed
 
@@ -580,87 +580,87 @@ package enum InitialFailureEvidence {
             /\\ observations[ProofCount].stateCount <= 1 /\\ observations[ProofCount].failureCount <= 1
             /\\ source[ProofCount].failures = ProofInitialization!SourceFailureConstraintPrefix(ProofOrder, ProofCount, ProofEvaluate(FALSE))
             /\\ \\A position \\in ProofIntPositions : \\A prior \\in source[position - 1].states :
-           ProofReadState(position, prior) = ProofInitialization!PartialIntProjection(prior)
+                   ProofReadState(position, prior) = ProofInitialization!PartialIntProjection(prior)
           PROOF
           <1>0. /\\ ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
-        /\\ ProofInitialization!IntInitializationDomains
+                /\\ ProofInitialization!IntInitializationDomains
             BY ActualLayoutSuppliesInitializationDecoderInputs, SMT
           <1>1. PICK source : ProofInitialization!InitializationHistory(FALSE, ProofCount, ProofOrder, ProofEvaluate(FALSE), source)
             BY <1>0, ActualInitializerEvaluatorsAreTypedAndAgree, ProofInitialization!InitializationHistoriesExist, SMT
           <1>2. PICK generated : ProofInitialization!InitializationHistory(TRUE, ProofCount, ProofOrder, ProofEvaluate(TRUE), generated)
             BY <1>0, ActualInitializerEvaluatorsAreTypedAndAgree, ProofInitialization!InitializationHistoriesExist, SMT
           <1>3. \\A length \\in 0..ProofCount : \\A prior \\in source[length].states :
-          ProofInitialization!PartialIntProjection(prior)
-            \\in [(DOMAIN prior) \\cap ProofIntSlots -> ProofIntMin..ProofIntMax]
+                  ProofInitialization!PartialIntProjection(prior)
+                    \\in [(DOMAIN prior) \\cap ProofIntSlots -> ProofIntMin..ProofIntMax]
             <2>. SUFFICES ASSUME NEW length \\in 0..ProofCount, NEW prior \\in source[length].states
-                 PROVE ProofInitialization!PartialIntProjection(prior)
-                   \\in [(DOMAIN prior) \\cap ProofIntSlots -> ProofIntMin..ProofIntMax]
+                         PROVE ProofInitialization!PartialIntProjection(prior)
+                           \\in [(DOMAIN prior) \\cap ProofIntSlots -> ProofIntMin..ProofIntMax]
               BY SMT
             <2>0. /\\ DOMAIN prior = ProofInitialization!PrefixKeys(ProofOrder, length)
-          /\\ prior \\in [DOMAIN prior -> ProofValues]
-          /\\ prior \\in ProofInitialization!SourceConstraintPrefix(ProofOrder, length, ProofEvaluate(FALSE))
+                  /\\ prior \\in [DOMAIN prior -> ProofValues]
+                  /\\ prior \\in ProofInitialization!SourceConstraintPrefix(ProofOrder, length, ProofEvaluate(FALSE))
               BY <1>0, <1>1, ActualInitializerEvaluatorsAreTypedAndAgree,
-        ProofInitialization!SourceHistoriesBindEveryPrefixKey,
-        ProofInitialization!SourceHistoriesMatchEveryInitializerPrefix, SMT
-        DEF ProofInitialization!InitializationOrder
+                ProofInitialization!SourceHistoriesBindEveryPrefixKey,
+                ProofInitialization!SourceHistoriesMatchEveryInitializerPrefix, SMT
+                DEF ProofInitialization!InitializationOrder
             <2>1. \\A key \\in (DOMAIN prior) \\cap ProofIntSlots : prior[key] \\in ProofIntMin..ProofIntMax
               <3>. SUFFICES ASSUME NEW key \\in (DOMAIN prior) \\cap ProofIntSlots
-                   PROVE prior[key] \\in ProofIntMin..ProofIntMax
-        BY SMT
+                           PROVE prior[key] \\in ProofIntMin..ProofIntMax
+                BY SMT
               <3>1. PICK position \\in 1..length : ProofOrder[position] = key
-        BY <2>0, SMT DEF ProofInitialization!PrefixKeys
+                BY <2>0, SMT DEF ProofInitialization!PrefixKeys
               <3>2. /\\ position \\in ProofIntPositions
-            /\\ ProofInitialization!PrefixKeys(ProofOrder, position - 1) \\subseteq DOMAIN prior
-        BY <1>0, <2>0, <3>1, ProofInitialization!PrefixKeySetsAreContained, SMT
-          DEF ProofIntPositions, ProofInitialization!InitializationOrder
+                    /\\ ProofInitialization!PrefixKeys(ProofOrder, position - 1) \\subseteq DOMAIN prior
+                BY <1>0, <2>0, <3>1, ProofInitialization!PrefixKeySetsAreContained, SMT
+                  DEF ProofIntPositions, ProofInitialization!InitializationOrder
               <3>3. ProofInitialization!SourceRestriction(prior, ProofInitialization!PrefixKeys(ProofOrder, position - 1))
-          \\in ProofInitialization!PartialBindings
-        BY <2>0, <3>2, ProofInitialization!SourceRestrictionIsTyped, SMT
-          DEF ProofInitialization!PartialBindings, ProofInitialization!InitializationOrder
+                  \\in ProofInitialization!PartialBindings
+                BY <2>0, <3>2, ProofInitialization!SourceRestrictionIsTyped, SMT
+                  DEF ProofInitialization!PartialBindings, ProofInitialization!InitializationOrder
               <3>4. prior[key] \\in ProofEvaluate(FALSE)[position][ProofInitialization!SourceRestriction(
-          prior, ProofInitialization!PrefixKeys(ProofOrder, position - 1))].candidates
-        BY <2>0, <3>1, SMT DEF ProofInitialization!SourceConstraintPrefix
+                  prior, ProofInitialization!PrefixKeys(ProofOrder, position - 1))].candidates
+                BY <2>0, <3>1, SMT DEF ProofInitialization!SourceConstraintPrefix
               <3>. QED BY <3>2, <3>3, <3>4, ActualInitializerEvaluatorsAreTypedAndAgree, SMT
             <2>. QED BY <2>1, SMT DEF ProofInitialization!PartialIntProjection
           <1>4. \\A position \\in ProofIntPositions : \\A prior \\in source[position - 1].states :
-          /\\ ProofReadState(position, prior) = ProofInitialization!PartialIntProjection(prior)
-          /\\ ProofPrefixIntNames(position) = (DOMAIN prior) \\cap ProofIntSlots
+                  /\\ ProofReadState(position, prior) = ProofInitialization!PartialIntProjection(prior)
+                  /\\ ProofPrefixIntNames(position) = (DOMAIN prior) \\cap ProofIntSlots
             BY <1>0, <1>1, <1>3, ActualInitializerEvaluatorsAreTypedAndAgree,
               ProofInitialization!SourceHistoriesBindEveryPrefixKey, SMT
               DEF ProofReadState, ProofPrefixIntNames, ProofPrefixKeys, ProofIntPositions,
-        ProofInitialization!PartialIntProjection, ProofInitialization!PrefixKeys, ProofInitialization!InitializationOrder
+                ProofInitialization!PartialIntProjection, ProofInitialization!PrefixKeys, ProofInitialization!InitializationOrder
           <1>5. \\A position \\in 1..ProofCount : \\A prior \\in source[position - 1].states :
-          IF position \\in ProofIntPositions
-          THEN /\\ ProofOrder[position] \\in ProofIntSlots
-               /\\ ProofInitialization!IntInitializerChildren(ProofPlans[position], prior,
-                      ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior])
-               /\\ ProofEvaluate(FALSE)[position][prior] = ProofInitialization!SourceIntInitializerOutcome(
-                      ProofSourceExpressions[position][prior][ProofPlans[position].count])
-               /\\ ProofEvaluate(TRUE)[position][prior] = ProofInitialization!GeneratedIntInitializerOutcome(
-                      ProofGeneratedExpressions[position][prior][ProofPlans[position].count])
-          ELSE ProofEvaluate(FALSE)[position][prior] = ProofEvaluate(TRUE)[position][prior]
+                  IF position \\in ProofIntPositions
+                  THEN /\\ ProofOrder[position] \\in ProofIntSlots
+                       /\\ ProofInitialization!IntInitializerChildren(ProofPlans[position], prior,
+                              ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior])
+                       /\\ ProofEvaluate(FALSE)[position][prior] = ProofInitialization!SourceIntInitializerOutcome(
+                              ProofSourceExpressions[position][prior][ProofPlans[position].count])
+                       /\\ ProofEvaluate(TRUE)[position][prior] = ProofInitialization!GeneratedIntInitializerOutcome(
+                              ProofGeneratedExpressions[position][prior][ProofPlans[position].count])
+                  ELSE ProofEvaluate(FALSE)[position][prior] = ProofEvaluate(TRUE)[position][prior]
             BY <1>0, <1>1, <1>4, ActualInitializerExpressionsSupplyTheirParents, ActualInitializerEvaluatorsAreTypedAndAgree, SMT
               DEF ProofIntPositions, ProofEvaluate, ProofInitialization!IntInitializerChildren,
-        SourcePlanHistory, LoweredPlanHistory, ProofInitialization!InitializationHistory,
-        ProofInitialization!InitializationResults
+                SourcePlanHistory, LoweredPlanHistory, ProofInitialization!InitializationHistory,
+                ProofInitialization!InitializationResults
           <1>6. \\A index \\in 0..ProofCount : source[index] = generated[index]
             BY <1>0, <1>1, <1>2, <1>5, ActualInitializerEvaluatorsAreTypedAndAgree,
               ProofInitialization!OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures, SMT
           <1>7. PICK observations :
-          /\\ ProofInitialization!SingleBranchInitialObservationHistory(ProofCount, ProofOrder, ProofEvaluate(FALSE), observations)
-          /\\ \\A index \\in 0..ProofCount : ProofInitialization!InitialSetProjection(observations[index]) = source[index]
+                  /\\ ProofInitialization!SingleBranchInitialObservationHistory(ProofCount, ProofOrder, ProofEvaluate(FALSE), observations)
+                  /\\ \\A index \\in 0..ProofCount : ProofInitialization!InitialSetProjection(observations[index]) = source[index]
             BY <1>0, <1>1, ActualInitializerEvaluatorsAreTypedAndAgree,
               ProofInitialization!DeterministicReachableInitializersConstructTheirOrderedObservations, SMT
               DEF ProofInitialization!InitializationHistory, ProofInitialization!InitializationResults
           <1>8. /\\ ProofInitialization!SingleBranchInitialObservationHistory(ProofCount, ProofOrder, ProofEvaluate(TRUE), observations)
-        /\\ ProofInitialization!InitialObservationIsTyped(observations[ProofCount])
-        /\\ observations[ProofCount].stateCount + observations[ProofCount].failureCount = 1
-        /\\ observations[ProofCount].stateCount <= 1 /\\ observations[ProofCount].failureCount <= 1
+                /\\ ProofInitialization!InitialObservationIsTyped(observations[ProofCount])
+                /\\ observations[ProofCount].stateCount + observations[ProofCount].failureCount = 1
+                /\\ observations[ProofCount].stateCount <= 1 /\\ observations[ProofCount].failureCount <= 1
             BY <1>0, <1>7, ActualInitializerEvaluatorsAreTypedAndAgree,
               ProofInitialization!SingleBranchInitializationDerivesItsObservationBounds, SMT
               DEF ProofInitialization!InitializationOrder
           <1>9. source[ProofCount].failures
-          = ProofInitialization!SourceFailureConstraintPrefix(ProofOrder, ProofCount, ProofEvaluate(FALSE))
+                  = ProofInitialization!SourceFailureConstraintPrefix(ProofOrder, ProofCount, ProofEvaluate(FALSE))
             BY <1>0, <1>1, ActualInitializerEvaluatorsAreTypedAndAgree,
               ProofInitialization!SourceHistoriesMatchEveryInitialFailurePrefix, SMT
               DEF ProofInitialization!InitializationOrder
@@ -687,6 +687,168 @@ package enum InitialFailureEvidence {
           /\\ \(aggregate[0])
           /\\ ~Init
           BY SMT DEF \(aggregate[0]), Init, \(failureDefs)
+        ProofObservedBefore == ProofInitialization!DecodedRenderedPrefixEntries(ExpectedBefore, ProofNames)
+        ProofObservedPrior(position) == ProofInitialization!SourceRestriction(ProofObservedBefore, ProofPrefixKeys(position))
+        ProofObservedFailures == ProofInitialization!DecodedNamedRenderedAdditionEvents(ExpectedFailures, ProofNames, ProofOrdinals)
+        ProofObservedResult == [states |-> {}, failures |-> ProofObservedFailures]
+        ProofObservedHistory == [length \\in 0..ProofCount |->
+          IF length = ProofCount THEN ProofObservedResult
+          ELSE [states |-> {ProofObservedPrior(length + 1)}, failures |-> {}]]
+
+        THEOREM ActualNativePrefixSuppliesTheSourceInitializerOutcomes ==
+          /\\ \\A position \\in 1..ProofCount :
+                 /\\ ProofObservedPrior(position) \\in ProofInitialization!PartialBindings
+                 /\\ DOMAIN ProofObservedPrior(position) = ProofPrefixKeys(position)
+                 /\\ ProofEvaluate(FALSE)[position][ProofObservedPrior(position)] =
+                      IF position = ProofCount
+                      THEN ProofInitialization!SourceFailed(<<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>>)
+                      ELSE ProofInitialization!SourceFixed(ProofObservedBefore[ProofOrder[position]])
+          /\\ ProofObservedBefore = ProofObservedPrior(ProofCount)
+          /\\ ProofObservedFailures = {[before |-> ProofObservedBefore, site |-> ProofOrder[ProofCount],
+                                      payload |-> <<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>>]}
+          PROOF
+          <1>0. /\\ ProofCount = 4 /\\ ProofIntPositions = {2, 3, 4}
+                /\\ ProofOrder = <<"pc", "first", "second", "last">>
+                /\\ ExpectedFailure.site = ProofOrdinals[ProofOrder[ProofCount]]
+            BY SMT DEF ProofCount, ActualInitializationOrder, ProofOrder, ProofOrdinalKey,
+              ProofIntPositions, ProofIntSlots, ActualLayout, ExpectedFailure, ProofOrdinals, ProofLayoutIndex
+          <1>1. /\\ DOMAIN ProofObservedBefore = {"pc", "first", "second"}
+                /\\ ProofObservedBefore["pc"] = "stay" /\\ ProofObservedBefore["first"] = 1
+                /\\ ProofObservedBefore["second"] = 3
+                /\\ ExpectedOperand0 = 3 /\\ ExpectedOperand1 = ProofIntMax
+            BY SMT DEF ProofObservedBefore, ExpectedBefore, ExpectedOperand0, ExpectedOperand1,
+              ProofIntMax, ProofNames, ProofAllKeys, ProofLayoutIndex, ActualLayout,
+              ProofInitialization!DecodedRenderedPrefixEntries
+          <1>2. \\A position \\in 1..ProofCount :
+                  /\\ ProofObservedPrior(position) \\in ProofInitialization!PartialBindings
+                  /\\ DOMAIN ProofObservedPrior(position) = ProofPrefixKeys(position)
+            BY <1>0, <1>1, ProofIntegerBounds, SMT
+              DEF ProofObservedPrior, ProofPrefixKeys, ProofValues, ProofInitialization!PartialBindings,
+                ProofInitialization!SourceRestriction
+          <1>3. \\A position \\in ProofIntPositions :
+                  SourcePlanHistory(ProofPlans[position], ProofReadState(position, ProofObservedPrior(position)),
+                      ProofSourceExpressions[position][ProofObservedPrior(position)])
+            BY <1>2, ActualInitializerExpressionsSupplyTheirParents, SMT
+              DEF ProofIntPositions
+          <1>4. ProofEvaluate(FALSE)[1][ProofObservedPrior(1)]
+              = ProofInitialization!SourceFixed(ProofObservedBefore[ProofOrder[1]])
+            BY <1>0, <1>1, <1>2, SMT
+              DEF ProofEvaluate, ProofControlSeed, ActualControlSeeds, ActualInitializationOrder
+          <1>5. \\A position \\in {2, 3} :
+              ProofEvaluate(FALSE)[position][ProofObservedPrior(position)]
+                = ProofInitialization!SourceFixed(ProofObservedBefore[ProofOrder[position]])
+            BY <1>0, <1>1, <1>2, <1>3, ProofIntegerBounds, SMT
+              DEF ProofEvaluate, ProofPlans, ProofSourceRow, SourceInitializers,
+                ProofReadState, ProofPrefixIntNames, ProofPrefixKeys, ProofObservedPrior,
+                ProofInitialization!SourceRestriction, SourcePlanHistory,
+                ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode,
+                ProofInitialization!Expressions!SourceCombine, ProofInitialization!Expressions!SourceAdd,
+                ProofInitialization!Expressions!Success, ProofInitialization!Expressions!SourceOverflow,
+                ProofInitialization!Expressions!InRange, ProofInitialization!SourceIntInitializerOutcome
+          <1>6. ProofEvaluate(FALSE)[ProofCount][ProofObservedPrior(ProofCount)]
+              = ProofInitialization!SourceFailed(<<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>>)
+            BY <1>0, <1>1, <1>2, <1>3, ProofIntegerBounds, SMT
+              DEF ProofEvaluate, ProofPlans, ProofSourceRow, SourceInitializers,
+                ProofReadState, ProofPrefixIntNames, ProofPrefixKeys, ProofObservedPrior,
+                ProofInitialization!SourceRestriction, SourcePlanHistory,
+                ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode,
+                ProofInitialization!Expressions!SourceCombine, ProofInitialization!Expressions!SourceAdd,
+                ProofInitialization!Expressions!Success, ProofInitialization!Expressions!SourceOverflow,
+                ProofInitialization!Expressions!InRange, ProofInitialization!SourceIntInitializerOutcome
+          <1>7. /\\ ProofObservedBefore = ProofObservedPrior(ProofCount)
+                /\\ ProofObservedBefore \\in [ProofPrefixKeys(ProofCount) -> ProofValues]
+            BY <1>0, <1>1, ProofIntegerBounds, SMT
+              DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!SourceRestriction, ProofValues
+          <1>8. ProofInitialization!DecodedRenderedInitializerSite(ExpectedFailure.site, ProofOrdinals) = ProofOrder[ProofCount]
+            BY <1>0, <1>7, ActualPrefixRecordsInvokeInitializationDecoder, SMT
+              DEF ProofAllKeys, ActualLayout
+          <1>9. ProofObservedFailures = {[before |-> ProofObservedBefore, site |-> ProofOrder[ProofCount],
+                                        payload |-> <<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>>]}
+            BY <1>8, SMT DEF ProofObservedFailures, ExpectedFailures, ExpectedFailure, ProofObservedBefore,
+              ProofInitialization!DecodedNamedRenderedAdditionEvents
+          <1>. QED BY <1>0, <1>2, <1>4, <1>5, <1>6, <1>7, <1>9, SMT
+
+        THEOREM ActualNativePrefixConstructsTheGeneratedInitializationHistory ==
+          ProofInitialization!InitializationHistory(TRUE, ProofCount, ProofOrder, ProofEvaluate(TRUE), ProofObservedHistory)
+          PROOF
+          <1>0. /\\ ProofCount \\in Nat /\\ ProofCount > 0
+                /\\ ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
+                /\\ ProofInitialization!InitializerEvaluators(ProofCount, ProofEvaluate(TRUE))
+            BY ActualLayoutSuppliesInitializationDecoderInputs, ActualInitializerEvaluatorsAreTypedAndAgree, SMT
+              DEF ProofCount, ActualInitializationOrder
+          <1>1. \\A position \\in 1..(ProofCount - 1) :
+                  ProofObservedPrior(position + 1) = ProofInitialization!GeneratedExtension(
+                      ProofObservedPrior(position), ProofOrder[position], ProofObservedBefore[ProofOrder[position]])
+            BY <1>0, ActualNativePrefixSuppliesTheSourceInitializerOutcomes,
+              ProofInitialization!PrefixKeysGrowByOne, SMT
+              DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!SourceRestriction,
+                ProofInitialization!GeneratedExtension, ProofInitialization!InitializationOrder
+          <1>2. ProofObservedHistory[0] = ProofInitialization!InitialSeed
+            BY <1>0, SMT DEF ProofObservedHistory, ProofObservedPrior, ProofPrefixKeys,
+              ProofInitialization!SourceRestriction, ProofInitialization!InitialSeed
+          <1>3. \\A position \\in 1..ProofCount :
+                  ProofObservedHistory[position] = ProofInitialization!GeneratedAdvance(
+                      ProofObservedHistory[position - 1], ProofOrder[position], ProofEvaluate(TRUE)[position])
+            BY <1>0, <1>1, ActualNativePrefixSuppliesTheSourceInitializerOutcomes,
+              ActualInitializerEvaluatorsAreTypedAndAgree, ProofInitialSentinels, SMT
+              DEF ProofObservedHistory, ProofObservedResult, ProofInitialization!GeneratedAdvance,
+                ProofInitialization!GeneratedInitialStates, ProofInitialization!GeneratedInitialFailures,
+                ProofInitialization!SourceFixed, ProofInitialization!SourceFailed
+          <1>4. ProofObservedHistory \\in [0..ProofCount -> ProofInitialization!InitializationResults]
+            BY <1>0, ActualNativePrefixSuppliesTheSourceInitializerOutcomes, ProofIntegerBounds,
+              ActualLayoutSuppliesInitializationDecoderInputs, ActualInitializerEvaluatorsAreTypedAndAgree, SMT
+              DEF ProofObservedHistory, ProofObservedResult, ProofObservedFailures,
+                ProofInitialization!InitializationResults, ProofInitialization!InitialFailureEvents,
+                ProofInitialization!IntInitializationDomains, ProofInitialization!InitializerEvaluators,
+                ProofInitialization!InitializerOutcomes, ProofInitialization!SourceFailed, ProofNoFailure
+          <1>. QED BY <1>0, <1>2, <1>3, <1>4, SMT
+            DEF ProofInitialization!InitializationHistory, ProofInitialization!InitializationAdvance
+
+        THEOREM CompleteInitializationMatchesActualOutputs ==
+          \\E source, generated, observations :
+            /\\ ProofInitialization!InitializationHistory(FALSE, ProofCount, ProofOrder, ProofEvaluate(FALSE), source)
+            /\\ ProofInitialization!InitializationHistory(TRUE, ProofCount, ProofOrder, ProofEvaluate(TRUE), generated)
+            /\\ source[ProofCount] = generated[ProofCount]
+            /\\ source[ProofCount].states = {}
+            /\\ source[ProofCount].failures = ProofInitialization!DecodedNamedRenderedAdditionEvents(
+                   \(events[0]), ProofNames, ProofOrdinals)
+            /\\ ProofInitialization!SingleBranchInitialObservationHistory(ProofCount, ProofOrder, ProofEvaluate(FALSE), observations)
+            /\\ ProofInitialization!SingleBranchInitialObservationHistory(ProofCount, ProofOrder, ProofEvaluate(TRUE), observations)
+            /\\ ProofInitialization!InitialSetProjection(observations[ProofCount]) = source[ProofCount]
+            /\\ observations[ProofCount].stateCount = 0 /\\ observations[ProofCount].failureCount = 1
+            /\\ {observations[ProofCount].failureHistory[1]} = ProofObservedFailures
+            /\\ ~Init
+          PROOF
+          <1>0. ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
+            BY ActualLayoutSuppliesInitializationDecoderInputs, SMT
+          <1>1. PICK source, generated, observations :
+                  /\\ ProofInitialization!InitializationHistory(FALSE, ProofCount, ProofOrder, ProofEvaluate(FALSE), source)
+                  /\\ ProofInitialization!InitializationHistory(TRUE, ProofCount, ProofOrder, ProofEvaluate(TRUE), generated)
+                  /\\ \\A index \\in 0..ProofCount : source[index] = generated[index]
+                  /\\ ProofInitialization!SingleBranchInitialObservationHistory(ProofCount, ProofOrder, ProofEvaluate(FALSE), observations)
+                  /\\ ProofInitialization!SingleBranchInitialObservationHistory(ProofCount, ProofOrder, ProofEvaluate(TRUE), observations)
+                  /\\ ProofInitialization!InitialSetProjection(observations[ProofCount]) = source[ProofCount]
+                  /\\ ProofInitialization!InitialObservationIsTyped(observations[ProofCount])
+                  /\\ observations[ProofCount].stateCount <= 1 /\\ observations[ProofCount].failureCount <= 1
+                  /\\ observations[ProofCount].stateCount + observations[ProofCount].failureCount = 1
+            BY ActualPlansInvokeCompleteInitializationAndObservationParents, SMT
+              DEF ProofCount, ActualInitializationOrder
+          <1>2. \\A index \\in 0..ProofCount : source[index] = ProofObservedHistory[index]
+            BY <1>0, <1>1, ActualNativePrefixConstructsTheGeneratedInitializationHistory,
+              ActualInitializerEvaluatorsAreTypedAndAgree, ProofInitialization!InitializationHistoriesRetainAllStatesAndFailures, SMT
+              DEF ProofInitialization!InitializationHistory, ProofInitialization!InitializationResults
+          <1>3. /\\ source[ProofCount].states = {}
+                /\\ source[ProofCount].failures = ProofObservedFailures
+                /\\ ProofObservedFailures # {}
+            BY <1>0, <1>2, ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT
+              DEF ProofObservedHistory, ProofObservedResult, ProofInitialization!InitializationOrder
+          <1>4. /\\ observations[ProofCount].stateCount = 0 /\\ observations[ProofCount].failureCount = 1
+                /\\ {observations[ProofCount].failureHistory[1]} = ProofObservedFailures
+            BY <1>1, <1>3, SMT DEF ProofInitialization!InitialSetProjection,
+              ProofInitialization!InitialFailureSet, ProofInitialization!InitialObservationIsTyped,
+              ProofInitialization!InitialFailureHistory
+          <1>. QED BY <1>0, <1>1, <1>3, <1>4, CompleteFailureEvents, InitialFailurePrecedesGraph, SMT
+            DEF ProofObservedFailures
         ====
         """
     }
