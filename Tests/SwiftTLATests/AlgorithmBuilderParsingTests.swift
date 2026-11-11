@@ -1697,24 +1697,27 @@ import SwiftTLAMacros
             Counter
         }
         """
-        let closure = try parseSpecTestClosure(source)
-        let parsed = parseAlgorithm(
-            closure,
-            enums: [parserTestEnum(
-                "ParserNode",
-                cases: ["left": .string("left"), "right": .string("right")],
-                finiteValues: [.string("left"), .string("right")]
-            )]
-        )
-        let parserSpecification = try loweredSource(parsed, named: "Counter")
-        let parserCompilation = try parserSpecification.compile()
-        #expect(parserCompilation.description.variables.map(\.name) == ["pc", "count"])
-        #expect(parserCompilation.description.actions.map(\.name) == ["increment", "Terminating"])
-        #expect(parserCompilation.description.controlLocations.first?.owner == .process(
-            algorithm: "Counter",
-            declarationOrder: 0,
-            typeName: "ParserNode"
-        ))
+        for root in ["count", "pc"] {
+            let closure = try parseSpecTestClosure(source.replacingOccurrences(of: "_name: \"count\"",
+                    with: "_name: \"\(root)\""))
+            let parsed = parseAlgorithm(
+                closure,
+                enums: [parserTestEnum(
+                    "ParserNode",
+                    cases: ["left": .string("left"), "right": .string("right")],
+                    finiteValues: [.string("left"), .string("right")]
+                )]
+            )
+            let parserSpecification = try loweredSource(parsed, named: "Counter")
+            let parserCompilation = try parserSpecification.compile()
+            #expect(parserCompilation.description.variables.map(\.name) == [root == "pc" ? "pc_1" : "pc", root])
+            #expect(parserCompilation.description.actions.map(\.name) == ["increment", "Terminating"])
+            #expect(parserCompilation.description.controlLocations.first?.owner == .process(
+                algorithm: "Counter",
+                declarationOrder: 0,
+                typeName: "ParserNode"
+            ))
+        }
     }
 
     @Test("parsed shared initializers retain raw values and explicit formal expressions")

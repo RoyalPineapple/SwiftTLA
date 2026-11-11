@@ -13,7 +13,6 @@ struct AlternativeTraversalTests {
             NamedVar(name: "enabled", initial: .bool(false)),
             NamedVar(name: "x", initial: .int(0)),
         ]
-        let roots: Set<String> = ["enabled", "x"]
         let conditional = ActionExpr.ifElse(.variable("enabled"),
             .assign(.named("x"), .int(1)), .assign(.named("x"), .int(2)))
         let guarded = ActionExpr.and(.guard_(.variable("enabled")), .assign(.named("x"), .int(3)))
@@ -23,22 +22,22 @@ struct AlternativeTraversalTests {
         let compilation = try specification.compile()
         try StraightLineAssignmentCheck.verifyNormalization(conditional,
             normalized: ActionNormalization.complete(conditional, variables: variables),
-            stateRoots: roots, at: "actions.choose.normalization")
+            variables: variables, at: "actions.choose.normalization")
         try StraightLineAssignmentCheck.verifyNormalization(guarded,
             normalized: ActionNormalization.complete(guarded, variables: variables),
-            stateRoots: roots, at: "actions.gated.normalization")
+            variables: variables, at: "actions.gated.normalization")
 
         let reversed = ActionExpr.ifElse(.variable("enabled"),
             .assign(.named("x"), .int(2)), .assign(.named("x"), .int(1)))
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineAssignmentCheck.verifyNormalization(conditional,
                 normalized: ActionNormalization.complete(reversed, variables: variables),
-                stateRoots: roots, at: "actions.choose.normalization")
+                variables: variables, at: "actions.choose.normalization")
         }
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineAssignmentCheck.verifyNormalization(guarded,
                 normalized: ActionNormalization.complete(.assign(.named("x"), .int(3)),
-                    variables: variables), stateRoots: roots, at: "actions.gated.normalization")
+                    variables: variables), variables: variables, at: "actions.gated.normalization")
         }
 
         let inputs = try SourceTypeResolver().resolve(in: compilation)
@@ -117,7 +116,7 @@ struct AlternativeTraversalTests {
             .assign(.named("y"), .int(3)))
         let normalized = ActionNormalization.complete(source, variables: variables)
         try StraightLineAssignmentCheck.verifyNormalization(source, normalized: normalized,
-            stateRoots: ["x", "y", "z"], at: "actions.pick.normalization")
+            variables: variables, at: "actions.pick.normalization")
         _ = try TLASpec(name: "ScalarNormalization", variables: variables,
             actions: [.init(name: "pick", body: source)], invariants: []).compile()
 
@@ -125,21 +124,21 @@ struct AlternativeTraversalTests {
             .or(.assign(.named("x"), .variable("chosen")), .assign(.named("x"), .int(1))))
         try StraightLineAssignmentCheck.verifyNormalization(bound,
             normalized: ActionNormalization.complete(bound, variables: variables),
-            stateRoots: ["x", "y", "z"], at: "actions.bound.normalization")
+            variables: variables, at: "actions.bound.normalization")
 
         let dropped = ActionNormalization.complete(
             .and(.assign(.named("x"), .int(1)), .assign(.named("y"), .int(3))),
             variables: variables)
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineAssignmentCheck.verifyNormalization(source, normalized: dropped,
-                stateRoots: ["x", "y", "z"], at: "actions.pick.normalization")
+                variables: variables, at: "actions.pick.normalization")
         }
         let unframed = ActionExpr.or(
             .and(.assign(.named("x"), .int(1)), .and(.assign(.named("y"), .int(3)), .unchanged(.named("z")))),
             .and(.assign(.named("x"), .int(2)), .assign(.named("y"), .int(3))))
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineAssignmentCheck.verifyNormalization(source, normalized: unframed,
-                stateRoots: ["x", "y", "z"], at: "actions.pick.normalization")
+                variables: variables, at: "actions.pick.normalization")
         }
     }
 
@@ -152,7 +151,7 @@ struct AlternativeTraversalTests {
         let source = ActionExpr.and(.or(first, second), continuation)
         let normalized = ActionNormalization.complete(source, variables: variables)
         try StraightLineAssignmentCheck.verifyNormalization(source, normalized: normalized,
-            stateRoots: ["divisor", "x", "y"], at: "actions.pick.normalization")
+            variables: variables, at: "actions.pick.normalization")
         let specification = TLASpec(name: "FallibleBranchwiseNormalization", variables: variables,
             actions: [.init(name: "pick", body: source)], invariants: [])
         let compilation = try specification.compile()
@@ -191,7 +190,7 @@ struct AlternativeTraversalTests {
             variables: variables)
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineAssignmentCheck.verifyNormalization(source, normalized: reordered,
-                stateRoots: ["divisor", "x", "y"], at: "actions.pick.normalization")
+                variables: variables, at: "actions.pick.normalization")
         }
     }
 
@@ -205,7 +204,7 @@ struct AlternativeTraversalTests {
         let source = ActionExpr.and(choose, continuation)
         let normalized = ActionNormalization.complete(source, variables: variables)
         try StraightLineAssignmentCheck.verifyNormalization(source, normalized: normalized,
-            stateRoots: ["divisor", "x", "y"], at: "actions.pick.normalization")
+            variables: variables, at: "actions.pick.normalization")
 
         let missingElseContinuation = ActionNormalization.complete(.ifElse(condition,
             .and(.assign(.named("x"), .int(1)), continuation),
@@ -213,7 +212,7 @@ struct AlternativeTraversalTests {
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineAssignmentCheck.verifyNormalization(source,
                 normalized: missingElseContinuation,
-                stateRoots: ["divisor", "x", "y"], at: "actions.pick.normalization")
+                variables: variables, at: "actions.pick.normalization")
         }
 
         let duplicatedCondition = ActionNormalization.complete(.or(
@@ -223,7 +222,7 @@ struct AlternativeTraversalTests {
         #expect(throws: CompilationDiagnostic.self) {
             try StraightLineAssignmentCheck.verifyNormalization(source,
                 normalized: duplicatedCondition,
-                stateRoots: ["divisor", "x", "y"], at: "actions.pick.normalization")
+                variables: variables, at: "actions.pick.normalization")
         }
     }
 

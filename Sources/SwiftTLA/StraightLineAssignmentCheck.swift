@@ -311,9 +311,10 @@ enum StraightLineAssignmentCheck {
     }
 
     static func verifyNormalization(_ source: ActionExpr, normalized: ActionExpr,
-                                    stateRoots: Set<String>, at path: String) throws {
+                                    variables: [NamedVar], at path: String) throws {
         try verifyOrderedBranchNormalization(source, normalized: normalized,
-            stateRoots: stateRoots, at: path)
+            variables: variables, at: path)
+        let stateRoots = Set(variables.map(\.name))
         func value(_ expression: StateExpr, bindings: [String: Term]) -> Term? {
             switch expression {
             case .variable(let name):
@@ -412,7 +413,7 @@ enum StraightLineAssignmentCheck {
     }
 
     private static func verifyOrderedBranchNormalization(
-        _ source: ActionExpr, normalized: ActionExpr, stateRoots: Set<String>, at path: String
+        _ source: ActionExpr, normalized: ActionExpr, variables: [NamedVar], at path: String
     ) throws {
         func words(_ action: ActionExpr) -> [[BranchStep]]? {
             var pending: [BranchVisit] = [.action(action)]
@@ -468,34 +469,39 @@ enum StraightLineAssignmentCheck {
                 nextSafeAction: "Report this action-normalization failure.")
         }
         guard let actual = words(normalized), actual.count == expected.count else { throw mismatch() }
-        func root(_ target: ActionTarget) -> String {
-            switch target {
-            case .named(let name): name
-            case .programCounter: CompilerControlSymbol.programCounter.rawValue
-            case .procedureStack: CompilerControlSymbol.stack.rawValue
+        func identity(_ target: ActionTarget) -> ActionTarget {
+            guard case .named(let name) = target,
+                  let variable = variables.first(where: { $0.name == name }) else { return target }
+            return switch variable.origin {
+            case .source, .compiler: .named(variable.name)
+            case .programCounter: .programCounter
+            case .procedureStack: .procedureStack
             }
         }
+        let stateTargets = Set(variables.map { identity(.named($0.name)) })
         for (sourceBranch, normalizedBranch) in zip(expected, actual) {
             guard normalizedBranch.count >= sourceBranch.count,
                   Array(normalizedBranch.prefix(sourceBranch.count)) == sourceBranch else { throw mismatch() }
-            var defined: Set<String> = []
-            var explicitlyUnchanged: Set<String> = []
+            var defined: Set<ActionTarget> = []
+            var explicitlyUnchanged: Set<ActionTarget> = []
             for action in sourceBranch {
                 switch action {
                 case .action(.assign(let target, _)):
-                    guard stateRoots.contains(root(target)) else { return }
-                    defined.insert(root(target))
+                    let target = identity(target)
+                    guard stateTargets.contains(target) else { return }
+                    defined.insert(target)
                 case .action(.unchanged(let target)):
-                    guard stateRoots.contains(root(target)) else { return }
-                    defined.insert(root(target))
-                    explicitlyUnchanged.insert(root(target))
+                    let target = identity(target)
+                    guard stateTargets.contains(target) else { return }
+                    defined.insert(target)
+                    explicitlyUnchanged.insert(target)
                 default: break
                 }
             }
-            let missing = stateRoots.subtracting(defined)
+            let missing = stateTargets.subtracting(defined)
             let suffix = normalizedBranch.dropFirst(sourceBranch.count)
-            let frames = suffix.compactMap { action -> String? in
-                if case .action(.unchanged(let target)) = action { return root(target) }
+            let frames = suffix.compactMap { action -> ActionTarget? in
+                if case .action(.unchanged(let target)) = action { return identity(target) }
                 return nil
             }
             let disabled = sourceBranch.last == .action(.guard_(.value(.bool(false))))
@@ -528,7 +534,8 @@ enum StraightLineAssignmentCheck {
             ? .memberOf(.setLiteral(locations)) : .expression(locations[0])
         guard lowered.variables.count == shared.count + 1,
               lowered.variables[0].origin == .programCounter,
-              lowered.variables[0].name == CompilerControlSymbol.programCounter.rawValue,
+              lowered.variables[0].name == StateExpr.freshBoundName(
+                  CompilerControlSymbol.programCounter.rawValue, avoiding: Set(shared.map(\.root))),
               lowered.variables[0].initialization == initialControl,
               zip(lowered.variables.dropFirst(), shared).allSatisfy({ variable, source in
                   variable.origin == .source && variable.name == source.root &&

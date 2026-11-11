@@ -93,7 +93,7 @@ enum ActionNormalization {
     static func checkedComplete(_ action: ActionExpr, variables: [NamedVar], at path: String) throws -> ActionExpr {
         let normalized = complete(action, variables: variables)
         try StraightLineAssignmentCheck.verifyNormalization(action, normalized: normalized,
-            stateRoots: Set(variables.map(\.name)), at: path)
+            variables: variables, at: path)
         return normalized
     }
 

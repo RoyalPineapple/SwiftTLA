@@ -260,7 +260,8 @@ enum AlgorithmLowerer {
                     .caseExpr(controlCases, nil)))
             }
             variables.insert(NamedVar(
-                name: CompilerControlSymbol.programCounter.rawValue,
+                name: StateExpr.freshBoundName(CompilerControlSymbol.programCounter.rawValue,
+                    avoiding: Set(variables.map(\.name) + procedureSlots(procedures).map(\.root))),
                 initialization: initialControl,
                 origin: .programCounter
             ), at: 0)
@@ -637,7 +638,8 @@ enum AlgorithmLowerer {
         )
         let needsProgramCounter = !procedures.isEmpty || !isControlFreeLoop(steps)
         var variables = (needsProgramCounter ? [NamedVar(
-            name: CompilerControlSymbol.programCounter.rawValue,
+            name: StateExpr.freshBoundName(CompilerControlSymbol.programCounter.rawValue,
+                avoiding: Set((sharedVariables + procedureVariables).map(\.name))),
             initialization: enumerateInitialControl
                 ? .memberOf(.setLiteral(steps.map { sequentialControl.location($0.label.name) }))
                 : .expression(sequentialControl.location(first.label.name)),

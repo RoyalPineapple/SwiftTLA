@@ -467,6 +467,73 @@ struct OrderedAssignmentLoweringTests {
             sourceTypes: .init(enums: enums))
         #expect(parsed.diagnostics.isEmpty)
         try OrderedIntSourceSyntaxCheck.verify(original, parsed: parsed, enums: enums)
+        _ = try parsed.compile()
+        for secondName in ["second", "pc_1"] {
+            let controlCollisionSource = source
+                .replacingOccurrences(of: "scope.sharedVar(initial: 1)",
+                    with: "scope.sharedVar(_name: \"pc\", initial: 1)")
+                .replacingOccurrences(of: "scope.sharedVar(initial: first + 2)",
+                    with: "scope.sharedVar(_name: \"\(secondName)\", initial: first + 2)")
+            try #require(!controlCollisionSource.utf8.elementsEqual(source.utf8))
+            for overflow in [false, true] {
+                let authored = overflow ? controlCollisionSource.replacingOccurrences(
+                    of: "initial: first + 2", with: "initial: first + \(Int.max)") : controlCollisionSource
+                let syntax = try parseSpecTestClosure(authored)
+                let parsedControl = SpecParser.parseSpecClosure(named: "OrderedInt", syntax,
+                    sourceTypes: .init(enums: enums))
+                try #require(parsedControl.diagnostics.isEmpty)
+                try OrderedIntSourceSyntaxCheck.verify(syntax, parsed: parsedControl, enums: enums)
+                let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: parsedControl.compile()))
+                let userPC = try #require(program.layout.variables.first {
+                    $0.declaration.origin == .source && $0.declaration.name == "pc"
+                })
+                let hiddenPC = try #require(program.layout.programCounterID())
+                let hidden = try #require(program.layout.variables.first { $0.id == hiddenPC })
+                #expect(hiddenPC != userPC.id)
+                #expect(hidden.declaration.name == (secondName == "pc_1" ? "pc_2" : "pc_1"))
+                let outcomes = try CompiledRuntime(program: program).initialOutcomes()
+                if overflow {
+                    #expect(outcomes.states.isEmpty)
+                    try #require(outcomes.failures.count == 1)
+                    let failure = try #require(outcomes.failures.first)
+                    #expect(failure.site == .initializer(2))
+                    #expect(failure.failure == .integerOverflow(.addition, operands: [1, Int.max]))
+                    #expect(try failure.formalBindingsBeforeFailure() == TLAStateProjection(validating: [
+                        .init(token: try #require(TLAStateProjection.Token(validating: userPC.formalName)), value: .int(1)),
+                        .init(token: try #require(TLAStateProjection.Token(validating: hidden.formalName)), value: .string("copy")),
+                    ]))
+                } else {
+                    #expect(outcomes.failures.isEmpty)
+                    try #require(outcomes.states.count == 1)
+                    #expect(try outcomes.states[0].value(for: userPC.id) == .integer(1))
+                    let second = try #require(program.layout.variables.first {
+                        $0.declaration.origin == .source && $0.declaration.name == secondName
+                    })
+                    #expect(try outcomes.states[0].value(for: second.id) == .integer(3))
+                    #expect(try outcomes.states[0].value(for: hiddenPC).rendered(using: program.layout) == .string("copy"))
+                    let variables = try parsedControl.loweredSourceModel().variables
+                    let frameSource = ActionExpr.guard_(.equal(.programCounter, .value(.string("copy"))))
+                    try StraightLineAssignmentCheck.verifyNormalization(frameSource,
+                        normalized: ActionNormalization.complete(frameSource, variables: variables),
+                        variables: variables, at: "actions.controlFrame.normalization")
+                    let namedFrames = variables.reduce(frameSource) {
+                        .and($0, .unchanged(.named($1.name)))
+                    }
+                    try StraightLineAssignmentCheck.verifyNormalization(frameSource,
+                        normalized: namedFrames, variables: variables, at: "actions.controlFrame.normalization")
+                    let missingControl = variables.filter { $0.origin != .programCounter }.reduce(frameSource) {
+                        .and($0, .unchanged(.named($1.name)))
+                    }
+                    #expect(throws: CompilationDiagnostic.self) {
+                        try StraightLineAssignmentCheck.verifyNormalization(frameSource,
+                            normalized: missingControl, variables: variables, at: "actions.controlFrame.normalization")
+                    }
+                }
+                _ = try program.renderModule()
+                var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "OrderedInt", program: program))
+                _ = try emitter.machineMembers()
+            }
+        }
         for (label, literal) in [
             ("K", "\"K\""),
             ("__SwiftTLA_UTF8_V1__C3A9", #""__SwiftTLA_UTF8_V1__5F5F5377696674544C415F555446385F56315F5F43334139""#),
