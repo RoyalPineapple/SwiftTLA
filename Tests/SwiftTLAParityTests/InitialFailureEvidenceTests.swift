@@ -12,7 +12,7 @@ struct InitialFailureEvidenceTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let sha = String(repeating: "a", count: 40)
         let report = try InitialFailureEvidence.prepare(sourceSHA: sha, to: directory)
-        #expect(report.schema == "swifttla.initial-failure-proof-v7")
+        #expect(report.schema == "swifttla.initial-failure-proof-v8")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)
         #expect(!report.graphCompared)
@@ -78,7 +78,7 @@ struct InitialFailureEvidenceTests {
         #expect(report.sourceCompilationIdentity == (try CheckedAdditionPrefixInitialModel.spec.compile()).identity.description)
         #expect(proofText.contains("THEOREM SourceInitializersMatchLoweredIR =="))
         #expect(proofText.contains("THEOREM InitializerPlansInvokeCheckedExpressionParent =="))
-        #expect(proofText.contains("ProofExpressions!PartialOrderedIntExpressionsPreserveValueAndFailure"))
+        #expect(proofText.contains("ProofInitialization!Expressions!PartialOrderedIntExpressionsPreserveValueAndFailure"))
         let layout = "<<" + [
             "[declaration |-> \"pc\", name |-> \"pc\", ordinal |-> 0, origin |-> \"programCounter\"]",
             "[declaration |-> \"first\", name |-> \"first\", ordinal |-> 1, origin |-> \"source\"]",
@@ -95,6 +95,13 @@ struct InitialFailureEvidenceTests {
         #expect(report.prefixOrdersSHA256 == SHA256.hex(Data(prefixes.utf8)))
         #expect(proofText.contains("THEOREM ActualPrefixRecordsInvokeInitializationDecoder =="))
         #expect(proofText.contains("ProofInitialization!RenderedInitialPrefixAndSiteDecodingRetainsEveryIdentity"))
+        let seeds = "<<[ordinal |-> 0, value |-> \"stay\"]>>"
+        #expect(proofText.contains("ActualControlSeeds == \(seeds)\n"))
+        let preparation = try #require(JSONSerialization.jsonObject(with:
+            Data(contentsOf: directory.appendingPathComponent("preparation.json"))) as? [String: Any])
+        #expect(preparation["controlSeedsSHA256"] as? String == SHA256.hex(Data(seeds.utf8)))
+        #expect(proofText.contains("ProofInitialization!OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures"))
+        #expect(proofText.contains("ProofInitialization!DeterministicReachableInitializersConstructTheirOrderedObservations"))
     }
 
     @Test("Invalid source provenance is refused before output")
