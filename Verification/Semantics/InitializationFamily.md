@@ -249,11 +249,18 @@ The initialization modules retain 6/1,277 and 10/633 undischarged obligations.
 All 263 proof inputs, 158 TLA snapshots and two runners match that published revision.
 The current tool receipts describe a cache delivery, not a cold build.
 
-The next repair changes four existing initialization proof bodies.
-It separates empty/singleton set operations, record projections and child theorem applications.
-It also supplies explicit bound membership, map domains and typed outcome facts.
-All statements, premises and definitions outside those bodies remain exact.
-No local pinned proof tool is available. These new bodies require their own pinned execution.
+Those four repairs were published in `aab1012a`.
+Its pinned run proves all 1,314 initialization-history obligations, including ordered observation existence, deterministic bounds, and complete state/failure projections.
+The expression module also proves all 1,696 obligations.
+The initialization-parent module retains six undischarged obligations out of 654.
+All 263 proof inputs, 158 TLA snapshots, and two runners match that exact revision.
+These results do not establish the physical compiler connection or hosted admission.
+
+The next repair changes only the existing parent proof body.
+It supplies the imported integer-domain fact, keeps construction maps opaque, and exposes the indexed plan identity.
+It also states the complete existing parent conclusion at its application.
+All theorem statements, premises, definitions, pins, backends, budgets, and timeouts remain unchanged.
+No local pinned proof tool is available, so this new body requires its own pinned execution.
 The actual compiler-initialization theorem and whole-language preservation remain unproved.
 
 The source/control trace also exposed a real hidden-seed rendering gap.
@@ -915,6 +922,27 @@ Together with the child contracts, both actual evaluation paths therefore have t
 left failure is propagated without evaluating right; successful left followed by right failure propagates that failure; two successes call checked addition once.
 For the first case the mathematical unused second outcome may be `Success(0)`; no executed right-child history is required.
 The checked `CombinedAdditionRule` consumes these child range facts and proves the same result as `GeneratedCombine`.
+
+For a call-free Int tree with an addition root, the emitter and `orderedIntPlan` visit the same occurrence order.
+Both push the expanded parent and reversed children onto a LIFO work array.
+Neither deduplicates equal subtrees.
+At node `j`, the emitter creates `_arithmetic(j-1)` from the stored child names.
+The read slots start with `_value_`, so these local names cannot capture them.
+This derives the correspondence between the actual emitted statements and the plan nodes.
+
+Let `completed` count the successful emitted bindings, and let `values[j]` denote their actual Int values.
+Literal and read bindings satisfy `CheckedPostorderOperation` through the established leaf and prefix facts.
+The checked helper supplies its addition equation and exact ordered overflow payload.
+A thrown overflow stops the later statements and the final return.
+Complete success returns the final stored value.
+Thus the actual statement sequence supplies `ReachedCheckedPostorderExecution` under the stated source, scope, type, and helper interpretations.
+
+For a literal or read root, the emitter returns the leaf expression directly.
+Its one-node reached execution follows from the corresponding leaf result.
+`CompletedSyntaxVisitRetainsTheReachedCheckedOutcome` consumes those equations rather than an assumed evaluator agreement.
+This is a manual code-case derivation of the physical sequence.
+Source identity, SwiftSyntax construction, TLA interpretation, and the complete compiler theorem remain separate obligations.
+The exact source hashes and argument are retained in the primary checkout's `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/native-arithmetic-reached-execution-codecase-review.json`.
 
 **TLA expression row.** Pure literal/read/add trees take the `arithmeticSites` fallback:
 `orderedFallibleSites` returns nil because this fragment has no special failure,
