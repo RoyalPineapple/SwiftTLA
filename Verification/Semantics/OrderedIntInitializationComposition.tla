@@ -387,13 +387,12 @@ THEOREM VisitedSourceSyntaxSuppliesReadyInitializerChildren ==
                 state == Expressions!CompleteIntBindings(bound, PartialIntProjection(prior))
     <1>0. Expressions!IntegerDomain
         BY SMT DEF IntInitializationDomains, Expressions!IntegerDomain
-    <1>. USE <1>0
     <1>1. state \in [IntKeys -> SwiftIntMin..SwiftIntMax]
-        BY Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
+        BY <1>0, Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
             DEF state, bound, IntInitializationDomains, Expressions!IntegerDomain
     <1>2. Expressions!ExpressionPlan(plan.count, plan.kinds, plan.literals,
         plan.reads, plan.left, plan.right, state)
-        BY <1>1, Expressions!SourceMatchedNodesSupplyTheTypedExpressionPlan, SMT
+        BY <1>0, <1>1, Expressions!SourceMatchedNodesSupplyTheTypedExpressionPlan, SMT
             DEF plan, Expressions!ExtractedNodePlan
     <1>3. Expressions!PartialExpressionPlan(plan.count, plan.kinds, plan.literals,
         plan.reads, plan.left, plan.right, bound, PartialIntProjection(prior))
@@ -401,7 +400,7 @@ THEOREM VisitedSourceSyntaxSuppliesReadyInitializerChildren ==
     <1>4. /\ Expressions!SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
                  plan.reads, plan.left, plan.right, PartialIntProjection(prior), source)
           /\ source[plan.count] = meaning[emitted.origins[emitted.count]]
-        BY Expressions!MatchedPostorderNodesRetainIndependentSourceSyntaxMeaning, SMT
+        BY <1>0, Expressions!MatchedPostorderNodesRetainIndependentSourceSyntaxMeaning, SMT
             DEF source, plan, Expressions!ExtractedNodePlan
     <1>5. IntInitializerChildren(plan, prior, source, generated)
         BY <1>3, <1>4, SMT DEF IntInitializerChildren, bound, plan
@@ -632,7 +631,6 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                         plans[index].left, plans[index].right, PartialIntProjection(prior), history)]]
     <1>0. Expressions!IntegerDomain
         BY SMT DEF IntInitializationDomains, Expressions!IntegerDomain
-    <1>. USE <1>0
     <1>. DEFINE typedPrefix(index) ==
         \A prior \in source[index].states :
             PartialIntProjection(prior) \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
@@ -676,7 +674,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                         DEF visit, emitted, plan, execution, IntInitializationDomains
                 <4>2. /\ emitted.count \in Nat \ {0}
                       /\ plan.count = emitted.count /\ plan.count \in Nat /\ plan.count > 0
-                    BY <2>1, <3>1, Expressions!SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
+                    BY <1>0, <2>1, <3>1, Expressions!SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
                         DEF visit, emitted, plan, Expressions!ExtractedNodePlan
                 <4>3. /\ execution.outcome.ok
                       /\ value = execution.outcome.value
@@ -729,7 +727,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             <3>0b. \A step \in 0..visits[index].steps :
                 /\ Expressions!NodeEmissionArrays(visits[index].emissions[step])
                 /\ Expressions!AllNodePayloadsMatchSource(views[index], visits[index].emissions[step])
-                BY <3>0a, Expressions!SynchronizedNodeHistoryPreservesEverySourcePayload, SMT
+                BY <1>0, <3>0a, Expressions!SynchronizedNodeHistoryPreservesEverySourcePayload, SMT
             <3>0. /\ Expressions!NodeEmissionArrays(emissions[index])
                   /\ emissions[index].count \in Nat \ {0} /\ emissions[index].count > 0
                   /\ emissions[index].origins[emissions[index].count] = roots[index]
@@ -747,7 +745,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             <3>2. \E history : Expressions!GeneratedExpressionHistory(plans[index].count,
                 plans[index].kinds, plans[index].literals, plans[index].reads,
                 plans[index].left, plans[index].right, PartialIntProjection(prior), history)
-                BY <3>1, Expressions!PartialOrderedIntExpressionsPreserveValueAndFailure, SMT
+                BY <1>0, <3>1, Expressions!PartialOrderedIntExpressionsPreserveValueAndFailure, SMT
                     DEF IntInitializationDomains, Expressions!IntegerDomain
             <3>3. Expressions!GeneratedExpressionHistory(plans[index].count,
                 plans[index].kinds, plans[index].literals, plans[index].reads,
@@ -761,10 +759,10 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                 BY <2>0, <2>1, <3>0, <3>3, VisitedSourceSyntaxSuppliesReadyInitializerChildren, SMT
                     DEF emissions, plans, sourceExpressions
             <3>5. meanings[index][prior][roots[index]] = executions[index][prior].outcome
-                BY <2>1, Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT
+                BY <1>0, <2>1, Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT
                     DEF IntInitializationDomains, Expressions!IntegerDomain
             <3>6. sourceExpressions[index][prior][plans[index].count] \in Expressions!ExpressionOutcomes
-                BY <3>4, Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
+                BY <1>0, <3>4, Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
                     DEF IntInitializerChildren, Expressions!PartialExpressionPlan,
                         Expressions!ExpressionPlan, IntInitializationDomains, Expressions!IntegerDomain
             <3>7. SourceIntInitializerOutcome(meanings[index][prior][roots[index]])
@@ -792,7 +790,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
         <2>1. CASE index \in positions
             <3>1. sourceExpressions[index][prior][plans[index].count]
                     \in Expressions!ExpressionOutcomes
-                BY <1>1, <2>1, Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
+                BY <1>0, <1>1, <2>1, Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
                     DEF IntInitializerChildren, Expressions!PartialExpressionPlan,
                         Expressions!ExpressionPlan, IntInitializationDomains, Expressions!IntegerDomain
             <3>. QED BY <1>1, <2>1, <3>1, SMT

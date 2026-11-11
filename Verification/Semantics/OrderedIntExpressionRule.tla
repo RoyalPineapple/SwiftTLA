@@ -1602,14 +1602,16 @@ THEOREM CompletedSyntaxVisitIdentifiesTheFirstReachedFailure ==
                              meaning[current.terms[current.height]])
                     BY <2>1, <3>1, <3>4, SMT DEF WellFormedVisitFrame,
                         WellFormedVisitPrefix, VisitFrameExit, SourceSyntaxHistory
-                <4>2. /\ EveryRootSucceeded(next.count, next.origins, meaning)
+                <4>2. /\ EveryRootSucceeded(emitted.count + 1,
+                             HistoryAppend(emitted.origins, emitted.count, frame.node), meaning)
                           <=> (EveryRootSucceeded(emitted.count, emitted.origins, meaning)
                                /\ meaning[frame.node].ok)
-                      /\ \A outcome : FirstRootFailureIs(next.count, next.origins, meaning, outcome)
+                      /\ \A outcome : FirstRootFailureIs(emitted.count + 1,
+                             HistoryAppend(emitted.origins, emitted.count, frame.node), meaning, outcome)
                           <=> (FirstRootFailureIs(emitted.count, emitted.origins, meaning, outcome)
                                \/ (EveryRootSucceeded(emitted.count, emitted.origins, meaning)
                                    /\ ~meaning[frame.node].ok /\ outcome = meaning[frame.node]))
-                    BY <2>1a, <3>2, AppendingARootRetainsTheFirstFailure, SMT
+                    BY <2>1a, AppendingARootRetainsTheFirstFailure, SMT
                 <4>3. /\ EveryRootSucceeded(nextCurrent.height, nextCurrent.terms, meaning)
                           <=> (EveryRootSucceeded(current.height, current.terms, meaning)
                                /\ meaning[frame.node].ok)
@@ -1619,7 +1621,7 @@ THEOREM CompletedSyntaxVisitIdentifiesTheFirstReachedFailure ==
                                    /\ ~meaning[frame.node].ok /\ outcome = meaning[frame.node]))
                     BY <4>1, FoldingOrderedChildrenRetainsTheFirstFailure, SMT
                         DEF FoldVisitPrefix, VisitPrefix
-                <4>. QED BY <2>1, <4>2, <4>3, SMT
+                <4>. QED BY <2>1, <3>2, <4>2, <4>3, SMT
                     DEF holds, VisitFailureProjection, FoldVisitPrefix, VisitPrefix,
                         frame, emitted, current, next, nextCurrent
             <3>. QED BY <3>3, <3>4, SMT

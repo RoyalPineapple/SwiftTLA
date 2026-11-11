@@ -219,18 +219,24 @@ Int binding. The parent then uses the derived projection type for its child rule
 Its remaining fixed-row premise says that an Int key has an Int seed; actual
 control keys are outside the Int-key set. The physical layout/type association
 and this new proof body still require verification.
-Pinned 0aaa CI leaves two reached-expression obligations and thirteen
-single-branch history obligations unproved. Its parent fails before proof
-checking because a bounded witness declaration refers to `prior` before it is
-in scope. The earlier source-to-postorder meaning lemma is not among the
-reported failures; this does not close its physical compiler interpretation.
-The working repairs split that witness into sequential choices, separate
-append and fold projections, and use explicit natural-number induction for the
-reached-operation prefix. Observation proofs expose empty/singleton domains,
-the single live leaf, and the typed failure append before advancing history.
-The theorem statements, premises, definitions, tool pins and budgets are
-unchanged. These proof bodies and the prefix-typing derivation remain unverified.
-The retained failed run does not establish theorem falsity or compiler agreement.
+Pinned `fdc680d3` CI leaves one of 1,688 reached-expression obligations and
+12 of 1,165 single-branch history obligations unproved. The earlier unbound
+witness now elaborates, but the initialization parent stops in the pinned
+Zenon formatter with a stack overflow. Its log identifies no source obligation;
+no parent theorem result is inferred. The source-to-postorder meaning lemma is
+not among the reported expression failures; its physical compiler interpretation
+remains open.
+The next body-only repair applies the append rule directly to its constructor
+arguments, hides local observation definitions until their leaves need them,
+and supplies set extensionality at the failed projection equalities. Explicit
+natural-number induction constructs every finite observation prefix. The parent
+keeps the integer-domain fact local to SMT applications of instantiated expression
+theorems. It no longer exposes that large numeral to default logical steps.
+This targets the formatter's recursive numeral expansion; the exact crashing
+obligation remains unidentified. Statements, premises, definitions, tool pins,
+backends, resources and budgets remain unchanged. These new bodies and the
+complete compiler-initialization theorem are unverified. A failed proof attempt
+does not establish theorem falsity or compiler agreement.
 
 The source/control trace also exposed a real hidden-seed rendering gap.
 Existing validation admits ASCII control identifiers, including names beginning
