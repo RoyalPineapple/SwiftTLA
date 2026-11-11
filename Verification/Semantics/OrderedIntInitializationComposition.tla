@@ -690,6 +690,22 @@ RenderedInitialRecordInterpretation(plan, values, outcome, prior, target, leaf) 
         (RenderedInitialRecordLayout(names, ordinals) /\ RenderedInitialPrefixOrder(length, order, prior))
         => leaf = NamedRenderedInitialLeaf(plan, values, outcome, prior, target, length, order, names, ordinals)
 
+RenderedInitialLeafWitness(plan, state, prior, target, leaf, witness) ==
+    /\ RenderedIntValueHistory(plan, state, witness.values)
+    /\ Expressions!ReachedCheckedPostorderExecution(plan, state, witness.execution)
+    /\ RenderedInitialRecordInterpretation(plan, witness.values, witness.execution.outcome, prior, target, leaf)
+
+RenderedInitialRecordOrders(count, prefixes, sorting, names, ordinals) ==
+    /\ RenderedInitialRecordLayout(names, ordinals)
+    /\ \A index \in 1..count : \A prior \in prefixes[index - 1].states :
+        RenderedInitialPrefixOrder(index - 1, sorting[index], prior)
+
+\* Union over reached prefixes; interpreting the emitted LET wrappers remains a separate obligation.
+RenderedInitialFailureEventUnion(positions, order, plans, prefixes, witnesses, sorting, names, ordinals) ==
+    UNION {UNION {RenderedInitialAdditionEvents(plans[index], witnesses[index][prior].values,
+        RenderedInitialPrefixEntries(index - 1, sorting[index], names, prior), ordinals[order[index]]) :
+        prior \in prefixes[index - 1].states} : index \in positions}
+
 THEOREM RenderedAdditionGuardsConstructTheReachedInitializationEvent ==
     ASSUME IntInitializationDomains,
            NEW plan, NEW bound, NEW state, NEW values, NEW prior, NEW target,
@@ -976,6 +992,10 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
           /\ \E observations :
               /\ SingleBranchInitialObservationHistory(count, order, sourceEvaluate, observations)
               /\ SingleBranchInitialObservationHistory(count, order, generatedEvaluate, observations)
+              /\ InitialSetProjection(observations[count]) = source[count]
+              /\ InitialObservationIsTyped(observations[count])
+              /\ observations[count].stateCount <= 1 /\ observations[count].failureCount <= 1
+              /\ observations[count].stateCount + observations[count].failureCount = 1
           /\ \A sourceObservation, generatedObservation :
               ((\E observations : SingleBranchInitialObservationHistory(count, order, sourceEvaluate, observations)
                     /\ sourceObservation = observations[count])
@@ -996,6 +1016,17 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                   /\ Expressions!ReachedCheckedPostorderExecution(plan, PartialIntProjection(prior), execution)
                   /\ RenderedInitialRecordInterpretation(plan, values, execution.outcome, prior, order[index],
                          SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]))
+          /\ LET plans == [index \in positions |->
+                     Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
+             IN \E witnesses :
+                 /\ \A index \in positions : \A prior \in source[index - 1].states :
+                     RenderedInitialLeafWitness(plans[index], PartialIntProjection(prior), prior, order[index],
+                         SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witnesses[index][prior])
+                 /\ \A sorting, names, ordinals :
+                     RenderedInitialRecordOrders(count, source, sorting, names, ordinals) =>
+                         DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
+                             positions, order, plans, source, witnesses, sorting, names, ordinals), names, ordinals)
+                             = source[count].failures
     PROOF
     <1>. DEFINE emissions == [index \in positions |-> visits[index].emissions[visits[index].steps]]
                 plans == [index \in positions |->
@@ -1263,7 +1294,11 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
     <1>2f. \E observations :
         /\ SingleBranchInitialObservationHistory(count, order, sourceEvaluate, observations)
         /\ SingleBranchInitialObservationHistory(count, order, generatedEvaluate, observations)
-        BY <1>2c, <1>2e, SMT
+        /\ InitialSetProjection(observations[count]) = source[count]
+        /\ InitialObservationIsTyped(observations[count])
+        /\ observations[count].stateCount <= 1 /\ observations[count].failureCount <= 1
+        /\ observations[count].stateCount + observations[count].failureCount = 1
+        BY <1>2c, <1>2d, <1>2e, SMT DEF InitializationOrder
     <1>3. \A isGenerated \in BOOLEAN : \A observations :
         LET evaluate == IF isGenerated THEN generatedEvaluate ELSE sourceEvaluate
             actual == IF isGenerated THEN generated ELSE source
@@ -1330,7 +1365,77 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             BY SetExtensionality, SMT
         <2>. QED BY <2>1, <2>2, RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf, SMT
             DEF emissions, plans
-    <1>. QED BY <1>2, <1>2f, <1>4, <1>5, SMT DEF emissions, plans
+    <1>6. \A index \in positions : \A prior \in source[index - 1].states :
+        \E witness : RenderedInitialLeafWitness(plans[index], PartialIntProjection(prior), prior, order[index],
+            SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witness)
+        <2>. SUFFICES ASSUME NEW index \in positions, NEW prior \in source[index - 1].states
+                     PROVE \E witness : RenderedInitialLeafWitness(
+                         plans[index], PartialIntProjection(prior), prior, order[index],
+                         SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witness)
+            BY SMT
+        <2>1. PICK values, execution :
+            /\ RenderedIntValueHistory(plans[index], PartialIntProjection(prior), values)
+            /\ Expressions!ReachedCheckedPostorderExecution(plans[index], PartialIntProjection(prior), execution)
+            /\ RenderedInitialRecordInterpretation(plans[index], values, execution.outcome, prior, order[index],
+                   SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]))
+            BY <1>5, SMT
+        <2>. DEFINE witness == [values |-> values, execution |-> execution]
+        <2>2. RenderedInitialLeafWitness(plans[index], PartialIntProjection(prior), prior, order[index],
+            SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witness)
+            BY <2>1, SMT DEF witness, RenderedInitialLeafWitness
+        <2>. QED BY <2>2, SMT
+    <1>. DEFINE witnesses == [index \in positions |-> [prior \in source[index - 1].states |->
+        CHOOSE witness : RenderedInitialLeafWitness(plans[index], PartialIntProjection(prior), prior, order[index],
+            SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witness)]]
+    <1>. HIDE DEF witnesses
+    <1>7. \A index \in positions : \A prior \in source[index - 1].states :
+        RenderedInitialLeafWitness(plans[index], PartialIntProjection(prior), prior, order[index],
+            SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witnesses[index][prior])
+        BY <1>6, SMT DEF witnesses
+    <1>8. \A sorting, names, ordinals :
+        RenderedInitialRecordOrders(count, source, sorting, names, ordinals) =>
+            DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
+                positions, order, plans, source, witnesses, sorting, names, ordinals), names, ordinals)
+                = source[count].failures
+        <2>. SUFFICES ASSUME NEW sorting, NEW names, NEW ordinals,
+                             RenderedInitialRecordOrders(count, source, sorting, names, ordinals)
+                     PROVE DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
+                         positions, order, plans, source, witnesses, sorting, names, ordinals), names, ordinals)
+                         = source[count].failures
+            BY SMT
+        <2>1. \A index \in positions : \A prior \in source[index - 1].states :
+            DecodedNamedRenderedAdditionEvents(RenderedInitialAdditionEvents(
+                plans[index], witnesses[index][prior].values,
+                RenderedInitialPrefixEntries(index - 1, sorting[index], names, prior), ordinals[order[index]]),
+                names, ordinals) = SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]).failures
+            BY <1>7, SMT DEF RenderedInitialRecordOrders, RenderedInitialLeafWitness,
+                RenderedInitialRecordInterpretation, NamedRenderedInitialLeaf
+        <2>2. DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
+            positions, order, plans, source, witnesses, sorting, names, ordinals), names, ordinals)
+            = UNION {UNION {SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]).failures :
+                prior \in source[index - 1].states} : index \in positions}
+            BY <2>1, SetExtensionality, SMT
+                DEF RenderedInitialFailureEventUnion, DecodedNamedRenderedAdditionEvents
+        <2>3. \A index \in (1..count) \ positions : \A prior \in source[index - 1].states :
+            SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]).failures = {}
+            BY SMT DEF SourceInitialLeaf, SourceInitialFailures, SourceFixed
+        <2>4. UNION {UNION {SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]).failures :
+            prior \in source[index - 1].states} : index \in positions}
+            = UNION {UNION {SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]).failures :
+                prior \in source[index - 1].states} : index \in 1..count}
+            BY <2>3, SetExtensionality, SMT
+        <2>5a. \A index \in 0..count :
+            source[index].states = SourceConstraintPrefix(order, index, sourceEvaluate)
+            BY SourceHistoriesMatchEveryInitializerPrefix, SMT
+        <2>5b. source[count].failures = SourceFailureConstraintPrefix(order, count, sourceEvaluate)
+            BY SourceHistoriesMatchEveryInitialFailurePrefix, SMT DEF InitializationOrder
+        <2>5. source[count].failures =
+            UNION {UNION {SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]).failures :
+                prior \in source[index - 1].states} : index \in 1..count}
+            BY <2>5a, <2>5b, SetExtensionality, SMT
+                DEF SourceFailureConstraintPrefix, SourceInitialLeaf, InitializationOrder
+        <2>. QED BY <2>2, <2>4, <2>5, SMT
+    <1>. QED BY <1>2, <1>2f, <1>4, <1>5, <1>7, <1>8, SMT DEF emissions, plans
 
 THEOREM ChangingAReadChangesTheFixedInitializerCandidate ==
     ASSUME NEW first \in Values, NEW second \in Values, first # second
