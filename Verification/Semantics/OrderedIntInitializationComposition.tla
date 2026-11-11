@@ -585,10 +585,15 @@ RenderedInitialAdditionEvents(plan, values, prior, target) ==
     UNION {IF plan.kinds[index] = "add"
               /\ (\A earlier \in 1..(index - 1) : RenderedIntGuard(plan, values, earlier))
               /\ ~RenderedIntGuard(plan, values, index)
-           THEN {[before |-> prior, site |-> target,
-                  payload |-> Expressions!GeneratedOverflow(
-                      values[plan.left[index]], values[plan.right[index]]).failure]}
+           THEN {[before |-> prior, site |-> target, kind |-> "integerOverflow.addition",
+                  operands |-> <<values[plan.left[index]], values[plan.right[index]]>>]}
            ELSE {} : index \in 1..plan.count}
+
+\* Site and preceding-binding identity decoding are separate physical obligations.
+DecodedRenderedAdditionEvents(events) ==
+    {[before |-> event.before, site |-> event.site,
+      payload |-> <<"integerOverflow", "addition", event.operands>>] :
+        event \in {entry \in events : entry.kind = "integerOverflow.addition"}}
 
 THEOREM RenderedAdditionGuardsConstructTheReachedInitializationEvent ==
     ASSUME IntInitializationDomains,
@@ -602,7 +607,8 @@ THEOREM RenderedAdditionGuardsConstructTheReachedInitializationEvent ==
         /\ execution.values = [index \in 1..execution.completed |-> values[index]]
         /\ RenderedInitialAdditionEvents(plan, values, prior, target) =
             IF execution.outcome.ok THEN {}
-            ELSE {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}
+            ELSE {[before |-> prior, site |-> target, kind |-> "integerOverflow.addition",
+                   operands |-> execution.outcome.failure[3]]}
     PROOF
     <1>0. /\ Expressions!IntegerDomain
           /\ plan.count \in Nat /\ plan.count > 0
@@ -712,9 +718,10 @@ THEOREM RenderedAdditionGuardsConstructTheReachedInitializationEvent ==
              /\ ~RenderedIntGuard(plan, values, index)) <=> index = failed
             BY <2>0, SMT
         <2>5. RenderedInitialAdditionEvents(plan, values, prior, target) =
-            {[before |-> prior, site |-> target, payload |-> outcome.failure]}
+            {[before |-> prior, site |-> target, kind |-> "integerOverflow.addition",
+              operands |-> outcome.failure[3]]}
             BY <2>0, <2>1, <2>4, SetExtensionality, SMT
-                DEF RenderedInitialAdditionEvents, outcome
+                DEF RenderedInitialAdditionEvents, outcome, Expressions!GeneratedOverflow
         <2>6. outcome \in Expressions!ExpressionOutcomes
             BY <1>0, <2>0, <2>1, <2>2, SMT
                 DEF outcome, Expressions!GeneratedOverflow, Expressions!ExpressionOutcomes,
@@ -749,7 +756,8 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
                   [states |-> IF execution.outcome.ok
                               THEN {GeneratedExtension(prior, target, values[plan.count])}
                               ELSE {},
-                   failures |-> RenderedInitialAdditionEvents(plan, values, prior, target)]
+                   failures |-> DecodedRenderedAdditionEvents(
+                       RenderedInitialAdditionEvents(plan, values, prior, target))]
     PROOF
     <1>. DEFINE plan == Expressions!ExtractedNodePlan(emissions[steps], target)
     <1>. HIDE DEF plan
@@ -797,7 +805,8 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
         /\ execution.values = [index \in 1..execution.completed |-> values[index]]
         /\ RenderedInitialAdditionEvents(plan, values, prior, target) =
             IF execution.outcome.ok THEN {}
-            ELSE {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}
+            ELSE {[before |-> prior, site |-> target, kind |-> "integerOverflow.addition",
+                   operands |-> execution.outcome.failure[3]]}
         BY <1>3, <1>3c, RenderedAdditionGuardsConstructTheReachedInitializationEvent
     <1>5. meaning[root] = execution.outcome
         BY <1>0, <1>4, Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT DEF plan
@@ -814,6 +823,7 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
             Expressions!Success, Expressions!ExpressionOutcomes, RenderedIntValueHistory
     <1>. QED BY <1>3c, <1>3d, <1>4, <1>5, <1>6, <1>7, <1>8, SMT
         DEF GeneratedInitialLeaf, GeneratedInitialStates, GeneratedInitialFailures,
+            DecodedRenderedAdditionEvents, Expressions!ExpressionOutcomes, Expressions!ArithmeticFailures,
             SourceIntInitializerOutcome, SourceFixed, SourceFailed, InitializerOutcomes
 
 \* Syntax meanings supply the source history; control rows are concrete fixed seeds.

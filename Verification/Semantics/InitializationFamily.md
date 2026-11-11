@@ -267,6 +267,8 @@ The next TLA event connection is implemented in the existing initialization modu
 `RenderedAdditionGuardsConstructTheReachedInitializationEvent` constructs reached operations from mathematical scalar terms and the emitted arithmetic guards.
 Earlier guards bound every reached operand; the first false guard selects one overflow and excludes every later site.
 The result retains the completed value prefix and the complete event record, including its preceding binding and target.
+The event retains separate `kind` and ordered `operands` fields, matching the emitted record shape.
+`DecodedRenderedAdditionEvents` converts that checked kind and operand tuple to the parent's failure payload.
 `RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf` constructs the unique mathematical scalar-term history from the derived plan.
 It then invokes the checked source-meaning bridge and the existing complete-leaf rule.
 Its conclusion includes both successful state extension and the complete failure-event set.
@@ -274,6 +276,7 @@ It therefore supplies the leaf contract needed by the initialization parent, wit
 These two new proof bodies require their own pinned execution.
 They do not yet discharge the physical rendering premises.
 Actual token interpretation, identifier binding, integer encoding, prefix wrappers, and hidden-control association remain owned obligations.
+The current formal record uses logical target keys and binding maps; actual ordinal and serialized-prefix decoding remain separate physical obligations.
 Other accepted constructors and source placements remain accepted and open.
 
 The source/control trace also exposed a real hidden-seed rendering gap.
