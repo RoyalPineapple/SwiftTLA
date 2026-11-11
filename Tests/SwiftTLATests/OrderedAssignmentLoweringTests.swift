@@ -504,6 +504,22 @@ struct OrderedAssignmentLoweringTests {
                 #expect(throws: CompilationDiagnostic.self) {
                     try emitter.verifyIntInitialOutput(changed)
                 }
+                #expect(try CompiledRuntime(program: program).initialOutcomes().states.count == 1)
+                let projectionEmitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "OrderedInt", program: program))
+                let projection = try projectionEmitter.formalProjectionDeclarations()
+                let fields = try program.layout.variables.map { variable in
+                    let route = projectionEmitter.stateValue(variable.id, prefix: "snapshot.")
+                    return (formalName: variable.formalName, route: route,
+                        value: try projectionEmitter.formalValue(route, type: program.variableTypes[variable.id]!))
+                }
+                try verifyGeneratedFormalProjectionOutput(projection, fields: fields)
+                try #require(projection[1].description.components(separatedBy: marker).count == 2)
+                let wrongProjection = projection[1].description.replacingOccurrences(of: marker, with: ".string(\"K\")")
+                #expect(!wrongProjection.utf8.elementsEqual(projection[1].description.utf8))
+                let changedProjection = try #require(Parser.parse(source: wrongProjection).statements.first?.item.as(DeclSyntax.self))
+                #expect(throws: CompilationDiagnostic.self) {
+                    try verifyGeneratedFormalProjectionOutput([projection[0], changedProjection], fields: fields)
+                }
             }
         }
         let unused = source.replacingOccurrences(of: "algorithm\n",

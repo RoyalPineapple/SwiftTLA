@@ -209,8 +209,8 @@ extension NativeSwiftEmitter {
 func verifyGeneratedFormalProjectionOutput(
     _ declarations: [DeclSyntax], fields: [(formalName: String, route: String, value: String)]
 ) throws {
-    func tokens(_ syntax: some SyntaxProtocol) -> [String] {
-        Array(syntax.tokens(viewMode: .sourceAccurate)).map(\.text)
+    func tokens(_ syntax: some SyntaxProtocol) -> [[UInt8]] {
+        syntax.tokens(viewMode: .sourceAccurate).map { Array($0.text.utf8) }
     }
     func reject(_ reason: String) -> CompilationDiagnostic {
         CompilationDiagnostic(
@@ -237,7 +237,7 @@ func verifyGeneratedFormalProjectionOutput(
         guard let expectedRoute, let value else { throw reject("the projected value cannot be parsed") }
         let route = tokens(expectedRoute)
         let valueTokens = tokens(value)
-        let references = valueTokens.indices.filter { valueTokens[$0] == "snapshot" }
+        let references = valueTokens.indices.filter { valueTokens[$0] == Array("snapshot".utf8) }
         guard !references.isEmpty, references.allSatisfy({ index in
             index + route.count <= valueTokens.count
                 && Array(valueTokens[index..<(index + route.count)]) == route
