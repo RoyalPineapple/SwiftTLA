@@ -76,6 +76,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
         named name: some ExprSyntaxProtocol,
         body: ClosureExprSyntax
     ) -> ExprSyntax {
+        // Use the macro's result type so caller declarations cannot capture its constructor.
         let arguments: LabeledExprListSyntax
         if body.signature == nil {
             arguments = [
@@ -83,7 +84,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
                 LabeledExprSyntax(expression: ExprSyntax(body))
             ]
             return ExprSyntax(FunctionCallExprSyntax(
-                calledExpression: DeclReferenceExprSyntax(baseName: .identifier("TLASpec")),
+                calledExpression: ExprSyntax(stringLiteral: ".init"),
                 leftParen: .leftParenToken(),
                 arguments: arguments,
                 rightParen: .rightParenToken()
@@ -98,7 +99,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
             )
         ]
         return ExprSyntax(FunctionCallExprSyntax(
-            calledExpression: DeclReferenceExprSyntax(baseName: .identifier("TLASpec")),
+            calledExpression: ExprSyntax(stringLiteral: ".init"),
             leftParen: .leftParenToken(),
             arguments: arguments,
             rightParen: .rightParenToken()

@@ -34,18 +34,33 @@ struct OrderedAssignmentLoweringTests {
 
     @Test("A standalone #spec checks its actual ordered Int builder output")
     func orderedIntSpecChecksRuntimeModel() throws {
-        let spec = #spec("OrderedAssignment") {
-            let algorithm = Algorithm(scoped: { scope in
-                let first = scope.sharedVar(initial: 1)
-                let second: SharedVariable<Int> = scope.sharedVar(initial: first + 2)
-                Do(OrderedAssignmentStep.`switch`) {
-                    Assign(first, to: second + 1)
-                    Assign(second, to: first)
-                }
-            })
-            algorithm
+        func TLASpec(_ name: String, @SpecBuilder _ body: () -> [SpecComponent]) -> SwiftTLA.TLASpec {
+            var specification = SwiftTLA.TLASpec(name, body)
+            specification.variables.append(.init(name: "unexpected", initial: .int(99)))
+            return specification
         }
+        func TLASpec(_ name: String, @SpecBuilder scoped body: (SpecificationScope) -> [SpecComponent]) -> SwiftTLA.TLASpec {
+            var specification = SwiftTLA.TLASpec(name, scoped: body)
+            specification.variables.append(.init(name: "unexpected", initial: .int(99)))
+            return specification
+        }
+        let spec = {
+            enum SwiftTLA {}
+            return #spec("OrderedAssignment") { _ in
+                let algorithm = Algorithm(scoped: { scope in
+                    let first = scope.sharedVar(initial: 1)
+                    let second: SharedVariable<Int> = scope.sharedVar(initial: first + 2)
+                    Do(OrderedAssignmentStep.`switch`) {
+                        Assign(first, to: second + 1)
+                        Assign(second, to: first)
+                    }
+                })
+                algorithm
+            }
+        }()
         let compiled = try spec.compile()
+        #expect(Set(compiled.layout.variables.filter { $0.declaration.origin == .source }
+            .map { $0.declaration.name }) == ["first", "second"])
         let secondID = try #require(compiled.layout.variables.first { $0.declaration.name == "second" }).id
         let secondInitial = try #require(compiled.semantics.behavior.initializations.first {
             $0.variable == secondID
@@ -108,18 +123,24 @@ struct OrderedAssignmentLoweringTests {
             }
         }
 
-        let domainSpec = #spec("OrderedAssignment") {
-            let algorithm = Algorithm(scoped: { scope in
-                let first = scope.sharedVar(in: 0...1)
-                let second = scope.sharedVar(in: If(first == 0,
-                    then: SetExpr<Int>.literal(0), else: SetExpr<Int>.literal(0, 1)))
-                Do(OrderedAssignmentStep.`switch`) {
-                    Assign(first, to: second + 1)
-                    Assign(second, to: first)
-                }
-            })
-            algorithm
-        }
+        let domainSpec = {
+            enum SwiftTLA {}
+            return #spec("OrderedAssignment") {
+                let algorithm = Algorithm(scoped: { scope in
+                    let first = scope.sharedVar(in: 0...1)
+                    let second = scope.sharedVar(in: If(first == 0,
+                        then: SetExpr<Int>.literal(0), else: SetExpr<Int>.literal(0, 1)))
+                    Do(OrderedAssignmentStep.`switch`) {
+                        Assign(first, to: second + 1)
+                        Assign(second, to: first)
+                    }
+                })
+                algorithm
+            }
+        }()
+        let domainCompilation = try domainSpec.compile()
+        #expect(Set(domainCompilation.layout.variables.filter { $0.declaration.origin == .source }
+            .map { $0.declaration.name }) == ["first", "second"])
         let fallibleDomainSpec = #spec("OrderedAssignment") {
             let algorithm = Algorithm(scoped: { scope in
                 let first = scope.sharedVar(in: 0...1)
