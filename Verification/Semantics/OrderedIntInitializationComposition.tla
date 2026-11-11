@@ -647,7 +647,7 @@ THEOREM RenderedAdditionGuardsConstructTheReachedInitializationEvent ==
             <3>. QED BY <2>3, <3>2, SMT DEF RenderedIntValueHistory
         <2>. QED BY <1>0, <2>1, <2>2, <2>3, SetExtensionality, SMT
     <1>1. \A index \in 0..plan.count : good(index)
-        BY <1>0, <1>1a, <1>1b, FiniteIndexedPrefixProperty
+        BY <1>0, <1>1a, <1>1b, FiniteIndexedPrefixProperty, SMT
     <1>2. \A index \in 1..plan.count :
         Expressions!CheckedPostorderOperation(plan, state, values, index) =
             IF RenderedIntGuard(plan, values, index) THEN Expressions!Success(values[index])
@@ -784,7 +784,7 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
         BY <1>2, <1>3, SMT DEF stepsForTerms, Expressions!ExpressionPlan,
             Expressions!PartialExpressionPlan, Expressions!ExpressionReadKeys
     <1>3b. PICK values \in [1..plan.count -> Int] : IndexedHistory(stepsForTerms, values, plan.count)
-        BY <1>3n, <1>3a, FiniteIndexedHistoryExists
+        BY <1>3n, <1>3a, FiniteIndexedHistoryExists, SMT
     <1>3c. RenderedIntValueHistory(plan, state, values)
         BY <1>2, <1>3b, SMT DEF stepsForTerms, IndexedHistory, HistoryPrefix,
             RenderedIntValueHistory, Expressions!ExpressionPlan
@@ -798,7 +798,7 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
             ((\A earlier \in 1..(index - 1) : actualValues[earlier] = values[earlier])
                 => actualValues[index] = values[index])
             BY <1>2, <1>3c, SMT DEF RenderedIntValueHistory, Expressions!ExpressionPlan
-        <2>. QED BY <1>3n, <2>1, <2>2, FiniteIndexedHistoriesAgree
+        <2>. QED BY <1>3n, <2>1, <2>2, FiniteIndexedHistoriesAgree, SMT
     <1>4. PICK execution :
         /\ Expressions!ReachedCheckedPostorderExecution(plan, state, execution)
         /\ execution.outcome \in Expressions!ExpressionOutcomes
@@ -807,7 +807,7 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
             IF execution.outcome.ok THEN {}
             ELSE {[before |-> prior, site |-> target, kind |-> "integerOverflow.addition",
                    operands |-> execution.outcome.failure[3]]}
-        BY <1>3, <1>3c, RenderedAdditionGuardsConstructTheReachedInitializationEvent
+        BY <1>3, <1>3c, RenderedAdditionGuardsConstructTheReachedInitializationEvent, SMT
     <1>5. meaning[root] = execution.outcome
         BY <1>0, <1>4, Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT DEF plan
     <1>6. /\ SourceIntInitializerOutcome(meaning[root])
@@ -921,7 +921,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
         <2>1. PICK value \in sourceEvaluate[index][prior].candidates :
             /\ prior \in source[index - 1].states
             /\ SourceExtension(prior, order[index], value, after)
-            BY <2>1a
+            BY <2>1a, SMT
         <2>2. prior \in PartialBindings
               /\ PartialIntProjection(prior)
                      \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
@@ -978,9 +978,9 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
         <2>. QED BY <2>1, <2>2, <2>3, SMT DEF PartialIntProjection, SourceExtension
     <1>0p. typedPrefix(0) /\ \A index \in 1..count :
         ((\A earlier \in 0..(index - 1) : typedPrefix(earlier)) => typedPrefix(index))
-        BY <1>0a, <1>0b
+        BY <1>0a, <1>0b, SMT
     <1>0c. \A index \in 0..count : typedPrefix(index)
-        BY <1>0n, <1>0p, FiniteIndexedPrefixProperty
+        BY <1>0n, <1>0p, FiniteIndexedPrefixProperty, SMT
     <1>0d. \A index \in 1..count : \A prior \in source[index - 1].states :
         PartialIntProjection(prior) \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
         BY <1>0c, SMT DEF typedPrefix, InitializationOrder
@@ -1136,12 +1136,12 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
     <1>2c. PICK observations :
         /\ SingleBranchInitialObservationHistory(count, order, sourceEvaluate, observations)
         /\ \A index \in 0..count : InitialSetProjection(observations[index]) = source[index]
-        BY <1>2b, DeterministicReachableInitializersConstructTheirOrderedObservations
+        BY <1>2b, DeterministicReachableInitializersConstructTheirOrderedObservations, SMT
     <1>2d. \A index \in 0..count :
         /\ InitialObservationIsTyped(observations[index])
         /\ observations[index].stateCount <= 1 /\ observations[index].failureCount <= 1
         /\ observations[index].stateCount + observations[index].failureCount = 1
-        BY <1>2c, SingleBranchInitializationDerivesItsObservationBounds
+        BY <1>2c, SingleBranchInitializationDerivesItsObservationBounds, SMT
     <1>2e. SingleBranchInitialObservationHistory(count, order, generatedEvaluate, observations)
         BY <1>2a, <1>2c, <1>2d, SMT
             DEF SingleBranchInitialObservationHistory, SingleBranchInitialObservationStep,
@@ -1173,7 +1173,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
         <2>2. InitializationHistory(isGenerated, count, order, evaluate, actual)
             BY SMT DEF evaluate, actual
         <2>3. \A index \in 0..count : projected[index] = actual[index]
-            BY <2>1, <2>2, InitializationHistoryIsUnique
+            BY <2>1, <2>2, InitializationHistoryIsUnique, SMT
         <2>4. /\ InitialObservationIsTyped(observations[count])
               /\ observations[count].stateCount <= 1 /\ observations[count].failureCount <= 1
             BY SingleBranchInitializationDerivesItsObservationBounds, SMT DEF evaluate, InitializationOrder
