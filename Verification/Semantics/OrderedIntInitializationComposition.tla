@@ -390,10 +390,15 @@ THEOREM VisitedSourceSyntaxSuppliesReadyInitializerChildren ==
     <1>1. state \in [IntKeys -> SwiftIntMin..SwiftIntMax]
         BY <1>0, Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
             DEF state, bound, IntInitializationDomains, Expressions!IntegerDomain
+    <1>1a. /\ fallbackRead \in IntKeys
+           /\ Expressions!NodeEmissionArrays(emitted) /\ emitted.count > 0
+           /\ Expressions!AllNodePayloadsMatchSource(view, emitted)
+           /\ Expressions!TypedVisitedSourceInputs(view, emitted)
+        BY SMT
     <1>2. Expressions!ExpressionPlan(plan.count, plan.kinds, plan.literals,
         plan.reads, plan.left, plan.right, state)
-        BY <1>0, <1>1, Expressions!SourceMatchedNodesSupplyTheTypedExpressionPlan, SMT
-            DEF plan, Expressions!ExtractedNodePlan
+        BY <1>0, <1>1, <1>1a, Expressions!SourceMatchedNodesSupplyTheTypedExpressionPlan, SMT
+            DEF plan, Expressions!ExtractedNodePlan, Expressions!IntegerDomain
     <1>3. Expressions!PartialExpressionPlan(plan.count, plan.kinds, plan.literals,
         plan.reads, plan.left, plan.right, bound, PartialIntProjection(prior))
         BY <1>2, SMT DEF plan, state, bound, Expressions!PartialExpressionPlan
@@ -668,14 +673,32 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                             emitted == visit.emissions[visit.steps]
                             plan == Expressions!ExtractedNodePlan(emitted, order[index])
                             execution == executions[index][prior]
+                <4>0. /\ order[index] \in IntKeys
+                      /\ Expressions!SynchronizedNodeHistory(visit.steps, roots[index], views[index],
+                             visit.heights, visit.pendings, visit.currents, visit.emissions)
+                      /\ visit.heights[visit.steps] = 0
+                      /\ \A step \in 1..visit.steps :
+                             visit.pendings[step - 1][visit.heights[step - 1]].node
+                                 \in DOMAIN views[index].kinds
+                      /\ Expressions!TypedVisitedSourceInputs(views[index], emitted)
+                      /\ {emitted.origins[node] : node \in 1..emitted.count}
+                             \subseteq DOMAIN views[index].kinds
+                      /\ Expressions!SourceSyntaxHistory(views[index], PartialIntProjection(prior),
+                             meanings[index][prior])
+                      /\ Expressions!ExpressionReadKeys(plan.count, plan.kinds, plan.reads)
+                             \subseteq (DOMAIN prior) \cap IntKeys
+                      /\ Expressions!ReachedCheckedPostorderExecution(plan, PartialIntProjection(prior),
+                             execution)
+                    BY <2>1, <3>1, SMT DEF visit, emitted, plan, execution
                 <4>1. meanings[index][prior][roots[index]] = execution.outcome
-                    BY <2>1, <2>2, <3>1,
+                    BY <1>0, <2>2, <4>0,
                         Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT
-                        DEF visit, emitted, plan, execution, IntInitializationDomains
+                        DEF visit, emitted, plan, execution, IntInitializationDomains,
+                            Expressions!IntegerDomain
                 <4>2. /\ emitted.count \in Nat \ {0}
                       /\ plan.count = emitted.count /\ plan.count \in Nat /\ plan.count > 0
-                    BY <1>0, <2>1, <3>1, Expressions!SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
-                        DEF visit, emitted, plan, Expressions!ExtractedNodePlan
+                    BY <1>0, <4>0, Expressions!SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
+                        DEF visit, emitted, plan, Expressions!ExtractedNodePlan, Expressions!IntegerDomain
                 <4>3. /\ execution.outcome.ok
                       /\ value = execution.outcome.value
                     BY <2>1, <3>1, <4>1, SMT
@@ -690,8 +713,11 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                 BY <2>1, <3>2, SMT DEF SourceFixed
             <3>. QED BY <3>1, <3>2, SMT
         <2>. QED BY <2>1, <2>2, <2>3, SMT DEF PartialIntProjection, SourceExtension
+    <1>0p. typedPrefix(0) /\ \A index \in 1..count :
+        ((\A earlier \in 0..(index - 1) : typedPrefix(earlier)) => typedPrefix(index))
+        BY <1>0a, <1>0b
     <1>0c. \A index \in 0..count : typedPrefix(index)
-        BY <1>0n, <1>0a, <1>0b, FiniteIndexedPrefixProperty
+        BY <1>0n, <1>0p, FiniteIndexedPrefixProperty
     <1>0d. \A index \in 1..count : \A prior \in source[index - 1].states :
         PartialIntProjection(prior) \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
         BY <1>0c, SMT DEF typedPrefix, InitializationOrder
@@ -723,7 +749,20 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             <3>0a. Expressions!SynchronizedNodeHistory(visits[index].steps, roots[index], views[index],
                 visits[index].heights, visits[index].pendings, visits[index].currents, visits[index].emissions)
                   /\ visits[index].heights[visits[index].steps] = 0
-                BY <2>1, SMT
+                  /\ order[index] \in IntKeys
+                  /\ \A step \in 1..visits[index].steps :
+                         visits[index].pendings[step - 1][visits[index].heights[step - 1]].node
+                             \in DOMAIN views[index].kinds
+                  /\ Expressions!TypedVisitedSourceInputs(views[index], emissions[index])
+                  /\ {emissions[index].origins[node] : node \in 1..emissions[index].count}
+                         \subseteq DOMAIN views[index].kinds
+                  /\ Expressions!SourceSyntaxHistory(views[index], PartialIntProjection(prior),
+                         meanings[index][prior])
+                  /\ Expressions!ExpressionReadKeys(plans[index].count, plans[index].kinds, plans[index].reads)
+                         \subseteq (DOMAIN prior) \cap IntKeys
+                  /\ Expressions!ReachedCheckedPostorderExecution(plans[index], PartialIntProjection(prior),
+                         executions[index][prior])
+                BY <2>1, SMT DEF emissions, plans
             <3>0b. \A step \in 0..visits[index].steps :
                 /\ Expressions!NodeEmissionArrays(visits[index].emissions[step])
                 /\ Expressions!AllNodePayloadsMatchSource(views[index], visits[index].emissions[step])
@@ -732,13 +771,21 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                   /\ emissions[index].count \in Nat \ {0} /\ emissions[index].count > 0
                   /\ emissions[index].origins[emissions[index].count] = roots[index]
                   /\ Expressions!AllNodePayloadsMatchSource(views[index], emissions[index])
-                BY <2>1, <3>0a, <3>0b,
+                BY <1>0, <3>0a, <3>0b,
                     Expressions!SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
-                    DEF emissions, Expressions!SynchronizedNodeHistory, Expressions!PendingVisitHistory
+                    DEF emissions, Expressions!SynchronizedNodeHistory, Expressions!PendingVisitHistory,
+                        Expressions!IntegerDomain
+            <3>0c. /\ ((DOMAIN prior) \cap IntKeys) \in SUBSET IntKeys
+                   /\ PartialIntProjection(prior)
+                          \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
+                   /\ Expressions!CompleteIntBindings((DOMAIN prior) \cap IntKeys, PartialIntProjection(prior))
+                          \in [IntKeys -> SwiftIntMin..SwiftIntMax]
+                BY <1>0, <1>0d, <2>0, Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
+                    DEF IntInitializationDomains, Expressions!IntegerDomain
             <3>1. Expressions!PartialExpressionPlan(plans[index].count, plans[index].kinds,
                 plans[index].literals, plans[index].reads, plans[index].left, plans[index].right,
                 (DOMAIN prior) \cap IntKeys, PartialIntProjection(prior))
-                BY <2>1, <3>0, Expressions!SourceMatchedNodesSupplyTheTypedExpressionPlan,
+                BY <1>0, <3>0a, <3>0, <3>0c, Expressions!SourceMatchedNodesSupplyTheTypedExpressionPlan,
                     Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
                     DEF plans, IntInitializationDomains, Expressions!IntegerDomain,
                         Expressions!PartialExpressionPlan
@@ -759,24 +806,30 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                 BY <2>0, <2>1, <3>0, <3>3, VisitedSourceSyntaxSuppliesReadyInitializerChildren, SMT
                     DEF emissions, plans, sourceExpressions
             <3>5. meanings[index][prior][roots[index]] = executions[index][prior].outcome
-                BY <1>0, <2>1, Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT
+                BY <1>0, <3>0a, <3>0c, Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT
                     DEF IntInitializationDomains, Expressions!IntegerDomain
             <3>6. sourceExpressions[index][prior][plans[index].count] \in Expressions!ExpressionOutcomes
                 BY <1>0, <3>4, Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
                     DEF IntInitializerChildren, Expressions!PartialExpressionPlan,
                         Expressions!ExpressionPlan, IntInitializationDomains, Expressions!IntegerDomain
+            <3>6a. /\ plans[index].count = emissions[index].count
+                   /\ sourceExpressions[index][prior][plans[index].count]
+                          = meanings[index][prior][roots[index]]
+                BY <3>0, SMT DEF plans, sourceExpressions, Expressions!ExtractedNodePlan,
+                    Expressions!EmittedSourceSyntaxHistory
             <3>7. SourceIntInitializerOutcome(meanings[index][prior][roots[index]])
                     = GeneratedIntInitializerOutcome(executions[index][prior].outcome)
-                BY <2>0, <2>1, <3>0, <3>5, <3>6, IntExpressionOutcomesSupplyInitializerOutcomes, SMT
+                BY <2>0, <2>1, <3>0, <3>5, <3>6, <3>6a, IntExpressionOutcomesSupplyInitializerOutcomes, SMT
                     DEF plans, sourceExpressions, Expressions!ExtractedNodePlan,
                         Expressions!EmittedSourceSyntaxHistory
-            <3>. QED BY <2>0, <2>1, <3>0, <3>4, <3>7, SMT DEF emissions, plans, sourceExpressions,
+            <3>. QED BY <2>0, <2>1, <3>0, <3>4, <3>6a, <3>7, SMT DEF emissions, plans, sourceExpressions,
                 Expressions!ExtractedNodePlan, Expressions!EmittedSourceSyntaxHistory
         <2>2. CASE index \notin positions
             BY <2>2, FixedInitializerRetainsItsOnlyCandidate, SMT
         <2>. QED BY <2>1, <2>2, SMT
     <1>2. \A index \in 0..count : source[index] = generated[index]
-        BY <1>1, OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures, SMT
+        BY <1>0d, <1>1, OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures, SMT
+            DEF IntInitializationDomains
     <1>2a. \A index \in 1..count : \A prior \in source[index - 1].states :
         sourceEvaluate[index][prior] = generatedEvaluate[index][prior]
         BY <1>1, IntInitializerChildrenSupplyOutcomeAgreement, SMT

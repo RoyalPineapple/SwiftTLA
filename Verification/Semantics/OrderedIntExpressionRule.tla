@@ -1602,6 +1602,13 @@ THEOREM CompletedSyntaxVisitIdentifiesTheFirstReachedFailure ==
                              meaning[current.terms[current.height]])
                     BY <2>1, <3>1, <3>4, SMT DEF WellFormedVisitFrame,
                         WellFormedVisitPrefix, VisitFrameExit, SourceSyntaxHistory
+                <4>2a. \A position \in 1..emitted.count :
+                    HistoryAppend(emitted.origins, emitted.count, frame.node)[position]
+                        = emitted.origins[position]
+                    BY <2>1a, SMT DEF HistoryAppend
+                <4>2b. HistoryAppend(emitted.origins, emitted.count, frame.node)[emitted.count + 1]
+                    = frame.node
+                    BY <2>1a, SMT DEF HistoryAppend
                 <4>2. /\ EveryRootSucceeded(emitted.count + 1,
                              HistoryAppend(emitted.origins, emitted.count, frame.node), meaning)
                           <=> (EveryRootSucceeded(emitted.count, emitted.origins, meaning)
@@ -1611,7 +1618,8 @@ THEOREM CompletedSyntaxVisitIdentifiesTheFirstReachedFailure ==
                           <=> (FirstRootFailureIs(emitted.count, emitted.origins, meaning, outcome)
                                \/ (EveryRootSucceeded(emitted.count, emitted.origins, meaning)
                                    /\ ~meaning[frame.node].ok /\ outcome = meaning[frame.node]))
-                    BY <2>1a, AppendingARootRetainsTheFirstFailure, SMT
+                    BY <2>1a, <4>2a, <4>2b, AppendingARootRetainsTheFirstFailure, SMT
+                        DEF EveryRootSucceeded, FirstRootFailureIs
                 <4>3. /\ EveryRootSucceeded(nextCurrent.height, nextCurrent.terms, meaning)
                           <=> (EveryRootSucceeded(current.height, current.terms, meaning)
                                /\ meaning[frame.node].ok)

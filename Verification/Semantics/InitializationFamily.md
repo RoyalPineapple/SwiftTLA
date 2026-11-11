@@ -238,6 +238,17 @@ backends, resources and budgets remain unchanged. These new bodies and the
 complete compiler-initialization theorem are unverified. A failed proof attempt
 does not establish theorem falsity or compiler agreement.
 
+That body repair was published in `308c01f3`. Its exact pinned run no longer
+reports the formatter crash. It leaves 1/1,688 expression, 11/1,192 initialization
+history and 8/610 initialization-parent obligations unproved. Complete current
+logs, source snapshots and tool receipts are retained in the primary checkout's
+`.git/swifttla-proof-evidence/compiler-initialization-admission-308c01f3-2026-11-11/ordinary/`.
+The current repair changes only those five existing proof bodies. It exposes
+append indices, empty/singleton projections, bounded induction and each reached
+prefix's child premises before their consumers. Statements and premises remain
+exact; no local pinned proof tool is available. These bodies remain unverified
+until their own pinned execution, and the actual compiler theorem remains open.
+
 The source/control trace also exposed a real hidden-seed rendering gap.
 Existing validation admits ASCII control identifiers, including names beginning
 with the formal string-codec marker. The old control renderer quoted such names
