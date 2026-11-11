@@ -284,14 +284,18 @@ struct OrderedAssignmentLoweringTests {
         }
 
         let spec = #spec("ChangedBuilder") {
-            let algorithm = Algorithm(scoped: { scope in
-                let value = scope.sharedVar(initial: 1)
-                Do(OrderedAssignmentStep.`switch`) {
-                    Assign(value, to: value + 1)
+            let algorithm = `Algorithm`(scoped: { scope in
+                let value = scope.`sharedVar`(initial: 1)
+                `Do`(OrderedAssignmentStep.`switch`) {
+                    `Assign`(value, to: value + 1)
                 }
             })
             algorithm
         }
+        try #require(spec.diagnostics.contains {
+            $0.source == "algorithm"
+                && $0.actual == "the runtime Algorithm builder produced a different source model"
+        })
         #expect(throws: SourceParseDiagnostic.self) { _ = try spec.compile() }
 
         let domainSpec = #spec("ChangedBuilder") {
@@ -351,18 +355,31 @@ struct OrderedAssignmentLoweringTests {
         let original = try parseSpecTestClosure(source)
         try OrderedIntSourceSyntaxCheck.verifyRewrite(original,
             rewritten: try parseSpecTestClosure(expanded))
-        for changed in [
+        let changedRewrites = [
             expanded.replacingOccurrences(of: "_name: \"algorithm\"", with: "_name: \"other\""),
             expanded.replacingOccurrences(of: "_name: \"first\"", with: "_name: \"other\""),
             expanded.replacingOccurrences(of: "second + 1", with: "first + 1"),
             expanded.replacingOccurrences(of: "Assign(second, to: first)",
                 with: "Assign(first, to: second)"),
             expanded.replacingOccurrences(of: "\n    algorithm\n", with: "\n    other\n"),
-        ] {
-            #expect(changed != expanded)
-            #expect(throws: CompilationDiagnostic.self) {
-                try OrderedIntSourceSyntaxCheck.verifyRewrite(original,
-                    rewritten: try parseSpecTestClosure(changed))
+        ]
+        for escaped in ["", "Algorithm", "sharedVar", "Do", "Assign"] {
+            let authored = escaped.isEmpty ? source
+                : source.replacingOccurrences(of: "\(escaped)(", with: "`\(escaped)`(")
+            let output = escaped.isEmpty ? expanded
+                : expanded.replacingOccurrences(of: "\(escaped)(", with: "`\(escaped)`(")
+            try #require(escaped.isEmpty || !authored.utf8.elementsEqual(source.utf8))
+            let authoredSyntax = try parseSpecTestClosure(authored)
+            try OrderedIntSourceSyntaxCheck.verifyRewrite(authoredSyntax,
+                rewritten: try parseSpecTestClosure(output))
+            for changed in changedRewrites {
+                let candidate = escaped.isEmpty ? changed
+                    : changed.replacingOccurrences(of: "\(escaped)(", with: "`\(escaped)`(")
+                try #require(!candidate.utf8.elementsEqual(output.utf8))
+                #expect(throws: CompilationDiagnostic.self) {
+                    try OrderedIntSourceSyntaxCheck.verifyRewrite(authoredSyntax,
+                        rewritten: try parseSpecTestClosure(candidate))
+                }
             }
         }
 
@@ -477,21 +494,26 @@ struct OrderedAssignmentLoweringTests {
         let fixtureSource = try #require(try TLASpecVerifier.findSpec(in: fixture.memberBlock.members,
             defaultName: "GeneratedAlgorithmMachine"))
         let fixtureEnums = try TLASpecVerifier.collectEnumVariables(from: fixture.memberBlock.members)
-        let fixtureParsed = SpecParser.parseSpecClosure(named: fixtureSource.name, fixtureSource.closure,
-            sourceTypes: .init(enums: fixtureEnums))
-        try #require(fixtureParsed.diagnostics.isEmpty)
-        _ = try fixtureParsed.compile()
-        try OrderedIntSourceSyntaxCheck.verify(fixtureSource.closure, parsed: fixtureParsed, enums: fixtureEnums)
-        let fixtureText = fixtureSource.closure.description
-        try #require(fixtureText.components(separatedBy: "initial: 1").count == 2)
-        let changedFixture = fixtureText.replacingOccurrences(of: "initial: 1", with: "initial: 3")
-        try #require(!changedFixture.utf8.elementsEqual(fixtureText.utf8))
-        let alteredFixture = SpecParser.parseSpecClosure(named: fixtureSource.name,
-            try parseSpecTestClosure(changedFixture), sourceTypes: .init(enums: fixtureEnums))
-        try #require(alteredFixture.diagnostics.isEmpty)
-        _ = try alteredFixture.compile()
-        #expect(throws: CompilationDiagnostic.self) {
-            try OrderedIntSourceSyntaxCheck.verify(fixtureSource.closure, parsed: alteredFixture, enums: fixtureEnums)
+        for escaped in ["", "Algorithm", "Do", "Invariant", "sharedVar", "Assign"] {
+            let fixtureText = escaped.isEmpty ? fixtureSource.closure.description
+                : fixtureSource.closure.description.replacingOccurrences(of: "\(escaped)(", with: "`\(escaped)`(")
+            try #require(escaped.isEmpty || !fixtureText.utf8.elementsEqual(fixtureSource.closure.description.utf8))
+            let authoredFixture = try parseSpecTestClosure(fixtureText)
+            let fixtureParsed = SpecParser.parseSpecClosure(named: fixtureSource.name, authoredFixture,
+                sourceTypes: .init(enums: fixtureEnums))
+            try #require(fixtureParsed.diagnostics.isEmpty)
+            _ = try fixtureParsed.compile()
+            try OrderedIntSourceSyntaxCheck.verify(authoredFixture, parsed: fixtureParsed, enums: fixtureEnums)
+            try #require(fixtureText.components(separatedBy: "initial: 1").count == 2)
+            let changedFixture = fixtureText.replacingOccurrences(of: "initial: 1", with: "initial: 3")
+            try #require(!changedFixture.utf8.elementsEqual(fixtureText.utf8))
+            let alteredFixture = SpecParser.parseSpecClosure(named: fixtureSource.name,
+                try parseSpecTestClosure(changedFixture), sourceTypes: .init(enums: fixtureEnums))
+            try #require(alteredFixture.diagnostics.isEmpty)
+            _ = try alteredFixture.compile()
+            #expect(throws: CompilationDiagnostic.self, "Escaped constructor: \(escaped)") {
+                try OrderedIntSourceSyntaxCheck.verify(authoredFixture, parsed: alteredFixture, enums: fixtureEnums)
+            }
         }
         for secondName in ["second", "pc_1"] {
             let controlCollisionSource = source
@@ -628,7 +650,7 @@ struct OrderedAssignmentLoweringTests {
                 with: "Assign(first, to: second + 1)")
             .replacingOccurrences(of: "__FIRST__", with: "Assign(second, to: first)")
 
-        for changed in [
+        let changedSteps = [
             source.replacingOccurrences(of: "initial: 1", with: "initial: 3"),
             source.replacingOccurrences(of: "initial: first + 2", with: "initial: first + 3"),
             source.replacingOccurrences(of: "Do(Step.copy)", with: "Do(Step.finish)"),
@@ -637,11 +659,25 @@ struct OrderedAssignmentLoweringTests {
             source.replacingOccurrences(of: "Assign(second, to: first)",
                 with: "Assign(first, to: second)"),
             reversed,
-        ] {
-            #expect(changed != source)
-            #expect(throws: CompilationDiagnostic.self) {
-                try OrderedIntSourceSyntaxCheck.verify(
-                    try parseSpecTestClosure(changed), parsed: parsed, enums: enums)
+        ]
+        for escaped in ["", "Algorithm", "Do", "sharedVar", "Assign"] {
+            let authoredText = escaped.isEmpty ? source
+                : source.replacingOccurrences(of: "\(escaped)(", with: "`\(escaped)`(")
+            try #require(escaped.isEmpty || !authoredText.utf8.elementsEqual(source.utf8))
+            let authored = try parseSpecTestClosure(authoredText)
+            let escapedParsed = SpecParser.parseSpecClosure(named: "OrderedInt", authored,
+                sourceTypes: .init(enums: enums))
+            try #require(escapedParsed.diagnostics.isEmpty)
+            _ = try escapedParsed.compile()
+            try OrderedIntSourceSyntaxCheck.verify(authored, parsed: escapedParsed, enums: enums)
+            for changed in changedSteps {
+                let changedText = escaped.isEmpty ? changed
+                    : changed.replacingOccurrences(of: "\(escaped)(", with: "`\(escaped)`(")
+                try #require(!changedText.utf8.elementsEqual(authoredText.utf8))
+                #expect(throws: CompilationDiagnostic.self) {
+                    try OrderedIntSourceSyntaxCheck.verify(
+                        try parseSpecTestClosure(changedText), parsed: escapedParsed, enums: enums)
+                }
             }
         }
 

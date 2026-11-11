@@ -29,7 +29,7 @@ enum OrderedIntSourceSyntaxCheck {
                   let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
                   registered.contains(name),
                   let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm" else { continue }
+                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm" else { continue }
             let matches = parsed.sourceAlgorithms.filter { $0.model.name == name }
             if unshadowed,
                let body = call.arguments.first(where: { $0.label?.text == "scoped" })?
@@ -73,7 +73,7 @@ enum OrderedIntSourceSyntaxCheck {
         for item in syntax.statements {
             if case .expr(let expression) = item.item,
                let call = expression.as(FunctionCallExprSyntax.self),
-               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
                ["Do", "Invariant"].contains(name) { continue }
             guard case .decl(let declaration) = item.item,
                   let variable = declaration.as(VariableDeclSyntax.self),
@@ -173,7 +173,7 @@ enum OrderedIntSourceSyntaxCheck {
                   let binding = variable.bindings.first,
                   let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
                   let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm",
+                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm",
                   components(of: call, enums: nil) != nil else { continue }
             guard case .decl(let outputDeclaration) = expanded.item,
                   let output = outputDeclaration.as(VariableDeclSyntax.self),
@@ -251,7 +251,7 @@ enum OrderedIntSourceSyntaxCheck {
                   let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
                   registered.contains(name),
                   let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm",
+                  call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm",
                   let expected = components(of: call, enums: nil) else { continue }
             let rendered = try expected.map(render).joined(separator: ", ")
             witnessCalls.append("._checkingOrderedIntSource(algorithm: \(String(reflecting: name)), components: [\(rendered)])")
@@ -325,7 +325,7 @@ enum OrderedIntSourceSyntaxCheck {
                let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
                let member = initializer.calledExpression.as(MemberAccessExprSyntax.self),
                member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == scope,
-               member.declName.baseName.text == "sharedVar",
+               member.declName.baseName.sourceIdentifierName == "sharedVar",
                initializer.arguments.allSatisfy({
                    $0.label?.text == "_name" || $0.label?.text == "label"
                        || $0.label?.text == "initial" || $0.label?.text == "in"
@@ -351,7 +351,7 @@ enum OrderedIntSourceSyntaxCheck {
             }
             guard case .expr(let expression) = item.item,
                   let step = expression.as(FunctionCallExprSyntax.self),
-                  step.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Do",
+                  step.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Do",
                   step.arguments.count == 1, step.arguments.first?.label == nil,
                   let labelExpression = step.arguments.first?.expression,
                   let labelAccess = labelExpression.as(MemberAccessExprSyntax.self),
@@ -370,7 +370,7 @@ enum OrderedIntSourceSyntaxCheck {
             for statement in body.statements {
                 guard case .expr(let expression) = statement.item,
                       let assignment = expression.as(FunctionCallExprSyntax.self),
-                      assignment.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Assign",
+                      assignment.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Assign",
                       assignment.arguments.count == 2,
                       assignment.arguments.first?.label == nil,
                       assignment.arguments.last?.label?.text == "to",
