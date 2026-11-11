@@ -1,5 +1,5 @@
-enum StraightLineAssignmentCheck {
-    private enum OrderedIntNode: Equatable {
+package enum StraightLineAssignmentCheck {
+    package enum OrderedIntNode: Equatable, Sendable {
         case literal(Int)
         case read(String)
         case add(Int, Int)
@@ -10,7 +10,7 @@ enum StraightLineAssignmentCheck {
         case conditional(Int, Int, Int)
     }
 
-    private static func orderedIntPlan(_ root: StateExpr, reads: Set<String>,
+    package static func orderedIntPlan(_ root: StateExpr, reads: Set<String>,
                                        renaming: [String: String] = [:],
                                        type: CompiledValueType = .int) -> [OrderedIntNode]? {
         var pending = [(root, type, false)]
@@ -62,7 +62,7 @@ enum StraightLineAssignmentCheck {
         return indices.count == 1 ? nodes : nil
     }
 
-    private static func orderedIntPlan(_ root: CompiledExpression,
+    package static func orderedIntPlan(_ root: CompiledExpression,
                                        names: [VariableID: String],
                                        type: CompiledValueType = .int,
                                        requireTypes: Bool = false) -> [OrderedIntNode]? {

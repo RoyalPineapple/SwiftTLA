@@ -12,7 +12,7 @@ struct InitialFailureEvidenceTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let sha = String(repeating: "a", count: 40)
         let report = try InitialFailureEvidence.prepare(sourceSHA: sha, to: directory)
-        #expect(report.schema == "swifttla.initial-failure-proof-v5")
+        #expect(report.schema == "swifttla.initial-failure-proof-v6")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)
         #expect(!report.graphCompared)
@@ -66,6 +66,19 @@ struct InitialFailureEvidenceTests {
         #expect(proofText.contains("ExpectedFailures == {ExpectedFailure}"))
         #expect(proofText.contains("THEOREM CompleteFailureEvents =="))
         #expect(proofText.contains("__SwiftTLAInitialFailureEvents = ExpectedFailures"))
+        let plans = "<<" + [
+            "<<\"first\", [count |-> 1, kinds |-> <<\"literal\">>, literals |-> <<1>>, reads |-> <<\"first\">>, left |-> <<0>>, right |-> <<0>>]>>",
+            "<<\"second\", [count |-> 3, kinds |-> <<\"read\", \"literal\", \"add\">>, literals |-> <<0, 2, 0>>, reads |-> <<\"first\", \"second\", \"second\">>, left |-> <<0, 0, 1>>, right |-> <<0, 0, 2>>]>>",
+            "<<\"last\", [count |-> 3, kinds |-> <<\"read\", \"literal\", \"add\">>, literals |-> <<0, ((7 * 1073741824 + 1073741823) * 1073741824 + 1073741823), 0>>, reads |-> <<\"second\", \"last\", \"last\">>, left |-> <<0, 0, 1>>, right |-> <<0, 0, 2>>]>>",
+        ].joined(separator: ", ") + ">>"
+        #expect(proofText.contains("SourceInitializers == \(plans)\n"))
+        #expect(proofText.contains("LoweredInitializers == \(plans)\n"))
+        #expect(report.sourceInitializersSHA256 == SHA256.hex(Data(plans.utf8)))
+        #expect(report.loweredInitializersSHA256 == SHA256.hex(Data(plans.utf8)))
+        #expect(report.sourceCompilationIdentity == (try CheckedAdditionPrefixInitialModel.spec.compile()).identity.description)
+        #expect(proofText.contains("THEOREM SourceInitializersMatchLoweredIR =="))
+        #expect(proofText.contains("THEOREM InitializerPlansInvokeCheckedExpressionParent =="))
+        #expect(proofText.contains("ProofExpressions!PartialOrderedIntExpressionsPreserveValueAndFailure"))
     }
 
     @Test("Invalid source provenance is refused before output")

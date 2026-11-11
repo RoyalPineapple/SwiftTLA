@@ -225,7 +225,7 @@ jobs:
           report = json.loads((case / "preparation.json").read_text())
           native = json.loads((case / "native-initial-failure.json").read_text())
           expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
-          assert report["schema"] == "swifttla.initial-failure-proof-v5"
+          assert report["schema"] == "swifttla.initial-failure-proof-v6"
           assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
           assert report["result"] == "prepared" and report["graphCompared"] is False
           assert (report["site"], report["kind"], report["operands"]) == expected
@@ -251,6 +251,27 @@ jobs:
               and hashlib.sha256(path.read_bytes()).hexdigest() == report[key]
               for key, path in files.items()
           )
+          proof_lines = files["proofSHA256"].read_text().splitlines()
+          for name, key in [("SourceInitializers", "sourceInitializersSHA256"),
+                            ("LoweredInitializers", "loweredInitializersSHA256")]:
+              prefix = name + " == "
+              definitions = [line[len(prefix):] for line in proof_lines if line.startswith(prefix)]
+              assert len(definitions) == 1
+              assert hashlib.sha256(definitions[0].encode()).hexdigest() == report[key]
+          assert len(report["sourceCompilationIdentity"]) == 64
+          lowered = [line for line in proof_lines if line.startswith("LoweredInitializers == ")]
+          assert len(lowered) == 1
+          operand = "literals |-> <<0, 2, 0>>"
+          assert lowered[0].count(operand) == 1
+          changed = lowered[0].replace(operand, "literals |-> <<0, 0, 0>>")
+          assert changed != lowered[0]
+          proof = files["proofSHA256"].read_text()
+          wrong = proof.replace(lowered[0], changed, 1)
+          assert wrong != proof
+          module = "MODULE SwiftTLAInitialFailureProof"
+          assert wrong.count(module) == 1
+          wrong = wrong.replace(module, "MODULE SwiftTLAInitialFailureWrongLowering", 1)
+          (case / "generated-tla" / "SwiftTLAInitialFailureWrongLowering.tla").write_text(wrong)
           PY
       - uses: ./.github/actions/setup-pinned-tlaps
         id: proof-tool
@@ -261,10 +282,15 @@ jobs:
           set -euo pipefail
           # Pinned TLC cannot evaluate Int.max; TLAPS proves this emitted TLA+ result.
           proof_tool_dir='${{ steps.proof-tool.outputs.directory }}'
+          proof_inputs=.build/initial-failure-artifacts/proof-inputs
+          mkdir -p "$proof_inputs"
+          cp Verification/Semantics/OrderedIntExpressionRule.tla Verification/Semantics/IndexedHistoryRules.tla "$proof_inputs/"
+          shasum -a 256 Verification/Semantics/OrderedIntExpressionRule.tla Verification/Semantics/IndexedHistoryRules.tla \
+            > .build/initial-failure-artifacts/proof-inputs.sha256
           "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/initial-failure-artifacts/tlapm-version.txt
           grep -Eq '^941f894(-dirty)?$' .build/initial-failure-artifacts/tlapm-version.txt
           "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version > .build/initial-failure-artifacts/z3-version.txt
-          "$proof_tool_dir/tlapm/bin/tlapm" --nofp \
+          "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" \
             .build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla \
             2>&1 | tee .build/initial-failure-artifacts/proof.log
           grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \
@@ -276,7 +302,7 @@ jobs:
           sed -e 's/MODULE SwiftTLAInitialFailureProof/MODULE SwiftTLAInitialFailureWrongPayload/' \
               -e 's/^ExpectedOperand1 == .*/ExpectedOperand1 == 0/' \
               "$source_proof" > "$wrong_proof"
-          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "$wrong_proof" \
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_proof" \
               > .build/initial-failure-artifacts/wrong-payload.log 2>&1; then
             echo 'wrong-payload proof unexpectedly succeeded' >&2
             exit 1
@@ -289,7 +315,7 @@ jobs:
               -e 's/^ExpectedBefore == .*/ExpectedBefore == <<>>/' \
               "$source_proof" > "$wrong_before"
           ! cmp -s "$source_proof" "$wrong_before"
-          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "$wrong_before" \
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_before" \
               > .build/initial-failure-artifacts/wrong-before.log 2>&1; then
             echo 'wrong-before proof unexpectedly succeeded' >&2
             exit 1
@@ -302,13 +328,23 @@ jobs:
               -e 's/^ExpectedFailures == .*/ExpectedFailures == {}/' \
               "$source_proof" > "$wrong_events"
           ! cmp -s "$source_proof" "$wrong_events"
-          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp "$wrong_events" \
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_events" \
               > .build/initial-failure-artifacts/wrong-events.log 2>&1; then
             echo 'wrong-events proof unexpectedly succeeded' >&2
             exit 1
           fi
           grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
             .build/initial-failure-artifacts/wrong-events.log
+          wrong_lowering=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongLowering.tla
+          test -s "$wrong_lowering"
+          ! cmp -s "$source_proof" "$wrong_lowering"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_lowering" \
+              > .build/initial-failure-artifacts/wrong-lowering.log 2>&1; then
+            echo 'wrong-lowering proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-lowering.log
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -316,7 +352,7 @@ jobs:
           root = Path(".build/initial-failure-artifacts")
           result = json.loads((root / "case" / "preparation.json").read_text())
           result.update(result="proved", proofMethod="TLAPS", wrongPayloadRejected=True,
-                        wrongBeforeRejected=True, wrongEventsRejected=True)
+                        wrongBeforeRejected=True, wrongEventsRejected=True, wrongLoweringRejected=True)
           (root / "proof-result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
           PY
       - name: Retain source revision
