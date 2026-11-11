@@ -100,13 +100,19 @@ THEOREM FiniteBooleanPrefixProperty ==
                ((\A earlier \in 0..(index - 1) : flags[earlier]) => flags[index])
     PROVE \A index \in 0..count : flags[index]
     PROOF
-    <1>. DEFINE holds(index) == flags[index]
-    <1>1. holds(0) BY SMT DEF holds
-    <1>2. \A index \in 1..count :
-        ((\A earlier \in 0..(index - 1) : holds(earlier)) => holds(index))
-        BY SMT DEF holds
-    <1>3. \A index \in 0..count : holds(index)
-        BY <1>1, <1>2, FiniteIndexedPrefixProperty
-    <1>. QED BY <1>3, SMT DEF holds
+    <1>. DEFINE P(length) ==
+        \A index \in 0..count : index <= length => flags[index]
+    <1>1. P(0) BY SMT DEF P
+    <1>2. ASSUME NEW length \in Nat, P(length)
+          PROVE P(length + 1)
+        <2>. SUFFICES ASSUME length + 1 \in 1..count
+                     PROVE flags[length + 1]
+            BY P(length), SMT DEF P
+        <2>1. \A earlier \in 0..length : flags[earlier]
+            BY P(length), SMT DEF P
+        <2>. QED BY <2>1, SMT
+    <1>3. \A length \in Nat : P(length)
+        BY <1>1, <1>2, NatInduction
+    <1>. QED BY <1>3, SMT DEF P
 
 =============================================================================
