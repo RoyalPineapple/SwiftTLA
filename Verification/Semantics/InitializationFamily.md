@@ -243,11 +243,18 @@ reports the formatter crash. It leaves 1/1,688 expression, 11/1,192 initializati
 history and 8/610 initialization-parent obligations unproved. Complete current
 logs, source snapshots and tool receipts are retained in the primary checkout's
 `.git/swifttla-proof-evidence/compiler-initialization-admission-308c01f3-2026-11-11/ordinary/`.
-The current repair changes only those five existing proof bodies. It exposes
-append indices, empty/singleton projections, bounded induction and each reached
-prefix's child premises before their consumers. Statements and premises remain
-exact; no local pinned proof tool is available. These bodies remain unverified
-until their own pinned execution, and the actual compiler theorem remains open.
+That next repair was published in `02df77ca`. Its pinned run proves all 1,696
+expression-module obligations, including the first-reached-failure step.
+The initialization modules retain 6/1,277 and 10/633 undischarged obligations.
+All 263 proof inputs, 158 TLA snapshots and two runners match that published revision.
+The current tool receipts describe a cache delivery, not a cold build.
+
+The next repair changes four existing initialization proof bodies.
+It separates empty/singleton set operations, record projections and child theorem applications.
+It also supplies explicit bound membership, map domains and typed outcome facts.
+All statements, premises and definitions outside those bodies remain exact.
+No local pinned proof tool is available. These new bodies require their own pinned execution.
+The actual compiler-initialization theorem and whole-language preservation remain unproved.
 
 The source/control trace also exposed a real hidden-seed rendering gap.
 Existing validation admits ASCII control identifiers, including names beginning
