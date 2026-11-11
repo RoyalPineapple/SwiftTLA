@@ -338,7 +338,8 @@ extension TLAValue: Codable {
             self = .tuple(elements)
         case .record:
             try Self.requireKeys([.version, .tag, .fields], from: decoder, for: tag)
-            guard let fields = try? container.decode([RecordEntry].self, forKey: .fields), Set(fields.map(\.key)).count == fields.count else {
+            guard let fields = try? container.decode([RecordEntry].self, forKey: .fields),
+                  Set(fields.map { TLAValue.string($0.key) }).count == fields.count else {
                 throw TLAValueCodingError.malformedValue(tag.rawValue)
             }
             self = .record(TLARecord(fields.map { .init($0.key, $0.value) }))
