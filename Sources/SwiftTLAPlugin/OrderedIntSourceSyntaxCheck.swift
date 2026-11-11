@@ -72,8 +72,9 @@ enum OrderedIntSourceSyntaxCheck {
         var result: [Component] = []
         for item in syntax.statements {
             if case .expr(let expression) = item.item,
-               expression.as(FunctionCallExprSyntax.self)?.calledExpression
-                .as(DeclReferenceExprSyntax.self)?.baseName.text == "Do" { continue }
+               let call = expression.as(FunctionCallExprSyntax.self),
+               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+               ["Do", "Invariant"].contains(name) { continue }
             guard case .decl(let declaration) = item.item,
                   let variable = declaration.as(VariableDeclSyntax.self),
                   variable.bindingSpecifier.text == "let", variable.bindings.count == 1,

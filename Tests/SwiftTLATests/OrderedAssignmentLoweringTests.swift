@@ -468,6 +468,31 @@ struct OrderedAssignmentLoweringTests {
         #expect(parsed.diagnostics.isEmpty)
         try OrderedIntSourceSyntaxCheck.verify(original, parsed: parsed, enums: enums)
         _ = try parsed.compile()
+        let fixtureFile = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("GeneratedStateMachineFixtures.swift")
+        let fixtureSyntax = Parser.parse(source: try String(contentsOf: fixtureFile, encoding: .utf8))
+        let fixture = try #require(fixtureSyntax.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "GeneratedAlgorithmMachine" })
+        let fixtureSource = try #require(try TLASpecVerifier.findSpec(in: fixture.memberBlock.members,
+            defaultName: "GeneratedAlgorithmMachine"))
+        let fixtureEnums = try TLASpecVerifier.collectEnumVariables(from: fixture.memberBlock.members)
+        let fixtureParsed = SpecParser.parseSpecClosure(named: fixtureSource.name, fixtureSource.closure,
+            sourceTypes: .init(enums: fixtureEnums))
+        try #require(fixtureParsed.diagnostics.isEmpty)
+        _ = try fixtureParsed.compile()
+        try OrderedIntSourceSyntaxCheck.verify(fixtureSource.closure, parsed: fixtureParsed, enums: fixtureEnums)
+        let fixtureText = fixtureSource.closure.description
+        try #require(fixtureText.components(separatedBy: "initial: 1").count == 2)
+        let changedFixture = fixtureText.replacingOccurrences(of: "initial: 1", with: "initial: 3")
+        try #require(!changedFixture.utf8.elementsEqual(fixtureText.utf8))
+        let alteredFixture = SpecParser.parseSpecClosure(named: fixtureSource.name,
+            try parseSpecTestClosure(changedFixture), sourceTypes: .init(enums: fixtureEnums))
+        try #require(alteredFixture.diagnostics.isEmpty)
+        _ = try alteredFixture.compile()
+        #expect(throws: CompilationDiagnostic.self) {
+            try OrderedIntSourceSyntaxCheck.verify(fixtureSource.closure, parsed: alteredFixture, enums: fixtureEnums)
+        }
         for secondName in ["second", "pc_1"] {
             let controlCollisionSource = source
                 .replacingOccurrences(of: "scope.sharedVar(initial: 1)",
