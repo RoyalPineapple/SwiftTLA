@@ -34,6 +34,8 @@ package struct InitialFailureEvidenceReport: Codable, Sendable {
     package let sourceCompilationIdentity: String
     package let sourceInitializersSHA256: String
     package let loweredInitializersSHA256: String
+    package let resolvedInitializersSHA256: String
+    package let resolvedVariableTypesSHA256: String
     package let layoutSHA256: String
     package let initializationOrderSHA256: String
     package let prefixOrdersSHA256: String
@@ -78,20 +80,37 @@ package enum InitialFailureEvidence {
         guard failures.count == 1 else { throw InitialFailureEvidenceError.unsupportedNativeOutcome }
         let source = CheckedAdditionPrefixInitialModel.spec
         let compilation = try source.compile()
+        let typeInputs = try CompiledTypeInputs(compilation: compilation,
+            types: CompiledTypeContext(enums: .init(), formalNames: [:])) { spelling in
+            guard ["Int", "Swift.Int"].contains(spelling) else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            return .int
+        }
+        let resolvedProgram = try CompiledProgram(inputs: typeInputs)
+        let resolvedModule = try resolvedProgram.renderModule()
+        let resolvedConfiguration = try resolvedModule.configuration.render(usesSymmetryReduction: false)
         let rendered = try CheckedAdditionPrefixInitialModel.render()
         let loweredOutput = try compilation.render().tlaBundle
         guard case .compiled(let identity, _, _) = rendered.tlaBundle.provenance,
               identity == compilation.identity,
+              resolvedProgram.identity == compilation.identity,
               let generatedConfiguration = rendered.tlaBundle.root.cfg,
               let loweredConfiguration = loweredOutput.root.cfg,
               rendered.tlaBundle.imports.isEmpty, loweredOutput.imports.isEmpty,
+              resolvedModule.imports.isEmpty,
               rendered.tlaBundle.root.tla.utf8.elementsEqual(loweredOutput.root.tla.utf8),
-              generatedConfiguration.utf8.elementsEqual(loweredConfiguration.utf8) else {
+              rendered.tlaBundle.root.tla.utf8.elementsEqual(resolvedModule.renderedModuleSource.utf8),
+              generatedConfiguration.utf8.elementsEqual(loweredConfiguration.utf8),
+              generatedConfiguration.utf8.elementsEqual(resolvedConfiguration.utf8) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let sourceInitializers = try sourceInitializerPlans(source)
-        let loweredInitializers = try loweredInitializerPlans(compilation)
-        let recordInputs = try initialRecordInputs(compilation)
+        let loweredInitializers = try initializerPlans(layout: compilation.layout,
+            initializations: compilation.semantics.behavior.initializations, requireTypes: false)
+        let resolvedInitializers = try initializerPlans(layout: resolvedProgram.layout,
+            initializations: resolvedProgram.behavior.initializations, requireTypes: true)
+        let recordInputs = try initialRecordInputs(resolvedProgram)
         guard let check = try rendered.initialEvaluationFailureBundle(capturingRecord: true) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
@@ -99,6 +118,7 @@ package enum InitialFailureEvidence {
         let proof = try proofSource(module: module.name, tla: module.tla,
             site: site, operands: operands, before: failures[0].before,
             sourceInitializers: sourceInitializers, loweredInitializers: loweredInitializers,
+            resolvedInitializers: resolvedInitializers,
             recordInputs: recordInputs)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let generated = directory.appendingPathComponent("generated-tla")
@@ -113,7 +133,7 @@ package enum InitialFailureEvidence {
         let proofBytes = Data(proof.utf8)
         try proofBytes.write(to: proofURL, options: .atomic)
         let report = InitialFailureEvidenceReport(
-            schema: "swifttla.initial-failure-proof-v8", sourceSHA: sourceSHA,
+            schema: "swifttla.initial-failure-proof-v9", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
@@ -122,6 +142,8 @@ package enum InitialFailureEvidence {
             sourceCompilationIdentity: compilation.identity.description,
             sourceInitializersSHA256: SHA256.hex(Data(sourceInitializers.utf8)),
             loweredInitializersSHA256: SHA256.hex(Data(loweredInitializers.utf8)),
+            resolvedInitializersSHA256: SHA256.hex(Data(resolvedInitializers.utf8)),
+            resolvedVariableTypesSHA256: SHA256.hex(Data(recordInputs.types.utf8)),
             layoutSHA256: SHA256.hex(Data(recordInputs.layout.utf8)),
             initializationOrderSHA256: SHA256.hex(Data(recordInputs.order.utf8)),
             prefixOrdersSHA256: SHA256.hex(Data(recordInputs.prefixes.utf8)),
@@ -159,16 +181,19 @@ package enum InitialFailureEvidence {
         return "<<\(rows.joined(separator: ", "))>>"
     }
 
-    private static func loweredInitializerPlans(_ compilation: CompiledSpecification) throws -> String {
-        let variables = Dictionary(uniqueKeysWithValues: compilation.layout.variables.map { ($0.id, $0) })
+    private static func initializerPlans(layout: CompiledLayout,
+                                        initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)],
+                                        requireTypes: Bool) throws -> String {
+        let variables = Dictionary(uniqueKeysWithValues: layout.variables.map { ($0.id, $0) })
         let names = variables.mapValues { $0.declaration.name }
-        let rows = try compilation.semantics.behavior.initializations.compactMap { initialization -> String? in
+        let rows = try initializations.compactMap { initialization -> String? in
             guard let variable = variables[initialization.variable] else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
             guard variable.declaration.origin == .source else { return nil }
             guard case .value(let expression) = initialization.initialization,
-                  let nodes = StraightLineAssignmentCheck.orderedIntPlan(expression, names: names) else {
+                  let nodes = StraightLineAssignmentCheck.orderedIntPlan(expression, names: names,
+                      requireTypes: requireTypes) else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
             let root = variable.declaration.name
@@ -199,9 +224,9 @@ package enum InitialFailureEvidence {
             + "reads |-> \(tuple(reads)), left |-> \(tuple(left)), right |-> \(tuple(right))]"
     }
 
-    private static func initialRecordInputs(_ compilation: CompiledSpecification) throws
-        -> (layout: String, order: String, prefixes: String, seeds: String) {
-        let variables = compilation.layout.variables
+    private static func initialRecordInputs(_ program: CompiledProgram) throws
+        -> (layout: String, order: String, prefixes: String, seeds: String, types: String) {
+        let variables = program.layout.variables
         let byID = Dictionary(uniqueKeysWithValues: variables.map { ($0.id, $0) })
         let layout = variables.map { variable in
             let origin: String = switch variable.declaration.origin {
@@ -214,7 +239,7 @@ package enum InitialFailureEvidence {
                 + "name |-> \(TLAValue.string(variable.formalName)), ordinal |-> \(variable.id.ordinal), "
                 + "origin |-> \(TLAValue.string(origin))]"
         }
-        let ordered = try compilation.semantics.behavior.initializations.map { initialization in
+        let ordered = try program.behavior.initializations.map { initialization in
             guard let variable = byID[initialization.variable] else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
@@ -226,7 +251,7 @@ package enum InitialFailureEvidence {
                 $0.formalName.utf8.lexicographicallyPrecedes($1.formalName.utf8)
             }.map { String($0.id.ordinal) })
         }
-        let seeds = try compilation.semantics.behavior.initializations.compactMap { initialization -> String? in
+        let seeds = try program.behavior.initializations.compactMap { initialization -> String? in
             guard let variable = byID[initialization.variable] else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
@@ -234,19 +259,28 @@ package enum InitialFailureEvidence {
             guard variable.declaration.origin == .programCounter,
                   case .value(let expression) = initialization.initialization,
                   case .controlLocation(let location) = expression.operation,
+                  expression.resultType == .controlLocation,
                   expression.children.isEmpty else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
-            let value = try CompiledValue.controlLocation(location).rendered(using: compilation.layout)
+            let value = try CompiledValue.controlLocation(location).rendered(using: program.layout)
             return "[ordinal |-> \(variable.id.ordinal), value |-> \(value)]"
         }
-        return (tuple(layout), tuple(ordered.map { String($0.id.ordinal) }), tuple(prefixes), tuple(seeds))
+        let types = try variables.map { variable in
+            let expected: CompiledValueType = variable.declaration.origin == .source ? .int : .controlLocation
+            guard let type = program.variableTypes[variable.id], type == expected else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            return "[ordinal |-> \(variable.id.ordinal), type |-> \(TLAValue.string(type.swiftType))]"
+        }
+        return (tuple(layout), tuple(ordered.map { String($0.id.ordinal) }), tuple(prefixes), tuple(seeds), tuple(types))
     }
 
     private static func proofSource(module: String, tla: String, site: Int,
                                     operands: [Int], before: [NativeInitialBindingOutput],
                                     sourceInitializers: String, loweredInitializers: String,
-                                    recordInputs: (layout: String, order: String, prefixes: String, seeds: String)) throws -> String {
+                                    resolvedInitializers: String,
+                                    recordInputs: (layout: String, order: String, prefixes: String, seeds: String, types: String)) throws -> String {
         guard isIdentifier(module), tla.contains("\nInit ==") else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
@@ -281,6 +315,8 @@ package enum InitialFailureEvidence {
 
         SourceInitializers == \(sourceInitializers)
         LoweredInitializers == \(loweredInitializers)
+        ResolvedInitializers == \(resolvedInitializers)
+        ResolvedVariableTypes == \(recordInputs.types)
         ActualLayout == \(recordInputs.layout)
         ActualInitializationOrder == \(recordInputs.order)
         ActualPrefixOrders == \(recordInputs.prefixes)
@@ -289,6 +325,18 @@ package enum InitialFailureEvidence {
         THEOREM SourceInitializersMatchLoweredIR ==
           SourceInitializers = LoweredInitializers
           BY SMT DEF SourceInitializers, LoweredInitializers
+
+        THEOREM LoweredInitializersMatchResolvedIR ==
+          LoweredInitializers = ResolvedInitializers
+          BY SMT DEF LoweredInitializers, ResolvedInitializers
+
+        THEOREM ResolvedVariableTypesMatchActualLayout ==
+          /\\ DOMAIN ResolvedVariableTypes = DOMAIN ActualLayout
+          /\\ \\A row \\in DOMAIN ActualLayout :
+                 /\\ ResolvedVariableTypes[row].ordinal = ActualLayout[row].ordinal
+                 /\\ ResolvedVariableTypes[row].type =
+                        IF ActualLayout[row].origin = "source" THEN "Int" ELSE "_ControlLocation"
+          BY SMT DEF ResolvedVariableTypes, ActualLayout
 
         ProofIntMin == \(binaryLiteral(Int.min))
         ProofIntMax == \(binaryLiteral(Int.max))
@@ -331,6 +379,8 @@ package enum InitialFailureEvidence {
         THEOREM ActualLayoutSuppliesInitializationDecoderInputs ==
           /\\ ProofInitialization!RenderedInitialRecordLayout(ProofNames, ProofOrdinals)
           /\\ ProofIntKeys = ProofIntSlots
+          /\\ \\A row \\in DOMAIN ActualLayout : ActualLayout[row].origin = "source"
+                 => ResolvedVariableTypes[row].type = "Int"
           /\\ ProofInitialization!IntInitializationDomains
           /\\ ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
           /\\ \\A row \\in DOMAIN ActualLayout :
@@ -338,7 +388,7 @@ package enum InitialFailureEvidence {
                  /\\ ProofOrdinals[ActualLayout[row].declaration] = ActualLayout[row].ordinal
                  /\\ \\A other \\in DOMAIN ActualLayout :
                         ActualLayout[row].ordinal = ActualLayout[other].ordinal => row = other
-          BY ProofIntegerBounds, ProofInitialSentinels, SMT
+          BY ProofIntegerBounds, ProofInitialSentinels, ResolvedVariableTypesMatchActualLayout, SMT
             DEF ActualLayout, ActualInitializationOrder, ProofCount, ProofOrder, ProofOrdinalKey,
               ProofAllKeys, ProofLayoutIndex, ProofNames, ProofOrdinals, ProofIntSlots, ProofIntKeys,
               SourceInitializers, ProofValues, ProofFailureValues,
@@ -349,7 +399,7 @@ package enum InitialFailureEvidence {
         SourcePlanHistory(plan, state, history) ==
           ProofInitialization!Expressions!SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
             plan.reads, plan.left, plan.right, state, history)
-        LoweredPlanHistory(plan, state, history) ==
+        ResolvedPlanHistory(plan, state, history) ==
           ProofInitialization!Expressions!GeneratedExpressionHistory(plan.count, plan.kinds, plan.literals,
             plan.reads, plan.left, plan.right, state, history)
 
@@ -358,7 +408,7 @@ package enum InitialFailureEvidence {
             \\A state \\in [ProofBoundKeys(row) -> ProofIntMin..ProofIntMax] :
               \\E source, generated :
                 /\\ SourcePlanHistory(SourceInitializers[row][2], state, source)
-                /\\ LoweredPlanHistory(LoweredInitializers[row][2], state, generated)
+                /\\ ResolvedPlanHistory(ResolvedInitializers[row][2], state, generated)
                 /\\ \\A index \\in 0..SourceInitializers[row][2].count :
                        /\\ ProofInitialization!Expressions!OutcomeAgrees(source, generated, index)
                        /\\ source[index] \\in ProofInitialization!Expressions!ExpressionOutcomes
@@ -368,7 +418,7 @@ package enum InitialFailureEvidence {
                               NEW state \\in [ProofBoundKeys(row) -> ProofIntMin..ProofIntMax]
                        PROVE \\E source, generated :
                          /\\ SourcePlanHistory(SourceInitializers[row][2], state, source)
-                         /\\ LoweredPlanHistory(LoweredInitializers[row][2], state, generated)
+                         /\\ ResolvedPlanHistory(ResolvedInitializers[row][2], state, generated)
                          /\\ \\A index \\in 0..SourceInitializers[row][2].count :
                                 /\\ ProofInitialization!Expressions!OutcomeAgrees(source, generated, index)
                                 /\\ source[index] \\in ProofInitialization!Expressions!ExpressionOutcomes
@@ -393,14 +443,14 @@ package enum InitialFailureEvidence {
             BY <1>0, <1>2, <1>3, SMT DEF bound, completed, ProofInitialization!Expressions!PartialExpressionPlan
           <1>5. \\E source, generated :
                   /\\ SourcePlanHistory(plan, state, source)
-                  /\\ LoweredPlanHistory(plan, state, generated)
+                  /\\ ResolvedPlanHistory(plan, state, generated)
                   /\\ \\A index \\in 0..plan.count :
                          /\\ ProofInitialization!Expressions!OutcomeAgrees(source, generated, index)
                          /\\ source[index] \\in ProofInitialization!Expressions!ExpressionOutcomes
                          /\\ generated[index] \\in ProofInitialization!Expressions!ExpressionOutcomes
             BY <1>4, ProofInitialization!Expressions!PartialOrderedIntExpressionsPreserveValueAndFailure, SMT
-              DEF SourcePlanHistory, LoweredPlanHistory
-          <1>. QED BY <1>5, SourceInitializersMatchLoweredIR, SMT DEF plan
+              DEF SourcePlanHistory, ResolvedPlanHistory
+          <1>. QED BY <1>5, SourceInitializersMatchLoweredIR, LoweredInitializersMatchResolvedIR, SMT DEF plan
 
         THEOREM ActualPrefixRecordsInvokeInitializationDecoder ==
           /\\ \\A position \\in 1..ProofCount : \\A prior \\in [ProofPrefixKeys(position) -> ProofValues] :
@@ -416,7 +466,7 @@ package enum InitialFailureEvidence {
                 /\\ \\A state \\in [ProofPrefixIntNames(position) -> ProofIntMin..ProofIntMax] :
                        \\E source, generated :
                          /\\ SourcePlanHistory(SourceInitializers[row][2], state, source)
-                         /\\ LoweredPlanHistory(LoweredInitializers[row][2], state, generated)
+                         /\\ ResolvedPlanHistory(ResolvedInitializers[row][2], state, generated)
                          /\\ \\A index \\in 0..SourceInitializers[row][2].count :
                                 ProofInitialization!Expressions!OutcomeAgrees(source, generated, index)
           PROOF
@@ -452,7 +502,7 @@ package enum InitialFailureEvidence {
         ProofIntPositions == {position \\in 1..ProofCount : ProofOrder[position] \\in ProofIntSlots}
         ProofSourceRow(position) == CHOOSE row \\in DOMAIN SourceInitializers : SourceInitializers[row][1] = ProofOrder[position]
         ProofPlans == [position \\in ProofIntPositions |-> SourceInitializers[ProofSourceRow(position)][2]]
-        ProofLoweredPlans == [position \\in ProofIntPositions |-> LoweredInitializers[ProofSourceRow(position)][2]]
+        ProofResolvedPlans == [position \\in ProofIntPositions |-> ResolvedInitializers[ProofSourceRow(position)][2]]
         ProofControlSeed(position) == (CHOOSE entry \\in {ActualControlSeeds[index] : index \\in DOMAIN ActualControlSeeds} :
           entry.ordinal = ActualInitializationOrder[position]).value
         \\* Totalize the proof input outside reached prefixes; the parent below proves no reached read uses a default.
@@ -461,7 +511,7 @@ package enum InitialFailureEvidence {
         ProofSourceExpressions == [position \\in ProofIntPositions |-> [prior \\in ProofInitialization!PartialBindings |->
           CHOOSE history : SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), history)]]
         ProofGeneratedExpressions == [position \\in ProofIntPositions |-> [prior \\in ProofInitialization!PartialBindings |->
-          CHOOSE history : LoweredPlanHistory(ProofLoweredPlans[position], ProofReadState(position, prior), history)]]
+          CHOOSE history : ResolvedPlanHistory(ProofResolvedPlans[position], ProofReadState(position, prior), history)]]
         ProofEvaluate(generated) == [position \\in 1..ProofCount |-> [prior \\in ProofInitialization!PartialBindings |->
           IF position \\in ProofIntPositions
           THEN IF generated
@@ -477,7 +527,7 @@ package enum InitialFailureEvidence {
                    ProofPlans[position].left, ProofPlans[position].right,
                    ProofPrefixIntNames(position), ProofReadState(position, prior))
             /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofSourceExpressions[position][prior])
-            /\\ LoweredPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
+            /\\ ResolvedPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
             /\\ \\A index \\in 0..ProofPlans[position].count :
                    /\\ ProofInitialization!Expressions!OutcomeAgrees(ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior], index)
                    /\\ ProofSourceExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
@@ -489,7 +539,7 @@ package enum InitialFailureEvidence {
                                     ProofPlans[position].left, ProofPlans[position].right,
                                     ProofPrefixIntNames(position), ProofReadState(position, prior))
                              /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofSourceExpressions[position][prior])
-                             /\\ LoweredPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
+                             /\\ ResolvedPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
                              /\\ \\A index \\in 0..ProofPlans[position].count :
                                     /\\ ProofInitialization!Expressions!OutcomeAgrees(ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior], index)
                                     /\\ ProofSourceExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
@@ -505,12 +555,12 @@ package enum InitialFailureEvidence {
             BY <1>0, ProofIntegerBounds, SMT DEF ProofReadState
           <1>2. \\E source, generated :
                   /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), source)
-                  /\\ LoweredPlanHistory(ProofLoweredPlans[position], ProofReadState(position, prior), generated)
-            BY <1>0, <1>1, InitializerPlansInvokeCheckedExpressionParent, SMT DEF ProofLoweredPlans
+                  /\\ ResolvedPlanHistory(ProofResolvedPlans[position], ProofReadState(position, prior), generated)
+            BY <1>0, <1>1, InitializerPlansInvokeCheckedExpressionParent, SMT DEF ProofResolvedPlans
           <1>3. /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofSourceExpressions[position][prior])
-                /\\ LoweredPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
-            BY <1>2, SourceInitializersMatchLoweredIR, SMT
-              DEF ProofSourceExpressions, ProofGeneratedExpressions, ProofLoweredPlans, ProofPlans
+                /\\ ResolvedPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
+            BY <1>2, SourceInitializersMatchLoweredIR, LoweredInitializersMatchResolvedIR, SMT
+              DEF ProofSourceExpressions, ProofGeneratedExpressions, ProofResolvedPlans, ProofPlans
           <1>4. ProofInitialization!Expressions!PartialExpressionPlan(ProofPlans[position].count,
               ProofPlans[position].kinds, ProofPlans[position].literals, ProofPlans[position].reads,
               ProofPlans[position].left, ProofPlans[position].right,
@@ -524,7 +574,7 @@ package enum InitialFailureEvidence {
                   /\\ ProofSourceExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
                   /\\ ProofGeneratedExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
             BY <1>3, <1>4, ProofInitialization!Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
-              DEF SourcePlanHistory, LoweredPlanHistory
+              DEF SourcePlanHistory, ResolvedPlanHistory
           <1>. QED BY <1>3, <1>4, <1>5, SMT
 
         THEOREM ActualInitializerEvaluatorsAreTypedAndAgree ==
@@ -641,7 +691,7 @@ package enum InitialFailureEvidence {
                   ELSE ProofEvaluate(FALSE)[position][prior] = ProofEvaluate(TRUE)[position][prior]
             BY <1>0, <1>1, <1>4, ActualInitializerExpressionsSupplyTheirParents, ActualInitializerEvaluatorsAreTypedAndAgree, SMT
               DEF ProofIntPositions, ProofEvaluate, ProofInitialization!IntInitializerChildren,
-                SourcePlanHistory, LoweredPlanHistory, ProofInitialization!InitializationHistory,
+                SourcePlanHistory, ResolvedPlanHistory, ProofInitialization!InitializationHistory,
                 ProofInitialization!InitializationResults
           <1>6. \\A index \\in 0..ProofCount : source[index] = generated[index]
             BY <1>0, <1>1, <1>2, <1>5, ActualInitializerEvaluatorsAreTypedAndAgree,

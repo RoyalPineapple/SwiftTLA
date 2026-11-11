@@ -12,7 +12,7 @@ struct InitialFailureEvidenceTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let sha = String(repeating: "a", count: 40)
         let report = try InitialFailureEvidence.prepare(sourceSHA: sha, to: directory)
-        #expect(report.schema == "swifttla.initial-failure-proof-v8")
+        #expect(report.schema == "swifttla.initial-failure-proof-v9")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)
         #expect(!report.graphCompared)
@@ -103,6 +103,17 @@ struct InitialFailureEvidenceTests {
         #expect(proofText.contains("ProofInitialization!OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures"))
         #expect(proofText.contains("ProofInitialization!DeterministicReachableInitializersConstructTheirOrderedObservations"))
         #expect(proofText.contains("THEOREM CompleteInitializationMatchesActualOutputs =="))
+        #expect(proofText.contains("ResolvedInitializers == \(plans)\n"))
+        #expect(preparation["resolvedInitializersSHA256"] as? String == SHA256.hex(Data(plans.utf8)))
+        let resolvedTypes = "<<" + [
+            "[ordinal |-> 0, type |-> \"_ControlLocation\"]",
+            "[ordinal |-> 1, type |-> \"Int\"]",
+            "[ordinal |-> 2, type |-> \"Int\"]",
+            "[ordinal |-> 3, type |-> \"Int\"]",
+        ].joined(separator: ", ") + ">>"
+        #expect(proofText.contains("ResolvedVariableTypes == \(resolvedTypes)\n"))
+        #expect(preparation["resolvedVariableTypesSHA256"] as? String == SHA256.hex(Data(resolvedTypes.utf8)))
+        #expect(proofText.contains("THEOREM LoweredInitializersMatchResolvedIR =="))
     }
 
     @Test("Invalid source provenance is refused before output")

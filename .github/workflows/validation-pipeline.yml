@@ -225,7 +225,7 @@ jobs:
           report = json.loads((case / "preparation.json").read_text())
           native = json.loads((case / "native-initial-failure.json").read_text())
           expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
-          assert report["schema"] == "swifttla.initial-failure-proof-v8"
+          assert report["schema"] == "swifttla.initial-failure-proof-v9"
           assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
           assert report["result"] == "prepared" and report["graphCompared"] is False
           assert (report["site"], report["kind"], report["operands"]) == expected
@@ -254,6 +254,8 @@ jobs:
           proof_lines = files["proofSHA256"].read_text().splitlines()
           for name, key in [("SourceInitializers", "sourceInitializersSHA256"),
                             ("LoweredInitializers", "loweredInitializersSHA256"),
+                            ("ResolvedInitializers", "resolvedInitializersSHA256"),
+                            ("ResolvedVariableTypes", "resolvedVariableTypesSHA256"),
                             ("ActualLayout", "layoutSHA256"),
                             ("ActualInitializationOrder", "initializationOrderSHA256"),
                             ("ActualPrefixOrders", "prefixOrdersSHA256"),
@@ -296,6 +298,14 @@ jobs:
           assert wrong != proof and wrong.count(module) == 1
           wrong = wrong.replace(module, "MODULE SwiftTLAInitialFailureWrongControlSeed", 1)
           (case / "generated-tla" / "SwiftTLAInitialFailureWrongControlSeed.tla").write_text(wrong)
+          resolved = [line for line in proof_lines if line.startswith("ResolvedInitializers == ")]
+          assert len(resolved) == 1 and resolved[0].count(operand) == 1
+          changed = resolved[0].replace(operand, "literals |-> <<0, 0, 0>>")
+          assert changed != resolved[0]
+          wrong = proof.replace(resolved[0], changed, 1)
+          assert wrong != proof and wrong.count(module) == 1
+          wrong = wrong.replace(module, "MODULE SwiftTLAInitialFailureWrongResolved", 1)
+          (case / "generated-tla" / "SwiftTLAInitialFailureWrongResolved.tla").write_text(wrong)
           PY
       - uses: ./.github/actions/setup-pinned-tlaps
         id: proof-tool
@@ -393,6 +403,16 @@ jobs:
           fi
           grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
             .build/initial-failure-artifacts/wrong-control-seed.log
+          wrong_resolved=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongResolved.tla
+          test -s "$wrong_resolved"
+          ! cmp -s "$source_proof" "$wrong_resolved"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_resolved" \
+              > .build/initial-failure-artifacts/wrong-resolved.log 2>&1; then
+            echo 'wrong-resolved proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-resolved.log
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -401,7 +421,8 @@ jobs:
           result = json.loads((root / "case" / "preparation.json").read_text())
           result.update(result="proved", proofMethod="TLAPS", wrongPayloadRejected=True,
                         wrongBeforeRejected=True, wrongEventsRejected=True, wrongLoweringRejected=True,
-                        wrongLayoutRejected=True, wrongControlSeedRejected=True)
+                        wrongLayoutRejected=True, wrongControlSeedRejected=True,
+                        wrongResolvedRejected=True)
           (root / "proof-result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
           PY
       - name: Retain source revision

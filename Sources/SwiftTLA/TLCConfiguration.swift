@@ -171,7 +171,7 @@ package struct TLCConfiguration: Equatable, Sendable {
             postconditionOperators: postconditionOperators, postcondition: postcondition)
     }
 
-    func render(usesSymmetryReduction: Bool) throws -> String {
+    package func render(usesSymmetryReduction: Bool) throws -> String {
         func checked(_ text: String) throws -> String {
             try StraightLineRenderedActionCheck.verifyCheckingConfiguration(self,
                 rendered: text, usesSymmetryReduction: usesSymmetryReduction,
