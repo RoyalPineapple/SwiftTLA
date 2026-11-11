@@ -568,6 +568,254 @@ THEOREM OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures ==
             DEF InitializationHistory, InitializationOrder
     <1>. QED BY <1>2, <1>3, <1>4, SMT DEF SourceTerminal, SourceSelectedStates
 
+\* Denotations of the emitted TLA scalar terms; values after overflow are not executions.
+RenderedIntValueHistory(plan, state, values) ==
+    /\ values \in [1..plan.count -> Int]
+    /\ \A index \in 1..plan.count : values[index] =
+        IF plan.kinds[index] = "literal" THEN plan.literals[index]
+        ELSE IF plan.kinds[index] = "read" THEN state[plan.reads[index]]
+        ELSE values[plan.left[index]] + values[plan.right[index]]
+
+RenderedIntGuard(plan, values, index) ==
+    IF plan.kinds[index] = "add"
+    THEN Expressions!GeneratedAddDefined(values[plan.left[index]], values[plan.right[index]])
+    ELSE TRUE
+
+RenderedInitialAdditionEvents(plan, values, prior, target) ==
+    UNION {IF plan.kinds[index] = "add"
+              /\ (\A earlier \in 1..(index - 1) : RenderedIntGuard(plan, values, earlier))
+              /\ ~RenderedIntGuard(plan, values, index)
+           THEN {[before |-> prior, site |-> target,
+                  payload |-> Expressions!GeneratedOverflow(
+                      values[plan.left[index]], values[plan.right[index]]).failure]}
+           ELSE {} : index \in 1..plan.count}
+
+THEOREM RenderedAdditionGuardsConstructTheReachedInitializationEvent ==
+    ASSUME IntInitializationDomains,
+           NEW plan, NEW bound, NEW state, NEW values, NEW prior, NEW target,
+           Expressions!PartialExpressionPlan(plan.count, plan.kinds, plan.literals,
+               plan.reads, plan.left, plan.right, bound, state),
+           RenderedIntValueHistory(plan, state, values)
+    PROVE \E execution :
+        /\ Expressions!ReachedCheckedPostorderExecution(plan, state, execution)
+        /\ execution.outcome \in Expressions!ExpressionOutcomes
+        /\ execution.values = [index \in 1..execution.completed |-> values[index]]
+        /\ RenderedInitialAdditionEvents(plan, values, prior, target) =
+            IF execution.outcome.ok THEN {}
+            ELSE {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}
+    PROOF
+    <1>0. /\ Expressions!IntegerDomain
+          /\ plan.count \in Nat /\ plan.count > 0
+          /\ \A index \in 1..plan.count :
+              /\ plan.kinds[index] \in {"literal", "read", "add"}
+              /\ (plan.kinds[index] = "add" =>
+                  /\ plan.left[index] \in 1..(index - 1)
+                  /\ plan.right[index] \in 1..(index - 1))
+        BY SMT DEF IntInitializationDomains, Expressions!IntegerDomain,
+            Expressions!PartialExpressionPlan, Expressions!ExpressionPlan
+    <1>. DEFINE good(index) == IF index = 0 THEN TRUE ELSE
+        (\A earlier \in 1..index : RenderedIntGuard(plan, values, earlier))
+            => Expressions!InRange(values[index])
+    <1>. HIDE DEF good
+    <1>1a. good(0) BY SMT DEF good
+    <1>1b. \A index \in 1..plan.count :
+        ((\A earlier \in 0..(index - 1) : good(earlier)) => good(index))
+        <2>. SUFFICES ASSUME NEW index \in 1..plan.count,
+                             \A earlier \in 0..(index - 1) : good(earlier),
+                             \A earlier \in 1..index : RenderedIntGuard(plan, values, earlier)
+                     PROVE Expressions!InRange(values[index])
+            BY SMT DEF good
+        <2>1. CASE plan.kinds[index] = "literal"
+            BY <2>1, SMT DEF RenderedIntValueHistory, Expressions!PartialExpressionPlan,
+                Expressions!ExpressionPlan, Expressions!InRange
+        <2>2. CASE plan.kinds[index] = "read"
+            BY <2>2, SMT DEF RenderedIntValueHistory, Expressions!PartialExpressionPlan,
+                Expressions!ExpressionPlan, Expressions!ExpressionReadKeys, Expressions!InRange
+        <2>3. CASE plan.kinds[index] = "add"
+            <3>1. /\ Expressions!InRange(values[plan.left[index]])
+                  /\ Expressions!InRange(values[plan.right[index]])
+                BY <1>0, <2>3, SMT DEF good
+            <3>2. Expressions!InRange(values[plan.left[index]] + values[plan.right[index]])
+                BY <1>0, <2>3, <3>1, Expressions!GeneratedAddGuardMatchesSource, SMT
+                    DEF RenderedIntGuard, RenderedIntValueHistory
+            <3>. QED BY <2>3, <3>2, SMT DEF RenderedIntValueHistory
+        <2>. QED BY <1>0, <2>1, <2>2, <2>3, SetExtensionality, SMT
+    <1>1. \A index \in 0..plan.count : good(index)
+        BY <1>0, <1>1a, <1>1b, FiniteIndexedPrefixProperty
+    <1>2. \A index \in 1..plan.count :
+        Expressions!CheckedPostorderOperation(plan, state, values, index) =
+            IF RenderedIntGuard(plan, values, index) THEN Expressions!Success(values[index])
+            ELSE Expressions!GeneratedOverflow(values[plan.left[index]], values[plan.right[index]])
+        BY <1>0, SMT DEF RenderedIntValueHistory, RenderedIntGuard,
+            Expressions!CheckedPostorderOperation, Expressions!GeneratedAdd
+    <1>. DEFINE stopped(length) ==
+        (\A index \in 1..length : RenderedIntGuard(plan, values, index))
+        \/ (\E failed \in 1..length :
+             /\ \A earlier \in 1..(failed - 1) : RenderedIntGuard(plan, values, earlier)
+             /\ ~RenderedIntGuard(plan, values, failed))
+    <1>. HIDE DEF stopped
+    <1>3a. stopped(0) BY SMT DEF stopped
+    <1>3b. \A length \in 1..plan.count :
+        ((\A earlier \in 0..(length - 1) : stopped(earlier)) => stopped(length))
+        <2>. SUFFICES ASSUME NEW length \in 1..plan.count,
+                             \A earlier \in 0..(length - 1) : stopped(earlier)
+                     PROVE stopped(length)
+            BY SMT
+        <2>1. stopped(length - 1) BY <1>0, SMT
+        <2>2. CASE \E failed \in 1..(length - 1) :
+            /\ \A earlier \in 1..(failed - 1) : RenderedIntGuard(plan, values, earlier)
+            /\ ~RenderedIntGuard(plan, values, failed)
+            BY <2>2, SMT DEF stopped
+        <2>3. CASE \A index \in 1..(length - 1) : RenderedIntGuard(plan, values, index)
+            BY <2>3, SMT DEF stopped
+        <2>. QED BY <2>1, <2>2, <2>3, SMT DEF stopped
+    <1>3. stopped(plan.count)
+        BY <1>0, <1>3a, <1>3b, FiniteIndexedPrefixProperty, SMT
+    <1>4. CASE \A index \in 1..plan.count : RenderedIntGuard(plan, values, index)
+        <2>. DEFINE execution == [completed |-> plan.count, values |-> values,
+                                 outcome |-> Expressions!Success(values[plan.count])]
+        <2>1. values \in [1..plan.count -> SwiftIntMin..SwiftIntMax]
+            BY <1>1, <1>4, SMT DEF good, RenderedIntValueHistory, Expressions!InRange
+        <2>2. Expressions!ReachedCheckedPostorderExecution(plan, state, execution)
+            BY <1>0, <1>2, <1>4, <2>1, SMT
+                DEF execution, Expressions!ReachedCheckedPostorderExecution
+        <2>3. RenderedInitialAdditionEvents(plan, values, prior, target) = {}
+            BY <1>4, SMT DEF RenderedInitialAdditionEvents
+        <2>. QED BY <1>0, <2>1, <2>2, <2>3, SMT
+            DEF execution, Expressions!Success, Expressions!ExpressionOutcomes
+    <1>5. CASE ~(\A index \in 1..plan.count : RenderedIntGuard(plan, values, index))
+        <2>0. PICK failed \in 1..plan.count :
+            /\ \A earlier \in 1..(failed - 1) : RenderedIntGuard(plan, values, earlier)
+            /\ ~RenderedIntGuard(plan, values, failed)
+            BY <1>3, <1>5, SMT DEF stopped
+        <2>1. /\ failed \in Nat /\ failed > 0
+              /\ plan.kinds[failed] = "add"
+              /\ \A index \in 1..(failed - 1) : Expressions!InRange(values[index])
+            BY <1>0, <1>1, <2>0, SMT DEF good, RenderedIntGuard
+        <2>. DEFINE prefix == [index \in 1..(failed - 1) |-> values[index]]
+                    outcome == Expressions!GeneratedOverflow(
+                        values[plan.left[failed]], values[plan.right[failed]])
+                    execution == [completed |-> failed - 1, values |-> prefix, outcome |-> outcome]
+        <2>. HIDE DEF prefix, outcome, execution
+        <2>2. /\ prefix \in [1..(failed - 1) -> SwiftIntMin..SwiftIntMax]
+              /\ ~outcome.ok
+              /\ \A index \in 1..failed :
+                  Expressions!CheckedPostorderOperation(plan, state, prefix, index)
+                    = Expressions!CheckedPostorderOperation(plan, state, values, index)
+            BY <1>0, <2>0, <2>1, SMT DEF prefix, outcome, Expressions!GeneratedOverflow,
+                Expressions!InRange, Expressions!CheckedPostorderOperation
+        <2>3. Expressions!ReachedCheckedPostorderExecution(plan, state, execution)
+            BY <1>0, <1>2, <2>0, <2>1, <2>2, SMT
+                DEF execution, outcome, Expressions!ReachedCheckedPostorderExecution
+        <2>4. \A index \in 1..plan.count :
+            ((\A earlier \in 1..(index - 1) : RenderedIntGuard(plan, values, earlier))
+             /\ ~RenderedIntGuard(plan, values, index)) <=> index = failed
+            BY <2>0, SMT
+        <2>5. RenderedInitialAdditionEvents(plan, values, prior, target) =
+            {[before |-> prior, site |-> target, payload |-> outcome.failure]}
+            BY <2>0, <2>1, <2>4, SetExtensionality, SMT
+                DEF RenderedInitialAdditionEvents, outcome
+        <2>6. outcome \in Expressions!ExpressionOutcomes
+            BY <1>0, <2>0, <2>1, <2>2, SMT
+                DEF outcome, Expressions!GeneratedOverflow, Expressions!ExpressionOutcomes,
+                    Expressions!ArithmeticFailures, Expressions!InRange
+        <2>. QED BY <2>2, <2>3, <2>5, <2>6, SMT DEF execution, prefix
+    <1>. QED BY <1>4, <1>5, SMT
+
+THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
+    ASSUME IntInitializationDomains,
+           NEW steps, NEW root, NEW view, NEW heights, NEW pendings, NEW currents, NEW emissions,
+           NEW bound \in SUBSET IntKeys, NEW state \in [bound -> SwiftIntMin..SwiftIntMax],
+           NEW meaning, NEW prior \in PartialBindings,
+           NEW target \in IntKeys \ (DOMAIN prior),
+           bound = (DOMAIN prior) \cap IntKeys, state = PartialIntProjection(prior),
+           Expressions!SynchronizedNodeHistory(steps, root, view, heights, pendings, currents, emissions),
+           heights[steps] = 0, Expressions!SourceSyntaxHistory(view, state, meaning),
+           \A step \in 1..steps : pendings[step - 1][heights[step - 1]].node \in DOMAIN view.kinds,
+           Expressions!TypedVisitedSourceInputs(view, emissions[steps]),
+           {emissions[steps].origins[index] : index \in 1..emissions[steps].count}
+               \subseteq DOMAIN view.kinds,
+           LET plan == Expressions!ExtractedNodePlan(emissions[steps], target)
+           IN Expressions!ExpressionReadKeys(plan.count, plan.kinds, plan.reads) \subseteq bound
+    PROVE LET plan == Expressions!ExtractedNodePlan(emissions[steps], target)
+          IN \E values, execution :
+              /\ RenderedIntValueHistory(plan, state, values)
+              /\ \A actualValues : RenderedIntValueHistory(plan, state, actualValues)
+                    => actualValues = values
+              /\ Expressions!ReachedCheckedPostorderExecution(plan, state, execution)
+              /\ SourceIntInitializerOutcome(meaning[root])
+                   = GeneratedIntInitializerOutcome(execution.outcome)
+              /\ SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root])) =
+                  [states |-> IF execution.outcome.ok
+                              THEN {GeneratedExtension(prior, target, values[plan.count])}
+                              ELSE {},
+                   failures |-> RenderedInitialAdditionEvents(plan, values, prior, target)]
+    PROOF
+    <1>. DEFINE plan == Expressions!ExtractedNodePlan(emissions[steps], target)
+    <1>. HIDE DEF plan
+    <1>0. Expressions!IntegerDomain /\ target \in IntKeys \cap Keys
+        BY SMT DEF IntInitializationDomains, Expressions!IntegerDomain
+    <1>1. Expressions!CompleteIntBindings(bound, state) \in [IntKeys -> SwiftIntMin..SwiftIntMax]
+        BY <1>0, Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
+    <1>2. Expressions!ExpressionPlan(plan.count, plan.kinds, plan.literals,
+              plan.reads, plan.left, plan.right, Expressions!CompleteIntBindings(bound, state))
+        BY <1>0, <1>1, Expressions!SuccessfulSynchronizedVisitSuppliesItsExpressionPlan, SMT DEF plan
+    <1>3. Expressions!PartialExpressionPlan(plan.count, plan.kinds, plan.literals,
+              plan.reads, plan.left, plan.right, bound, state)
+        BY <1>2, SMT DEF plan, Expressions!PartialExpressionPlan
+    <1>3n. plan.count \in Nat
+        BY <1>2, SMT DEF Expressions!ExpressionPlan
+    <1>. DEFINE stepsForTerms == [index \in 1..plan.count |->
+        [prefix \in [1..(index - 1) -> Int] |->
+            IF plan.kinds[index] = "literal" THEN plan.literals[index]
+            ELSE IF plan.kinds[index] = "read" THEN state[plan.reads[index]]
+            ELSE prefix[plan.left[index]] + prefix[plan.right[index]]]]
+    <1>. HIDE DEF stepsForTerms
+    <1>3a. \A index \in 1..plan.count :
+        stepsForTerms[index] \in [[1..(index - 1) -> Int] -> Int]
+        BY <1>2, <1>3, SMT DEF stepsForTerms, Expressions!ExpressionPlan,
+            Expressions!PartialExpressionPlan, Expressions!ExpressionReadKeys
+    <1>3b. PICK values \in [1..plan.count -> Int] : IndexedHistory(stepsForTerms, values, plan.count)
+        BY <1>3n, <1>3a, FiniteIndexedHistoryExists
+    <1>3c. RenderedIntValueHistory(plan, state, values)
+        BY <1>2, <1>3b, SMT DEF stepsForTerms, IndexedHistory, HistoryPrefix,
+            RenderedIntValueHistory, Expressions!ExpressionPlan
+    <1>3d. \A actualValues : RenderedIntValueHistory(plan, state, actualValues) => actualValues = values
+        <2>. SUFFICES ASSUME NEW actualValues, RenderedIntValueHistory(plan, state, actualValues)
+                     PROVE actualValues = values
+            BY SMT
+        <2>1. actualValues \in [1..plan.count -> Int] /\ values \in [1..plan.count -> Int]
+            BY <1>3c, SMT DEF RenderedIntValueHistory
+        <2>2. \A index \in 1..plan.count :
+            ((\A earlier \in 1..(index - 1) : actualValues[earlier] = values[earlier])
+                => actualValues[index] = values[index])
+            BY <1>2, <1>3c, SMT DEF RenderedIntValueHistory, Expressions!ExpressionPlan
+        <2>. QED BY <1>3n, <2>1, <2>2, FiniteIndexedHistoriesAgree
+    <1>4. PICK execution :
+        /\ Expressions!ReachedCheckedPostorderExecution(plan, state, execution)
+        /\ execution.outcome \in Expressions!ExpressionOutcomes
+        /\ execution.values = [index \in 1..execution.completed |-> values[index]]
+        /\ RenderedInitialAdditionEvents(plan, values, prior, target) =
+            IF execution.outcome.ok THEN {}
+            ELSE {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}
+        BY <1>3, <1>3c, RenderedAdditionGuardsConstructTheReachedInitializationEvent
+    <1>5. meaning[root] = execution.outcome
+        BY <1>0, <1>4, Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT DEF plan
+    <1>6. /\ SourceIntInitializerOutcome(meaning[root])
+                  = GeneratedIntInitializerOutcome(execution.outcome)
+          /\ SourceIntInitializerOutcome(meaning[root]) \in InitializerOutcomes
+        BY <1>4, <1>5, IntExpressionOutcomesSupplyInitializerOutcomes, SMT
+    <1>7. SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root]))
+            = GeneratedInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root]))
+        BY <1>0, <1>6, InitializerLeafRetainsCompleteStatesAndFailures, SMT
+            DEF PartialBindings, IntInitializationDomains
+    <1>8. execution.outcome.ok => execution.outcome.value = values[plan.count]
+        BY <1>3c, <1>4, SMT DEF Expressions!ReachedCheckedPostorderExecution,
+            Expressions!Success, Expressions!ExpressionOutcomes, RenderedIntValueHistory
+    <1>. QED BY <1>3c, <1>3d, <1>4, <1>5, <1>6, <1>7, <1>8, SMT
+        DEF GeneratedInitialLeaf, GeneratedInitialStates, GeneratedInitialFailures,
+            SourceIntInitializerOutcome, SourceFixed, SourceFailed, InitializerOutcomes
+
 \* Syntax meanings supply the source history; control rows are concrete fixed seeds.
 THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
     ASSUME IntInitializationDomains,

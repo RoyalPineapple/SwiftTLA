@@ -263,6 +263,19 @@ All theorem statements, premises, definitions, pins, backends, budgets, and time
 No local pinned proof tool is available, so this new body requires its own pinned execution.
 The actual compiler-initialization theorem and whole-language preservation remain unproved.
 
+The next TLA event connection is implemented in the existing initialization module.
+`RenderedAdditionGuardsConstructTheReachedInitializationEvent` constructs reached operations from mathematical scalar terms and the emitted arithmetic guards.
+Earlier guards bound every reached operand; the first false guard selects one overflow and excludes every later site.
+The result retains the completed value prefix and the complete event record, including its preceding binding and target.
+`RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf` constructs the unique mathematical scalar-term history from the derived plan.
+It then invokes the checked source-meaning bridge and the existing complete-leaf rule.
+Its conclusion includes both successful state extension and the complete failure-event set.
+It therefore supplies the leaf contract needed by the initialization parent, without a supplied reached-execution history for this TLA route.
+These two new proof bodies require their own pinned execution.
+They do not yet discharge the physical rendering premises.
+Actual token interpretation, identifier binding, integer encoding, prefix wrappers, and hidden-control association remain owned obligations.
+Other accepted constructors and source placements remain accepted and open.
+
 The source/control trace also exposed a real hidden-seed rendering gap.
 Existing validation admits ASCII control identifiers, including names beginning
 with the formal string-codec marker. The old control renderer quoted such names
