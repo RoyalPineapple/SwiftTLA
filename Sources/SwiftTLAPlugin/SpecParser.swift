@@ -179,7 +179,7 @@ final class ParserSession {
         var isEmpty: Bool { bindings.isEmpty }
 
         func containsBinding(named name: String) -> Bool {
-            bindings.contains { $0.sourceName == name }
+            bindings.contains { $0.sourceName.utf8.elementsEqual(name.utf8) }
         }
 
         func merging(_ local: Self) -> Self {
@@ -195,27 +195,27 @@ final class ParserSession {
         }
 
         func isCheckingScope(_ reference: DeclReferenceExprSyntax) -> Bool {
-            guard let binding = bindings.last(where: { $0.sourceName == reference.baseName.sourceIdentifierName }),
+            guard let binding = bindings.last(where: { $0.sourceName.utf8.elementsEqual(reference.baseName.sourceIdentifierName.utf8) }),
                   case .checkingScope = binding.meaning else { return false }
             return true
         }
 
         func value(for reference: DeclReferenceExprSyntax) -> StateExpr? {
-            guard let binding = bindings.last(where: { $0.sourceName == reference.baseName.sourceIdentifierName }),
+            guard let binding = bindings.last(where: { $0.sourceName.utf8.elementsEqual(reference.baseName.sourceIdentifierName.utf8) }),
                   case .value(let value) = binding.meaning
             else { return nil }
             return value
         }
 
         func recursiveOperator(for reference: DeclReferenceExprSyntax) -> String? {
-            guard let binding = bindings.last(where: { $0.sourceName == reference.baseName.sourceIdentifierName }),
+            guard let binding = bindings.last(where: { $0.sourceName.utf8.elementsEqual(reference.baseName.sourceIdentifierName.utf8) }),
                   case .recursiveOperator(let name) = binding.meaning
             else { return nil }
             return name
         }
 
         func shape(for reference: DeclReferenceExprSyntax) -> CompiledValueType? {
-            bindings.last(where: { $0.sourceName == reference.baseName.sourceIdentifierName })?.shape
+            bindings.last(where: { $0.sourceName.utf8.elementsEqual(reference.baseName.sourceIdentifierName.utf8) })?.shape
         }
 
         func extending(

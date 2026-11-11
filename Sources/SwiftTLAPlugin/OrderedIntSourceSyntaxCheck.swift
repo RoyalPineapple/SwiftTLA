@@ -68,7 +68,7 @@ enum OrderedIntSourceSyntaxCheck {
 
     private static func intInitializers(in syntax: ClosureExprSyntax) -> [Component]? {
         guard let scope = scopeName(of: syntax) else { return nil }
-        var roots: [String: String] = [:]
+        var roots: [[UInt8]: String] = [:]
         var result: [Component] = []
         for item in syntax.statements {
             if case .expr(let expression) = item.item,
@@ -93,7 +93,7 @@ enum OrderedIntSourceSyntaxCheck {
                 guard let name = argument.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else { return nil }
                 root = name
             } else { root = name }
-            guard roots.updateValue(root, forKey: name) == nil else { return nil }
+            guard roots.updateValue(root, forKey: Array(name.utf8)) == nil else { return nil }
             let initialization: VariableInitialization
             if case .value(.int(let number)) = value { initialization = .value(.int(number)) }
             else { initialization = .expression(value) }
@@ -102,11 +102,11 @@ enum OrderedIntSourceSyntaxCheck {
         return result
     }
 
-    private static func initializerValue(_ syntax: ExprSyntax, roots: [String: String])
+    private static func initializerValue(_ syntax: ExprSyntax, roots: [[UInt8]: String])
         -> (value: StateExpr, formal: Bool)? {
         if let number = integer(syntax) { return (.value(.int(number)), false) }
         if let name = syntax.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
-           let root = roots[name] {
+           let root = roots[Array(name.utf8)] {
             return (.variable(root), true)
         }
         if let prefix = syntax.as(PrefixOperatorExprSyntax.self),
@@ -313,7 +313,7 @@ enum OrderedIntSourceSyntaxCheck {
               let closure = call.arguments.first(where: { $0.label?.text == "scoped" })?
                 .expression.as(ClosureExprSyntax.self),
               let scope = scopeName(of: closure) else { return nil }
-        var roots: [String: String] = [:]
+        var roots: [[UInt8]: String] = [:]
         var result: [Component] = []
         for item in closure.statements {
             if case .decl(let declaration) = item.item,
@@ -336,7 +336,7 @@ enum OrderedIntSourceSyntaxCheck {
                    type: initial.label?.text == "in" ? .set(.int) : .int) {
                 let root = initializer.arguments.first(where: { $0.label?.text == "_name" })?
                     .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? sourceName
-                guard roots.updateValue(root, forKey: sourceName) == nil else { return nil }
+                guard roots.updateValue(root, forKey: Array(sourceName.utf8)) == nil else { return nil }
                 let initialization: VariableInitialization
                 if initial.label?.text == "in" {
                     initialization = .memberOf(initialValue)
@@ -375,7 +375,7 @@ enum OrderedIntSourceSyntaxCheck {
                       assignment.arguments.last?.label?.text == "to",
                       let targetName = assignment.arguments.first?.expression
                         .as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
-                      let target = roots[targetName],
+                      let target = roots[Array(targetName.utf8)],
                       let valueSyntax = assignment.arguments.first(where: { $0.label?.text == "to" })?.expression,
                       let value = value(valueSyntax, roots: roots) else { return nil }
                 assignments.append((target, value))
@@ -419,11 +419,11 @@ enum OrderedIntSourceSyntaxCheck {
         return Int(sign + digits, radix: radix)
     }
 
-    private static func value(_ syntax: ExprSyntax, roots: [String: String],
+    private static func value(_ syntax: ExprSyntax, roots: [[UInt8]: String],
                               type: CompiledValueType = .int) -> StateExpr? {
         if type == .int, let integer = integer(syntax) { return .value(.int(integer)) }
         if type == .int, let name = syntax.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
-           let root = roots[name] { return .variable(root) }
+           let root = roots[Array(name.utf8)] { return .variable(root) }
         if let group = syntax.as(TupleExprSyntax.self), group.elements.count == 1,
            let element = group.elements.first { return value(element.expression, roots: roots, type: type) }
         if type == .int, let prefix = syntax.as(PrefixOperatorExprSyntax.self),

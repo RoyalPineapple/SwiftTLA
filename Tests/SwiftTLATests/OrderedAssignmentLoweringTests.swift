@@ -722,6 +722,60 @@ struct OrderedAssignmentLoweringTests {
             }
             """
             let rootSyntax = try parseSpecTestClosure(rootSource)
+            if first == "7" {
+                let K = 7
+                let K = 9
+                try #require(K == 7 && K == 9)
+                let boundSource = rootSource
+                    .replacingOccurrences(of: "let first = scope.sharedVar(initial: 7)",
+                        with: "let K = scope.sharedVar(_name: \"first\", initial: 7)")
+                    .replacingOccurrences(of: "let second = scope.sharedVar(initial: first)",
+                        with: "let K = scope.sharedVar(_name: \"second\", initial: K + 2)")
+                    .replacingOccurrences(of: "initial: second + 1", with: "initial: K + 1")
+                try #require(!boundSource.utf8.elementsEqual(rootSource.utf8))
+                let boundSyntax = try parseSpecTestClosure(boundSource)
+                let boundParsed = SpecParser.parseSpecClosure(named: "OrderedInt", boundSyntax)
+                try #require(boundParsed.diagnostics.isEmpty)
+                let boundProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: boundParsed.compile()))
+                let boundStates = try CompiledRuntime(program: boundProgram).initialStates()
+                let boundState = try #require(boundStates.first)
+                let boundValues = try boundProgram.layout.variables.map { try boundState.value(for: $0.id) }
+                #expect(boundValues == [.integer(7), .integer(9), .integer(8)])
+                try OrderedIntSourceSyntaxCheck.verify(boundSyntax, parsed: boundParsed, enums: [])
+                let readMarker = "initial: K + 1"
+                try #require(boundSource.components(separatedBy: readMarker).count == 2)
+                let wrongRead = boundSource.replacingOccurrences(of: readMarker, with: "initial: K + 1")
+                try #require(!wrongRead.utf8.elementsEqual(boundSource.utf8))
+                let wrongParsed = SpecParser.parseSpecClosure(named: "OrderedInt", try parseSpecTestClosure(wrongRead))
+                try #require(wrongParsed.diagnostics.isEmpty)
+                _ = try wrongParsed.compile()
+                #expect(throws: CompilationDiagnostic.self) {
+                    try OrderedIntSourceSyntaxCheck.verify(boundSyntax, parsed: wrongParsed, enums: [])
+                }
+                let overflowSource = boundSource.replacingOccurrences(of: readMarker,
+                    with: "initial: K + Int.max")
+                try #require(!overflowSource.utf8.elementsEqual(boundSource.utf8))
+                let overflowSyntax = try parseSpecTestClosure(overflowSource)
+                let overflowParsed = SpecParser.parseSpecClosure(named: "OrderedInt", overflowSyntax)
+                try #require(overflowParsed.diagnostics.isEmpty)
+                try OrderedIntSourceSyntaxCheck.verify(overflowSyntax, parsed: overflowParsed, enums: [])
+                let overflowProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: overflowParsed.compile()))
+                let outcomes = try CompiledRuntime(program: overflowProgram).initialOutcomes()
+                #expect(outcomes.states.isEmpty)
+                try #require(outcomes.failures.count == 1)
+                let failure = try #require(outcomes.failures.first)
+                #expect(failure.site == .initializer(2))
+                #expect(failure.failure == .integerOverflow(.addition, operands: [7, Int.max]))
+                #expect(try failure.formalBindingsBeforeFailure() == TLAStateProjection(validating: [
+                    .init(token: try #require(TLAStateProjection.Token(validating: "first")), value: .int(7)),
+                    .init(token: try #require(TLAStateProjection.Token(validating: "second")), value: .int(9)),
+                ]))
+                for program in [boundProgram, overflowProgram] {
+                    _ = try program.renderModule()
+                    var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "OrderedInt", program: program))
+                    _ = try emitter.machineMembers()
+                }
+            }
             let rootParsed = SpecParser.parseSpecClosure(named: "OrderedInt", rootSyntax)
             try #require(rootParsed.diagnostics.isEmpty)
             let rootProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: rootParsed.compile()))

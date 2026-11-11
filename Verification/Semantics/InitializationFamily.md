@@ -279,6 +279,23 @@ Actual token interpretation, identifier binding, integer encoding, prefix wrappe
 The current formal record uses logical target keys and binding maps; actual ordinal and serialized-prefix decoding remain separate physical obligations.
 Other accepted constructors and source placements remain accepted and open.
 
+The physical binding review found an accepted literal/read/add counterexample.
+Swift distinguishes lexical bindings `K` and `K`, even though their String names compare equal.
+With ASCII state roots, parsing and compilation succeeded but initialization disagreed with the independent result `[7, 9, 8]`.
+The shared lexical scope used String equality, and the independent source witness could skip the same case after a key collision.
+The scope now compares extracted identifier bytes; the existing witness uses byte-array keys for bindings, reads, and targets.
+The pinned SwiftSyntax source preserves ordinary identifier spelling and removes enclosing backticks.
+
+Formal declaration roots pass the existing ASCII identifier validation before normal compilation.
+That namespace is distinct from Swift lexical binding names; this repair adds no identifier restriction.
+The existing source diagnostic passed 86 tests in four suites on the repaired production.
+The final initialization diagnostic passed 40 tests in six suites, including the changed owner.
+Its overflow variant retains operands `[7, Int.max]` and exactly the preceding bindings `first = 7` and `second = 9`.
+Both actual output generators complete their existing checks for the success and overflow variants.
+These executions remove the observed counterexample; they do not prove complete parser or output interpretation.
+The binding argument supplies the read-identity fact needed by `UniqueLayoutNamesPreserveEveryReadValue` and the initialization parent's reachable-prefix children.
+Complete mechanical source-to-layout correspondence and the implementation-linked initialization theorem remain open.
+
 The source/control trace also exposed a real hidden-seed rendering gap.
 Existing validation admits ASCII control identifiers, including names beginning
 with the formal string-codec marker. The old control renderer quoted such names
