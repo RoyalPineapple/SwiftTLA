@@ -337,7 +337,7 @@ struct GeneratedAlgorithmMachine {
     static var spec: TLASpec {
         #spec("GeneratedAlgorithmMachine") {
             let generatedAlgorithmMachine = Algorithm(label: "GeneratedAlgorithmMachine", scoped: { scope in
-                let count = scope.sharedVar(_name: "count", initial: 1)
+                let count = scope.sharedVar(_name: "pc", initial: 1)
                 Do(Step.tick) {
                     If(count < 12) {
                         Assign(count, to: count + 1)
