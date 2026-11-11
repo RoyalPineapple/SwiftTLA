@@ -93,4 +93,20 @@ THEOREM FiniteIndexedHistoriesAgree ==
         BY <1>1, <1>2, NatInduction
     <1>. QED BY <1>3, SMT DEF P
 
+THEOREM FiniteBooleanPrefixProperty ==
+    ASSUME NEW count \in Nat, NEW flags \in [0..count -> BOOLEAN],
+           flags[0],
+           \A index \in 1..count :
+               ((\A earlier \in 0..(index - 1) : flags[earlier]) => flags[index])
+    PROVE \A index \in 0..count : flags[index]
+    PROOF
+    <1>. DEFINE holds(index) == flags[index]
+    <1>1. holds(0) BY SMT DEF holds
+    <1>2. \A index \in 1..count :
+        ((\A earlier \in 0..(index - 1) : holds(earlier)) => holds(index))
+        BY SMT DEF holds
+    <1>3. \A index \in 0..count : holds(index)
+        BY <1>1, <1>2, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>3, SMT DEF holds
+
 =============================================================================
