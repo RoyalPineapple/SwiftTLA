@@ -12,7 +12,7 @@ struct InitialFailureEvidenceTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let sha = String(repeating: "a", count: 40)
         let report = try InitialFailureEvidence.prepare(sourceSHA: sha, to: directory)
-        #expect(report.schema == "swifttla.initial-failure-proof-v9")
+        #expect(report.schema == "swifttla.initial-failure-proof-v10")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)
         #expect(!report.graphCompared)
@@ -114,6 +114,10 @@ struct InitialFailureEvidenceTests {
         #expect(proofText.contains("ResolvedVariableTypes == \(resolvedTypes)\n"))
         #expect(preparation["resolvedVariableTypesSHA256"] as? String == SHA256.hex(Data(resolvedTypes.utf8)))
         #expect(proofText.contains("THEOREM LoweredInitializersMatchResolvedIR =="))
+        let sourceControl = "\"stay\""
+        #expect(proofText.contains("SourceInitialControl == \(sourceControl)\n"))
+        #expect(preparation["sourceInitialControlSHA256"] as? String == SHA256.hex(Data(sourceControl.utf8)))
+        #expect(proofText.contains("THEOREM SourceInitialControlMatchesResolvedIR =="))
     }
 
     @Test("Invalid source provenance is refused before output")

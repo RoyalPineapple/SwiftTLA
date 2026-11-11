@@ -33,6 +33,7 @@ package struct InitialFailureEvidenceReport: Codable, Sendable {
     package let nativeSHA256: String
     package let sourceCompilationIdentity: String
     package let sourceInitializersSHA256: String
+    package let sourceInitialControlSHA256: String
     package let loweredInitializersSHA256: String
     package let resolvedInitializersSHA256: String
     package let resolvedVariableTypesSHA256: String
@@ -105,7 +106,15 @@ package enum InitialFailureEvidence {
               generatedConfiguration.utf8.elementsEqual(resolvedConfiguration.utf8) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
-        let sourceInitializers = try sourceInitializerPlans(source)
+        guard let sourceWitness = source.orderedIntSourceComponents,
+              let sourceControl = sourceWitness.compactMap({ component -> String? in
+                  guard case .step(let label, _) = component else { return nil }
+                  return label
+              }).first else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        let sourceInitializers = try sourceInitializerPlans(sourceWitness)
+        let sourceInitialControl = TLAValue.string(sourceControl).description
         let loweredInitializers = try initializerPlans(layout: compilation.layout,
             initializations: compilation.semantics.behavior.initializations, requireTypes: false)
         let resolvedInitializers = try initializerPlans(layout: resolvedProgram.layout,
@@ -117,7 +126,8 @@ package enum InitialFailureEvidence {
         let module = rendered.tlaBundle.root
         let proof = try proofSource(module: module.name, tla: module.tla,
             site: site, operands: operands, before: failures[0].before,
-            sourceInitializers: sourceInitializers, loweredInitializers: loweredInitializers,
+            sourceInitializers: sourceInitializers, sourceInitialControl: sourceInitialControl,
+            loweredInitializers: loweredInitializers,
             resolvedInitializers: resolvedInitializers,
             recordInputs: recordInputs)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
@@ -133,7 +143,7 @@ package enum InitialFailureEvidence {
         let proofBytes = Data(proof.utf8)
         try proofBytes.write(to: proofURL, options: .atomic)
         let report = InitialFailureEvidenceReport(
-            schema: "swifttla.initial-failure-proof-v9", sourceSHA: sourceSHA,
+            schema: "swifttla.initial-failure-proof-v10", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
@@ -141,6 +151,7 @@ package enum InitialFailureEvidence {
             proofSHA256: SHA256.hex(proofBytes), nativeSHA256: SHA256.hex(nativeBytes),
             sourceCompilationIdentity: compilation.identity.description,
             sourceInitializersSHA256: SHA256.hex(Data(sourceInitializers.utf8)),
+            sourceInitialControlSHA256: SHA256.hex(Data(sourceInitialControl.utf8)),
             loweredInitializersSHA256: SHA256.hex(Data(loweredInitializers.utf8)),
             resolvedInitializersSHA256: SHA256.hex(Data(resolvedInitializers.utf8)),
             resolvedVariableTypesSHA256: SHA256.hex(Data(recordInputs.types.utf8)),
@@ -155,14 +166,11 @@ package enum InitialFailureEvidence {
         return report
     }
 
-    // These retain existing checker plans; raw Swift parsing and builder meaning remain separate.
-    private static func sourceInitializerPlans(_ source: TLASpec) throws -> String {
-        guard source.sourceAlgorithms.count == 1 else {
-            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-        }
-        let states = source.sourceAlgorithms[0].model.components.compactMap { component -> AlgorithmStateModel? in
-            guard case .shared(let state) = component else { return nil }
-            return state
+    // Retain the existing macro witness, independently of the built Algorithm model.
+    private static func sourceInitializerPlans(_ components: [_OrderedIntSourceComponent]) throws -> String {
+        let states = components.compactMap { component -> (root: String, initialization: VariableInitialization)? in
+            guard case .variable(let root, let initialization) = component else { return nil }
+            return (root, initialization)
         }
         let reads = Set(states.map(\.root))
         let rows = try states.map { state in
@@ -278,7 +286,8 @@ package enum InitialFailureEvidence {
 
     private static func proofSource(module: String, tla: String, site: Int,
                                     operands: [Int], before: [NativeInitialBindingOutput],
-                                    sourceInitializers: String, loweredInitializers: String,
+                                    sourceInitializers: String, sourceInitialControl: String,
+                                    loweredInitializers: String,
                                     resolvedInitializers: String,
                                     recordInputs: (layout: String, order: String, prefixes: String, seeds: String, types: String)) throws -> String {
         guard isIdentifier(module), tla.contains("\nInit ==") else {
@@ -314,6 +323,7 @@ package enum InitialFailureEvidence {
         EXTENDS \(module), TLAPS
 
         SourceInitializers == \(sourceInitializers)
+        SourceInitialControl == \(sourceInitialControl)
         LoweredInitializers == \(loweredInitializers)
         ResolvedInitializers == \(resolvedInitializers)
         ResolvedVariableTypes == \(recordInputs.types)
@@ -325,6 +335,15 @@ package enum InitialFailureEvidence {
         THEOREM SourceInitializersMatchLoweredIR ==
           SourceInitializers = LoweredInitializers
           BY SMT DEF SourceInitializers, LoweredInitializers
+
+        THEOREM SourceInitialControlMatchesResolvedIR ==
+          /\\ Len(ActualControlSeeds) = 1
+          /\\ ActualControlSeeds[1].value = SourceInitialControl
+          /\\ ActualInitializationOrder[1] = ActualControlSeeds[1].ordinal
+          /\\ \\A row \\in DOMAIN ActualLayout :
+                 ActualLayout[row].ordinal = ActualControlSeeds[1].ordinal
+                   => ActualLayout[row].origin = "programCounter"
+          BY SMT DEF SourceInitialControl, ActualControlSeeds, ActualInitializationOrder, ActualLayout
 
         THEOREM LoweredInitializersMatchResolvedIR ==
           LoweredInitializers = ResolvedInitializers
@@ -518,7 +537,7 @@ package enum InitialFailureEvidence {
                THEN ProofInitialization!GeneratedIntInitializerOutcome(ProofGeneratedExpressions[position][prior][ProofPlans[position].count])
                ELSE ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
           ELSE IF generated THEN ProofInitialization!GeneratedFixed(ProofControlSeed(position))
-               ELSE ProofInitialization!SourceFixed(ProofControlSeed(position))]]
+               ELSE ProofInitialization!SourceFixed(SourceInitialControl)]]
 
         THEOREM ActualInitializerExpressionsSupplyTheirParents ==
           \\A position \\in ProofIntPositions : \\A prior \\in ProofInitialization!PartialBindings :
@@ -589,8 +608,9 @@ package enum InitialFailureEvidence {
           PROOF
           <1>0. /\\ ProofCount \\in Nat /\\ ProofIntPositions \\subseteq 1..ProofCount
                 /\\ \\A position \\in (1..ProofCount) \\ ProofIntPositions : ProofControlSeed(position) \\in ProofValues
+                /\\ \\A position \\in (1..ProofCount) \\ ProofIntPositions : ProofControlSeed(position) = SourceInitialControl
                 /\\ \\A position \\in ProofIntPositions : ProofPlans[position].count \\in Nat
-            BY SMT DEF ProofCount, ActualInitializationOrder, ProofIntPositions, ProofControlSeed,
+            BY SourceInitialControlMatchesResolvedIR, SMT DEF ProofCount, ActualInitializationOrder, ProofIntPositions, ProofControlSeed,
               ActualControlSeeds, ActualLayout, ProofOrdinalKey, ProofOrder, ProofIntSlots, ProofValues,
               ProofPlans, ProofSourceRow, SourceInitializers
           <1>1. \\A position \\in ProofIntPositions : \\A prior \\in ProofInitialization!PartialBindings :
@@ -602,8 +622,8 @@ package enum InitialFailureEvidence {
               ProofInitialization!IntExpressionOutcomesSupplyInitializerOutcomes, SMT
               DEF ProofInitialization!Expressions!OutcomeAgrees
           <1>2. \\A position \\in (1..ProofCount) \\ ProofIntPositions :
-                  /\\ ProofInitialization!SourceFixed(ProofControlSeed(position)) = ProofInitialization!GeneratedFixed(ProofControlSeed(position))
-                  /\\ ProofInitialization!SourceFixed(ProofControlSeed(position)) \\in ProofInitialization!InitializerOutcomes
+                  /\\ ProofInitialization!SourceFixed(SourceInitialControl) = ProofInitialization!GeneratedFixed(ProofControlSeed(position))
+                  /\\ ProofInitialization!SourceFixed(SourceInitialControl) \\in ProofInitialization!InitializerOutcomes
             BY <1>0, ProofInitialization!FixedInitializerRetainsItsOnlyCandidate, SMT
           <1>3. \\A position \\in ProofIntPositions : \\A prior \\in ProofInitialization!PartialBindings :
                   /\\ ProofEvaluate(FALSE)[position][prior].candidates \\subseteq ProofIntMin..ProofIntMax
@@ -783,7 +803,7 @@ package enum InitialFailureEvidence {
           <1>4. ProofEvaluate(FALSE)[1][ProofObservedPrior(1)]
               = ProofInitialization!SourceFixed(ProofObservedBefore[ProofOrder[1]])
             BY <1>0, <1>1, <1>2, SMT
-              DEF ProofEvaluate, ProofControlSeed, ActualControlSeeds, ActualInitializationOrder
+              DEF ProofEvaluate, SourceInitialControl, ProofControlSeed, ActualControlSeeds, ActualInitializationOrder
           <1>5. \\A position \\in {2, 3} :
               ProofEvaluate(FALSE)[position][ProofObservedPrior(position)]
                 = ProofInitialization!SourceFixed(ProofObservedBefore[ProofOrder[position]])

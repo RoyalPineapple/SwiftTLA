@@ -18,6 +18,7 @@ extension TLASpec {
       return checked
     }
     checked.sourceSpecDefaultDeadlockWitness = true
+    checked.orderedIntSourceComponents = components
     return checked
   }
 
@@ -252,6 +253,7 @@ extension TLASpec {
     lowered.algorithmPhase = .lowered
     lowered.orderedIntProofActionNames = orderedIntProofActionNames
     lowered.sourceSpecDefaultDeadlockWitness = sourceSpecDefaultDeadlockWitness
+    lowered.orderedIntSourceComponents = orderedIntSourceComponents
     return lowered
   }
 
