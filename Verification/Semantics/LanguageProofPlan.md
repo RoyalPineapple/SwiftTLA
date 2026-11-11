@@ -653,6 +653,9 @@ Complete these rows in order. Reuse the existing rules and checks.
   Bind the physical visitor to the existing synchronized history proof. A supplied correct plan cannot replace this obligation.
 - [ ] M1.5 Prove the existing output checks are sound for these routes.
   Include their token grammar, scopes, helper binding and mandatory coverage conditions.
+  The complete Int initialization output check now requires identical UTF-8 token spelling before its existing token-kind checks. Acceptance therefore entails byte-exact spelling for every compared token; canonical-equivalent Swift Strings cannot substitute a different raw formal value.
+  The existing authored-source owner reproduced an admitted `K`/Kelvin-sign change in the hidden-control prefix of a reached addition overflow on unchanged `be33a82a` production. The one-guard repair passed 36 tests in three initialization suites; token kinds, angle compatibility, complete lexical fragments and function-shape guards remain unchanged.
+  Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-output-raw-token-identity/` in the primary checkout. This scoped code-case result leaves token grammar/grouping, scope/helper binding, separate projection checks and complete initialization preservation open.
 - [ ] M1.6 Instantiate both assignment and initializer composition with these results.
   Derive the required child facts for arbitrary supported nesting and valid prior bindings.
 

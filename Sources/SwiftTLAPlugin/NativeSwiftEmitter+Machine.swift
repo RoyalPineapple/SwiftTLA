@@ -1025,7 +1025,7 @@ extension NativeSwiftEmitter {
         }
         let actualTokens = declaration.map { Array($0.tokens(viewMode: .sourceAccurate)) } ?? []
         func sameToken(_ actual: TokenSyntax, _ expected: TokenSyntax) -> Bool {
-            guard actual.text == expected.text else { return false }
+            guard actual.text.utf8.elementsEqual(expected.text.utf8) else { return false }
             if actual.tokenKind == expected.tokenKind { return true }
             // Fragment parsing can leave generic angle delimiters classified as operators.
             switch (actual.tokenKind, expected.tokenKind) {

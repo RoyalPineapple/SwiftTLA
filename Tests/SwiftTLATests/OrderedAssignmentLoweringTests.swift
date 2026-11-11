@@ -468,7 +468,7 @@ struct OrderedAssignmentLoweringTests {
         #expect(parsed.diagnostics.isEmpty)
         try OrderedIntSourceSyntaxCheck.verify(original, parsed: parsed, enums: enums)
         for (label, literal) in [
-            ("copy", "\"copy\""),
+            ("K", "\"K\""),
             ("__SwiftTLA_UTF8_V1__C3A9", #""__SwiftTLA_UTF8_V1__5F5F5377696674544C415F555446385F56315F5F43334139""#),
         ] {
             try #require(isPlusCalDeclarationName(label))
@@ -481,6 +481,30 @@ struct OrderedAssignmentLoweringTests {
             let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: labeled.compile()))
             let output = try program.renderModule().renderedModuleSource
             #expect(output.contains("pc = \(literal)"))
+            if label == "K" {
+                let failingSource = source.replacingOccurrences(of: "initial: first + 2",
+                    with: "initial: first + \(Int.max)")
+                let failing = SpecParser.parseSpecClosure(named: "OrderedInt",
+                    try parseSpecTestClosure(failingSource), sourceTypes: .init(enums: labels))
+                try #require(failing.diagnostics.isEmpty)
+                let failingProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: failing.compile()))
+                let outcome = try CompiledRuntime(program: failingProgram).initialOutcomes()
+                #expect(outcome.states.isEmpty)
+                #expect(outcome.firstFailure == .integerOverflow(.addition, operands: [1, Int.max]))
+                var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "OrderedInt", program: failingProgram))
+                let initial = try #require(try emitter.machineMembers().first {
+                    $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+                })
+                try emitter.verifyIntInitialOutput(initial)
+                let marker = ".string(\"K\")"
+                try #require(initial.description.components(separatedBy: marker).count == 3)
+                let wrong = initial.description.replacingOccurrences(of: marker, with: ".string(\"K\")")
+                #expect(!wrong.utf8.elementsEqual(initial.description.utf8))
+                let changed = try #require(Parser.parse(source: wrong).statements.first?.item.as(DeclSyntax.self))
+                #expect(throws: CompilationDiagnostic.self) {
+                    try emitter.verifyIntInitialOutput(changed)
+                }
+            }
         }
         let unused = source.replacingOccurrences(of: "algorithm\n",
             with: "let ignored = Algorithm(scoped: { scope in\n"
