@@ -77,8 +77,8 @@ struct SwiftRecordTypeTests {
         let z = try #require(ordering.range(of: "lhs.`z`"))
         #expect(a.lowerBound < z.lowerBound)
         let projection = try emitter.formalValue("packet", type: record)
-        #expect(projection.contains(".init(\"z\", TLAValue.int(packet.`z`))"))
-        #expect(projection.contains(".init(\"a\", TLAValue.int(packet.`a`))"))
+        #expect(projection.contains(".init(\"z\", SwiftTLA.TLAValue.int(packet.`z`))"))
+        #expect(projection.contains(".init(\"a\", SwiftTLA.TLAValue.int(packet.`a`))"))
     }
 
     @Test("native record literals reject lossy and malformed field projections")
