@@ -34,6 +34,9 @@ package struct InitialFailureEvidenceReport: Codable, Sendable {
     package let sourceCompilationIdentity: String
     package let sourceInitializersSHA256: String
     package let loweredInitializersSHA256: String
+    package let layoutSHA256: String
+    package let initializationOrderSHA256: String
+    package let prefixOrdersSHA256: String
     package let graphCompared: Bool
     package let result: String
     package let site: Int
@@ -87,13 +90,15 @@ package enum InitialFailureEvidence {
         }
         let sourceInitializers = try sourceInitializerPlans(source)
         let loweredInitializers = try loweredInitializerPlans(compilation)
+        let recordInputs = try initialRecordInputs(compilation)
         guard let check = try rendered.initialEvaluationFailureBundle(capturingRecord: true) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let module = rendered.tlaBundle.root
         let proof = try proofSource(module: module.name, tla: module.tla,
             site: site, operands: operands, before: failures[0].before,
-            sourceInitializers: sourceInitializers, loweredInitializers: loweredInitializers)
+            sourceInitializers: sourceInitializers, loweredInitializers: loweredInitializers,
+            recordInputs: recordInputs)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let generated = directory.appendingPathComponent("generated-tla")
         try GeneratedTLCOracle.retainGeneratedInputs(check, in: generated)
@@ -107,7 +112,7 @@ package enum InitialFailureEvidence {
         let proofBytes = Data(proof.utf8)
         try proofBytes.write(to: proofURL, options: .atomic)
         let report = InitialFailureEvidenceReport(
-            schema: "swifttla.initial-failure-proof-v6", sourceSHA: sourceSHA,
+            schema: "swifttla.initial-failure-proof-v7", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
@@ -116,6 +121,9 @@ package enum InitialFailureEvidence {
             sourceCompilationIdentity: compilation.identity.description,
             sourceInitializersSHA256: SHA256.hex(Data(sourceInitializers.utf8)),
             loweredInitializersSHA256: SHA256.hex(Data(loweredInitializers.utf8)),
+            layoutSHA256: SHA256.hex(Data(recordInputs.layout.utf8)),
+            initializationOrderSHA256: SHA256.hex(Data(recordInputs.order.utf8)),
+            prefixOrdersSHA256: SHA256.hex(Data(recordInputs.prefixes.utf8)),
             graphCompared: false, result: "prepared", site: site,
             kind: failureKind, operands: operands)
         try encoder.encode(report).write(
@@ -189,9 +197,40 @@ package enum InitialFailureEvidence {
             + "reads |-> \(tuple(reads)), left |-> \(tuple(left)), right |-> \(tuple(right))]"
     }
 
+    private static func initialRecordInputs(_ compilation: CompiledSpecification) throws
+        -> (layout: String, order: String, prefixes: String) {
+        let variables = compilation.layout.variables
+        let byID = Dictionary(uniqueKeysWithValues: variables.map { ($0.id, $0) })
+        let layout = variables.map { variable in
+            let origin: String = switch variable.declaration.origin {
+            case .source: "source"
+            case .compiler: "compiler"
+            case .programCounter: "programCounter"
+            case .procedureStack: "procedureStack"
+            }
+            return "[declaration |-> \(TLAValue.string(variable.declaration.name)), "
+                + "name |-> \(TLAValue.string(variable.formalName)), ordinal |-> \(variable.id.ordinal), "
+                + "origin |-> \(TLAValue.string(origin))]"
+        }
+        let ordered = try compilation.semantics.behavior.initializations.map { initialization in
+            guard let variable = byID[initialization.variable] else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            return variable
+        }
+        func tuple(_ entries: [String]) -> String { "<<\(entries.joined(separator: ", "))>>" }
+        let prefixes = ordered.indices.map { index in
+            tuple(ordered.prefix(index).sorted {
+                $0.formalName.utf8.lexicographicallyPrecedes($1.formalName.utf8)
+            }.map { String($0.id.ordinal) })
+        }
+        return (tuple(layout), tuple(ordered.map { String($0.id.ordinal) }), tuple(prefixes))
+    }
+
     private static func proofSource(module: String, tla: String, site: Int,
                                     operands: [Int], before: [NativeInitialBindingOutput],
-                                    sourceInitializers: String, loweredInitializers: String) throws -> String {
+                                    sourceInitializers: String, loweredInitializers: String,
+                                    recordInputs: (layout: String, order: String, prefixes: String)) throws -> String {
         guard isIdentifier(module), tla.contains("\nInit ==") else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
@@ -226,6 +265,9 @@ package enum InitialFailureEvidence {
 
         SourceInitializers == \(sourceInitializers)
         LoweredInitializers == \(loweredInitializers)
+        ActualLayout == \(recordInputs.layout)
+        ActualInitializationOrder == \(recordInputs.order)
+        ActualPrefixOrders == \(recordInputs.prefixes)
 
         THEOREM SourceInitializersMatchLoweredIR ==
           SourceInitializers = LoweredInitializers
@@ -235,13 +277,13 @@ package enum InitialFailureEvidence {
         ProofIntMax == \(binaryLiteral(Int.max))
         ProofIntKeys == {SourceInitializers[row][1] : row \\in DOMAIN SourceInitializers}
         ProofBoundKeys(row) == {SourceInitializers[earlier][1] : earlier \\in 1..(row - 1)}
-        ProofExpressions == INSTANCE OrderedIntExpressionRule WITH
-          Keys <- ProofIntKeys, SwiftIntMin <- ProofIntMin, SwiftIntMax <- ProofIntMax
-
         THEOREM ProofIntegerBounds ==
           /\\ ProofIntMin \\in Int /\\ ProofIntMax \\in Int
           /\\ ProofIntMin <= -2000000000 /\\ 2000000000 <= ProofIntMax
           BY SMT DEF ProofIntMin, ProofIntMax
+
+        ProofExpressions == INSTANCE OrderedIntExpressionRule WITH
+          Keys <- ProofIntKeys, SwiftIntMin <- ProofIntMin, SwiftIntMax <- ProofIntMax
 
         SourcePlanHistory(plan, state, history) ==
           ProofExpressions!SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
@@ -298,6 +340,98 @@ package enum InitialFailureEvidence {
             BY <1>4, ProofExpressions!PartialOrderedIntExpressionsPreserveValueAndFailure, SMT
               DEF SourcePlanHistory, LoweredPlanHistory
           <1>. QED BY <1>5, SourceInitializersMatchLoweredIR, SMT DEF plan
+
+        ProofAllKeys == {ActualLayout[row].ordinal : row \\in DOMAIN ActualLayout}
+        ProofLayoutIndex(key) == CHOOSE row \\in DOMAIN ActualLayout : ActualLayout[row].ordinal = key
+        ProofNames == [key \\in ProofAllKeys |-> ActualLayout[ProofLayoutIndex(key)].name]
+        ProofOrdinals == [key \\in ProofAllKeys |-> ActualLayout[ProofLayoutIndex(key)].ordinal]
+        ProofIntSlots == {ActualLayout[row].ordinal :
+          row \\in {entry \\in DOMAIN ActualLayout : ActualLayout[entry].origin = "source"}}
+        ProofPrefixKeys(position) ==
+          {ActualInitializationOrder[earlier] : earlier \\in 1..(position - 1)}
+        ProofPrefixIntNames(position) ==
+          {ActualLayout[ProofLayoutIndex(key)].declaration : key \\in ProofPrefixKeys(position) \\cap ProofIntSlots}
+        ProofValues == Int \\cup STRING
+        ProofFailureValues == ProofExpressions!ArithmeticFailures
+        ProofNoFailure == <<"none", 0, 0>>
+        ProofNoInitialSite == -1
+
+        THEOREM ProofInitialSentinels ==
+          /\\ ProofNoFailure \\notin ProofFailureValues
+          /\\ ProofNoInitialSite \\notin ProofAllKeys
+          BY SMT DEF ProofNoFailure, ProofFailureValues, ProofExpressions!ArithmeticFailures,
+            ProofNoInitialSite, ProofAllKeys, ActualLayout
+
+        ProofInitialization == INSTANCE OrderedIntInitializationComposition WITH
+          Keys <- ProofAllKeys, Values <- ProofValues, FailureValues <- ProofFailureValues,
+          NoFailure <- ProofNoFailure, NoInitialSite <- ProofNoInitialSite,
+          IntKeys <- ProofIntSlots, SwiftIntMin <- ProofIntMin, SwiftIntMax <- ProofIntMax
+
+        THEOREM ActualLayoutSuppliesInitializationDecoderInputs ==
+          /\\ ProofInitialization!RenderedInitialRecordLayout(ProofNames, ProofOrdinals)
+          /\\ \\A row \\in DOMAIN ActualLayout :
+                 /\\ ProofNames[ActualLayout[row].ordinal] = ActualLayout[row].name
+                 /\\ ProofOrdinals[ActualLayout[row].ordinal] = ActualLayout[row].ordinal
+                 /\\ \\A other \\in DOMAIN ActualLayout :
+                        ActualLayout[row].ordinal = ActualLayout[other].ordinal => row = other
+          /\\ ProofIntKeys = {ActualLayout[ProofLayoutIndex(key)].declaration : key \\in ProofIntSlots}
+          BY SMT DEF ActualLayout, ProofAllKeys, ProofLayoutIndex, ProofNames, ProofOrdinals,
+            ProofIntSlots, ProofIntKeys, SourceInitializers, ProofInitialization!RenderedInitialRecordLayout
+
+        THEOREM ActualPrefixRecordsInvokeInitializationDecoder ==
+          /\\ \\A position \\in DOMAIN ActualInitializationOrder :
+                \\A prior \\in [ProofPrefixKeys(position) -> ProofValues] :
+                  /\\ ProofInitialization!RenderedInitialPrefixOrder(
+                         position - 1, ActualPrefixOrders[position], prior)
+                  /\\ ProofInitialization!DecodedRenderedPrefixEntries(
+                         ProofInitialization!RenderedInitialPrefixEntries(
+                           position - 1, ActualPrefixOrders[position], ProofNames, prior), ProofNames) = prior
+                  /\\ \\A target \\in ProofAllKeys :
+                         ProofInitialization!DecodedRenderedInitializerSite(ProofOrdinals[target], ProofOrdinals) = target
+          /\\ \\A row \\in DOMAIN SourceInitializers :
+                \\E position \\in DOMAIN ActualInitializationOrder :
+                  /\\ ActualLayout[ProofLayoutIndex(ActualInitializationOrder[position])].declaration
+                         = SourceInitializers[row][1]
+                  /\\ ProofPrefixIntNames(position) = ProofBoundKeys(row)
+                  /\\ \\A state \\in [ProofPrefixIntNames(position) -> ProofIntMin..ProofIntMax] :
+                         \\E source, generated :
+                           /\\ SourcePlanHistory(SourceInitializers[row][2], state, source)
+                           /\\ LoweredPlanHistory(LoweredInitializers[row][2], state, generated)
+                           /\\ \\A index \\in 0..SourceInitializers[row][2].count :
+                                  ProofExpressions!OutcomeAgrees(source, generated, index)
+          PROOF
+          <1>1. ProofInitialization!RenderedInitialRecordLayout(ProofNames, ProofOrdinals)
+            BY ActualLayoutSuppliesInitializationDecoderInputs, SMT
+          <1>2. \\A position \\in DOMAIN ActualInitializationOrder :
+                  /\\ ProofPrefixKeys(position) \\subseteq ProofAllKeys
+                  /\\ position - 1 \\in Nat
+                  /\\ ActualPrefixOrders[position] \\in [1..(position - 1) -> ProofPrefixKeys(position)]
+                  /\\ {ActualPrefixOrders[position][index] : index \\in 1..(position - 1)} = ProofPrefixKeys(position)
+                  /\\ \\A prefixLeftIndex, prefixRightIndex \\in 1..(position - 1) :
+                         ActualPrefixOrders[position][prefixLeftIndex] = ActualPrefixOrders[position][prefixRightIndex]
+                           => prefixLeftIndex = prefixRightIndex
+            BY SMT DEF ActualInitializationOrder, ActualPrefixOrders, ProofPrefixKeys, ProofAllKeys, ActualLayout
+          <1>3. \\A position \\in DOMAIN ActualInitializationOrder :
+                  \\A prior \\in [ProofPrefixKeys(position) -> ProofValues] :
+                    /\\ prior \\in ProofInitialization!PartialBindings
+                    /\\ ProofInitialization!RenderedInitialPrefixOrder(position - 1, ActualPrefixOrders[position], prior)
+            BY <1>2, SMT DEF ProofInitialization!PartialBindings, ProofInitialization!RenderedInitialPrefixOrder
+          <1>4. \\A position \\in DOMAIN ActualInitializationOrder :
+                  \\A prior \\in [ProofPrefixKeys(position) -> ProofValues] :
+                    /\\ ProofInitialization!DecodedRenderedPrefixEntries(
+                           ProofInitialization!RenderedInitialPrefixEntries(
+                             position - 1, ActualPrefixOrders[position], ProofNames, prior), ProofNames) = prior
+                    /\\ \\A target \\in ProofAllKeys :
+                           ProofInitialization!DecodedRenderedInitializerSite(ProofOrdinals[target], ProofOrdinals) = target
+            BY <1>1, <1>3, ProofInitialization!RenderedInitialPrefixAndSiteDecodingRetainsEveryIdentity, SMT
+          <1>5. \\A row \\in DOMAIN SourceInitializers :
+                  \\E position \\in DOMAIN ActualInitializationOrder :
+                    /\\ ActualLayout[ProofLayoutIndex(ActualInitializationOrder[position])].declaration
+                           = SourceInitializers[row][1]
+                    /\\ ProofPrefixIntNames(position) = ProofBoundKeys(row)
+            BY SMT DEF ActualLayout, ActualInitializationOrder, SourceInitializers, ProofLayoutIndex,
+              ProofPrefixIntNames, ProofPrefixKeys, ProofIntSlots, ProofBoundKeys
+          <1>. QED BY <1>3, <1>4, <1>5, InitializerPlansInvokeCheckedExpressionParent, SMT
 
         ExpectedOperand0 == \(binaryLiteral(operands[0]))
         ExpectedOperand1 == \(binaryLiteral(operands[1]))

@@ -225,7 +225,7 @@ jobs:
           report = json.loads((case / "preparation.json").read_text())
           native = json.loads((case / "native-initial-failure.json").read_text())
           expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
-          assert report["schema"] == "swifttla.initial-failure-proof-v6"
+          assert report["schema"] == "swifttla.initial-failure-proof-v7"
           assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
           assert report["result"] == "prepared" and report["graphCompared"] is False
           assert (report["site"], report["kind"], report["operands"]) == expected
@@ -253,7 +253,10 @@ jobs:
           )
           proof_lines = files["proofSHA256"].read_text().splitlines()
           for name, key in [("SourceInitializers", "sourceInitializersSHA256"),
-                            ("LoweredInitializers", "loweredInitializersSHA256")]:
+                            ("LoweredInitializers", "loweredInitializersSHA256"),
+                            ("ActualLayout", "layoutSHA256"),
+                            ("ActualInitializationOrder", "initializationOrderSHA256"),
+                            ("ActualPrefixOrders", "prefixOrdersSHA256")]:
               prefix = name + " == "
               definitions = [line[len(prefix):] for line in proof_lines if line.startswith(prefix)]
               assert len(definitions) == 1
@@ -272,6 +275,16 @@ jobs:
           assert wrong.count(module) == 1
           wrong = wrong.replace(module, "MODULE SwiftTLAInitialFailureWrongLowering", 1)
           (case / "generated-tla" / "SwiftTLAInitialFailureWrongLowering.tla").write_text(wrong)
+          layout = [line for line in proof_lines if line.startswith("ActualLayout == ")]
+          assert len(layout) == 1
+          control_name = 'name |-> "pc"'
+          assert layout[0].count(control_name) == 1
+          changed = layout[0].replace(control_name, 'name |-> "first"')
+          assert changed != layout[0]
+          wrong = proof.replace(layout[0], changed, 1)
+          assert wrong != proof and wrong.count(module) == 1
+          wrong = wrong.replace(module, "MODULE SwiftTLAInitialFailureWrongLayout", 1)
+          (case / "generated-tla" / "SwiftTLAInitialFailureWrongLayout.tla").write_text(wrong)
           PY
       - uses: ./.github/actions/setup-pinned-tlaps
         id: proof-tool
@@ -284,8 +297,12 @@ jobs:
           proof_tool_dir='${{ steps.proof-tool.outputs.directory }}'
           proof_inputs=.build/initial-failure-artifacts/proof-inputs
           mkdir -p "$proof_inputs"
-          cp Verification/Semantics/OrderedIntExpressionRule.tla Verification/Semantics/IndexedHistoryRules.tla "$proof_inputs/"
-          shasum -a 256 Verification/Semantics/OrderedIntExpressionRule.tla Verification/Semantics/IndexedHistoryRules.tla \
+          proof_sources=(OrderedIntExpressionRule IndexedHistoryRules OrderedIntInitializationComposition
+            InitializationComposition InitializationOutcomeRules FiniteSetMembershipRule)
+          for module in "${proof_sources[@]}"; do
+            cp "Verification/Semantics/$module.tla" "$proof_inputs/"
+          done
+          shasum -a 256 "$proof_inputs/"*.tla \
             > .build/initial-failure-artifacts/proof-inputs.sha256
           "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/initial-failure-artifacts/tlapm-version.txt
           grep -Eq '^941f894(-dirty)?$' .build/initial-failure-artifacts/tlapm-version.txt
@@ -345,6 +362,16 @@ jobs:
           fi
           grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
             .build/initial-failure-artifacts/wrong-lowering.log
+          wrong_layout=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongLayout.tla
+          test -s "$wrong_layout"
+          ! cmp -s "$source_proof" "$wrong_layout"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_layout" \
+              > .build/initial-failure-artifacts/wrong-layout.log 2>&1; then
+            echo 'wrong-layout proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-layout.log
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -352,7 +379,8 @@ jobs:
           root = Path(".build/initial-failure-artifacts")
           result = json.loads((root / "case" / "preparation.json").read_text())
           result.update(result="proved", proofMethod="TLAPS", wrongPayloadRejected=True,
-                        wrongBeforeRejected=True, wrongEventsRejected=True, wrongLoweringRejected=True)
+                        wrongBeforeRejected=True, wrongEventsRejected=True, wrongLoweringRejected=True,
+                        wrongLayoutRejected=True)
           (root / "proof-result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
           PY
       - name: Retain source revision

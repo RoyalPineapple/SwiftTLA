@@ -12,7 +12,7 @@ struct InitialFailureEvidenceTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let sha = String(repeating: "a", count: 40)
         let report = try InitialFailureEvidence.prepare(sourceSHA: sha, to: directory)
-        #expect(report.schema == "swifttla.initial-failure-proof-v6")
+        #expect(report.schema == "swifttla.initial-failure-proof-v7")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)
         #expect(!report.graphCompared)
@@ -79,6 +79,22 @@ struct InitialFailureEvidenceTests {
         #expect(proofText.contains("THEOREM SourceInitializersMatchLoweredIR =="))
         #expect(proofText.contains("THEOREM InitializerPlansInvokeCheckedExpressionParent =="))
         #expect(proofText.contains("ProofExpressions!PartialOrderedIntExpressionsPreserveValueAndFailure"))
+        let layout = "<<" + [
+            "[declaration |-> \"pc\", name |-> \"pc\", ordinal |-> 0, origin |-> \"programCounter\"]",
+            "[declaration |-> \"first\", name |-> \"first\", ordinal |-> 1, origin |-> \"source\"]",
+            "[declaration |-> \"second\", name |-> \"second\", ordinal |-> 2, origin |-> \"source\"]",
+            "[declaration |-> \"last\", name |-> \"last\", ordinal |-> 3, origin |-> \"source\"]",
+        ].joined(separator: ", ") + ">>"
+        let order = "<<0, 1, 2, 3>>"
+        let prefixes = "<<<<>>, <<0>>, <<1, 0>>, <<1, 0, 2>>>>"
+        #expect(proofText.contains("ActualLayout == \(layout)\n"))
+        #expect(proofText.contains("ActualInitializationOrder == \(order)\n"))
+        #expect(proofText.contains("ActualPrefixOrders == \(prefixes)\n"))
+        #expect(report.layoutSHA256 == SHA256.hex(Data(layout.utf8)))
+        #expect(report.initializationOrderSHA256 == SHA256.hex(Data(order.utf8)))
+        #expect(report.prefixOrdersSHA256 == SHA256.hex(Data(prefixes.utf8)))
+        #expect(proofText.contains("THEOREM ActualPrefixRecordsInvokeInitializationDecoder =="))
+        #expect(proofText.contains("ProofInitialization!RenderedInitialPrefixAndSiteDecodingRetainsEveryIdentity"))
     }
 
     @Test("Invalid source provenance is refused before output")
