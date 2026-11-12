@@ -1250,9 +1250,11 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                 <4>1a. emitted.count \in Nat \ {0}
                     BY <1>0, <4>0, Expressions!SuccessfulSynchronizedVisitIdentifiesTheEmittedSourceRoot, SMT
                         DEF emitted
+                <4>1b. plan.count = emitted.count
+                    BY ONLY SMT DEF plan, Expressions!ExtractedNodePlan
                 <4>2. /\ emitted.count \in Nat \ {0}
                       /\ plan.count = emitted.count /\ plan.count \in Nat /\ plan.count > 0
-                    BY <4>1a, SMT DEF plan, Expressions!ExtractedNodePlan
+                    BY ONLY <4>1a, <4>1b, SMT
                 <4>3. /\ execution.outcome.ok
                       /\ value = execution.outcome.value
                     BY <2>1, <3>1, <4>1, SMT
