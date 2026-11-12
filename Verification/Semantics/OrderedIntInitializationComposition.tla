@@ -1023,7 +1023,7 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
             ELSE {[before |-> prior, site |-> target, kind |-> "integerOverflow.addition",
                    operands |-> execution.outcome.failure[3]]}
         BY ONLY <1>3e, <1>3f, RenderedAdditionGuardsConstructTheReachedInitializationEvent, SMT
-            DEF InitialSentinels
+            DEF InitialSentinels, Expressions!IntegerDomain, plan
     <1>5. meaning[root] = execution.outcome
         BY <1>0, <1>4, Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT DEF plan
     <1>6. /\ SourceIntInitializerOutcome(meaning[root])
