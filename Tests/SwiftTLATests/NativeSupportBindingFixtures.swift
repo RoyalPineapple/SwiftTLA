@@ -32,6 +32,8 @@ private extension NativeSupportBindingModel {
     }
 
     static func _completedInitialStates() throws -> [Snapshot] { [] }
+
+    static func _completedInitialStates(_selectedInitial: State?) throws -> [State] { [] }
 }
 
 private extension ArraySlice where Element == NativeSupportBindingModel.Snapshot {

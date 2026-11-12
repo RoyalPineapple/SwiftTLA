@@ -88,17 +88,23 @@ struct GeneratedAtomicUpdateProofTests {
         let uniqueBinding = try #require(emittedConstructor.as(FunctionDeclSyntax.self)?.body?.statements.first)
         try #require(emittedConstructor.description.components(separatedBy: uniqueBinding.description).count == 2)
         let wrongUniqueness = emittedConstructor.description.replacingOccurrences(
-            of: uniqueBinding.description, with: "let execution = try Self._completedInitialStates(_selectedInitial: nil as State?)[0]\n")
+            of: uniqueBinding.description, with: "let execution = try (Self._completedInitialStates(_selectedInitial: nil as State?) as [Snapshot])[0]\n")
         #expect(wrongUniqueness != emittedConstructor.description)
         let wrongConstructor = try #require(Parser.parse(source: wrongUniqueness)
             .statements.first?.item.as(DeclSyntax.self))
         #expect(wrongConstructor.as(FunctionDeclSyntax.self)?.name.text == "makeMachine")
+        let completedResult = " as [Snapshot]"
+        try #require(emittedConstructor.description.components(separatedBy: completedResult).count == 2)
+        let inferredCompletedResult = emittedConstructor.description.replacingOccurrences(of: completedResult, with: "")
+        try #require(inferredCompletedResult != emittedConstructor.description)
+        let wrongCompletedResult = try #require(Parser.parse(source: inferredCompletedResult)
+            .statements.first?.item.as(DeclSyntax.self))
         let publicOutcomes = initialConstruction[2].description
         let initialMachines = initialConstruction[3].description
-        let conversion = "SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(_selectedInitial: nil as State?))"
+        let conversion = "SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(_selectedInitial: nil as State?) as [Snapshot])"
         try #require(initialMachines.components(separatedBy: conversion).count == 2)
         let wrongMapping = initialMachines.replacingOccurrences(of: conversion,
-            with: "(try Self._completedInitialStates(_selectedInitial: nil as State?)).map")
+            with: "(try Self._completedInitialStates(_selectedInitial: nil as State?) as [Snapshot]).map")
         try #require(wrongMapping != initialMachines)
         let wrongOutcomes = try #require(Parser.parse(source: wrongMapping)
             .statements.first?.item.as(DeclSyntax.self))
@@ -143,7 +149,7 @@ struct GeneratedAtomicUpdateProofTests {
             #expect(diagnostic.path == "native._initialStates.completeIntOutput")
         }
         try verifyGeneratedInitialConstruction(initialConstruction, configured: false)
-        for (index, declaration) in [(4, wrongConstructor), (3, wrongOutcomes), (2, wrongInitialCall),
+        for (index, declaration) in [(4, wrongConstructor), (4, wrongCompletedResult), (3, wrongOutcomes), (2, wrongInitialCall),
                                       (2, wrongResultContext), (2, wrongOutcomeReads), (1, wrongCompletionReads)] {
             var wrongConstruction = initialConstruction
             wrongConstruction[index] = declaration
