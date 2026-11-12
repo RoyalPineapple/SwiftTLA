@@ -142,7 +142,7 @@ struct DependentInitializationOutputProofTests {
                 with: "evaluatingInitializerOrdinal = \(seedID.ordinal)")),
             ("earlyReturn", native.description.replacingOccurrences(
                 of: "var result: [Snapshot] = []",
-                with: "var result: [Snapshot] = []\nreturn SwiftTLA.InitialEvaluationOutcomes(states: result, failures: [])")),
+                with: "var result: [Snapshot] = []\nreturn SwiftTLA._nativeInitialOutcomes(states: result, failures: [])")),
         ]
         for (label, changed) in changedNativeOutputs {
             try #require(changed != native.description)
@@ -612,7 +612,7 @@ struct DependentInitializationOutputProofTests {
             ("enumeration", emitted.replacingOccurrences(of: enumeration, with: "Set<\(nativeIntType)>()")),
             ("membership", emitted.replacingOccurrences(of: membership, with: "return { _ in false }")),
             ("earlyReturn", emitted.replacingOccurrences(of: "var result: [Snapshot] = []",
-                with: "var result: [Snapshot] = []\nif _selectedInitial == nil { return SwiftTLA.InitialEvaluationOutcomes(states: result, failures: []) }")),
+                with: "var result: [Snapshot] = []\nif _selectedInitial == nil { return SwiftTLA._nativeInitialOutcomes(states: result, failures: []) }")),
         ] {
             try #require(changed != emitted)
             let corrupted = try #require(Parser.parse(source: changed).statements.first?.item.as(DeclSyntax.self))

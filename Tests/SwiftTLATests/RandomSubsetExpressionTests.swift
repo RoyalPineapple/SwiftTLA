@@ -51,10 +51,10 @@ struct RandomSubsetExpressionTests {
             try verifyRandomSubsetInitialSupport(altered, expected: [(name, false)])
         }
         try emitter.verifyInitialStateAssembly(initial)
-        let returningFailures = "return SwiftTLA.InitialEvaluationOutcomes(states: result, failures: failures)"
+        let returningFailures = "return SwiftTLA._nativeInitialOutcomes(states: result, failures: failures)"
         try #require(initial.description.components(separatedBy: returningFailures).count == 2)
         let lostFailure = initial.description.replacingOccurrences(
-            of: returningFailures, with: "return SwiftTLA.InitialEvaluationOutcomes(states: result, failures: [])")
+            of: returningFailures, with: "return SwiftTLA._nativeInitialOutcomes(states: result, failures: [])")
         #expect(lostFailure != initial.description)
         let lostFailureDeclaration = try #require(Parser.parse(source: lostFailure)
             .statements.first?.item.as(DeclSyntax.self))

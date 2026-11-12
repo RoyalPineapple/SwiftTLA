@@ -2340,7 +2340,7 @@ struct OrderedAssignmentLoweringTests {
         try #require(original.description.components(separatedBy: marker).count == 2)
         let wrong = original.description.replacingOccurrences(of: marker, with: """
         \(marker)
-        if true { return SwiftTLA.InitialEvaluationOutcomes(states: [], failures: []) }
+        if true { return SwiftTLA._nativeInitialOutcomes(states: [], failures: []) }
         """)
         #expect(wrong != original.description)
         let declaration = try #require(Parser.parse(source: wrong)

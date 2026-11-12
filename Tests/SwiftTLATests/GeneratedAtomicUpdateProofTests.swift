@@ -112,8 +112,16 @@ struct GeneratedAtomicUpdateProofTests {
         try #require(inferredResult != publicOutcomes)
         let wrongResultContext = try #require(Parser.parse(source: inferredResult)
             .statements.first?.item.as(DeclSyntax.self))
+        let factoryCall = "SwiftTLA._nativeInitialOutcomes(states:"
+        try #require(publicOutcomes.components(separatedBy: factoryCall).count == 2)
+        let callerFactory = publicOutcomes.replacingOccurrences(
+            of: factoryCall, with: "SwiftTLA.InitialEvaluationOutcomes(states:")
+        try #require(callerFactory != publicOutcomes)
+        let wrongOutcomeFactory = try #require(Parser.parse(source: callerFactory)
+            .statements.first?.item.as(DeclSyntax.self))
         try verifyGeneratedInitialConstruction(initialConstruction, configured: false)
-        for (index, declaration) in [(4, wrongConstructor), (2, wrongOutcomes), (2, wrongInitialCall), (2, wrongResultContext)] {
+        for (index, declaration) in [(4, wrongConstructor), (2, wrongOutcomes), (2, wrongInitialCall),
+                                      (2, wrongResultContext), (2, wrongOutcomeFactory)] {
             var wrongConstruction = initialConstruction
             wrongConstruction[index] = declaration
             do {
@@ -1330,7 +1338,7 @@ struct GeneratedAtomicUpdateProofTests {
         \s* site: \s* SwiftTLA\._nativeInitialFailureSite\(evaluatingInitializerOrdinal\),
         \s* failure: \s* failure, \s* projectingBefore: \s* evaluatingInitialBindings \) \)
         \s* \} \s* \)
-        \s* return \s+ SwiftTLA\.InitialEvaluationOutcomes \s* \( \s* states: \s* result, \s* failures: \s* failures \)
+        \s* return \s+ SwiftTLA\._nativeInitialOutcomes \s* \( \s* states: \s* result, \s* failures: \s* failures \)
         \s* \} \s* \z
         """#
         let regex = try NSRegularExpression(pattern: pattern, options: .allowCommentsAndWhitespace)

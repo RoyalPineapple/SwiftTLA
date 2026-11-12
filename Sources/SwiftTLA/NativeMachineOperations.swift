@@ -135,6 +135,14 @@ public struct InitialEvaluationOutcomes<State: Sendable>: Sendable {
     }
 }
 
+/// Keep generated outcome construction in library scope, away from caller initializers.
+@_documentation(visibility: internal)
+public func _nativeInitialOutcomes<State: Sendable>(
+    states: [State], failures: [InitialEvaluationFailure]
+) -> InitialEvaluationOutcomes<State> {
+    InitialEvaluationOutcomes(states: states, failures: failures)
+}
+
 /// Keep generated collection mutation in library scope, away from caller overloads.
 @_documentation(visibility: internal)
 public func _appendNativeOutcome<Outcome: Sendable>(_ outcomes: inout [Outcome], _ outcome: Outcome) {

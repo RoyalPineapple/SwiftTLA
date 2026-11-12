@@ -1,6 +1,16 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+private func emptyInitialOutcomes<State: Sendable>() -> InitialEvaluationOutcomes<State> {
+    .init(states: [], failures: [])
+}
+
+private extension InitialEvaluationOutcomes where State == NativeSupportBindingModel.Snapshot {
+    init(states: [State], failures: [InitialEvaluationFailure]) {
+        self = emptyInitialOutcomes()
+    }
+}
+
 private extension NativeSupportBindingModel {
     static func _initialStates(_selectedInitial: State?) throws -> (
         states: [Snapshot], failures: [InitialEvaluationFailure], firstFailure: NativeMachineEvaluationError?

@@ -784,7 +784,7 @@ extension NativeSwiftEmitter {
         var evaluatingInitialBindings: @Sendable () throws -> SwiftTLA.TLAStateProjection = { try SwiftTLA.TLAStateProjection(validating: []) }
         """).statements
         let branch = try initialBranch(body).with(\.leadingTrivia, .newlines(1))
-        let returning = Parser.parse(source: "return SwiftTLA.InitialEvaluationOutcomes(states: result, failures: failures)")
+        let returning = Parser.parse(source: "return SwiftTLA._nativeInitialOutcomes(states: result, failures: failures)")
             .statements.map { $0.with(\.leadingTrivia, .newlines(1)) }
         let statements = CodeBlockItemListSyntax(Array(prefix) + [branch] + returning)
         let initial = try FunctionDeclSyntax("private static func _initialStates(_selectedInitial: State? = nil\(raw: samplingParameter)\(raw: appendedParameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Snapshot>") {
@@ -799,7 +799,7 @@ extension NativeSwiftEmitter {
         }
         public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
             let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(\(unselectedArguments))
-            return SwiftTLA.InitialEvaluationOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
+            return SwiftTLA._nativeInitialOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
                 failures: outcome.failures)
         }
         public static func initialMachines(\(parameters)) throws -> [Self] {
@@ -1002,7 +1002,7 @@ extension NativeSwiftEmitter {
                 site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
-        return SwiftTLA.InitialEvaluationOutcomes(states: result, failures: failures)
+        return SwiftTLA._nativeInitialOutcomes(states: result, failures: failures)
         }
         """
         let expected = Array(Parser.parse(source: suffix).tokens(viewMode: .sourceAccurate))
@@ -1201,7 +1201,7 @@ extension NativeSwiftEmitter {
                 site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
-        return SwiftTLA.InitialEvaluationOutcomes(states: result, failures: failures)
+        return SwiftTLA._nativeInitialOutcomes(states: result, failures: failures)
         """
         guard nextPredicate == predicateNames.count else { throw intInitialOutputMismatch() }
         return """
@@ -1972,7 +1972,7 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
     }
     public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
         let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(\(unselectedArguments))
-        return SwiftTLA.InitialEvaluationOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
+        return SwiftTLA._nativeInitialOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
             failures: outcome.failures)
     }
     public static func initialMachines(\(parameters)) throws -> [Self] {

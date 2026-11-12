@@ -705,6 +705,10 @@ Exit: actual accepted pilot expressions supply the child theorem premises. No ex
   The result-context repair passed 74 tests in twelve suites, including the external consumer and rejection of a removed result annotation by the mandatory construction check.
   Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-helper-result-binding/` in the primary checkout.
   This closes that compiler blocker; it does not discharge the generic output-interpretation premise or M2.5.
+  A caller-constrained `InitialEvaluationOutcomes` initializer then reproduced actual loss of a valid initial state on unchanged production: one executed owner test failed with three runtime issues.
+  Generated outcome construction now uses a typed library-scope function, preserving the supplied state and failure arrays outside caller initializer lookup.
+  The same owner and external consumer pass in the 74-test native run; the 24-test source/IR owner also passes, with two shared artifact-consumer tests checked separately.
+  The existing construction checker rejects a return to the caller constructor. Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-outcome-construction-binding/`; complete physical interpretation remains open.
 - [ ] M2.6 Discharge the evaluator and history premises at `OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures`.
   The pinned `28c609d2` run checks the repaired rendered failure leaf; one of 1,250 initialization obligations remains unproved at the final parent conjunction.
   Its next proof body names the constructed rendered-plan/witness existential explicitly and cites it at that join. This candidate is not yet mathematically checked.
