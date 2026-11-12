@@ -388,12 +388,25 @@ package enum InitialFailureEvidence {
         THEOREM ProofInitialSentinels ==
           /\\ ProofNoFailure \\notin ProofFailureValues
           /\\ ProofNoInitialSite \\notin ProofAllKeys
-          BY SMT DEF ProofNoFailure, ProofFailureValues, ProofNoInitialSite, ProofAllKeys, ActualLayout
+          PROOF
+          <1>0. \\A failure \\in ProofFailureValues : failure[1] = "integerOverflow"
+            BY ONLY SMT DEF ProofFailureValues
+          <1>1. ProofNoFailure[1] = "none"
+            BY ONLY SMT DEF ProofNoFailure
+          <1>2. ProofNoFailure \\notin ProofFailureValues
+            BY ONLY <1>0, <1>1, SMT
+          <1>3. ProofAllKeys = {"pc", "first", "second", "last"}
+            BY ONLY SetExtensionality, SMT DEF ProofAllKeys, ActualLayout
+          <1>. QED BY ONLY <1>2, <1>3, SMT DEF ProofNoInitialSite
+
+        USE ProofIntegerBounds, ProofInitialSentinels
 
         ProofInitialization == INSTANCE OrderedIntInitializationComposition WITH
           Keys <- ProofAllKeys, Values <- ProofValues, FailureValues <- ProofFailureValues,
           NoFailure <- ProofNoFailure, NoInitialSite <- ProofNoInitialSite,
           IntKeys <- ProofIntSlots, SwiftIntMin <- ProofIntMin, SwiftIntMax <- ProofIntMax
+
+        USE DEF ProofInitialization!InitialSentinels, ProofInitialization!Expressions!IntegerDomain
 
         THEOREM ActualLayoutSuppliesInitializationDecoderInputs ==
           /\\ ProofInitialization!RenderedInitialRecordLayout(ProofNames, ProofOrdinals)
@@ -405,15 +418,61 @@ package enum InitialFailureEvidence {
           /\\ \\A row \\in DOMAIN ActualLayout :
                  /\\ ProofNames[ActualLayout[row].declaration] = ActualLayout[row].name
                  /\\ ProofOrdinals[ActualLayout[row].declaration] = ActualLayout[row].ordinal
+                 /\\ ProofLayoutIndex(ActualLayout[row].declaration) = row
+                 /\\ ProofOrdinalKey(ActualLayout[row].ordinal) = ActualLayout[row].declaration
                  /\\ \\A other \\in DOMAIN ActualLayout :
                         ActualLayout[row].ordinal = ActualLayout[other].ordinal => row = other
-          BY ProofIntegerBounds, ProofInitialSentinels, ResolvedVariableTypesMatchActualLayout, SMT
-            DEF ActualLayout, ActualInitializationOrder, ProofCount, ProofOrder, ProofOrdinalKey,
-              ProofAllKeys, ProofLayoutIndex, ProofNames, ProofOrdinals, ProofIntSlots, ProofIntKeys,
-              SourceInitializers, ProofValues, ProofFailureValues,
-              ProofInitialization!RenderedInitialRecordLayout, ProofInitialization!IntInitializationDomains,
-              ProofInitialization!InitializationOrder, ProofInitialization!PrefixKeys,
-              ProofInitialization!Expressions!ArithmeticFailures
+          PROOF
+          <1>0. /\\ \\A row, other \\in DOMAIN ActualLayout :
+                       ActualLayout[row].declaration = ActualLayout[other].declaration => row = other
+                /\\ \\A row, other \\in DOMAIN ActualLayout :
+                       ActualLayout[row].name = ActualLayout[other].name => row = other
+                /\\ \\A row, other \\in DOMAIN ActualLayout :
+                       ActualLayout[row].ordinal = ActualLayout[other].ordinal => row = other
+            BY ONLY SMT DEF ActualLayout
+          <1>1. \\A row \\in DOMAIN ActualLayout :
+                  /\\ ProofLayoutIndex(ActualLayout[row].declaration) = row
+                  /\\ ProofOrdinalKey(ActualLayout[row].ordinal) = ActualLayout[row].declaration
+            <2>. SUFFICES ASSUME NEW row \\in DOMAIN ActualLayout
+                         PROVE /\\ ProofLayoutIndex(ActualLayout[row].declaration) = row
+                               /\\ ProofOrdinalKey(ActualLayout[row].ordinal) = ActualLayout[row].declaration
+              BY SMT
+            <2>0. row \\in DOMAIN ActualLayout BY SMT
+            <2>1. (CHOOSE selected \\in DOMAIN ActualLayout :
+                       ActualLayout[selected].declaration = ActualLayout[row].declaration) = row
+              BY ONLY <1>0, <2>0, SMT
+            <2>2. (CHOOSE selected \\in DOMAIN ActualLayout :
+                       ActualLayout[selected].ordinal = ActualLayout[row].ordinal) = row
+              BY ONLY <1>0, <2>0, SMT
+            <2>. QED BY ONLY <2>1, <2>2, SMT DEF ProofLayoutIndex, ProofOrdinalKey
+          <1>2. ProofInitialization!RenderedInitialRecordLayout(ProofNames, ProofOrdinals)
+            BY ONLY <1>0, <1>1, SetExtensionality, SMT
+              DEF ProofNames, ProofOrdinals, ProofAllKeys, ActualLayout,
+                ProofInitialization!RenderedInitialRecordLayout
+          <1>3. ProofIntKeys = ProofIntSlots /\\ ProofIntSlots \\subseteq ProofAllKeys
+            BY ONLY SetExtensionality, SMT
+              DEF ProofIntKeys, ProofIntSlots, ProofAllKeys, ActualLayout, SourceInitializers
+          <1>4a. DOMAIN ActualLayout = 1..ProofCount /\\ ProofCount \\in Nat
+            BY ONLY SMT DEF ActualLayout, ActualInitializationOrder, ProofCount
+          <1>4b. \\A position \\in 1..ProofCount : ProofOrder[position] = ActualLayout[position].declaration
+            BY ONLY <1>1, <1>4a, SMT
+              DEF ProofOrder, ActualInitializationOrder, ActualLayout, ProofCount
+          <1>4. ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
+            BY ONLY <1>0, <1>4a, <1>4b, SetExtensionality, SMT
+              DEF ProofOrder, ProofAllKeys, ProofInitialization!InitializationOrder,
+                ProofInitialization!PrefixKeys
+          <1>5. ProofInitialization!IntInitializationDomains
+            BY ONLY <1>3, ProofIntegerBounds, ProofInitialSentinels, SMT
+              DEF ProofInitialization!IntInitializationDomains, ProofValues, ProofFailureValues,
+                ProofInitialization!Expressions!ArithmeticFailures
+          <1>6. \\A row \\in DOMAIN ActualLayout :
+                  /\\ ProofNames[ActualLayout[row].declaration] = ActualLayout[row].name
+                  /\\ ProofOrdinals[ActualLayout[row].declaration] = ActualLayout[row].ordinal
+            BY ONLY <1>1, SMT DEF ProofNames, ProofOrdinals, ProofAllKeys
+          <1>. QED BY ONLY <1>0, <1>1, <1>2, <1>3, <1>4, <1>5, <1>6,
+            ResolvedVariableTypesMatchActualLayout, SMT
+
+        USE DEF ProofInitialization!IntInitializationDomains
 
         SourcePlanHistory(plan, state, history) ==
           ProofInitialization!Expressions!SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
@@ -449,12 +508,24 @@ package enum InitialFailureEvidence {
           <1>0. bound \\subseteq ProofIntSlots
             BY ActualLayoutSuppliesInitializationDecoderInputs, SMT DEF bound, ProofBoundKeys, SourceInitializers, ProofIntKeys
           <1>1. completed \\in [ProofIntSlots -> ProofIntMin..ProofIntMax]
-            BY <1>0, ProofInitialization!Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
-              DEF bound, completed
+            BY <1>0, ProofIntegerBounds, ProofInitialization!Expressions!CompletingPartialBindingsRetainsEveryBoundValue, SMT
+              DEF bound, completed, ProofInitialization!Expressions!IntegerDomain
           <1>2. ProofInitialization!Expressions!ExpressionPlan(plan.count, plan.kinds, plan.literals,
                   plan.reads, plan.left, plan.right, completed)
-            BY <1>1, ProofIntegerBounds, SMT DEF plan, SourceInitializers, ProofIntKeys, ProofIntSlots, ActualLayout,
-              ProofIntMin, ProofIntMax, ProofInitialization!Expressions!ExpressionPlan
+            PROOF
+            <2>1. CASE row = 1
+              BY <2>1, <1>1, ProofIntegerBounds, SMT
+                DEF plan, SourceInitializers, ProofIntKeys, ProofIntSlots, ActualLayout,
+                  ProofIntMin, ProofIntMax, ProofInitialization!Expressions!ExpressionPlan
+            <2>2. CASE row = 2
+              BY <2>2, <1>1, ProofIntegerBounds, SMT
+                DEF plan, SourceInitializers, ProofIntKeys, ProofIntSlots, ActualLayout,
+                  ProofIntMin, ProofIntMax, ProofInitialization!Expressions!ExpressionPlan
+            <2>3. CASE row = 3
+              BY <2>3, <1>1, ProofIntegerBounds, SMT
+                DEF plan, SourceInitializers, ProofIntKeys, ProofIntSlots, ActualLayout,
+                  ProofIntMin, ProofIntMax, ProofInitialization!Expressions!ExpressionPlan
+            <2>. QED BY <2>1, <2>2, <2>3, SMT DEF SourceInitializers
           <1>3. ProofInitialization!Expressions!ExpressionReadKeys(plan.count, plan.kinds, plan.reads) \\subseteq bound
             BY SMT DEF plan, bound, ProofBoundKeys, SourceInitializers, ProofInitialization!Expressions!ExpressionReadKeys
           <1>4. ProofInitialization!Expressions!PartialExpressionPlan(plan.count, plan.kinds, plan.literals,
@@ -498,7 +569,8 @@ package enum InitialFailureEvidence {
                   /\\ \\A prefixLeftIndex, prefixRightIndex \\in 1..(position - 1) :
                          ProofPrefixOrder(position)[prefixLeftIndex] = ProofPrefixOrder(position)[prefixRightIndex]
                            => prefixLeftIndex = prefixRightIndex
-            BY SMT DEF ActualInitializationOrder, ActualPrefixOrders, ActualLayout, ProofCount, ProofOrder,
+            BY ActualLayoutSuppliesInitializationDecoderInputs, SMT
+              DEF ActualInitializationOrder, ActualPrefixOrders, ActualLayout, ProofCount, ProofOrder,
               ProofOrdinalKey, ProofPrefixOrder, ProofPrefixKeys, ProofAllKeys
           <1>3. \\A position \\in 1..ProofCount : \\A prior \\in [ProofPrefixKeys(position) -> ProofValues] :
                   /\\ prior \\in ProofInitialization!PartialBindings
@@ -514,8 +586,20 @@ package enum InitialFailureEvidence {
           <1>5. \\A row \\in DOMAIN SourceInitializers : \\E position \\in 1..ProofCount :
                   /\\ ProofOrder[position] = SourceInitializers[row][1]
                   /\\ ProofPrefixIntNames(position) = ProofBoundKeys(row)
-            BY SMT DEF ActualLayout, ActualInitializationOrder, ProofCount, ProofOrder, ProofOrdinalKey,
-              SourceInitializers, ProofPrefixIntNames, ProofPrefixKeys, ProofIntSlots, ProofBoundKeys
+            PROOF
+            <2>. SUFFICES ASSUME NEW row \\in DOMAIN SourceInitializers
+                         PROVE \\E position \\in 1..ProofCount :
+                             /\\ ProofOrder[position] = SourceInitializers[row][1]
+                             /\\ ProofPrefixIntNames(position) = ProofBoundKeys(row)
+              BY SMT
+            <2>0. row \\in {1, 2, 3} BY SMT DEF SourceInitializers
+            <2>1. /\\ ProofOrder[row + 1] = SourceInitializers[row][1]
+                  /\\ ProofPrefixIntNames(row + 1) = ProofBoundKeys(row)
+              BY <2>0, ActualLayoutSuppliesInitializationDecoderInputs, SetExtensionality, SMT
+                DEF ActualLayout, ActualInitializationOrder, ProofCount, ProofOrder,
+                  SourceInitializers, ProofPrefixIntNames, ProofPrefixKeys, ProofIntSlots, ProofBoundKeys
+            <2>. WITNESS row + 1
+            <2>. QED BY ONLY <2>0, <2>1, SMT DEF ProofCount, ActualInitializationOrder
           <1>. QED BY <1>3, <1>4, <1>5, InitializerPlansInvokeCheckedExpressionParent, SMT
 
         ProofIntPositions == {position \\in 1..ProofCount : ProofOrder[position] \\in ProofIntSlots}
@@ -567,7 +651,8 @@ package enum InitialFailureEvidence {
           <1>0. /\\ ProofSourceRow(position) \\in DOMAIN SourceInitializers
                 /\\ ProofPlans[position] = SourceInitializers[ProofSourceRow(position)][2]
                 /\\ ProofPrefixIntNames(position) = ProofBoundKeys(ProofSourceRow(position))
-            BY SMT DEF ProofSourceRow, ProofPlans, ProofIntPositions, ProofOrder, ProofCount,
+            BY ActualLayoutSuppliesInitializationDecoderInputs, SMT
+              DEF ProofSourceRow, ProofPlans, ProofIntPositions, ProofOrder, ProofCount,
               ProofOrdinalKey, ActualInitializationOrder, ActualLayout, SourceInitializers,
               ProofPrefixIntNames, ProofPrefixKeys, ProofIntSlots, ProofBoundKeys
           <1>1. ProofReadState(position, prior) \\in [ProofBoundKeys(ProofSourceRow(position)) -> ProofIntMin..ProofIntMax]
@@ -610,7 +695,8 @@ package enum InitialFailureEvidence {
                 /\\ \\A position \\in (1..ProofCount) \\ ProofIntPositions : ProofControlSeed(position) \\in ProofValues
                 /\\ \\A position \\in (1..ProofCount) \\ ProofIntPositions : ProofControlSeed(position) = SourceInitialControl
                 /\\ \\A position \\in ProofIntPositions : ProofPlans[position].count \\in Nat
-            BY SourceInitialControlMatchesResolvedIR, SMT DEF ProofCount, ActualInitializationOrder, ProofIntPositions, ProofControlSeed,
+            BY ActualLayoutSuppliesInitializationDecoderInputs, SourceInitialControlMatchesResolvedIR, SMT
+              DEF ProofCount, ActualInitializationOrder, ProofIntPositions, ProofControlSeed,
               ActualControlSeeds, ActualLayout, ProofOrdinalKey, ProofOrder, ProofIntSlots, ProofValues,
               ProofPlans, ProofSourceRow, SourceInitializers
           <1>1. \\A position \\in ProofIntPositions : \\A prior \\in ProofInitialization!PartialBindings :
@@ -726,15 +812,28 @@ package enum InitialFailureEvidence {
                 /\\ ProofInitialization!InitialObservationIsTyped(observations[ProofCount])
                 /\\ observations[ProofCount].stateCount + observations[ProofCount].failureCount = 1
                 /\\ observations[ProofCount].stateCount <= 1 /\\ observations[ProofCount].failureCount <= 1
-            BY <1>0, <1>7, ActualInitializerEvaluatorsAreTypedAndAgree,
-              ProofInitialization!SingleBranchInitializationDerivesItsObservationBounds, SMT
-              DEF ProofInitialization!InitializationOrder
+            PROOF
+            <2>1. ProofInitialization!SingleBranchInitialObservationHistory(
+                ProofCount, ProofOrder, ProofEvaluate(TRUE), observations)
+              BY ONLY <1>7, ActualInitializerEvaluatorsAreTypedAndAgree, SMT
+            <2>2. /\\ ProofCount \\in 0..ProofCount
+                  /\\ ProofInitialization!InitializerEvaluators(ProofCount, ProofEvaluate(FALSE))
+              BY <1>0, ActualInitializerEvaluatorsAreTypedAndAgree, SMT
+                DEF ProofInitialization!InitializationOrder
+            <2>3. \\A index \\in 0..ProofCount :
+                    /\\ ProofInitialization!InitialObservationIsTyped(observations[index])
+                    /\\ observations[index].stateCount <= 1 /\\ observations[index].failureCount <= 1
+                    /\\ observations[index].stateCount + observations[index].failureCount = 1
+              BY ONLY <1>0, <1>7, <2>2, ProofInitialSentinels,
+                ProofInitialization!SingleBranchInitializationDerivesItsObservationBounds, SMT
+            <2>. QED BY ONLY <2>1, <2>2, <2>3, SMT
           <1>9. source[ProofCount].failures
                   = ProofInitialization!SourceFailureConstraintPrefix(ProofOrder, ProofCount, ProofEvaluate(FALSE))
             BY <1>0, <1>1, ActualInitializerEvaluatorsAreTypedAndAgree,
               ProofInitialization!SourceHistoriesMatchEveryInitialFailurePrefix, SMT
               DEF ProofInitialization!InitializationOrder
-          <1>. QED BY <1>1, <1>2, <1>4, <1>6, <1>7, <1>8, <1>9, SMT
+          <1>. WITNESS source, generated, observations
+          <1>. QED BY ONLY <1>1, <1>2, <1>4, <1>6, <1>7, <1>8, <1>9, SMT
 
         ExpectedOperand0 == \(binaryLiteral(operands[0]))
         ExpectedOperand1 == \(binaryLiteral(operands[1]))
@@ -780,13 +879,15 @@ package enum InitialFailureEvidence {
           <1>0. /\\ ProofCount = 4 /\\ ProofIntPositions = {2, 3, 4}
                 /\\ ProofOrder = <<"pc", "first", "second", "last">>
                 /\\ ExpectedFailure.site = ProofOrdinals[ProofOrder[ProofCount]]
-            BY SMT DEF ProofCount, ActualInitializationOrder, ProofOrder, ProofOrdinalKey,
+            BY ActualLayoutSuppliesInitializationDecoderInputs, SMT
+              DEF ProofCount, ActualInitializationOrder, ProofOrder, ProofOrdinalKey,
               ProofIntPositions, ProofIntSlots, ActualLayout, ExpectedFailure, ProofOrdinals, ProofLayoutIndex
           <1>1. /\\ DOMAIN ProofObservedBefore = {"pc", "first", "second"}
                 /\\ ProofObservedBefore["pc"] = "stay" /\\ ProofObservedBefore["first"] = 1
                 /\\ ProofObservedBefore["second"] = 3
                 /\\ ExpectedOperand0 = 3 /\\ ExpectedOperand1 = ProofIntMax
-            BY SMT DEF ProofObservedBefore, ExpectedBefore, ExpectedOperand0, ExpectedOperand1,
+            BY ActualLayoutSuppliesInitializationDecoderInputs, SMT
+              DEF ProofObservedBefore, ExpectedBefore, ExpectedOperand0, ExpectedOperand1,
               ProofIntMax, ProofNames, ProofAllKeys, ProofLayoutIndex, ActualLayout,
               ProofInitialization!DecodedRenderedPrefixEntries
           <1>2. \\A position \\in 1..ProofCount :
@@ -904,9 +1005,11 @@ package enum InitialFailureEvidence {
             BY ActualPlansInvokeCompleteInitializationAndObservationParents, SMT
               DEF ProofCount, ActualInitializationOrder
           <1>2. \\A index \\in 0..ProofCount : source[index] = ProofObservedHistory[index]
-            BY <1>0, <1>1, ActualNativePrefixConstructsTheGeneratedInitializationHistory,
-              ActualInitializerEvaluatorsAreTypedAndAgree, ProofInitialization!InitializationHistoriesRetainAllStatesAndFailures, SMT
-              DEF ProofInitialization!InitializationHistory, ProofInitialization!InitializationResults
+            PROOF
+            <2>1. \\A index \\in 0..ProofCount : generated[index] = ProofObservedHistory[index]
+              BY ONLY <1>0, <1>1, ProofInitialSentinels, ActualNativePrefixConstructsTheGeneratedInitializationHistory,
+                ProofInitialization!InitializationHistoryIsUnique, SMT
+            <2>. QED BY ONLY <1>1, <2>1, SMT
           <1>3. /\\ source[ProofCount].states = {}
                 /\\ source[ProofCount].failures = ProofObservedFailures
                 /\\ ProofObservedFailures # {}
@@ -917,7 +1020,10 @@ package enum InitialFailureEvidence {
             BY <1>1, <1>3, SMT DEF ProofInitialization!InitialSetProjection,
               ProofInitialization!InitialFailureSet, ProofInitialization!InitialObservationIsTyped,
               ProofInitialization!InitialFailureHistory
-          <1>. QED BY <1>0, <1>1, <1>3, <1>4, CompleteFailureEvents, InitialFailurePrecedesGraph, SMT
+          <1>5. ProofCount \\in 0..ProofCount
+            BY <1>0, SMT DEF ProofInitialization!InitializationOrder
+          <1>. WITNESS source, generated, observations
+          <1>. QED BY ONLY <1>1, <1>3, <1>4, <1>5, CompleteFailureEvents, InitialFailurePrecedesGraph, SMT
             DEF ProofObservedFailures
         ====
         """

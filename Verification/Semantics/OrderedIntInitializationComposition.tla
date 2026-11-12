@@ -1012,6 +1012,8 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
                   plan.reads, plan.left, plan.right, bound, state)
            /\ RenderedIntValueHistory(plan, state, values)
         BY <1>3, <1>3c, SMT
+    <1>3f. InitialSentinels /\ Expressions!IntegerDomain
+        BY InitialSentinels, <1>3e, SMT DEF IntInitializationDomains, Expressions!IntegerDomain
     <1>4. PICK execution :
         /\ Expressions!ReachedCheckedPostorderExecution(plan, state, execution)
         /\ execution.outcome \in Expressions!ExpressionOutcomes
@@ -1020,7 +1022,8 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
             IF execution.outcome.ok THEN {}
             ELSE {[before |-> prior, site |-> target, kind |-> "integerOverflow.addition",
                    operands |-> execution.outcome.failure[3]]}
-        BY ONLY <1>3e, RenderedAdditionGuardsConstructTheReachedInitializationEvent, SMT
+        BY ONLY <1>3e, <1>3f, RenderedAdditionGuardsConstructTheReachedInitializationEvent, SMT
+            DEF InitialSentinels
     <1>5. meaning[root] = execution.outcome
         BY <1>0, <1>4, Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT DEF plan
     <1>6. /\ SourceIntInitializerOutcome(meaning[root])
@@ -1071,7 +1074,13 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
             <3>5. GeneratedInitialLeaf(prior, target, SourceFailed(execution.outcome.failure))
                 = [states |-> {}, failures |-> {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}]
                 BY <3>3, <3>4, SMT DEF GeneratedInitialLeaf
-            <3>. QED BY <1>7, <2>2, <3>1, <3>2, <3>5, SMT
+            <3>6. SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root]))
+                = GeneratedInitialLeaf(prior, target, SourceFailed(execution.outcome.failure))
+                BY ONLY <1>7, <3>1, SMT
+            <3>7. SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root]))
+                = [states |-> {}, failures |-> {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}]
+                BY ONLY <3>6, <3>5, SMT
+            <3>. QED BY ONLY <2>2, <3>2, <3>7, SMT
         <2>. QED BY <1>4, <2>1, <2>2, SMT DEF Expressions!ExpressionOutcomes
     <1>10. RenderedInitialRecordInterpretation(plan, values, execution.outcome, prior, target,
         SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root])))
@@ -1277,6 +1286,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
     <1>0d. \A index \in 1..count : \A prior \in source[index - 1].states :
         PartialIntProjection(prior) \in [(DOMAIN prior) \cap IntKeys -> SwiftIntMin..SwiftIntMax]
         BY <1>0c, SMT DEF typedPrefix, InitializationOrder
+    <1>. HIDE DEF typedPrefixFlags
     <1>. USE <1>0d
     <1>1. \A index \in 1..count : \A prior \in source[index - 1].states :
         IF index \in positions
@@ -1430,6 +1440,8 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                     /\ SourceTerminal(source[count], sourceChecks).states \subseteq [Keys -> Values]
         BY <1>2h, <1>2s, <1>2t, SMT
             DEF InitializationOrder, SourceTerminal, SourceSelectedStates
+    <1>2u. \A index \in 0..count : source[index] = generated[index]
+        BY ONLY <1>2, SMT
     <1>2b. \A index \in 1..count : \A prior \in source[index - 1].states :
         sourceEvaluate[index][prior].firstFailure = NoFailure
             => \E value \in Values : sourceEvaluate[index][prior].candidates = {value}
@@ -1693,7 +1705,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             BY SMT DEF plans, emissions
         <2>. WITNESS plans, witnesses
         <2>. QED BY ONLY <2>1, <1>7, <1>8, SMT
-    <1>. QED BY ONLY <1>2, <1>2f, <1>4, <1>5a, <1>9, SMT
+    <1>. QED BY ONLY <1>2u, <1>2f, <1>4, <1>5a, <1>9, SMT
 
 THEOREM ChangingAReadChangesTheFixedInitializerCandidate ==
     ASSUME NEW first \in Values, NEW second \in Values, first # second
