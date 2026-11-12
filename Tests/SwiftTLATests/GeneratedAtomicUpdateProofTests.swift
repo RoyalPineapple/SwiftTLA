@@ -94,11 +94,28 @@ struct GeneratedAtomicUpdateProofTests {
             .statements.first?.item.as(DeclSyntax.self))
         #expect(wrongConstructor.as(FunctionDeclSyntax.self)?.name.text == "makeMachine")
         let publicOutcomes = initialConstruction[2].description
-        let conversion = "SwiftTLA._mapNativeOutcomes(outcome.states)"
-        try #require(publicOutcomes.components(separatedBy: conversion).count == 2)
-        let wrongMapping = publicOutcomes.replacingOccurrences(of: conversion, with: "outcome.states.map")
-        try #require(wrongMapping != publicOutcomes)
+        let initialMachines = initialConstruction[3].description
+        let conversion = "SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(_selectedInitial: nil as State?))"
+        try #require(initialMachines.components(separatedBy: conversion).count == 2)
+        let wrongMapping = initialMachines.replacingOccurrences(of: conversion,
+            with: "(try Self._completedInitialStates(_selectedInitial: nil as State?)).map")
+        try #require(wrongMapping != initialMachines)
         let wrongOutcomes = try #require(Parser.parse(source: wrongMapping)
+            .statements.first?.item.as(DeclSyntax.self))
+        let outcomeConversion = "return SwiftTLA._mapNativeInitialOutcomes(outcome) { Self(execution: $0) }"
+        try #require(publicOutcomes.components(separatedBy: outcomeConversion).count == 2)
+        let callerReads = publicOutcomes.replacingOccurrences(of: outcomeConversion,
+            with: "return SwiftTLA._nativeInitialOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0) }, failures: outcome.failures)")
+        try #require(callerReads != publicOutcomes)
+        let wrongOutcomeReads = try #require(Parser.parse(source: callerReads)
+            .statements.first?.item.as(DeclSyntax.self))
+        let completedOutcomes = initialConstruction[1].description
+        let completion = "return try SwiftTLA._completeNativeInitialOutcomes(outcome)"
+        try #require(completedOutcomes.components(separatedBy: completion).count == 2)
+        let callerCompletion = completedOutcomes.replacingOccurrences(of: completion,
+            with: "if let failure = outcome.firstFailure { throw failure }\nreturn outcome.states")
+        try #require(callerCompletion != completedOutcomes)
+        let wrongCompletionReads = try #require(Parser.parse(source: callerCompletion)
             .statements.first?.item.as(DeclSyntax.self))
         let initialCall = "Self._initialStates(_selectedInitial: nil as State?)"
         try #require(publicOutcomes.components(separatedBy: initialCall).count == 2)
@@ -113,15 +130,21 @@ struct GeneratedAtomicUpdateProofTests {
         let wrongResultContext = try #require(Parser.parse(source: inferredResult)
             .statements.first?.item.as(DeclSyntax.self))
         let factoryCall = "SwiftTLA._nativeInitialOutcomes(states:"
-        try #require(publicOutcomes.components(separatedBy: factoryCall).count == 2)
-        let callerFactory = publicOutcomes.replacingOccurrences(
+        try #require(initials.description.components(separatedBy: factoryCall).count == 2)
+        let callerFactory = initials.description.replacingOccurrences(
             of: factoryCall, with: "SwiftTLA.InitialEvaluationOutcomes(states:")
-        try #require(callerFactory != publicOutcomes)
+        try #require(callerFactory != initials.description)
         let wrongOutcomeFactory = try #require(Parser.parse(source: callerFactory)
             .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try emitter.verifyIntInitialOutput(wrongOutcomeFactory)
+            Issue.record("An initializer using a caller-specialized outcome constructor was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+        }
         try verifyGeneratedInitialConstruction(initialConstruction, configured: false)
-        for (index, declaration) in [(4, wrongConstructor), (2, wrongOutcomes), (2, wrongInitialCall),
-                                      (2, wrongResultContext), (2, wrongOutcomeFactory)] {
+        for (index, declaration) in [(4, wrongConstructor), (3, wrongOutcomes), (2, wrongInitialCall),
+                                      (2, wrongResultContext), (2, wrongOutcomeReads), (1, wrongCompletionReads)] {
             var wrongConstruction = initialConstruction
             wrongConstruction[index] = declaration
             do {

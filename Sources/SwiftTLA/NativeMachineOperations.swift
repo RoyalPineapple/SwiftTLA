@@ -143,6 +143,23 @@ public func _nativeInitialOutcomes<State: Sendable>(
     InitialEvaluationOutcomes(states: states, failures: failures)
 }
 
+/// Keep generated outcome reads and conversion outside caller specializations.
+@_documentation(visibility: internal)
+public func _mapNativeInitialOutcomes<Source: Sendable, Result: Sendable>(
+    _ outcomes: InitialEvaluationOutcomes<Source>, _ transform: (Source) -> Result
+) -> InitialEvaluationOutcomes<Result> {
+    _nativeInitialOutcomes(states: _mapNativeOutcomes(outcomes.states, transform), failures: outcomes.failures)
+}
+
+/// Keep generated first-failure selection and state reads in library scope.
+@_documentation(visibility: internal)
+public func _completeNativeInitialOutcomes<State: Sendable>(
+    _ outcomes: InitialEvaluationOutcomes<State>
+) throws -> [State] {
+    if let failure = outcomes.firstFailure { throw failure }
+    return outcomes.states
+}
+
 /// Bind generated addition in library scope, away from caller extensions.
 @_documentation(visibility: internal)
 public func _nativeIntAdd(_ lhs: Int, _ rhs: Int) throws -> Int {

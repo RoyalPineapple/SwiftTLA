@@ -794,13 +794,11 @@ extension NativeSwiftEmitter {
         declarations += try nativeDeclarations("""
         private static func _completedInitialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
             let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(_selectedInitial: _selectedInitial\(hasRandomSubset ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
-            if let failure = outcome.firstFailure { throw failure }
-            return outcome.states
+            return try SwiftTLA._completeNativeInitialOutcomes(outcome)
         }
         public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
             let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(\(unselectedArguments))
-            return SwiftTLA._nativeInitialOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
-                failures: outcome.failures)
+            return SwiftTLA._mapNativeInitialOutcomes(outcome) { Self(execution: $0\(appendedArguments)) }
         }
         public static func initialMachines(\(parameters)) throws -> [Self] {
             SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(\(unselectedArguments))) { Self(execution: $0\(appendedArguments)) }
@@ -1967,13 +1965,11 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
     let expected = Parser.parse(source: """
     private static func _completedInitialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
         let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(_selectedInitial: _selectedInitial\(sampled ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
-        if let failure = outcome.firstFailure { throw failure }
-        return outcome.states
+        return try SwiftTLA._completeNativeInitialOutcomes(outcome)
     }
     public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
         let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(\(unselectedArguments))
-        return SwiftTLA._nativeInitialOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
-            failures: outcome.failures)
+        return SwiftTLA._mapNativeInitialOutcomes(outcome) { Self(execution: $0\(appendedArguments)) }
     }
     public static func initialMachines(\(parameters)) throws -> [Self] {
         SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(\(unselectedArguments))) { Self(execution: $0\(appendedArguments)) }

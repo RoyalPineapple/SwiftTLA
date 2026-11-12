@@ -15,6 +15,8 @@ private func emptyInitialOutcomes<State: Sendable>() -> InitialEvaluationOutcome
 }
 
 private extension InitialEvaluationOutcomes where State == NativeSupportBindingModel.Snapshot {
+    var states: [State] { [] }
+
     init(states: [State], failures: [InitialEvaluationFailure]) {
         self = emptyInitialOutcomes()
     }

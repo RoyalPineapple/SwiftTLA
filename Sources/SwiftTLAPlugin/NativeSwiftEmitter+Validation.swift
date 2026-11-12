@@ -155,8 +155,7 @@ extension NativeSwiftEmitter {
             }
             public func initialMachines() throws -> [\(model.typeName)] {
                 let outcome = try initialOutcomes()
-                if let failure = outcome.firstFailure { throw failure }
-                return outcome.states
+                return try SwiftTLA._completeNativeInitialOutcomes(outcome)
             }
             public var formalPropertyNames: [Property: \(nativeStringType)] {
                 Machine.formalPropertyNames
