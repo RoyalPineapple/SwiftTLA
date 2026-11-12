@@ -725,7 +725,8 @@ Exit: actual accepted pilot expressions supply the child theorem premises. No ex
 - [ ] M2.6 Discharge the evaluator and history premises at `OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures`.
   The pinned `28c609d2` run checks the repaired rendered failure leaf; one of 1,250 initialization obligations remains unproved at the final parent conjunction.
   Its next proof body names the constructed rendered-plan/witness existential explicitly and cites it at that join. This candidate is not yet mathematically checked.
-  The pinned `28cc7bc2` result checks that final join but leaves one of 1,251 obligations unproved at the earlier plan-count/type step. The current candidate separates the count-field projection from its Nat/positive consequence, using only the two required facts; the parent remains unproved pending checking.
+  The pinned `28cc7bc2` result checks that final join but leaves one of 1,251 obligations unproved at the earlier plan-count/type step. The count-field projection repair now checks in the source-bound pinned `e6bc23db` result.
+  That result leaves one of 1,254 obligations unproved at `RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf` step `<1>8`: successful execution returns the rendered root value. The current proof body makes positive count, completed-root position and restricted-prefix lookup explicit under unchanged statements and premises. This body is unverified; the whole parent and physical compiler/output interpretation remain open.
 
 Owners: [native runtime](../../Sources/SwiftTLA/CompiledRuntime.swift),
 [native emitter](../../Sources/SwiftTLAPlugin/NativeSwiftEmitter+Machine.swift),

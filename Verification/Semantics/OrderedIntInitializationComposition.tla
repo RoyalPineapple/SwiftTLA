@@ -1035,8 +1035,21 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
         BY <1>0, <1>6, InitializerLeafRetainsCompleteStatesAndFailures, SMT
             DEF PartialBindings, IntInitializationDomains
     <1>8. execution.outcome.ok => execution.outcome.value = values[plan.count]
-        BY <1>3c, <1>4, SMT DEF Expressions!ReachedCheckedPostorderExecution,
-            Expressions!Success, Expressions!ExpressionOutcomes, RenderedIntValueHistory
+        <2>. SUFFICES ASSUME execution.outcome.ok
+                     PROVE execution.outcome.value = values[plan.count]
+            BY SMT
+        <2>0. execution.outcome.ok BY SMT
+        <2>1. plan.count \in Nat \ {0}
+            BY ONLY <1>2, SMT DEF Expressions!ExpressionPlan
+        <2>2. execution.completed = plan.count
+            BY ONLY <1>4, <2>0, SMT DEF Expressions!ReachedCheckedPostorderExecution
+        <2>3. plan.count \in 1..execution.completed
+            BY ONLY <2>1, <2>2, SMT
+        <2>4. execution.values[plan.count] = values[plan.count]
+            BY ONLY <1>4, <2>3, SMT
+        <2>5. execution.outcome = Expressions!Success(execution.values[plan.count])
+            BY ONLY <1>4, <2>2, SMT DEF Expressions!ReachedCheckedPostorderExecution
+        <2>. QED BY ONLY <2>4, <2>5, SMT DEF Expressions!Success
     <1>8a. ~execution.outcome.ok =>
         /\ execution.outcome.failure # NoFailure
         /\ execution.outcome.failure =
