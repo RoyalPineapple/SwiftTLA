@@ -706,6 +706,8 @@ Exit: actual accepted pilot expressions supply the child theorem premises. No ex
   Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-helper-result-binding/` in the primary checkout.
   This closes that compiler blocker; it does not discharge the generic output-interpretation premise or M2.5.
 - [ ] M2.6 Discharge the evaluator and history premises at `OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures`.
+  The pinned `28c609d2` run checks the repaired rendered failure leaf; one of 1,250 initialization obligations remains unproved at the final parent conjunction.
+  Its next proof body names the constructed rendered-plan/witness existential explicitly and cites it at that join. This candidate is not yet mathematically checked.
 
 Owners: [native runtime](../../Sources/SwiftTLA/CompiledRuntime.swift),
 [native emitter](../../Sources/SwiftTLAPlugin/NativeSwiftEmitter+Machine.swift),

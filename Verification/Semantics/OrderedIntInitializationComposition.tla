@@ -1684,7 +1684,10 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                 prior \in source[index - 1].states} : index \in 1..count}
             BY <2>5b, <2>5c, SetExtensionality, SMT DEF SourceFailureConstraintPrefix
         <2>. QED BY <2>2, <2>4, <2>5, SMT
-    <1>. SUFFICES \E renderedPlans, witnesses :
+    <1>9. plans = [index \in positions |->
+        Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
+        BY SMT DEF plans, emissions
+    <1>10. \E renderedPlans, witnesses :
               /\ renderedPlans = [index \in positions |->
                      Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
               /\ \A index \in positions : \A prior \in source[index - 1].states :
@@ -1695,12 +1698,9 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                       DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
                           positions, order, renderedPlans, source, witnesses, sorting, names, ordinals), names, ordinals)
                           = source[count].failures
-        BY ONLY <1>2u, <1>2f, <1>4, <1>5a, SMT
-    <1>9. plans = [index \in positions |->
-        Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
-        BY SMT DEF plans, emissions
-    <1>. WITNESS plans, constructedWitnesses
-    <1>. QED BY ONLY <1>9, <1>7, <1>8, SMT
+        <2>. WITNESS plans, constructedWitnesses
+        <2>. QED BY ONLY <1>9, <1>7, <1>8, SMT
+    <1>. QED BY ONLY <1>2u, <1>2f, <1>4, <1>5a, <1>10, SMT
 
 THEOREM ChangingAReadChangesTheFixedInitializerCandidate ==
     ASSUME NEW first \in Values, NEW second \in Values, first # second
