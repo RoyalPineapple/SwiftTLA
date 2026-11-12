@@ -149,6 +149,13 @@ public func _mapNativeOutcomes<Source: Sendable, Result: Sendable>(
     outcomes.map(transform)
 }
 
+/// Keep generated failure sites independent of caller Optional operations.
+@_documentation(visibility: internal)
+public func _nativeInitialFailureSite(_ ordinal: Int?) -> InitialEvaluationFailure.Site {
+    guard let ordinal else { return .selectedInvariant }
+    return .initializer(ordinal)
+}
+
 /// Keep generated Int selection independent of caller Boolean and equality overloads.
 @_documentation(visibility: internal)
 public func _nativeIntInitialMatches(_ selected: Int?, _ value: Int) -> Bool {

@@ -725,7 +725,7 @@ extension NativeSwiftEmitter {
         let parsed = Parser.parse(source: """
         try SwiftTLA._NativeMachineOperations.visitInitialBranch({}, onEvaluationFailure: { failure in
             SwiftTLA._appendNativeOutcome(&failures, .init(
-                site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
         """)
@@ -987,7 +987,7 @@ extension NativeSwiftEmitter {
                 return """
                 }, onEvaluationFailure: { failure in
                     SwiftTLA._appendNativeOutcome(&failures, .init(
-                        site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                        site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
                         failure: failure, projectingBefore: evaluatingInitialBindings))
                 })
                 }
@@ -1000,7 +1000,7 @@ extension NativeSwiftEmitter {
         let suffix = append + "\n" + closing + """
         }, onEvaluationFailure: { failure in
             SwiftTLA._appendNativeOutcome(&failures, .init(
-                site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
         return SwiftTLA.InitialEvaluationOutcomes(states: result, failures: failures)
@@ -1187,7 +1187,7 @@ extension NativeSwiftEmitter {
                 closing = """
                 }, onEvaluationFailure: { failure in
                     SwiftTLA._appendNativeOutcome(&failures, .init(
-                        site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                        site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
                         failure: failure, projectingBefore: evaluatingInitialBindings))
                 })
                 }
@@ -1199,7 +1199,7 @@ extension NativeSwiftEmitter {
         body += """
         }, onEvaluationFailure: { failure in
             SwiftTLA._appendNativeOutcome(&failures, .init(
-                site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
+                site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
         return SwiftTLA.InitialEvaluationOutcomes(states: result, failures: failures)

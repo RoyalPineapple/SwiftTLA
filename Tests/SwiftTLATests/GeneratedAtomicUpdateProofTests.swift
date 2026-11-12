@@ -38,6 +38,20 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(wrongGuard != initials.description)
         #expect(try checkedInitialValues(wrongGuard).map { _ in true } == nil)
 
+        let siteConversion = "SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal)"
+        try #require(initials.description.components(separatedBy: siteConversion).count == 2)
+        let callerSite = initials.description.replacingOccurrences(of: siteConversion,
+            with: "evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant")
+        try #require(callerSite != initials.description)
+        let wrongSite = try #require(Parser.parse(source: callerSite).statements.first?.item.as(DeclSyntax.self))
+        try emitter.verifyIntInitialOutput(initials)
+        do {
+            try emitter.verifyIntInitialOutput(wrongSite)
+            Issue.record("An initializer failure site using caller Optional operations was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+        }
+
         let templateFile = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/GeneratedAtomicCopySwiftTemplate.txt")
@@ -1286,8 +1300,7 @@ struct GeneratedAtomicUpdateProofTests {
         \s* \} \s* \}
         \s* \}, \s* onEvaluationFailure: \s* \{ \s* failure \s+ in
         \s* SwiftTLA\._appendNativeOutcome \( &failures, \s* \.init \(
-        \s* site: \s* evaluatingInitializerOrdinal\.map\(SwiftTLA\.InitialEvaluationFailure\.Site\.initializer\)
-        \s* \?\? \s* \.selectedInvariant,
+        \s* site: \s* SwiftTLA\._nativeInitialFailureSite\(evaluatingInitializerOrdinal\),
         \s* failure: \s* failure, \s* projectingBefore: \s* evaluatingInitialBindings \) \)
         \s* \} \s* \)
         \s* return \s+ SwiftTLA\.InitialEvaluationOutcomes \s* \( \s* states: \s* result, \s* failures: \s* failures \)

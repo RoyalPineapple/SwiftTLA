@@ -1,6 +1,11 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+private extension Optional where Wrapped == Int {
+    func map(_ transform: (Int) -> SwiftTLA.InitialEvaluationFailure.Site)
+        -> SwiftTLA.InitialEvaluationFailure.Site? { nil }
+}
+
 @TLAModel
 struct DependentDivisionInitialModel {
     enum Step: String, CaseIterable { case stay }
