@@ -5,6 +5,12 @@ private extension SwiftTLA.TLAValue {
     static func int(_ value: Swift.Int) -> Self { .string("caller-int") }
 }
 
+private extension SwiftTLA.TLAStateProjection {
+    init(validating entries: [Entry]) throws {
+        throw TLAStateProjectionDiagnostic.invalidValue(path: "caller-constructor")
+    }
+}
+
 private extension SwiftTLA._NativeMachineOperations {
     static func visitInitialBranch(
         _ visit: () throws -> Void,

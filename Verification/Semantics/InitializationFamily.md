@@ -806,6 +806,7 @@ The owners are [the emitter name table](../../Sources/SwiftTLAPlugin/NativeSwift
    The constructor's pointwise copies make the completed Snapshot projection agree with that final lexical projection.
    `formalProjectionDeclarations` uses the same layout ID's field route and formal name; its `.int` case calls `SwiftTLA._nativeFormalInt(value)`.
    That function constructs `.int(value)` in library scope, outside caller enum extensions. The existing output check independently requires this callee and field route for resolved Int fields.
+   Projection construction calls `_nativeFormalProjection(entries)`, which invokes the unchanged validating initializer in library scope. Caller initializer lookup no longer supplies this validation call; validator soundness and complete entry correspondence remain owned.
    General module identity, type/field mapping and projection-checker soundness remain owned.
 6. `_visitNativeInitialBranch` invokes its `visit` closure once inside `do`. A normally returning literal binding reaches no catch or failure callback.
    A wholly literal initializer sequence reaches the single Snapshot append, with no model failure and no branch enumeration.

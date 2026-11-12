@@ -25,7 +25,7 @@ extension NativeSwiftEmitter {
         private static let __swifttlaFormalProjectionTokens: [SwiftTLA.TLAStateProjection.Token] = [\(tokens)]
         """), DeclSyntax(stringLiteral: """
         public func formalProjection(of snapshot: Snapshot) throws -> SwiftTLA.TLAStateProjection {
-            try SwiftTLA.TLAStateProjection(validating: [\(entries)])
+            try SwiftTLA._nativeFormalProjection([\(entries)])
         }
         """)]
         try verifyGeneratedFormalProjectionOutput(declarations, fields: fields)
@@ -255,7 +255,7 @@ func verifyGeneratedFormalProjectionOutput(
     }.joined(separator: ",\n")
     let expectedFunction = Parser.parse(source: """
     public func formalProjection(of snapshot: Snapshot) throws -> SwiftTLA.TLAStateProjection {
-        try SwiftTLA.TLAStateProjection(validating: [\(expectedEntries)])
+        try SwiftTLA._nativeFormalProjection([\(expectedEntries)])
     }
     """).statements.first?.item
     guard let expectedFunction, tokens(declarations[1]) == tokens(expectedFunction) else {

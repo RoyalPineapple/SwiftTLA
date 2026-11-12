@@ -72,7 +72,7 @@ extension NativeSwiftEmitter {
                 """)
                 viewProjections.append("""
                 case \(index):
-                    return try SwiftTLA.TLAStateProjection(validating: [
+                    return try SwiftTLA._nativeFormalProjection([
                         .init(token: SwiftTLA.TLAStateProjection.Token(validating: "View")!,
                               value: \(try formalValue(projected, type: view.resultType)))])
                 """)

@@ -194,6 +194,12 @@ public func _singleNativeOutcome<Outcome: Sendable>(
 @_documentation(visibility: internal)
 public func _nativeFormalInt(_ value: Int) -> TLAValue { .int(value) }
 
+/// Validate generated projections in library scope, away from caller initializers.
+@_documentation(visibility: internal)
+public func _nativeFormalProjection(_ entries: [TLAStateProjection.Entry]) throws -> TLAStateProjection {
+    try TLAStateProjection(validating: entries)
+}
+
 /// Keep formal token indexing in library scope, away from caller subscripts.
 @_documentation(visibility: internal)
 public func _nativeFormalProjectionToken(

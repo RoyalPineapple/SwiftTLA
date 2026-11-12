@@ -602,7 +602,7 @@ extension NativeSwiftEmitter {
             return ".init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(entry.variable.ordinal)), value: \(value))"
         }
         let capture = captures.isEmpty ? "" : "[" + captures.joined(separator: ", ") + "] in "
-        return "{ \(capture)try SwiftTLA.TLAStateProjection(validating: [\(entries.joined(separator: ", "))]) }"
+        return "{ \(capture)try SwiftTLA._nativeFormalProjection([\(entries.joined(separator: ", "))]) }"
     }
 
     private enum InitialScope {
@@ -781,7 +781,7 @@ extension NativeSwiftEmitter {
         var result: [Snapshot] = []
         var failures: [SwiftTLA.InitialEvaluationFailure] = []
         var evaluatingInitializerOrdinal: \(nativeIntType)?
-        var evaluatingInitialBindings: @Sendable () throws -> SwiftTLA.TLAStateProjection = { try SwiftTLA.TLAStateProjection(validating: []) }
+        var evaluatingInitialBindings: @Sendable () throws -> SwiftTLA.TLAStateProjection = { try SwiftTLA._nativeFormalProjection([]) }
         """).statements
         let branch = try initialBranch(body).with(\.leadingTrivia, .newlines(1))
         let returning = Parser.parse(source: "return SwiftTLA._nativeInitialOutcomes(states: result, failures: failures)")
@@ -1125,7 +1125,7 @@ extension NativeSwiftEmitter {
         let hiddenFields = program.layout.variables.filter { visible[$0.id] == nil }.map {
             ", \(variable($0.id)): \(variable($0.id))"
         }.joined()
-        var body = "var result: [Snapshot] = []\nvar failures: [SwiftTLA.InitialEvaluationFailure] = []\nvar evaluatingInitializerOrdinal: \(nativeIntType)?\nvar evaluatingInitialBindings: @Sendable () throws -> SwiftTLA.TLAStateProjection = { try SwiftTLA.TLAStateProjection(validating: []) }\n"
+        var body = "var result: [Snapshot] = []\nvar failures: [SwiftTLA.InitialEvaluationFailure] = []\nvar evaluatingInitializerOrdinal: \(nativeIntType)?\nvar evaluatingInitialBindings: @Sendable () throws -> SwiftTLA.TLAStateProjection = { try SwiftTLA._nativeFormalProjection([]) }\n"
         body += "try SwiftTLA._visitNativeInitialBranch({\n"
         var closing = ""
         for (index, pair) in zip(program.behavior.initializations, bindings).enumerated() {
@@ -1145,7 +1145,7 @@ extension NativeSwiftEmitter {
                 return ".init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(prior.variable.ordinal)), value: \(value))"
             }
             let capture = captures.isEmpty ? "" : "[" + captures.joined(separator: ", ") + "] in "
-            body += "evaluatingInitialBindings = { \(capture)try SwiftTLA.TLAStateProjection(validating: [\(entries.joined(separator: ", "))]) }\n"
+            body += "evaluatingInitialBindings = { \(capture)try SwiftTLA._nativeFormalProjection([\(entries.joined(separator: ", "))]) }\n"
             body += "evaluatingInitializerOrdinal = \(initialization.variable.ordinal)\n"
             switch initialization.initialization {
             case .value:

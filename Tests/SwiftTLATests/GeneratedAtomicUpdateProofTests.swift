@@ -339,21 +339,27 @@ struct GeneratedAtomicUpdateProofTests {
                 value: "SwiftTLA._nativeFormalInt(snapshot.state.\(field))")
         }
         try verifyGeneratedFormalProjectionOutput([projectionTokens, projection], fields: projectionFields)
-        let libraryInt = "SwiftTLA._nativeFormalInt("
-        try #require(projection.description.components(separatedBy: libraryInt).count - 1 == 2)
-        let callerIntSource = projection.description.replacingOccurrences(of: libraryInt, with: "SwiftTLA.TLAValue.int(")
-        #expect(callerIntSource != projection.description)
-        let callerInt = try #require(Parser.parse(source: callerIntSource).statements.first?.item.as(DeclSyntax.self))
-        let callerIntFields = projectionFields.map { field in
-            (formalName: field.formalName, route: field.route, type: field.type,
-                value: field.value.replacingOccurrences(of: libraryInt, with: "SwiftTLA.TLAValue.int("))
-        }
-        do {
-            try verifyGeneratedFormalProjectionOutput([projectionTokens, callerInt], fields: callerIntFields)
-            Issue.record("An Int projection using a caller-replaceable enum member was accepted")
-        } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.path == "native.formalProjection")
-            #expect(diagnostic.actual == "the projected Int value for \(firstField) does not use the library integer conversion")
+        for (callee, replacement, occurrences, reason) in [
+            ("SwiftTLA._nativeFormalInt(", "SwiftTLA.TLAValue.int(", 2,
+                "the projected Int value for \(firstField) does not use the library integer conversion"),
+            ("SwiftTLA._nativeFormalProjection(", "SwiftTLA.TLAStateProjection(validating:", 1,
+                "the projection call shape or formal token ordering differs from the checked rule"),
+        ] {
+            try #require(projection.description.components(separatedBy: callee).count - 1 == occurrences)
+            let wrongSource = projection.description.replacingOccurrences(of: callee, with: replacement)
+            try #require(wrongSource != projection.description)
+            let wrong = try #require(Parser.parse(source: wrongSource).statements.first?.item.as(DeclSyntax.self))
+            let wrongFields = projectionFields.map { field in
+                (formalName: field.formalName, route: field.route, type: field.type,
+                    value: field.value.replacingOccurrences(of: callee, with: replacement))
+            }
+            do {
+                try verifyGeneratedFormalProjectionOutput([projectionTokens, wrong], fields: wrongFields)
+                Issue.record("A caller-replaceable projection call was accepted")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native.formalProjection")
+                #expect(diagnostic.actual == reason)
+            }
         }
         let wrongProjectionSource = projection.description.replacingOccurrences(
             of: "snapshot.state.\(secondField)", with: "snapshot.state.\(firstField)")
@@ -1366,15 +1372,15 @@ struct GeneratedAtomicUpdateProofTests {
         \s* var \s+ failures: \s* \[SwiftTLA\.InitialEvaluationFailure\] \s* = \s* \[\]
         \s* var \s+ evaluatingInitializerOrdinal: \s* \#(integerType)\?
         \s* var \s+ evaluatingInitialBindings: \s* @Sendable \s* \(\) \s* throws \s* -> \s* SwiftTLA\.TLAStateProjection
-        \s* = \s* \{ \s* try \s+ SwiftTLA\.TLAStateProjection \( validating: \s* \[\] \) \s* \}
+        \s* = \s* \{ \s* try \s+ SwiftTLA\._nativeFormalProjection \( \s* \[\] \) \s* \}
         \s* try \s+ SwiftTLA\._visitNativeInitialBranch \s* \( \s* \{
-        \s* evaluatingInitialBindings \s* = \s* \{ \s* try \s+ SwiftTLA\.TLAStateProjection \( validating: \s* \[\] \) \s* \}
+        \s* evaluatingInitialBindings \s* = \s* \{ \s* try \s+ SwiftTLA\._nativeFormalProjection \( \s* \[\] \) \s* \}
         \s* evaluatingInitializerOrdinal \s* = \s* 0
         \s* let \s+ _value_first_0: \s* \#(integerType) \s* = \s* (-?[0-9]+)
         \s* evaluatingInitializerOrdinal \s* = \s* nil
         \s* if \s+ SwiftTLA\._nativeIntInitialMatches \( _selectedInitial\?\.first, \s* _value_first_0 \) \s* \{
         \s* evaluatingInitialBindings \s* = \s* \{ \s* \[_value_first_0\] \s+ in
-        \s* try \s+ SwiftTLA\.TLAStateProjection \( validating: \s* \[
+        \s* try \s+ SwiftTLA\._nativeFormalProjection \( \s* \[
         \.init \( token: \s* SwiftTLA\._nativeFormalProjectionToken\(Self\.__swifttlaFormalProjectionTokens,\s*at:\s*0\),
         \s* value: \s* SwiftTLA\._nativeFormalInt\(_value_first_0\) \) \] \) \s* \}
         \s* evaluatingInitializerOrdinal \s* = \s* 1
