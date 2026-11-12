@@ -1091,7 +1091,7 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
                 = [states |-> {}, failures |->
                     {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}]
                 BY ONLY <3>2, <3>8, SMT
-            <3>. QED BY ONLY <3>7, <3>9, SMT
+            <3>. QED BY <1>8b, <2>2, <3>2, <3>7, <3>8, <3>9, SMT
         <2>. QED BY <1>4, <2>1, <2>2, SMT DEF Expressions!ExpressionOutcomes
     <1>10. RenderedInitialRecordInterpretation(plan, values, execution.outcome, prior, target,
         SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root])))
@@ -1716,7 +1716,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             BY SMT DEF plans, emissions
         <2>. WITNESS plans, constructedWitnesses
         <2>. QED BY ONLY <2>1, <1>7, <1>8, SMT
-    <1>. QED BY ONLY <1>0n, <1>2u, <1>2f, <1>4, <1>5a, <1>9, SMT
+    <1>. QED BY <1>0n, <1>2u, <1>2f, <1>4, <1>5a, <1>9, SMT
 
 THEOREM ChangingAReadChangesTheFixedInitializerCandidate ==
     ASSUME NEW first \in Values, NEW second \in Values, first # second
