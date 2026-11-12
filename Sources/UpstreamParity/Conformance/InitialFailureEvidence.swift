@@ -695,7 +695,7 @@ package enum InitialFailureEvidence {
                                          /\\ \\A prefixLeftIndex, prefixRightIndex \\in 1..(position - 1) :
                                                 ProofPrefixOrder(position)[prefixLeftIndex] = ProofPrefixOrder(position)[prefixRightIndex]
                                                   => prefixLeftIndex = prefixRightIndex
-              BY ONLY SMT
+              BY SMT
             <2>1. CASE position = 1
               BY ONLY <2>1, <1>0, SetExtensionality, SMT
                 DEF ProofPrefixKeys, ProofPrefixOrder, ActualPrefixOrders
@@ -745,7 +745,7 @@ package enum InitialFailureEvidence {
               <3>. QED BY ONLY <2>0, <3>1, <3>2, <3>3, SMT
             <2>2. row + 1 \\in 1..ProofCount
               BY ONLY <2>0, SMT DEF ProofCount, ActualInitializationOrder
-            <2>. QED BY ONLY <2>1, <2>2, SMT
+            <2>. QED BY <2>0, <2>1, <2>2, SMT
           <1>6. \\A row \\in DOMAIN SourceInitializers : \\E position \\in 1..ProofCount :
                 /\\ ProofOrder[position] = SourceInitializers[row][1]
                 /\\ ProofPrefixIntNames(position) = ProofBoundKeys(row)
@@ -778,7 +778,7 @@ package enum InitialFailureEvidence {
                       /\\ \\A index \\in 0..SourceInitializers[row][2].count :
                              ProofInitialization!Expressions!OutcomeAgrees(source, generated, index)
               BY ONLY <2>0, <2>1, InitializerPlansInvokeCheckedExpressionParent, SMT
-            <2>. QED BY ONLY <2>1, <2>2, SMT
+            <2>. QED BY <2>0, <2>1, <2>2, SMT
           <1>. QED BY ONLY <1>3, <1>4, <1>6, SMT
 
         ProofIntPositions == {position \\in 1..ProofCount : ProofOrder[position] \\in ProofIntSlots}
@@ -899,7 +899,7 @@ package enum InitialFailureEvidence {
           <1>0c. SourceInitialControl \\in ProofValues
             BY ONLY SMT DEF SourceInitialControl, ProofValues
           <1>0d. /\\ ProofPlans[2].count = 1 /\\ ProofPlans[3].count = 3 /\\ ProofPlans[4].count = 3
-            BY ONLY <1>0a, SMT DEF ProofPlans, ProofSourceRow, SourceInitializers
+            BY ONLY <1>0a, SetExtensionality, SMT DEF ProofPlans, ProofSourceRow, SourceInitializers, ProofIntPositions
           <1>0. /\\ ProofCount \\in Nat /\\ ProofIntPositions \\subseteq 1..ProofCount
                 /\\ \\A position \\in (1..ProofCount) \\ ProofIntPositions : ProofControlSeed(position) \\in ProofValues
                 /\\ \\A position \\in (1..ProofCount) \\ ProofIntPositions : ProofControlSeed(position) = SourceInitialControl
@@ -921,11 +921,28 @@ package enum InitialFailureEvidence {
                   /\\ ProofEvaluate(FALSE)[position][prior].candidates \\subseteq ProofIntMin..ProofIntMax
                   /\\ (ProofEvaluate(FALSE)[position][prior].firstFailure = ProofNoFailure
                        => \\E value \\in ProofValues : ProofEvaluate(FALSE)[position][prior].candidates = {value})
-            BY <1>0, <1>1, ActualInitializerExpressionsSupplyTheirParents, ProofInitialSentinels,
-              ActualLayoutSuppliesInitializationDecoderInputs, SMT
-              DEF ProofEvaluate, ProofInitialization!SourceIntInitializerOutcome, ProofInitialization!SourceFixed,
-                ProofInitialization!SourceFailed, ProofInitialization!Expressions!ExpressionOutcomes, ProofValues,
-                ProofInitialization!IntInitializationDomains
+            PROOF
+            <2>. SUFFICES ASSUME NEW position \\in ProofIntPositions,
+                                 NEW prior \\in ProofInitialization!PartialBindings
+                         PROVE /\\ ProofEvaluate(FALSE)[position][prior].candidates \\subseteq ProofIntMin..ProofIntMax
+                               /\\ (ProofEvaluate(FALSE)[position][prior].firstFailure = ProofNoFailure
+                                    => \\E value \\in ProofValues : ProofEvaluate(FALSE)[position][prior].candidates = {value})
+              BY SMT
+            <2>. DEFINE result == ProofSourceExpressions[position][prior][ProofPlans[position].count]
+            <2>0. result \\in ProofInitialization!Expressions!ExpressionOutcomes
+              BY <1>0, ActualInitializerExpressionsSupplyTheirParents, SMT DEF result
+            <2>1. ProofEvaluate(FALSE)[position][prior] = ProofInitialization!SourceIntInitializerOutcome(result)
+              BY ONLY SMT DEF result, ProofEvaluate
+            <2>2. CASE result.ok
+              BY ONLY <2>0, <2>1, <2>2, ActualLayoutSuppliesInitializationDecoderInputs, SMT
+                DEF ProofInitialization!Expressions!ExpressionOutcomes, ProofInitialization!SourceIntInitializerOutcome,
+                  ProofInitialization!SourceFixed, ProofInitialization!IntInitializationDomains
+            <2>3. CASE ~result.ok
+              BY ONLY <2>0, <2>1, <2>3, ProofInitialSentinels,
+                ActualLayoutSuppliesInitializationDecoderInputs, SMT
+                DEF ProofInitialization!Expressions!ExpressionOutcomes, ProofInitialization!SourceIntInitializerOutcome,
+                  ProofInitialization!SourceFailed, ProofInitialization!IntInitializationDomains
+            <2>. QED BY <2>2, <2>3, SMT DEF ProofInitialization!Expressions!ExpressionOutcomes
           <1>. QED BY <1>0, <1>1, <1>2, <1>3, SMT
             DEF ProofEvaluate, ProofInitialization!InitializerEvaluators, ProofInitialization!SourceFixed
 
@@ -1107,15 +1124,19 @@ package enum InitialFailureEvidence {
                 /\\ ProofObservedBefore["pc"] = "stay" /\\ ProofObservedBefore["first"] = 1
                 /\\ ProofObservedBefore["second"] = 3
                 /\\ ExpectedOperand0 = 3 /\\ ExpectedOperand1 = ProofIntMax
+                /\\ ProofObservedBefore \\in [ProofPrefixKeys(ProofCount) -> ProofValues]
             PROOF
             <2>. DEFINE observed == [key \\in {"pc", "first", "second"} |->
                 CASE key = "pc" -> "stay" [] key = "first" -> 1 [] OTHER -> 3]
             <2>0a. "stay" \\in STRING
               BY ONLY SMT
+            <2>0b. ProofPrefixKeys(ProofCount) = {"pc", "first", "second"}
+              BY ONLY <1>0, SetExtensionality, SMT DEF ProofPrefixKeys
+            <2>0c. observed \\in [{"pc", "first", "second"} -> ProofValues]
+              BY ONLY <2>0a, SMT DEF observed, ProofValues
             <2>0. /\\ observed \\in [ProofPrefixKeys(ProofCount) -> ProofValues]
                   /\\ ExpectedOperand0 = 3 /\\ ExpectedOperand1 = ProofIntMax
-              BY ONLY <1>0, <2>0a, ProofIntegerBounds, SetExtensionality, SMT
-                DEF observed, ProofPrefixKeys, ProofValues, ExpectedOperand0, ExpectedOperand1, ProofIntMax
+              BY ONLY <2>0b, <2>0c, SMT DEF ExpectedOperand0, ExpectedOperand1, ProofIntMax
             <2>1a. /\\ ProofNames["first"] = "first" /\\ ProofNames["pc"] = "pc"
                    /\\ ProofNames["second"] = "second"
                    /\\ ProofOrdinalKey(0) = "pc" /\\ ProofOrdinalKey(1) = "first" /\\ ProofOrdinalKey(2) = "second"
@@ -1133,6 +1154,11 @@ package enum InitialFailureEvidence {
 
           <1>1a. "stay" \\in STRING
             BY ONLY SMT
+          <1>1b. /\\ ProofPlans[2] = SourceInitializers[1][2]
+                 /\\ ProofPlans[3] = SourceInitializers[2][2]
+                 /\\ ProofPlans[4] = SourceInitializers[3][2]
+            BY ONLY <1>0, SetExtensionality, SMT
+              DEF ProofPlans, ProofSourceRow, SourceInitializers, ProofIntPositions
           <1>2. \\A position \\in 1..ProofCount :
                   /\\ ProofObservedPrior(position) \\in ProofInitialization!PartialBindings
                   /\\ DOMAIN ProofObservedPrior(position) = ProofPrefixKeys(position)
@@ -1145,7 +1171,7 @@ package enum InitialFailureEvidence {
                   /\\ ProofPrefixKeys(position) \\subseteq DOMAIN ProofObservedBefore
               BY <1>0, <1>1, SetExtensionality, SMT DEF ProofPrefixKeys, ProofAllKeys, ActualLayout
             <2>1. ProofObservedBefore \\in [DOMAIN ProofObservedBefore -> ProofValues]
-              BY ONLY <1>1, <1>1a, ProofIntegerBounds, SMT DEF ProofValues
+              BY ONLY <1>1, SMT
 
             <2>2. ProofObservedPrior(position) \\in [ProofPrefixKeys(position) -> ProofValues]
               BY ONLY <2>0, <2>1, SMT DEF ProofObservedPrior, ProofInitialization!SourceRestriction
@@ -1172,14 +1198,14 @@ package enum InitialFailureEvidence {
             <2>. SUFFICES ASSUME NEW position \\in {2, 3}
                          PROVE ProofEvaluate(FALSE)[position][ProofObservedPrior(position)]
                                        = ProofInitialization!SourceFixed(ProofObservedBefore[ProofOrder[position]])
-              BY ONLY SMT
+              BY SMT
             <2>1. CASE position = 2
               <3>1. ProofSourceExpressions[2][ProofObservedPrior(2)][1] = ProofInitialization!Expressions!Success(1)
-                BY ONLY <1>0, <1>2, <1>3, SMT
-                  DEF ProofPlans, ProofSourceRow, SourceInitializers, SourcePlanHistory,
+                BY ONLY <1>0, <1>1b, <1>2, <1>3, SMT
+                  DEF SourceInitializers, SourcePlanHistory,
                     ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode
-              <3>. QED BY ONLY <2>1, <3>1, <1>0, <1>1, <1>2, SMT
-                DEF ProofEvaluate, ProofPlans, ProofSourceRow, SourceInitializers,
+              <3>. QED BY ONLY <2>1, <3>1, <1>0, <1>1, <1>1b, <1>2, SMT
+                DEF ProofEvaluate, ProofIntPositions, SourceInitializers,
                   ProofInitialization!SourceIntInitializerOutcome, ProofInitialization!SourceFixed,
                   ProofInitialization!Expressions!Success
             <2>2. CASE position = 3
@@ -1188,21 +1214,21 @@ package enum InitialFailureEvidence {
                   DEF ProofReadState, ProofObservedPrior, ProofPrefixIntNames, ProofPrefixKeys,
                     ProofInitialization!SourceRestriction
               <3>1. ProofSourceExpressions[3][ProofObservedPrior(3)][1] = ProofInitialization!Expressions!Success(1)
-                BY ONLY <1>0, <1>2, <1>3, <3>0, SMT
-                  DEF ProofPlans, ProofSourceRow, SourceInitializers, SourcePlanHistory,
+                BY ONLY <1>0, <1>1b, <1>2, <1>3, <3>0, SMT
+                  DEF SourceInitializers, SourcePlanHistory,
                     ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode
               <3>2. ProofSourceExpressions[3][ProofObservedPrior(3)][2] = ProofInitialization!Expressions!Success(2)
-                BY ONLY <1>0, <1>2, <1>3, SMT
-                  DEF ProofPlans, ProofSourceRow, SourceInitializers, SourcePlanHistory,
+                BY ONLY <1>0, <1>1b, <1>2, <1>3, SMT
+                  DEF SourceInitializers, SourcePlanHistory,
                     ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode
               <3>3. ProofSourceExpressions[3][ProofObservedPrior(3)][3] = ProofInitialization!Expressions!Success(3)
-                BY ONLY <1>0, <1>2, <1>3, <3>1, <3>2, ProofIntegerBounds, SMT
-                  DEF ProofPlans, ProofSourceRow, SourceInitializers, SourcePlanHistory,
+                BY ONLY <1>0, <1>1b, <1>2, <1>3, <3>1, <3>2, ProofIntegerBounds, SMT
+                  DEF SourceInitializers, SourcePlanHistory,
                     ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode,
                     ProofInitialization!Expressions!SourceCombine, ProofInitialization!Expressions!SourceAdd,
                     ProofInitialization!Expressions!Success, ProofInitialization!Expressions!InRange
-              <3>. QED BY ONLY <2>2, <3>3, <1>0, <1>1, <1>2, SMT
-                DEF ProofEvaluate, ProofPlans, ProofSourceRow, SourceInitializers,
+              <3>. QED BY ONLY <2>2, <3>3, <1>0, <1>1, <1>1b, <1>2, SMT
+                DEF ProofEvaluate, ProofIntPositions, SourceInitializers,
                   ProofInitialization!SourceIntInitializerOutcome, ProofInitialization!SourceFixed,
                   ProofInitialization!Expressions!Success
             <2>. QED BY ONLY <2>1, <2>2, SMT
@@ -1214,21 +1240,21 @@ package enum InitialFailureEvidence {
                 DEF ProofReadState, ProofObservedPrior, ProofPrefixIntNames, ProofPrefixKeys,
                   ProofInitialization!SourceRestriction
             <2>1. ProofSourceExpressions[4][ProofObservedPrior(4)][1] = ProofInitialization!Expressions!Success(3)
-              BY ONLY <1>0, <1>2, <1>3, <2>0, SMT
-                DEF ProofPlans, ProofSourceRow, SourceInitializers, SourcePlanHistory,
+              BY ONLY <1>0, <1>1b, <1>2, <1>3, <2>0, SMT
+                DEF SourceInitializers, SourcePlanHistory,
                   ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode
             <2>2. ProofSourceExpressions[4][ProofObservedPrior(4)][2] = ProofInitialization!Expressions!Success(ProofIntMax)
-              BY ONLY <1>0, <1>2, <1>3, SMT
-                DEF ProofPlans, ProofSourceRow, SourceInitializers, SourcePlanHistory, ProofIntMax,
+              BY ONLY <1>0, <1>1b, <1>2, <1>3, SMT
+                DEF SourceInitializers, SourcePlanHistory, ProofIntMax,
                   ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode
             <2>3. ProofSourceExpressions[4][ProofObservedPrior(4)][3] = ProofInitialization!Expressions!SourceOverflow(3, ProofIntMax)
-              BY ONLY <1>0, <1>2, <1>3, <2>1, <2>2, ProofIntegerBounds, SMT
-                DEF ProofPlans, ProofSourceRow, SourceInitializers, SourcePlanHistory,
+              BY ONLY <1>0, <1>1b, <1>2, <1>3, <2>1, <2>2, ProofIntegerBounds, SMT
+                DEF SourceInitializers, SourcePlanHistory,
                   ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode,
                   ProofInitialization!Expressions!SourceCombine, ProofInitialization!Expressions!SourceAdd,
                   ProofInitialization!Expressions!Success, ProofInitialization!Expressions!InRange
-            <2>. QED BY ONLY <1>0, <1>1, <1>2, <2>3, SMT
-              DEF ProofEvaluate, ProofPlans, ProofSourceRow, SourceInitializers,
+            <2>. QED BY ONLY <1>0, <1>1, <1>1b, <1>2, <2>3, SMT
+              DEF ProofEvaluate, ProofIntPositions, SourceInitializers,
                 ProofInitialization!SourceIntInitializerOutcome, ProofInitialization!SourceFailed,
                 ProofInitialization!Expressions!SourceOverflow
           <1>7. /\\ ProofObservedBefore = ProofObservedPrior(ProofCount)
@@ -1252,6 +1278,13 @@ package enum InitialFailureEvidence {
                 /\\ ProofInitialization!InitializerEvaluators(ProofCount, ProofEvaluate(TRUE))
             BY ActualLayoutSuppliesInitializationDecoderInputs, ActualInitializerEvaluatorsAreTypedAndAgree, SMT
               DEF ProofCount, ActualInitializationOrder
+          <1>0a. /\\ ProofCount = 4 /\\ ProofOrder = <<"pc", "first", "second", "last">>
+                 /\\ \\A position \\in 1..ProofCount :
+                        ProofObservedPrior(position) \\in [ProofPrefixKeys(position) -> ProofValues]
+            BY <1>0, ActualLayoutSuppliesInitializationDecoderInputs,
+              ActualNativePrefixSuppliesTheSourceInitializerOutcomes,
+              ProofInitialization!SourceRestrictionIsTyped, SetExtensionality, SMT
+              DEF ProofObservedPrior, ProofPrefixKeys
           <1>1. \\A position \\in 1..(ProofCount - 1) :
                   ProofObservedPrior(position + 1) = ProofInitialization!GeneratedExtension(
                       ProofObservedPrior(position), ProofOrder[position], ProofObservedBefore[ProofOrder[position]])
@@ -1259,19 +1292,19 @@ package enum InitialFailureEvidence {
             <2>. SUFFICES ASSUME NEW position \\in 1..(ProofCount - 1)
                          PROVE ProofObservedPrior(position + 1) = ProofInitialization!GeneratedExtension(
                                              ProofObservedPrior(position), ProofOrder[position], ProofObservedBefore[ProofOrder[position]])
-              BY ONLY SMT
+              BY SMT
             <2>1. CASE position = 1
-              BY ONLY <2>1, <1>0, ActualLayoutSuppliesInitializationDecoderInputs,
+              BY ONLY <2>1, <1>0, <1>0a, ActualLayoutSuppliesInitializationDecoderInputs,
                 ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SetExtensionality, SMT
                 DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!SourceRestriction,
                   ProofInitialization!GeneratedExtension
             <2>2. CASE position = 2
-              BY ONLY <2>2, <1>0, ActualLayoutSuppliesInitializationDecoderInputs,
+              BY ONLY <2>2, <1>0, <1>0a, ActualLayoutSuppliesInitializationDecoderInputs,
                 ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SetExtensionality, SMT
                 DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!SourceRestriction,
                   ProofInitialization!GeneratedExtension
             <2>3. CASE position = 3
-              BY ONLY <2>3, <1>0, ActualLayoutSuppliesInitializationDecoderInputs,
+              BY ONLY <2>3, <1>0, <1>0a, ActualLayoutSuppliesInitializationDecoderInputs,
                 ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SetExtensionality, SMT
                 DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!SourceRestriction,
                   ProofInitialization!GeneratedExtension
@@ -1293,36 +1326,40 @@ package enum InitialFailureEvidence {
             <2>. SUFFICES ASSUME NEW position \\in 1..ProofCount
                          PROVE ProofObservedHistory[position] = ProofInitialization!GeneratedAdvance(
                                              ProofObservedHistory[position - 1], ProofOrder[position], ProofEvaluate(TRUE)[position])
-              BY ONLY SMT
+              BY SMT
             <2>1. CASE position = 1
-              BY ONLY <2>1, <1>0, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
+              BY ONLY <2>1, <1>0, <1>0a, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
                 ActualNativePrefixSuppliesTheSourceInitializerOutcomes, ActualInitializerEvaluatorsAreTypedAndAgree,
                 ProofInitialSentinels, SetExtensionality, SMT
-                DEF ProofObservedHistory, ProofObservedResult, ProofInitialization!GeneratedAdvance,
+                DEF ProofObservedHistory, ProofObservedResult, ProofObservedPrior, ProofPrefixKeys,
+                  ProofInitialization!SourceRestriction, ProofInitialization!GeneratedAdvance,
                   ProofInitialization!GeneratedInitialStates, ProofInitialization!GeneratedInitialFailures,
                   ProofInitialization!SourceFixed, ProofInitialization!SourceFailed,
                   ProofInitialization!InitialSentinels
             <2>2. CASE position = 2
-              BY ONLY <2>2, <1>0, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
+              BY ONLY <2>2, <1>0, <1>0a, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
                 ActualNativePrefixSuppliesTheSourceInitializerOutcomes, ActualInitializerEvaluatorsAreTypedAndAgree,
                 ProofInitialSentinels, SetExtensionality, SMT
-                DEF ProofObservedHistory, ProofObservedResult, ProofInitialization!GeneratedAdvance,
+                DEF ProofObservedHistory, ProofObservedResult, ProofObservedPrior, ProofPrefixKeys,
+                  ProofInitialization!SourceRestriction, ProofInitialization!GeneratedAdvance,
                   ProofInitialization!GeneratedInitialStates, ProofInitialization!GeneratedInitialFailures,
                   ProofInitialization!SourceFixed, ProofInitialization!SourceFailed,
                   ProofInitialization!InitialSentinels
             <2>3. CASE position = 3
-              BY ONLY <2>3, <1>0, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
+              BY ONLY <2>3, <1>0, <1>0a, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
                 ActualNativePrefixSuppliesTheSourceInitializerOutcomes, ActualInitializerEvaluatorsAreTypedAndAgree,
                 ProofInitialSentinels, SetExtensionality, SMT
-                DEF ProofObservedHistory, ProofObservedResult, ProofInitialization!GeneratedAdvance,
+                DEF ProofObservedHistory, ProofObservedResult, ProofObservedPrior, ProofPrefixKeys,
+                  ProofInitialization!SourceRestriction, ProofInitialization!GeneratedAdvance,
                   ProofInitialization!GeneratedInitialStates, ProofInitialization!GeneratedInitialFailures,
                   ProofInitialization!SourceFixed, ProofInitialization!SourceFailed,
                   ProofInitialization!InitialSentinels
             <2>4. CASE position = 4
-              BY ONLY <2>4, <1>0, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
+              BY ONLY <2>4, <1>0, <1>0a, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
                 ActualNativePrefixSuppliesTheSourceInitializerOutcomes, ActualInitializerEvaluatorsAreTypedAndAgree,
                 ProofInitialSentinels, SetExtensionality, SMT
-                DEF ProofObservedHistory, ProofObservedResult, ProofInitialization!GeneratedAdvance,
+                DEF ProofObservedHistory, ProofObservedResult, ProofObservedPrior, ProofPrefixKeys,
+                  ProofInitialization!SourceRestriction, ProofInitialization!GeneratedAdvance,
                   ProofInitialization!GeneratedInitialStates, ProofInitialization!GeneratedInitialFailures,
                   ProofInitialization!SourceFixed, ProofInitialization!SourceFailed,
                   ProofInitialization!InitialSentinels
@@ -1336,7 +1373,7 @@ package enum InitialFailureEvidence {
               BY ONLY <2>0, ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT
             <2>. QED BY ONLY <2>1, SMT DEF ProofInitialization!PartialBindings
           <1>3b. <<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>> \\in ProofFailureValues
-            BY ONLY ProofIntegerBounds, SMT DEF ExpectedOperand0, ExpectedOperand1, ProofFailureValues
+            BY ONLY ProofIntegerBounds, SMT DEF ExpectedOperand0, ExpectedOperand1, ProofIntMax, ProofFailureValues
           <1>3c. ProofObservedFailures \\subseteq ProofInitialization!InitialFailureEvents
             BY ONLY <1>0, <1>3a, <1>3b, ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT
               DEF ProofInitialization!InitialFailureEvents, ProofInitialization!InitializationOrder
