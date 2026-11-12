@@ -100,7 +100,7 @@ struct InitialFailureEvidenceTests {
         let preparation = try #require(JSONSerialization.jsonObject(with:
             Data(contentsOf: directory.appendingPathComponent("preparation.json"))) as? [String: Any])
         #expect(preparation["controlSeedsSHA256"] as? String == SHA256.hex(Data(seeds.utf8)))
-        #expect(proofText.contains("ProofInitialization!OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures"))
+        #expect(proofText.contains("ProofInitialization!InitializationHistoriesNeedOnlyReachableChildAgreement"))
         #expect(proofText.contains("ProofInitialization!DeterministicReachableInitializersConstructTheirOrderedObservations"))
         #expect(proofText.contains("THEOREM CompleteInitializationMatchesActualOutputs =="))
         #expect(proofText.contains("ResolvedInitializers == \(plans)\n"))

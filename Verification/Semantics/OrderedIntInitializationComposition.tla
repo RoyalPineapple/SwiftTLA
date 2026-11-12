@@ -1042,6 +1042,8 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
         /\ execution.outcome.failure =
                <<"integerOverflow", "addition", execution.outcome.failure[3]>>
         BY <1>0, <1>4, SMT DEF Expressions!ExpressionOutcomes, Expressions!ArithmeticFailures
+    <1>8b. execution.outcome.ok \in BOOLEAN
+        BY ONLY <1>4, SMT DEF Expressions!ExpressionOutcomes
     <1>9. SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root])) =
         [states |-> IF execution.outcome.ok
                     THEN {GeneratedExtension(prior, target, values[plan.count])} ELSE {},
@@ -1080,7 +1082,16 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
             <3>7. SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root]))
                 = [states |-> {}, failures |-> {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}]
                 BY ONLY <3>6, <3>5, SMT
-            <3>. QED BY ONLY <2>2, <3>2, <3>7, SMT
+            <3>8. execution.outcome.ok = FALSE
+                BY ONLY <1>8b, <2>2, SMT
+            <3>9. [states |-> IF execution.outcome.ok
+                             THEN {GeneratedExtension(prior, target, values[plan.count])} ELSE {},
+                    failures |-> DecodedRenderedAdditionEvents(
+                        RenderedInitialAdditionEvents(plan, values, prior, target))]
+                = [states |-> {}, failures |->
+                    {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}]
+                BY ONLY <3>2, <3>8, SMT
+            <3>. QED BY ONLY <3>7, <3>9, SMT
         <2>. QED BY <1>4, <2>1, <2>2, SMT DEF Expressions!ExpressionOutcomes
     <1>10. RenderedInitialRecordInterpretation(plan, values, execution.outcome, prior, target,
         SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root])))
@@ -1600,33 +1611,33 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witness)
             BY <2>1, SMT DEF witness, RenderedInitialLeafWitness
         <2>. QED BY <2>2, SMT
-    <1>. DEFINE witnesses == [index \in positions |-> [prior \in source[index - 1].states |->
+    <1>. DEFINE constructedWitnesses == [index \in positions |-> [prior \in source[index - 1].states |->
         CHOOSE witness : RenderedInitialLeafWitness(plans[index], PartialIntProjection(prior), prior, order[index],
             SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witness)]]
-    <1>. HIDE DEF witnesses
+    <1>. HIDE DEF constructedWitnesses
     <1>7. \A index \in positions : \A prior \in source[index - 1].states :
         RenderedInitialLeafWitness(plans[index], PartialIntProjection(prior), prior, order[index],
-            SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witnesses[index][prior])
-        BY <1>6, SMT DEF witnesses
+            SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), constructedWitnesses[index][prior])
+        BY <1>6, SMT DEF constructedWitnesses
     <1>8. \A sorting, names, ordinals :
         RenderedInitialRecordOrders(count, source, sorting, names, ordinals) =>
             DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
-                positions, order, plans, source, witnesses, sorting, names, ordinals), names, ordinals)
+                positions, order, plans, source, constructedWitnesses, sorting, names, ordinals), names, ordinals)
                 = source[count].failures
         <2>. SUFFICES ASSUME NEW sorting, NEW names, NEW ordinals,
                              RenderedInitialRecordOrders(count, source, sorting, names, ordinals)
                      PROVE DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
-                         positions, order, plans, source, witnesses, sorting, names, ordinals), names, ordinals)
+                         positions, order, plans, source, constructedWitnesses, sorting, names, ordinals), names, ordinals)
                          = source[count].failures
             BY SMT
         <2>1. \A index \in positions : \A prior \in source[index - 1].states :
             DecodedNamedRenderedAdditionEvents(RenderedInitialAdditionEvents(
-                plans[index], witnesses[index][prior].values,
+                plans[index], constructedWitnesses[index][prior].values,
                 RenderedInitialPrefixEntries(index - 1, sorting[index], names, prior), ordinals[order[index]]),
                 names, ordinals) = SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]).failures
             <3>. SUFFICES ASSUME NEW index \in positions, NEW prior \in source[index - 1].states
                          PROVE DecodedNamedRenderedAdditionEvents(RenderedInitialAdditionEvents(
-                             plans[index], witnesses[index][prior].values,
+                             plans[index], constructedWitnesses[index][prior].values,
                              RenderedInitialPrefixEntries(index - 1, sorting[index], names, prior),
                              ordinals[order[index]]), names, ordinals)
                              = SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]).failures
@@ -1635,8 +1646,8 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                   /\ RenderedInitialPrefixOrder(index - 1, sorting[index], prior)
                 BY SMT DEF RenderedInitialRecordOrders
             <3>2. SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior])
-                = NamedRenderedInitialLeaf(plans[index], witnesses[index][prior].values,
-                    witnesses[index][prior].execution.outcome, prior, order[index],
+                = NamedRenderedInitialLeaf(plans[index], constructedWitnesses[index][prior].values,
+                    constructedWitnesses[index][prior].execution.outcome, prior, order[index],
                     index - 1, sorting[index], names, ordinals)
                 BY <1>7, <3>1, SMT DEF RenderedInitialLeafWitness, RenderedInitialRecordInterpretation
             <3>. QED BY <3>2, SMT DEF NamedRenderedInitialLeaf
@@ -1644,12 +1655,12 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             = UNION {DecodedNamedRenderedAdditionEvents(events, names, ordinals) : events \in groups}
             BY SetExtensionality, SMT DEF DecodedNamedRenderedAdditionEvents
         <2>2. DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
-            positions, order, plans, source, witnesses, sorting, names, ordinals), names, ordinals)
+            positions, order, plans, source, constructedWitnesses, sorting, names, ordinals), names, ordinals)
             = UNION {UNION {SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]).failures :
                 prior \in source[index - 1].states} : index \in positions}
             <3>1. \A index \in positions :
                 DecodedNamedRenderedAdditionEvents(UNION {RenderedInitialAdditionEvents(
-                    plans[index], witnesses[index][prior].values,
+                    plans[index], constructedWitnesses[index][prior].values,
                     RenderedInitialPrefixEntries(index - 1, sorting[index], names, prior),
                     ordinals[order[index]]) : prior \in source[index - 1].states}, names, ordinals)
                 = UNION {SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]).failures :
@@ -1703,9 +1714,9 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
         <2>1. plans = [index \in positions |->
             Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
             BY SMT DEF plans, emissions
-        <2>. WITNESS plans, witnesses
+        <2>. WITNESS plans, constructedWitnesses
         <2>. QED BY ONLY <2>1, <1>7, <1>8, SMT
-    <1>. QED BY ONLY <1>2u, <1>2f, <1>4, <1>5a, <1>9, SMT
+    <1>. QED BY ONLY <1>0n, <1>2u, <1>2f, <1>4, <1>5a, <1>9, SMT
 
 THEOREM ChangingAReadChangesTheFixedInitializerCandidate ==
     ASSUME NEW first \in Values, NEW second \in Values, first # second
