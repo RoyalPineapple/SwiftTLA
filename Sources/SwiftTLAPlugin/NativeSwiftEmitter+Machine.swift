@@ -1135,7 +1135,7 @@ extension NativeSwiftEmitter {
             let entries = prefix.map { prior, binding -> String in
                 let value: String
                 if binding.type == nativeIntType {
-                    value = "SwiftTLA.TLAValue.int(\(binding.name))"
+                    value = "SwiftTLA._nativeFormalInt(\(binding.name))"
                 } else {
                     let cases = program.layout.controlLocations.map {
                         "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.formalName)))"
@@ -2785,7 +2785,9 @@ func verifyGeneratedActionRoutingOutput(
             throw invalid("native.action.route.\(name)", "the complete bound successor route for compiled action \(route.id)")
         }
         let values = route.bindings.map { binding in
-            "SwiftTLA.TLAValue.\(binding.type == .int ? "int" : "bool")(\(binding.name))"
+            binding.type == .int
+                ? "SwiftTLA._nativeFormalInt(\(binding.name))"
+                : "SwiftTLA.TLAValue.bool(\(binding.name))"
         }.joined(separator: ", ")
         let formal = "return FormalActionCall(name: \(String(reflecting: route.formalName)), arguments: [\(values)])"
         guard labeled[name]?.pattern == tokens(pattern),

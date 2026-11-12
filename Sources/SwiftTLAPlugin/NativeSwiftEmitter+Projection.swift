@@ -11,8 +11,9 @@ extension NativeSwiftEmitter {
                 throw unsupported("invalid formal state identifier: \(name)")
             }
             let route = stateValue(variable.id, prefix: "snapshot.")
-            return (formalName: name, route: route,
-                value: try formalValue(route, type: program.variableTypes[variable.id]!))
+            let type = program.variableTypes[variable.id]!
+            return (formalName: name, route: route, type: type,
+                value: try formalValue(route, type: type))
         }
         let tokens = fields.map { field in
             "SwiftTLA.TLAStateProjection.Token(validating: \(String(reflecting: field.formalName)))!"
@@ -36,7 +37,7 @@ extension NativeSwiftEmitter {
             "try { () throws -> SwiftTLA.TLAValue in switch \(value) {\n\(cases.joined(separator: "\n"))\n} }()"
         }
         switch type {
-        case .int: return "SwiftTLA.TLAValue.int(\(value))"
+        case .int: return "SwiftTLA._nativeFormalInt(\(value))"
         case .bool: return "SwiftTLA.TLAValue.bool(\(value))"
         case .string: return "SwiftTLA.TLAValue.string(\(value).formalString)"
         case .modelValue: return "SwiftTLA.TLAValue.constant(\(value).rawValue)"
@@ -190,7 +191,7 @@ extension NativeSwiftEmitter {
     func renderedLiteral(_ value: TLAValue) -> String {
         func emit(_ value: TLAValue) -> String {
             switch value {
-            case .int(let value): return "SwiftTLA.TLAValue.int(\(value == Int.min ? "Int.min" : String(value)))"
+            case .int(let value): return "SwiftTLA._nativeFormalInt(\(value == Int.min ? "Int.min" : String(value)))"
             case .bool(let value): return "SwiftTLA.TLAValue.bool(\(value))"
             case .string(let value): return "SwiftTLA.TLAValue.string(\(String(reflecting: value)))"
             case .constant(let value): return "SwiftTLA.TLAValue.constant(\(String(reflecting: value)))"
@@ -207,7 +208,7 @@ extension NativeSwiftEmitter {
 }
 
 func verifyGeneratedFormalProjectionOutput(
-    _ declarations: [DeclSyntax], fields: [(formalName: String, route: String, value: String)]
+    _ declarations: [DeclSyntax], fields: [(formalName: String, route: String, type: CompiledValueType, value: String)]
 ) throws {
     func tokens(_ syntax: some SyntaxProtocol) -> [[UInt8]] {
         syntax.tokens(viewMode: .sourceAccurate).map { Array($0.text.utf8) }
@@ -242,6 +243,12 @@ func verifyGeneratedFormalProjectionOutput(
             index + route.count <= valueTokens.count
                 && Array(valueTokens[index..<(index + route.count)]) == route
         }) else { throw reject("the projected value for \(field.formalName) reads a different snapshot field") }
+        if field.type == .int {
+            let expected = Parser.parse(source: "SwiftTLA._nativeFormalInt(\(field.route))").statements.first?.item
+            guard let expected, valueTokens == tokens(expected) else {
+                throw reject("the projected Int value for \(field.formalName) does not use the library integer conversion")
+            }
+        }
     }
     let expectedEntries = fields.enumerated().map { index, field in
         ".init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(index)), value: \(field.value))"

@@ -691,8 +691,9 @@ struct OrderedAssignmentLoweringTests {
                 let projection = try projectionEmitter.formalProjectionDeclarations()
                 let fields = try program.layout.variables.map { variable in
                     let route = projectionEmitter.stateValue(variable.id, prefix: "snapshot.")
-                    return (formalName: variable.formalName, route: route,
-                        value: try projectionEmitter.formalValue(route, type: program.variableTypes[variable.id]!))
+                    let type = program.variableTypes[variable.id]!
+                    return (formalName: variable.formalName, route: route, type: type,
+                        value: try projectionEmitter.formalValue(route, type: type))
                 }
                 try verifyGeneratedFormalProjectionOutput(projection, fields: fields)
                 try #require(projection[1].description.components(separatedBy: marker).count == 2)

@@ -695,6 +695,9 @@ Exit: actual accepted pilot expressions supply the child theorem premises. No ex
   Derive complete candidate states and reached failures at every prefix.
 - [ ] M2.3 Prove actual native event collection retains site, payload and immutable preceding bindings.
   Derive first-failure selection from the complete observation contract.
+  Raw Int snapshot and captured-prefix conversion now calls `_nativeFormalInt` in library scope. A retained caller enum extension reproduced a string in place of the native integer on unchanged production.
+  The existing projection check independently requires the Int callee and compiled field route, including when emitter-provided expected text is also corrupted. The hostile-caller owner, output controls and external generated client pass on the same production bytes; the final prefix/source owner check passed 36 tests in three suites after migrating its exact preceding-binding mutation.
+  Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/formal-int-value-binding/` in the primary checkout. These are implementation/regression results; helper, checker and physical output interpretation remain open, and M2.3 is unchecked.
 - [ ] M2.4 Prove actual TLA initialization and failure observations correspond to the same source prefixes.
   Complete branch observations cannot rely only on the deterministic selected record.
   I5s supplies an implemented event-set expression for guarded Int value/add and supported membership-domain initialization, including lazy domain addition failures. Its generic source/Swift/TLA relation and ordered observations still require proof; the prepared v5 deterministic case is separate admission evidence.

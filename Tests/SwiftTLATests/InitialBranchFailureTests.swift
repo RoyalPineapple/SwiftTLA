@@ -273,11 +273,11 @@ struct InitialBranchFailureTests {
         try emitter.verifyIntInitialOutput(swiftOutput)
         let secondField = try #require(program.layout.variables.first { $0.declaration.name == "second" })
         let firstField = try #require(program.layout.variables.first { $0.declaration.name == "first" })
-        let correctPrefix = "SwiftTLA.TLAValue.int(\(emitter.variable(secondField.id)))"
-        #expect(swiftOutput.description.components(separatedBy: correctPrefix).count == 2)
+        let correctPrefix = "SwiftTLA._nativeFormalInt(\(emitter.variable(secondField.id)))"
+        try #require(swiftOutput.description.components(separatedBy: correctPrefix).count == 2)
         let wrongPrefix = swiftOutput.description.replacingOccurrences(of: correctPrefix,
-            with: "SwiftTLA.TLAValue.int(\(emitter.variable(firstField.id)))")
-        #expect(wrongPrefix != swiftOutput.description)
+            with: "SwiftTLA._nativeFormalInt(\(emitter.variable(firstField.id)))")
+        try #require(wrongPrefix != swiftOutput.description)
         let wrongPrefixOutput = try #require(Parser.parse(source: wrongPrefix)
             .statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {

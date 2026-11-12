@@ -190,6 +190,10 @@ public func _singleNativeOutcome<Outcome: Sendable>(
     return first
 }
 
+/// Bind formal integer construction in library scope, away from caller extensions.
+@_documentation(visibility: internal)
+public func _nativeFormalInt(_ value: Int) -> TLAValue { .int(value) }
+
 /// Keep formal token indexing in library scope, away from caller subscripts.
 @_documentation(visibility: internal)
 public func _nativeFormalProjectionToken(

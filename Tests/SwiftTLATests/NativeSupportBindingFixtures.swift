@@ -1,6 +1,10 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+private extension SwiftTLA.TLAValue {
+    static func int(_ value: Swift.Int) -> Self { .string("caller-int") }
+}
+
 private extension SwiftTLA._NativeMachineOperations {
     static func visitInitialBranch(
         _ visit: () throws -> Void,

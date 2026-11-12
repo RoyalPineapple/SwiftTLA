@@ -804,8 +804,9 @@ The owners are [the emitter name table](../../Sources/SwiftTLAPlugin/NativeSwift
    Hidden Snapshot fields use their layout ID's slot directly. Thus neither public nor hidden state assembly retargets the literal.
 5. The lexical-prefix projection now has `v |-> n`, with every prior ID/value unchanged: exactly `GeneratedExtension(prior, v, n)`.
    The constructor's pointwise copies make the completed Snapshot projection agree with that final lexical projection.
-   `formalProjectionDeclarations` uses the same layout ID's field route and formal name; its `.int` case emits `TLAValue.int(value)`.
-   This supplies integer value transport at that projection entry. General formal-name namespace interpretation and projection soundness remain owned.
+   `formalProjectionDeclarations` uses the same layout ID's field route and formal name; its `.int` case calls `SwiftTLA._nativeFormalInt(value)`.
+   That function constructs `.int(value)` in library scope, outside caller enum extensions. The existing output check independently requires this callee and field route for resolved Int fields.
+   General module identity, type/field mapping and projection-checker soundness remain owned.
 6. `_visitNativeInitialBranch` invokes its `visit` closure once inside `do`. A normally returning literal binding reaches no catch or failure callback.
    A wholly literal initializer sequence reaches the single Snapshot append, with no model failure and no branch enumeration.
    `initialOutcomes` maps each Snapshot through the private initializer that copies it into `_execution`; it forwards the same failure array.

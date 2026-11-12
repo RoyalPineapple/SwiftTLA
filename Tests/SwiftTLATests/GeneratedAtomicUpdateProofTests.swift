@@ -334,6 +334,27 @@ struct GeneratedAtomicUpdateProofTests {
         let secondField = try #require(bindings["__PROOF_SECOND_FIELD__"])
         let projectionTokens = try #require(member(named: "__swifttlaFormalProjectionTokens", in: members))
         let projection = try #require(member(named: "formalProjection", in: members))
+        let projectionFields = [firstField, secondField].map { field in
+            (formalName: field, route: "snapshot.state.\(field)", type: CompiledValueType.int,
+                value: "SwiftTLA._nativeFormalInt(snapshot.state.\(field))")
+        }
+        try verifyGeneratedFormalProjectionOutput([projectionTokens, projection], fields: projectionFields)
+        let libraryInt = "SwiftTLA._nativeFormalInt("
+        try #require(projection.description.components(separatedBy: libraryInt).count - 1 == 2)
+        let callerIntSource = projection.description.replacingOccurrences(of: libraryInt, with: "SwiftTLA.TLAValue.int(")
+        #expect(callerIntSource != projection.description)
+        let callerInt = try #require(Parser.parse(source: callerIntSource).statements.first?.item.as(DeclSyntax.self))
+        let callerIntFields = projectionFields.map { field in
+            (formalName: field.formalName, route: field.route, type: field.type,
+                value: field.value.replacingOccurrences(of: libraryInt, with: "SwiftTLA.TLAValue.int("))
+        }
+        do {
+            try verifyGeneratedFormalProjectionOutput([projectionTokens, callerInt], fields: callerIntFields)
+            Issue.record("An Int projection using a caller-replaceable enum member was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.formalProjection")
+            #expect(diagnostic.actual == "the projected Int value for \(firstField) does not use the library integer conversion")
+        }
         let wrongProjectionSource = projection.description.replacingOccurrences(
             of: "snapshot.state.\(secondField)", with: "snapshot.state.\(firstField)")
         #expect(wrongProjectionSource != projection.description)
@@ -341,10 +362,10 @@ struct GeneratedAtomicUpdateProofTests {
             .statements.first?.item.as(DeclSyntax.self))
         do {
             try verifyGeneratedFormalProjectionOutput([projectionTokens, wrongProjection], fields: [
-                (formalName: firstField, route: "snapshot.state.\(firstField)",
-                    value: "SwiftTLA.TLAValue.int(snapshot.state.\(firstField))"),
-                (formalName: secondField, route: "snapshot.state.\(secondField)",
-                    value: "SwiftTLA.TLAValue.int(snapshot.state.\(firstField))"),
+                (formalName: firstField, route: "snapshot.state.\(firstField)", type: .int,
+                    value: "SwiftTLA._nativeFormalInt(snapshot.state.\(firstField))"),
+                (formalName: secondField, route: "snapshot.state.\(secondField)", type: .int,
+                    value: "SwiftTLA._nativeFormalInt(snapshot.state.\(firstField))"),
             ])
             Issue.record("A projection routed through the wrong state field was accepted")
         } catch let diagnostic as CompilationDiagnostic {
@@ -1355,7 +1376,7 @@ struct GeneratedAtomicUpdateProofTests {
         \s* evaluatingInitialBindings \s* = \s* \{ \s* \[_value_first_0\] \s+ in
         \s* try \s+ SwiftTLA\.TLAStateProjection \( validating: \s* \[
         \.init \( token: \s* SwiftTLA\._nativeFormalProjectionToken\(Self\.__swifttlaFormalProjectionTokens,\s*at:\s*0\),
-        \s* value: \s* SwiftTLA\.TLAValue\.int\(_value_first_0\) \) \] \) \s* \}
+        \s* value: \s* SwiftTLA\._nativeFormalInt\(_value_first_0\) \) \] \) \s* \}
         \s* evaluatingInitializerOrdinal \s* = \s* 1
         \s* let \s+ _value_second_1: \s* \#(integerType) \s* = \s* (-?[0-9]+)
         \s* evaluatingInitializerOrdinal \s* = \s* nil
