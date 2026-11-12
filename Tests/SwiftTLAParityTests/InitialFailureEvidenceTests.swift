@@ -73,6 +73,12 @@ struct InitialFailureEvidenceTests {
         ].joined(separator: ", ") + ">>"
         #expect(proofText.contains("SourceInitializers == \(plans)\n"))
         #expect(proofText.contains("LoweredInitializers == \(plans)\n"))
+        let sourceViews = "<<" + [
+            "<<\"first\", [root |-> 1, kinds |-> <<\"literal\">>, literals |-> <<1>>, reads |-> <<\"first\">>, left |-> <<0>>, right |-> <<0>>]>>",
+            "<<\"second\", [root |-> 1, kinds |-> <<\"add\", \"read\", \"literal\">>, literals |-> <<0, 0, 2>>, reads |-> <<\"second\", \"first\", \"second\">>, left |-> <<2, 0, 0>>, right |-> <<3, 0, 0>>]>>",
+            "<<\"last\", [root |-> 1, kinds |-> <<\"add\", \"read\", \"literal\">>, literals |-> <<0, 0, ((7 * 1073741824 + 1073741823) * 1073741824 + 1073741823)>>, reads |-> <<\"last\", \"second\", \"last\">>, left |-> <<2, 0, 0>>, right |-> <<3, 0, 0>>]>>",
+        ].joined(separator: ", ") + ">>"
+        #expect(proofText.contains("SourceSyntaxViews == \(sourceViews)\n"))
         #expect(report.sourceInitializersSHA256 == SHA256.hex(Data(plans.utf8)))
         #expect(report.loweredInitializersSHA256 == SHA256.hex(Data(plans.utf8)))
         #expect(report.sourceCompilationIdentity == (try CheckedAdditionPrefixInitialModel.spec.compile()).identity.description)

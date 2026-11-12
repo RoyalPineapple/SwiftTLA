@@ -113,7 +113,8 @@ package enum InitialFailureEvidence {
               }).first else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
-        let sourceInitializers = try sourceInitializerPlans(sourceWitness)
+        let sourceInputs = try sourceInitializerInputs(sourceWitness)
+        let sourceInitializers = sourceInputs.plans
         let sourceInitialControl = TLAValue.string(sourceControl).description
         let loweredInitializers = try initializerPlans(layout: compilation.layout,
             initializations: compilation.semantics.behavior.initializations, requireTypes: false)
@@ -126,7 +127,8 @@ package enum InitialFailureEvidence {
         let module = rendered.tlaBundle.root
         let proof = try proofSource(module: module.name, tla: module.tla,
             site: site, operands: operands, before: failures[0].before,
-            sourceInitializers: sourceInitializers, sourceInitialControl: sourceInitialControl,
+            sourceInitializers: sourceInitializers, sourceSyntaxViews: sourceInputs.views,
+            sourceInitialControl: sourceInitialControl,
             loweredInitializers: loweredInitializers,
             resolvedInitializers: resolvedInitializers,
             recordInputs: recordInputs)
@@ -167,7 +169,8 @@ package enum InitialFailureEvidence {
     }
 
     // Retain the existing macro witness, independently of the built Algorithm model.
-    private static func sourceInitializerPlans(_ components: [_OrderedIntSourceComponent]) throws -> String {
+    private static func sourceInitializerInputs(_ components: [_OrderedIntSourceComponent]) throws
+        -> (plans: String, views: String) {
         let states = components.compactMap { component -> (root: String, initialization: VariableInitialization)? in
             guard case .variable(let root, let initialization) = component else { return nil }
             return (root, initialization)
@@ -183,10 +186,44 @@ package enum InitialFailureEvidence {
             guard let nodes = StraightLineAssignmentCheck.orderedIntPlan(expression, reads: reads) else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
-            return "<<\(TLAValue.string(state.root)), \(try initializerPlan(nodes, root: state.root))>>"
+            return (
+                "<<\(TLAValue.string(state.root)), \(try initializerPlan(nodes, root: state.root))>>",
+                "<<\(TLAValue.string(state.root)), \(try sourceSyntaxView(expression, root: state.root, reads: reads))>>"
+            )
         }
         guard !rows.isEmpty else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
-        return "<<\(rows.joined(separator: ", "))>>"
+        return ("<<\(rows.map(\.0).joined(separator: ", "))>>",
+                "<<\(rows.map(\.1).joined(separator: ", "))>>")
+    }
+
+    // Keep source-tree identities independent of postorder extraction and repeated subtrees distinct.
+    private static func sourceSyntaxView(_ rootExpression: StateExpr, root: String,
+                                         reads: Set<String>) throws -> String {
+        var expressions = [rootExpression]
+        var kinds: [String] = [], literals: [String] = [], names: [String] = []
+        var left: [String] = [], right: [String] = []
+        var index = 0
+        while index < expressions.count {
+            var literal = "0", name = TLAValue.string(root).description
+            var lhs = 0, rhs = 0
+            switch expressions[index] {
+            case .value(.int(let value)):
+                kinds.append("\"literal\""); literal = binaryLiteral(value)
+            case .variable(let variable) where reads.contains(variable):
+                kinds.append("\"read\""); name = TLAValue.string(variable).description
+            case .add(let first, let second):
+                kinds.append("\"add\"")
+                lhs = expressions.count + 1; rhs = lhs + 1
+                expressions.append(first); expressions.append(second)
+            default: throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            literals.append(literal); names.append(name)
+            left.append(String(lhs)); right.append(String(rhs))
+            index += 1
+        }
+        func tuple(_ values: [String]) -> String { "<<\(values.joined(separator: ", "))>>" }
+        return "[root |-> 1, kinds |-> \(tuple(kinds)), literals |-> \(tuple(literals)), "
+            + "reads |-> \(tuple(names)), left |-> \(tuple(left)), right |-> \(tuple(right))]"
     }
 
     private static func initializerPlans(layout: CompiledLayout,
@@ -286,7 +323,7 @@ package enum InitialFailureEvidence {
 
     private static func proofSource(module: String, tla: String, site: Int,
                                     operands: [Int], before: [NativeInitialBindingOutput],
-                                    sourceInitializers: String, sourceInitialControl: String,
+                                    sourceInitializers: String, sourceSyntaxViews: String, sourceInitialControl: String,
                                     loweredInitializers: String,
                                     resolvedInitializers: String,
                                     recordInputs: (layout: String, order: String, prefixes: String, seeds: String, types: String)) throws -> String {
@@ -323,6 +360,7 @@ package enum InitialFailureEvidence {
         EXTENDS \(module), TLAPS
 
         SourceInitializers == \(sourceInitializers)
+        SourceSyntaxViews == \(sourceSyntaxViews)
         SourceInitialControl == \(sourceInitialControl)
         LoweredInitializers == \(loweredInitializers)
         ResolvedInitializers == \(resolvedInitializers)
@@ -505,6 +543,10 @@ package enum InitialFailureEvidence {
               /\\ ProofInitialization!Expressions!PartialExpressionPlan(SourceInitializers[row][2].count,
                      SourceInitializers[row][2].kinds, SourceInitializers[row][2].literals, SourceInitializers[row][2].reads,
                      SourceInitializers[row][2].left, SourceInitializers[row][2].right, ProofBoundKeys(row), state)
+              /\\ \\A history : SourcePlanHistory(SourceInitializers[row][2], state, history) =>
+                     /\\ \\E meaning : ProofInitialization!Expressions!SourceSyntaxHistory(SourceSyntaxViews[row][2], state, meaning)
+                     /\\ \\A meaning : ProofInitialization!Expressions!SourceSyntaxHistory(SourceSyntaxViews[row][2], state, meaning)
+                            => history[SourceInitializers[row][2].count] = meaning[SourceSyntaxViews[row][2].root]
               /\\ \\E source, generated :
                   /\\ SourcePlanHistory(SourceInitializers[row][2], state, source)
                   /\\ ResolvedPlanHistory(ResolvedInitializers[row][2], state, generated)
@@ -519,6 +561,10 @@ package enum InitialFailureEvidence {
                                       SourceInitializers[row][2].kinds, SourceInitializers[row][2].literals,
                                       SourceInitializers[row][2].reads, SourceInitializers[row][2].left,
                                       SourceInitializers[row][2].right, ProofBoundKeys(row), state)
+                             /\\ \\A history : SourcePlanHistory(SourceInitializers[row][2], state, history) =>
+                                    /\\ \\E meaning : ProofInitialization!Expressions!SourceSyntaxHistory(SourceSyntaxViews[row][2], state, meaning)
+                                    /\\ \\A meaning : ProofInitialization!Expressions!SourceSyntaxHistory(SourceSyntaxViews[row][2], state, meaning)
+                                           => history[SourceInitializers[row][2].count] = meaning[SourceSyntaxViews[row][2].root]
                              /\\ \\E source, generated :
                                  /\\ SourcePlanHistory(SourceInitializers[row][2], state, source)
                                  /\\ ResolvedPlanHistory(ResolvedInitializers[row][2], state, generated)
@@ -529,6 +575,7 @@ package enum InitialFailureEvidence {
             BY SMT
           <1>. DEFINE plan == SourceInitializers[row][2]
                       bound == ProofBoundKeys(row)
+                      view == SourceSyntaxViews[row][2]
                       completed == ProofInitialization!Expressions!CompleteIntBindings(bound, state)
           <1>0. bound \\subseteq ProofIntSlots
             BY ActualLayoutSuppliesInitializationDecoderInputs, SMT DEF bound, ProofBoundKeys, SourceInitializers, ProofIntKeys
@@ -565,7 +612,47 @@ package enum InitialFailureEvidence {
                          /\\ generated[index] \\in ProofInitialization!Expressions!ExpressionOutcomes
             BY <1>4, ProofInitialization!Expressions!PartialOrderedIntExpressionsPreserveValueAndFailure, SMT
               DEF SourcePlanHistory, ResolvedPlanHistory
-          <1>. QED BY ONLY <1>4, <1>5, SourceInitializersMatchLoweredIR, LoweredInitializersMatchResolvedIR, SMT DEF plan, bound
+          <1>6a. \\A history : SourcePlanHistory(plan, state, history) =>
+              ProofInitialization!Expressions!SourceSyntaxHistory(view, state,
+                [node \\in DOMAIN view.kinds |-> history[IF row = 1 THEN 1 ELSE IF node = 1 THEN 3 ELSE node - 1]])
+            PROOF
+            <2>1. CASE row = 1
+              BY ONLY <2>1, SMT DEF plan, view, SourceInitializers, SourceSyntaxViews, SourcePlanHistory,
+                ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode,
+                ProofInitialization!Expressions!SourceSyntaxHistory
+            <2>2. CASE row = 2
+              BY ONLY <2>2, SMT DEF plan, view, SourceInitializers, SourceSyntaxViews, SourcePlanHistory,
+                ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode,
+                ProofInitialization!Expressions!SourceSyntaxHistory
+            <2>3. CASE row = 3
+              BY ONLY <2>3, SMT DEF plan, view, SourceInitializers, SourceSyntaxViews, SourcePlanHistory,
+                ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode,
+                ProofInitialization!Expressions!SourceSyntaxHistory
+            <2>. QED BY ONLY <2>1, <2>2, <2>3, SMT DEF SourceInitializers
+          <1>6b. \\A history, meaning :
+              (SourcePlanHistory(plan, state, history)
+               /\\ ProofInitialization!Expressions!SourceSyntaxHistory(view, state, meaning))
+                => history[plan.count] = meaning[view.root]
+            PROOF
+            <2>1. CASE row = 1
+              BY ONLY <2>1, SMT DEF plan, view, SourceInitializers, SourceSyntaxViews, SourcePlanHistory,
+                ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode,
+                ProofInitialization!Expressions!SourceSyntaxHistory
+            <2>2. CASE row = 2
+              BY ONLY <2>2, SMT DEF plan, view, SourceInitializers, SourceSyntaxViews, SourcePlanHistory,
+                ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode,
+                ProofInitialization!Expressions!SourceSyntaxHistory
+            <2>3. CASE row = 3
+              BY ONLY <2>3, SMT DEF plan, view, SourceInitializers, SourceSyntaxViews, SourcePlanHistory,
+                ProofInitialization!Expressions!SourceExpressionHistory, ProofInitialization!Expressions!SourceNode,
+                ProofInitialization!Expressions!SourceSyntaxHistory
+            <2>. QED BY ONLY <2>1, <2>2, <2>3, SMT DEF SourceInitializers
+          <1>6. \\A history : SourcePlanHistory(plan, state, history) =>
+              /\\ \\E meaning : ProofInitialization!Expressions!SourceSyntaxHistory(view, state, meaning)
+              /\\ \\A meaning : ProofInitialization!Expressions!SourceSyntaxHistory(view, state, meaning)
+                     => history[plan.count] = meaning[view.root]
+            BY ONLY <1>6a, <1>6b, SMT
+          <1>. QED BY ONLY <1>4, <1>5, <1>6, SourceInitializersMatchLoweredIR, LoweredInitializersMatchResolvedIR, SMT DEF plan, bound, view
 
         THEOREM ActualPrefixRecordsInvokeInitializationDecoder ==
           /\\ \\A position \\in 1..ProofCount : \\A prior \\in [ProofPrefixKeys(position) -> ProofValues] :
@@ -698,6 +785,7 @@ package enum InitialFailureEvidence {
         ProofSourceRow(position) == CHOOSE row \\in DOMAIN SourceInitializers : SourceInitializers[row][1] = ProofOrder[position]
         ProofPlans == [position \\in ProofIntPositions |-> SourceInitializers[ProofSourceRow(position)][2]]
         ProofResolvedPlans == [position \\in ProofIntPositions |-> ResolvedInitializers[ProofSourceRow(position)][2]]
+        ProofSyntaxViews == [position \\in ProofIntPositions |-> SourceSyntaxViews[ProofSourceRow(position)][2]]
         ProofControlSeed(position) == (CHOOSE entry \\in {ActualControlSeeds[index] : index \\in DOMAIN ActualControlSeeds} :
           entry.ordinal = ActualInitializationOrder[position]).value
         \\* Totalize the proof input outside reached prefixes; the parent below proves no reached read uses a default.
@@ -723,6 +811,9 @@ package enum InitialFailureEvidence {
                    ProofPrefixIntNames(position), ProofReadState(position, prior))
             /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofSourceExpressions[position][prior])
             /\\ ResolvedPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
+            /\\ \\E meaning : ProofInitialization!Expressions!SourceSyntaxHistory(ProofSyntaxViews[position], ProofReadState(position, prior), meaning)
+            /\\ \\A meaning : ProofInitialization!Expressions!SourceSyntaxHistory(ProofSyntaxViews[position], ProofReadState(position, prior), meaning)
+                   => ProofSourceExpressions[position][prior][ProofPlans[position].count] = meaning[ProofSyntaxViews[position].root]
             /\\ \\A index \\in 0..ProofPlans[position].count :
                    /\\ ProofInitialization!Expressions!OutcomeAgrees(ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior], index)
                    /\\ ProofSourceExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
@@ -735,6 +826,9 @@ package enum InitialFailureEvidence {
                                     ProofPrefixIntNames(position), ProofReadState(position, prior))
                              /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofSourceExpressions[position][prior])
                              /\\ ResolvedPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
+                             /\\ \\E meaning : ProofInitialization!Expressions!SourceSyntaxHistory(ProofSyntaxViews[position], ProofReadState(position, prior), meaning)
+                             /\\ \\A meaning : ProofInitialization!Expressions!SourceSyntaxHistory(ProofSyntaxViews[position], ProofReadState(position, prior), meaning)
+                                    => ProofSourceExpressions[position][prior][ProofPlans[position].count] = meaning[ProofSyntaxViews[position].root]
                              /\\ \\A index \\in 0..ProofPlans[position].count :
                                     /\\ ProofInitialization!Expressions!OutcomeAgrees(ProofSourceExpressions[position][prior], ProofGeneratedExpressions[position][prior], index)
                                     /\\ ProofSourceExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
@@ -779,7 +873,12 @@ package enum InitialFailureEvidence {
                   /\\ ProofGeneratedExpressions[position][prior][index] \\in ProofInitialization!Expressions!ExpressionOutcomes
             BY <1>3, <1>4, ProofInitialization!Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
               DEF SourcePlanHistory, ResolvedPlanHistory
-          <1>. QED BY <1>3, <1>4, <1>5, SMT
+          <1>6. /\\ \\E meaning : ProofInitialization!Expressions!SourceSyntaxHistory(ProofSyntaxViews[position], ProofReadState(position, prior), meaning)
+                /\\ \\A meaning : ProofInitialization!Expressions!SourceSyntaxHistory(ProofSyntaxViews[position], ProofReadState(position, prior), meaning)
+                       => ProofSourceExpressions[position][prior][ProofPlans[position].count] = meaning[ProofSyntaxViews[position].root]
+            BY ONLY <1>0, <1>1, <1>3, InitializerPlansInvokeCheckedExpressionParent, SMT
+              DEF ProofSyntaxViews
+          <1>. QED BY <1>3, <1>4, <1>5, <1>6, SMT
 
         THEOREM ActualInitializerEvaluatorsAreTypedAndAgree ==
           /\\ ProofInitialization!InitializerEvaluators(ProofCount, ProofEvaluate(FALSE))
@@ -844,6 +943,13 @@ package enum InitialFailureEvidence {
             /\\ source[ProofCount].failures = ProofInitialization!SourceFailureConstraintPrefix(ProofOrder, ProofCount, ProofEvaluate(FALSE))
             /\\ \\A position \\in ProofIntPositions : \\A prior \\in source[position - 1].states :
                    ProofReadState(position, prior) = ProofInitialization!PartialIntProjection(prior)
+            /\\ \\A position \\in ProofIntPositions : \\A prior \\in source[position - 1].states :
+                   /\\ \\E meaning : ProofInitialization!Expressions!SourceSyntaxHistory(
+                          ProofSyntaxViews[position], ProofInitialization!PartialIntProjection(prior), meaning)
+                   /\\ \\A meaning : ProofInitialization!Expressions!SourceSyntaxHistory(
+                          ProofSyntaxViews[position], ProofInitialization!PartialIntProjection(prior), meaning)
+                          => ProofEvaluate(FALSE)[position][prior] =
+                               ProofInitialization!SourceIntInitializerOutcome(meaning[ProofSyntaxViews[position].root])
           PROOF
           <1>0. /\\ ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
                 /\\ ProofInitialization!IntInitializationDomains
@@ -934,8 +1040,18 @@ package enum InitialFailureEvidence {
             BY <1>0, <1>1, ActualInitializerEvaluatorsAreTypedAndAgree,
               ProofInitialization!SourceHistoriesMatchEveryInitialFailurePrefix, SMT
               DEF ProofInitialization!InitializationOrder
+          <1>10. \\A position \\in ProofIntPositions : \\A prior \\in source[position - 1].states :
+               /\\ \\E meaning : ProofInitialization!Expressions!SourceSyntaxHistory(
+                      ProofSyntaxViews[position], ProofInitialization!PartialIntProjection(prior), meaning)
+               /\\ \\A meaning : ProofInitialization!Expressions!SourceSyntaxHistory(
+                      ProofSyntaxViews[position], ProofInitialization!PartialIntProjection(prior), meaning)
+                      => ProofEvaluate(FALSE)[position][prior] =
+                           ProofInitialization!SourceIntInitializerOutcome(meaning[ProofSyntaxViews[position].root])
+            BY ONLY <1>0, <1>1, <1>4, ActualInitializerExpressionsSupplyTheirParents, SMT
+              DEF ProofEvaluate, ProofInitialization!InitializationHistory, ProofInitialization!InitializationResults,
+                ProofInitialization!InitializationOrder, ProofIntPositions
           <1>. WITNESS source, generated, observations
-          <1>. QED BY ONLY <1>1, <1>2, <1>4, <1>6, <1>7, <1>8, <1>9, SMT
+          <1>. QED BY ONLY <1>1, <1>2, <1>4, <1>6, <1>7, <1>8, <1>9, <1>10, SMT
 
         ExpectedOperand0 == \(binaryLiteral(operands[0]))
         ExpectedOperand1 == \(binaryLiteral(operands[1]))
@@ -1248,6 +1364,13 @@ package enum InitialFailureEvidence {
             /\\ observations[ProofCount].stateCount = 0 /\\ observations[ProofCount].failureCount = 1
             /\\ {observations[ProofCount].failureHistory[1]} = ProofObservedFailures
             /\\ ~Init
+            /\\ \\A position \\in ProofIntPositions : \\A prior \\in source[position - 1].states :
+                   /\\ \\E meaning : ProofInitialization!Expressions!SourceSyntaxHistory(
+                          ProofSyntaxViews[position], ProofInitialization!PartialIntProjection(prior), meaning)
+                   /\\ \\A meaning : ProofInitialization!Expressions!SourceSyntaxHistory(
+                          ProofSyntaxViews[position], ProofInitialization!PartialIntProjection(prior), meaning)
+                          => ProofEvaluate(FALSE)[position][prior] =
+                               ProofInitialization!SourceIntInitializerOutcome(meaning[ProofSyntaxViews[position].root])
           PROOF
           <1>0. ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
             BY ActualLayoutSuppliesInitializationDecoderInputs, SMT
@@ -1261,6 +1384,13 @@ package enum InitialFailureEvidence {
                   /\\ ProofInitialization!InitialObservationIsTyped(observations[ProofCount])
                   /\\ observations[ProofCount].stateCount <= 1 /\\ observations[ProofCount].failureCount <= 1
                   /\\ observations[ProofCount].stateCount + observations[ProofCount].failureCount = 1
+                  /\\ \\A position \\in ProofIntPositions : \\A prior \\in source[position - 1].states :
+                         /\\ \\E meaning : ProofInitialization!Expressions!SourceSyntaxHistory(
+                                ProofSyntaxViews[position], ProofInitialization!PartialIntProjection(prior), meaning)
+                         /\\ \\A meaning : ProofInitialization!Expressions!SourceSyntaxHistory(
+                                ProofSyntaxViews[position], ProofInitialization!PartialIntProjection(prior), meaning)
+                                => ProofEvaluate(FALSE)[position][prior] =
+                                     ProofInitialization!SourceIntInitializerOutcome(meaning[ProofSyntaxViews[position].root])
             BY ActualPlansInvokeCompleteInitializationAndObservationParents, SMT
               DEF ProofCount, ActualInitializationOrder
           <1>2. \\A index \\in 0..ProofCount : source[index] = ProofObservedHistory[index]
