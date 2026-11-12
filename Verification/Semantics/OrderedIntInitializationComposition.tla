@@ -1133,16 +1133,16 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                   /\ Expressions!ReachedCheckedPostorderExecution(plan, PartialIntProjection(prior), execution)
                   /\ RenderedInitialRecordInterpretation(plan, values, execution.outcome, prior, order[index],
                          SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]))
-          /\ LET plans == [index \in positions |->
-                     Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
-             IN \E witnesses :
+          /\ \E renderedPlans, witnesses :
+                 /\ renderedPlans = [index \in positions |->
+                        Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
                  /\ \A index \in positions : \A prior \in source[index - 1].states :
-                     RenderedInitialLeafWitness(plans[index], PartialIntProjection(prior), prior, order[index],
+                     RenderedInitialLeafWitness(renderedPlans[index], PartialIntProjection(prior), prior, order[index],
                          SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witnesses[index][prior])
                  /\ \A sorting, names, ordinals :
                      RenderedInitialRecordOrders(count, source, sorting, names, ordinals) =>
                          DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
-                             positions, order, plans, source, witnesses, sorting, names, ordinals), names, ordinals)
+                             positions, order, renderedPlans, source, witnesses, sorting, names, ordinals), names, ordinals)
                              = source[count].failures
     PROOF
     <1>. DEFINE emissions == [index \in positions |-> visits[index].emissions[visits[index].steps]]
@@ -1630,9 +1630,9 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                 prior \in source[index - 1].states} : index \in 1..count}
             BY <2>5b, <2>5c, SetExtensionality, SMT DEF SourceFailureConstraintPrefix
         <2>. QED BY <2>2, <2>4, <2>5, SMT
-    <1>9. LET actualPlans == [index \in positions |->
-                 Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
-          IN \E actualWitnesses :
+    <1>9. \E actualPlans, actualWitnesses :
+              /\ actualPlans = [index \in positions |->
+                     Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
               /\ \A index \in positions : \A prior \in source[index - 1].states :
                   RenderedInitialLeafWitness(actualPlans[index], PartialIntProjection(prior), prior, order[index],
                       SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), actualWitnesses[index][prior])
@@ -1644,18 +1644,8 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
         <2>1. plans = [index \in positions |->
             Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
             BY SMT DEF plans, emissions
-        <2>. SUFFICES \E actualWitnesses :
-            /\ \A index \in positions : \A prior \in source[index - 1].states :
-                RenderedInitialLeafWitness(plans[index], PartialIntProjection(prior), prior, order[index],
-                    SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), actualWitnesses[index][prior])
-            /\ \A sorting, names, ordinals :
-                RenderedInitialRecordOrders(count, source, sorting, names, ordinals) =>
-                    DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
-                        positions, order, plans, source, actualWitnesses, sorting, names, ordinals), names, ordinals)
-                        = source[count].failures
-            BY <2>1, SMT
-        <2>. WITNESS witnesses
-        <2>. QED BY <1>7, <1>8, SMT
+        <2>. WITNESS plans, witnesses
+        <2>. QED BY <2>1, <1>7, <1>8, SMT
     <1>. QED BY <1>2, <1>2f, <1>4, <1>5, <1>9, SMT
         DEF emissions, plans
 
