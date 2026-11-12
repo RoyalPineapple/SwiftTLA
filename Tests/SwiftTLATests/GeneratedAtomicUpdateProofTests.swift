@@ -88,7 +88,7 @@ struct GeneratedAtomicUpdateProofTests {
         let uniqueBinding = try #require(emittedConstructor.as(FunctionDeclSyntax.self)?.body?.statements.first)
         try #require(emittedConstructor.description.components(separatedBy: uniqueBinding.description).count == 2)
         let wrongUniqueness = emittedConstructor.description.replacingOccurrences(
-            of: uniqueBinding.description, with: "let execution = try _completedInitialStates()[0]\n")
+            of: uniqueBinding.description, with: "let execution = try Self._completedInitialStates(_selectedInitial: nil as State?)[0]\n")
         #expect(wrongUniqueness != emittedConstructor.description)
         let wrongConstructor = try #require(Parser.parse(source: wrongUniqueness)
             .statements.first?.item.as(DeclSyntax.self))
@@ -100,13 +100,19 @@ struct GeneratedAtomicUpdateProofTests {
         try #require(wrongMapping != publicOutcomes)
         let wrongOutcomes = try #require(Parser.parse(source: wrongMapping)
             .statements.first?.item.as(DeclSyntax.self))
+        let initialCall = "Self._initialStates(_selectedInitial: nil as State?)"
+        try #require(publicOutcomes.components(separatedBy: initialCall).count == 2)
+        let defaultedCall = publicOutcomes.replacingOccurrences(of: initialCall, with: "Self._initialStates()")
+        try #require(defaultedCall != publicOutcomes)
+        let wrongInitialCall = try #require(Parser.parse(source: defaultedCall)
+            .statements.first?.item.as(DeclSyntax.self))
         try verifyGeneratedInitialConstruction(initialConstruction, configured: false)
-        for (index, declaration) in [(4, wrongConstructor), (2, wrongOutcomes)] {
+        for (index, declaration) in [(4, wrongConstructor), (2, wrongOutcomes), (2, wrongInitialCall)] {
             var wrongConstruction = initialConstruction
             wrongConstruction[index] = declaration
             do {
                 try verifyGeneratedInitialConstruction(wrongConstruction, configured: false)
-                Issue.record("A generated constructor with changed uniqueness or state conversion was accepted")
+                Issue.record("A generated constructor with changed uniqueness, state conversion or helper binding was accepted")
             } catch let diagnostic as CompilationDiagnostic {
                 #expect(diagnostic.path == "native.initialConstruction")
             }

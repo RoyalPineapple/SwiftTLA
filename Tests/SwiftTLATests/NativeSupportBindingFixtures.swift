@@ -1,6 +1,14 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+private extension NativeSupportBindingModel {
+    static func _initialStates() throws -> InitialEvaluationOutcomes<Snapshot> {
+        .init(states: [], failures: [])
+    }
+
+    static func _completedInitialStates() throws -> [Snapshot] { [] }
+}
+
 private extension ArraySlice where Element == NativeSupportBindingModel.Snapshot {
     mutating func popFirst() -> Element? { nil }
 }

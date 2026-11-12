@@ -775,6 +775,7 @@ extension NativeSwiftEmitter {
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters
         let appendedArguments = arguments.isEmpty ? "" : ", " + arguments
         let samplingParameter = hasRandomSubset ? ", _sampleRandomSubset: \(nativeBoolType) = false" : ""
+        let unselectedArguments = "_selectedInitial: nil as State?\(hasRandomSubset ? ", _sampleRandomSubset: false" : "")\(appendedArguments)"
         let body = try initialBody(source.code, scopes: source.scopes)
         let prefix = Parser.parse(source: """
         var result: [Snapshot] = []
@@ -792,33 +793,33 @@ extension NativeSwiftEmitter {
         var declarations = [DeclSyntax(initial)]
         declarations += try nativeDeclarations("""
         private static func _completedInitialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
-            let outcome = try _initialStates(_selectedInitial: _selectedInitial\(hasRandomSubset ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
+            let outcome = try Self._initialStates(_selectedInitial: _selectedInitial\(hasRandomSubset ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
             if let failure = outcome.firstFailure { throw failure }
             return outcome.states
         }
         public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
-            let outcome = try _initialStates(\(arguments))
+            let outcome = try Self._initialStates(\(unselectedArguments))
             return SwiftTLA.InitialEvaluationOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
                 failures: outcome.failures)
         }
         public static func initialMachines(\(parameters)) throws -> [Self] {
-            SwiftTLA._mapNativeOutcomes(try _completedInitialStates(\(arguments))) { Self(execution: $0\(appendedArguments)) }
+            SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(\(unselectedArguments))) { Self(execution: $0\(appendedArguments)) }
         }
         public static func makeMachine(\(parameters)) throws -> Self {
             let execution = try SwiftTLA._singleNativeOutcome(
-                _completedInitialStates(\(arguments)), missing: .noInitialState, ambiguous: .ambiguousInitialState)
+                Self._completedInitialStates(\(unselectedArguments)), missing: .noInitialState, ambiguous: .ambiguousInitialState)
             return Self(execution: execution\(appendedArguments))
         }
         public static func makeMachine(_ initial: State\(appendedParameters)) throws -> Self {
             let execution = try SwiftTLA._singleNativeOutcome(
-                _completedInitialStates(_selectedInitial: initial\(appendedArguments)), missing: .invalidInitialState, ambiguous: .ambiguousInitialState)
+                Self._completedInitialStates(_selectedInitial: initial as State?\(hasRandomSubset ? ", _sampleRandomSubset: false" : "")\(appendedArguments)), missing: .invalidInitialState, ambiguous: .ambiguousInitialState)
             return Self(execution: execution\(appendedArguments))
         }
         """)
         if hasRandomSubset {
             declarations += try nativeDeclarations("""
             public static func sampledInitialMachines(\(parameters)) throws -> [Self] {
-                SwiftTLA._mapNativeOutcomes(try _completedInitialStates(_sampleRandomSubset: true\(appendedArguments))) { Self(execution: $0\(appendedArguments)) }
+                SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(_selectedInitial: nil as State?, _sampleRandomSubset: true\(appendedArguments))) { Self(execution: $0\(appendedArguments)) }
             }
             """)
         }
@@ -1959,37 +1960,37 @@ func verifyRandomSubsetInitialSupport(_ declaration: DeclSyntax?, expected: [(St
 func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured: Bool,
                                         sampled: Bool = false) throws {
     let parameters = configured ? "configuration: Configuration" : ""
-    let arguments = configured ? "configuration: configuration" : ""
     let appendedParameters = configured ? ", configuration: Configuration" : ""
     let appendedArguments = configured ? ", configuration: configuration" : ""
     let samplingParameter = sampled ? ", _sampleRandomSubset: \(nativeBoolType) = false" : ""
+    let unselectedArguments = "_selectedInitial: nil as State?\(sampled ? ", _sampleRandomSubset: false" : "")\(appendedArguments)"
     let expected = Parser.parse(source: """
     private static func _completedInitialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
-        let outcome = try _initialStates(_selectedInitial: _selectedInitial\(sampled ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
+        let outcome = try Self._initialStates(_selectedInitial: _selectedInitial\(sampled ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
         if let failure = outcome.firstFailure { throw failure }
         return outcome.states
     }
     public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
-        let outcome = try _initialStates(\(arguments))
+        let outcome = try Self._initialStates(\(unselectedArguments))
         return SwiftTLA.InitialEvaluationOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
             failures: outcome.failures)
     }
     public static func initialMachines(\(parameters)) throws -> [Self] {
-        SwiftTLA._mapNativeOutcomes(try _completedInitialStates(\(arguments))) { Self(execution: $0\(appendedArguments)) }
+        SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(\(unselectedArguments))) { Self(execution: $0\(appendedArguments)) }
     }
     public static func makeMachine(\(parameters)) throws -> Self {
         let execution = try SwiftTLA._singleNativeOutcome(
-            _completedInitialStates(\(arguments)), missing: .noInitialState, ambiguous: .ambiguousInitialState)
+            Self._completedInitialStates(\(unselectedArguments)), missing: .noInitialState, ambiguous: .ambiguousInitialState)
         return Self(execution: execution\(appendedArguments))
     }
     public static func makeMachine(_ initial: State\(appendedParameters)) throws -> Self {
         let execution = try SwiftTLA._singleNativeOutcome(
-            _completedInitialStates(_selectedInitial: initial\(appendedArguments)), missing: .invalidInitialState, ambiguous: .ambiguousInitialState)
+            Self._completedInitialStates(_selectedInitial: initial as State?\(sampled ? ", _sampleRandomSubset: false" : "")\(appendedArguments)), missing: .invalidInitialState, ambiguous: .ambiguousInitialState)
         return Self(execution: execution\(appendedArguments))
     }
     \(sampled ? """
     public static func sampledInitialMachines(\(parameters)) throws -> [Self] {
-        SwiftTLA._mapNativeOutcomes(try _completedInitialStates(_sampleRandomSubset: true\(appendedArguments))) { Self(execution: $0\(appendedArguments)) }
+        SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(_selectedInitial: nil as State?, _sampleRandomSubset: true\(appendedArguments))) { Self(execution: $0\(appendedArguments)) }
     }
     """ : "")
     """).statements.compactMap { $0.item.as(DeclSyntax.self) }

@@ -685,6 +685,11 @@ Exit: actual accepted pilot expressions supply the child theorem premises. No ex
   Complete branch observations cannot rely only on the deterministic selected record.
   I5s supplies an implemented event-set expression for guarded Int value/add and supported membership-domain initialization, including lazy domain addition failures. Its generic source/Swift/TLA relation and ordered observations still require proof; the prepared v5 deterministic case is separate admission evidence.
 - [ ] M2.5 Prove complete initial function, selected filtering and hidden-state assembly correspond to the logical history.
+  Native factories now call their private initializers through `Self` and supply explicit arguments of type `State?`.
+  The existing owner reproduced three runtime issues with caller overloads on unchanged production.
+  The repaired path passed 74 tests in twelve suites, including configured, selected and sampled initialization and an external typed client.
+  Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-helper-call-binding/` in the primary checkout.
+  This repair removes the measured dispatch dependency. The generic compiler interpretation and M2.5 proof remain open.
 - [ ] M2.6 Discharge the evaluator and history premises at `OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures`.
 
 Owners: [native runtime](../../Sources/SwiftTLA/CompiledRuntime.swift),
