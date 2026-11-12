@@ -658,6 +658,12 @@ Complete these rows in order. Reuse the existing rules and checks.
   Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-output-raw-token-identity/` in the primary checkout. This scoped code-case result leaves token grammar/grouping, scope/helper binding, separate projection checks and complete initialization preservation open.
   The companion complete-snapshot projection check now compares ordered UTF-8 token bytes too. Its existing source owner reproduced the same admitted raw control-literal change on unchanged `e4f56c58` production; the repair passed 63 tests in six suites, retaining field-route, token-order and complete-shape controls.
   Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/projection-output-raw-token-identity/` in the primary checkout. This repairs the separate projection check's token-identity defect; its grammar, helper/field interpretation and complete compiler preservation proof remain open.
+  The macro rewrite check now requires exact token kinds, UTF-8 spelling, declaration names and injected identity names.
+  The existing source owner reproduced one admitted read change and three admitted name changes.
+  The final focused run passed six tests in three suites, including the actual proof consumer and an external typed client.
+  Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/source-rewrite-raw-token-identity/` in the primary checkout.
+  The retained source witness feeds `InitializerPlansInvokeCheckedExpressionParent`.
+  These checks do not prove general grammar, scope, source-to-IR or output interpretation.
 - [ ] M1.6 Instantiate both assignment and initializer composition with these results.
   Derive the required child facts for arbitrary supported nesting and valid prior bindings.
 

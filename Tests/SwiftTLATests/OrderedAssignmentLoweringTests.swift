@@ -404,6 +404,53 @@ struct OrderedAssignmentLoweringTests {
             }
         }
 
+        let distinctBindings = source.replacingOccurrences(of: "first", with: "K")
+            .replacingOccurrences(of: "second", with: "K")
+            .replacingOccurrences(of: "scope.sharedVar(initial: 1)",
+                with: "scope.sharedVar(_name: \"first\", initial: 1)")
+            .replacingOccurrences(of: "_name: \"K\"", with: "_name: \"second\"")
+        let distinctExpanded = distinctBindings.replacingOccurrences(of: "Algorithm(scoped:",
+            with: "Algorithm(_name: \"algorithm\", scoped:")
+        let distinctOriginal = try parseSpecTestClosure(distinctBindings)
+        let distinctRewrite = try parseSpecTestClosure(distinctExpanded)
+        try #require(!distinctOriginal.hasError && !distinctRewrite.hasError)
+        try OrderedIntSourceSyntaxCheck.verifyRewrite(distinctOriginal, rewritten: distinctRewrite)
+        let read = "to: K + 1"
+        try #require(distinctExpanded.components(separatedBy: read).count == 2)
+        let changedRead = distinctExpanded.replacingOccurrences(of: read, with: "to: K + 1")
+        try #require(!changedRead.utf8.elementsEqual(distinctExpanded.utf8))
+        let changedSyntax = try parseSpecTestClosure(changedRead)
+        try #require(!changedSyntax.hasError)
+        #expect(throws: CompilationDiagnostic.self) {
+            try OrderedIntSourceSyntaxCheck.verifyRewrite(distinctOriginal, rewritten: changedSyntax)
+        }
+
+        let namedAlgorithmSource = source.replacingOccurrences(of: "algorithm", with: "K")
+        let namedAlgorithmOutput = expanded.replacingOccurrences(of: "algorithm", with: "K")
+        let namedStateSource = source.replacingOccurrences(of: "first", with: "K")
+        let namedStateOutput = expanded.replacingOccurrences(of: "first", with: "K")
+        for (label, authored, output, from, to) in [
+            ("algorithm identity", namedAlgorithmSource, namedAlgorithmOutput, "_name: \"K\"", "_name: \"K\""),
+            ("state identity", namedStateSource, namedStateOutput, "_name: \"K\"", "_name: \"K\""),
+            ("algorithm binding", namedAlgorithmSource, namedAlgorithmOutput, "let K =", "let K ="),
+        ] {
+            let original = try parseSpecTestClosure(authored)
+            let correct = try parseSpecTestClosure(output)
+            try #require(!original.hasError && !correct.hasError)
+            try OrderedIntSourceSyntaxCheck.verifyRewrite(original, rewritten: correct)
+            try #require(output.components(separatedBy: from).count == 2)
+            let changed = output.replacingOccurrences(of: from, with: to)
+            try #require(!changed.utf8.elementsEqual(output.utf8))
+            let candidate = try parseSpecTestClosure(changed)
+            try #require(!candidate.hasError)
+            do {
+                try OrderedIntSourceSyntaxCheck.verifyRewrite(original, rewritten: candidate)
+                Issue.record("Raw source \(label) corruption accepted")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.hasSuffix(".macroRewrite"))
+            }
+        }
+
         let signedSource = source.replacingOccurrences(of: "initial: 1", with: "initial: -1")
         let signedExpanded = expanded.replacingOccurrences(of: "initial: 1", with: "initial: -1")
         let signedOriginal = try parseSpecTestClosure(signedSource)

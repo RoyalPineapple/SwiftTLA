@@ -179,11 +179,13 @@ enum OrderedIntSourceSyntaxCheck {
                   let output = outputDeclaration.as(VariableDeclSyntax.self),
                   output.bindings.count == 1,
                   let outputBinding = output.bindings.first,
-                  outputBinding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName == name,
+                  let outputName = outputBinding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
+                  outputName.utf8.elementsEqual(name.utf8),
                   var outputCall = outputBinding.initializer?.value.as(FunctionCallExprSyntax.self),
                   let identity = outputCall.arguments.first,
                   identity.label?.text == "_name",
-                  identity.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue == name,
+                  let identityName = identity.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+                  identityName.utf8.elementsEqual(name.utf8),
                   let sourceBody = call.arguments.first(where: { $0.label?.text == "scoped" })?
                     .expression.as(ClosureExprSyntax.self),
                   var outputBody = outputCall.arguments.first(where: { $0.label?.text == "scoped" })?
@@ -209,30 +211,31 @@ enum OrderedIntSourceSyntaxCheck {
                    var outputVariableCall = outputInitializer.value.as(FunctionCallExprSyntax.self),
                    let added = outputVariableCall.arguments.first,
                    added.label?.text == "_name",
-                   added.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue == root {
+                   let addedName = added.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+                   addedName.utf8.elementsEqual(root.utf8) {
                     outputVariableCall.arguments = LabeledExprListSyntax(outputVariableCall.arguments.dropFirst())
                     outputInitializer.value = ExprSyntax(outputVariableCall)
                     outputBinding.initializer = outputInitializer
                     outputVar.bindings = PatternBindingListSyntax([outputBinding])
                     normalized.item = .decl(DeclSyntax(outputVar))
                 }
-                guard tokens(sourceItem) == tokens(normalized) else { throw drift(name) }
+                guard sameTokens(sourceItem, normalized) else { throw drift(name) }
                 normalizedStatements.append(normalized)
             }
             outputBody.statements = CodeBlockItemListSyntax(normalizedStatements)
-            guard tokens(sourceBody) == tokens(outputBody) else { throw drift(name) }
+            guard sameTokens(sourceBody, outputBody) else { throw drift(name) }
             outputCall.arguments = LabeledExprListSyntax(outputCall.arguments.dropFirst().map { argument in
                 guard argument.label?.text == "scoped" else { return argument }
                 var result = argument
                 result.expression = ExprSyntax(outputBody)
                 return result
             })
-            guard tokens(call) == tokens(outputCall) else { throw drift(name) }
+            guard sameTokens(call, outputCall) else { throw drift(name) }
             for (sourceItem, outputItem) in zip(source.statements, rewritten.statements) {
                 guard case .expr(let expression) = sourceItem.item,
                       expression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == name
                 else { continue }
-                guard tokens(sourceItem) == tokens(outputItem) else { throw drift(name) }
+                guard sameTokens(sourceItem, outputItem) else { throw drift(name) }
             }
         }
     }
@@ -297,8 +300,12 @@ enum OrderedIntSourceSyntaxCheck {
         }
     }
 
-    private static func tokens(_ syntax: some SyntaxProtocol) -> [TokenKind] {
-        syntax.tokens(viewMode: .sourceAccurate).map(\.tokenKind)
+    private static func sameTokens(_ lhs: some SyntaxProtocol, _ rhs: some SyntaxProtocol) -> Bool {
+        let first = Array(lhs.tokens(viewMode: .sourceAccurate))
+        let second = Array(rhs.tokens(viewMode: .sourceAccurate))
+        return first.count == second.count && zip(first, second).allSatisfy { left, right in
+            left.tokenKind == right.tokenKind && left.text.utf8.elementsEqual(right.text.utf8)
+        }
     }
 
     private static func drift(_ name: String) -> CompilationDiagnostic {
