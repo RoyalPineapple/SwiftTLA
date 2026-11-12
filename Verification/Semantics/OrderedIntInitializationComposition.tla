@@ -1068,30 +1068,14 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
             <3>2. DecodedRenderedAdditionEvents(RenderedInitialAdditionEvents(plan, values, prior, target))
                 = {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}
                 BY <1>4, <1>8a, <2>2, SMT DEF DecodedRenderedAdditionEvents
-            <3>3. GeneratedInitialStates(prior, target, SourceFailed(execution.outcome.failure)) = {}
-                BY SetExtensionality, SMT DEF GeneratedInitialStates, SourceFailed
-            <3>4. GeneratedInitialFailures(prior, target, SourceFailed(execution.outcome.failure))
-                = {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}
-                BY <1>8a, <2>2, SetExtensionality, SMT DEF GeneratedInitialFailures, SourceFailed
-            <3>5. GeneratedInitialLeaf(prior, target, SourceFailed(execution.outcome.failure))
-                = [states |-> {}, failures |-> {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}]
-                BY <3>3, <3>4, SMT DEF GeneratedInitialLeaf
-            <3>6. SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root]))
-                = GeneratedInitialLeaf(prior, target, SourceFailed(execution.outcome.failure))
-                BY ONLY <1>7, <3>1, SMT
-            <3>7. SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root]))
-                = [states |-> {}, failures |-> {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}]
-                BY ONLY <3>6, <3>5, SMT
-            <3>8. execution.outcome.ok = FALSE
+            <3>3. SourceInitialStates(prior, target, SourceIntInitializerOutcome(meaning[root])) = {}
+                BY ONLY <3>1, SetExtensionality, SMT DEF SourceInitialStates, SourceFailed
+            <3>4. SourceInitialFailures(prior, target, SourceIntInitializerOutcome(meaning[root]))
+                = DecodedRenderedAdditionEvents(RenderedInitialAdditionEvents(plan, values, prior, target))
+                BY ONLY <1>8a, <2>2, <3>1, <3>2, SMT DEF SourceInitialFailures, SourceFailed
+            <3>5. execution.outcome.ok = FALSE
                 BY ONLY <1>8b, <2>2, SMT
-            <3>9. [states |-> IF execution.outcome.ok
-                             THEN {GeneratedExtension(prior, target, values[plan.count])} ELSE {},
-                    failures |-> DecodedRenderedAdditionEvents(
-                        RenderedInitialAdditionEvents(plan, values, prior, target))]
-                = [states |-> {}, failures |->
-                    {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}]
-                BY ONLY <3>2, <3>8, SMT
-            <3>. QED BY <1>8b, <2>2, <3>2, <3>7, <3>8, <3>9, SMT
+            <3>. QED BY ONLY <3>3, <3>4, <3>5, SMT DEF SourceInitialLeaf
         <2>. QED BY <1>4, <2>1, <2>2, SMT DEF Expressions!ExpressionOutcomes
     <1>10. RenderedInitialRecordInterpretation(plan, values, execution.outcome, prior, target,
         SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root])))
@@ -1700,23 +1684,23 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                 prior \in source[index - 1].states} : index \in 1..count}
             BY <2>5b, <2>5c, SetExtensionality, SMT DEF SourceFailureConstraintPrefix
         <2>. QED BY <2>2, <2>4, <2>5, SMT
-    <1>9. \E actualPlans, actualWitnesses :
-              /\ actualPlans = [index \in positions |->
+    <1>. SUFFICES \E renderedPlans, witnesses :
+              /\ renderedPlans = [index \in positions |->
                      Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
               /\ \A index \in positions : \A prior \in source[index - 1].states :
-                  RenderedInitialLeafWitness(actualPlans[index], PartialIntProjection(prior), prior, order[index],
-                      SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), actualWitnesses[index][prior])
+                  RenderedInitialLeafWitness(renderedPlans[index], PartialIntProjection(prior), prior, order[index],
+                      SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witnesses[index][prior])
               /\ \A sorting, names, ordinals :
                   RenderedInitialRecordOrders(count, source, sorting, names, ordinals) =>
                       DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
-                          positions, order, actualPlans, source, actualWitnesses, sorting, names, ordinals), names, ordinals)
+                          positions, order, renderedPlans, source, witnesses, sorting, names, ordinals), names, ordinals)
                           = source[count].failures
-        <2>1. plans = [index \in positions |->
-            Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
-            BY SMT DEF plans, emissions
-        <2>. WITNESS plans, constructedWitnesses
-        <2>. QED BY ONLY <2>1, <1>7, <1>8, SMT
-    <1>. QED BY <1>0n, <1>2u, <1>2f, <1>4, <1>5a, <1>9, SMT
+        BY ONLY <1>2u, <1>2f, <1>4, <1>5a, SMT
+    <1>9. plans = [index \in positions |->
+        Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
+        BY SMT DEF plans, emissions
+    <1>. WITNESS plans, constructedWitnesses
+    <1>. QED BY ONLY <1>9, <1>7, <1>8, SMT
 
 THEOREM ChangingAReadChangesTheFixedInitializerCandidate ==
     ASSUME NEW first \in Values, NEW second \in Values, first # second
