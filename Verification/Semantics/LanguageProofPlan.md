@@ -700,6 +700,11 @@ Exit: actual accepted pilot expressions supply the child theorem premises. No ex
   The repaired path passed 74 tests in twelve suites, including configured, selected and sampled initialization and an external typed client.
   Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-helper-call-binding/` in the primary checkout.
   This repair removes the measured dispatch dependency. The generic compiler interpretation and M2.5 proof remain open.
+  Both initializer callers now also require the nominal `SwiftTLA.InitialEvaluationOutcomes<Snapshot>` result.
+  The existing overload fixture reproduced ambiguous generated calls with the same `State?` input and a shape-compatible tuple result; no test executed on that baseline.
+  The result-context repair passed 74 tests in twelve suites, including the external consumer and rejection of a removed result annotation by the mandatory construction check.
+  Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-helper-result-binding/` in the primary checkout.
+  This closes that compiler blocker; it does not discharge the generic output-interpretation premise or M2.5.
 - [ ] M2.6 Discharge the evaluator and history premises at `OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures`.
 
 Owners: [native runtime](../../Sources/SwiftTLA/CompiledRuntime.swift),

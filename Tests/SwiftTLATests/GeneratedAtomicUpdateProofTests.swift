@@ -106,8 +106,14 @@ struct GeneratedAtomicUpdateProofTests {
         try #require(defaultedCall != publicOutcomes)
         let wrongInitialCall = try #require(Parser.parse(source: defaultedCall)
             .statements.first?.item.as(DeclSyntax.self))
+        let nominalResult = "let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> ="
+        try #require(publicOutcomes.components(separatedBy: nominalResult).count == 2)
+        let inferredResult = publicOutcomes.replacingOccurrences(of: nominalResult, with: "let outcome =")
+        try #require(inferredResult != publicOutcomes)
+        let wrongResultContext = try #require(Parser.parse(source: inferredResult)
+            .statements.first?.item.as(DeclSyntax.self))
         try verifyGeneratedInitialConstruction(initialConstruction, configured: false)
-        for (index, declaration) in [(4, wrongConstructor), (2, wrongOutcomes), (2, wrongInitialCall)] {
+        for (index, declaration) in [(4, wrongConstructor), (2, wrongOutcomes), (2, wrongInitialCall), (2, wrongResultContext)] {
             var wrongConstruction = initialConstruction
             wrongConstruction[index] = declaration
             do {

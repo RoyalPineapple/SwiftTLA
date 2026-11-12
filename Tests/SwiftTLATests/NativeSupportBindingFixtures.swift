@@ -2,6 +2,10 @@ import SwiftTLA
 import SwiftTLAMacros
 
 private extension NativeSupportBindingModel {
+    static func _initialStates(_selectedInitial: State?) throws -> (
+        states: [Snapshot], failures: [InitialEvaluationFailure], firstFailure: NativeMachineEvaluationError?
+    ) { ([], [], nil) }
+
     static func _initialStates() throws -> InitialEvaluationOutcomes<Snapshot> {
         .init(states: [], failures: [])
     }

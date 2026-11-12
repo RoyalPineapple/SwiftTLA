@@ -793,12 +793,12 @@ extension NativeSwiftEmitter {
         var declarations = [DeclSyntax(initial)]
         declarations += try nativeDeclarations("""
         private static func _completedInitialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
-            let outcome = try Self._initialStates(_selectedInitial: _selectedInitial\(hasRandomSubset ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
+            let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(_selectedInitial: _selectedInitial\(hasRandomSubset ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
             if let failure = outcome.firstFailure { throw failure }
             return outcome.states
         }
         public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
-            let outcome = try Self._initialStates(\(unselectedArguments))
+            let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(\(unselectedArguments))
             return SwiftTLA.InitialEvaluationOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
                 failures: outcome.failures)
         }
@@ -1966,12 +1966,12 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
     let unselectedArguments = "_selectedInitial: nil as State?\(sampled ? ", _sampleRandomSubset: false" : "")\(appendedArguments)"
     let expected = Parser.parse(source: """
     private static func _completedInitialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
-        let outcome = try Self._initialStates(_selectedInitial: _selectedInitial\(sampled ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
+        let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(_selectedInitial: _selectedInitial\(sampled ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
         if let failure = outcome.firstFailure { throw failure }
         return outcome.states
     }
     public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
-        let outcome = try Self._initialStates(\(unselectedArguments))
+        let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(\(unselectedArguments))
         return SwiftTLA.InitialEvaluationOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
             failures: outcome.failures)
     }
