@@ -4,6 +4,8 @@ import SwiftTLAMacros
 private func || (lhs: Bool, rhs: @autoclosure () -> Bool) -> Bool { false }
 
 private extension Array where Element == NativeSupportBindingModel.Snapshot {
+    func map<Result>(_ transform: (Element) throws -> Result) rethrows -> [Result] { [] }
+
     mutating func append(_ element: Element) {}
 }
 

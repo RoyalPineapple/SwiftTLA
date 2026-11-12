@@ -64,13 +64,23 @@ struct GeneratedAtomicUpdateProofTests {
         let wrongConstructor = try #require(Parser.parse(source: wrongUniqueness)
             .statements.first?.item.as(DeclSyntax.self))
         #expect(wrongConstructor.as(FunctionDeclSyntax.self)?.name.text == "makeMachine")
-        var wrongConstruction = initialConstruction
-        wrongConstruction[4] = wrongConstructor
-        do {
-            try verifyGeneratedInitialConstruction(wrongConstruction, configured: false)
-            Issue.record("A generated constructor with reversed uniqueness was accepted")
-        } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.path == "native.initialConstruction")
+        let publicOutcomes = initialConstruction[2].description
+        let conversion = "SwiftTLA._mapNativeOutcomes(outcome.states)"
+        try #require(publicOutcomes.components(separatedBy: conversion).count == 2)
+        let wrongMapping = publicOutcomes.replacingOccurrences(of: conversion, with: "outcome.states.map")
+        try #require(wrongMapping != publicOutcomes)
+        let wrongOutcomes = try #require(Parser.parse(source: wrongMapping)
+            .statements.first?.item.as(DeclSyntax.self))
+        try verifyGeneratedInitialConstruction(initialConstruction, configured: false)
+        for (index, declaration) in [(4, wrongConstructor), (2, wrongOutcomes)] {
+            var wrongConstruction = initialConstruction
+            wrongConstruction[index] = declaration
+            do {
+                try verifyGeneratedInitialConstruction(wrongConstruction, configured: false)
+                Issue.record("A generated constructor with changed uniqueness or state conversion was accepted")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native.initialConstruction")
+            }
         }
         let emittedUpdate = try #require(member(named: "_visitUpdates0", in: members))
         let expectedUpdate = try #require(member(named: "_visitUpdates0", in: templateMembers))

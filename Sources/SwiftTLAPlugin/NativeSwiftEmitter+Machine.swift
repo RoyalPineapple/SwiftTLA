@@ -798,11 +798,11 @@ extension NativeSwiftEmitter {
         }
         public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
             let outcome = try _initialStates(\(arguments))
-            return SwiftTLA.InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) },
+            return SwiftTLA.InitialEvaluationOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
                 failures: outcome.failures)
         }
         public static func initialMachines(\(parameters)) throws -> [Self] {
-            try _completedInitialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }
+            SwiftTLA._mapNativeOutcomes(try _completedInitialStates(\(arguments))) { Self(execution: $0\(appendedArguments)) }
         }
         public static func makeMachine(\(parameters)) throws -> Self {
             var candidates = try _completedInitialStates(\(arguments))[...]
@@ -820,7 +820,7 @@ extension NativeSwiftEmitter {
         if hasRandomSubset {
             declarations += try nativeDeclarations("""
             public static func sampledInitialMachines(\(parameters)) throws -> [Self] {
-                try _completedInitialStates(_sampleRandomSubset: true\(appendedArguments)).map { Self(execution: $0\(appendedArguments)) }
+                SwiftTLA._mapNativeOutcomes(try _completedInitialStates(_sampleRandomSubset: true\(appendedArguments))) { Self(execution: $0\(appendedArguments)) }
             }
             """)
         }
@@ -1974,11 +1974,11 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
     }
     public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
         let outcome = try _initialStates(\(arguments))
-        return SwiftTLA.InitialEvaluationOutcomes(states: outcome.states.map { Self(execution: $0\(appendedArguments)) },
+        return SwiftTLA.InitialEvaluationOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0\(appendedArguments)) },
             failures: outcome.failures)
     }
     public static func initialMachines(\(parameters)) throws -> [Self] {
-        try _completedInitialStates(\(arguments)).map { Self(execution: $0\(appendedArguments)) }
+        SwiftTLA._mapNativeOutcomes(try _completedInitialStates(\(arguments))) { Self(execution: $0\(appendedArguments)) }
     }
     public static func makeMachine(\(parameters)) throws -> Self {
         var candidates = try _completedInitialStates(\(arguments))[...]
@@ -1994,7 +1994,7 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
     }
     \(sampled ? """
     public static func sampledInitialMachines(\(parameters)) throws -> [Self] {
-        try _completedInitialStates(_sampleRandomSubset: true\(appendedArguments)).map { Self(execution: $0\(appendedArguments)) }
+        SwiftTLA._mapNativeOutcomes(try _completedInitialStates(_sampleRandomSubset: true\(appendedArguments))) { Self(execution: $0\(appendedArguments)) }
     }
     """ : "")
     """).statements.compactMap { $0.item.as(DeclSyntax.self) }

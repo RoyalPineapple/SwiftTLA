@@ -141,6 +141,14 @@ public func _appendNativeOutcome<Outcome: Sendable>(_ outcomes: inout [Outcome],
     outcomes.append(outcome)
 }
 
+/// Keep generated state conversion in library scope, away from caller overloads.
+@_documentation(visibility: internal)
+public func _mapNativeOutcomes<Source: Sendable, Result: Sendable>(
+    _ outcomes: [Source], _ transform: (Source) -> Result
+) -> [Result] {
+    outcomes.map(transform)
+}
+
 /// Keep generated Int selection independent of caller Boolean and equality overloads.
 @_documentation(visibility: internal)
 public func _nativeIntInitialMatches(_ selected: Int?, _ value: Int) -> Bool {

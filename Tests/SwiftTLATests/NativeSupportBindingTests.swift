@@ -7,6 +7,7 @@ import SwiftTLA
         let initial = try NativeSupportBindingModel.initialOutcomes()
         #expect(initial.states.count == 1)
         #expect(initial.failures.isEmpty)
+        #expect(try NativeSupportBindingModel.initialMachines().count == 1)
         var machine = try NativeSupportBindingModel.makeMachine()
         #expect(machine.state.seed == 0 && machine.state.count == 1)
         #expect(try machine.send(.advance).after.count == 2)
