@@ -805,15 +805,13 @@ extension NativeSwiftEmitter {
             SwiftTLA._mapNativeOutcomes(try _completedInitialStates(\(arguments))) { Self(execution: $0\(appendedArguments)) }
         }
         public static func makeMachine(\(parameters)) throws -> Self {
-            var candidates = try _completedInitialStates(\(arguments))[...]
-            guard let execution = candidates.popFirst() else { throw GeneratedMachineError.noInitialState }
-            guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
+            let execution = try SwiftTLA._singleNativeOutcome(
+                _completedInitialStates(\(arguments)), missing: .noInitialState, ambiguous: .ambiguousInitialState)
             return Self(execution: execution\(appendedArguments))
         }
         public static func makeMachine(_ initial: State\(appendedParameters)) throws -> Self {
-            var candidates = try _completedInitialStates(_selectedInitial: initial\(appendedArguments))[...]
-            guard let execution = candidates.popFirst() else { throw GeneratedMachineError.invalidInitialState }
-            guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
+            let execution = try SwiftTLA._singleNativeOutcome(
+                _completedInitialStates(_selectedInitial: initial\(appendedArguments)), missing: .invalidInitialState, ambiguous: .ambiguousInitialState)
             return Self(execution: execution\(appendedArguments))
         }
         """)
@@ -1629,9 +1627,8 @@ extension NativeSwiftEmitter {
             try _actions().filter { try isEnabled($0) }
         }
         public mutating func send(_ action: Action) throws -> Transition {
-            var candidates = try _successors(for: action)[...]
-            guard let next = candidates.popFirst() else { throw GeneratedMachineError.noMatchingSuccessor }
-            guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousAction }
+            let next = try SwiftTLA._singleNativeOutcome(
+                _successors(for: action), missing: .noMatchingSuccessor, ambiguous: .ambiguousAction)
             let before = state
             _execution = next
             return Transition(action: action, before: before, after: state)
@@ -1981,15 +1978,13 @@ func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured
         SwiftTLA._mapNativeOutcomes(try _completedInitialStates(\(arguments))) { Self(execution: $0\(appendedArguments)) }
     }
     public static func makeMachine(\(parameters)) throws -> Self {
-        var candidates = try _completedInitialStates(\(arguments))[...]
-        guard let execution = candidates.popFirst() else { throw GeneratedMachineError.noInitialState }
-        guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
+        let execution = try SwiftTLA._singleNativeOutcome(
+            _completedInitialStates(\(arguments)), missing: .noInitialState, ambiguous: .ambiguousInitialState)
         return Self(execution: execution\(appendedArguments))
     }
     public static func makeMachine(_ initial: State\(appendedParameters)) throws -> Self {
-        var candidates = try _completedInitialStates(_selectedInitial: initial\(appendedArguments))[...]
-        guard let execution = candidates.popFirst() else { throw GeneratedMachineError.invalidInitialState }
-        guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
+        let execution = try SwiftTLA._singleNativeOutcome(
+            _completedInitialStates(_selectedInitial: initial\(appendedArguments)), missing: .invalidInitialState, ambiguous: .ambiguousInitialState)
         return Self(execution: execution\(appendedArguments))
     }
     \(sampled ? """
@@ -2833,9 +2828,8 @@ func verifyGeneratedActionRoutingOutput(
     let send = methods.filter { $0.name.text == "send" }
     let expectedSend = tokens("""
         public mutating func send(_ action: Action) throws -> Transition {
-            var candidates = try _successors(for: action)[...]
-            guard let next = candidates.popFirst() else { throw GeneratedMachineError.noMatchingSuccessor }
-            guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousAction }
+            let next = try SwiftTLA._singleNativeOutcome(
+                _successors(for: action), missing: .noMatchingSuccessor, ambiguous: .ambiguousAction)
             let before = state
             _execution = next
             return Transition(action: action, before: before, after: state)

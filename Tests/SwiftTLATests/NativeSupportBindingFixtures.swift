@@ -1,6 +1,10 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+private extension ArraySlice where Element == NativeSupportBindingModel.Snapshot {
+    mutating func popFirst() -> Element? { nil }
+}
+
 private func || (lhs: Bool, rhs: @autoclosure () -> Bool) -> Bool { false }
 
 private extension Array where Element == NativeSupportBindingModel.Snapshot {

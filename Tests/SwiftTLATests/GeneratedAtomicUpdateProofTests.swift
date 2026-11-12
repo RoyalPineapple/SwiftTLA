@@ -85,8 +85,10 @@ struct GeneratedAtomicUpdateProofTests {
             #require(member(named: "makeMachine", parameterCount: 1, in: members)),
         ]
         let emittedConstructor = try #require(member(named: "makeMachine", parameterCount: 0, in: members))
+        let uniqueBinding = try #require(emittedConstructor.as(FunctionDeclSyntax.self)?.body?.statements.first)
+        try #require(emittedConstructor.description.components(separatedBy: uniqueBinding.description).count == 2)
         let wrongUniqueness = emittedConstructor.description.replacingOccurrences(
-            of: "guard candidates.isEmpty else", with: "guard !candidates.isEmpty else")
+            of: uniqueBinding.description, with: "let execution = try _completedInitialStates()[0]\n")
         #expect(wrongUniqueness != emittedConstructor.description)
         let wrongConstructor = try #require(Parser.parse(source: wrongUniqueness)
             .statements.first?.item.as(DeclSyntax.self))

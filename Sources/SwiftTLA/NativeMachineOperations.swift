@@ -149,6 +149,16 @@ public func _mapNativeOutcomes<Source: Sendable, Result: Sendable>(
     outcomes.map(transform)
 }
 
+/// Select one generated outcome without calling caller collection overloads.
+@_documentation(visibility: internal)
+public func _singleNativeOutcome<Outcome: Sendable>(
+    _ outcomes: [Outcome], missing: GeneratedMachineError, ambiguous: GeneratedMachineError
+) throws -> Outcome {
+    guard let first = outcomes.first else { throw missing }
+    guard outcomes.count == 1 else { throw ambiguous }
+    return first
+}
+
 /// Keep formal token indexing in library scope, away from caller subscripts.
 @_documentation(visibility: internal)
 public func _nativeFormalProjectionToken(
