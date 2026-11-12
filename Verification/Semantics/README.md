@@ -314,7 +314,7 @@ the project-owned checkers and formal integer encoding. It does not prove
 arbitrary initializers, other expressions, temporal claims, or the universal
 `#spec` theorem.
 The native branch trusts Swift's `addingReportingOverflow` contract and the small
-`_NativeMachineOperations.add` wrapper; the fixture's generated-Swift witness
+`_nativeIntAdd` gateway to `_NativeMachineOperations.add`; the fixture's generated-Swift witness
 and runtime failure test check that link, but are not a proof of the Swift
 compiler or every accepted addition lowering to this root form.
 The direct emitter now uses checked guards for pure addition, subtraction,

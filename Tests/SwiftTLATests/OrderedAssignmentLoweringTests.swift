@@ -2189,6 +2189,17 @@ struct OrderedAssignmentLoweringTests {
         try verify(declaration)
         try verifyOrderedIntInitialExpression(declaration,
             named: name, expression: resolvedExpression, slots: slots)
+        let boundAddition = "SwiftTLA._nativeIntAdd(_arithmetic0, _arithmetic1)"
+        try #require(declaration.description.components(separatedBy: boundAddition).count == 2)
+        let rebound = declaration.description.replacingOccurrences(of: boundAddition,
+            with: "SwiftTLA._NativeMachineOperations.add(_arithmetic0, _arithmetic1)")
+        try #require(rebound != declaration.description)
+        let reboundDeclaration = try #require(Parser.parse(source: rebound)
+            .statements.first?.item.as(DeclSyntax.self))
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyOrderedIntInitialExpression(reboundDeclaration,
+                named: name, expression: resolvedExpression, slots: slots)
+        }
         let missingFailure = declaration.description.replacingOccurrences(
             of: "failure: failure, projectingBefore: evaluatingInitialBindings", with: "failure: .divisionByZero, projectingBefore: evaluatingInitialBindings")
         #expect(missingFailure != declaration.description)
@@ -2198,7 +2209,7 @@ struct OrderedAssignmentLoweringTests {
             try verify(missingFailureDeclaration)
         }
         let wrongSwift = declaration.description.replacingOccurrences(
-            of: "_NativeMachineOperations.add", with: "_NativeMachineOperations.subtract")
+            of: "_nativeIntAdd", with: "_NativeMachineOperations.subtract")
         #expect(wrongSwift != declaration.description)
         let wrongDeclaration = try #require(Parser.parse(source: wrongSwift)
             .statements.first?.item.as(DeclSyntax.self))
@@ -2209,8 +2220,8 @@ struct OrderedAssignmentLoweringTests {
             #expect(diagnostic.path == "native._initialStates.value.\(name)")
         }
         let wrongOrder = declaration.description.replacingOccurrences(
-            of: "_NativeMachineOperations.add(_arithmetic0, _arithmetic1)",
-            with: "_NativeMachineOperations.add(_arithmetic1, _arithmetic0)")
+            of: "_nativeIntAdd(_arithmetic0, _arithmetic1)",
+            with: "_nativeIntAdd(_arithmetic1, _arithmetic0)")
         #expect(wrongOrder != declaration.description)
         let wrongOrderDeclaration = try #require(Parser.parse(source: wrongOrder)
             .statements.first?.item.as(DeclSyntax.self))

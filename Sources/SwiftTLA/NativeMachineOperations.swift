@@ -143,6 +143,12 @@ public func _nativeInitialOutcomes<State: Sendable>(
     InitialEvaluationOutcomes(states: states, failures: failures)
 }
 
+/// Bind generated addition in library scope, away from caller extensions.
+@_documentation(visibility: internal)
+public func _nativeIntAdd(_ lhs: Int, _ rhs: Int) throws -> Int {
+    try _NativeMachineOperations.add(lhs, rhs)
+}
+
 /// Keep generated collection mutation in library scope, away from caller overloads.
 @_documentation(visibility: internal)
 public func _appendNativeOutcome<Outcome: Sendable>(_ outcomes: inout [Outcome], _ outcome: Outcome) {

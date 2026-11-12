@@ -649,6 +649,10 @@ Complete these rows in order. Reuse the existing rules and checks.
 - [x] M1.3a Derive the call-free Int addition node case from its established child contracts.
   The [addition-child argument](InitializationFamily.md#checked-addition-initializer-child) follows actual scheduling, checked helper/error transport and TLA expression guards into the checked `CombinedAdditionRule`.
   Eight independent parser-context rows passed at two source placements, including nested failure precedence and retained before-prefix. This is a scoped manual code-case result with separate regression evidence; all six E ADD links, the full visitor mapping and complete TLA initial-event correspondence remain open.
+  A caller extension of the qualified `_NativeMachineOperations.add` member then reproduced wrong values, a missing overflow and hidden-control advancement on unchanged production: one executed test failed with four issues.
+  Generated addition now calls the module function `_nativeIntAdd`, which binds the unchanged checked implementation in library scope. The complete initializer and action checks and independent initializer decoder require that call.
+  The same caller extension passes in 111 tests across fourteen suites, including the external consumer. Existing operation/order controls and five helper references in three Swift witnesses were migrated exactly; no theorem statement or premise changed.
+  Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-add-helper-member-binding/` in the primary checkout. This repairs a measured callee-selection dependency; general module, token, scope and output interpretation remain unproved.
 - [ ] M1.4 Derive `ExpressionPlan` from actual accepted input and actual compilation.
   Bind the physical visitor to the existing synchronized history proof. A supplied correct plan cannot replace this obligation.
   The existing proof consumer now retains proposed occurrence maps between its independent source tree and actual postorder plan.
@@ -709,6 +713,7 @@ Exit: actual accepted pilot expressions supply the child theorem premises. No ex
   Generated outcome construction now uses a typed library-scope function, preserving the supplied state and failure arrays outside caller initializer lookup.
   The same owner and external consumer pass in the 74-test native run; the 24-test source/IR owner also passes, with two shared artifact-consumer tests checked separately.
   The existing construction checker rejects a return to the caller constructor. Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-outcome-construction-binding/`; complete physical interpretation remains open.
+  Remaining pilot bindings include `visitInitialBranch`, completed-helper result and mapping-closure types, outcome member reads and hidden-snapshot assembly. The checked logical history does not certify these physical links.
 - [ ] M2.6 Discharge the evaluator and history premises at `OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures`.
   The pinned `28c609d2` run checks the repaired rendered failure leaf; one of 1,250 initialization obligations remains unproved at the final parent conjunction.
   Its next proof body names the constructed rendered-plan/witness existential explicitly and cites it at that join. This candidate is not yet mathematically checked.

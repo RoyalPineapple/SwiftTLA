@@ -33,7 +33,7 @@ do {
     guard ((try { () throws -> Int in
     let _arithmetic0: Int = state.state.count
 let _arithmetic1: Int = 1
-let _arithmetic2: Int = try SwiftTLA._NativeMachineOperations.add(_arithmetic0, _arithmetic1)
+let _arithmetic2: Int = try SwiftTLA._nativeIntAdd(_arithmetic0, _arithmetic1)
     return _arithmetic2
 }()) > 0) else { return }
 try emit(updates)

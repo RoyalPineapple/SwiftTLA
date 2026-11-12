@@ -131,12 +131,12 @@ struct DependentInitializationOutputProofTests {
         let native = try #require(try fallibleEmitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
         })
-        try #require(native.description.contains("SwiftTLA._NativeMachineOperations.add(_arithmetic0, _arithmetic1)"))
+        try #require(native.description.contains("SwiftTLA._nativeIntAdd(_arithmetic0, _arithmetic1)"))
         try fallibleEmitter.verifyIntInitialOutput(native)
         let changedNativeOutputs = [
             ("additionOperand", native.description.replacingOccurrences(
-                of: "SwiftTLA._NativeMachineOperations.add(_arithmetic0, _arithmetic1)",
-                with: "SwiftTLA._NativeMachineOperations.add(_arithmetic0, 0)")),
+                of: "SwiftTLA._nativeIntAdd(_arithmetic0, _arithmetic1)",
+                with: "SwiftTLA._nativeIntAdd(_arithmetic0, 0)")),
             ("initializerSite", native.description.replacingOccurrences(
                 of: "evaluatingInitializerOrdinal = \(choiceID.ordinal)",
                 with: "evaluatingInitializerOrdinal = \(seedID.ordinal)")),

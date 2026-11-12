@@ -2150,7 +2150,7 @@ private func checkedIntInitialValue(_ root: CompiledExpression,
             guard values.count >= 2 else { return nil }
             let rhs = values.removeLast()
             let lhs = values.removeLast()
-            value = "try SwiftTLA._NativeMachineOperations.add(\(lhs), \(rhs))"
+            value = "try SwiftTLA._nativeIntAdd(\(lhs), \(rhs))"
         case .stateVariable(let id):
             guard node.children.isEmpty, let slot = slots[id] else { return nil }
             value = slot
@@ -2238,7 +2238,7 @@ func verifyOrderedIntInitialExpression(_ declaration: DeclSyntax?, named name: S
         return index
     }
     func readStep(available: Int) -> Step? {
-        if take(["try", "SwiftTLA", ".", "_NativeMachineOperations", ".", "add", "("]) {
+        if take(["try", "SwiftTLA", ".", "_nativeIntAdd", "("]) {
             guard let left = arithmeticIndex(), take([","]), let right = arithmeticIndex(),
                   take([")"]), left < available, right < available else { return nil }
             return .add(left, right)
@@ -3335,7 +3335,8 @@ func verifyGeneratedActionWriteOutput(
                 let operands = Array(values.suffix(operation.arity))
                 values.removeLast(operation.arity)
                 let arguments = operation.rightFirst ? Array(operands.reversed()) : operands
-                value = ["try", "SwiftTLA", ".", "_NativeMachineOperations", ".", operation.name, "("] +
+                let helper = operation.name == "add" ? ["_nativeIntAdd"] : ["_NativeMachineOperations", ".", operation.name]
+                value = ["try", "SwiftTLA", "."] + helper + ["("] +
                     arguments.enumerated().flatMap { index, argument in
                         index == 0 ? [argument] : [",", argument]
                     } + [")"]

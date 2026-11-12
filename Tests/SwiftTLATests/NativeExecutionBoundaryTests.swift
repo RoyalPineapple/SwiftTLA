@@ -467,20 +467,23 @@ private struct ReachableInvariantFailure {
         let emittedWrites = try emitter.actionFunctions(generatedAction.body).writes
         try verifyGeneratedActionWriteOutput(emittedUpdate, action: generatedAction.body,
             program: program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
-        let unqualified = swiftAction.replacingOccurrences(
-            of: "SwiftTLA._NativeMachineOperations.add", with: "_NativeMachineOperations.add")
-        #expect(unqualified != swiftAction)
-        let unqualifiedUpdate = try #require(Parser.parse(source: unqualified)
-            .statements.first?.item.as(DeclSyntax.self))
-        do {
-            try verifyGeneratedActionWriteOutput(unqualifiedUpdate, action: generatedAction.body,
-                program: program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
-            Issue.record("A generated addition can bind a model's helper instead of the library")
-        } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.path == "native.action.binding.1")
+        let boundAddition = "SwiftTLA._nativeIntAdd"
+        try #require(swiftAction.components(separatedBy: boundAddition).count == 2)
+        for replacement in ["_nativeIntAdd", "SwiftTLA._NativeMachineOperations.add"] {
+            let rebound = swiftAction.replacingOccurrences(of: boundAddition, with: replacement)
+            try #require(rebound != swiftAction)
+            let reboundUpdate = try #require(Parser.parse(source: rebound)
+                .statements.first?.item.as(DeclSyntax.self))
+            do {
+                try verifyGeneratedActionWriteOutput(reboundUpdate, action: generatedAction.body,
+                    program: program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
+                Issue.record("A generated addition can bind a caller's helper instead of the library")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native.action.binding.1")
+            }
         }
         let wrongOperation = swiftAction.replacingOccurrences(
-            of: "_NativeMachineOperations.add(_arithmetic0, _arithmetic1)",
+            of: "_nativeIntAdd(_arithmetic0, _arithmetic1)",
             with: "_NativeMachineOperations.subtract(_arithmetic0, _arithmetic1)")
         #expect(wrongOperation != swiftAction)
         let wrongUpdate = try #require(Parser.parse(source: wrongOperation)
@@ -493,8 +496,8 @@ private struct ReachableInvariantFailure {
             #expect(diagnostic.path == "native.action.binding.1")
         }
         let reversedOperands = swiftAction.replacingOccurrences(
-            of: "_NativeMachineOperations.add(_arithmetic0, _arithmetic1)",
-            with: "_NativeMachineOperations.add(_arithmetic1, _arithmetic0)")
+            of: "_nativeIntAdd(_arithmetic0, _arithmetic1)",
+            with: "_nativeIntAdd(_arithmetic1, _arithmetic0)")
         #expect(reversedOperands != swiftAction)
         let reversedUpdate = try #require(Parser.parse(source: reversedOperands)
             .statements.first?.item.as(DeclSyntax.self))
@@ -616,12 +619,12 @@ private struct ReachableInvariantFailure {
         }
         try check(visitor)
         let wrongOperation = visitor.replacingOccurrences(
-            of: "_NativeMachineOperations.divide(_arithmetic", with: "_NativeMachineOperations.add(_arithmetic")
+            of: "_NativeMachineOperations.divide(_arithmetic", with: "_nativeIntAdd(_arithmetic")
         #expect(wrongOperation != visitor)
         #expect(throws: CompilationDiagnostic.self) { try check(wrongOperation) }
         let reversedOperands = visitor.replacingOccurrences(
-            of: "_NativeMachineOperations.add(_arithmetic3, _arithmetic4)",
-            with: "_NativeMachineOperations.add(_arithmetic4, _arithmetic3)")
+            of: "_nativeIntAdd(_arithmetic3, _arithmetic4)",
+            with: "_nativeIntAdd(_arithmetic4, _arithmetic3)")
         #expect(reversedOperands != visitor)
         #expect(throws: CompilationDiagnostic.self) { try check(reversedOperands) }
     }
@@ -652,7 +655,7 @@ private struct ReachableInvariantFailure {
             .standardizedFileURL
         let expectedSwift = nativeWitnessSource(try String(contentsOf: additionWitness, encoding: .utf8))
             .replacingOccurrences(of: "let _arithmetic1: \(nativeIntType) = 1", with: "let _arithmetic1: \(nativeIntType) = -1")
-            .replacingOccurrences(of: "_NativeMachineOperations.add", with: "_NativeMachineOperations.subtract")
+            .replacingOccurrences(of: "_nativeIntAdd", with: "_NativeMachineOperations.subtract")
         let actualTokens = Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
         let expectedTokens = Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text)
         #expect(actualTokens == expectedTokens)
@@ -727,7 +730,7 @@ private struct ReachableInvariantFailure {
             .standardizedFileURL
         let expectedSwift = nativeWitnessSource(try String(contentsOf: witness, encoding: .utf8))
             .replacingOccurrences(of: "let _arithmetic1: \(nativeIntType) = 1", with: "let _arithmetic1: \(nativeIntType) = 2")
-            .replacingOccurrences(of: "_NativeMachineOperations.add", with: "_NativeMachineOperations.multiply")
+            .replacingOccurrences(of: "_nativeIntAdd", with: "_NativeMachineOperations.multiply")
         #expect(Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
             == Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text))
 

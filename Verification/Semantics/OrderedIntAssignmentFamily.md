@@ -320,6 +320,7 @@ Swift `try` stops the expression at the first reached throwing declaration.
 Thus a failed left subtree prevents evaluation of the right subtree and parent.
 `_NativeMachineOperations.add` calls `addingReportingOverflow` with the ordered operands.
 Its `checked` helper returns the reported value or throws the addition overflow with those same operands.
+Generated callers reach it through the module function `_nativeIntAdd`, whose body binds the member in library scope instead of caller extension scope.
 Under documented Swift Int behavior, this is the source expression's value-or-failure rule.
 This argument assumes correct slot values, helper symbol binding, and interpretation of the accepted Swift tokens.
 It does not prove the surrounding initializer's complete branch-failure collection.
@@ -333,7 +334,7 @@ The remaining source and output interpretation boundaries are precise:
 | Source and resolved trees to node arrays | Both `orderedIntPlan` overloads | Reviewed Swift statements implement the checked synchronized record history |
 | Actual Swift tokens to expression steps | `verifyOrderedIntInitialExpression` | Accepted token grammar and scoped temporary interpretation |
 | Complete initial function | `intInitialOutputSource`, `verifyIntInitialOutput` | Template meaning, field identities and selected-initial filtering |
-| Runtime calls and observations | `_NativeMachineOperations.add`, `checked`, `visitInitialBranch` | Qualified symbol binding and complete observation connection |
+| Runtime calls and observations | `_nativeIntAdd`, `_NativeMachineOperations.add`, `checked`, `visitInitialBranch` | Module/scope interpretation, other helper bindings and complete observation connection |
 
 These are bounded source arguments under named interpretations, not a mechanically checked Swift translator.
 The current formal proof is unchanged; no new traversal model or decoder is added.

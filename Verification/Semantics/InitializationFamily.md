@@ -945,6 +945,7 @@ Any throw leaves that evaluation before a later task executes.
 At finish, `.add.apply` removes the right result and then the left result, and calls `_NativeMachineOperations.add(lhs, rhs)` in that order.
 `nativeOperation` translates its overflow to the formal evaluator error without changing operation or operands.
 The native arithmetic emitter uses the same left-first order to produce sequential throwing `let` bindings, followed by the parent helper call.
+Generated addition calls `SwiftTLA._nativeIntAdd`, which invokes the checked member from library scope; a caller extension of `_NativeMachineOperations` cannot replace that call.
 For this call-free initializer route the expression cache supplies no branch-specific precomputed value.
 A throwing child exits the emitted closure before its following bindings and parent operation run.
 

@@ -1,6 +1,10 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+private extension SwiftTLA._NativeMachineOperations {
+    static func add(_ lhs: Swift.Int, _ rhs: Swift.Int) throws -> Swift.Int { -2 }
+}
+
 private func emptyInitialOutcomes<State: Sendable>() -> InitialEvaluationOutcomes<State> {
     .init(states: [], failures: [])
 }

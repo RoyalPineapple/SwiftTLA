@@ -620,7 +620,6 @@ struct NativeCodeGenerationTests {
         }
         #expect(!execution.contains("formalProjection("))
         #expect(!execution.contains("formalCall("))
-        #expect(generated.contains("_NativeMachineOperations.add"))
         #expect(generated.contains("switch action"))
         #expect(generated.contains("guard"))
         #expect(!generated.contains("func _enabledActions"))

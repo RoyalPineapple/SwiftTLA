@@ -865,7 +865,8 @@ struct NativeSwiftEmitter {
                 let operands = Array(values.suffix(node.children.count))
                 values.removeLast(node.children.count)
                 let arguments = rightFirst ? Array(operands.reversed()) : operands
-                code = "try SwiftTLA._NativeMachineOperations.\(operation)(\(arguments.joined(separator: ", ")))"
+                let helper = operation == "add" ? "SwiftTLA._nativeIntAdd" : "SwiftTLA._NativeMachineOperations.\(operation)"
+                code = "try \(helper)(\(arguments.joined(separator: ", ")))"
             } else {
                 code = try expression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
             }
