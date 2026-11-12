@@ -629,6 +629,7 @@ THEOREM RenderedInitialPrefixAndSiteDecodingRetainsEveryIdentity ==
                  DecodedRenderedInitializerSite(ordinals[target], ordinals) = target
     PROOF
     <1>. DEFINE entries == RenderedInitialPrefixEntries(length, order, names, prior)
+    <1>. HIDE DEF entries
     <1>0. /\ DOMAIN prior \subseteq Keys
           /\ DOMAIN entries = 1..length
           /\ DOMAIN names = Keys /\ DOMAIN ordinals = Keys
@@ -655,7 +656,7 @@ THEOREM RenderedInitialPrefixAndSiteDecodingRetainsEveryIdentity ==
         <2>2. DecodedRenderedPrefixEntries(entries, names)
             = [key \in DOMAIN prior |->
                 entries[CHOOSE index \in DOMAIN entries : entries[index].name = names[key]].value]
-            BY <2>1, SMT DEF DecodedRenderedPrefixEntries
+            BY ONLY <2>1, SMT DEF DecodedRenderedPrefixEntries
         <2>3. \A key \in DOMAIN prior :
             entries[CHOOSE index \in DOMAIN entries : entries[index].name = names[key]].value = prior[key]
             BY <1>3, SMT
@@ -702,6 +703,7 @@ THEOREM RenderedAdditionRecordDecodingRetainsCompleteObservations ==
                     THEN {[before |-> prior, site |-> target, kind |-> "integerOverflow.addition",
                            operands |-> <<values[plan.left[index]], values[plan.right[index]]>>]}
                     ELSE {}
+    <1>. HIDE DEF entries, named, logical
     <1>1. /\ DecodedRenderedPrefixEntries(entries, names) = prior
           /\ DecodedRenderedInitializerSite(ordinals[target], ordinals) = target
         BY RenderedInitialPrefixAndSiteDecodingRetainsEveryIdentity, SMT DEF entries
@@ -730,7 +732,14 @@ THEOREM RenderedAdditionRecordDecodingRetainsCompleteObservations ==
     <1>8. DecodedRenderedAdditionEvents(UNION {logical(index) : index \in 1..plan.count})
         = UNION {DecodedRenderedAdditionEvents(logical(index)) : index \in 1..plan.count}
         BY <1>4, SetExtensionality, SMT
-    <1>. QED BY <1>5, <1>6, <1>7, <1>8, SMT DEF entries
+    <1>9. DecodedNamedRenderedAdditionEvents(UNION {named(index) : index \in 1..plan.count}, names, ordinals)
+        = DecodedRenderedAdditionEvents(UNION {logical(index) : index \in 1..plan.count})
+        BY ONLY <1>6, <1>7, <1>8, SMT
+    <1>10. DecodedNamedRenderedAdditionEvents(
+        RenderedInitialAdditionEvents(plan, values, entries, ordinals[target]), names, ordinals)
+        = DecodedRenderedAdditionEvents(RenderedInitialAdditionEvents(plan, values, prior, target))
+        BY ONLY <1>5, <1>9, SMT
+    <1>. QED BY ONLY <1>10, SMT DEF entries
 
 NamedRenderedInitialLeaf(plan, values, outcome, prior, target, length, order, names, ordinals) ==
     [states |-> IF outcome.ok THEN {GeneratedExtension(prior, target, values[plan.count])} ELSE {},
@@ -998,6 +1007,11 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
                 => actualValues[index] = values[index])
             BY <1>2, <1>3c, SMT DEF RenderedIntValueHistory, Expressions!ExpressionPlan
         <2>. QED BY <1>3n, <2>1, <2>2, FiniteIndexedHistoriesAgree, SMT
+    <1>3e. /\ IntInitializationDomains
+           /\ Expressions!PartialExpressionPlan(plan.count, plan.kinds, plan.literals,
+                  plan.reads, plan.left, plan.right, bound, state)
+           /\ RenderedIntValueHistory(plan, state, values)
+        BY <1>3, <1>3c, SMT
     <1>4. PICK execution :
         /\ Expressions!ReachedCheckedPostorderExecution(plan, state, execution)
         /\ execution.outcome \in Expressions!ExpressionOutcomes
@@ -1006,7 +1020,7 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
             IF execution.outcome.ok THEN {}
             ELSE {[before |-> prior, site |-> target, kind |-> "integerOverflow.addition",
                    operands |-> execution.outcome.failure[3]]}
-        BY <1>3, <1>3c, RenderedAdditionGuardsConstructTheReachedInitializationEvent, SMT
+        BY ONLY <1>3e, RenderedAdditionGuardsConstructTheReachedInitializationEvent, SMT
     <1>5. meaning[root] = execution.outcome
         BY <1>0, <1>4, Expressions!CompletedSyntaxVisitRetainsTheReachedCheckedOutcome, SMT DEF plan
     <1>6. /\ SourceIntInitializerOutcome(meaning[root])
@@ -1053,7 +1067,7 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
                 BY SetExtensionality, SMT DEF GeneratedInitialStates, SourceFailed
             <3>4. GeneratedInitialFailures(prior, target, SourceFailed(execution.outcome.failure))
                 = {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}
-                BY <1>8a, SMT DEF GeneratedInitialFailures, SourceFailed
+                BY <1>8a, <2>2, SetExtensionality, SMT DEF GeneratedInitialFailures, SourceFailed
             <3>5. GeneratedInitialLeaf(prior, target, SourceFailed(execution.outcome.failure))
                 = [states |-> {}, failures |-> {[before |-> prior, site |-> target, payload |-> execution.outcome.failure]}]
                 BY <3>3, <3>4, SMT DEF GeneratedInitialLeaf
@@ -1061,8 +1075,19 @@ THEOREM RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf ==
         <2>. QED BY <1>4, <2>1, <2>2, SMT DEF Expressions!ExpressionOutcomes
     <1>10. RenderedInitialRecordInterpretation(plan, values, execution.outcome, prior, target,
         SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root])))
-        BY <1>0, <1>9, RenderedAdditionRecordDecodingRetainsCompleteObservations, SMT
-            DEF RenderedInitialRecordInterpretation, NamedRenderedInitialLeaf
+        <2>. SUFFICES ASSUME NEW length, NEW order, NEW names, NEW ordinals,
+                             RenderedInitialRecordLayout(names, ordinals),
+                             RenderedInitialPrefixOrder(length, order, prior)
+                     PROVE SourceInitialLeaf(prior, target, SourceIntInitializerOutcome(meaning[root]))
+                         = NamedRenderedInitialLeaf(plan, values, execution.outcome,
+                             prior, target, length, order, names, ordinals)
+            BY SMT DEF RenderedInitialRecordInterpretation
+        <2>1. DecodedNamedRenderedAdditionEvents(
+            RenderedInitialAdditionEvents(plan, values,
+                RenderedInitialPrefixEntries(length, order, names, prior), ordinals[target]), names, ordinals)
+            = DecodedRenderedAdditionEvents(RenderedInitialAdditionEvents(plan, values, prior, target))
+            BY <1>0, RenderedAdditionRecordDecodingRetainsCompleteObservations, SMT
+        <2>. QED BY ONLY <1>9, <2>1, SMT DEF NamedRenderedInitialLeaf
     <1>. QED BY <1>3c, <1>3d, <1>4, <1>6, <1>9, <1>10, SMT DEF plan
 
 \* Syntax meanings supply the source history; control rows are concrete fixed seeds.
@@ -1522,6 +1547,28 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             BY SetExtensionality, SMT
         <2>. QED BY <2>1, <2>2, RenderedSourceAdditionSitesSupplyTheCompleteInitializerLeaf, SMT
             DEF emissions, plans
+    <1>5a. \A index \in positions : \A prior \in source[index - 1].states :
+        LET visit == visits[index]
+            plan == Expressions!ExtractedNodePlan(visit.emissions[visit.steps], order[index])
+        IN \E values, execution :
+            /\ RenderedIntValueHistory(plan, PartialIntProjection(prior), values)
+            /\ Expressions!ReachedCheckedPostorderExecution(plan, PartialIntProjection(prior), execution)
+            /\ RenderedInitialRecordInterpretation(plan, values, execution.outcome, prior, order[index],
+                   SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]))
+        <2>. SUFFICES ASSUME NEW index \in positions, NEW prior \in source[index - 1].states
+                     PROVE LET visit == visits[index]
+                               plan == Expressions!ExtractedNodePlan(visit.emissions[visit.steps], order[index])
+                           IN \E values, execution :
+                               /\ RenderedIntValueHistory(plan, PartialIntProjection(prior), values)
+                               /\ Expressions!ReachedCheckedPostorderExecution(plan, PartialIntProjection(prior), execution)
+                               /\ RenderedInitialRecordInterpretation(plan, values, execution.outcome, prior, order[index],
+                                      SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]))
+            BY SMT
+        <2>0. index \in positions /\ prior \in source[index - 1].states BY SMT
+        <2>1. plans[index] = Expressions!ExtractedNodePlan(
+            visits[index].emissions[visits[index].steps], order[index])
+            BY SMT DEF plans, emissions
+        <2>. QED BY ONLY <1>5, <2>0, <2>1, SMT
     <1>6. \A index \in positions : \A prior \in source[index - 1].states :
         \E witness : RenderedInitialLeafWitness(plans[index], PartialIntProjection(prior), prior, order[index],
             SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]), witness)
@@ -1645,9 +1692,8 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             Expressions!ExtractedNodePlan(visits[index].emissions[visits[index].steps], order[index])]
             BY SMT DEF plans, emissions
         <2>. WITNESS plans, witnesses
-        <2>. QED BY <2>1, <1>7, <1>8, SMT
-    <1>. QED BY <1>2, <1>2f, <1>4, <1>5, <1>9, SMT
-        DEF emissions, plans
+        <2>. QED BY ONLY <2>1, <1>7, <1>8, SMT
+    <1>. QED BY ONLY <1>2, <1>2f, <1>4, <1>5a, <1>9, SMT
 
 THEOREM ChangingAReadChangesTheFixedInitializerCandidate ==
     ASSUME NEW first \in Values, NEW second \in Values, first # second
