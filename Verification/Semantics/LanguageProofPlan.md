@@ -651,6 +651,10 @@ Complete these rows in order. Reuse the existing rules and checks.
   Eight independent parser-context rows passed at two source placements, including nested failure precedence and retained before-prefix. This is a scoped manual code-case result with separate regression evidence; all six E ADD links, the full visitor mapping and complete TLA initial-event correspondence remain open.
 - [ ] M1.4 Derive `ExpressionPlan` from actual accepted input and actual compilation.
   Bind the physical visitor to the existing synchronized history proof. A supplied correct plan cannot replace this obligation.
+  The existing proof consumer now retains proposed occurrence maps between its independent source tree and actual postorder plan.
+  `InitializerPlansInvokeCheckedExpressionParent` asks TLAPS to establish inverse maps, every payload, ordered children and the source root.
+  It then consumes `MatchedPostorderNodesRetainIndependentSourceSyntaxMeaning` instead of a handwritten row formula.
+  Two existing artifact consumer tests pass. The new proof body and general compiler/exporter interpretation remain unproved.
 - [ ] M1.5 Prove the existing output checks are sound for these routes.
   Include their token grammar, scopes, helper binding and mandatory coverage conditions.
   The complete Int initialization output check now requires identical UTF-8 token spelling before its existing token-kind checks. Acceptance therefore entails byte-exact spelling for every compared token; canonical-equivalent Swift Strings cannot substitute a different raw formal value.

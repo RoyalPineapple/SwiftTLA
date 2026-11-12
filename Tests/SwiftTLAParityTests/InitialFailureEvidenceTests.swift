@@ -79,6 +79,8 @@ struct InitialFailureEvidenceTests {
             "<<\"last\", [root |-> 1, kinds |-> <<\"add\", \"read\", \"literal\">>, literals |-> <<0, 0, ((7 * 1073741824 + 1073741823) * 1073741824 + 1073741823)>>, reads |-> <<\"last\", \"second\", \"last\">>, left |-> <<2, 0, 0>>, right |-> <<3, 0, 0>>]>>",
         ].joined(separator: ", ") + ">>"
         #expect(proofText.contains("SourceSyntaxViews == \(sourceViews)\n"))
+        #expect(proofText.contains("SourceSyntaxOrigins == <<<<1>>, <<2, 3, 1>>, <<2, 3, 1>>>>\n"))
+        #expect(proofText.contains("SourceSyntaxIndices == <<<<1>>, <<3, 1, 2>>, <<3, 1, 2>>>>\n"))
         #expect(report.sourceInitializersSHA256 == SHA256.hex(Data(plans.utf8)))
         #expect(report.loweredInitializersSHA256 == SHA256.hex(Data(plans.utf8)))
         #expect(report.sourceCompilationIdentity == (try CheckedAdditionPrefixInitialModel.spec.compile()).identity.description)
