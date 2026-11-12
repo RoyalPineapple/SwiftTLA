@@ -1405,7 +1405,7 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                    /\ sourceExpressions[index][prior][plans[index].count]
                           = meanings[index][prior][roots[index]]
                 <4>1. plans[index].count = emissions[index].count
-                    BY <3>0cp, SMT DEF Expressions!ExtractedNodePlan
+                    BY ONLY <3>0cp, SMT DEF Expressions!ExtractedNodePlan
                 <4>2. emissions[index].count \in 0..emissions[index].count
                     BY <3>0, SMT
                 <4>3. sourceExpressions[index][prior] =
@@ -1460,11 +1460,21 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
                          => \E value \in Values : sourceEvaluate[index][prior].candidates = {value}
             BY SMT
         <2>1. CASE index \in positions
+            <3>0s. /\ index \in 1..count /\ prior \in source[index - 1].states
+                BY SMT
+            <3>0a. IntInitializerChildren(plans[index], prior,
+                sourceExpressions[index][prior], generatedExpressions[index][prior])
+                BY ONLY <1>1, <2>1, <3>0s, SMT
+            <3>0b. plans[index].count \in Nat \ {0}
+                BY ONLY <3>0a, SMT DEF IntInitializerChildren,
+                    Expressions!PartialExpressionPlan, Expressions!ExpressionPlan
+            <3>0c. \A node \in 0..plans[index].count :
+                sourceExpressions[index][prior][node] \in Expressions!ExpressionOutcomes
+                BY ONLY <1>0, <3>0a, Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
+                    DEF IntInitializerChildren
             <3>1. sourceExpressions[index][prior][plans[index].count]
                     \in Expressions!ExpressionOutcomes
-                BY <1>0, <1>1, <2>1, Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
-                    DEF IntInitializerChildren, Expressions!PartialExpressionPlan,
-                        Expressions!ExpressionPlan, IntInitializationDomains, Expressions!IntegerDomain
+                BY ONLY <3>0b, <3>0c, SMT
             <3>. QED BY <1>1, <2>1, <3>1, SMT
                 DEF SourceIntInitializerOutcome, Expressions!ExpressionOutcomes,
                     SourceFixed, SourceFailed, IntInitializationDomains
@@ -1492,8 +1502,25 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             BY <1>2a, <2>1, SMT
         <2>3. \A index \in 1..count : SingleBranchInitialObservationStep(
             observations[index - 1], order[index], generatedEvaluate[index], observations[index])
-            BY <1>2c, <2>2, SMT
-                DEF SingleBranchInitialObservationHistory, SingleBranchInitialObservationStep
+            <3>. SUFFICES ASSUME NEW index \in 1..count
+                         PROVE SingleBranchInitialObservationStep(observations[index - 1],
+                             order[index], generatedEvaluate[index], observations[index])
+                BY SMT
+            <3>0i. index \in 1..count BY SMT
+            <3>0s. SingleBranchInitialObservationStep(observations[index - 1],
+                order[index], sourceEvaluate[index], observations[index])
+                BY ONLY <1>2c, <3>0i, SMT DEF SingleBranchInitialObservationHistory
+            <3>1. CASE observations[index - 1].stateCount = 0
+                BY ONLY <3>0s, <3>1, SMT DEF SingleBranchInitialObservationStep
+            <3>2. CASE observations[index - 1].stateCount # 0
+                <4>1. observations[index - 1].stateCount = 1
+                    BY ONLY <3>0s, <3>2, SMT DEF SingleBranchInitialObservationStep
+                <4>2. sourceEvaluate[index][observations[index - 1].stateHistory[1]]
+                    = generatedEvaluate[index][observations[index - 1].stateHistory[1]]
+                    BY ONLY <2>2, <3>0i, <4>1, SMT
+                <4>. QED BY ONLY <3>0s, <3>2, <4>1, <4>2, SMT
+                    DEF SingleBranchInitialObservationStep
+            <3>. QED BY ONLY <3>1, <3>2, SMT
         <2>. QED BY <1>2c, <2>3, SMT DEF SingleBranchInitialObservationHistory
     <1>2f. \E observations :
         /\ SingleBranchInitialObservationHistory(count, order, sourceEvaluate, observations)
@@ -1652,7 +1679,21 @@ THEOREM VisitedSourceSyntaxInvokesTheCompleteInitializationParent ==
             <3>. QED BY <3>2, SMT DEF NamedRenderedInitialLeaf
         <2>1u. \A groups : DecodedNamedRenderedAdditionEvents(UNION groups, names, ordinals)
             = UNION {DecodedNamedRenderedAdditionEvents(events, names, ordinals) : events \in groups}
-            BY SetExtensionality, SMT DEF DecodedNamedRenderedAdditionEvents
+            <3>. SUFFICES ASSUME NEW groups
+                         PROVE DecodedNamedRenderedAdditionEvents(UNION groups, names, ordinals)
+                             = UNION {DecodedNamedRenderedAdditionEvents(events, names, ordinals) : events \in groups}
+                BY SMT
+            <3>1. \A decoded :
+                (decoded \in DecodedNamedRenderedAdditionEvents(UNION groups, names, ordinals))
+                    <=> (\E events \in groups :
+                        decoded \in DecodedNamedRenderedAdditionEvents(events, names, ordinals))
+                BY ONLY SMT DEF DecodedNamedRenderedAdditionEvents
+            <3>2. \A decoded :
+                (decoded \in UNION {DecodedNamedRenderedAdditionEvents(events, names, ordinals) : events \in groups})
+                    <=> (\E events \in groups :
+                        decoded \in DecodedNamedRenderedAdditionEvents(events, names, ordinals))
+                BY ONLY SMT
+            <3>. QED BY ONLY <3>1, <3>2, SetExtensionality, SMT
         <2>2. DecodedNamedRenderedAdditionEvents(RenderedInitialFailureEventUnion(
             positions, order, plans, source, constructedWitnesses, sorting, names, ordinals), names, ordinals)
             = UNION {UNION {SourceInitialLeaf(prior, order[index], sourceEvaluate[index][prior]).failures :
