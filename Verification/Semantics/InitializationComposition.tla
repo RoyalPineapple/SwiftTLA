@@ -1746,4 +1746,136 @@ THEOREM TypedInitialRelationsRetainAllStatesAndFailureEvents ==
     <1>. QED BY <1>3, <1>7, <1>9, SMT DEF filteredGenerated, InitializationOrder
 
 
+\* A recorded failure prefix determines the reached history, including skipped suffixes.
+THEOREM ObservedFailurePrefixConstructsTheGeneratedInitializationHistory ==
+    ASSUME NEW count \in Nat, NEW order, InitializationOrder(count, order),
+           NEW failed \in 1..count,
+           NEW before \in [PrefixKeys(order, failed - 1) -> Values],
+           NEW failure \in FailureValues, NEW evaluate,
+           \A index \in 1..(failed - 1) :
+               evaluate[index][SourceRestriction(before, PrefixKeys(order, index - 1))]
+                   = SourceFixed(before[order[index]]),
+           evaluate[failed][before] = SourceFailed(failure)
+    PROVE LET event == [before |-> before, site |-> order[failed], payload |-> failure]
+              history == [index \in 0..count |->
+                  IF index < failed
+                  THEN [states |-> {SourceRestriction(before, PrefixKeys(order, index))}, failures |-> {}]
+                  ELSE [states |-> {}, failures |-> {event}]]
+          IN InitializationHistory(TRUE, count, order, evaluate, history)
+    PROOF
+    <1>. DEFINE prefix(index) == SourceRestriction(before, PrefixKeys(order, index))
+                event == [before |-> before, site |-> order[failed], payload |-> failure]
+                terminal == [states |-> {}, failures |-> {event}]
+                history == [index \in 0..count |->
+                    IF index < failed THEN [states |-> {prefix(index)}, failures |-> {}]
+                    ELSE terminal]
+    <1>. HIDE DEF prefix, event, terminal, history
+    <1>0. /\ count \in Nat /\ failed \in 1..count
+          /\ InitializationOrder(count, order)
+          /\ DOMAIN before = PrefixKeys(order, failed - 1)
+          /\ before \in [PrefixKeys(order, failed - 1) -> Values]
+          /\ failure \in FailureValues /\ failure # NoFailure
+          /\ \A index \in 1..(failed - 1) :
+                 evaluate[index][prefix(index - 1)] = SourceFixed(before[order[index]])
+          /\ evaluate[failed][before] = SourceFailed(failure)
+        BY InitialSentinels, SMT DEF InitialSentinels, prefix
+    <1>1. \A index \in 0..(failed - 1) :
+        /\ PrefixKeys(order, index) \subseteq DOMAIN before
+        /\ PrefixKeys(order, index) \subseteq Keys
+        /\ prefix(index) \in [PrefixKeys(order, index) -> Values]
+        /\ prefix(index) \in PartialBindings
+        /\ DOMAIN prefix(index) = PrefixKeys(order, index)
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 0..(failed - 1)
+                     PROVE /\ PrefixKeys(order, index) \subseteq DOMAIN before
+                           /\ PrefixKeys(order, index) \subseteq Keys
+                           /\ prefix(index) \in [PrefixKeys(order, index) -> Values]
+                           /\ prefix(index) \in PartialBindings
+                           /\ DOMAIN prefix(index) = PrefixKeys(order, index)
+            BY SMT
+        <2>0. /\ index \in 0..count /\ failed - 1 \in index..count
+              /\ PrefixKeys(order, index) \subseteq DOMAIN before
+              /\ PrefixKeys(order, index) \subseteq Keys
+            BY ONLY <1>0, PrefixKeySetsAreContained, SMT
+        <2>1. prefix(index) \in [PrefixKeys(order, index) -> Values]
+            BY ONLY <1>0, <2>0, SourceRestrictionIsTyped, SMT DEF prefix
+        <2>2. \E bound \in SUBSET Keys : prefix(index) \in [bound -> Values]
+            <3>. WITNESS PrefixKeys(order, index)
+            <3>. QED BY ONLY <2>0, <2>1, SMT
+        <2>3. prefix(index) \in PartialBindings
+            BY ONLY <2>2, SMT DEF PartialBindings
+        <2>. QED BY ONLY <2>0, <2>1, <2>3, SMT
+    <1>2. prefix(failed - 1) = before
+        BY ONLY <1>0, SMT DEF prefix, SourceRestriction
+    <1>3a. before \in PartialBindings /\ order[failed] \in Keys
+        BY ONLY <1>0, <1>1, <1>2, SMT DEF InitializationOrder
+    <1>3b. event \in InitialFailureEvents
+        BY ONLY <1>0, <1>3a, SMT DEF event, InitialFailureEvents
+    <1>3. terminal \in InitializationResults
+        BY ONLY <1>3b, SMT DEF terminal, InitializationResults
+    <1>4. history \in [0..count -> InitializationResults]
+        BY ONLY <1>0, <1>1, <1>3, SMT DEF history, InitializationResults
+    <1>4a. history[0] = InitialSeed
+        BY ONLY <1>0, SMT DEF history, prefix, SourceRestriction, PrefixKeys, InitialSeed
+    <1>5. \A index \in 1..(failed - 1) :
+        prefix(index) = GeneratedExtension(prefix(index - 1), order[index], before[order[index]])
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 1..(failed - 1)
+                     PROVE prefix(index) =
+                         GeneratedExtension(prefix(index - 1), order[index], before[order[index]])
+            BY SMT
+        <2>0. /\ index \in 1..count /\ index \in 0..(failed - 1)
+              /\ index - 1 \in 0..(failed - 1)
+              /\ order[index] \in DOMAIN before
+              /\ order[index] \notin PrefixKeys(order, index - 1)
+            BY ONLY <1>0, SMT DEF InitializationOrder, PrefixKeys
+        <2>1. PrefixKeys(order, index) = PrefixKeys(order, index - 1) \cup {order[index]}
+            BY ONLY <1>0, <2>0, PrefixKeysGrowByOne, SMT DEF InitializationOrder
+        <2>. QED BY ONLY <1>0, <1>1, <2>0, <2>1, SMT
+            DEF prefix, SourceRestriction, GeneratedExtension
+    <1>6. \A index \in 1..count :
+        history[index] = GeneratedAdvance(history[index - 1], order[index], evaluate[index])
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 1..count
+                     PROVE history[index] =
+                         GeneratedAdvance(history[index - 1], order[index], evaluate[index])
+            BY SMT
+        <2>1. CASE index < failed
+            <3>0. index \in 1..(failed - 1) /\ index - 1 \in 0..(failed - 1)
+                BY ONLY <1>0, <2>1, SMT
+            <3>1. /\ history[index] = [states |-> {prefix(index)}, failures |-> {}]
+                  /\ history[index - 1] = [states |-> {prefix(index - 1)}, failures |-> {}]
+                  /\ evaluate[index][prefix(index - 1)] = SourceFixed(before[order[index]])
+                BY ONLY <1>0, <2>1, <3>0, SMT DEF history
+            <3>2. GeneratedInitialLeaf(prefix(index - 1), order[index],
+                    evaluate[index][prefix(index - 1)])
+                = [states |-> {GeneratedExtension(prefix(index - 1), order[index], before[order[index]])},
+                   failures |-> {}]
+                BY ONLY <3>1, SetExtensionality, SMT
+                    DEF GeneratedInitialLeaf, GeneratedInitialStates, GeneratedInitialFailures, SourceFixed
+            <3>3. GeneratedAdvance(history[index - 1], order[index], evaluate[index])
+                = [states |-> {GeneratedExtension(prefix(index - 1), order[index], before[order[index]])},
+                   failures |-> {}]
+                BY ONLY <3>1, <3>2, SetExtensionality, SMT DEF GeneratedAdvance
+            <3>. QED BY ONLY <1>5, <3>0, <3>1, <3>3, SMT
+        <2>2. CASE index = failed
+            <3>1. /\ history[index] = terminal
+                  /\ history[index - 1] = [states |-> {before}, failures |-> {}]
+                  /\ evaluate[index][before] = SourceFailed(failure)
+                BY ONLY <1>0, <1>2, <2>2, SMT DEF history
+            <3>2. GeneratedInitialLeaf(before, order[index], evaluate[index][before]) = terminal
+                BY ONLY <1>0, <2>2, <3>1, SetExtensionality, SMT
+                    DEF terminal, event, GeneratedInitialLeaf, GeneratedInitialStates,
+                        GeneratedInitialFailures, SourceFailed
+            <3>. QED BY ONLY <3>1, <3>2, SetExtensionality, SMT DEF GeneratedAdvance
+        <2>3. CASE index > failed
+            <3>1. history[index] = terminal /\ history[index - 1] = terminal
+                BY ONLY <1>0, <2>3, SMT DEF history
+            <3>2. GeneratedAdvance(terminal, order[index], evaluate[index]) = terminal
+                BY ONLY SetExtensionality, SMT DEF terminal, GeneratedAdvance
+            <3>. QED BY ONLY <3>1, <3>2, SMT
+        <2>. QED BY ONLY <1>0, <2>1, <2>2, <2>3, SMT
+    <1>. QED BY ONLY <1>4, <1>4a, <1>6, SMT
+        DEF InitializationHistory, InitializationAdvance, history, prefix, terminal, event
+
 =============================================================================

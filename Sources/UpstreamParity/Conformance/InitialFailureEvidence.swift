@@ -1356,119 +1356,47 @@ package enum InitialFailureEvidence {
         THEOREM ActualNativePrefixConstructsTheGeneratedInitializationHistory ==
           ProofInitialization!InitializationHistory(TRUE, ProofCount, ProofOrder, ProofEvaluate(TRUE), ProofObservedHistory)
           PROOF
-          <1>0. /\\ ProofCount \\in Nat /\\ ProofCount > 0
+          <1>. DEFINE failure == <<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>>
+                      constructed == [length \\in 0..ProofCount |->
+                        IF length < ProofCount
+                        THEN [states |-> {ProofInitialization!SourceRestriction(ProofObservedBefore,
+                                           ProofInitialization!PrefixKeys(ProofOrder, length))},
+                              failures |-> {}]
+                        ELSE [states |-> {},
+                              failures |-> {[before |-> ProofObservedBefore,
+                                             site |-> ProofOrder[ProofCount], payload |-> failure]}]]
+          <1>. HIDE DEF failure, constructed
+          <1>0. /\\ ProofCount \\in Nat /\\ ProofCount \\in 1..ProofCount
                 /\\ ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
-                /\\ ProofInitialization!InitializerEvaluators(ProofCount, ProofEvaluate(TRUE))
-            BY ActualLayoutSuppliesInitializationDecoderInputs, ActualInitializerEvaluatorsAreTypedAndAgree, SMT
-              DEF ProofCount, ActualInitializationOrder
-          <1>0a. /\\ ProofCount = 4 /\\ ProofOrder = <<"pc", "first", "second", "last">>
-                 /\\ \\A position \\in 1..ProofCount :
-                        ProofObservedPrior(position) \\in [ProofPrefixKeys(position) -> ProofValues]
-            BY <1>0, ActualLayoutSuppliesInitializationDecoderInputs,
-              ActualNativePrefixSuppliesTheSourceInitializerOutcomes,
-              ProofInitialization!SourceRestrictionIsTyped, SetExtensionality, SMT
-              DEF ProofObservedPrior, ProofPrefixKeys
-          <1>1. \\A position \\in 1..(ProofCount - 1) :
-                  ProofObservedPrior(position + 1) = ProofInitialization!GeneratedExtension(
-                      ProofObservedPrior(position), ProofOrder[position], ProofObservedBefore[ProofOrder[position]])
-            PROOF
-            <2>. SUFFICES ASSUME NEW position \\in 1..(ProofCount - 1)
-                         PROVE ProofObservedPrior(position + 1) = ProofInitialization!GeneratedExtension(
-                                             ProofObservedPrior(position), ProofOrder[position], ProofObservedBefore[ProofOrder[position]])
-              BY SMT
-            <2>1. CASE position = 1
-              BY ONLY <2>1, <1>0, <1>0a, ActualLayoutSuppliesInitializationDecoderInputs,
-                ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SetExtensionality, SMT
-                DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!SourceRestriction,
-                  ProofInitialization!GeneratedExtension
-            <2>2. CASE position = 2
-              BY ONLY <2>2, <1>0, <1>0a, ActualLayoutSuppliesInitializationDecoderInputs,
-                ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SetExtensionality, SMT
-                DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!SourceRestriction,
-                  ProofInitialization!GeneratedExtension
-            <2>3. CASE position = 3
-              BY ONLY <2>3, <1>0, <1>0a, ActualLayoutSuppliesInitializationDecoderInputs,
-                ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SetExtensionality, SMT
-                DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!SourceRestriction,
-                  ProofInitialization!GeneratedExtension
-            <2>. QED BY ONLY <1>0, ActualLayoutSuppliesInitializationDecoderInputs, <2>1, <2>2, <2>3, SMT
-          <1>2. ProofObservedHistory[0] = ProofInitialization!InitialSeed
-            PROOF
-            <2>0. ProofPrefixKeys(1) = {}
-              BY ONLY SMT DEF ProofPrefixKeys
-            <2>1. ProofObservedPrior(1) = [key \\in {} |-> key]
-              BY ONLY <2>0, SetExtensionality, SMT
-                DEF ProofObservedPrior, ProofInitialization!SourceRestriction
-            <2>. QED BY ONLY <1>0, <2>1, SMT
-              DEF ProofObservedHistory, ProofInitialization!InitialSeed
-
-          <1>3. \\A position \\in 1..ProofCount :
-                  ProofObservedHistory[position] = ProofInitialization!GeneratedAdvance(
-                      ProofObservedHistory[position - 1], ProofOrder[position], ProofEvaluate(TRUE)[position])
-            PROOF
-            <2>. SUFFICES ASSUME NEW position \\in 1..ProofCount
-                         PROVE ProofObservedHistory[position] = ProofInitialization!GeneratedAdvance(
-                                             ProofObservedHistory[position - 1], ProofOrder[position], ProofEvaluate(TRUE)[position])
-              BY SMT
-            <2>1. CASE position = 1
-              BY ONLY <2>1, <1>0, <1>0a, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
-                ActualNativePrefixSuppliesTheSourceInitializerOutcomes, ActualInitializerEvaluatorsAreTypedAndAgree,
-                ProofInitialSentinels, SetExtensionality, SMT
-                DEF ProofObservedHistory, ProofObservedResult, ProofObservedPrior, ProofPrefixKeys,
-                  ProofInitialization!SourceRestriction, ProofInitialization!GeneratedAdvance,
-                  ProofInitialization!GeneratedInitialStates, ProofInitialization!GeneratedInitialFailures,
-                  ProofInitialization!SourceFixed, ProofInitialization!SourceFailed,
-                  ProofInitialization!InitialSentinels
-            <2>2. CASE position = 2
-              BY ONLY <2>2, <1>0, <1>0a, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
-                ActualNativePrefixSuppliesTheSourceInitializerOutcomes, ActualInitializerEvaluatorsAreTypedAndAgree,
-                ProofInitialSentinels, SetExtensionality, SMT
-                DEF ProofObservedHistory, ProofObservedResult, ProofObservedPrior, ProofPrefixKeys,
-                  ProofInitialization!SourceRestriction, ProofInitialization!GeneratedAdvance,
-                  ProofInitialization!GeneratedInitialStates, ProofInitialization!GeneratedInitialFailures,
-                  ProofInitialization!SourceFixed, ProofInitialization!SourceFailed,
-                  ProofInitialization!InitialSentinels
-            <2>3. CASE position = 3
-              BY ONLY <2>3, <1>0, <1>0a, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
-                ActualNativePrefixSuppliesTheSourceInitializerOutcomes, ActualInitializerEvaluatorsAreTypedAndAgree,
-                ProofInitialSentinels, SetExtensionality, SMT
-                DEF ProofObservedHistory, ProofObservedResult, ProofObservedPrior, ProofPrefixKeys,
-                  ProofInitialization!SourceRestriction, ProofInitialization!GeneratedAdvance,
-                  ProofInitialization!GeneratedInitialStates, ProofInitialization!GeneratedInitialFailures,
-                  ProofInitialization!SourceFixed, ProofInitialization!SourceFailed,
-                  ProofInitialization!InitialSentinels
-            <2>4. CASE position = 4
-              BY ONLY <2>4, <1>0, <1>0a, <1>1, ActualLayoutSuppliesInitializationDecoderInputs,
-                ActualNativePrefixSuppliesTheSourceInitializerOutcomes, ActualInitializerEvaluatorsAreTypedAndAgree,
-                ProofInitialSentinels, SetExtensionality, SMT
-                DEF ProofObservedHistory, ProofObservedResult, ProofObservedPrior, ProofPrefixKeys,
-                  ProofInitialization!SourceRestriction, ProofInitialization!GeneratedAdvance,
-                  ProofInitialization!GeneratedInitialStates, ProofInitialization!GeneratedInitialFailures,
-                  ProofInitialization!SourceFixed, ProofInitialization!SourceFailed,
-                  ProofInitialization!InitialSentinels
-            <2>. QED BY ONLY <1>0, ActualLayoutSuppliesInitializationDecoderInputs, <2>1, <2>2, <2>3, <2>4, SMT
-          <1>3a. ProofObservedBefore \\in ProofInitialization!PartialBindings
-            PROOF
-            <2>0. ProofPrefixKeys(ProofCount) \\in SUBSET ProofAllKeys
-              BY ONLY <1>0, ActualLayoutSuppliesInitializationDecoderInputs, SetExtensionality, SMT
-                DEF ProofPrefixKeys
-            <2>1. \\E bound \\in SUBSET ProofAllKeys : ProofObservedBefore \\in [bound -> ProofValues]
-              BY ONLY <2>0, ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT
-            <2>. QED BY ONLY <2>1, SMT DEF ProofInitialization!PartialBindings
-          <1>3b. <<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>> \\in ProofFailureValues
-            BY ONLY ProofIntegerBounds, SMT DEF ExpectedOperand0, ExpectedOperand1, ProofIntMax, ProofFailureValues
-          <1>3c. ProofObservedFailures \\subseteq ProofInitialization!InitialFailureEvents
-            BY ONLY <1>0, <1>3a, <1>3b, ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT
-              DEF ProofInitialization!InitialFailureEvents, ProofInitialization!InitializationOrder
-          <1>3d. ProofObservedResult \\in ProofInitialization!InitializationResults
-            BY ONLY <1>3c, SMT DEF ProofObservedResult, ProofInitialization!InitializationResults
-          <1>4. ProofObservedHistory \\in [0..ProofCount -> ProofInitialization!InitializationResults]
-            BY ONLY <1>0, <1>3d, ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT
-              DEF ProofObservedHistory, ProofInitialization!InitializationResults,
-                ProofInitialization!InitializationOrder
-
-          <1>. QED BY <1>0, <1>2, <1>3, <1>4, SMT
-            DEF ProofInitialization!InitializationHistory, ProofInitialization!InitializationAdvance
+                /\\ ProofObservedBefore \\in [ProofInitialization!PrefixKeys(ProofOrder, ProofCount - 1) -> ProofValues]
+            BY ONLY ActualLayoutSuppliesInitializationDecoderInputs,
+              ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT
+              DEF ProofPrefixKeys, ProofInitialization!PrefixKeys
+          <1>1a. \\A position \\in 1..(ProofCount - 1) :
+                  ProofEvaluate(TRUE)[position][ProofInitialization!SourceRestriction(
+                      ProofObservedBefore, ProofInitialization!PrefixKeys(ProofOrder, position - 1))]
+                    = ProofInitialization!SourceFixed(ProofObservedBefore[ProofOrder[position]])
+            BY ONLY <1>0, ActualNativePrefixSuppliesTheSourceInitializerOutcomes,
+              ActualInitializerEvaluatorsAreTypedAndAgree, SMT
+              DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!PrefixKeys
+          <1>1b. ProofEvaluate(TRUE)[ProofCount][ProofObservedBefore]
+                    = ProofInitialization!SourceFailed(failure)
+            BY ONLY <1>0, ActualNativePrefixSuppliesTheSourceInitializerOutcomes,
+              ActualInitializerEvaluatorsAreTypedAndAgree, SMT DEF failure
+          <1>2. failure \\in ProofFailureValues
+            BY ONLY ProofIntegerBounds, SMT
+              DEF failure, ExpectedOperand0, ExpectedOperand1, ProofIntMax, ProofFailureValues
+          <1>3. ProofInitialization!InitializationHistory(TRUE, ProofCount, ProofOrder,
+                    ProofEvaluate(TRUE), constructed)
+            BY ONLY <1>0, <1>1a, <1>1b, <1>2, ProofInitialSentinels,
+              ProofInitialization!ObservedFailurePrefixConstructsTheGeneratedInitializationHistory, SMT
+              DEF constructed, ProofInitialization!InitialSentinels
+          <1>4. constructed = ProofObservedHistory
+            BY ONLY <1>0, ActualNativePrefixSuppliesTheSourceInitializerOutcomes,
+              SetExtensionality, SMT
+              DEF constructed, failure, ProofObservedHistory, ProofObservedPrior,
+                ProofPrefixKeys, ProofInitialization!PrefixKeys, ProofObservedResult
+          <1>. QED BY ONLY <1>3, <1>4, SMT
 
         THEOREM CompleteInitializationMatchesActualOutputs ==
           \\E source, generated, observations :
