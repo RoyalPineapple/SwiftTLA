@@ -712,9 +712,9 @@ extension NativeSwiftEmitter {
             let arguments = arguments.isEmpty ? "" : ", " + arguments
             code += "evaluatingInitialBindings = \(try initialFailureBindingsSource(program.behavior.initializations[...]))\n"
             code += "let candidate = \(executionState(values: variable))\n"
-            code += "if try Self._invariant\(selected.ordinal)(in: candidate, atLevel: 0\(arguments)) { result.append(candidate) }\n"
+            code += "if try Self._invariant\(selected.ordinal)(in: candidate, atLevel: 0\(arguments)) { SwiftTLA._appendNativeOutcome(&result, candidate) }\n"
         } else {
-            code += "result.append(\(executionState(values: variable)))\n"
+            code += "SwiftTLA._appendNativeOutcome(&result, \(executionState(values: variable)))\n"
         }
         return (code, scopes, expectedLoops, expectedCandidateSources, expectedMembershipSources)
     }
@@ -722,7 +722,7 @@ extension NativeSwiftEmitter {
     private func initialBranch(_ body: CodeBlockItemListSyntax) throws -> CodeBlockItemSyntax {
         let parsed = Parser.parse(source: """
         try SwiftTLA._NativeMachineOperations.visitInitialBranch({}, onEvaluationFailure: { failure in
-            failures.append(.init(
+            SwiftTLA._appendNativeOutcome(&failures, .init(
                 site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
@@ -972,17 +972,17 @@ extension NativeSwiftEmitter {
             append = """
             evaluatingInitialBindings = \(try initialFailureBindingsSource(program.behavior.initializations[...]))
             let candidate = \(state)
-            if try Self._invariant\(invariant.ordinal)(in: candidate, atLevel: 0\(configuration)) { result.append(candidate) }
+            if try Self._invariant\(invariant.ordinal)(in: candidate, atLevel: 0\(configuration)) { SwiftTLA._appendNativeOutcome(&result, candidate) }
             """
         } else {
-            append = "result.append(\(state))"
+            append = "SwiftTLA._appendNativeOutcome(&result, \(state))"
         }
         let closing = program.behavior.initializations.reversed().map { initialization -> String in
             switch initialization.initialization {
             case .memberOf:
                 return """
                 }, onEvaluationFailure: { failure in
-                    failures.append(.init(
+                    SwiftTLA._appendNativeOutcome(&failures, .init(
                         site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
                         failure: failure, projectingBefore: evaluatingInitialBindings))
                 })
@@ -995,7 +995,7 @@ extension NativeSwiftEmitter {
         }.joined()
         let suffix = append + "\n" + closing + """
         }, onEvaluationFailure: { failure in
-            failures.append(.init(
+            SwiftTLA._appendNativeOutcome(&failures, .init(
                 site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
@@ -1179,7 +1179,7 @@ extension NativeSwiftEmitter {
                 body += "evaluatingInitializerOrdinal = nil\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
                 closing = """
                 }, onEvaluationFailure: { failure in
-                    failures.append(.init(
+                    SwiftTLA._appendNativeOutcome(&failures, .init(
                         site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
                         failure: failure, projectingBefore: evaluatingInitialBindings))
                 })
@@ -1188,10 +1188,10 @@ extension NativeSwiftEmitter {
                 """ + closing
             }
         }
-        body += "result.append(Snapshot(state: State(\(publicFields))\(hiddenFields)))\n" + closing
+        body += "SwiftTLA._appendNativeOutcome(&result, Snapshot(state: State(\(publicFields))\(hiddenFields)))\n" + closing
         body += """
         }, onEvaluationFailure: { failure in
-            failures.append(.init(
+            SwiftTLA._appendNativeOutcome(&failures, .init(
                 site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
@@ -1537,7 +1537,7 @@ extension NativeSwiftEmitter {
         }
         private func _successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
             var result: [Snapshot] = []
-            let failures = try _visitSuccessors(for: action, checking: &context) { result.append($0) }
+            let failures = try _visitSuccessors(for: action, checking: &context) { SwiftTLA._appendNativeOutcome(&result, $0) }
             if let failure = failures.first { throw failure }
             return result
         }
@@ -2809,7 +2809,7 @@ func verifyGeneratedActionRoutingOutput(
         """
         private func _successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
             var result: [Snapshot] = []
-            let failures = try _visitSuccessors(for: action, checking: &context) { result.append($0) }
+            let failures = try _visitSuccessors(for: action, checking: &context) { SwiftTLA._appendNativeOutcome(&result, $0) }
             if let failure = failures.first { throw failure }
             return result
         }

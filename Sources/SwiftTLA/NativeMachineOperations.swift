@@ -135,6 +135,12 @@ public struct InitialEvaluationOutcomes<State: Sendable>: Sendable {
     }
 }
 
+/// Keep generated collection mutation in library scope, away from caller overloads.
+@_documentation(visibility: internal)
+public func _appendNativeOutcome<Outcome: Sendable>(_ outcomes: inout [Outcome], _ outcome: Outcome) {
+    outcomes.append(outcome)
+}
+
 /// Value operations emitted by the native machine generator.
 @_documentation(visibility: internal)
 public enum _NativeMachineOperations: Sendable {

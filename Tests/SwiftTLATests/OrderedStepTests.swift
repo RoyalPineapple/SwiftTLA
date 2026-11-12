@@ -236,7 +236,7 @@ import SwiftSyntax
                 && method.signature.parameterClause.parameters.count == 2
         })
         let wrongSuccessors = members[successorIndex].description.replacingOccurrences(
-            of: "{ result.append($0) }", with: "{ _ in }")
+            of: "{ SwiftTLA._appendNativeOutcome(&result, $0) }", with: "{ _ in }")
         #expect(wrongSuccessors != members[successorIndex].description)
         wrongMembers = members
         wrongMembers[successorIndex] = try #require(Parser.parse(source: wrongSuccessors)

@@ -519,15 +519,22 @@ struct DependentInitializationOutputProofTests {
             with: "for \(choiceName) in \(choiceName)Candidates {\nif \(choiceName) == 1 { continue }\n")
         let wrongRangeBounds = initialStates.description.replacingOccurrences(
             of: "let bounds = (0, 1)", with: "let bounds = (0, 2)")
-        for (label, source) in [("earlyReturn", earlyReturn), ("prunedSibling", prunedSibling),
-                                ("rangeBounds", wrongRangeBounds)] {
+        let collection = "SwiftTLA._appendNativeOutcome(&result, "
+        try #require(initialStates.description.components(separatedBy: collection).count == 2)
+        let droppedCollection = initialStates.description.replacingOccurrences(of: collection, with: "result.append(")
+        let completePath = "native._initialStates.completeIntOutput"
+        for (label, source, expectedPath) in [
+            ("earlyReturn", earlyReturn, completePath), ("prunedSibling", prunedSibling, completePath),
+            ("rangeBounds", wrongRangeBounds, completePath),
+            ("collector", droppedCollection, "native._initialStates.assembly")
+        ] {
             #expect(source != initialStates.description)
             let mutated = try #require(Parser.parse(source: source).statements.first?.item.as(DeclSyntax.self))
             do {
                 try verifyComplete(mutated)
                 Issue.record("Complete Swift initialization corruption accepted: \(label)")
             } catch let diagnostic as CompilationDiagnostic {
-                #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+                #expect(diagnostic.path == expectedPath)
             }
         }
 
@@ -634,7 +641,7 @@ struct DependentInitializationOutputProofTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
         })
         try assumptionOnlyEmitter.verifyIntInitialOutput(emptyStateInitial)
-        let appendEmptyState = "result.append(Snapshot(state: State()))"
+        let appendEmptyState = "SwiftTLA._appendNativeOutcome(&result, Snapshot(state: State()))"
         try #require(emptyStateInitial.description.components(separatedBy: appendEmptyState).count == 2)
         let droppedEmptyState = emptyStateInitial.description.replacingOccurrences(of: appendEmptyState, with: "")
         try #require(droppedEmptyState != emptyStateInitial.description)

@@ -1,6 +1,24 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+private extension Array where Element == NativeSupportBindingModel.Snapshot {
+    mutating func append(_ element: Element) {}
+}
+
+private extension Array {
+    mutating func append(_ element: Element) {
+        guard !(element is NativeSupportBindingModel.Snapshot) else { return }
+        self += [element]
+    }
+}
+
+private extension Array where Element: Sendable {
+    mutating func append(_ element: Element) {
+        guard !(element is NativeSupportBindingModel.Snapshot) else { return }
+        self += [element]
+    }
+}
+
 @TLAModel
 struct NativeSupportBindingModel {
     enum Step: String, CaseIterable { case advance, overflow }

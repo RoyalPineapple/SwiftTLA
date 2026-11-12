@@ -1272,10 +1272,10 @@ struct GeneratedAtomicUpdateProofTests {
         \s* let \s+ _value_second_1: \s* \#(integerType) \s* = \s* (-?[0-9]+)
         \s* evaluatingInitializerOrdinal \s* = \s* nil
         \s* if \s+ _selectedInitial \s* == \s* nil \s* \|\| \s* _selectedInitial!\.second \s* == \s* _value_second_1 \s* \{
-        \s* result\.append \( Snapshot \( state: \s* State \( first: \s* _value_first_0, \s* second: \s* _value_second_1 \) \) \)
+        \s* SwiftTLA\._appendNativeOutcome \( &result, \s* Snapshot \( state: \s* State \( first: \s* _value_first_0, \s* second: \s* _value_second_1 \) \) \)
         \s* \} \s* \}
         \s* \}, \s* onEvaluationFailure: \s* \{ \s* failure \s+ in
-        \s* failures\.append \( \.init \(
+        \s* SwiftTLA\._appendNativeOutcome \( &failures, \s* \.init \(
         \s* site: \s* evaluatingInitializerOrdinal\.map\(SwiftTLA\.InitialEvaluationFailure\.Site\.initializer\)
         \s* \?\? \s* \.selectedInvariant,
         \s* failure: \s* failure, \s* projectingBefore: \s* evaluatingInitialBindings \) \)

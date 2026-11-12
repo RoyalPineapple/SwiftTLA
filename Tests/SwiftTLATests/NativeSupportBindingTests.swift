@@ -2,8 +2,11 @@ import Testing
 import SwiftTLA
 
 @Suite struct NativeSupportBindingTests {
-    @Test("Generated arithmetic binds library support, not a model's same-named helper")
+    @Test("Generated initial collection and arithmetic retain library behavior under caller overloads")
     func modelHelperCannotReplaceCheckedAddition() throws {
+        let initial = try NativeSupportBindingModel.initialOutcomes()
+        #expect(initial.states.count == 1)
+        #expect(initial.failures.isEmpty)
         var machine = try NativeSupportBindingModel.makeMachine()
         #expect(machine.state.seed == 0 && machine.state.count == 1)
         #expect(try machine.send(.advance).after.count == 2)
