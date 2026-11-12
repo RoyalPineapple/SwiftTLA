@@ -24,8 +24,8 @@ public struct Snapshot: Hashable, Sendable {
 private static let __swifttlaFormalProjectionTokens: [SwiftTLA.TLAStateProjection.Token] = [SwiftTLA.TLAStateProjection.Token(validating: "first")!, SwiftTLA.TLAStateProjection.Token(validating: "second")!]
 @@ formalProjection
 public func formalProjection(of snapshot: Snapshot) throws -> SwiftTLA.TLAStateProjection {
-    try SwiftTLA.TLAStateProjection(validating: [.init(token: Self.__swifttlaFormalProjectionTokens[0], value: SwiftTLA.TLAValue.int(snapshot.state.first)),
-.init(token: Self.__swifttlaFormalProjectionTokens[1], value: SwiftTLA.TLAValue.int(snapshot.state.second))])
+    try SwiftTLA.TLAStateProjection(validating: [.init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: 0), value: SwiftTLA.TLAValue.int(snapshot.state.first)),
+.init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: 1), value: SwiftTLA.TLAValue.int(snapshot.state.second))])
 }
 @@ formalCall
 public func formalCall(for action: Action) throws -> FormalActionCall {

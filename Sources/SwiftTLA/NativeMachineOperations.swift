@@ -149,6 +149,14 @@ public func _mapNativeOutcomes<Source: Sendable, Result: Sendable>(
     outcomes.map(transform)
 }
 
+/// Keep formal token indexing in library scope, away from caller subscripts.
+@_documentation(visibility: internal)
+public func _nativeFormalProjectionToken(
+    _ tokens: [TLAStateProjection.Token], at index: Int
+) -> TLAStateProjection.Token {
+    tokens[index]
+}
+
 /// Keep generated failure sites independent of caller Optional operations.
 @_documentation(visibility: internal)
 public func _nativeInitialFailureSite(_ ordinal: Int?) -> InitialEvaluationFailure.Site {

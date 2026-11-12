@@ -1,6 +1,12 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+private extension Array where Element == SwiftTLA.TLAStateProjection.Token {
+    subscript(position: Int) -> Element {
+        self.dropFirst(count - 1 - position).first!
+    }
+}
+
 private extension Optional where Wrapped == Int {
     func map(_ transform: (Int) -> SwiftTLA.InitialEvaluationFailure.Site)
         -> SwiftTLA.InitialEvaluationFailure.Site? { nil }

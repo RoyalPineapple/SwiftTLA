@@ -18,7 +18,7 @@ extension NativeSwiftEmitter {
             "SwiftTLA.TLAStateProjection.Token(validating: \(String(reflecting: field.formalName)))!"
         }.joined(separator: ", ")
         let entries = fields.enumerated().map { index, field in
-            ".init(token: Self.__swifttlaFormalProjectionTokens[\(index)], value: \(field.value))"
+            ".init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(index)), value: \(field.value))"
         }.joined(separator: ",\n")
         let declarations = [DeclSyntax(stringLiteral: """
         private static let __swifttlaFormalProjectionTokens: [SwiftTLA.TLAStateProjection.Token] = [\(tokens)]
@@ -244,7 +244,7 @@ func verifyGeneratedFormalProjectionOutput(
         }) else { throw reject("the projected value for \(field.formalName) reads a different snapshot field") }
     }
     let expectedEntries = fields.enumerated().map { index, field in
-        ".init(token: Self.__swifttlaFormalProjectionTokens[\(index)], value: \(field.value))"
+        ".init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(index)), value: \(field.value))"
     }.joined(separator: ",\n")
     let expectedFunction = Parser.parse(source: """
     public func formalProjection(of snapshot: Snapshot) throws -> SwiftTLA.TLAStateProjection {

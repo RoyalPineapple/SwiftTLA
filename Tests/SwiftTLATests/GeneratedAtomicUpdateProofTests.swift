@@ -52,6 +52,19 @@ struct GeneratedAtomicUpdateProofTests {
             #expect(diagnostic.path == "native._initialStates.completeIntOutput")
         }
 
+        let prefixToken = "SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: 0)"
+        try #require(initials.description.components(separatedBy: prefixToken).count == 2)
+        let callerToken = initials.description.replacingOccurrences(of: prefixToken,
+            with: "Self.__swifttlaFormalProjectionTokens[0]")
+        try #require(callerToken != initials.description)
+        let wrongToken = try #require(Parser.parse(source: callerToken).statements.first?.item.as(DeclSyntax.self))
+        do {
+            try emitter.verifyIntInitialOutput(wrongToken)
+            Issue.record("An initial prefix using a caller token-array subscript was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+        }
+
         let templateFile = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/GeneratedAtomicCopySwiftTemplate.txt")
@@ -1290,7 +1303,7 @@ struct GeneratedAtomicUpdateProofTests {
         \s* if \s+ SwiftTLA\._nativeIntInitialMatches \( _selectedInitial\?\.first, \s* _value_first_0 \) \s* \{
         \s* evaluatingInitialBindings \s* = \s* \{ \s* \[_value_first_0\] \s+ in
         \s* try \s+ SwiftTLA\.TLAStateProjection \( validating: \s* \[
-        \.init \( token: \s* Self\.__swifttlaFormalProjectionTokens\[0\],
+        \.init \( token: \s* SwiftTLA\._nativeFormalProjectionToken\(Self\.__swifttlaFormalProjectionTokens,\s*at:\s*0\),
         \s* value: \s* SwiftTLA\.TLAValue\.int\(_value_first_0\) \) \] \) \s* \}
         \s* evaluatingInitializerOrdinal \s* = \s* 1
         \s* let \s+ _value_second_1: \s* \#(integerType) \s* = \s* (-?[0-9]+)

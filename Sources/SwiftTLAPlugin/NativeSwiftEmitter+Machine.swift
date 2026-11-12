@@ -599,7 +599,7 @@ extension NativeSwiftEmitter {
         let captures = prefix.map { variable($0.variable) }
         let entries = try prefix.map { entry in
             let value = try formalValue(variable(entry.variable), type: program.variableTypes[entry.variable]!)
-            return ".init(token: Self.__swifttlaFormalProjectionTokens[\(entry.variable.ordinal)], value: \(value))"
+            return ".init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(entry.variable.ordinal)), value: \(value))"
         }
         let capture = captures.isEmpty ? "" : "[" + captures.joined(separator: ", ") + "] in "
         return "{ \(capture)try SwiftTLA.TLAStateProjection(validating: [\(entries.joined(separator: ", "))]) }"
@@ -1145,7 +1145,7 @@ extension NativeSwiftEmitter {
                     }.joined(separator: "\n")
                     value = "try { () throws -> SwiftTLA.TLAValue in switch \(binding.name) {\n\(cases)\n} }()"
                 }
-                return ".init(token: Self.__swifttlaFormalProjectionTokens[\(prior.variable.ordinal)], value: \(value))"
+                return ".init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(prior.variable.ordinal)), value: \(value))"
             }
             let capture = captures.isEmpty ? "" : "[" + captures.joined(separator: ", ") + "] in "
             body += "evaluatingInitialBindings = { \(capture)try SwiftTLA.TLAStateProjection(validating: [\(entries.joined(separator: ", "))]) }\n"
@@ -1217,7 +1217,7 @@ extension NativeSwiftEmitter {
             guard stateMemberNames[variable.id] != nil else { return nil }
             let type = program.variableTypes[variable.id]!
             return """
-            guard let _json\(index) = formalJSON.value(for: Self.__swifttlaFormalProjectionTokens[\(index)]) else {
+            guard let _json\(index) = formalJSON.value(for: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(index))) else {
                 throw TLAStateProjectionDiagnostic.invalidKey(path: \(String(reflecting: variable.formalName)))
             }
             let _decoded\(variable.id.ordinal): \(try swiftType(type)) = \(try formalJSONValue("_json\(index)", type: type))
