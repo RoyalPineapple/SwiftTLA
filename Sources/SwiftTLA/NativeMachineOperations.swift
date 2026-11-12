@@ -195,30 +195,31 @@ public func _nativeIntInitialMatches(_ selected: Int?, _ value: Int) -> Bool {
     return selected == value
 }
 
+/// Handle a model failure within one initial branch without abandoning other branches.
+/// Enumeration, capacity, call-depth and missing-context errors propagate without a completed branch result.
+@_documentation(visibility: internal)
+public func _visitNativeInitialBranch(
+    _ visit: () throws -> Void,
+    onEvaluationFailure: (NativeMachineEvaluationError) -> Void
+) throws {
+    do {
+        try visit()
+    } catch let failure as NativeMachineEvaluationError {
+        guard failure.isModelEvaluationFailure else { throw failure }
+        onEvaluationFailure(failure)
+    } catch let failure as EvalError {
+        guard let native = failure.nativeFailure else { throw failure }
+        guard native.isModelEvaluationFailure else { throw failure }
+        onEvaluationFailure(native)
+    }
+}
+
 /// Value operations emitted by the native machine generator.
 @_documentation(visibility: internal)
 public enum _NativeMachineOperations: Sendable {
     public typealias StateHasher = Swift.Hasher
 
     public static let maximumRecursiveDepth = 4_096
-
-    /// Handle a model failure within one initial branch without abandoning other branches.
-    /// Enumeration, capacity, call-depth and missing-context errors propagate without a completed branch result.
-    public static func visitInitialBranch(
-        _ visit: () throws -> Void,
-        onEvaluationFailure: (NativeMachineEvaluationError) -> Void
-    ) throws {
-        do {
-            try visit()
-        } catch let failure as NativeMachineEvaluationError {
-            guard failure.isModelEvaluationFailure else { throw failure }
-            onEvaluationFailure(failure)
-        } catch let failure as EvalError {
-            guard let native = failure.nativeFailure else { throw failure }
-            guard native.isModelEvaluationFailure else { throw failure }
-            onEvaluationFailure(native)
-        }
-    }
 
     @inlinable
     public static func mergeUpdate<Value: Equatable & Sendable>(

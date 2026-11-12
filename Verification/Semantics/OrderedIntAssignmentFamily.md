@@ -334,7 +334,7 @@ The remaining source and output interpretation boundaries are precise:
 | Source and resolved trees to node arrays | Both `orderedIntPlan` overloads | Reviewed Swift statements implement the checked synchronized record history |
 | Actual Swift tokens to expression steps | `verifyOrderedIntInitialExpression` | Accepted token grammar and scoped temporary interpretation |
 | Complete initial function | `intInitialOutputSource`, `verifyIntInitialOutput` | Template meaning, field identities and selected-initial filtering |
-| Runtime calls and observations | `_nativeIntAdd`, `_NativeMachineOperations.add`, `checked`, `visitInitialBranch` | Module/scope interpretation, other helper bindings and complete observation connection |
+| Runtime calls and observations | `_nativeIntAdd`, `_NativeMachineOperations.add`, `checked`, `_visitNativeInitialBranch` | Module/scope interpretation, other helper bindings and complete observation connection |
 
 These are bounded source arguments under named interpretations, not a mechanically checked Swift translator.
 The current formal proof is unchanged; no new traversal model or decoder is added.

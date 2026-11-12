@@ -26,7 +26,7 @@ struct CheckingEffectsTests {
         #expect(throws: NativeMachineEvaluationError.checkingContextRequired) { try machine.successors() }
         var direct = machine
         #expect(throws: NativeMachineEvaluationError.checkingContextRequired) {
-            try _NativeMachineOperations.visitInitialBranch {
+            try _visitNativeInitialBranch {
                 _ = try direct.send(.advance)
             } onEvaluationFailure: { _ in
                 Issue.record("A missing checking context became a completed model failure")

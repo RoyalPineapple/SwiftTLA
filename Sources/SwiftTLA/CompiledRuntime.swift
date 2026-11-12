@@ -42,7 +42,7 @@ struct CompiledRuntime {
             return invariant
         }
         while let (index, values) = pending.popLast() {
-            try _NativeMachineOperations.visitInitialBranch {
+            try _visitNativeInitialBranch {
                 guard index < initializations.count else {
                     let state = try CompiledState(values: layout.variables.map { variable in
                         guard let value = values[variable.id] else {

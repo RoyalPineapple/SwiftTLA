@@ -1317,7 +1317,7 @@ struct GeneratedAtomicUpdateProofTests {
         \s* var \s+ evaluatingInitializerOrdinal: \s* \#(integerType)\?
         \s* var \s+ evaluatingInitialBindings: \s* @Sendable \s* \(\) \s* throws \s* -> \s* SwiftTLA\.TLAStateProjection
         \s* = \s* \{ \s* try \s+ SwiftTLA\.TLAStateProjection \( validating: \s* \[\] \) \s* \}
-        \s* try \s+ SwiftTLA\._NativeMachineOperations\.visitInitialBranch \s* \( \s* \{
+        \s* try \s+ SwiftTLA\._visitNativeInitialBranch \s* \( \s* \{
         \s* evaluatingInitialBindings \s* = \s* \{ \s* try \s+ SwiftTLA\.TLAStateProjection \( validating: \s* \[\] \) \s* \}
         \s* evaluatingInitializerOrdinal \s* = \s* 0
         \s* let \s+ _value_first_0: \s* \#(integerType) \s* = \s* (-?[0-9]+)

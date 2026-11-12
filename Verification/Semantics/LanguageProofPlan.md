@@ -713,7 +713,11 @@ Exit: actual accepted pilot expressions supply the child theorem premises. No ex
   Generated outcome construction now uses a typed library-scope function, preserving the supplied state and failure arrays outside caller initializer lookup.
   The same owner and external consumer pass in the 74-test native run; the 24-test source/IR owner also passes, with two shared artifact-consumer tests checked separately.
   The existing construction checker rejects a return to the caller constructor. Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-outcome-construction-binding/`; complete physical interpretation remains open.
-  Remaining pilot bindings include `visitInitialBranch`, completed-helper result and mapping-closure types, outcome member reads and hidden-snapshot assembly. The checked logical history does not certify these physical links.
+  A caller extension of the qualified initial-branch member reproduced loss of the valid initial state on unchanged `e6bc23db` production: one executed test failed with three runtime issues.
+  The recovery body now resides in the module function `_visitNativeInitialBranch`; actual native/compiled callers, the complete Int template and independent literal decoder use that function. Native/Eval model-error mapping and operational-error propagation are unchanged.
+  The existing complete-output owner rejects substitution of the old replaceable member call. Its retained caller-extension fixture passes in 114 tests across seventeen suites, including the external generated client and existing failure-order, prefix, hidden-control and operational-error owners.
+  Receipts are in `.git/swifttla-proof-evidence/compiler-initialization-theorem-2026-11-10/initial-branch-member-binding/` in the primary checkout. This addresses measured dispatch, not a checked interpretation theorem.
+  Remaining pilot bindings include module identity, completed-helper result and mapping-closure types, outcome member reads and hidden-snapshot assembly. The checked logical history does not certify these physical links.
 - [ ] M2.6 Discharge the evaluator and history premises at `OrderedIntInitializerChildrenComposeAllReachableStatesAndFailures`.
   The pinned `28c609d2` run checks the repaired rendered failure leaf; one of 1,250 initialization obligations remains unproved at the final parent conjunction.
   Its next proof body names the constructed rendered-plan/witness existential explicitly and cites it at that join. This candidate is not yet mathematically checked.

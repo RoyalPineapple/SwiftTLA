@@ -505,7 +505,7 @@ struct InitialBranchFailureTests {
     @Test("Internal errors and collection capacity limits are not relabeled as model failures")
     func rejectsUnmappedFailure() {
         #expect(throws: EvalError.expected(.integer, actual: [])) {
-            try _NativeMachineOperations.visitInitialBranch {
+            try _visitNativeInitialBranch {
                 throw EvalError.expected(.integer, actual: [])
             } onEvaluationFailure: { _ in
                 Issue.record("An internal value-shape error must not become an initial outcome")
@@ -529,12 +529,12 @@ struct InitialBranchFailureTests {
         ]
         for entry in cases {
             #expect(throws: entry.native) {
-                try _NativeMachineOperations.visitInitialBranch(entry.operation) { _ in
+                try _visitNativeInitialBranch(entry.operation) { _ in
                     Issue.record("A native collection capacity limit became a completed model failure")
                 }
             }
             #expect(throws: entry.compiled) {
-                try _NativeMachineOperations.visitInitialBranch {
+                try _visitNativeInitialBranch {
                     _ = try compiledValue(entry.expression)
                 } onEvaluationFailure: { _ in
                     Issue.record("A compiled collection capacity limit became a completed model failure")

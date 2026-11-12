@@ -34,7 +34,7 @@ private struct BoundedRecursiveCall {
         }
         var compiledFailures: [NativeMachineEvaluationError] = []
         do {
-            try _NativeMachineOperations.visitInitialBranch {
+            try _visitNativeInitialBranch {
                 _ = try runtime.successors(for: action, from: initial)
             } onEvaluationFailure: { compiledFailures.append($0) }
         } catch {
@@ -47,7 +47,7 @@ private struct BoundedRecursiveCall {
             try machine.send(.advance)
         }
         var nativeFailures: [NativeMachineEvaluationError] = []
-        try _NativeMachineOperations.visitInitialBranch {
+        try _visitNativeInitialBranch {
             _ = try machine.send(.advance)
         } onEvaluationFailure: { nativeFailures.append($0) }
         #expect(nativeFailures == [.functionArgumentOutsideDomain])

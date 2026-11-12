@@ -723,7 +723,7 @@ extension NativeSwiftEmitter {
 
     private func initialBranch(_ body: CodeBlockItemListSyntax) throws -> CodeBlockItemSyntax {
         let parsed = Parser.parse(source: """
-        try SwiftTLA._NativeMachineOperations.visitInitialBranch({}, onEvaluationFailure: { failure in
+        try SwiftTLA._visitNativeInitialBranch({}, onEvaluationFailure: { failure in
             SwiftTLA._appendNativeOutcome(&failures, .init(
                 site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
                 failure: failure, projectingBefore: evaluatingInitialBindings))
@@ -1128,7 +1128,7 @@ extension NativeSwiftEmitter {
             ", \(variable($0.id)): \(variable($0.id))"
         }.joined()
         var body = "var result: [Snapshot] = []\nvar failures: [SwiftTLA.InitialEvaluationFailure] = []\nvar evaluatingInitializerOrdinal: \(nativeIntType)?\nvar evaluatingInitialBindings: @Sendable () throws -> SwiftTLA.TLAStateProjection = { try SwiftTLA.TLAStateProjection(validating: []) }\n"
-        body += "try SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
+        body += "try SwiftTLA._visitNativeInitialBranch({\n"
         var closing = ""
         for (index, pair) in zip(program.behavior.initializations, bindings).enumerated() {
             let (initialization, binding) = pair
@@ -1182,7 +1182,7 @@ extension NativeSwiftEmitter {
                 } else {
                     body += "for \(binding.name) in \(ordered) {\n"
                 }
-                body += "evaluatingInitializerOrdinal = nil\ntry SwiftTLA._NativeMachineOperations.visitInitialBranch({\n"
+                body += "evaluatingInitializerOrdinal = nil\ntry SwiftTLA._visitNativeInitialBranch({\n"
                 closing = """
                 }, onEvaluationFailure: { failure in
                     SwiftTLA._appendNativeOutcome(&failures, .init(

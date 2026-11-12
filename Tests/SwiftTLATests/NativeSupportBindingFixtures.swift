@@ -2,6 +2,11 @@ import SwiftTLA
 import SwiftTLAMacros
 
 private extension SwiftTLA._NativeMachineOperations {
+    static func visitInitialBranch(
+        _ visit: () throws -> Void,
+        onEvaluationFailure: (NativeMachineEvaluationError) -> Void
+    ) throws {}
+
     static func add(_ lhs: Swift.Int, _ rhs: Swift.Int) throws -> Swift.Int { -2 }
 }
 
@@ -64,14 +69,6 @@ struct NativeSupportBindingModel {
             _ current: inout Value?, _ incoming: Value?
         ) -> Bool {
             SwiftTLA._NativeMachineOperations.mergeUpdate(&current, incoming)
-        }
-
-        static func visitInitialBranch(
-            _ visit: () throws -> Void,
-            onEvaluationFailure: (NativeMachineEvaluationError) -> Void
-        ) throws {
-            try SwiftTLA._NativeMachineOperations.visitInitialBranch(
-                visit, onEvaluationFailure: onEvaluationFailure)
         }
     }
 

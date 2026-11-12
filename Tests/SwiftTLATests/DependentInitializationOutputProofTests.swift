@@ -510,8 +510,12 @@ struct DependentInitializationOutputProofTests {
                 [declaration] + Array(initialDeclarations.dropFirst()), configured: false)
         }
         try verifyComplete(initialStates)
-        let callback = "try SwiftTLA._NativeMachineOperations.visitInitialBranch({"
+        let callback = "try SwiftTLA._visitNativeInitialBranch({"
+        try #require(initialStates.description.components(separatedBy: callback).count - 1 == expectedLoops.count + 1)
         let callbackRange = try #require(initialStates.description.range(of: callback))
+        var replacedVisitor = initialStates.description
+        replacedVisitor.replaceSubrange(callbackRange,
+            with: "try SwiftTLA._NativeMachineOperations.visitInitialBranch({")
         var earlyReturn = initialStates.description
         earlyReturn.replaceSubrange(callbackRange, with: callback + "\nreturn\n")
         let prunedSibling = initialStates.description.replacingOccurrences(
@@ -524,6 +528,7 @@ struct DependentInitializationOutputProofTests {
         let droppedCollection = initialStates.description.replacingOccurrences(of: collection, with: "result.append(")
         let completePath = "native._initialStates.completeIntOutput"
         for (label, source, expectedPath) in [
+            ("callerVisitor", replacedVisitor, completePath),
             ("earlyReturn", earlyReturn, completePath), ("prunedSibling", prunedSibling, completePath),
             ("rangeBounds", wrongRangeBounds, completePath),
             ("collector", droppedCollection, "native._initialStates.assembly")
