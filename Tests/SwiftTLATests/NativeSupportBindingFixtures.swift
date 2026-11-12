@@ -1,6 +1,8 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+private func || (lhs: Bool, rhs: @autoclosure () -> Bool) -> Bool { false }
+
 private extension Array where Element == NativeSupportBindingModel.Snapshot {
     mutating func append(_ element: Element) {}
 }

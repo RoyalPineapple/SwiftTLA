@@ -34,7 +34,7 @@ struct GeneratedAtomicUpdateProofTests {
         let values = try #require(try checkedInitialValues(initials.description))
         #expect(values.first == 0 && values.second == 1)
         let wrongGuard = initials.description.replacingOccurrences(
-            of: "_selectedInitial!.second", with: "_selectedInitial!.first")
+            of: "_selectedInitial?.second", with: "_selectedInitial?.first")
         #expect(wrongGuard != initials.description)
         #expect(try checkedInitialValues(wrongGuard).map { _ in true } == nil)
 
@@ -1263,7 +1263,7 @@ struct GeneratedAtomicUpdateProofTests {
         \s* evaluatingInitializerOrdinal \s* = \s* 0
         \s* let \s+ _value_first_0: \s* \#(integerType) \s* = \s* (-?[0-9]+)
         \s* evaluatingInitializerOrdinal \s* = \s* nil
-        \s* if \s+ _selectedInitial \s* == \s* nil \s* \|\| \s* _selectedInitial!\.first \s* == \s* _value_first_0 \s* \{
+        \s* if \s+ SwiftTLA\._nativeIntInitialMatches \( _selectedInitial\?\.first, \s* _value_first_0 \) \s* \{
         \s* evaluatingInitialBindings \s* = \s* \{ \s* \[_value_first_0\] \s+ in
         \s* try \s+ SwiftTLA\.TLAStateProjection \( validating: \s* \[
         \.init \( token: \s* Self\.__swifttlaFormalProjectionTokens\[0\],
@@ -1271,7 +1271,7 @@ struct GeneratedAtomicUpdateProofTests {
         \s* evaluatingInitializerOrdinal \s* = \s* 1
         \s* let \s+ _value_second_1: \s* \#(integerType) \s* = \s* (-?[0-9]+)
         \s* evaluatingInitializerOrdinal \s* = \s* nil
-        \s* if \s+ _selectedInitial \s* == \s* nil \s* \|\| \s* _selectedInitial!\.second \s* == \s* _value_second_1 \s* \{
+        \s* if \s+ SwiftTLA\._nativeIntInitialMatches \( _selectedInitial\?\.second, \s* _value_second_1 \) \s* \{
         \s* SwiftTLA\._appendNativeOutcome \( &result, \s* Snapshot \( state: \s* State \( first: \s* _value_first_0, \s* second: \s* _value_second_1 \) \) \)
         \s* \} \s* \}
         \s* \}, \s* onEvaluationFailure: \s* \{ \s* failure \s+ in

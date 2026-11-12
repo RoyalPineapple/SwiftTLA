@@ -630,7 +630,9 @@ extension NativeSwiftEmitter {
                 code += "evaluatingInitializerOrdinal = nil\n"
                 if let field = stateMemberNames[initialization.variable] {
                     let condition: String
-                    if containsSourceNominal(type) {
+                    if type == .int {
+                        condition = "SwiftTLA._nativeIntInitialMatches(_selectedInitial?.\(field), \(name))"
+                    } else if containsSourceNominal(type) {
                         let order = "_initialValueOrder\(initialization.variable.ordinal)"
                         code += "let \(order) = \(try crossOrdering(type, type))\n"
                         condition = "_selectedInitial == nil || !(\(order)(_selectedInitial!.\(field), \(name)) || \(order)(\(name), _selectedInitial!.\(field)))"
@@ -905,7 +907,9 @@ extension NativeSwiftEmitter {
             switch initialization.initialization {
             case .value:
                 let type = program.variableTypes[initialization.variable]!
-                if containsSourceNominal(type) {
+                if type == .int {
+                    required = ["if SwiftTLA._nativeIntInitialMatches(_selectedInitial?.\(field), \(name)) {"]
+                } else if containsSourceNominal(type) {
                     let order = "_initialValueOrder\(initialization.variable.ordinal)"
                     required = [
                         "let \(order) = { (lhs: \(try swiftType(type)), rhs: \(try swiftType(type))) -> \(nativeBoolType) in",
@@ -1151,7 +1155,10 @@ extension NativeSwiftEmitter {
                 body += "let \(binding.name): \(binding.type) = \(binding.value)\n"
                 body += "evaluatingInitializerOrdinal = nil\n"
                 if let field = visible[initialization.variable] {
-                    body += "if _selectedInitial == nil || _selectedInitial!.\(field) == \(binding.name) {\n"
+                    let condition = binding.type == nativeIntType
+                        ? "SwiftTLA._nativeIntInitialMatches(_selectedInitial?.\(field), \(binding.name))"
+                        : "_selectedInitial == nil || _selectedInitial!.\(field) == \(binding.name)"
+                    body += "if \(condition) {\n"
                     closing = "}\n" + closing
                 }
             case .memberOf(let domain):

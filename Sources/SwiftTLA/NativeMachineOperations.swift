@@ -141,6 +141,13 @@ public func _appendNativeOutcome<Outcome: Sendable>(_ outcomes: inout [Outcome],
     outcomes.append(outcome)
 }
 
+/// Keep generated Int selection independent of caller Boolean and equality overloads.
+@_documentation(visibility: internal)
+public func _nativeIntInitialMatches(_ selected: Int?, _ value: Int) -> Bool {
+    guard let selected else { return true }
+    return selected == value
+}
+
 /// Value operations emitted by the native machine generator.
 @_documentation(visibility: internal)
 public enum _NativeMachineOperations: Sendable {
