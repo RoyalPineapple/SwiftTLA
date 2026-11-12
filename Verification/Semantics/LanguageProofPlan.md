@@ -701,6 +701,8 @@ Exit: actual accepted pilot expressions supply the child theorem premises. No ex
 - [ ] M2.4 Prove actual TLA initialization and failure observations correspond to the same source prefixes.
   Complete branch observations cannot rely only on the deterministic selected record.
   I5s supplies an implemented event-set expression for guarded Int value/add and supported membership-domain initialization, including lazy domain addition failures. Its generic source/Swift/TLA relation and ordered observations still require proof; the prepared v5 deterministic case is separate admission evidence.
+  The actual-output parent still needs `ActualNativePrefixConstructsTheGeneratedInitializationHistory`. The `3dde507f` worker again reached its unchanged 90-minute job limit with an empty positive proof log and no executed rejection controls; no failed obligation or phase is identified.
+  Its existing positive invocation now requests the pinned prover's compact `--timing` report. The pinned runtime source uses this flag only for reporting. Proof selection, `--nofp`, the rejection checks, pins, backends and limits are unchanged; the separate serialized rule-batch command and flags are untouched. This is diagnostic implementation, not a mathematical discharge or completed M2.4.
 - [ ] M2.5 Prove complete initial function, selected filtering and hidden-state assembly correspond to the logical history.
   Native factories now call their private initializers through `Self` and supply explicit arguments of type `State?`.
   The existing owner reproduced three runtime issues with caller overloads on unchanged production.
