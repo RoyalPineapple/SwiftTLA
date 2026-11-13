@@ -1205,14 +1205,36 @@ package enum InitialFailureEvidence {
                 /\\ \\A position \\in (1..ProofCount) \\ ProofIntPositions : ProofControlSeed(position) = SourceInitialControl
                 /\\ \\A position \\in ProofIntPositions : ProofPlans[position].count \\in Nat
             BY ONLY <1>0a, <1>0b, <1>0c, <1>0d, SMT
+          <1>0e. ProofInitialization!IntInitializationDomains
+            BY ONLY ActualLayoutSuppliesInitializationDecoderInputs, SMT
           <1>1. \\A position \\in ProofIntPositions : \\A prior \\in ProofInitialization!PartialBindings :
                   /\\ ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
                        = ProofInitialization!GeneratedIntInitializerOutcome(ProofGeneratedExpressions[position][prior][ProofPlans[position].count])
                   /\\ ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
                        \\in ProofInitialization!InitializerOutcomes
-            BY <1>0, ActualInitializerExpressionsSupplyTheirParents, ActualLayoutSuppliesInitializationDecoderInputs,
-              ProofInitialization!IntExpressionOutcomesSupplyInitializerOutcomes, SMT
-              DEF ProofInitialization!Expressions!OutcomeAgrees
+            PROOF
+            <2>. SUFFICES ASSUME NEW position \\in ProofIntPositions,
+                                 NEW prior \\in ProofInitialization!PartialBindings
+                         PROVE /\\ ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
+                                    = ProofInitialization!GeneratedIntInitializerOutcome(ProofGeneratedExpressions[position][prior][ProofPlans[position].count])
+                               /\\ ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
+                                    \\in ProofInitialization!InitializerOutcomes
+              BY SMT
+            <2>0. /\\ position \\in ProofIntPositions /\\ prior \\in ProofInitialization!PartialBindings
+                  /\\ ProofPlans[position].count \\in 0..ProofPlans[position].count
+              BY <1>0, SMT
+            <2>1. /\\ ProofSourceExpressions[position][prior][ProofPlans[position].count]
+                        \\in ProofInitialization!Expressions!ExpressionOutcomes
+                  /\\ ProofSourceExpressions[position][prior][ProofPlans[position].count]
+                        = ProofGeneratedExpressions[position][prior][ProofPlans[position].count]
+              BY ONLY <2>0, ActualInitializerExpressionsSupplyTheirParents, SMT
+                DEF ProofInitialization!Expressions!OutcomeAgrees
+            <2>2. /\\ ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
+                        = ProofInitialization!GeneratedIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
+                  /\\ ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
+                        \\in ProofInitialization!InitializerOutcomes
+              BY ONLY <1>0e, <2>1, ProofInitialization!IntExpressionOutcomesSupplyInitializerOutcomes, SMT
+            <2>. QED BY ONLY <2>1, <2>2, SMT
           <1>2. \\A position \\in (1..ProofCount) \\ ProofIntPositions :
                   /\\ ProofInitialization!SourceFixed(SourceInitialControl) = ProofInitialization!GeneratedFixed(ProofControlSeed(position))
                   /\\ ProofInitialization!SourceFixed(SourceInitialControl) \\in ProofInitialization!InitializerOutcomes
@@ -1236,15 +1258,25 @@ package enum InitialFailureEvidence {
               BY <1>0, SMT
             <2>1. ProofEvaluate(FALSE)[position][prior] = ProofInitialization!SourceIntInitializerOutcome(result)
               BY ONLY <2>0a, SMT DEF result, ProofEvaluate
+            <2>0b. /\\ result.ok \\in BOOLEAN
+                   /\\ (result.ok => result.value \\in ProofIntMin..ProofIntMax)
+                   /\\ (~result.ok => result.failure \\in ProofInitialization!Expressions!ArithmeticFailures)
+              BY ONLY <2>0, SMT DEF ProofInitialization!Expressions!ExpressionOutcomes
+            <2>0c. /\\ ProofIntMin..ProofIntMax \\subseteq ProofValues
+                   /\\ ProofNoFailure \\notin ProofInitialization!Expressions!ArithmeticFailures
+              BY ONLY <1>0e, SMT DEF ProofInitialization!IntInitializationDomains
             <2>2. CASE result.ok
-              BY ONLY <2>0, <2>1, <2>2, ActualLayoutSuppliesInitializationDecoderInputs, SMT
-                DEF ProofInitialization!Expressions!ExpressionOutcomes, ProofInitialization!SourceIntInitializerOutcome,
-                  ProofInitialization!SourceFixed, ProofInitialization!IntInitializationDomains
+              <3>1. /\\ ProofEvaluate(FALSE)[position][prior].candidates = {result.value}
+                    /\\ ProofEvaluate(FALSE)[position][prior].firstFailure = ProofNoFailure
+                BY ONLY <2>1, <2>2, SMT
+                  DEF ProofInitialization!SourceIntInitializerOutcome, ProofInitialization!SourceFixed
+              <3>. QED BY ONLY <2>0b, <2>0c, <2>2, <3>1, SMT
             <2>3. CASE ~result.ok
-              BY ONLY <2>0, <2>1, <2>3, ProofInitialSentinels,
-                ActualLayoutSuppliesInitializationDecoderInputs, SMT
-                DEF ProofInitialization!Expressions!ExpressionOutcomes, ProofInitialization!SourceIntInitializerOutcome,
-                  ProofInitialization!SourceFailed, ProofInitialization!IntInitializationDomains
+              <3>1. /\\ ProofEvaluate(FALSE)[position][prior].candidates = {}
+                    /\\ ProofEvaluate(FALSE)[position][prior].firstFailure = result.failure
+                BY ONLY <2>1, <2>3, SMT
+                  DEF ProofInitialization!SourceIntInitializerOutcome, ProofInitialization!SourceFailed
+              <3>. QED BY ONLY <2>0b, <2>0c, <2>3, <3>1, SMT
             <2>. QED BY <2>2, <2>3, SMT DEF ProofInitialization!Expressions!ExpressionOutcomes
           <1>. QED BY <1>0, <1>1, <1>2, <1>3, SMT
             DEF ProofEvaluate, ProofInitialization!InitializerEvaluators, ProofInitialization!SourceFixed
