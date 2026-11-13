@@ -193,6 +193,8 @@ jobs:
             Package.swift \
             Sources/SwiftTLACompilerSupport/NativeIntInitialOutput.swift \
             Sources/SwiftTLACompilerSupport/NativeIntInitialFunction.swift \
+            Sources/SwiftTLACompilerSupport/NativeFormalProjectionOutput.swift \
+            Sources/SwiftTLAPlugin/NativeSwiftEmitter+Projection.swift \
             Sources/SwiftTLAPlugin/GeneratedMachineAPI.swift \
             Sources/UpstreamParity/Conformance/InitialFailureEvidence.swift \
             Tests/SwiftTLAParityTests/InitialFailureEvidenceTests.swift \

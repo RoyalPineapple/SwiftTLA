@@ -1,3 +1,4 @@
+import SwiftTLACompilerSupport
 import Foundation
 import Testing
 import SwiftParser

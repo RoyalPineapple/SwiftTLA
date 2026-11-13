@@ -292,6 +292,16 @@ package enum InitialFailureEvidence {
         guard declarations.count == 1, let declaration = declarations.first else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
+        let tokenTables = file.statements.compactMap { $0.item.as(VariableDeclSyntax.self) }.filter {
+            $0.bindings.contains {
+                $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "__swifttlaFormalProjectionTokens"
+            }
+        }
+        guard tokenTables.count == 1, let tokenTable = tokenTables.first else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        try verifyGeneratedFormalProjectionTokenTable(DeclSyntax(tokenTable),
+            names: program.layout.variables.map(\.formalName))
         let visible = try program.layout.variables.filter { $0.declaration.origin == .source }.map {
             (id: $0.id, swiftIdentifier: try nativeSourceIdentifier($0.declaration.name))
         }

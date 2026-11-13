@@ -144,6 +144,21 @@ struct InitialFailureEvidenceTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native._initialStates.completeIntOutput")
         }
+        let firstToken = "SwiftTLA.TLAStateProjection.Token(validating: \"first\")!"
+        let secondToken = "SwiftTLA.TLAStateProjection.Token(validating: \"second\")!"
+        try #require(nativeSource.components(separatedBy: firstToken).count == 2)
+        try #require(nativeSource.components(separatedBy: secondToken).count == 2)
+        let swappedTokens = nativeSource.replacingOccurrences(of: firstToken, with: "__swappedToken__")
+            .replacingOccurrences(of: secondToken, with: firstToken)
+            .replacingOccurrences(of: "__swappedToken__", with: secondToken)
+        try #require(swappedTokens != nativeSource)
+        do {
+            _ = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: swappedTokens,
+                to: directory.appendingPathComponent("swapped-tokens"))
+            Issue.record("A permuted formal token table was accepted as initialization proof input")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.formalProjection")
+        }
         #expect(proofText.contains("THEOREM CompleteInitializationMatchesActualOutputs =="))
         #expect(proofText.contains("ResolvedInitializers == \(plans)\n"))
         #expect(preparation["resolvedInitializersSHA256"] as? String == SHA256.hex(Data(plans.utf8)))
