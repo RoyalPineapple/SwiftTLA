@@ -1,6 +1,7 @@
 import Foundation
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
+import SwiftTLACompilerSupport
 import SwiftParser
 import SwiftSyntax
 import SwiftTLAMacros

@@ -144,6 +144,18 @@ struct InitialFailureEvidenceTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native._initialStates.completeIntOutput")
         }
+        let retainedOutcomes = "SwiftTLA._mapNativeInitialOutcomes(outcome)"
+        try #require(nativeSource.components(separatedBy: retainedOutcomes).count == 2)
+        let erasedOutcomes = nativeSource.replacingOccurrences(of: retainedOutcomes,
+            with: "SwiftTLA._mapNativeInitialOutcomes(SwiftTLA.InitialEvaluationOutcomes<Snapshot>(states: [], failures: []))")
+        try #require(erasedOutcomes != nativeSource)
+        do {
+            _ = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: erasedOutcomes,
+                to: directory.appendingPathComponent("erased-public-outcomes"))
+            Issue.record("The public native outcome adapter erased failures but its proof input was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.initialConstruction")
+        }
         let firstToken = "SwiftTLA.TLAStateProjection.Token(validating: \"first\")!"
         let secondToken = "SwiftTLA.TLAStateProjection.Token(validating: \"second\")!"
         try #require(nativeSource.components(separatedBy: firstToken).count == 2)

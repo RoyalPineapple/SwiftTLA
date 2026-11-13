@@ -287,9 +287,13 @@ package enum InitialFailureEvidence {
         guard !source.utf8.contains(0) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
         let file = Parser.parse(source: source)
         guard !file.hasError else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
-        let declarations = file.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }
+        let members = file.statements.compactMap { $0.item.as(DeclSyntax.self) }
+        let declarations = members.compactMap { $0.as(FunctionDeclSyntax.self) }
             .filter { $0.name.text == "_initialStates" }
-        guard declarations.count == 1, let declaration = declarations.first else {
+        guard declarations.count == 1, let declaration = declarations.first,
+              let initialIndex = members.firstIndex(where: {
+                  $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+              }) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let tokenTables = file.statements.compactMap { $0.item.as(VariableDeclSyntax.self) }.filter {
@@ -333,6 +337,8 @@ package enum InitialFailureEvidence {
             program: program, variables: visible) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
+        try verifyGeneratedInitialConstruction(Array(members.dropFirst(initialIndex)),
+            configured: !program.layout.parameters.isEmpty)
         let names = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
             (slots[$0.id]!, $0.declaration.name)
         })

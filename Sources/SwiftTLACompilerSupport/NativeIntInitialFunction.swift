@@ -384,3 +384,59 @@ package func checkedIntInitialValue(_ root: CompiledExpression,
     if !arithmetic { return value }
     return "(try { () throws -> \(nativeIntType) in\n\(statements.joined(separator: "\n"))\nreturn \(value)\n}())"
 }
+
+package func verifyGeneratedInitialConstruction(_ declarations: [DeclSyntax], configured: Bool,
+                                        sampled: Bool = false) throws {
+    let parameters = configured ? "configuration: Configuration" : ""
+    let appendedParameters = configured ? ", configuration: Configuration" : ""
+    let appendedArguments = configured ? ", configuration: configuration" : ""
+    let samplingParameter = sampled ? ", _sampleRandomSubset: \(nativeBoolType) = false" : ""
+    let unselectedArguments = "_selectedInitial: nil as State?\(sampled ? ", _sampleRandomSubset: false" : "")\(appendedArguments)"
+    let expected = Parser.parse(source: """
+    private static func _completedInitialStates(_selectedInitial: State? = nil\(samplingParameter)\(appendedParameters)) throws -> [Snapshot] {
+        let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(_selectedInitial: _selectedInitial\(sampled ? ", _sampleRandomSubset: _sampleRandomSubset" : "")\(appendedArguments))
+        return try SwiftTLA._completeNativeInitialOutcomes(outcome)
+    }
+    public static func initialOutcomes(\(parameters)) throws -> SwiftTLA.InitialEvaluationOutcomes<Self> {
+        let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> = try Self._initialStates(\(unselectedArguments))
+        return SwiftTLA._mapNativeInitialOutcomes(outcome) { Self(execution: $0\(appendedArguments)) }
+    }
+    public static func initialMachines(\(parameters)) throws -> [Self] {
+        SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(\(unselectedArguments)) as [Snapshot]) { Self(execution: $0\(appendedArguments)) }
+    }
+    public static func makeMachine(\(parameters)) throws -> Self {
+        let execution = try SwiftTLA._singleNativeOutcome(
+            Self._completedInitialStates(\(unselectedArguments)) as [Snapshot], missing: .noInitialState, ambiguous: .ambiguousInitialState)
+        return Self(execution: execution\(appendedArguments))
+    }
+    public static func makeMachine(_ initial: State\(appendedParameters)) throws -> Self {
+        let execution = try SwiftTLA._singleNativeOutcome(
+            Self._completedInitialStates(_selectedInitial: initial as State?\(sampled ? ", _sampleRandomSubset: false" : "")\(appendedArguments)) as [Snapshot], missing: .invalidInitialState, ambiguous: .ambiguousInitialState)
+        return Self(execution: execution\(appendedArguments))
+    }
+    \(sampled ? """
+    public static func sampledInitialMachines(\(parameters)) throws -> [Self] {
+        SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(_selectedInitial: nil as State?, _sampleRandomSubset: true\(appendedArguments)) as [Snapshot]) { Self(execution: $0\(appendedArguments)) }
+    }
+    """ : "")
+    """).statements.compactMap { $0.item.as(DeclSyntax.self) }
+    let actual = Array(declarations.dropFirst().prefix(expected.count))
+    let actualTokens = actual.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+    let expectedTokens = expected.map { Array($0.tokens(viewMode: .sourceAccurate)).map(\.text) }
+    let matches = declarations.first?.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        && expected.count == (sampled ? 6 : 5) && actual.count == expected.count
+        && actualTokens == expectedTokens
+    guard matches else {
+        let mismatch = zip(actualTokens, expectedTokens).enumerated().first { $0.element.0 != $0.element.1 }
+        let difference = mismatch.map {
+            "method \($0.offset): actual \($0.element.0.prefix(40)), expected \($0.element.1.prefix(40))"
+        } ?? "declaration counts: actual \(declarations.count), expected 4"
+        throw CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.initialConstruction",
+            expected: "the checked initialMachines and both makeMachine construction rules",
+            actual: difference,
+            nextSafeAction: "Report this native code generation failure."
+        )
+    }
+}
