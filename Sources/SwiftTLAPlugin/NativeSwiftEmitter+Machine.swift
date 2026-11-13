@@ -725,8 +725,8 @@ extension NativeSwiftEmitter {
     private func initialBranch(_ body: CodeBlockItemListSyntax) throws -> CodeBlockItemSyntax {
         let parsed = Parser.parse(source: """
         try SwiftTLA._visitNativeInitialBranch({}, onEvaluationFailure: { failure in
-            SwiftTLA._appendNativeOutcome(&failures, .init(
-                site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
+            SwiftTLA._appendNativeOutcome(&failures, SwiftTLA._nativeInitialFailure(
+                evaluatingInitializerOrdinal,
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
         """)
@@ -984,8 +984,8 @@ extension NativeSwiftEmitter {
             case .memberOf:
                 return """
                 }, onEvaluationFailure: { failure in
-                    SwiftTLA._appendNativeOutcome(&failures, .init(
-                        site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
+                    SwiftTLA._appendNativeOutcome(&failures, SwiftTLA._nativeInitialFailure(
+                        evaluatingInitializerOrdinal,
                         failure: failure, projectingBefore: evaluatingInitialBindings))
                 })
                 }
@@ -997,8 +997,8 @@ extension NativeSwiftEmitter {
         }.joined()
         let suffix = append + "\n" + closing + """
         }, onEvaluationFailure: { failure in
-            SwiftTLA._appendNativeOutcome(&failures, .init(
-                site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
+            SwiftTLA._appendNativeOutcome(&failures, SwiftTLA._nativeInitialFailure(
+                evaluatingInitializerOrdinal,
                 failure: failure, projectingBefore: evaluatingInitialBindings))
         })
         return SwiftTLA._nativeInitialOutcomes(states: result, failures: failures)

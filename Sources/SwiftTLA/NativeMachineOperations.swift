@@ -208,11 +208,14 @@ public func _nativeFormalProjectionToken(
     tokens[index]
 }
 
-/// Keep generated failure sites independent of caller Optional operations.
+/// Keep generated failure construction independent of caller initializers and Optional operations.
 @_documentation(visibility: internal)
-public func _nativeInitialFailureSite(_ ordinal: Int?) -> InitialEvaluationFailure.Site {
-    guard let ordinal else { return .selectedInvariant }
-    return .initializer(ordinal)
+public func _nativeInitialFailure(
+    _ ordinal: Int?, failure: NativeMachineEvaluationError,
+    projectingBefore: @escaping @Sendable () throws -> TLAStateProjection
+) -> InitialEvaluationFailure {
+    let site: InitialEvaluationFailure.Site = if let ordinal { .initializer(ordinal) } else { .selectedInvariant }
+    return InitialEvaluationFailure(site: site, failure: failure, projectingBefore: projectingBefore)
 }
 
 /// Keep generated Int selection independent of caller Boolean and equality overloads.

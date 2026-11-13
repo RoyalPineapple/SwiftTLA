@@ -202,8 +202,8 @@ private func intInitialOutputSource(_ declaration: DeclSyntax?, program: Compile
             body += "evaluatingInitializerOrdinal = nil\ntry SwiftTLA._visitNativeInitialBranch({\n"
             closing = """
             }, onEvaluationFailure: { failure in
-                SwiftTLA._appendNativeOutcome(&failures, .init(
-                    site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
+                SwiftTLA._appendNativeOutcome(&failures, SwiftTLA._nativeInitialFailure(
+                    evaluatingInitializerOrdinal,
                     failure: failure, projectingBefore: evaluatingInitialBindings))
             })
             }
@@ -214,8 +214,8 @@ private func intInitialOutputSource(_ declaration: DeclSyntax?, program: Compile
     body += "SwiftTLA._appendNativeOutcome(&result, Snapshot(state: State(\(publicFields))\(hiddenFields)))\n" + closing
     body += """
     }, onEvaluationFailure: { failure in
-        SwiftTLA._appendNativeOutcome(&failures, .init(
-            site: SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal),
+        SwiftTLA._appendNativeOutcome(&failures, SwiftTLA._nativeInitialFailure(
+            evaluatingInitializerOrdinal,
             failure: failure, projectingBefore: evaluatingInitialBindings))
     })
     return SwiftTLA._nativeInitialOutcomes(states: result, failures: failures)

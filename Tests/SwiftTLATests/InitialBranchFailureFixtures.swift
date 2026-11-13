@@ -1,5 +1,13 @@
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAMacros
+
+private extension SwiftTLA.InitialEvaluationFailure {
+    init(site: Site, failure: NativeMachineEvaluationError,
+         projectingBefore: @escaping @Sendable () throws -> TLAStateProjection) {
+        let compiled = try! CompiledRuntime(compilation: InitialFailureOrderModel.spec.compile()).initialOutcomes()
+        self = compiled.failures[0]
+    }
+}
 
 private extension Array where Element == SwiftTLA.TLAStateProjection.Token {
     subscript(position: Int) -> Element {

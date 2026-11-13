@@ -39,16 +39,19 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(wrongGuard != initials.description)
         #expect(try checkedInitialValues(wrongGuard).map { _ in true } == nil)
 
-        let siteConversion = "SwiftTLA._nativeInitialFailureSite(evaluatingInitializerOrdinal)"
+        let siteConversion = "SwiftTLA._nativeInitialFailure("
+        let siteOrdinal = "evaluatingInitializerOrdinal,"
         try #require(initials.description.components(separatedBy: siteConversion).count == 2)
+        try #require(initials.description.components(separatedBy: siteOrdinal).count == 2)
         let callerSite = initials.description.replacingOccurrences(of: siteConversion,
-            with: "evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant")
+            with: "SwiftTLA.InitialEvaluationFailure(").replacingOccurrences(of: siteOrdinal,
+            with: "site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,")
         try #require(callerSite != initials.description)
         let wrongSite = try #require(Parser.parse(source: callerSite).statements.first?.item.as(DeclSyntax.self))
         try emitter.verifyIntInitialOutput(initials)
         do {
             try emitter.verifyIntInitialOutput(wrongSite)
-            Issue.record("An initializer failure site using caller Optional operations was accepted")
+            Issue.record("An initializer failure using caller construction or Optional operations was accepted")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native._initialStates.completeIntOutput")
         }
@@ -1391,8 +1394,8 @@ struct GeneratedAtomicUpdateProofTests {
         \s* SwiftTLA\._appendNativeOutcome \( &result, \s* Snapshot \( state: \s* State \( first: \s* _value_first_0, \s* second: \s* _value_second_1 \) \) \)
         \s* \} \s* \}
         \s* \}, \s* onEvaluationFailure: \s* \{ \s* failure \s+ in
-        \s* SwiftTLA\._appendNativeOutcome \( &failures, \s* \.init \(
-        \s* site: \s* SwiftTLA\._nativeInitialFailureSite\(evaluatingInitializerOrdinal\),
+        \s* SwiftTLA\._appendNativeOutcome \( &failures, \s* SwiftTLA\._nativeInitialFailure \(
+        \s* evaluatingInitializerOrdinal,
         \s* failure: \s* failure, \s* projectingBefore: \s* evaluatingInitialBindings \) \)
         \s* \} \s* \)
         \s* return \s+ SwiftTLA\._nativeInitialOutcomes \s* \( \s* states: \s* result, \s* failures: \s* failures \)
