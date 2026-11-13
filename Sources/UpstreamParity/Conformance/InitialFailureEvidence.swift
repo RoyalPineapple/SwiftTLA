@@ -45,6 +45,7 @@ package struct InitialFailureEvidenceReport: Codable, Sendable {
     package let layoutSHA256: String
     package let initializationOrderSHA256: String
     package let prefixOrdersSHA256: String
+    package let nativePrefixOrdersSHA256: String
     package let controlSeedsSHA256: String
     package let graphCompared: Bool
     package let result: String
@@ -137,7 +138,8 @@ package enum InitialFailureEvidence {
             sourceSyntaxOrigins: sourceInputs.origins, sourceSyntaxIndices: sourceInputs.indices,
             sourceInitialControl: sourceInitialControl,
             loweredInitializers: loweredInitializers,
-            resolvedInitializers: resolvedInitializers, nativeInitializers: nativeInitializers,
+            resolvedInitializers: resolvedInitializers, nativeInitializers: nativeInitializers.plans,
+            nativePrefixOrders: nativeInitializers.prefixes,
             recordInputs: recordInputs)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let generated = directory.appendingPathComponent("generated-tla")
@@ -153,7 +155,7 @@ package enum InitialFailureEvidence {
         let proofBytes = Data(proof.utf8)
         try proofBytes.write(to: proofURL, options: .atomic)
         let report = InitialFailureEvidenceReport(
-            schema: "swifttla.initial-failure-proof-v11", sourceSHA: sourceSHA,
+            schema: "swifttla.initial-failure-proof-v12", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
@@ -165,11 +167,12 @@ package enum InitialFailureEvidence {
             loweredInitializersSHA256: SHA256.hex(Data(loweredInitializers.utf8)),
             resolvedInitializersSHA256: SHA256.hex(Data(resolvedInitializers.utf8)),
             nativeSourceSHA256: SHA256.hex(Data(nativeSource.utf8)),
-            nativeInitializersSHA256: SHA256.hex(Data(nativeInitializers.utf8)),
+            nativeInitializersSHA256: SHA256.hex(Data(nativeInitializers.plans.utf8)),
             resolvedVariableTypesSHA256: SHA256.hex(Data(recordInputs.types.utf8)),
             layoutSHA256: SHA256.hex(Data(recordInputs.layout.utf8)),
             initializationOrderSHA256: SHA256.hex(Data(recordInputs.order.utf8)),
             prefixOrdersSHA256: SHA256.hex(Data(recordInputs.prefixes.utf8)),
+            nativePrefixOrdersSHA256: SHA256.hex(Data(nativeInitializers.prefixes.utf8)),
             controlSeedsSHA256: SHA256.hex(Data(recordInputs.seeds.utf8)),
             graphCompared: false, result: "prepared", site: site,
             kind: failureKind, operands: operands)
@@ -283,7 +286,8 @@ package enum InitialFailureEvidence {
     }
 
     // Syntax coverage is required here; semantic interpretation of the full function remains a separate proof obligation.
-    private static func nativeInitializerPlans(_ source: String, program: CompiledProgram) throws -> String {
+    private static func nativeInitializerPlans(_ source: String, program: CompiledProgram) throws
+        -> (plans: String, prefixes: String) {
         guard !source.utf8.contains(0) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
         let file = Parser.parse(source: source)
         guard !file.hasError else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
@@ -348,7 +352,7 @@ package enum InitialFailureEvidence {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
             guard variable.declaration.origin == .source else { return nil }
-            guard let decoded = decodedPlans[initialization.variable] else {
+            guard let decoded = decodedPlans.expressions[initialization.variable] else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
             let nodes = try decoded.map { step -> StraightLineAssignmentCheck.OrderedIntNode in
@@ -363,7 +367,17 @@ package enum InitialFailureEvidence {
             return "<<\(TLAValue.string(variable.declaration.name)), \(try initializerPlan(nodes, root: variable.declaration.name))>>"
         }
         guard !rows.isEmpty else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
-        return "<<\(rows.joined(separator: ", "))>>"
+        let prefixes = try decodedPlans.captures.map { capture in
+            let captured = try capture.map { id in
+                guard let variable = variables[id] else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+                return variable
+            }
+            let ordinals = captured.sorted {
+                $0.formalName.utf8.lexicographicallyPrecedes($1.formalName.utf8)
+            }.map { String($0.id.ordinal) }
+            return "<<\(ordinals.joined(separator: ", "))>>"
+        }
+        return ("<<\(rows.joined(separator: ", "))>>", "<<\(prefixes.joined(separator: ", "))>>")
     }
 
     private static func initializerPlan(_ nodes: [StraightLineAssignmentCheck.OrderedIntNode],
@@ -444,7 +458,7 @@ package enum InitialFailureEvidence {
                                     sourceInitializers: String, sourceSyntaxViews: String,
                                     sourceSyntaxOrigins: String, sourceSyntaxIndices: String, sourceInitialControl: String,
                                     loweredInitializers: String,
-                                    resolvedInitializers: String, nativeInitializers: String,
+                                    resolvedInitializers: String, nativeInitializers: String, nativePrefixOrders: String,
                                     recordInputs: (layout: String, order: String, prefixes: String, seeds: String, types: String)) throws -> String {
         guard isIdentifier(module), tla.contains("\nInit ==") else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
@@ -490,6 +504,7 @@ package enum InitialFailureEvidence {
         ActualLayout == \(recordInputs.layout)
         ActualInitializationOrder == \(recordInputs.order)
         ActualPrefixOrders == \(recordInputs.prefixes)
+        NativePrefixOrders == \(nativePrefixOrders)
         ActualControlSeeds == \(recordInputs.seeds)
 
         THEOREM SourceInitializersMatchLoweredIR ==
@@ -512,6 +527,10 @@ package enum InitialFailureEvidence {
         THEOREM NativeInitializersMatchResolvedIR ==
           NativeInitializers = ResolvedInitializers
           BY ONLY SMT DEF NativeInitializers, ResolvedInitializers
+
+        THEOREM NativePrefixOrdersMatchResolvedIR ==
+          NativePrefixOrders = ActualPrefixOrders
+          BY ONLY SMT DEF NativePrefixOrders, ActualPrefixOrders
 
         THEOREM ResolvedVariableTypesMatchActualLayout ==
           /\\ DOMAIN ResolvedVariableTypes = DOMAIN ActualLayout
@@ -541,8 +560,8 @@ package enum InitialFailureEvidence {
         ProofOrder == [position \\in 1..ProofCount |-> ProofOrdinalKey(ActualInitializationOrder[position])]
         ProofPrefixKeys(position) == {ProofOrder[earlier] : earlier \\in 1..(position - 1)}
         ProofPrefixIntNames(position) == ProofPrefixKeys(position) \\cap ProofIntSlots
-        ProofPrefixOrder(position) == [index \\in DOMAIN ActualPrefixOrders[position] |->
-          ProofOrdinalKey(ActualPrefixOrders[position][index])]
+        ProofPrefixOrder(position) == [index \\in DOMAIN NativePrefixOrders[position] |->
+          ProofOrdinalKey(NativePrefixOrders[position][index])]
         ProofValues == Int \\cup STRING
         ProofFailureValues == {"integerOverflow"} \\X {"addition"} \\X
           ((ProofIntMin..ProofIntMax) \\X (ProofIntMin..ProofIntMax))
@@ -878,16 +897,16 @@ package enum InitialFailureEvidence {
                                                   => prefixLeftIndex = prefixRightIndex
               BY SMT
             <2>1. CASE position = 1
-              BY ONLY <2>1, <1>0, SetExtensionality, SMT
+              BY ONLY <2>1, <1>0, NativePrefixOrdersMatchResolvedIR, SetExtensionality, SMT
                 DEF ProofPrefixKeys, ProofPrefixOrder, ActualPrefixOrders
             <2>2. CASE position = 2
-              BY ONLY <2>2, <1>0, SetExtensionality, SMT
+              BY ONLY <2>2, <1>0, NativePrefixOrdersMatchResolvedIR, SetExtensionality, SMT
                 DEF ProofPrefixKeys, ProofPrefixOrder, ActualPrefixOrders
             <2>3. CASE position = 3
-              BY ONLY <2>3, <1>0, SetExtensionality, SMT
+              BY ONLY <2>3, <1>0, NativePrefixOrdersMatchResolvedIR, SetExtensionality, SMT
                 DEF ProofPrefixKeys, ProofPrefixOrder, ActualPrefixOrders
             <2>4. CASE position = 4
-              BY ONLY <2>4, <1>0, SetExtensionality, SMT
+              BY ONLY <2>4, <1>0, NativePrefixOrdersMatchResolvedIR, SetExtensionality, SMT
                 DEF ProofPrefixKeys, ProofPrefixOrder, ActualPrefixOrders
             <2>. QED BY ONLY <1>0, <2>1, <2>2, <2>3, <2>4, SMT
           <1>3. \\A position \\in 1..ProofCount : \\A prior \\in [ProofPrefixKeys(position) -> ProofValues] :
@@ -1325,7 +1344,7 @@ package enum InitialFailureEvidence {
                    /\\ ProofOrdinalKey(0) = "pc" /\\ ProofOrdinalKey(1) = "first" /\\ ProofOrdinalKey(2) = "second"
               BY ONLY ActualLayoutSuppliesInitializationDecoderInputs, SMT DEF ActualLayout
             <2>1b. ProofPrefixOrder(ProofCount) = <<"first", "pc", "second">>
-              BY ONLY <1>0, <2>1a, SMT DEF ProofPrefixOrder, ActualPrefixOrders
+              BY ONLY <1>0, <2>1a, NativePrefixOrdersMatchResolvedIR, SMT DEF ProofPrefixOrder, ActualPrefixOrders
             <2>1. ExpectedBefore = ProofInitialization!RenderedInitialPrefixEntries(
                 ProofCount - 1, ProofPrefixOrder(ProofCount), ProofNames, observed)
               BY ONLY <1>0, <2>1a, <2>1b, SMT

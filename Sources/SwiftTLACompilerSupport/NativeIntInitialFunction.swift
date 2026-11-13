@@ -33,7 +33,8 @@ private func invalidSourceIdentifier(_ name: String) -> CompilationDiagnostic {
 
 @discardableResult
 package func verifyNativeIntInitialOutput(_ declaration: DeclSyntax?, program: CompiledProgram,
-    variables: [(id: VariableID, swiftIdentifier: String)]) throws -> [VariableID: [NativeIntInitialStep]]? {
+    variables: [(id: VariableID, swiftIdentifier: String)]) throws
+    -> (expressions: [VariableID: [NativeIntInitialStep]], captures: [[VariableID]])? {
     guard let source = try intInitialOutputSource(declaration, program: program, variables: variables) else { return nil }
     // Template lines have complete lexemes; parse them separately to avoid recursive closure nesting.
     let expectedTokens = source.split(separator: "\n").flatMap { line in
@@ -72,7 +73,33 @@ package func verifyNativeIntInitialOutput(_ declaration: DeclSyntax?, program: C
         decoded[initialization.variable] = try verifyOrderedIntInitialExpression(declaration,
             named: slots[initialization.variable]!, expression: expression, slots: slots)
     }
-    return decoded
+    let tokens = actualTokens.map(\.text)
+    let capturedIDs = Dictionary(uniqueKeysWithValues: slots.map { ($0.value, $0.key) })
+    var captures: [[VariableID]] = []
+    for index in tokens.indices where tokens[index] == "evaluatingInitialBindings"
+        && index + 2 < tokens.count && tokens[index + 1] == "=" && tokens[index + 2] == "{" {
+        var cursor = index + 3
+        var prefix: [VariableID] = []
+        if cursor < tokens.count, tokens[cursor] == "[" {
+            cursor += 1
+            while cursor < tokens.count {
+                guard let id = capturedIDs[tokens[cursor]] else { throw intInitialOutputMismatch() }
+                prefix.append(id)
+                cursor += 1
+                guard cursor < tokens.count else { throw intInitialOutputMismatch() }
+                if tokens[cursor] == "]" { break }
+                guard tokens[cursor] == "," else { throw intInitialOutputMismatch() }
+                cursor += 1
+            }
+            guard cursor + 1 < tokens.count, tokens[cursor] == "]", tokens[cursor + 1] == "in" else {
+                throw intInitialOutputMismatch()
+            }
+        }
+        guard Set(prefix).count == prefix.count else { throw intInitialOutputMismatch() }
+        captures.append(prefix)
+    }
+    guard captures.count == program.behavior.initializations.count else { throw intInitialOutputMismatch() }
+    return (decoded, captures)
 }
 
 private func intInitialOutputMismatch(

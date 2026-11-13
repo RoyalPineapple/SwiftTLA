@@ -20,7 +20,7 @@ struct InitialFailureEvidenceTests {
             typeName: "CheckedAdditionPrefixInitialModel", program: program))
         let nativeSource = try emitter.machineMembers().map(\.description).joined(separator: "\n")
         let report = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: nativeSource, to: directory)
-        #expect(report.schema == "swifttla.initial-failure-proof-v11")
+        #expect(report.schema == "swifttla.initial-failure-proof-v12")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)
         #expect(!report.graphCompared)
@@ -114,6 +114,8 @@ struct InitialFailureEvidenceTests {
         #expect(report.layoutSHA256 == SHA256.hex(Data(layout.utf8)))
         #expect(report.initializationOrderSHA256 == SHA256.hex(Data(order.utf8)))
         #expect(report.prefixOrdersSHA256 == SHA256.hex(Data(prefixes.utf8)))
+        #expect(proofText.contains("NativePrefixOrders == \(prefixes)\n"))
+        #expect(report.nativePrefixOrdersSHA256 == SHA256.hex(Data(prefixes.utf8)))
         #expect(proofText.contains("THEOREM ActualPrefixRecordsInvokeInitializationDecoder =="))
         #expect(proofText.contains("ProofInitialization!RenderedInitialPrefixAndSiteDecodingRetainsEveryIdentity"))
         let seeds = "<<[ordinal |-> 0, value |-> \"stay\"]>>"
@@ -172,6 +174,9 @@ struct InitialFailureEvidenceTests {
             #expect(diagnostic.path == "native.formalProjection")
         }
         for (index, change) in [
+            ("evaluatingInitialBindings = { [_value_pc_0, _value_first_1, _value_second_2] in",
+             "evaluatingInitialBindings = { [_value_first_1, _value_second_2] in",
+             1, "native._initialStates.completeIntOutput"),
             (firstToken, "SwiftTLA.TLAStateProjection.Token(validating: \"first\")!",
              1, "native.formalProjection"),
             ("SwiftTLA._nativeFormalInt(snapshot.state.first)", "SwiftTLA._nativeFormalInt(snapshot.state.second)",
