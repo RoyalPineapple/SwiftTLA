@@ -22,7 +22,8 @@ let package = Package(
         .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLA", "SwiftTLAPlugin"], swiftSettings: settings),
         .target(name: "SwiftTLACompilerSupport", dependencies: [
             "SwiftTLA",
-            .product(name: "SwiftSyntax", package: "swift-syntax")
+            .product(name: "SwiftSyntax", package: "swift-syntax"),
+            .product(name: "SwiftParser", package: "swift-syntax")
         ], swiftSettings: settings),
         .macro(name: "SwiftTLAPlugin", dependencies: [
             "SwiftTLACompilerSupport",

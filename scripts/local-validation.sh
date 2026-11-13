@@ -236,7 +236,7 @@ run_guarded() {
         macro_key="$({
             printf '%s\n' 'swiftpm-local-validation-macro-sources-v1'
             git ls-files --cached --others --exclude-standard -z -- \
-                Sources/SwiftTLA Sources/SwiftTLAPlugin Sources/SwiftTLAMacros |
+                Sources/SwiftTLA Sources/SwiftTLAPlugin Sources/SwiftTLAMacros Sources/SwiftTLACompilerSupport |
                 while IFS= read -r -d '' input_path; do
                     if [[ -f "$input_path" && ! -L "$input_path" ]]; then
                         shasum -a 256 -- "$input_path"

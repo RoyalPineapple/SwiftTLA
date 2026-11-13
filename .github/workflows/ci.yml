@@ -192,6 +192,8 @@ jobs:
           sha256sum Verification/Semantics/*.tla Verification/Semantics/*.txt \
             Package.swift \
             Sources/SwiftTLACompilerSupport/NativeIntInitialOutput.swift \
+            Sources/SwiftTLACompilerSupport/NativeIntInitialFunction.swift \
+            Sources/SwiftTLAPlugin/GeneratedMachineAPI.swift \
             Sources/UpstreamParity/Conformance/InitialFailureEvidence.swift \
             Tests/SwiftTLAParityTests/InitialFailureEvidenceTests.swift \
             Sources/SwiftTLAPlugin/NativeSwiftEmitter{,+Machine,+Boolean,+Refinement}.swift \

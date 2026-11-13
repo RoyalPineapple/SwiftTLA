@@ -282,7 +282,7 @@ package enum InitialFailureEvidence {
         return "<<\(rows.joined(separator: ", "))>>"
     }
 
-    // shortcut: expression decoding only; full-function and helper interpretation remain separate proof obligations.
+    // Syntax coverage is required here; semantic interpretation of the full function remains a separate proof obligation.
     private static func nativeInitializerPlans(_ source: String, program: CompiledProgram) throws -> String {
         guard !source.utf8.contains(0) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
         let file = Parser.parse(source: source)
@@ -290,6 +290,13 @@ package enum InitialFailureEvidence {
         let declarations = file.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }
             .filter { $0.name.text == "_initialStates" }
         guard declarations.count == 1, let declaration = declarations.first else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        let visible = try program.layout.variables.filter { $0.declaration.origin == .source }.map {
+            (id: $0.id, swiftIdentifier: try nativeSourceIdentifier($0.declaration.name))
+        }
+        guard let decodedPlans = try verifyNativeIntInitialOutput(DeclSyntax(declaration),
+            program: program, variables: visible) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let slots = nativeVariableSlots(program.layout)
@@ -302,12 +309,9 @@ package enum InitialFailureEvidence {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
             guard variable.declaration.origin == .source else { return nil }
-            guard case .value(let expression) = initialization.initialization,
-                  expression.resultType == .int, let slot = slots[initialization.variable] else {
+            guard let decoded = decodedPlans[initialization.variable] else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
-            let decoded = try verifyOrderedIntInitialExpression(DeclSyntax(declaration), named: slot,
-                expression: expression, slots: slots)
             let nodes = try decoded.map { step -> StraightLineAssignmentCheck.OrderedIntNode in
                 switch step {
                 case .integer(let value): return .literal(value)

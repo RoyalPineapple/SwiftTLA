@@ -2,6 +2,7 @@ import SwiftTLA
 import Foundation
 import SwiftParser
 import SwiftSyntax
+import SwiftTLACompilerSupport
 
 /// Swift names and parameters exposed by the generated machine.
 package struct GeneratedMachineAPI: Sendable, Equatable {
@@ -10,7 +11,7 @@ package struct GeneratedMachineAPI: Sendable, Equatable {
         package var argumentLabel: String { swiftIdentifier.replacingOccurrences(of: "`", with: "") }
         package let id: VariableID
         init(formalName: String, id: VariableID) throws {
-            self.swiftIdentifier = try GeneratedMachineAPI.sourceIdentifier(formalName)
+            self.swiftIdentifier = try nativeSourceIdentifier(formalName)
             self.id = id
         }
     }
@@ -20,7 +21,7 @@ package struct GeneratedMachineAPI: Sendable, Equatable {
         package let isPublic: Bool
 
         init(formalName: String, isPublic: Bool) throws {
-            self.swiftIdentifier = try GeneratedMachineAPI.sourceIdentifier(formalName)
+            self.swiftIdentifier = try nativeSourceIdentifier(formalName)
             self.isPublic = isPublic
         }
     }
@@ -73,31 +74,6 @@ package struct GeneratedMachineAPI: Sendable, Equatable {
             expected: "a declaration in the compiled layout",
             actual: "no matching declaration identity",
             nextSafeAction: "Compile the model again from its current source."
-        )
-    }
-
-    private static func sourceIdentifier(_ name: String) throws -> String {
-        let tokens = Parser.parse(source: name).tokens(viewMode: .sourceAccurate).filter {
-            $0.tokenKind != .endOfFile
-        }
-        guard tokens.count == 1, let token = tokens.first, token.text == name, name != "_" else {
-            throw invalidSourceIdentifier(name)
-        }
-        switch token.tokenKind {
-        case .identifier: return name
-        case .keyword: return "`\(name)`"
-        default: throw invalidSourceIdentifier(name)
-        }
-    }
-
-    private static func invalidSourceIdentifier(_ name: String) -> CompilationDiagnostic {
-        CompilationDiagnostic(
-            code: .unsupportedGeneratedValueShape,
-            stage: .validation,
-            path: "generatedMachineAPI.identifiers.\(name)",
-            expected: "one named Swift identifier for a generated state field or action parameter",
-            actual: name,
-            nextSafeAction: "Choose a named Swift identifier; formal action labels may use arbitrary names."
         )
     }
 

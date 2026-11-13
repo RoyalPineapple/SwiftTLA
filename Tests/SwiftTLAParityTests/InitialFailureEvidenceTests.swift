@@ -132,6 +132,18 @@ struct InitialFailureEvidenceTests {
             try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: rebound,
                 to: directory.appendingPathComponent("rejected"))
         }
+        let retainedFailures = "SwiftTLA._nativeInitialOutcomes(states: result, failures: failures)"
+        try #require(nativeSource.components(separatedBy: retainedFailures).count == 2)
+        let droppedFailures = nativeSource.replacingOccurrences(of: retainedFailures,
+            with: "SwiftTLA._nativeInitialOutcomes(states: result, failures: [])")
+        try #require(droppedFailures != nativeSource)
+        do {
+            _ = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: droppedFailures,
+                to: directory.appendingPathComponent("dropped-failures"))
+            Issue.record("The native source erased failures but its proof input was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+        }
         #expect(proofText.contains("THEOREM CompleteInitializationMatchesActualOutputs =="))
         #expect(proofText.contains("ResolvedInitializers == \(plans)\n"))
         #expect(preparation["resolvedInitializersSHA256"] as? String == SHA256.hex(Data(plans.utf8)))
