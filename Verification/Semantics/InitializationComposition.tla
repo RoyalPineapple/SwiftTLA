@@ -1798,10 +1798,10 @@ THEOREM ObservedFailurePrefixConstructsTheGeneratedInitializationHistory ==
               /\ PrefixKeys(order, index) \subseteq Keys
             BY ONLY <1>0, PrefixKeySetsAreContained, SMT
         <2>1. prefix(index) \in [PrefixKeys(order, index) -> Values]
-            BY ONLY <1>0, <2>0, SourceRestrictionIsTyped, SMT DEF prefix
+            BY ONLY <1>0, <2>0, SMT DEF prefix, SourceRestriction
         <2>2. \E bound \in SUBSET Keys : prefix(index) \in [bound -> Values]
             <3>. WITNESS PrefixKeys(order, index)
-            <3>. QED BY ONLY <2>0, <2>1, SMT
+            <3>. QED BY <2>0, <2>1, SMT
         <2>3. prefix(index) \in PartialBindings
             BY ONLY <2>2, SMT DEF PartialBindings
         <2>. QED BY ONLY <2>0, <2>1, <2>3, SMT
@@ -1816,7 +1816,12 @@ THEOREM ObservedFailurePrefixConstructsTheGeneratedInitializationHistory ==
     <1>4. history \in [0..count -> InitializationResults]
         BY ONLY <1>0, <1>1, <1>3, SMT DEF history, InitializationResults
     <1>4a. history[0] = InitialSeed
-        BY ONLY <1>0, SMT DEF history, prefix, SourceRestriction, PrefixKeys, InitialSeed
+        PROOF
+        <2>1. /\ 0 \in 0..count /\ 0 < failed /\ PrefixKeys(order, 0) = {}
+            BY ONLY <1>0, SMT DEF PrefixKeys
+        <2>2. prefix(0) = [name \in {} |-> name]
+            BY ONLY <2>1, SMT DEF prefix, SourceRestriction
+        <2>. QED BY ONLY <2>1, <2>2, SMT DEF history, InitialSeed
     <1>5. \A index \in 1..(failed - 1) :
         prefix(index) = GeneratedExtension(prefix(index - 1), order[index], before[order[index]])
         PROOF
@@ -1867,7 +1872,7 @@ THEOREM ObservedFailurePrefixConstructsTheGeneratedInitializationHistory ==
                 BY ONLY <1>0, <2>2, <3>1, SetExtensionality, SMT
                     DEF terminal, event, GeneratedInitialLeaf, GeneratedInitialStates,
                         GeneratedInitialFailures, SourceFailed
-            <3>. QED BY ONLY <3>1, <3>2, SetExtensionality, SMT DEF GeneratedAdvance
+            <3>. QED BY ONLY <3>1, <3>2, SetExtensionality, SMT DEF GeneratedAdvance, terminal
         <2>3. CASE index > failed
             <3>1. history[index] = terminal /\ history[index - 1] = terminal
                 BY ONLY <1>0, <2>3, SMT DEF history
