@@ -76,8 +76,11 @@ package func verifyNativeIntInitialOutput(_ declaration: DeclSyntax?, program: C
     let tokens = actualTokens.map(\.text)
     let capturedIDs = Dictionary(uniqueKeysWithValues: slots.map { ($0.value, $0.key) })
     var captures: [[VariableID]] = []
-    for index in tokens.indices where tokens[index] == "evaluatingInitialBindings"
-        && index + 2 < tokens.count && tokens[index + 1] == "=" && tokens[index + 2] == "{" {
+    for index in tokens.indices {
+        guard tokens[index] == "evaluatingInitialBindings" else { continue }
+        guard index + 2 < tokens.count else { continue }
+        guard tokens[index + 1] == "=" else { continue }
+        guard tokens[index + 2] == "{" else { continue }
         var cursor = index + 3
         var prefix: [VariableID] = []
         if cursor < tokens.count, tokens[cursor] == "[" {
