@@ -10,6 +10,7 @@ import SwiftTLA
         #expect(try NativeSupportBindingModel.initialMachines().count == 1)
         var machine = try NativeSupportBindingModel.makeMachine()
         #expect(machine.state.seed == 0 && machine.state.count == 1)
+        #expect(machine.state.minimum == Int.min)
         let count = try #require(TLAStateProjection.Token(validating: "count"))
         let projection = try machine.formalProjection(of: machine.snapshot)
         #expect(projection.value(for: count) == .int(1))

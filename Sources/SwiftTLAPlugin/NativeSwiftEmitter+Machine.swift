@@ -1817,7 +1817,7 @@ func verifyGeneratedInitialBindings(
         }
     }
     for (name, value) in expectedIntLiterals {
-        try verifyInitializer(name, type: nativeIntType, value: value == Int.min ? "\(nativeIntType).min" : String(value))
+        try verifyInitializer(name, type: nativeIntType, value: value == Int.min ? "SwiftTLA._nativeIntMinimum()" : String(value))
     }
     for (name, expression) in expectedIntExpressions {
         guard let expected = checkedIntInitialValue(expression, slots: stateSlots) else {
@@ -2231,7 +2231,7 @@ func verifyGeneratedActionRoutingOutput(
     func scalarDomain(_ binding: ScalarBoundRoute.Binding) -> String {
         let values = binding.members.map { member in
             switch member {
-            case .integer(let value): value == Int.min ? "\(nativeIntType).min" : String(value)
+            case .integer(let value): value == Int.min ? "SwiftTLA._nativeIntMinimum()" : String(value)
             case .boolean(let value): String(value)
             default: ""
             }
@@ -2780,7 +2780,7 @@ func verifyGeneratedActionWriteOutput(
                   parameters.contains(name) || externalScalarNames.contains(name) else { return nil }
             return [name]
         case .value(.integer(let integer)) where expression.resultType == .int:
-            if integer == Int.min { return nativeIntTypeTokens + [".", "min"] }
+            if integer == Int.min { return ["SwiftTLA", ".", "_nativeIntMinimum", "(", ")"] }
             return integer < 0 ? ["-", String(integer.magnitude)] : [String(integer)]
         case .value(.boolean(let value)) where expression.resultType == .bool:
             return [value ? "true" : "false"]
@@ -3197,7 +3197,7 @@ func verifyGeneratedActionWriteOutput(
             let values = members.sorted().compactMap { member -> String? in
                 switch (member, element) {
                 case (.integer(let value), .int):
-                    return value == Int.min ? "\(nativeIntType).min" : String(value)
+                    return value == Int.min ? "SwiftTLA._nativeIntMinimum()" : String(value)
                 case (.boolean(let value), .bool):
                     return value ? "true" : "false"
                 default:

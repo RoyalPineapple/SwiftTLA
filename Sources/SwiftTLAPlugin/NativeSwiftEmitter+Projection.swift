@@ -178,7 +178,7 @@ extension NativeSwiftEmitter {
 
     private func formalJSONLiteral(_ value: CompiledValue) throws -> String {
         switch try value.rendered(using: program.layout) {
-        case .int(let value): return ".integer(\(value == Int.min ? "Int.min" : String(value)))"
+        case .int(let value): return ".integer(\(value == Int.min ? "SwiftTLA._nativeIntMinimum()" : String(value)))"
         case .bool(let value): return ".boolean(\(value))"
         case .string(let value), .constant(let value): return ".string(\(String(reflecting: value)))"
         default: throw unsupported("formal JSON enum literal")
@@ -192,7 +192,7 @@ extension NativeSwiftEmitter {
     func renderedLiteral(_ value: TLAValue) -> String {
         func emit(_ value: TLAValue) -> String {
             switch value {
-            case .int(let value): return "SwiftTLA._nativeFormalInt(\(value == Int.min ? "Int.min" : String(value)))"
+            case .int(let value): return "SwiftTLA._nativeFormalInt(\(value == Int.min ? "SwiftTLA._nativeIntMinimum()" : String(value)))"
             case .bool(let value): return "SwiftTLA.TLAValue.bool(\(value))"
             case .string(let value): return "SwiftTLA._nativeFormalString(\(String(reflecting: value)))"
             case .constant(let value): return "SwiftTLA.TLAValue.constant(\(String(reflecting: value)))"

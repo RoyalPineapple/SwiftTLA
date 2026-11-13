@@ -89,7 +89,7 @@ package func verifyOrderedIntInitialExpression(_ declaration: DeclSyntax?, named
             return .add(left, right)
         }
         guard cursor < tokens.count else { return nil }
-        if take(nativeIntTypeTokens + [".", "min"]) { return .integer(Int.min) }
+        if take(["SwiftTLA", ".", "_nativeIntMinimum", "(", ")"]) { return .integer(Int.min) }
         let negative = take(["-"])
         if cursor < tokens.count, let integer = Int((negative ? "-" : "") + tokens[cursor]) {
             cursor += 1

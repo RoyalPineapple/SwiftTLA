@@ -1,6 +1,10 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+private extension Swift.Int {
+    static var min: Swift.Int { -9 }
+}
+
 private extension SwiftTLA.TLAValue {
     static func int(_ value: Swift.Int) -> Self { .string("caller-int") }
 }
@@ -91,7 +95,11 @@ struct NativeSupportBindingModel {
             let algorithm = Algorithm(label: "NativeSupportBindingModel", scoped: { scope in
                 let seed = scope.sharedVar(initial: 0)
                 let count = scope.sharedVar(initial: seed + 1)
-                Do(Step.advance) { Assign(count, to: count + 1) }
+                let minimum = scope.sharedVar(initial: -9_223_372_036_854_775_808)
+                Do(Step.advance) {
+                    Assign(count, to: count + 1)
+                    Assign(minimum, to: minimum)
+                }
                 Do(Step.overflow) { Assign(count, to: count + 9_223_372_036_854_775_807) }
             })
             algorithm

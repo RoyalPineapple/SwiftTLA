@@ -210,7 +210,7 @@ struct NativeSwiftEmitter {
             throw unsupported("literal of \(name)")
         }
         switch (value, type) {
-        case (.integer(let value), .int): return value == Int.min ? "\(nativeIntType).min" : String(value)
+        case (.integer(let value), .int): return value == Int.min ? "SwiftTLA._nativeIntMinimum()" : String(value)
         case (.boolean(let value), .bool): return String(value)
         case (.string(let value), .string): return "\(nativeStringValueType)(formalString: \(String(reflecting: value)))"
         case (.constant(let value), .modelValue):

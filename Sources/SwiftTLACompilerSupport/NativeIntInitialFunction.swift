@@ -141,7 +141,7 @@ private func intInitialOutputSource(_ declaration: DeclSyntax?, program: Compile
             switch (expression.operation, expression.resultType) {
             case (.value(.integer(let integer)), .int):
                 type = nativeIntType
-                value = integer == Int.min ? "\(nativeIntType).min" : String(integer)
+                value = integer == Int.min ? "SwiftTLA._nativeIntMinimum()" : String(integer)
             case (.controlLocation(let location), .controlLocation):
                 type = "_ControlLocation"
                 value = "_ControlLocation.location\(location.ordinal)"
@@ -406,7 +406,7 @@ package func checkedIntInitialValue(_ root: CompiledExpression,
             value = slot
         case .value(.integer(let integer)):
             guard node.children.isEmpty else { return nil }
-            value = integer == Int.min ? "\(nativeIntType).min" : String(integer)
+            value = integer == Int.min ? "SwiftTLA._nativeIntMinimum()" : String(integer)
         default: return nil
         }
         if arithmetic {

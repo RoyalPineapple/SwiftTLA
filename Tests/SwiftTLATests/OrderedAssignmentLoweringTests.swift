@@ -286,7 +286,25 @@ struct OrderedAssignmentLoweringTests {
             _ = try program.renderModule()
             var emitter = NativeSwiftEmitter(model: try MacroCompilation(
                 typeName: "OrderedAssignment", program: program))
-            _ = try emitter.machineMembers()
+            let members = try emitter.machineMembers()
+            if sourceDomain?.initializer == "initial: Int.min" {
+                let initial = try #require(members.first {
+                    $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+                })
+                try emitter.verifyIntInitialOutput(initial)
+                let marker = "SwiftTLA._nativeIntMinimum()"
+                try #require(initial.description.components(separatedBy: marker).count == 2)
+                let wrong = initial.description.replacingOccurrences(of: marker,
+                    with: "SwiftTLA.TLAValue.IntegerLiteralType.min")
+                try #require(!wrong.utf8.elementsEqual(initial.description.utf8))
+                let changed = try #require(Parser.parse(source: wrong).statements.first?.item.as(DeclSyntax.self))
+                do {
+                    try emitter.verifyIntInitialOutput(changed)
+                    Issue.record("A caller-bound minimum member was accepted as initialization output")
+                } catch let diagnostic as CompilationDiagnostic {
+                    #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+                }
+            }
         }
 
     }

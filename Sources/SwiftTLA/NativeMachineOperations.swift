@@ -166,6 +166,10 @@ public func _nativeIntAdd(_ lhs: Int, _ rhs: Int) throws -> Int {
     try _NativeMachineOperations.add(lhs, rhs)
 }
 
+/// Bind the minimum integer literal away from caller member declarations.
+@_documentation(visibility: internal)
+public func _nativeIntMinimum() -> Int { Int.min }
+
 /// Keep generated collection mutation in library scope, away from caller overloads.
 @_documentation(visibility: internal)
 public func _appendNativeOutcome<Outcome: Sendable>(_ outcomes: inout [Outcome], _ outcome: Outcome) {
