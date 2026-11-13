@@ -600,7 +600,7 @@ extension NativeSwiftEmitter {
         let captures = prefix.map { variable($0.variable) }
         let entries = try prefix.map { entry in
             let value = try formalValue(variable(entry.variable), type: program.variableTypes[entry.variable]!)
-            return ".init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(entry.variable.ordinal)), value: \(value))"
+            return "SwiftTLA._nativeFormalProjectionEntry(Self.__swifttlaFormalProjectionTokens, at: \(entry.variable.ordinal), value: \(value))"
         }
         let capture = captures.isEmpty ? "" : "[" + captures.joined(separator: ", ") + "] in "
         return "{ \(capture)try SwiftTLA._nativeFormalProjection([\(entries.joined(separator: ", "))]) }"

@@ -56,17 +56,21 @@ struct GeneratedAtomicUpdateProofTests {
             #expect(diagnostic.path == "native._initialStates.completeIntOutput")
         }
 
-        let prefixToken = "SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: 0)"
-        try #require(initials.description.components(separatedBy: prefixToken).count == 2)
-        let callerToken = initials.description.replacingOccurrences(of: prefixToken,
-            with: "Self.__swifttlaFormalProjectionTokens[0]")
-        try #require(callerToken != initials.description)
-        let wrongToken = try #require(Parser.parse(source: callerToken).statements.first?.item.as(DeclSyntax.self))
-        do {
-            try emitter.verifyIntInitialOutput(wrongToken)
-            Issue.record("An initial prefix using a caller token-array subscript was accepted")
-        } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+        let prefixEntry = "SwiftTLA._nativeFormalProjectionEntry(Self.__swifttlaFormalProjectionTokens, at: 0,"
+        try #require(initials.description.components(separatedBy: prefixEntry).count == 2)
+        for callerEntry in [
+            "SwiftTLA.TLAStateProjection.Entry(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: 0),",
+            "SwiftTLA._nativeFormalProjectionEntry([Self.__swifttlaFormalProjectionTokens[0]], at: 0,",
+        ] {
+            let altered = initials.description.replacingOccurrences(of: prefixEntry, with: callerEntry)
+            try #require(altered != initials.description)
+            let wrongEntry = try #require(Parser.parse(source: altered).statements.first?.item.as(DeclSyntax.self))
+            do {
+                try emitter.verifyIntInitialOutput(wrongEntry)
+                Issue.record("An initial prefix using caller entry construction or token-array indexing was accepted")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+            }
         }
 
         let templateFile = URL(fileURLWithPath: #filePath)
@@ -1385,7 +1389,7 @@ struct GeneratedAtomicUpdateProofTests {
         \s* if \s+ SwiftTLA\._nativeIntInitialMatches \( _selectedInitial\?\.first, \s* _value_first_0 \) \s* \{
         \s* evaluatingInitialBindings \s* = \s* \{ \s* \[_value_first_0\] \s+ in
         \s* try \s+ SwiftTLA\._nativeFormalProjection \( \s* \[
-        \.init \( token: \s* SwiftTLA\._nativeFormalProjectionToken\(Self\.__swifttlaFormalProjectionTokens,\s*at:\s*0\),
+        SwiftTLA\._nativeFormalProjectionEntry\(Self\.__swifttlaFormalProjectionTokens,\s*at:\s*0,
         \s* value: \s* SwiftTLA\._nativeFormalInt\(_value_first_0\) \) \] \) \s* \}
         \s* evaluatingInitializerOrdinal \s* = \s* 1
         \s* let \s+ _value_second_1: \s* \#(integerType) \s* = \s* (-?[0-9]+)

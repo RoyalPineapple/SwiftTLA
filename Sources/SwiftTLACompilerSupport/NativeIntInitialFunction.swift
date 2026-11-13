@@ -161,7 +161,7 @@ private func intInitialOutputSource(_ declaration: DeclSyntax?, program: Compile
                 }.joined(separator: "\n")
                 value = "try { () throws -> SwiftTLA.TLAValue in switch \(binding.name) {\n\(cases)\n} }()"
             }
-            return ".init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(prior.variable.ordinal)), value: \(value))"
+            return "SwiftTLA._nativeFormalProjectionEntry(Self.__swifttlaFormalProjectionTokens, at: \(prior.variable.ordinal), value: \(value))"
         }
         let capture = captures.isEmpty ? "" : "[" + captures.joined(separator: ", ") + "] in "
         body += "evaluatingInitialBindings = { \(capture)try SwiftTLA._nativeFormalProjection([\(entries.joined(separator: ", "))]) }\n"

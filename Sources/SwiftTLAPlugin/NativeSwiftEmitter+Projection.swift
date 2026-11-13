@@ -20,7 +20,7 @@ extension NativeSwiftEmitter {
             "SwiftTLA.TLAStateProjection.Token(validating: \(String(reflecting: field.formalName)))!"
         }.joined(separator: ", ")
         let entries = fields.enumerated().map { index, field in
-            ".init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(index)), value: \(field.value))"
+            "SwiftTLA._nativeFormalProjectionEntry(Self.__swifttlaFormalProjectionTokens, at: \(index), value: \(field.value))"
         }.joined(separator: ",\n")
         let declarations = [DeclSyntax(stringLiteral: """
         private static let __swifttlaFormalProjectionTokens: [SwiftTLA.TLAStateProjection.Token] = [\(tokens)]

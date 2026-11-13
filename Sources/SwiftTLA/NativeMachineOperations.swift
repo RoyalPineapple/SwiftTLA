@@ -208,6 +208,14 @@ public func _nativeFormalProjectionToken(
     tokens[index]
 }
 
+/// Keep projection entry construction in library scope, preserving its token and value.
+@_documentation(visibility: internal)
+public func _nativeFormalProjectionEntry(
+    _ tokens: [TLAStateProjection.Token], at index: Int, value: TLAValue
+) -> TLAStateProjection.Entry {
+    TLAStateProjection.Entry(token: _nativeFormalProjectionToken(tokens, at: index), value: value)
+}
+
 /// Keep generated failure construction independent of caller initializers and Optional operations.
 @_documentation(visibility: internal)
 public func _nativeInitialFailure(

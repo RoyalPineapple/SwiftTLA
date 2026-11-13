@@ -53,7 +53,7 @@ package func verifyGeneratedFormalProjectionOutput(
         }
     }
     let expectedEntries = fields.enumerated().map { index, field in
-        ".init(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: \(index)), value: \(field.value))"
+        "SwiftTLA._nativeFormalProjectionEntry(Self.__swifttlaFormalProjectionTokens, at: \(index), value: \(field.value))"
     }.joined(separator: ",\n")
     let expectedFunction = Parser.parse(source: """
     public func formalProjection(of snapshot: Snapshot) throws -> SwiftTLA.TLAStateProjection {
