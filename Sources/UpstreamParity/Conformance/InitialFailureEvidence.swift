@@ -48,6 +48,7 @@ package struct InitialFailureEvidenceReport: Codable, Sendable {
     package let prefixOrdersSHA256: String
     package let nativePrefixOrdersSHA256: String
     package let controlSeedsSHA256: String
+    package let nativeControlSeedsSHA256: String
     package let graphCompared: Bool
     package let result: String
     package let site: Int
@@ -128,7 +129,7 @@ package enum InitialFailureEvidence {
         let resolvedInitializers = try initializerPlans(layout: resolvedProgram.layout,
             initializations: resolvedProgram.behavior.initializations, requireTypes: true)
         let nativeInitializers = try nativeInitializerPlans(nativeSource, program: resolvedProgram)
-        let recordInputs = try initialRecordInputs(resolvedProgram)
+        let recordInputs = try initialRecordInputs(resolvedProgram, before: failures[0].before)
         guard let check = try rendered.initialEvaluationFailureBundle(capturingRecord: true) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
@@ -156,7 +157,7 @@ package enum InitialFailureEvidence {
         let proofBytes = Data(proof.utf8)
         try proofBytes.write(to: proofURL, options: .atomic)
         let report = InitialFailureEvidenceReport(
-            schema: "swifttla.initial-failure-proof-v13", sourceSHA: sourceSHA,
+            schema: "swifttla.initial-failure-proof-v14", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
@@ -176,6 +177,7 @@ package enum InitialFailureEvidence {
             prefixOrdersSHA256: SHA256.hex(Data(recordInputs.prefixes.utf8)),
             nativePrefixOrdersSHA256: SHA256.hex(Data(nativeInitializers.prefixes.utf8)),
             controlSeedsSHA256: SHA256.hex(Data(recordInputs.seeds.utf8)),
+            nativeControlSeedsSHA256: SHA256.hex(Data(recordInputs.nativeSeeds.utf8)),
             graphCompared: false, result: "prepared", site: site,
             kind: failureKind, operands: operands)
         try encoder.encode(report).write(
@@ -404,8 +406,8 @@ package enum InitialFailureEvidence {
             + "reads |-> \(tuple(reads)), left |-> \(tuple(left)), right |-> \(tuple(right))]"
     }
 
-    private static func initialRecordInputs(_ program: CompiledProgram) throws
-        -> (layout: String, order: String, prefixes: String, seeds: String, types: String) {
+    private static func initialRecordInputs(_ program: CompiledProgram, before: [NativeInitialBindingOutput]) throws
+        -> (layout: String, order: String, prefixes: String, seeds: String, nativeSeeds: String, types: String) {
         let variables = program.layout.variables
         let byID = Dictionary(uniqueKeysWithValues: variables.map { ($0.id, $0) })
         let layout = variables.map { variable in
@@ -446,6 +448,14 @@ package enum InitialFailureEvidence {
             let value = try CompiledValue.controlLocation(location).rendered(using: program.layout)
             return "[ordinal |-> \(variable.id.ordinal), value |-> \(value)]"
         }
+        let nativeSeeds = try ordered.compactMap { variable -> String? in
+            guard variable.declaration.origin == .programCounter else { return nil }
+            let matching = before.filter { $0.name.utf8.elementsEqual(variable.formalName.utf8) }
+            guard matching.count == 1, case .string = matching[0].value else {
+                throw InitialFailureEvidenceError.unsupportedNativeOutcome
+            }
+            return "[ordinal |-> \(variable.id.ordinal), value |-> \(matching[0].value)]"
+        }
         let types = try variables.map { variable in
             let expected: CompiledValueType = variable.declaration.origin == .source ? .int : .controlLocation
             guard let type = program.variableTypes[variable.id], type == expected else {
@@ -453,7 +463,8 @@ package enum InitialFailureEvidence {
             }
             return "[ordinal |-> \(variable.id.ordinal), type |-> \(TLAValue.string(type.swiftType))]"
         }
-        return (tuple(layout), tuple(ordered.map { String($0.id.ordinal) }), tuple(prefixes), tuple(seeds), tuple(types))
+        return (tuple(layout), tuple(ordered.map { String($0.id.ordinal) }), tuple(prefixes),
+                tuple(seeds), tuple(nativeSeeds), tuple(types))
     }
 
     private static func proofSource(module: String, tla: String, site: Int,
@@ -463,7 +474,7 @@ package enum InitialFailureEvidence {
                                     loweredInitializers: String,
                                     resolvedInitializers: String, nativeInitializers: String, nativePrefixOrders: String,
                                     nativeInitializationOrder: String,
-                                    recordInputs: (layout: String, order: String, prefixes: String, seeds: String, types: String)) throws -> String {
+                                    recordInputs: (layout: String, order: String, prefixes: String, seeds: String, nativeSeeds: String, types: String)) throws -> String {
         guard isIdentifier(module), tla.contains("\nInit ==") else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
@@ -511,6 +522,7 @@ package enum InitialFailureEvidence {
         ActualPrefixOrders == \(recordInputs.prefixes)
         NativePrefixOrders == \(nativePrefixOrders)
         ActualControlSeeds == \(recordInputs.seeds)
+        NativeControlSeeds == \(recordInputs.nativeSeeds)
 
         THEOREM SourceInitializersMatchLoweredIR ==
           SourceInitializers = LoweredInitializers
@@ -540,6 +552,10 @@ package enum InitialFailureEvidence {
         THEOREM NativePrefixOrdersMatchResolvedIR ==
           NativePrefixOrders = ActualPrefixOrders
           BY ONLY SMT DEF NativePrefixOrders, ActualPrefixOrders
+
+        THEOREM NativeControlSeedsMatchResolvedIR ==
+          NativeControlSeeds = ActualControlSeeds
+          BY ONLY SMT DEF NativeControlSeeds, ActualControlSeeds
 
         THEOREM ResolvedVariableTypesMatchActualLayout ==
           /\\ DOMAIN ResolvedVariableTypes = DOMAIN ActualLayout
@@ -1001,7 +1017,7 @@ package enum InitialFailureEvidence {
         ProofResolvedPlans == [position \\in ProofIntPositions |-> ResolvedInitializers[ProofSourceRow(position)][2]]
         ProofNativePlans == [position \\in ProofIntPositions |-> NativeInitializers[ProofSourceRow(position)][2]]
         ProofSyntaxViews == [position \\in ProofIntPositions |-> SourceSyntaxViews[ProofSourceRow(position)][2]]
-        ProofControlSeed(position) == (CHOOSE entry \\in {ActualControlSeeds[index] : index \\in DOMAIN ActualControlSeeds} :
+        ProofControlSeed(position) == (CHOOSE entry \\in {NativeControlSeeds[index] : index \\in DOMAIN NativeControlSeeds} :
           entry.ordinal = NativeInitializationOrder[position]).value
         \\* Totalize the proof input outside reached prefixes; the parent below proves no reached read uses a default.
         ProofReadState(position, prior) == [key \\in ProofPrefixIntNames(position) |->
@@ -1110,7 +1126,8 @@ package enum InitialFailureEvidence {
                  /\\ ProofOrder = <<"pc", "first", "second", "last">>
             BY ONLY ActualLayoutSuppliesInitializationDecoderInputs, SetExtensionality, SMT DEF ProofIntPositions
           <1>0b. ProofControlSeed(1) = SourceInitialControl
-            BY ONLY <1>0a, SourceInitialControlMatchesResolvedIR, NativeInitializationOrderMatchesResolvedIR, SMT
+            BY ONLY <1>0a, SourceInitialControlMatchesResolvedIR, NativeInitializationOrderMatchesResolvedIR,
+              NativeControlSeedsMatchResolvedIR, SMT
               DEF ProofControlSeed, ActualControlSeeds, ActualInitializationOrder
           <1>0c. SourceInitialControl \\in ProofValues
             BY ONLY SMT DEF SourceInitialControl, ProofValues
@@ -1423,7 +1440,7 @@ package enum InitialFailureEvidence {
             BY ONLY <1>0, <1>1b, <1>3, SMT
           <1>4. ProofEvaluate(FALSE)[1][ProofObservedPrior(1)]
               = ProofInitialization!SourceFixed(ProofObservedBefore[ProofOrder[1]])
-            BY <1>0, <1>1, <1>2, SMT
+            BY <1>0, <1>1, <1>2, NativeControlSeedsMatchResolvedIR, SMT
               DEF ProofEvaluate, SourceInitialControl, ProofControlSeed, ActualControlSeeds, ActualInitializationOrder
           <1>5. \\A position \\in {2, 3} :
               ProofEvaluate(FALSE)[position][ProofObservedPrior(position)]

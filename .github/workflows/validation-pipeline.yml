@@ -244,7 +244,7 @@ jobs:
           assert hashlib.sha256((case / "native-initial-source.swift").read_bytes()).hexdigest() == compiler["sourceSHA256"]
           assert report["nativeSourceSHA256"] == compiler["sourceSHA256"]
           expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
-          assert report["schema"] == "swifttla.initial-failure-proof-v13"
+          assert report["schema"] == "swifttla.initial-failure-proof-v14"
           assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
           assert report["result"] == "prepared" and report["graphCompared"] is False
           assert (report["site"], report["kind"], report["operands"]) == expected
@@ -283,7 +283,8 @@ jobs:
                             ("NativeInitializationOrder", "nativeInitializationOrderSHA256"),
                             ("ActualPrefixOrders", "prefixOrdersSHA256"),
                             ("NativePrefixOrders", "nativePrefixOrdersSHA256"),
-                            ("ActualControlSeeds", "controlSeedsSHA256")]:
+                            ("ActualControlSeeds", "controlSeedsSHA256"),
+                            ("NativeControlSeeds", "nativeControlSeedsSHA256")]:
               prefix = name + " == "
               definitions = [line[len(prefix):] for line in proof_lines if line.startswith(prefix)]
               assert len(definitions) == 1

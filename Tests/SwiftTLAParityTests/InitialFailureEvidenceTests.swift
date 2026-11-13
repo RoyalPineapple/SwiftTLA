@@ -20,7 +20,7 @@ struct InitialFailureEvidenceTests {
             typeName: "CheckedAdditionPrefixInitialModel", program: program))
         let nativeSource = try emitter.machineMembers().map(\.description).joined(separator: "\n")
         let report = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: nativeSource, to: directory)
-        #expect(report.schema == "swifttla.initial-failure-proof-v13")
+        #expect(report.schema == "swifttla.initial-failure-proof-v14")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)
         #expect(!report.graphCompared)
@@ -125,6 +125,11 @@ struct InitialFailureEvidenceTests {
         let preparation = try #require(JSONSerialization.jsonObject(with:
             Data(contentsOf: directory.appendingPathComponent("preparation.json"))) as? [String: Any])
         #expect(preparation["controlSeedsSHA256"] as? String == SHA256.hex(Data(seeds.utf8)))
+        let nativeControl = try #require(failure.before.first { $0.name == "pc" })
+        let nativeSeeds = "<<[ordinal |-> 0, value |-> \(nativeControl.value)]>>"
+        let nativeSeedHash = try #require(preparation["nativeControlSeedsSHA256"] as? String)
+        #expect(nativeSeedHash == SHA256.hex(Data(nativeSeeds.utf8)))
+        #expect(proofText.contains("NativeControlSeeds == \(nativeSeeds)\n"))
         #expect(proofText.contains("ProofInitialization!InitializationHistoriesNeedOnlyReachableChildAgreement"))
         #expect(proofText.contains("ProofInitialization!DeterministicReachableInitializersConstructTheirOrderedObservations"))
         let helper = "SwiftTLA._nativeIntAdd(_arithmetic0, _arithmetic1)"
