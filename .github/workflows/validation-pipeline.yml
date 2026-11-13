@@ -76,13 +76,22 @@ jobs:
       - uses: actions/cache@v4
         id: binary-cache
         with:
-          path: .build/release/tlc-validate
-          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-xcode-16.4-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
+          path: |
+            .build/release/tlc-validate
+            .build/release/native-initial-source.swift
+            .build/release/native-initial-source.json
+          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-xcode-16.4-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', '.github/workflows/validation-pipeline.yml', 'scripts/retain-native-initial-source.py') }}
       - name: Build validator for this revision
         if: steps.binary-cache.outputs.cache-hit != 'true'
-        run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
-      - name: Verify cached or built executable
-        run: test -x .build/release/tlc-validate
+        run: |
+          set -euo pipefail
+          native_source_build_started=$(python3 -c 'import time; print(time.time_ns())')
+          swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -Xswiftc -g -j 1
+          python3 scripts/retain-native-initial-source.py capture "$native_source_build_started"
+      - name: Verify cached or built executable and compiler input
+        run: |
+          test -x .build/release/tlc-validate
+          python3 scripts/retain-native-initial-source.py verify
       - name: Enumerate complete case coverage
         id: cases
         env:
@@ -135,7 +144,10 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
-          path: .build/release/tlc-validate
+          path: |
+            .build/release/tlc-validate
+            .build/release/native-initial-source.swift
+            .build/release/native-initial-source.json
           if-no-files-found: error
           overwrite: true
 
@@ -212,9 +224,12 @@ jobs:
           set -euo pipefail
           chmod +x .build/release/tlc-validate
           test -x .build/release/tlc-validate
+          python3 scripts/retain-native-initial-source.py verify
           mkdir -p .build/initial-failure-artifacts
           .build/release/tlc-validate initial-failure prepare \
             --output .build/initial-failure-artifacts/case
+          cp .build/release/native-initial-source.swift .build/initial-failure-artifacts/case/
+          cp .build/release/native-initial-source.json .build/initial-failure-artifacts/case/
           python3 - <<'PY'
           import hashlib
           import json
@@ -224,6 +239,9 @@ jobs:
           case = Path(".build/initial-failure-artifacts/case")
           report = json.loads((case / "preparation.json").read_text())
           native = json.loads((case / "native-initial-failure.json").read_text())
+          compiler = json.loads((case / "native-initial-source.json").read_text())
+          assert compiler["semanticInterpretation"] == "OPEN"
+          assert hashlib.sha256((case / "native-initial-source.swift").read_bytes()).hexdigest() == compiler["sourceSHA256"]
           expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
           assert report["schema"] == "swifttla.initial-failure-proof-v10"
           assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
@@ -420,10 +438,15 @@ jobs:
 
           root = Path(".build/initial-failure-artifacts")
           result = json.loads((root / "case" / "preparation.json").read_text())
+          compiler = json.loads((root / "case" / "native-initial-source.json").read_text())
           result.update(result="proved", proofMethod="TLAPS", wrongPayloadRejected=True,
                         wrongBeforeRejected=True, wrongEventsRejected=True, wrongLoweringRejected=True,
                         wrongLayoutRejected=True, wrongControlSeedRejected=True,
-                        wrongResolvedRejected=True)
+                        wrongResolvedRejected=True,
+                        retainedNativeSwift={"sha256": compiler["sourceSHA256"],
+                                             "producerSHA": compiler["producerSHA"],
+                                             "origin": compiler["origin"],
+                                             "semanticInterpretation": "OPEN", "consumedByProof": False})
           (root / "proof-result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
           PY
       - name: Retain source revision

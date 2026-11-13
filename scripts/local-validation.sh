@@ -171,6 +171,7 @@ run_guarded() {
         bash -n scripts/build-pinned-tlaps.sh scripts/check-language-proof-batch.sh scripts/proof-family-inputs.sh
         ruby Tests/Fixtures/ProofFamily/assert_routing.rb
         python3 Tests/Fixtures/TLAPSBootstrap/assert_inputs.py
+        python3 "$(dirname "$0")/retain-native-initial-source.py" --self-check
         "$(dirname "$0")/setup-finite-graph-tools.sh" --verify-bridge-sources
         bash "$(dirname "$0")/verify-finite-graph-input-pins.sh"
         return
