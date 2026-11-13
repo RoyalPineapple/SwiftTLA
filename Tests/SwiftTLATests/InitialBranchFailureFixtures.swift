@@ -1,6 +1,13 @@
 @testable import SwiftTLA
 import SwiftTLAMacros
 
+private extension SwiftTLA.TLAStateProjection.Token {
+    init?(validating identifier: Swift.String) {
+        let compiled = try! CompiledRuntime(compilation: InitialFailureOrderModel.spec.compile()).initialOutcomes()
+        self = try! compiled.failures[0].formalBindingsBeforeFailure().entries[0].token
+    }
+}
+
 private extension SwiftTLA.TLAValue {
     static func string(_ value: Swift.String) -> Self { .int(-9) }
 }

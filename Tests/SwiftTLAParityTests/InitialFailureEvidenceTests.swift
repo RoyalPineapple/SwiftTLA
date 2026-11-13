@@ -156,8 +156,8 @@ struct InitialFailureEvidenceTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.initialConstruction")
         }
-        let firstToken = "SwiftTLA.TLAStateProjection.Token(validating: \"first\")!"
-        let secondToken = "SwiftTLA.TLAStateProjection.Token(validating: \"second\")!"
+        let firstToken = "SwiftTLA._nativeFormalProjectionToken(validating: \"first\")!"
+        let secondToken = "SwiftTLA._nativeFormalProjectionToken(validating: \"second\")!"
         try #require(nativeSource.components(separatedBy: firstToken).count == 2)
         try #require(nativeSource.components(separatedBy: secondToken).count == 2)
         let swappedTokens = nativeSource.replacingOccurrences(of: firstToken, with: "__swappedToken__")
@@ -172,6 +172,8 @@ struct InitialFailureEvidenceTests {
             #expect(diagnostic.path == "native.formalProjection")
         }
         for (index, change) in [
+            (firstToken, "SwiftTLA.TLAStateProjection.Token(validating: \"first\")!",
+             1, "native.formalProjection"),
             ("SwiftTLA._nativeFormalInt(snapshot.state.first)", "SwiftTLA._nativeFormalInt(snapshot.state.second)",
              1, "native.formalProjection"),
             ("SwiftTLA._nativeFormalInt(snapshot.state.second)", "SwiftTLA._nativeFormalInt(0)",

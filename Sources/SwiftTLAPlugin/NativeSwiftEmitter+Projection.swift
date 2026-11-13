@@ -17,7 +17,7 @@ extension NativeSwiftEmitter {
                 value: try formalValue(route, type: type))
         }
         let tokens = fields.map { field in
-            "SwiftTLA.TLAStateProjection.Token(validating: \(String(reflecting: field.formalName)))!"
+            "SwiftTLA._nativeFormalProjectionToken(validating: \(String(reflecting: field.formalName)))!"
         }.joined(separator: ", ")
         let entries = fields.enumerated().map { index, field in
             "SwiftTLA._nativeFormalProjectionEntry(Self.__swifttlaFormalProjectionTokens, at: \(index), value: \(field.value))"

@@ -204,6 +204,12 @@ public func _nativeFormalProjection(_ entries: [TLAStateProjection.Entry]) throw
     try TLAStateProjection(validating: entries)
 }
 
+/// Validate formal token names in library scope, away from caller initializers.
+@_documentation(visibility: internal)
+public func _nativeFormalProjectionToken(validating identifier: String) -> TLAStateProjection.Token? {
+    TLAStateProjection.Token(validating: identifier)
+}
+
 /// Keep formal token indexing in library scope, away from caller subscripts.
 @_documentation(visibility: internal)
 public func _nativeFormalProjectionToken(

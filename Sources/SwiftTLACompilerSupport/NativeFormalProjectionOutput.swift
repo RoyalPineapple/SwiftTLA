@@ -16,7 +16,7 @@ private func nativeProjectionMismatch(_ reason: String) -> CompilationDiagnostic
 }
 package func verifyGeneratedFormalProjectionTokenTable(_ declaration: DeclSyntax?, names: [String]) throws {
     let tokenValues = names.map {
-        "SwiftTLA.TLAStateProjection.Token(validating: \(String(reflecting: $0)))!"
+        "SwiftTLA._nativeFormalProjectionToken(validating: \(String(reflecting: $0)))!"
     }.joined(separator: ", ")
     let expectedTokens = Parser.parse(source: """
     private static let __swifttlaFormalProjectionTokens: [SwiftTLA.TLAStateProjection.Token] = [\(tokenValues)]

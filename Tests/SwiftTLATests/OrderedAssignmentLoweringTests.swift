@@ -679,9 +679,9 @@ struct OrderedAssignmentLoweringTests {
                     $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
                 })
                 try emitter.verifyIntInitialOutput(initial)
-                let marker = ".string(\"K\")"
+                let marker = "SwiftTLA._nativeFormalString(\"K\")"
                 try #require(initial.description.components(separatedBy: marker).count == 3)
-                let wrong = initial.description.replacingOccurrences(of: marker, with: ".string(\"K\")")
+                let wrong = initial.description.replacingOccurrences(of: marker, with: "SwiftTLA._nativeFormalString(\"K\")")
                 #expect(!wrong.utf8.elementsEqual(initial.description.utf8))
                 let changed = try #require(Parser.parse(source: wrong).statements.first?.item.as(DeclSyntax.self))
                 #expect(throws: CompilationDiagnostic.self) {
@@ -698,7 +698,7 @@ struct OrderedAssignmentLoweringTests {
                 }
                 try verifyGeneratedFormalProjectionOutput(projection, fields: fields)
                 try #require(projection[1].description.components(separatedBy: marker).count == 2)
-                let wrongProjection = projection[1].description.replacingOccurrences(of: marker, with: ".string(\"K\")")
+                let wrongProjection = projection[1].description.replacingOccurrences(of: marker, with: "SwiftTLA._nativeFormalString(\"K\")")
                 #expect(!wrongProjection.utf8.elementsEqual(projection[1].description.utf8))
                 let changedProjection = try #require(Parser.parse(source: wrongProjection).statements.first?.item.as(DeclSyntax.self))
                 #expect(throws: CompilationDiagnostic.self) {
