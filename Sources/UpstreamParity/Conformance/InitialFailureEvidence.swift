@@ -325,7 +325,7 @@ package enum InitialFailureEvidence {
             case .int: value = "SwiftTLA._nativeFormalInt(\(route))"
             case .controlLocation:
                 let cases = program.layout.controlLocations.map {
-                    "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.formalName)))"
+                    "case .location\($0.id.ordinal): return SwiftTLA._nativeFormalString(\(String(reflecting: $0.formalName)))"
                 }.joined(separator: "\n")
                 value = "try { () throws -> SwiftTLA.TLAValue in switch \(route) {\n\(cases)\n} }()"
             default: throw InitialFailureEvidenceError.unsupportedGeneratedOutput

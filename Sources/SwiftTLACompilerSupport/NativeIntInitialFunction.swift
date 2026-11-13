@@ -157,7 +157,7 @@ private func intInitialOutputSource(_ declaration: DeclSyntax?, program: Compile
                 value = "SwiftTLA._nativeFormalInt(\(binding.name))"
             } else {
                 let cases = program.layout.controlLocations.map {
-                    "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.formalName)))"
+                    "case .location\($0.id.ordinal): return SwiftTLA._nativeFormalString(\(String(reflecting: $0.formalName)))"
                 }.joined(separator: "\n")
                 value = "try { () throws -> SwiftTLA.TLAValue in switch \(binding.name) {\n\(cases)\n} }()"
             }

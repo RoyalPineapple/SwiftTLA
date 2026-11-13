@@ -1,6 +1,10 @@
 @testable import SwiftTLA
 import SwiftTLAMacros
 
+private extension SwiftTLA.TLAValue {
+    static func string(_ value: Swift.String) -> Self { .int(-9) }
+}
+
 private extension SwiftTLA.TLAStateProjection.Entry {
     init(token: TLAStateProjection.Token, value: TLAValue) {
         let compiled = try! CompiledRuntime(compilation: InitialFailureOrderModel.spec.compile()).initialOutcomes()

@@ -172,20 +172,30 @@ struct InitialFailureEvidenceTests {
             #expect(diagnostic.path == "native.formalProjection")
         }
         for (index, change) in [
-            ("SwiftTLA._nativeFormalInt(snapshot.state.first)", "SwiftTLA._nativeFormalInt(snapshot.state.second)"),
-            ("SwiftTLA._nativeFormalInt(snapshot.state.second)", "SwiftTLA._nativeFormalInt(0)"),
-            ("switch snapshot._value_pc_0 {\ncase .location0: return .string(\"stay\")",
-             "switch snapshot._value_pc_0 {\ncase .location0: return .string(\"changed\")"),
+            ("SwiftTLA._nativeFormalInt(snapshot.state.first)", "SwiftTLA._nativeFormalInt(snapshot.state.second)",
+             1, "native.formalProjection"),
+            ("SwiftTLA._nativeFormalInt(snapshot.state.second)", "SwiftTLA._nativeFormalInt(0)",
+             1, "native.formalProjection"),
+            ("switch snapshot._value_pc_0 {\ncase .location0: return SwiftTLA._nativeFormalString(\"stay\")",
+             "switch snapshot._value_pc_0 {\ncase .location0: return SwiftTLA._nativeFormalString(\"changed\")",
+             1, "native.formalProjection"),
+            ("switch snapshot._value_pc_0 {\ncase .location0: return SwiftTLA._nativeFormalString(\"stay\")",
+             "switch snapshot._value_pc_0 {\ncase .location0: return .string(\"stay\")",
+             1, "native.formalProjection"),
+            ("switch _value_pc_0 {\ncase .location0: return SwiftTLA._nativeFormalString(\"stay\")",
+             "switch _value_pc_0 {\ncase .location0: return .string(\"stay\")",
+             3, "native._initialStates.completeIntOutput"),
         ].enumerated() {
-            try #require(nativeSource.components(separatedBy: change.0).count == 2)
-            let changedProjection = nativeSource.replacingOccurrences(of: change.0, with: change.1)
+            let (original, replacement, occurrences, path) = change
+            try #require(nativeSource.components(separatedBy: original).count == occurrences + 1)
+            let changedProjection = nativeSource.replacingOccurrences(of: original, with: replacement)
             try #require(changedProjection != nativeSource)
             do {
                 _ = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: changedProjection,
                     to: directory.appendingPathComponent("changed-projection-\(index)"))
-                Issue.record("A changed snapshot projection was accepted as initialization proof input: \(index)")
+                Issue.record("A changed projection or prefix was accepted as initialization proof input: \(index)")
             } catch let diagnostic as CompilationDiagnostic {
-                #expect(diagnostic.path == "native.formalProjection")
+                #expect(diagnostic.path == path)
             }
         }
         #expect(proofText.contains("THEOREM CompleteInitializationMatchesActualOutputs =="))

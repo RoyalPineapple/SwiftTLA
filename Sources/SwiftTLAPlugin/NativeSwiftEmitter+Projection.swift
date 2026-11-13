@@ -40,11 +40,11 @@ extension NativeSwiftEmitter {
         switch type {
         case .int: return "SwiftTLA._nativeFormalInt(\(value))"
         case .bool: return "SwiftTLA.TLAValue.bool(\(value))"
-        case .string: return "SwiftTLA.TLAValue.string(\(value).formalString)"
+        case .string: return "SwiftTLA._nativeFormalString(\(value).formalString)"
         case .modelValue: return "SwiftTLA.TLAValue.constant(\(value).rawValue)"
         case .controlLocation:
             return switching(program.layout.controlLocations.map {
-                "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.formalName)))"
+                "case .location\($0.id.ordinal): return SwiftTLA._nativeFormalString(\(String(reflecting: $0.formalName)))"
             })
         case .named(let name):
             guard let members = program.enums.cases[name] else { throw unsupported("unresolved formal enum: \(name)") }
@@ -194,7 +194,7 @@ extension NativeSwiftEmitter {
             switch value {
             case .int(let value): return "SwiftTLA._nativeFormalInt(\(value == Int.min ? "Int.min" : String(value)))"
             case .bool(let value): return "SwiftTLA.TLAValue.bool(\(value))"
-            case .string(let value): return "SwiftTLA.TLAValue.string(\(String(reflecting: value)))"
+            case .string(let value): return "SwiftTLA._nativeFormalString(\(String(reflecting: value)))"
             case .constant(let value): return "SwiftTLA.TLAValue.constant(\(String(reflecting: value)))"
             case .set(let values): return "SwiftTLA.TLAValue.set([\(values.sorted().map(emit).joined(separator: ", "))])"
             case .tuple(let values): return "SwiftTLA.TLAValue.tuple([\(values.map(emit).joined(separator: ", "))])"
