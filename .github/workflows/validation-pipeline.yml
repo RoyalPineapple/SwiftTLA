@@ -353,8 +353,8 @@ jobs:
           "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/initial-failure-artifacts/tlapm-version.txt
           grep -Eq '^941f894(-dirty)?$' .build/initial-failure-artifacts/tlapm-version.txt
           "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version > .build/initial-failure-artifacts/z3-version.txt
-          "$proof_tool_dir/tlapm/bin/tlapm" --nofp --timing --verbose -I "$proof_inputs" \
-            .build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla \
+          "$proof_tool_dir/tlapm/bin/tlapm" --nofp --timing --toolbox-vsn 1 -I "$proof_inputs" \
+            .build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla </dev/null \
             2>&1 | tee .build/initial-failure-artifacts/proof.log
           grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \
             .build/initial-failure-artifacts/proof.log
