@@ -1799,12 +1799,13 @@ THEOREM ObservedFailurePrefixConstructsTheGeneratedInitializationHistory ==
             BY ONLY <1>0, PrefixKeySetsAreContained, SMT
         <2>1. prefix(index) \in [PrefixKeys(order, index) -> Values]
             BY ONLY <1>0, <2>0, SMT DEF prefix, SourceRestriction
-        <2>2. \E bound \in SUBSET Keys : prefix(index) \in [bound -> Values]
-            <3>. WITNESS PrefixKeys(order, index)
-            <3>. QED BY <2>0, <2>1, SMT
-        <2>3. prefix(index) \in PartialBindings
-            BY ONLY <2>2, SMT DEF PartialBindings
-        <2>. QED BY ONLY <2>0, <2>1, <2>3, SMT
+        <2>2. PrefixKeys(order, index) \in SUBSET Keys
+            BY ONLY <2>0, SMT
+        <2>3. [PrefixKeys(order, index) -> Values] \in {[bound -> Values] : bound \in SUBSET Keys}
+            BY ONLY <2>2, SMT
+        <2>4. prefix(index) \in PartialBindings
+            BY ONLY <2>1, <2>3, SMT DEF PartialBindings
+        <2>. QED BY ONLY <2>0, <2>1, <2>4, SMT
     <1>2. prefix(failed - 1) = before
         BY ONLY <1>0, SMT DEF prefix, SourceRestriction
     <1>3a. before \in PartialBindings /\ order[failed] \in Keys
@@ -1872,7 +1873,12 @@ THEOREM ObservedFailurePrefixConstructsTheGeneratedInitializationHistory ==
                 BY ONLY <1>0, <2>2, <3>1, SetExtensionality, SMT
                     DEF terminal, event, GeneratedInitialLeaf, GeneratedInitialStates,
                         GeneratedInitialFailures, SourceFailed
-            <3>. QED BY ONLY <3>1, <3>2, SetExtensionality, SMT DEF GeneratedAdvance, terminal
+            <3>3. /\ {GeneratedInitialLeaf(prior, order[index], evaluate[index][prior]).states : prior \in {before}} = {{}}
+                  /\ {GeneratedInitialLeaf(prior, order[index], evaluate[index][prior]).failures : prior \in {before}} = {{event}}
+                BY ONLY <3>2, SetExtensionality, SMT DEF terminal
+            <3>4. GeneratedAdvance([states |-> {before}, failures |-> {}], order[index], evaluate[index]) = terminal
+                BY ONLY <3>3, SetExtensionality, SMT DEF GeneratedAdvance, terminal
+            <3>. QED BY ONLY <3>1, <3>4, SMT
         <2>3. CASE index > failed
             <3>1. history[index] = terminal /\ history[index - 1] = terminal
                 BY ONLY <1>0, <2>3, SMT DEF history
