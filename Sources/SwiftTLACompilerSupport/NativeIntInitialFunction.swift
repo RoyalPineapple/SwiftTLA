@@ -34,7 +34,7 @@ private func invalidSourceIdentifier(_ name: String) -> CompilationDiagnostic {
 @discardableResult
 package func verifyNativeIntInitialOutput(_ declaration: DeclSyntax?, program: CompiledProgram,
     variables: [(id: VariableID, swiftIdentifier: String)]) throws
-    -> (expressions: [VariableID: [NativeIntInitialStep]], captures: [[VariableID]])? {
+    -> (expressions: [VariableID: [NativeIntInitialStep]], captures: [[VariableID]], sites: [VariableID])? {
     guard let source = try intInitialOutputSource(declaration, program: program, variables: variables) else { return nil }
     // Template lines have complete lexemes; parse them separately to avoid recursive closure nesting.
     let expectedTokens = source.split(separator: "\n").flatMap { line in
@@ -98,8 +98,18 @@ package func verifyNativeIntInitialOutput(_ declaration: DeclSyntax?, program: C
         guard Set(prefix).count == prefix.count else { throw intInitialOutputMismatch() }
         captures.append(prefix)
     }
-    guard captures.count == program.behavior.initializations.count else { throw intInitialOutputMismatch() }
-    return (decoded, captures)
+    let sites = try tokens.indices.compactMap { index -> VariableID? in
+        guard tokens[index] == "evaluatingInitializerOrdinal", index + 2 < tokens.count,
+              tokens[index + 1] == "=", tokens[index + 2] != "nil" else { return nil }
+        guard let ordinal = Int(tokens[index + 2]),
+              let variable = program.layout.variables.first(where: { $0.id.ordinal == ordinal }) else {
+            throw intInitialOutputMismatch()
+        }
+        return variable.id
+    }
+    guard captures.count == program.behavior.initializations.count,
+          sites.count == captures.count else { throw intInitialOutputMismatch() }
+    return (decoded, captures, sites)
 }
 
 private func intInitialOutputMismatch(

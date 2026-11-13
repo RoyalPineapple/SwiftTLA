@@ -44,6 +44,7 @@ package struct InitialFailureEvidenceReport: Codable, Sendable {
     package let resolvedVariableTypesSHA256: String
     package let layoutSHA256: String
     package let initializationOrderSHA256: String
+    package let nativeInitializationOrderSHA256: String
     package let prefixOrdersSHA256: String
     package let nativePrefixOrdersSHA256: String
     package let controlSeedsSHA256: String
@@ -139,7 +140,7 @@ package enum InitialFailureEvidence {
             sourceInitialControl: sourceInitialControl,
             loweredInitializers: loweredInitializers,
             resolvedInitializers: resolvedInitializers, nativeInitializers: nativeInitializers.plans,
-            nativePrefixOrders: nativeInitializers.prefixes,
+            nativePrefixOrders: nativeInitializers.prefixes, nativeInitializationOrder: nativeInitializers.order,
             recordInputs: recordInputs)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let generated = directory.appendingPathComponent("generated-tla")
@@ -155,7 +156,7 @@ package enum InitialFailureEvidence {
         let proofBytes = Data(proof.utf8)
         try proofBytes.write(to: proofURL, options: .atomic)
         let report = InitialFailureEvidenceReport(
-            schema: "swifttla.initial-failure-proof-v12", sourceSHA: sourceSHA,
+            schema: "swifttla.initial-failure-proof-v13", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
@@ -171,6 +172,7 @@ package enum InitialFailureEvidence {
             resolvedVariableTypesSHA256: SHA256.hex(Data(recordInputs.types.utf8)),
             layoutSHA256: SHA256.hex(Data(recordInputs.layout.utf8)),
             initializationOrderSHA256: SHA256.hex(Data(recordInputs.order.utf8)),
+            nativeInitializationOrderSHA256: SHA256.hex(Data(nativeInitializers.order.utf8)),
             prefixOrdersSHA256: SHA256.hex(Data(recordInputs.prefixes.utf8)),
             nativePrefixOrdersSHA256: SHA256.hex(Data(nativeInitializers.prefixes.utf8)),
             controlSeedsSHA256: SHA256.hex(Data(recordInputs.seeds.utf8)),
@@ -287,7 +289,7 @@ package enum InitialFailureEvidence {
 
     // Syntax coverage is required here; semantic interpretation of the full function remains a separate proof obligation.
     private static func nativeInitializerPlans(_ source: String, program: CompiledProgram) throws
-        -> (plans: String, prefixes: String) {
+        -> (plans: String, prefixes: String, order: String) {
         guard !source.utf8.contains(0) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
         let file = Parser.parse(source: source)
         guard !file.hasError else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
@@ -377,7 +379,8 @@ package enum InitialFailureEvidence {
             }.map { String($0.id.ordinal) }
             return "<<\(ordinals.joined(separator: ", "))>>"
         }
-        return ("<<\(rows.joined(separator: ", "))>>", "<<\(prefixes.joined(separator: ", "))>>")
+        let order = decodedPlans.sites.map { String($0.ordinal) }.joined(separator: ", ")
+        return ("<<\(rows.joined(separator: ", "))>>", "<<\(prefixes.joined(separator: ", "))>>", "<<\(order)>>")
     }
 
     private static func initializerPlan(_ nodes: [StraightLineAssignmentCheck.OrderedIntNode],
@@ -459,6 +462,7 @@ package enum InitialFailureEvidence {
                                     sourceSyntaxOrigins: String, sourceSyntaxIndices: String, sourceInitialControl: String,
                                     loweredInitializers: String,
                                     resolvedInitializers: String, nativeInitializers: String, nativePrefixOrders: String,
+                                    nativeInitializationOrder: String,
                                     recordInputs: (layout: String, order: String, prefixes: String, seeds: String, types: String)) throws -> String {
         guard isIdentifier(module), tla.contains("\nInit ==") else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
@@ -503,6 +507,7 @@ package enum InitialFailureEvidence {
         ResolvedVariableTypes == \(recordInputs.types)
         ActualLayout == \(recordInputs.layout)
         ActualInitializationOrder == \(recordInputs.order)
+        NativeInitializationOrder == \(nativeInitializationOrder)
         ActualPrefixOrders == \(recordInputs.prefixes)
         NativePrefixOrders == \(nativePrefixOrders)
         ActualControlSeeds == \(recordInputs.seeds)
@@ -527,6 +532,10 @@ package enum InitialFailureEvidence {
         THEOREM NativeInitializersMatchResolvedIR ==
           NativeInitializers = ResolvedInitializers
           BY ONLY SMT DEF NativeInitializers, ResolvedInitializers
+
+        THEOREM NativeInitializationOrderMatchesResolvedIR ==
+          NativeInitializationOrder = ActualInitializationOrder
+          BY ONLY SMT DEF NativeInitializationOrder, ActualInitializationOrder
 
         THEOREM NativePrefixOrdersMatchResolvedIR ==
           NativePrefixOrders = ActualPrefixOrders
@@ -556,8 +565,8 @@ package enum InitialFailureEvidence {
         ProofOrdinals == [key \\in ProofAllKeys |-> ActualLayout[ProofLayoutIndex(key)].ordinal]
         ProofIntSlots == {ActualLayout[row].declaration :
           row \\in {entry \\in DOMAIN ActualLayout : ActualLayout[entry].origin = "source"}}
-        ProofCount == Len(ActualInitializationOrder)
-        ProofOrder == [position \\in 1..ProofCount |-> ProofOrdinalKey(ActualInitializationOrder[position])]
+        ProofCount == Len(NativeInitializationOrder)
+        ProofOrder == [position \\in 1..ProofCount |-> ProofOrdinalKey(NativeInitializationOrder[position])]
         ProofPrefixKeys(position) == {ProofOrder[earlier] : earlier \\in 1..(position - 1)}
         ProofPrefixIntNames(position) == ProofPrefixKeys(position) \\cap ProofIntSlots
         ProofPrefixOrder(position) == [index \\in DOMAIN NativePrefixOrders[position] |->
@@ -652,14 +661,14 @@ package enum InitialFailureEvidence {
           <1>3. ProofIntKeys = ProofIntSlots /\\ ProofIntSlots \\subseteq ProofAllKeys
             BY ONLY <1>3c, <1>3d, <1>3e, SMT
           <1>4a. DOMAIN ActualLayout = 1..ProofCount /\\ ProofCount \\in Nat /\\ ProofCount = 4
-            BY ONLY SMT DEF ActualLayout, ActualInitializationOrder, ProofCount
+            BY ONLY NativeInitializationOrderMatchesResolvedIR, SMT DEF ActualLayout, ActualInitializationOrder, ProofCount
           <1>4b. \\A position \\in 1..ProofCount : ProofOrder[position] = ActualLayout[position].declaration
-            BY ONLY <1>1, <1>4a, SMT
+            BY ONLY <1>1, <1>4a, NativeInitializationOrderMatchesResolvedIR, SMT
               DEF ProofOrder, ActualInitializationOrder, ActualLayout, ProofCount
           <1>4c. ProofOrder = <<"pc", "first", "second", "last">>
-            BY ONLY <1>4a, <1>4b, SMT DEF ProofOrder, ActualLayout
+            BY ONLY <1>4a, <1>4b, NativeInitializationOrderMatchesResolvedIR, SMT DEF ProofOrder, ActualLayout
           <1>4. ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
-            BY ONLY <1>0, <1>4a, <1>4b, SetExtensionality, SMT
+            BY ONLY <1>0, <1>4a, <1>4b, NativeInitializationOrderMatchesResolvedIR, SetExtensionality, SMT
               DEF ProofOrder, ProofAllKeys, ProofInitialization!InitializationOrder,
                 ProofInitialization!PrefixKeys
           <1>5. ProofInitialization!IntInitializationDomains
@@ -944,7 +953,7 @@ package enum InitialFailureEvidence {
                   DEF SourceInitializers, ProofPrefixIntNames, ProofPrefixKeys, ProofBoundKeys
               <3>. QED BY ONLY <2>0, <3>1, <3>2, <3>3, SMT
             <2>2. row + 1 \\in 1..ProofCount
-              BY ONLY <2>0, SMT DEF ProofCount, ActualInitializationOrder
+              BY ONLY <2>0, NativeInitializationOrderMatchesResolvedIR, SMT DEF ProofCount, ActualInitializationOrder
             <2>. QED BY <2>0, <2>1, <2>2, SMT
           <1>6. \\A row \\in DOMAIN SourceInitializers : \\E position \\in 1..ProofCount :
                 /\\ ProofOrder[position] = SourceInitializers[row][1]
@@ -988,7 +997,7 @@ package enum InitialFailureEvidence {
         ProofNativePlans == [position \\in ProofIntPositions |-> NativeInitializers[ProofSourceRow(position)][2]]
         ProofSyntaxViews == [position \\in ProofIntPositions |-> SourceSyntaxViews[ProofSourceRow(position)][2]]
         ProofControlSeed(position) == (CHOOSE entry \\in {ActualControlSeeds[index] : index \\in DOMAIN ActualControlSeeds} :
-          entry.ordinal = ActualInitializationOrder[position]).value
+          entry.ordinal = NativeInitializationOrder[position]).value
         \\* Totalize the proof input outside reached prefixes; the parent below proves no reached read uses a default.
         ProofReadState(position, prior) == [key \\in ProofPrefixIntNames(position) |->
           IF key \\in DOMAIN prior /\\ prior[key] \\in ProofIntMin..ProofIntMax THEN prior[key] ELSE 0]
@@ -1096,7 +1105,7 @@ package enum InitialFailureEvidence {
                  /\\ ProofOrder = <<"pc", "first", "second", "last">>
             BY ONLY ActualLayoutSuppliesInitializationDecoderInputs, SetExtensionality, SMT DEF ProofIntPositions
           <1>0b. ProofControlSeed(1) = SourceInitialControl
-            BY ONLY <1>0a, SourceInitialControlMatchesResolvedIR, SMT
+            BY ONLY <1>0a, SourceInitialControlMatchesResolvedIR, NativeInitializationOrderMatchesResolvedIR, SMT
               DEF ProofControlSeed, ActualControlSeeds, ActualInitializationOrder
           <1>0c. SourceInitialControl \\in ProofValues
             BY ONLY SMT DEF SourceInitialControl, ProofValues
