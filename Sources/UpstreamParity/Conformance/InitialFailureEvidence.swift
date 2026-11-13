@@ -1510,8 +1510,13 @@ package enum InitialFailureEvidence {
                 ProofInitialization!Expressions!SourceOverflow
           <1>7. /\\ ProofObservedBefore = ProofObservedPrior(ProofCount)
                 /\\ ProofObservedBefore \\in [ProofPrefixKeys(ProofCount) -> ProofValues]
-            BY ONLY <1>0, <1>1, <1>1a, ProofIntegerBounds, SetExtensionality, SMT
-              DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!SourceRestriction, ProofValues
+            PROOF
+            <2>1. DOMAIN ProofObservedBefore = ProofPrefixKeys(ProofCount)
+              BY ONLY <1>1, SMT
+            <2>2. [name \\in ProofPrefixKeys(ProofCount) |-> ProofObservedBefore[name]] = ProofObservedBefore
+              BY ONLY <1>1, <2>1, SMT
+            <2>. QED BY ONLY <1>1, <2>2, SMT
+              DEF ProofObservedPrior, ProofInitialization!SourceRestriction
           <1>8. ProofInitialization!DecodedRenderedInitializerSite(ExpectedFailure.site, ProofOrdinals) = ProofOrder[ProofCount]
             BY ONLY <1>0, <1>0c, <1>7, ActualLayoutSuppliesInitializationDecoderInputs,
               ActualPrefixRecordsInvokeInitializationDecoder, SMT
