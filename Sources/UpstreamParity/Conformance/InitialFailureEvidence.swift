@@ -300,16 +300,39 @@ package enum InitialFailureEvidence {
         guard tokenTables.count == 1, let tokenTable = tokenTables.first else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
-        try verifyGeneratedFormalProjectionTokenTable(DeclSyntax(tokenTable),
-            names: program.layout.variables.map(\.formalName))
         let visible = try program.layout.variables.filter { $0.declaration.origin == .source }.map {
             (id: $0.id, swiftIdentifier: try nativeSourceIdentifier($0.declaration.name))
         }
+        let projections = file.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }
+            .filter { $0.name.text == "formalProjection" }
+        guard projections.count == 1, let projection = projections.first else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        let slots = nativeVariableSlots(program.layout)
+        let stateFields = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0.swiftIdentifier) })
+        let fields = try program.layout.variables.map { variable in
+            let route = stateFields[variable.id].map { "snapshot.state.\($0)" }
+                ?? "snapshot.\(slots[variable.id]!)"
+            guard let type = program.variableTypes[variable.id] else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            let value: String
+            switch type {
+            case .int: value = "SwiftTLA._nativeFormalInt(\(route))"
+            case .controlLocation:
+                let cases = program.layout.controlLocations.map {
+                    "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.formalName)))"
+                }.joined(separator: "\n")
+                value = "try { () throws -> SwiftTLA.TLAValue in switch \(route) {\n\(cases)\n} }()"
+            default: throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            return (formalName: variable.formalName, route: route, type: type, value: value)
+        }
+        try verifyGeneratedFormalProjectionOutput([DeclSyntax(tokenTable), DeclSyntax(projection)], fields: fields)
         guard let decodedPlans = try verifyNativeIntInitialOutput(DeclSyntax(declaration),
             program: program, variables: visible) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
-        let slots = nativeVariableSlots(program.layout)
         let names = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
             (slots[$0.id]!, $0.declaration.name)
         })

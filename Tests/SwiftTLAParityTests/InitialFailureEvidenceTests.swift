@@ -159,6 +159,23 @@ struct InitialFailureEvidenceTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.formalProjection")
         }
+        for (index, change) in [
+            ("SwiftTLA._nativeFormalInt(snapshot.state.first)", "SwiftTLA._nativeFormalInt(snapshot.state.second)"),
+            ("SwiftTLA._nativeFormalInt(snapshot.state.second)", "SwiftTLA._nativeFormalInt(0)"),
+            ("switch snapshot._value_pc_0 {\ncase .location0: return .string(\"stay\")",
+             "switch snapshot._value_pc_0 {\ncase .location0: return .string(\"changed\")"),
+        ].enumerated() {
+            try #require(nativeSource.components(separatedBy: change.0).count == 2)
+            let changedProjection = nativeSource.replacingOccurrences(of: change.0, with: change.1)
+            try #require(changedProjection != nativeSource)
+            do {
+                _ = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: changedProjection,
+                    to: directory.appendingPathComponent("changed-projection-\(index)"))
+                Issue.record("A changed snapshot projection was accepted as initialization proof input: \(index)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native.formalProjection")
+            }
+        }
         #expect(proofText.contains("THEOREM CompleteInitializationMatchesActualOutputs =="))
         #expect(proofText.contains("ResolvedInitializers == \(plans)\n"))
         #expect(preparation["resolvedInitializersSHA256"] as? String == SHA256.hex(Data(plans.utf8)))
