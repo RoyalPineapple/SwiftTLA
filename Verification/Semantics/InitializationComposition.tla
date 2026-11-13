@@ -1756,12 +1756,12 @@ THEOREM ObservedFailurePrefixConstructsTheGeneratedInitializationHistory ==
                evaluate[index][SourceRestriction(before, PrefixKeys(order, index - 1))]
                    = SourceFixed(before[order[index]]),
            evaluate[failed][before] = SourceFailed(failure)
-    PROVE LET event == [before |-> before, site |-> order[failed], payload |-> failure]
-              history == [index \in 0..count |->
+    PROVE InitializationHistory(TRUE, count, order, evaluate,
+              [index \in 0..count |->
                   IF index < failed
                   THEN [states |-> {SourceRestriction(before, PrefixKeys(order, index))}, failures |-> {}]
-                  ELSE [states |-> {}, failures |-> {event}]]
-          IN InitializationHistory(TRUE, count, order, evaluate, history)
+                  ELSE [states |-> {},
+                        failures |-> {[before |-> before, site |-> order[failed], payload |-> failure]}]])
     PROOF
     <1>. DEFINE prefix(index) == SourceRestriction(before, PrefixKeys(order, index))
                 event == [before |-> before, site |-> order[failed], payload |-> failure]
