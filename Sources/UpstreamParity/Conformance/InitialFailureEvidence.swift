@@ -494,7 +494,7 @@ package enum InitialFailureEvidence {
 
         THEOREM SourceInitializersMatchLoweredIR ==
           SourceInitializers = LoweredInitializers
-          BY SMT DEF SourceInitializers, LoweredInitializers
+          BY ONLY SMT DEF SourceInitializers, LoweredInitializers
 
         THEOREM SourceInitialControlMatchesResolvedIR ==
           /\\ Len(ActualControlSeeds) = 1
@@ -503,15 +503,15 @@ package enum InitialFailureEvidence {
           /\\ \\A row \\in DOMAIN ActualLayout :
                  ActualLayout[row].ordinal = ActualControlSeeds[1].ordinal
                    => ActualLayout[row].origin = "programCounter"
-          BY SMT DEF SourceInitialControl, ActualControlSeeds, ActualInitializationOrder, ActualLayout
+          BY ONLY SMT DEF SourceInitialControl, ActualControlSeeds, ActualInitializationOrder, ActualLayout
 
         THEOREM LoweredInitializersMatchResolvedIR ==
           LoweredInitializers = ResolvedInitializers
-          BY SMT DEF LoweredInitializers, ResolvedInitializers
+          BY ONLY SMT DEF LoweredInitializers, ResolvedInitializers
 
         THEOREM NativeInitializersMatchResolvedIR ==
           NativeInitializers = ResolvedInitializers
-          BY SMT DEF NativeInitializers, ResolvedInitializers
+          BY ONLY SMT DEF NativeInitializers, ResolvedInitializers
 
         THEOREM ResolvedVariableTypesMatchActualLayout ==
           /\\ DOMAIN ResolvedVariableTypes = DOMAIN ActualLayout
@@ -519,7 +519,7 @@ package enum InitialFailureEvidence {
                  /\\ ResolvedVariableTypes[row].ordinal = ActualLayout[row].ordinal
                  /\\ ResolvedVariableTypes[row].type =
                         IF ActualLayout[row].origin = "source" THEN "Int" ELSE "_ControlLocation"
-          BY SMT DEF ResolvedVariableTypes, ActualLayout
+          BY ONLY SMT DEF ResolvedVariableTypes, ActualLayout
 
         ProofIntMin == \(binaryLiteral(Int.min))
         ProofIntMax == \(binaryLiteral(Int.max))
