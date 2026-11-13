@@ -1,5 +1,8 @@
 import Foundation
 import SwiftTLA
+import SwiftTLACompilerSupport
+import SwiftParser
+import SwiftSyntax
 
 private struct NativeInitialBindingOutput: Codable {
     let name: String
@@ -36,6 +39,8 @@ package struct InitialFailureEvidenceReport: Codable, Sendable {
     package let sourceInitialControlSHA256: String
     package let loweredInitializersSHA256: String
     package let resolvedInitializersSHA256: String
+    package let nativeSourceSHA256: String
+    package let nativeInitializersSHA256: String
     package let resolvedVariableTypesSHA256: String
     package let layoutSHA256: String
     package let initializationOrderSHA256: String
@@ -59,7 +64,7 @@ package enum InitialFailureEvidence {
     private static let proofModule = "SwiftTLAInitialFailureProof"
     private static let failureKind = "integerOverflow.addition"
 
-    package static func prepare(sourceSHA: String, to directory: URL) throws -> InitialFailureEvidenceReport {
+    package static func prepare(sourceSHA: String, nativeSource: String, to directory: URL) throws -> InitialFailureEvidenceReport {
         guard TLCReferencePin.isRevision(sourceSHA) else {
             throw InitialFailureEvidenceError.invalidSourceSHA
         }
@@ -120,6 +125,7 @@ package enum InitialFailureEvidence {
             initializations: compilation.semantics.behavior.initializations, requireTypes: false)
         let resolvedInitializers = try initializerPlans(layout: resolvedProgram.layout,
             initializations: resolvedProgram.behavior.initializations, requireTypes: true)
+        let nativeInitializers = try nativeInitializerPlans(nativeSource, program: resolvedProgram)
         let recordInputs = try initialRecordInputs(resolvedProgram)
         guard let check = try rendered.initialEvaluationFailureBundle(capturingRecord: true) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
@@ -131,7 +137,7 @@ package enum InitialFailureEvidence {
             sourceSyntaxOrigins: sourceInputs.origins, sourceSyntaxIndices: sourceInputs.indices,
             sourceInitialControl: sourceInitialControl,
             loweredInitializers: loweredInitializers,
-            resolvedInitializers: resolvedInitializers,
+            resolvedInitializers: resolvedInitializers, nativeInitializers: nativeInitializers,
             recordInputs: recordInputs)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let generated = directory.appendingPathComponent("generated-tla")
@@ -143,10 +149,11 @@ package enum InitialFailureEvidence {
         let nativeBytes = try encoder.encode(NativeInitialFailureOutput(
             successfulInitialStates: 0, failures: failures, site: site, kind: failureKind, operands: operands))
         try nativeBytes.write(to: nativeURL, options: .atomic)
+        try Data(nativeSource.utf8).write(to: directory.appendingPathComponent("native-initial-source.swift"), options: .atomic)
         let proofBytes = Data(proof.utf8)
         try proofBytes.write(to: proofURL, options: .atomic)
         let report = InitialFailureEvidenceReport(
-            schema: "swifttla.initial-failure-proof-v10", sourceSHA: sourceSHA,
+            schema: "swifttla.initial-failure-proof-v11", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
@@ -157,6 +164,8 @@ package enum InitialFailureEvidence {
             sourceInitialControlSHA256: SHA256.hex(Data(sourceInitialControl.utf8)),
             loweredInitializersSHA256: SHA256.hex(Data(loweredInitializers.utf8)),
             resolvedInitializersSHA256: SHA256.hex(Data(resolvedInitializers.utf8)),
+            nativeSourceSHA256: SHA256.hex(Data(nativeSource.utf8)),
+            nativeInitializersSHA256: SHA256.hex(Data(nativeInitializers.utf8)),
             resolvedVariableTypesSHA256: SHA256.hex(Data(recordInputs.types.utf8)),
             layoutSHA256: SHA256.hex(Data(recordInputs.layout.utf8)),
             initializationOrderSHA256: SHA256.hex(Data(recordInputs.order.utf8)),
@@ -273,6 +282,47 @@ package enum InitialFailureEvidence {
         return "<<\(rows.joined(separator: ", "))>>"
     }
 
+    // shortcut: expression decoding only; full-function and helper interpretation remain separate proof obligations.
+    private static func nativeInitializerPlans(_ source: String, program: CompiledProgram) throws -> String {
+        guard !source.utf8.contains(0) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+        let file = Parser.parse(source: source)
+        guard !file.hasError else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+        let declarations = file.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }
+            .filter { $0.name.text == "_initialStates" }
+        guard declarations.count == 1, let declaration = declarations.first else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        let slots = nativeVariableSlots(program.layout)
+        let names = Dictionary(uniqueKeysWithValues: program.layout.variables.map {
+            (slots[$0.id]!, $0.declaration.name)
+        })
+        let variables = Dictionary(uniqueKeysWithValues: program.layout.variables.map { ($0.id, $0) })
+        let rows = try program.behavior.initializations.compactMap { initialization -> String? in
+            guard let variable = variables[initialization.variable] else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            guard variable.declaration.origin == .source else { return nil }
+            guard case .value(let expression) = initialization.initialization,
+                  expression.resultType == .int, let slot = slots[initialization.variable] else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            let decoded = try verifyOrderedIntInitialExpression(DeclSyntax(declaration), named: slot,
+                expression: expression, slots: slots)
+            let nodes = try decoded.map { step -> StraightLineAssignmentCheck.OrderedIntNode in
+                switch step {
+                case .integer(let value): return .literal(value)
+                case .slot(let slot):
+                    guard let name = names[slot] else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+                    return .read(name)
+                case .add(let left, let right): return .add(left + 1, right + 1)
+                }
+            }
+            return "<<\(TLAValue.string(variable.declaration.name)), \(try initializerPlan(nodes, root: variable.declaration.name))>>"
+        }
+        guard !rows.isEmpty else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+        return "<<\(rows.joined(separator: ", "))>>"
+    }
+
     private static func initializerPlan(_ nodes: [StraightLineAssignmentCheck.OrderedIntNode],
                                         root: String) throws -> String {
         var kinds: [String] = [], literals: [String] = [], reads: [String] = []
@@ -351,7 +401,7 @@ package enum InitialFailureEvidence {
                                     sourceInitializers: String, sourceSyntaxViews: String,
                                     sourceSyntaxOrigins: String, sourceSyntaxIndices: String, sourceInitialControl: String,
                                     loweredInitializers: String,
-                                    resolvedInitializers: String,
+                                    resolvedInitializers: String, nativeInitializers: String,
                                     recordInputs: (layout: String, order: String, prefixes: String, seeds: String, types: String)) throws -> String {
         guard isIdentifier(module), tla.contains("\nInit ==") else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
@@ -392,6 +442,7 @@ package enum InitialFailureEvidence {
         SourceInitialControl == \(sourceInitialControl)
         LoweredInitializers == \(loweredInitializers)
         ResolvedInitializers == \(resolvedInitializers)
+        NativeInitializers == \(nativeInitializers)
         ResolvedVariableTypes == \(recordInputs.types)
         ActualLayout == \(recordInputs.layout)
         ActualInitializationOrder == \(recordInputs.order)
@@ -414,6 +465,10 @@ package enum InitialFailureEvidence {
         THEOREM LoweredInitializersMatchResolvedIR ==
           LoweredInitializers = ResolvedInitializers
           BY SMT DEF LoweredInitializers, ResolvedInitializers
+
+        THEOREM NativeInitializersMatchResolvedIR ==
+          NativeInitializers = ResolvedInitializers
+          BY SMT DEF NativeInitializers, ResolvedInitializers
 
         THEOREM ResolvedVariableTypesMatchActualLayout ==
           /\\ DOMAIN ResolvedVariableTypes = DOMAIN ActualLayout
@@ -868,6 +923,7 @@ package enum InitialFailureEvidence {
         ProofSourceRow(position) == CHOOSE row \\in DOMAIN SourceInitializers : SourceInitializers[row][1] = ProofOrder[position]
         ProofPlans == [position \\in ProofIntPositions |-> SourceInitializers[ProofSourceRow(position)][2]]
         ProofResolvedPlans == [position \\in ProofIntPositions |-> ResolvedInitializers[ProofSourceRow(position)][2]]
+        ProofNativePlans == [position \\in ProofIntPositions |-> NativeInitializers[ProofSourceRow(position)][2]]
         ProofSyntaxViews == [position \\in ProofIntPositions |-> SourceSyntaxViews[ProofSourceRow(position)][2]]
         ProofControlSeed(position) == (CHOOSE entry \\in {ActualControlSeeds[index] : index \\in DOMAIN ActualControlSeeds} :
           entry.ordinal = ActualInitializationOrder[position]).value
@@ -877,7 +933,7 @@ package enum InitialFailureEvidence {
         ProofSourceExpressions == [position \\in ProofIntPositions |-> [prior \\in ProofInitialization!PartialBindings |->
           CHOOSE history : SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), history)]]
         ProofGeneratedExpressions == [position \\in ProofIntPositions |-> [prior \\in ProofInitialization!PartialBindings |->
-          CHOOSE history : ResolvedPlanHistory(ProofResolvedPlans[position], ProofReadState(position, prior), history)]]
+          CHOOSE history : ResolvedPlanHistory(ProofNativePlans[position], ProofReadState(position, prior), history)]]
         ProofEvaluate(generated) == [position \\in 1..ProofCount |-> [prior \\in ProofInitialization!PartialBindings |->
           IF position \\in ProofIntPositions
           THEN IF generated
@@ -943,8 +999,9 @@ package enum InitialFailureEvidence {
             BY <1>0, <1>1, InitializerPlansInvokeCheckedExpressionParent, SMT DEF ProofResolvedPlans
           <1>3. /\\ SourcePlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofSourceExpressions[position][prior])
                 /\\ ResolvedPlanHistory(ProofPlans[position], ProofReadState(position, prior), ProofGeneratedExpressions[position][prior])
-            BY <1>2, SourceInitializersMatchLoweredIR, LoweredInitializersMatchResolvedIR, SMT
-              DEF ProofSourceExpressions, ProofGeneratedExpressions, ProofResolvedPlans, ProofPlans
+            BY <1>2, SourceInitializersMatchLoweredIR, LoweredInitializersMatchResolvedIR,
+              NativeInitializersMatchResolvedIR, SMT
+              DEF ProofSourceExpressions, ProofGeneratedExpressions, ProofNativePlans, ProofResolvedPlans, ProofPlans
           <1>4. ProofInitialization!Expressions!PartialExpressionPlan(ProofPlans[position].count,
               ProofPlans[position].kinds, ProofPlans[position].literals, ProofPlans[position].reads,
               ProofPlans[position].left, ProofPlans[position].right,

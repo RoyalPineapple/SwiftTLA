@@ -21,7 +21,7 @@ default:
       upstream trace-reference --output <directory>
       upstream shiviz-reference --output <directory>
       temporal-symmetry run --output <directory>
-      initial-failure prepare --output <directory>
+      initial-failure prepare --native-source <swift-file> --output <directory>
     """, stderr)
     exit(1)
 }
@@ -143,9 +143,10 @@ private func failTemporalSymmetry(_ error: Error) -> Never {
 }
 
 private func runInitialFailure(arguments: [String]) -> Never {
-    guard arguments.count == 3, arguments[0] == "prepare",
-          arguments[1] == "--output", !arguments[2].isEmpty else {
-        fputs("initial-failure: expected prepare --output <directory>\n", stderr)
+    guard arguments.count == 5, arguments[0] == "prepare",
+          arguments[1] == "--native-source", !arguments[2].isEmpty,
+          arguments[3] == "--output", !arguments[4].isEmpty else {
+        fputs("initial-failure: expected prepare --native-source <swift-file> --output <directory>\n", stderr)
         exit(2)
     }
     do {
@@ -153,8 +154,9 @@ private func runInitialFailure(arguments: [String]) -> Never {
         guard let sourceSHA = environment["SWIFT_TLA_SHA"] else {
             throw ValidationCLIError.invalidManifest("missing source SHA")
         }
-        let report = try InitialFailureEvidence.prepare(sourceSHA: sourceSHA,
-            to: URL(fileURLWithPath: arguments[2]).standardizedFileURL)
+        let nativeSource = try String(contentsOf: URL(fileURLWithPath: arguments[2]), encoding: .utf8)
+        let report = try InitialFailureEvidence.prepare(sourceSHA: sourceSHA, nativeSource: nativeSource,
+            to: URL(fileURLWithPath: arguments[4]).standardizedFileURL)
         print("initial-failure: \(report.result), site \(report.site), no graph")
         exit(0)
     } catch {

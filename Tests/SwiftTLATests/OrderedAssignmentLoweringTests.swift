@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import SwiftParser
 import SwiftSyntax
+import SwiftTLACompilerSupport
 import SwiftTLAMacros
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
@@ -2188,8 +2189,11 @@ struct OrderedAssignmentLoweringTests {
             try emitter.verifyIntInitialOutput(declaration)
         }
         try verify(declaration)
-        try verifyOrderedIntInitialExpression(declaration,
+        let decoded = try verifyOrderedIntInitialExpression(declaration,
             named: name, expression: resolvedExpression, slots: slots)
+        let firstRead = try #require(program.layout.variables.first { $0.declaration.name == "first" })
+        #expect(decoded == [.slot(emitter.variable(firstRead.id)), .integer(2), .add(0, 1),
+                            .integer(1), .add(2, 3)])
         let boundAddition = "SwiftTLA._nativeIntAdd(_arithmetic0, _arithmetic1)"
         try #require(declaration.description.components(separatedBy: boundAddition).count == 2)
         let rebound = declaration.description.replacingOccurrences(of: boundAddition,

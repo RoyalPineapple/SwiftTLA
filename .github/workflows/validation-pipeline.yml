@@ -227,8 +227,8 @@ jobs:
           python3 scripts/retain-native-initial-source.py verify
           mkdir -p .build/initial-failure-artifacts
           .build/release/tlc-validate initial-failure prepare \
+            --native-source .build/release/native-initial-source.swift \
             --output .build/initial-failure-artifacts/case
-          cp .build/release/native-initial-source.swift .build/initial-failure-artifacts/case/
           cp .build/release/native-initial-source.json .build/initial-failure-artifacts/case/
           python3 - <<'PY'
           import hashlib
@@ -242,8 +242,9 @@ jobs:
           compiler = json.loads((case / "native-initial-source.json").read_text())
           assert compiler["semanticInterpretation"] == "OPEN"
           assert hashlib.sha256((case / "native-initial-source.swift").read_bytes()).hexdigest() == compiler["sourceSHA256"]
+          assert report["nativeSourceSHA256"] == compiler["sourceSHA256"]
           expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
-          assert report["schema"] == "swifttla.initial-failure-proof-v10"
+          assert report["schema"] == "swifttla.initial-failure-proof-v11"
           assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
           assert report["result"] == "prepared" and report["graphCompared"] is False
           assert (report["site"], report["kind"], report["operands"]) == expected
@@ -263,6 +264,7 @@ jobs:
               "checkConfigurationSHA256": case / "generated-tla" / (report["checkModule"] + ".cfg"),
               "proofSHA256": case / "generated-tla" / "SwiftTLAInitialFailureProof.tla",
               "nativeSHA256": case / "native-initial-failure.json",
+              "nativeSourceSHA256": case / "native-initial-source.swift",
           }
           assert all(
               path.is_file() and path.stat().st_size
@@ -274,6 +276,7 @@ jobs:
                             ("SourceInitialControl", "sourceInitialControlSHA256"),
                             ("LoweredInitializers", "loweredInitializersSHA256"),
                             ("ResolvedInitializers", "resolvedInitializersSHA256"),
+                            ("NativeInitializers", "nativeInitializersSHA256"),
                             ("ResolvedVariableTypes", "resolvedVariableTypesSHA256"),
                             ("ActualLayout", "layoutSHA256"),
                             ("ActualInitializationOrder", "initializationOrderSHA256"),
@@ -446,7 +449,9 @@ jobs:
                         retainedNativeSwift={"sha256": compiler["sourceSHA256"],
                                              "producerSHA": compiler["producerSHA"],
                                              "origin": compiler["origin"],
-                                             "semanticInterpretation": "OPEN", "consumedByProof": False})
+                                             "semanticInterpretation": "OPEN", "consumedByProof": False,
+                                             "decodedInitializerPlansSHA256": result["nativeInitializersSHA256"],
+                                             "decodedPlanConsumer": "ProofGeneratedExpressions"})
           (root / "proof-result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
           PY
       - name: Retain source revision

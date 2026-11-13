@@ -20,7 +20,12 @@ let package = Package(
     targets: [
         .target(name: "SwiftTLA", swiftSettings: settings),
         .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLA", "SwiftTLAPlugin"], swiftSettings: settings),
+        .target(name: "SwiftTLACompilerSupport", dependencies: [
+            "SwiftTLA",
+            .product(name: "SwiftSyntax", package: "swift-syntax")
+        ], swiftSettings: settings),
         .macro(name: "SwiftTLAPlugin", dependencies: [
+            "SwiftTLACompilerSupport",
             "SwiftTLA",
             .product(name: "SwiftBasicFormat", package: "swift-syntax"),
             .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
@@ -42,7 +47,10 @@ let package = Package(
             dependencies: [
                 "SwiftTLA",
                 "SwiftTLAMacros",
-                "CanonicalUpstreamCorpus"
+                "CanonicalUpstreamCorpus",
+                "SwiftTLACompilerSupport",
+                .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "SwiftSyntax", package: "swift-syntax")
             ],
             exclude: ["Examples/AGENTS.md", "CanonicalCorpus"],
             swiftSettings: settings
@@ -64,6 +72,7 @@ let package = Package(
             "SwiftTLA",
             "SwiftTLAMacros",
             "SwiftTLAPlugin",
+            "SwiftTLACompilerSupport",
             "UpstreamParity",
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax")
@@ -74,7 +83,8 @@ let package = Package(
             "SwiftTLAMacros",
             "CanonicalUpstreamCorpus",
             "UpstreamParity",
-            "SwiftTLAPlugin"
+            "SwiftTLAPlugin",
+            "SwiftTLACompilerSupport"
         ], path: "Tests/SwiftTLAParityTests", swiftSettings: settings)
     ]
 )

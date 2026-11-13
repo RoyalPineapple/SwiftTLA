@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import SwiftTLA
+@testable import SwiftTLAPlugin
 @testable import UpstreamParity
 
 @Suite("Selected initial failure evidence")
@@ -11,8 +12,15 @@ struct InitialFailureEvidenceTests {
             .appendingPathComponent("swifttla-initial-failure-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
         let sha = String(repeating: "a", count: 40)
-        let report = try InitialFailureEvidence.prepare(sourceSHA: sha, to: directory)
-        #expect(report.schema == "swifttla.initial-failure-proof-v10")
+        let compilation = try CheckedAdditionPrefixInitialModel.spec.compile()
+        let inputs = try CompiledTypeInputs(compilation: compilation,
+            types: CompiledTypeContext(enums: .init(), formalNames: [:])) { _ in .int }
+        let program = try CompiledProgram(inputs: inputs)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "CheckedAdditionPrefixInitialModel", program: program))
+        let nativeSource = try emitter.machineMembers().map(\.description).joined(separator: "\n")
+        let report = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: nativeSource, to: directory)
+        #expect(report.schema == "swifttla.initial-failure-proof-v11")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)
         #expect(!report.graphCompared)
@@ -73,6 +81,11 @@ struct InitialFailureEvidenceTests {
         ].joined(separator: ", ") + ">>"
         #expect(proofText.contains("SourceInitializers == \(plans)\n"))
         #expect(proofText.contains("LoweredInitializers == \(plans)\n"))
+        #expect(proofText.contains("NativeInitializers == \(plans)\n"))
+        #expect(report.nativeInitializersSHA256 == SHA256.hex(Data(plans.utf8)))
+        #expect(report.nativeSourceSHA256 == SHA256.hex(Data(nativeSource.utf8)))
+        #expect(try String(contentsOf: directory.appendingPathComponent("native-initial-source.swift"),
+            encoding: .utf8) == nativeSource)
         let sourceViews = "<<" + [
             "<<\"first\", [root |-> 1, kinds |-> <<\"literal\">>, literals |-> <<1>>, reads |-> <<\"first\">>, left |-> <<0>>, right |-> <<0>>]>>",
             "<<\"second\", [root |-> 1, kinds |-> <<\"add\", \"read\", \"literal\">>, literals |-> <<0, 0, 2>>, reads |-> <<\"second\", \"first\", \"second\">>, left |-> <<2, 0, 0>>, right |-> <<3, 0, 0>>]>>",
@@ -110,6 +123,15 @@ struct InitialFailureEvidenceTests {
         #expect(preparation["controlSeedsSHA256"] as? String == SHA256.hex(Data(seeds.utf8)))
         #expect(proofText.contains("ProofInitialization!InitializationHistoriesNeedOnlyReachableChildAgreement"))
         #expect(proofText.contains("ProofInitialization!DeterministicReachableInitializersConstructTheirOrderedObservations"))
+        let helper = "SwiftTLA._nativeIntAdd(_arithmetic0, _arithmetic1)"
+        try #require(nativeSource.components(separatedBy: helper).count == 3)
+        let rebound = nativeSource.replacingOccurrences(of: helper,
+            with: "SwiftTLA._NativeMachineOperations.add(_arithmetic0, _arithmetic1)")
+        try #require(rebound != nativeSource)
+        #expect(throws: CompilationDiagnostic.self) {
+            try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: rebound,
+                to: directory.appendingPathComponent("rejected"))
+        }
         #expect(proofText.contains("THEOREM CompleteInitializationMatchesActualOutputs =="))
         #expect(proofText.contains("ResolvedInitializers == \(plans)\n"))
         #expect(preparation["resolvedInitializersSHA256"] as? String == SHA256.hex(Data(plans.utf8)))
@@ -133,7 +155,7 @@ struct InitialFailureEvidenceTests {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("swifttla-invalid-revision-\(UUID().uuidString)")
         #expect(throws: InitialFailureEvidenceError.invalidSourceSHA) {
-            try InitialFailureEvidence.prepare(sourceSHA: "not-a-revision", to: directory)
+            try InitialFailureEvidence.prepare(sourceSHA: "not-a-revision", nativeSource: "", to: directory)
         }
         #expect(!FileManager.default.fileExists(atPath: directory.path))
     }

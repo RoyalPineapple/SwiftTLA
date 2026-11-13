@@ -2,9 +2,9 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftBasicFormat
 import SwiftTLA
+import SwiftTLACompilerSupport
 
 // Resolve scalar types through the library, outside user model declarations.
-let nativeIntTypeTokens = ["SwiftTLA", ".", "TLAValue", ".", "IntegerLiteralType"]
 let nativeBoolTypeTokens = ["SwiftTLA", ".", "TLAValue", ".", "BooleanLiteralType"]
 let nativeStringTypeTokens = ["SwiftTLA", ".", "TLAValue", ".", "StringLiteralType"]
 let nativeIntType = nativeIntTypeTokens.joined()
@@ -65,15 +65,7 @@ struct NativeSwiftEmitter {
         }
         self.enabledActionIDs = enabledActionIDs
         typeDeclarations = sharedTypes ?? NativeTypeDeclarations(program: program)
-        variableNames = Dictionary(uniqueKeysWithValues: program.layout.variables.map { variable in
-            let name = String(variable.declaration.name.unicodeScalars.map { scalar -> Character in
-                switch scalar.value {
-                case 65...90, 97...122, 48...57, 95: Character(String(scalar))
-                default: "_"
-                }
-            })
-            return (variable.id, "_value_\(name)_\(variable.id.ordinal)")
-        })
+        variableNames = nativeVariableSlots(program.layout)
         stateMemberNames = Dictionary(uniqueKeysWithValues: model.api.variables.map {
             ($0.id, $0.swiftIdentifier)
         })

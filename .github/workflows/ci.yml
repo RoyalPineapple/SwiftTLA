@@ -190,6 +190,10 @@ jobs:
           mkdir -p .build/semantic-proof-evidence
           git rev-parse HEAD > .build/semantic-proof-evidence/source-sha.txt
           sha256sum Verification/Semantics/*.tla Verification/Semantics/*.txt \
+            Package.swift \
+            Sources/SwiftTLACompilerSupport/NativeIntInitialOutput.swift \
+            Sources/UpstreamParity/Conformance/InitialFailureEvidence.swift \
+            Tests/SwiftTLAParityTests/InitialFailureEvidenceTests.swift \
             Sources/SwiftTLAPlugin/NativeSwiftEmitter{,+Machine,+Boolean,+Refinement}.swift \
             Tests/SwiftTLATests/NativeSupportBinding{Fixtures,Tests}.swift \
             Sources/SwiftTLA/StraightLineRenderedActionCheck.swift \
