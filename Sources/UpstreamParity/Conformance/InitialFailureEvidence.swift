@@ -822,31 +822,117 @@ package enum InitialFailureEvidence {
                   DEF plan, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxOrigins,
                     ProofInitialization!Expressions!NodeEmissionArrays
               <3>2. CASE row = 2
-                BY ONLY <3>2, SMT
-                  DEF plan, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxOrigins,
-                    ProofInitialization!Expressions!NodeEmissionArrays
+                PROOF
+                <4>0. /\\ emitted.count = 3 /\\ emitted.height = 1
+                      /\\ emitted.indices = <<3>> /\\ emitted.origins = <<2, 3, 1>>
+                  BY ONLY <3>2, SMT
+                    DEF emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxOrigins
+                <4>1. emitted.nodes = [index \\in 1..3 |-> emitted.nodes[index]]
+                  BY ONLY <3>2, SMT DEF emitted, SourcePlanEmission, SourceInitializers
+                <4>. QED BY ONLY <4>0, <4>1, SMT
+                  DEF ProofInitialization!Expressions!NodeEmissionArrays
               <3>3. CASE row = 3
-                BY ONLY <3>3, SMT
-                  DEF plan, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxOrigins,
-                    ProofInitialization!Expressions!NodeEmissionArrays
+                PROOF
+                <4>0. /\\ emitted.count = 3 /\\ emitted.height = 1
+                      /\\ emitted.indices = <<3>> /\\ emitted.origins = <<2, 3, 1>>
+                  BY ONLY <3>3, SMT
+                    DEF emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxOrigins
+                <4>1. emitted.nodes = [index \\in 1..3 |-> emitted.nodes[index]]
+                  BY ONLY <3>3, SMT DEF emitted, SourcePlanEmission, SourceInitializers
+                <4>. QED BY ONLY <4>0, <4>1, SMT
+                  DEF ProofInitialization!Expressions!NodeEmissionArrays
               <3>. QED BY ONLY <3>1, <3>2, <3>3, SMT DEF SourceInitializers
             <2>1. ProofInitialization!Expressions!AllNodePayloadsMatchSource(view, emitted)
               PROOF
               <3>1. CASE row = 1
-                BY ONLY <3>1, SMT
-                  DEF plan, view, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxViews,
-                    SourceSyntaxOrigins, ProofInitialization!Expressions!AllNodePayloadsMatchSource,
-                    ProofInitialization!Expressions!NodePayloadMatchesSource
+                PROOF
+                <4>0. emitted.count = 1
+                  BY ONLY <3>1, SMT DEF emitted, SourcePlanEmission, SourceInitializers
+                <4>0p. SourceInitializers[row][2] =
+                  [count |-> 1, kinds |-> <<"literal">>, literals |-> <<1>>,
+                   reads |-> <<"first">>, left |-> <<0>>, right |-> <<0>>]
+                  BY ONLY <3>1, SMT DEF SourceInitializers
+                <4>0o. SourceSyntaxOrigins[row] = <<1>>
+                  BY ONLY <3>1, SMT DEF SourceSyntaxOrigins
+                <4>1a. /\\ emitted.nodes[1].kind = "literal" /\\ emitted.nodes[1].payload = 1
+                       /\\ emitted.nodes[1].left = 0 /\\ emitted.nodes[1].right = 0
+                       /\\ emitted.origins[1] = 1
+                  BY ONLY <4>0p, <4>0o, SMT DEF emitted, SourcePlanEmission
+                <4>1b. /\\ view.kinds[1] = "literal" /\\ view.literals[1] = 1
+                  BY ONLY <3>1, SMT DEF view, SourceSyntaxViews
+                <4>1. ProofInitialization!Expressions!NodePayloadMatchesSource(view, emitted, 1)
+                  BY ONLY <4>1a, <4>1b, SMT
+                    DEF ProofInitialization!Expressions!NodePayloadMatchesSource
+                <4>. QED BY ONLY <4>0, <4>1, SMT
+                  DEF ProofInitialization!Expressions!AllNodePayloadsMatchSource
               <3>2. CASE row = 2
-                BY ONLY <3>2, SMT
-                  DEF plan, view, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxViews,
-                    SourceSyntaxOrigins, ProofInitialization!Expressions!AllNodePayloadsMatchSource,
-                    ProofInitialization!Expressions!NodePayloadMatchesSource
+                PROOF
+                <4>0p. SourceInitializers[row][2] =
+                  [count |-> 3, kinds |-> <<"read", "literal", "add">>, literals |-> <<0, 2, 0>>,
+                   reads |-> <<"first", "second", "second">>, left |-> <<0, 0, 1>>, right |-> <<0, 0, 2>>]
+                  BY ONLY <3>2, SMT DEF SourceInitializers
+                <4>0v. view =
+                  [root |-> 1, kinds |-> <<"add", "read", "literal">>, literals |-> <<0, 0, 2>>,
+                   reads |-> <<"second", "first", "second">>, left |-> <<2, 0, 0>>, right |-> <<3, 0, 0>>]
+                  BY ONLY <3>2, SMT DEF view, SourceSyntaxViews
+                <4>0n. emitted.count = 3
+                  BY ONLY <4>0p, SMT DEF emitted, SourcePlanEmission
+                <4>0o. emitted.origins = <<2, 3, 1>>
+                  BY ONLY <3>2, SMT DEF emitted, SourcePlanEmission, SourceSyntaxOrigins
+                <4>1a. /\\ emitted.nodes[1].kind = "read" /\\ emitted.nodes[1].payload = "first"
+                       /\\ emitted.nodes[1].left = 0 /\\ emitted.nodes[1].right = 0
+                  BY ONLY <4>0p, SMT DEF emitted, SourcePlanEmission
+                <4>1. ProofInitialization!Expressions!NodePayloadMatchesSource(view, emitted, 1)
+                  BY ONLY <4>0v, <4>0o, <4>1a, SMT
+                    DEF ProofInitialization!Expressions!NodePayloadMatchesSource
+                <4>2a. /\\ emitted.nodes[2].kind = "literal" /\\ emitted.nodes[2].payload = 2
+                       /\\ emitted.nodes[2].left = 0 /\\ emitted.nodes[2].right = 0
+                  BY ONLY <4>0p, SMT DEF emitted, SourcePlanEmission
+                <4>2. ProofInitialization!Expressions!NodePayloadMatchesSource(view, emitted, 2)
+                  BY ONLY <4>0v, <4>0o, <4>2a, SMT
+                    DEF ProofInitialization!Expressions!NodePayloadMatchesSource
+                <4>3a. /\\ emitted.nodes[3].kind = "add" /\\ emitted.nodes[3].payload = 0
+                       /\\ emitted.nodes[3].left = 1 /\\ emitted.nodes[3].right = 2
+                  BY ONLY <4>0p, SMT DEF emitted, SourcePlanEmission
+                <4>3. ProofInitialization!Expressions!NodePayloadMatchesSource(view, emitted, 3)
+                  BY ONLY <4>0v, <4>0o, <4>3a, SMT
+                    DEF ProofInitialization!Expressions!NodePayloadMatchesSource
+                <4>. QED BY ONLY <4>0n, <4>1, <4>2, <4>3, SMT
+                  DEF ProofInitialization!Expressions!AllNodePayloadsMatchSource
               <3>3. CASE row = 3
-                BY ONLY <3>3, SMT
-                  DEF plan, view, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxViews,
-                    SourceSyntaxOrigins, ProofInitialization!Expressions!AllNodePayloadsMatchSource,
-                    ProofInitialization!Expressions!NodePayloadMatchesSource
+                PROOF
+                <4>0p. SourceInitializers[row][2] =
+                  [count |-> 3, kinds |-> <<"read", "literal", "add">>, literals |-> <<0, ProofIntMax, 0>>,
+                   reads |-> <<"second", "last", "last">>, left |-> <<0, 0, 1>>, right |-> <<0, 0, 2>>]
+                  BY ONLY <3>3, SMT DEF SourceInitializers, ProofIntMax
+                <4>0v. view =
+                  [root |-> 1, kinds |-> <<"add", "read", "literal">>, literals |-> <<0, 0, ProofIntMax>>,
+                   reads |-> <<"last", "second", "last">>, left |-> <<2, 0, 0>>, right |-> <<3, 0, 0>>]
+                  BY ONLY <3>3, SMT DEF view, SourceSyntaxViews, ProofIntMax
+                <4>0n. emitted.count = 3
+                  BY ONLY <4>0p, SMT DEF emitted, SourcePlanEmission
+                <4>0o. emitted.origins = <<2, 3, 1>>
+                  BY ONLY <3>3, SMT DEF emitted, SourcePlanEmission, SourceSyntaxOrigins
+                <4>1a. /\\ emitted.nodes[1].kind = "read" /\\ emitted.nodes[1].payload = "second"
+                       /\\ emitted.nodes[1].left = 0 /\\ emitted.nodes[1].right = 0
+                  BY ONLY <4>0p, SMT DEF emitted, SourcePlanEmission
+                <4>1. ProofInitialization!Expressions!NodePayloadMatchesSource(view, emitted, 1)
+                  BY ONLY <4>0v, <4>0o, <4>1a, SMT
+                    DEF ProofInitialization!Expressions!NodePayloadMatchesSource
+                <4>2a. /\\ emitted.nodes[2].kind = "literal" /\\ emitted.nodes[2].payload = ProofIntMax
+                       /\\ emitted.nodes[2].left = 0 /\\ emitted.nodes[2].right = 0
+                  BY ONLY <4>0p, SMT DEF emitted, SourcePlanEmission
+                <4>2. ProofInitialization!Expressions!NodePayloadMatchesSource(view, emitted, 2)
+                  BY ONLY <4>0v, <4>0o, <4>2a, SMT
+                    DEF ProofInitialization!Expressions!NodePayloadMatchesSource
+                <4>3a. /\\ emitted.nodes[3].kind = "add" /\\ emitted.nodes[3].payload = 0
+                       /\\ emitted.nodes[3].left = 1 /\\ emitted.nodes[3].right = 2
+                  BY ONLY <4>0p, SMT DEF emitted, SourcePlanEmission
+                <4>3. ProofInitialization!Expressions!NodePayloadMatchesSource(view, emitted, 3)
+                  BY ONLY <4>0v, <4>0o, <4>3a, SMT
+                    DEF ProofInitialization!Expressions!NodePayloadMatchesSource
+                <4>. QED BY ONLY <4>0n, <4>1, <4>2, <4>3, SMT
+                  DEF ProofInitialization!Expressions!AllNodePayloadsMatchSource
               <3>. QED BY ONLY <3>1, <3>2, <3>3, SMT DEF SourceInitializers
             <2>2. /\\ emitted.count = plan.count /\\ plan.count > 0 /\\ plan.count \\in Nat
                   /\\ {emitted.origins[index] : index \\in 1..emitted.count} = DOMAIN view.kinds
@@ -857,17 +943,77 @@ package enum InitialFailureEvidence {
                   /\\ \\A node \\in DOMAIN view.kinds : emitted.origins[SourceSyntaxIndices[row][node]] = node
               PROOF
               <3>1. CASE row = 1
-                BY ONLY <3>1, <1>1a, SMT
-                  DEF plan, view, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxViews,
-                    SourceSyntaxOrigins, SourceSyntaxIndices
+                PROOF
+                <4>0p. /\\ plan.count = 1 /\\ SourceInitializers[row][1] = "first"
+                  BY ONLY <3>1, SMT DEF plan, SourceInitializers
+                <4>0v. /\\ DOMAIN view.kinds = 1..1 /\\ view.root = 1
+                  BY ONLY <3>1, SMT DEF view, SourceSyntaxViews
+                <4>0e. /\\ emitted.count = plan.count /\\ emitted.origins = <<1>>
+                  BY ONLY <3>1, SMT DEF plan, emitted, SourcePlanEmission, SourceSyntaxOrigins
+                <4>0i. SourceSyntaxIndices[row] = <<1>>
+                  BY ONLY <3>1, SMT DEF SourceSyntaxIndices
+                <4>1. /\\ emitted.count = plan.count /\\ plan.count > 0 /\\ plan.count \\in Nat
+                  BY ONLY <4>0p, <4>0e, SMT
+                <4>2. /\\ {emitted.origins[index] : index \\in 1..emitted.count} = DOMAIN view.kinds
+                      /\\ emitted.origins[plan.count] = view.root
+                  BY ONLY <4>0p, <4>0v, <4>0e, SMT
+                <4>3. SourceInitializers[row][1] \\in ProofIntSlots
+                  BY ONLY <4>0p, <1>1a, SMT
+                <4>4. SourceSyntaxIndices[row] \\in [DOMAIN view.kinds -> 1..plan.count]
+                  BY ONLY <4>0p, <4>0v, <4>0i, SMT
+                <4>5. \\A index \\in 1..plan.count : SourceSyntaxIndices[row][emitted.origins[index]] = index
+                  BY ONLY <4>0p, <4>0e, <4>0i, SMT
+                <4>6. \\A node \\in DOMAIN view.kinds : emitted.origins[SourceSyntaxIndices[row][node]] = node
+                  BY ONLY <4>0v, <4>0e, <4>0i, SMT
+                <4>. QED BY ONLY <4>1, <4>2, <4>3, <4>4, <4>5, <4>6, SMT
               <3>2. CASE row = 2
-                BY ONLY <3>2, <1>1a, SMT
-                  DEF plan, view, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxViews,
-                    SourceSyntaxOrigins, SourceSyntaxIndices
+                PROOF
+                <4>0p. /\\ plan.count = 3 /\\ SourceInitializers[row][1] = "second"
+                  BY ONLY <3>2, SMT DEF plan, SourceInitializers
+                <4>0v. /\\ DOMAIN view.kinds = 1..3 /\\ view.root = 1
+                  BY ONLY <3>2, SMT DEF view, SourceSyntaxViews
+                <4>0e. /\\ emitted.count = plan.count /\\ emitted.origins = <<2, 3, 1>>
+                  BY ONLY <3>2, SMT DEF plan, emitted, SourcePlanEmission, SourceSyntaxOrigins
+                <4>0i. SourceSyntaxIndices[row] = <<3, 1, 2>>
+                  BY ONLY <3>2, SMT DEF SourceSyntaxIndices
+                <4>1. /\\ emitted.count = plan.count /\\ plan.count > 0 /\\ plan.count \\in Nat
+                  BY ONLY <4>0p, <4>0e, SMT
+                <4>2. /\\ {emitted.origins[index] : index \\in 1..emitted.count} = DOMAIN view.kinds
+                      /\\ emitted.origins[plan.count] = view.root
+                  BY ONLY <4>0p, <4>0v, <4>0e, SMT
+                <4>3. SourceInitializers[row][1] \\in ProofIntSlots
+                  BY ONLY <4>0p, <1>1a, SMT
+                <4>4. SourceSyntaxIndices[row] \\in [DOMAIN view.kinds -> 1..plan.count]
+                  BY ONLY <4>0p, <4>0v, <4>0i, SMT
+                <4>5. \\A index \\in 1..plan.count : SourceSyntaxIndices[row][emitted.origins[index]] = index
+                  BY ONLY <4>0p, <4>0e, <4>0i, SMT
+                <4>6. \\A node \\in DOMAIN view.kinds : emitted.origins[SourceSyntaxIndices[row][node]] = node
+                  BY ONLY <4>0v, <4>0e, <4>0i, SMT
+                <4>. QED BY ONLY <4>1, <4>2, <4>3, <4>4, <4>5, <4>6, SMT
               <3>3. CASE row = 3
-                BY ONLY <3>3, <1>1a, SMT
-                  DEF plan, view, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxViews,
-                    SourceSyntaxOrigins, SourceSyntaxIndices
+                PROOF
+                <4>0p. /\\ plan.count = 3 /\\ SourceInitializers[row][1] = "last"
+                  BY ONLY <3>3, SMT DEF plan, SourceInitializers
+                <4>0v. /\\ DOMAIN view.kinds = 1..3 /\\ view.root = 1
+                  BY ONLY <3>3, SMT DEF view, SourceSyntaxViews
+                <4>0e. /\\ emitted.count = plan.count /\\ emitted.origins = <<2, 3, 1>>
+                  BY ONLY <3>3, SMT DEF plan, emitted, SourcePlanEmission, SourceSyntaxOrigins
+                <4>0i. SourceSyntaxIndices[row] = <<3, 1, 2>>
+                  BY ONLY <3>3, SMT DEF SourceSyntaxIndices
+                <4>1. /\\ emitted.count = plan.count /\\ plan.count > 0 /\\ plan.count \\in Nat
+                  BY ONLY <4>0p, <4>0e, SMT
+                <4>2. /\\ {emitted.origins[index] : index \\in 1..emitted.count} = DOMAIN view.kinds
+                      /\\ emitted.origins[plan.count] = view.root
+                  BY ONLY <4>0p, <4>0v, <4>0e, SMT
+                <4>3. SourceInitializers[row][1] \\in ProofIntSlots
+                  BY ONLY <4>0p, <1>1a, SMT
+                <4>4. SourceSyntaxIndices[row] \\in [DOMAIN view.kinds -> 1..plan.count]
+                  BY ONLY <4>0p, <4>0v, <4>0i, SMT
+                <4>5. \\A index \\in 1..plan.count : SourceSyntaxIndices[row][emitted.origins[index]] = index
+                  BY ONLY <4>0p, <4>0e, <4>0i, SMT
+                <4>6. \\A node \\in DOMAIN view.kinds : emitted.origins[SourceSyntaxIndices[row][node]] = node
+                  BY ONLY <4>0v, <4>0e, <4>0i, SMT
+                <4>. QED BY ONLY <4>1, <4>2, <4>3, <4>4, <4>5, <4>6, SMT
               <3>. QED BY ONLY <3>1, <3>2, <3>3, SMT DEF SourceInitializers
             <2>3. ProofInitialization!Expressions!ExtractedNodePlan(emitted, SourceInitializers[row][1]) = plan
               PROOF
@@ -876,13 +1022,41 @@ package enum InitialFailureEvidence {
                   DEF plan, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxOrigins,
                     ProofInitialization!Expressions!ExtractedNodePlan
               <3>2. CASE row = 2
-                BY ONLY <3>2, SMT
-                  DEF plan, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxOrigins,
-                    ProofInitialization!Expressions!ExtractedNodePlan
+                PROOF
+                <4>0p. /\\ plan = [count |-> 3, kinds |-> <<"read", "literal", "add">>,
+                                  literals |-> <<0, 2, 0>>, reads |-> <<"first", "second", "second">>,
+                                  left |-> <<0, 0, 1>>, right |-> <<0, 0, 2>>]
+                       /\\ SourceInitializers[row][1] = "second"
+                  BY ONLY <3>2, SMT DEF plan, SourceInitializers
+                <4>0e. /\\ emitted.count = 3
+                       /\\ \\A index \\in 1..3 :
+                            /\\ emitted.nodes[index].kind = plan.kinds[index]
+                            /\\ emitted.nodes[index].payload =
+                                 IF plan.kinds[index] = "literal" THEN plan.literals[index]
+                                 ELSE IF plan.kinds[index] = "read" THEN plan.reads[index] ELSE 0
+                            /\\ emitted.nodes[index].left = plan.left[index]
+                            /\\ emitted.nodes[index].right = plan.right[index]
+                  BY ONLY <4>0p, SMT DEF emitted, SourcePlanEmission, plan
+                <4>. QED BY ONLY <4>0p, <4>0e, SMT
+                  DEF ProofInitialization!Expressions!ExtractedNodePlan
               <3>3. CASE row = 3
-                BY ONLY <3>3, SMT
-                  DEF plan, emitted, SourcePlanEmission, SourceInitializers, SourceSyntaxOrigins,
-                    ProofInitialization!Expressions!ExtractedNodePlan
+                PROOF
+                <4>0p. /\\ plan = [count |-> 3, kinds |-> <<"read", "literal", "add">>,
+                                  literals |-> <<0, ProofIntMax, 0>>, reads |-> <<"second", "last", "last">>,
+                                  left |-> <<0, 0, 1>>, right |-> <<0, 0, 2>>]
+                       /\\ SourceInitializers[row][1] = "last"
+                  BY ONLY <3>3, SMT DEF plan, SourceInitializers, ProofIntMax
+                <4>0e. /\\ emitted.count = 3
+                       /\\ \\A index \\in 1..3 :
+                            /\\ emitted.nodes[index].kind = plan.kinds[index]
+                            /\\ emitted.nodes[index].payload =
+                                 IF plan.kinds[index] = "literal" THEN plan.literals[index]
+                                 ELSE IF plan.kinds[index] = "read" THEN plan.reads[index] ELSE 0
+                            /\\ emitted.nodes[index].left = plan.left[index]
+                            /\\ emitted.nodes[index].right = plan.right[index]
+                  BY ONLY <4>0p, SMT DEF emitted, SourcePlanEmission, plan
+                <4>. QED BY ONLY <4>0p, <4>0e, SMT
+                  DEF ProofInitialization!Expressions!ExtractedNodePlan
               <3>. QED BY ONLY <3>1, <3>2, <3>3, SMT DEF SourceInitializers
             <2>. QED BY ONLY <2>0, <2>1, <2>2, <2>3, SMT
           <1>6a. \\A history : SourcePlanHistory(plan, state, history) =>
@@ -927,7 +1101,7 @@ package enum InitialFailureEvidence {
                   IN /\\ ProofInitialization!Expressions!SourceExpressionHistory(matched.count, matched.kinds,
                            matched.literals, matched.reads, matched.left, matched.right, state, syntax)
                      /\\ syntax[matched.count] = meaning[emitted.origins[emitted.count]]
-              BY ONLY <1>0d, <2>0p,
+              BY ONLY ProofInitialSentinels, <1>0d, <2>0p,
                 ProofInitialization!Expressions!MatchedPostorderNodesRetainIndependentSourceSyntaxMeaning, SMT
             <2>1. /\\ SourcePlanHistory(plan, state,
                          ProofInitialization!Expressions!EmittedSourceSyntaxHistory(emitted, meaning))
@@ -946,7 +1120,7 @@ package enum InitialFailureEvidence {
                 /\\ ProofInitialization!Expressions!OutcomeAgrees(history, generated, index)
                 /\\ history[index] \\in ProofInitialization!Expressions!ExpressionOutcomes
                 /\\ generated[index] \\in ProofInitialization!Expressions!ExpressionOutcomes
-              BY ONLY <1>0d, <1>4, <2>0h, <2>2h,
+              BY ONLY ProofInitialSentinels, <1>0d, <1>4, <2>0h, <2>2h,
                 ProofInitialization!Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
             <2>3. history[plan.count] = generated[plan.count]
               BY ONLY <1>6p, <2>3a, SMT DEF ProofInitialization!Expressions!OutcomeAgrees
@@ -960,7 +1134,7 @@ package enum InitialFailureEvidence {
                 /\\ ProofInitialization!Expressions!EmittedSourceSyntaxHistory(emitted, meaning)[index]
                       \\in ProofInitialization!Expressions!ExpressionOutcomes
                 /\\ generated[index] \\in ProofInitialization!Expressions!ExpressionOutcomes
-              BY ONLY <1>0d, <1>4, <2>1h, <2>2h,
+              BY ONLY ProofInitialSentinels, <1>0d, <1>4, <2>1h, <2>2h,
                 ProofInitialization!Expressions!AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
             <2>4. ProofInitialization!Expressions!EmittedSourceSyntaxHistory(emitted, meaning)[plan.count]
                 = generated[plan.count]
@@ -1255,7 +1429,7 @@ package enum InitialFailureEvidence {
                         = ProofInitialization!GeneratedIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
                   /\\ ProofInitialization!SourceIntInitializerOutcome(ProofSourceExpressions[position][prior][ProofPlans[position].count])
                         \\in ProofInitialization!InitializerOutcomes
-              BY ONLY <1>0e, <2>1, ProofInitialization!IntExpressionOutcomesSupplyInitializerOutcomes, SMT
+              BY ONLY ProofInitialSentinels, <1>0e, <2>1, ProofInitialization!IntExpressionOutcomesSupplyInitializerOutcomes, SMT
             <2>. QED BY ONLY <2>1, <2>2, SMT
           <1>2. \\A position \\in (1..ProofCount) \\ ProofIntPositions :
                   /\\ ProofInitialization!SourceFixed(SourceInitialControl) = ProofInitialization!GeneratedFixed(ProofControlSeed(position))
@@ -1548,7 +1722,14 @@ package enum InitialFailureEvidence {
             BY ONLY <1>0, <1>1c, SMT DEF ProofPlans
           <1>1d. /\\ ProofPlans[2].count = 1
                  /\\ ProofPlans[3].count = 3 /\\ ProofPlans[4].count = 3
-            BY ONLY <1>1b, SMT DEF SourceInitializers
+            PROOF
+            <2>1. SourceInitializers[1][2].count = 1
+              BY ONLY SMT DEF SourceInitializers
+            <2>2. SourceInitializers[2][2].count = 3
+              BY ONLY SMT DEF SourceInitializers
+            <2>3. SourceInitializers[3][2].count = 3
+              BY ONLY SMT DEF SourceInitializers
+            <2>. QED BY ONLY <1>1b, <2>1, <2>2, <2>3, SMT
           <1>2. \\A position \\in 1..ProofCount :
                   /\\ ProofObservedPrior(position) \\in ProofInitialization!PartialBindings
                   /\\ DOMAIN ProofObservedPrior(position) = ProofPrefixKeys(position)
@@ -1709,10 +1890,32 @@ package enum InitialFailureEvidence {
               ProofInitialization!ObservedFailurePrefixConstructsTheGeneratedInitializationHistory, SMT
               DEF constructed, ProofInitialization!InitialSentinels
           <1>4a. \\A length \\in 0..ProofCount : constructed[length] = ProofObservedHistory[length]
-            BY ONLY <1>0, ActualNativePrefixSuppliesTheSourceInitializerOutcomes,
-              SetExtensionality, SMT
-              DEF constructed, failure, ProofObservedHistory, ProofObservedPrior,
-                ProofPrefixKeys, ProofInitialization!PrefixKeys, ProofObservedResult
+            PROOF
+            <2>. SUFFICES ASSUME NEW length \\in 0..ProofCount
+                         PROVE constructed[length] = ProofObservedHistory[length]
+              BY SMT
+            <2>0. /\\ length \\in Int /\\ 0 <= length /\\ length <= ProofCount
+                  /\\ ProofCount \\in Nat
+              BY ONLY <1>0, SMT
+            <2>1. CASE length < ProofCount
+              <3>0. ProofPrefixKeys(length + 1) = ProofInitialization!PrefixKeys(ProofOrder, length)
+                BY ONLY <2>0, SMT DEF ProofPrefixKeys, ProofInitialization!PrefixKeys
+              <3>. QED BY ONLY <2>0, <2>1, <3>0, SMT
+                DEF constructed, ProofObservedHistory, ProofObservedPrior
+            <2>2. CASE length = ProofCount
+              <3>0. ProofObservedFailures = {[before |-> ProofObservedBefore, site |-> ProofOrder[ProofCount],
+                                            payload |-> failure]}
+                BY ONLY ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT DEF failure
+              <3>1. constructed[length] = [states |-> {},
+                  failures |-> {[before |-> ProofObservedBefore, site |-> ProofOrder[ProofCount], payload |-> failure]}]
+                BY ONLY <2>0, <2>2, SMT DEF constructed
+              <3>2. ProofObservedHistory[length] = ProofObservedResult
+                BY ONLY <2>0, <2>2, SMT DEF ProofObservedHistory
+              <3>3. ProofObservedResult = [states |-> {},
+                  failures |-> {[before |-> ProofObservedBefore, site |-> ProofOrder[ProofCount], payload |-> failure]}]
+                BY ONLY <3>0, SMT DEF ProofObservedResult
+              <3>. QED BY ONLY <3>1, <3>2, <3>3, SMT
+            <2>. QED BY ONLY <2>0, <2>1, <2>2, SMT
           <1>4. constructed = ProofObservedHistory
             BY ONLY <1>4a, SMT DEF constructed, ProofObservedHistory
           <1>. QED BY ONLY <1>3, <1>4, SMT
@@ -1739,8 +1942,33 @@ package enum InitialFailureEvidence {
                           => ProofEvaluate(FALSE)[position][prior] =
                                ProofInitialization!SourceIntInitializerOutcome(meaning[ProofSyntaxViews[position].root])
           PROOF
+          <1>. DEFINE CompleteOutputRelation(source, generated, observations) ==
+                /\\ ProofInitialization!InitializationHistory(FALSE, ProofCount, ProofOrder, ProofEvaluate(FALSE), source)
+                /\\ ProofInitialization!InitializationHistory(TRUE, ProofCount, ProofOrder, ProofEvaluate(TRUE), generated)
+                /\\ source[ProofCount] = generated[ProofCount]
+                /\\ source[ProofCount].states = {}
+                /\\ source[ProofCount].failures = ProofInitialization!DecodedNamedRenderedAdditionEvents(
+                       __SwiftTLAInitialFailureEvents, ProofNames, ProofOrdinals)
+                /\\ ProofInitialization!SingleBranchInitialObservationHistory(ProofCount, ProofOrder, ProofEvaluate(FALSE), observations)
+                /\\ ProofInitialization!SingleBranchInitialObservationHistory(ProofCount, ProofOrder, ProofEvaluate(TRUE), observations)
+                /\\ ProofInitialization!InitialSetProjection(observations[ProofCount]) = source[ProofCount]
+                /\\ observations[ProofCount].stateCount = 0 /\\ observations[ProofCount].failureCount = 1
+                /\\ {observations[ProofCount].failureHistory[1]} = ProofObservedFailures
+                /\\ ~Init
+                /\\ \\A position \\in ProofIntPositions : \\A prior \\in source[position - 1].states :
+                       /\\ \\E meaning : ProofInitialization!Expressions!SourceSyntaxHistory(
+                              ProofSyntaxViews[position], ProofInitialization!PartialIntProjection(prior), meaning)
+                       /\\ \\A meaning : ProofInitialization!Expressions!SourceSyntaxHistory(
+                              ProofSyntaxViews[position], ProofInitialization!PartialIntProjection(prior), meaning)
+                              => ProofEvaluate(FALSE)[position][prior] =
+                                   ProofInitialization!SourceIntInitializerOutcome(meaning[ProofSyntaxViews[position].root])
+          <1>. HIDE DEF CompleteOutputRelation
+          <1>0g. SUFFICES \\E source, generated, observations : CompleteOutputRelation(source, generated, observations)
+            BY ONLY <1>0g, SMT DEF CompleteOutputRelation
           <1>0. ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
             BY ActualLayoutSuppliesInitializationDecoderInputs, SMT
+          <1>5. ProofCount \\in 0..ProofCount
+            BY <1>0, SMT DEF ProofInitialization!InitializationOrder
           <1>1. PICK source, generated, observations :
                   /\\ ProofInitialization!InitializationHistory(FALSE, ProofCount, ProofOrder, ProofEvaluate(FALSE), source)
                   /\\ ProofInitialization!InitializationHistory(TRUE, ProofCount, ProofOrder, ProofEvaluate(TRUE), generated)
@@ -1758,8 +1986,7 @@ package enum InitialFailureEvidence {
                                 ProofSyntaxViews[position], ProofInitialization!PartialIntProjection(prior), meaning)
                                 => ProofEvaluate(FALSE)[position][prior] =
                                      ProofInitialization!SourceIntInitializerOutcome(meaning[ProofSyntaxViews[position].root])
-            BY ActualPlansInvokeCompleteInitializationAndObservationParents, SMT
-              DEF ProofCount, ActualInitializationOrder
+            BY ONLY <1>5, ActualPlansInvokeCompleteInitializationAndObservationParents, SMT
           <1>2. \\A index \\in 0..ProofCount : source[index] = ProofObservedHistory[index]
             PROOF
             <2>1. \\A index \\in 0..ProofCount : generated[index] = ProofObservedHistory[index]
@@ -1776,11 +2003,9 @@ package enum InitialFailureEvidence {
             BY <1>1, <1>3, SMT DEF ProofInitialization!InitialSetProjection,
               ProofInitialization!InitialFailureSet, ProofInitialization!InitialObservationIsTyped,
               ProofInitialization!InitialFailureHistory
-          <1>5. ProofCount \\in 0..ProofCount
-            BY <1>0, SMT DEF ProofInitialization!InitializationOrder
           <1>. WITNESS source, generated, observations
           <1>. QED BY ONLY <1>1, <1>3, <1>4, <1>5, CompleteFailureEvents, InitialFailurePrecedesGraph, SMT
-            DEF ProofObservedFailures
+            DEF CompleteOutputRelation, ProofObservedFailures
         ====
         """
     }

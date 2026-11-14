@@ -15,6 +15,9 @@ usage() {
 usage: scripts/local-validation.sh static
        scripts/local-validation.sh swiftpm-test <test-filter>
        scripts/local-validation.sh xcode-test <test-identifier>
+       scripts/local-validation.sh proof-step <retained-packet> <first-line> <last-line> [candidate-proof]
+       scripts/local-validation.sh proof-tools
+       scripts/local-validation.sh proof-prepare <output-directory> <checked-proof>
 EOF
     exit 64
 }
@@ -34,12 +37,23 @@ require_positive_integer() {
 
 mode="${1:-}"
 case "$mode" in
-    static)
+    static|proof-tools)
         [[ $# -eq 1 ]] || usage
         ;;
     swiftpm-test|xcode-test)
         [[ $# -eq 2 && -n "${2:-}" && "${2:-}" != -* ]] || usage
         selector="$2"
+        ;;
+    proof-step)
+        [[ $# -eq 4 || $# -eq 5 ]] || usage
+        require_positive_integer first-line "$3"
+        require_positive_integer last-line "$4"
+        [[ "$3" -le "$4" ]] || fail "first-line must not exceed last-line"
+        proof_arguments=("${@:2}")
+        ;;
+    proof-prepare)
+        [[ $# -eq 3 ]] || usage
+        proof_arguments=("${@:2}")
         ;;
     *)
         usage
@@ -168,7 +182,9 @@ run_guarded() {
         ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }' \
             .github/workflows/ci.yml .github/workflows/validation-pipeline.yml \
             .github/workflows/validation-case.yml .github/actions/setup-pinned-tlaps/action.yml
-        bash -n scripts/build-pinned-tlaps.sh scripts/check-language-proof-batch.sh scripts/proof-family-inputs.sh
+        bash -n scripts/build-pinned-tlaps.sh scripts/check-language-proof-batch.sh scripts/proof-family-inputs.sh scripts/bootstrap-pinned-proof.sh
+        python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/check-initial-proof-step.py").read_text())'
+        python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/prepare-initial-proof.py").read_text())'
         ruby Tests/Fixtures/ProofFamily/assert_routing.rb
         python3 Tests/Fixtures/TLAPSBootstrap/assert_inputs.py
         python3 "$(dirname "$0")/retain-native-initial-source.py" --self-check
@@ -269,6 +285,15 @@ run_guarded() {
     fi
     set -m
     case "$mode" in
+        proof-tools)
+            bash scripts/bootstrap-pinned-proof.sh &
+            ;;
+        proof-step)
+            python3 scripts/check-initial-proof-step.py "${proof_arguments[@]}" &
+            ;;
+        proof-prepare)
+            python3 scripts/prepare-initial-proof.py "$scratch_dir" "${proof_arguments[@]}" &
+            ;;
         swiftpm-test)
             swift test -Xswiftc -warnings-as-errors --disable-automatic-resolution --filter "$selector" -j 1 --scratch-path "$build_dir" &
             ;;
@@ -302,5 +327,5 @@ run_guarded() {
 }
 
 case "$mode" in
-    static|swiftpm-test|xcode-test) run_guarded ;;
+    static|swiftpm-test|xcode-test|proof-step|proof-tools|proof-prepare) run_guarded ;;
 esac

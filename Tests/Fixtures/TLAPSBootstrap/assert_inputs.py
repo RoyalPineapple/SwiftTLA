@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import runpy
 import subprocess
 import sys
 import tempfile
@@ -121,3 +122,36 @@ target.write_bytes(os.environ["DOWNLOAD_BYTES"].encode())
         print(f"Isabelle download: {name}: {actual_calls} attempts, {'accepted' if success else 'rejected'}")
 
 print("Proof build pins, packaging boundary, and Isabelle download controls passed.")
+
+# A zero exit status alone cannot establish a nonempty, uncached selected proof.
+selected_result = runpy.run_path(str(root / "scripts/check-initial-proof-step.py"))["selected_result"]
+declared = """@!!BEGIN
+@!!type:obligation
+@!!id:136
+@!!loc:257:5:257:7
+@!!status:to be proved
+@!!END
+"""
+proved = """@!!BEGIN
+@!!type:obligation
+@!!id:136
+@!!loc:257:5:257:7
+@!!status:proved
+@!!already:false
+@!!END
+"""
+for name, protocol, exit_code, expected in [
+    ("selected uncached completion", declared + proved, 0, True),
+    ("empty selection", "All 0 obligations proved\n", 0, False),
+    ("unfinished selection", declared, 0, False),
+    ("different obligation", declared + proved.replace("id:136", "id:137"), 0, False),
+    ("wrong range", (declared + proved).replace("257:", "258:"), 0, False),
+    ("moved final span", declared + proved.replace("257:", "258:"), 0, False),
+    ("cached result", declared + proved.replace("already:false", "already:true"), 0, False),
+    ("failed backend", declared + proved.replace("status:proved", "status:failed"), 0, False),
+    ("failed process", declared + proved, 10, False),
+    ("tool error", declared + proved + "[ERROR] incomplete proof\n", 0, False),
+]:
+    result = selected_result(protocol, 257, 257, exit_code)
+    assert (result["status"] == "FOCUSED_PASS_DEPENDENCIES_UNCHECKED") == expected, name
+print("Focused proof selection/status controls passed (no mathematical proof credit).")
