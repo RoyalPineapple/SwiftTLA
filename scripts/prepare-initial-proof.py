@@ -26,7 +26,8 @@ def payloads(root):
 def main():
     root = Path.cwd()
     scratch = Path(sys.argv[1]).resolve(strict=True)
-    if str(scratch) != os.environ.get("SWIFTTLA_VALIDATION_SCRATCH_PATH"):
+    guarded_scratch = os.environ.get("SWIFTTLA_VALIDATION_SCRATCH_PATH")
+    if not guarded_scratch or not scratch.samefile(guarded_scratch):
         raise ValueError("invoke through local-validation.sh proof-prepare")
     common = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], text=True).strip()).resolve()
     output = Path(sys.argv[2]).resolve()
