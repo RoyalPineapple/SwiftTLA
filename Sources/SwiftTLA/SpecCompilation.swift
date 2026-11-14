@@ -22,6 +22,9 @@ private let tlaReservedWords: Set<String> = [
     "UNION", "USE", "VARIABLE", "VARIABLES", "WF_", "WITH", "WITNESS"
 ]
 
+// Reserve these in allocations without restricting source names or raw values.
+let tlaPredefinedIdentifierNames: Set<String> = ["TRUE", "FALSE", "BOOLEAN", "STRING"]
+
 private let plusCalReservedWords: Set<String> = [
     "algorithm", "assert", "await", "begin", "call", "define", "do", "either", "else",
     "elsif", "end", "fair", "goto", "if", "macro", "or", "print", "procedure", "process",
@@ -30,6 +33,23 @@ private let plusCalReservedWords: Set<String> = [
 
 func isTLADeclarationName(_ name: String) -> Bool {
     isFormalIdentifier(name) && tlaReservedWords.contains(name) == false
+}
+
+// Record fields allow keywords, unlike declarations; lexer restrictions still apply.
+func isTLARecordFieldName(_ name: String) -> Bool {
+    guard isFormalIdentifier(name) else { return false }
+    if name == "_" || name == "WF_" || name == "SF_" { return true }
+    return !name.hasPrefix("WF_") && !name.hasPrefix("SF_")
+        && name.utf8.contains { (65...90).contains($0) || (97...122).contains($0) }
+}
+
+// Escape lexer restrictions here without changing accepted source names.
+func tlaDeclarationStem(_ name: String) -> String {
+    if tlaReservedWords.contains(name) || name.hasPrefix("WF_") || name.hasPrefix("SF_") {
+        return "_\(name)"
+    }
+    if name.utf8.contains(where: { (65...90).contains($0) || (97...122).contains($0) }) { return name }
+    return "v\(name)"
 }
 
 func isPlusCalDeclarationName(_ name: String) -> Bool {
@@ -119,8 +139,13 @@ package struct RenderedModule: Sendable, Equatable {
     package var imports: [TLAModuleFile] = []
     package var importedOwnership: [TLAModuleBundle.OwnershipEntry] = []
     package var dependencies: [TLAModuleBundle.ModuleDependency] = []
+    package let moduleName: String
+    let moduleNames: [String: String]
     package let renderedModuleSource: String
+    package let constantValues: [ConstantDecl]
     let evaluationFailureDeclarations: [String]
+    package let initialEvaluationFailure: String?
+    package let initialEvaluationFailureRecord: String?
     package let configuration: TLCConfiguration
     package let renderedActions: [RenderedAction]
     package let symbolicActions: [ActionID]
@@ -223,7 +248,7 @@ package struct CompiledGeneratedModelRefinement: Sendable {
     }
 }
 
-/// Source metadata needed by renderers after executable declarations are lowered.
+/// Module metadata needed by renderers after executable declarations are lowered.
 struct CompiledModuleMetadata: Sendable {
     var name: String
     let constants: [ConstantDecl]
@@ -234,6 +259,8 @@ struct CompiledModuleMetadata: Sendable {
     let symmetrySets: [SymmetrySet]
     let formalDefinitionCount: Int
     let recursiveFunctionCount: Int
+    let orderedIntProofActionNames: Set<String>
+    let sourceSpecDefaultDeadlockWitness: Bool
 
     func constantDeclaration(including additionalNames: [String]) -> String? {
         let formalConstants = formalParameters.filter { $0.kind == .constant }.map(\.name)
@@ -241,23 +268,34 @@ struct CompiledModuleMetadata: Sendable {
         return names.isEmpty ? nil : "CONSTANTS \(names.joined(separator: ", "))"
     }
 
-    init(source: TLASpec, modelValueNames: Set<String>) {
+    init(source: TLASpec, modelValueNames: Set<String>, reserving names: Set<String>) {
         self.modelValueNames = modelValueNames
         name = source.name
-        constants = source.constants
+        var occupied = names.union(source.constants.map(\.name))
+        constants = source.constants.map { constant in
+            // shortcut: identity model-value names need a separate value-encoding rule.
+            guard constant.value != .constant(constant.name) else { return constant }
+            let stem = tlaDeclarationStem(constant.name)
+            guard stem != constant.name || names.contains(stem) else { return constant }
+            let name = StateExpr.freshBoundName(stem, avoiding: occupied)
+            occupied.insert(name)
+            return .init(name, constant.value)
+        }
         formalParameters = source.formalParameters
         extendsModules = source.extendsModules
         imports = source.imports.map(\.name)
         symmetrySets = source.symmetrySets
         formalDefinitionCount = source.formalOperatorDefinitions.count
         recursiveFunctionCount = source.recursiveFuncs.count
+        orderedIntProofActionNames = source.orderedIntProofActionNames
+        sourceSpecDefaultDeadlockWitness = source.sourceSpecDefaultDeadlockWitness
     }
 }
 
 fileprivate struct CompiledModule: Sendable {
     let metadata: CompiledModuleMetadata
-    let layout: CompiledLayout
-    let bindings: CompiledBindingTable
+    var layout: CompiledLayout
+    var bindings: CompiledBindingTable
     let semantics: CompiledSemantics
     let refinements: [CompiledRefinement]
     let generatedRefinements: [CompiledGeneratedModelRefinement]
@@ -291,14 +329,25 @@ struct CompiledModuleImports: Sendable {
         return selected
     }
 
-    fileprivate func names(for directImports: [String], namespace: String?, configured: Bool) -> [String: String] {
+    fileprivate func names(for directImports: [String], rootName: String,
+        namespace: Bool, configured: Bool, reserving reservedNames: Set<String>) -> [String: String] {
         let selected = selectedNames(directImports)
         let needsNamespace = configured || modules.contains {
             selected.contains($0.metadata.name) && !$0.semantics.formalModuleReplacements.isEmpty
         }
-        return Dictionary(uniqueKeysWithValues: selected.sorted().enumerated().map { offset, name in
-            (name, needsNamespace ? namespace.map { "\($0)__Import\(offset)" } ?? name : name)
-        })
+        let standardNames = Set(StandardModule.allCases.map(\.rawValue))
+        var occupied = Set(modules.map { $0.metadata.name }).union(standardNames).union(reservedNames)
+        let formalRoot = StateExpr.freshBoundName(tlaDeclarationStem(rootName), avoiding: occupied)
+        occupied.insert(formalRoot)
+        var names = [root: formalRoot]
+        for (offset, name) in selected.sorted().enumerated() {
+            let preferred = needsNamespace && namespace ? "\(formalRoot)__Import\(offset)" : tlaDeclarationStem(name)
+            let formalName = preferred == name && !standardNames.contains(name)
+                ? name : StateExpr.freshBoundName(preferred, avoiding: occupied)
+            occupied.insert(formalName)
+            names[name] = formalName
+        }
+        return names
     }
 
     fileprivate func replacements(for directImports: [String], moduleNames: [String: String]) -> [TLCModuleReplacement] {
@@ -362,26 +411,39 @@ public struct CompiledSpecification: Sendable {
                 nextSafeAction: "Render through the generated model's typed export.")
         }
         let metadata = module.metadata
-        let rootModule = try metadata.renderModule(module)
+        let moduleNames = moduleImports.names(for: imports.map { $0.metadata.name },
+            rootName: metadata.name, namespace: false, configured: false, reserving: [])
+        let rootModule = try metadata.renderModule(module, moduleNames: moduleNames)
         guard rootModule.symbolicActions.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
                 path: "export.\(metadata.name).actions",
                 expected: "configured action invocation metadata", actual: "symbolic action domains",
                 nextSafeAction: "Export through the generated model with its typed configuration.")
         }
+        guard case .compiled(let identity, let ownership, let dependencies) = provenance else {
+            preconditionFailure("Compiler-owned modules require compiled provenance")
+        }
+        let renderedProvenance = TLAModuleBundle.Provenance.compiled(identity: identity,
+            ownership: ownership.map {
+                .init(moduleName: moduleNames[$0.moduleName] ?? $0.moduleName,
+                    owningRoot: moduleNames[$0.owningRoot] ?? $0.owningRoot, structuralPath: $0.structuralPath)
+            }, dependencies: dependencies.map {
+                .init(importingModule: moduleNames[$0.importingModule] ?? $0.importingModule,
+                    importedModule: moduleNames[$0.importedModule] ?? $0.importedModule, structuralPath: $0.structuralPath)
+            })
         let renderedBundle = TLAModuleBundle(
-            root: .init(name: metadata.name, tla: rootModule.renderedModuleSource, cfg: rootModule.configuration.render(usesSymmetryReduction: false)),
+            root: .init(name: rootModule.moduleName, tla: rootModule.renderedModuleSource, cfg: try rootModule.configuration.render(usesSymmetryReduction: false)),
             imports: try imports.map { imported in
-                let plan = try imported.metadata.renderModule(imported)
-                return .init(name: imported.metadata.name, tla: plan.renderedModuleSource, cfg: nil)
+                let plan = try imported.metadata.renderModule(imported, moduleNames: moduleNames)
+                return .init(name: plan.moduleName, tla: plan.renderedModuleSource, cfg: nil)
             },
-            provenance: provenance
+            provenance: renderedProvenance
         )
         try renderedBundle.validateDeclaredClosure()
-        let renderer = CompiledTLARenderer(moduleName: metadata.name,
+        let renderer = CompiledTLARenderer(moduleName: rootModule.moduleName,
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)).union(metadata.formalParameters.map(\.name)),
             layout: module.layout, bindings: module.bindings,
-            operators: module.semantics.operators, actions: module.semantics.behavior.actions, functions: [],
+            operators: module.semantics.operators, actions: module.semantics.behavior.actions, functions: [], moduleNames: moduleNames,
             parameterDomains: module.semantics.behavior.parameterDomains)
         let algorithm = try module.authoredAlgorithm.map { authored in
             try metadata.authoredPlusCalModule(
@@ -392,17 +454,19 @@ public struct CompiledSpecification: Sendable {
         }
         let plusCalBundle = try algorithm.map { algorithm in
             let bundle = TLAModuleBundle(
-                root: .init(name: metadata.name,
+                root: .init(name: rootModule.moduleName,
                     tla: try AlgorithmPlusCalRenderer(module: algorithm, formalRenderer: renderer).render(),
                     cfg: renderedBundle.root.cfg),
-                imports: renderedBundle.imports, provenance: provenance
+                imports: renderedBundle.imports, provenance: renderedProvenance
             )
             try bundle.validateDeclaredClosure()
             return bundle
         }
-        return RenderedSpecification(
+        return try RenderedSpecification(
             tlaBundle: renderedBundle,
-            configuration: rootModule.configuration,
+            configuration: rootModule.configuration, constantValues: metadata.constants, parameterNames: [],
+            initialEvaluationFailure: rootModule.initialEvaluationFailure,
+            initialEvaluationFailureRecord: rootModule.initialEvaluationFailureRecord,
             actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle.map { .success($0) },
             fairnessProfileOperators: Dictionary(uniqueKeysWithValues: module.semantics.behavior.fairnessProfiles.map {
                 ($0.name, $0.operatorName)
@@ -419,22 +483,109 @@ public struct CompiledSpecification: Sendable {
 public struct RenderedSpecification: Sendable {
     public let tlaBundle: TLAModuleBundle
     fileprivate let configuration: TLCConfiguration
+    private let constantValues: [ConstantDecl]
+    private let parameterNames: Set<String>
+    private let configurationNamespaceSources: [String]
+    private let configurationDefinitionNames: Set<String>
+    private let refinementBundle: TLAModuleBundle
+    private let initialEvaluationFailure: String?
+    private let initialEvaluationFailureRecord: String?
     public let actions: [RenderedAction]
     fileprivate let renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?
     fileprivate let renderedPlusCalProfiles: [String: Result<TLAModuleBundle, CompilationDiagnostic>]
     fileprivate let fairnessProfileOperators: [String: String]
     package let temporalObligations: [String: [_RenderedTemporalObligation]]
 
-    init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration, actions: [RenderedAction],
+    init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration, constantValues: [ConstantDecl],
+        parameterNames: Set<String>, configurationNamespaceSources: [String]? = nil,
+        configurationDefinitionNames: Set<String> = [],
+        refinementBundle: TLAModuleBundle? = nil,
+        initialEvaluationFailure: String? = nil, initialEvaluationFailureRecord: String? = nil,
+        actions: [RenderedAction],
         renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?,
         renderedPlusCalProfiles: [String: Result<TLAModuleBundle, CompilationDiagnostic>] = [:],
         fairnessProfileOperators: [String: String] = [:],
-        temporalObligations: [String: [_RenderedTemporalObligation]] = [:]) {
-        self.tlaBundle = tlaBundle
+        temporalObligations: [String: [_RenderedTemporalObligation]] = [:]) throws {
+        var constantValues = constantValues
+        let knownNames = Set(constantValues.map(\.name))
+        for declaration in configuration.declarations where declaration.hasPrefix("CONSTANT ") {
+            let parts = declaration.dropFirst("CONSTANT ".count).components(separatedBy: " = ")
+            if parts.count == 2, !knownNames.contains(parts[0]),
+               isTLADeclarationName(parts[0]), isTLADeclarationName(parts[1]),
+               parts[1] != "TRUE", parts[1] != "FALSE" {
+                constantValues.append(.init(parts[0], .constant(parts[1])))
+            }
+        }
+        var declarations = configuration.declarations
+        var definitions: [String] = []
+        var prefix = "__SwiftTLAParameter"
+        // Runtime configuration values are data, not a declaration namespace.
+        var namespaceSources: [String]
+        if let configurationNamespaceSources {
+            namespaceSources = configurationNamespaceSources
+        } else {
+            namespaceSources = tlaBundle.files.map(\.tla)
+            if case .success(let bundle)? = renderedPlusCalModuleBundle { namespaceSources += bundle.files.map(\.tla) }
+            for result in renderedPlusCalProfiles.values {
+                if case .success(let bundle) = result { namespaceSources += bundle.files.map(\.tla) }
+            }
+        }
+        let sources = namespaceSources + (refinementBundle?.files.map(\.tla) ?? []) + constantValues.map(\.name)
+        while sources.contains(where: { $0.contains(prefix) }) { prefix += "_" }
+        var modelValueNames: [String: String] = [:]
+        for binding in constantValues.sorted(by: { $0.name < $1.name }) {
+            if case .constant(let value) = binding.value, modelValueNames[value] == nil {
+                modelValueNames[value] = binding.name
+            }
+        }
+        for (index, constant) in constantValues.enumerated() where !constant.value.isTLCConfigurationLiteral {
+            let assignment = "CONSTANT \(constant.name) = \(constant.value)"
+            guard let position = declarations.firstIndex(of: assignment) else { continue }
+            let definition = "\(prefix)\(index)"
+            definitions.append("\(definition) == \(Self.renamingModelValues(constant.value, names: modelValueNames))")
+            declarations[position] = "CONSTANT \(constant.name) <- \(definition)"
+        }
+        let configuration = TLCConfiguration(behavior: configuration.behavior,
+            specificationName: configuration.specificationName, assumptionsOnly: configuration.assumptionsOnly,
+            declarations: declarations, checkDeadlock: configuration.checkDeadlock,
+            intrinsicInvariants: configuration.intrinsicInvariants,
+            invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
+            properties: configuration.properties, refinements: configuration.refinements,
+            symmetry: configuration.symmetry, viewOperators: configuration.viewOperators, view: configuration.view,
+            postconditionOperators: configuration.postconditionOperators, postcondition: configuration.postcondition)
+        func configured(_ bundle: TLAModuleBundle) throws -> TLAModuleBundle {
+            guard !definitions.isEmpty else { return bundle }
+            guard let end = bundle.root.tla.range(of: "====", options: .backwards) else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "configuration",
+                    expected: "a complete rendered module", actual: "missing module terminator",
+                    nextSafeAction: "Render the resolved model before binding configuration.")
+            }
+            let source = String(bundle.root.tla[..<end.lowerBound]) + definitions.joined(separator: "\n")
+                + "\n" + bundle.root.tla[end.lowerBound...]
+            return TLAModuleBundle(root: .init(name: bundle.root.name, tla: FormalStringEncoding.declare(in: source),
+                cfg: try configuration.render(usesSymmetryReduction: false)),
+                imports: bundle.imports, provenance: bundle.provenance)
+        }
+        func configuredResult(_ result: Result<TLAModuleBundle, CompilationDiagnostic>) throws
+            -> Result<TLAModuleBundle, CompilationDiagnostic> {
+            switch result {
+            case .success(let bundle): return .success(try configured(bundle))
+            case .failure(let diagnostic): return .failure(diagnostic)
+            }
+        }
+        self.tlaBundle = try configured(tlaBundle)
         self.configuration = configuration
+        self.constantValues = constantValues
+        self.parameterNames = parameterNames
+        self.configurationNamespaceSources = namespaceSources
+        self.configurationDefinitionNames = configurationDefinitionNames.union(
+            constantValues.indices.map { "\(prefix)\($0)" })
+        self.refinementBundle = refinementBundle ?? tlaBundle
+        self.initialEvaluationFailure = initialEvaluationFailure
+        self.initialEvaluationFailureRecord = initialEvaluationFailureRecord
         self.actions = actions
-        self.renderedPlusCalModuleBundle = renderedPlusCalModuleBundle
-        self.renderedPlusCalProfiles = renderedPlusCalProfiles
+        self.renderedPlusCalModuleBundle = try renderedPlusCalModuleBundle.map(configuredResult)
+        self.renderedPlusCalProfiles = try renderedPlusCalProfiles.mapValues(configuredResult)
         self.fairnessProfileOperators = fairnessProfileOperators
         self.temporalObligations = temporalObligations.mapValues { obligations in
             obligations.sorted {
@@ -446,7 +597,7 @@ public struct RenderedSpecification: Sendable {
     /// Final artifact boundary used by generated machines; this does not compile or interpret a model.
     @_documentation(visibility: internal)
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
-        declarations: [String], checkDeadlock: Bool, _generatedIntegerBitWidth: Int,
+        declarations: [String], _generatedConstants: [ConstantDecl], checkDeadlock: Bool, _generatedIntegerBitWidth: Int,
         _generatedIntrinsicInvariants: [String],
         invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
         symmetry: [String], viewOperators: [String] = [], postconditionOperators: [String] = [],
@@ -457,6 +608,8 @@ public struct RenderedSpecification: Sendable {
         _generatedImports: [(name: String, source: String, structuralPath: [String])] = [],
         _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = [],
         _generatedFairnessProfileOperators: [String: String] = [:],
+        _generatedInitialEvaluationFailure: String? = nil,
+        _generatedInitialEvaluationFailureRecord: String? = nil,
         _generatedTemporalObligations: [String: [_RenderedTemporalObligation]] = [:]) throws {
         guard _generatedIntegerBitWidth == Int.bitWidth else {
             throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
@@ -464,30 +617,7 @@ public struct RenderedSpecification: Sendable {
                 actual: "generated Int width \(_generatedIntegerBitWidth)",
                 nextSafeAction: "Regenerate the model for the target architecture.")
         }
-        var declarations = declarations
-        var definitions: [String] = []
-        var prefix = "__SwiftTLAParameter"
-        let sources = [source] + _generatedImports.map(\.source)
-            + [(try? _generatedPlusCal?.get()) ?? ""] + declarations + _generatedParameters.map(\.name)
-        while sources.contains(where: { $0.contains(prefix) }) { prefix += "_" }
-        for (index, parameter) in _generatedParameters.enumerated() {
-            if parameter.value.isTLCConfigurationLiteral {
-                declarations.append("CONSTANT \(parameter.name) = \(parameter.value)")
-            } else {
-                let definition = "\(prefix)\(index)"
-                definitions.append("\(definition) == \(parameter.value)")
-                declarations.append("CONSTANT \(parameter.name) <- \(definition)")
-            }
-        }
-        func configuredSource(_ source: String) throws -> String {
-            guard !definitions.isEmpty else { return source }
-            guard let end = source.range(of: "====", options: .backwards) else {
-                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "configuration",
-                    expected: "a complete rendered module", actual: "missing module terminator",
-                    nextSafeAction: "Render the resolved model before binding configuration.")
-            }
-            return String(source[..<end.lowerBound]) + definitions.joined(separator: "\n") + "\n" + source[end.lowerBound...]
-        }
+        let declarations = declarations + _generatedParameters.map { "CONSTANT \($0.name) = \($0.value)" }
         if _assumptionsOnly && (checkDeadlock || !invariants.isEmpty || !reachabilityProperties.isEmpty
             || !properties.isEmpty || !refinements.isEmpty || !symmetry.isEmpty || !actions.isEmpty) {
             throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
@@ -500,8 +630,8 @@ public struct RenderedSpecification: Sendable {
             invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements,
             symmetry: symmetry, viewOperators: viewOperators,
             postconditionOperators: postconditionOperators)
-        let bundle = TLAModuleBundle(root: .init(name: name, tla: try configuredSource(source),
-            cfg: configuration.render(usesSymmetryReduction: false)),
+        let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
+            cfg: try configuration.render(usesSymmetryReduction: false)),
             imports: _generatedImports.map { .init(name: $0.name, tla: $0.source) }, provenance: .compiled(
                 identity: .init(value: compilationIdentity),
                 ownership: [.init(moduleName: name, owningRoot: name, structuralPath: [])]
@@ -514,7 +644,7 @@ public struct RenderedSpecification: Sendable {
             switch result {
             case .failure(let diagnostic): return .failure(diagnostic)
             case .success(let source):
-                let authored = TLAModuleBundle(root: .init(name: name, tla: try configuredSource(source), cfg: bundle.root.cfg),
+                let authored = TLAModuleBundle(root: .init(name: name, tla: source, cfg: bundle.root.cfg),
                     imports: bundle.imports, provenance: bundle.provenance)
                 try authored.validateDeclaredClosure()
                 return .success(authored)
@@ -522,10 +652,30 @@ public struct RenderedSpecification: Sendable {
         }
         let plusCal = try _generatedPlusCal.map(configuredPlusCal)
         let plusCalProfiles = try _generatedPlusCalProfiles.mapValues(configuredPlusCal)
-        self.init(tlaBundle: bundle, configuration: configuration, actions: actions, renderedPlusCalModuleBundle: plusCal,
+        try self.init(tlaBundle: bundle, configuration: configuration,
+            constantValues: _generatedConstants + _generatedParameters.map { .init($0.name, $0.value) },
+            parameterNames: Set(_generatedParameters.map(\.name)),
+            initialEvaluationFailure: _generatedInitialEvaluationFailure,
+            initialEvaluationFailureRecord: _generatedInitialEvaluationFailureRecord,
+            actions: actions, renderedPlusCalModuleBundle: plusCal,
             renderedPlusCalProfiles: plusCalProfiles,
             fairnessProfileOperators: _generatedFairnessProfileOperators,
             temporalObligations: _generatedTemporalObligations)
+    }
+
+    private static func renamingModelValues(_ value: TLAValue, names: [String: String]) -> TLAValue {
+        switch value {
+        case .constant(let name): return .constant(names[name] ?? name)
+        case .set(let values): return .set(Set(values.map { renamingModelValues($0, names: names) }))
+        case .tuple(let values): return .tuple(values.map { renamingModelValues($0, names: names) })
+        case .record(let record): return .record(.init(record.fields.map {
+            .init($0.name, renamingModelValues($0.value, names: names))
+        }))
+        case .function(let values): return .function(Dictionary(uniqueKeysWithValues: values.map {
+            (renamingModelValues($0.key, names: names), renamingModelValues($0.value, names: names))
+        }))
+        case .int, .bool, .string: return value
+        }
     }
 
     /// Links another generated model's compiled TLA at the final export boundary.
@@ -565,31 +715,80 @@ public struct RenderedSpecification: Sendable {
             }
             return mapped
         }
-        let bindings = try substitutions(parameters, names: Abstract.Configuration.fieldIdentities, kind: "parameters")
-            + substitutions(state, names: Abstract.State.fieldIdentities, kind: "state")
-        let target = try abstract.render(configuration: abstractConfiguration).tlaBundle
+        let stateBindings = try substitutions(state, names: Abstract.State.fieldIdentities, kind: "state")
+        var bindings = try substitutions(parameters, names: Abstract.Configuration.fieldIdentities, kind: "parameters")
+            + stateBindings
+        let renderedTarget = try abstract.render(configuration: abstractConfiguration)
+        let target = renderedTarget.refinementBundle
         guard case .compiled(let targetIdentity, let targetOwnership, let targetDependencies) = target.provenance else {
             throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
                 path: "refinements.\(name).abstract", expected: "a generated compiled abstract model",
                 actual: "external formal input", nextSafeAction: "Use a generated model as the refinement target.")
         }
+        let boundNames = Set(bindings.map { $0.0 })
+        let abstractConstants = renderedTarget.constantValues.filter { !boundNames.contains($0.name) }
+        var rootConstants = constantValues
+        var declarations = configuration.declarations
+        var constantNames: [String] = []
+        var occupiedSources = configurationNamespaceSources + refinementBundle.files.map(\.tla)
+            + configurationDefinitionNames.sorted() + rootConstants.map(\.name)
+        // shortcut: module-operator replacements still need separate import forwarding.
+        for constant in abstractConstants {
+            let symbol: String
+            // Equality in one configuration cannot make a parameter a closed constant.
+            if let existing = rootConstants.first(where: {
+                !parameterNames.contains($0.name) && $0.value == constant.value
+            }) {
+                symbol = existing.name
+            } else {
+                var fresh = constant.name
+                while fresh == name || occupiedSources.contains(where: { $0.contains(fresh) }) { fresh += "_" }
+                symbol = fresh
+                let declaration = "CONSTANT \(symbol) = \(constant.value)"
+                declarations.append(declaration)
+                occupiedSources.append(declaration)
+                rootConstants.append(.init(symbol, constant.value))
+                constantNames.append(symbol)
+            }
+            bindings.append((constant.name, symbol))
+        }
         let replacement = bindings.sorted { $0.0 < $1.0 }
             .map { "\($0.0) <- (\($0.1))" }.joined(separator: ", ")
-        let property = behavior == .specification
-            ? "\(instance)!Spec"
-            : "\(instance)!Init /\\ [][\(instance)!Next]_\(instance)!vars"
-        let definitions = "\(instance) == INSTANCE \(target.root.name)"
-            + (replacement.isEmpty ? "" : " WITH " + replacement)
-            + "\n\(name) == \(property)\n"
+        let variableDeclarations = target.root.tla.split(separator: "\n").filter {
+            $0.hasPrefix("VARIABLES ")
+        }
+        let variableNames = variableDeclarations.count == 1
+            ? variableDeclarations[0].dropFirst("VARIABLES ".count)
+                .components(separatedBy: ", ") : []
+        let mappedValues = Dictionary(uniqueKeysWithValues: stateBindings)
+        let mappedFrame: String?
+        if !variableNames.isEmpty, variableNames.allSatisfy(isTLADeclarationName),
+           Set(variableNames).count == variableNames.count,
+           Set(variableNames) == Set(mappedValues.keys) {
+            let values = variableNames.map { "(\(mappedValues[$0]!))" }
+            mappedFrame = values.count == 1 ? values[0] : "<<\(values.joined(separator: ", "))>>"
+        } else {
+            // shortcut: hidden or noncanonical frames keep the existing alias; derive their full mapping before inlining.
+            mappedFrame = nil
+        }
         let selected = TLCConfiguration(behavior: configuration.behavior,
             specificationName: configuration.specificationName, assumptionsOnly: configuration.assumptionsOnly,
-            declarations: configuration.declarations, checkDeadlock: configuration.checkDeadlock,
+            declarations: declarations, checkDeadlock: configuration.checkDeadlock,
             intrinsicInvariants: configuration.intrinsicInvariants,
             invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
             properties: configuration.properties, refinements: configuration.refinements + [name],
             symmetry: configuration.symmetry, viewOperators: configuration.viewOperators, view: configuration.view,
             postconditionOperators: configuration.postconditionOperators,
             postcondition: configuration.postcondition)
+        let instanceBody = "INSTANCE \(target.root.name)"
+            + (replacement.isEmpty ? "" : " WITH " + replacement)
+        let sourceLines = refinementBundle.root.tla.split(separator: "\n")
+        var linkedInstance = instance
+        while linkedInstance == name || (occupiedSources.contains(where: { $0.contains(linkedInstance) })
+            && !sourceLines.contains(Substring("\(linkedInstance) == \(instanceBody)"))) {
+            linkedInstance += "_"
+        }
+        let existingInstance = sourceLines.contains(Substring("\(linkedInstance) == \(instanceBody)"))
         func linked(_ source: TLAModuleBundle) throws -> TLAModuleBundle {
             guard let end = source.root.tla.range(of: "====", options: .backwards),
                   case .compiled(let rootIdentity, let rootOwnership, let rootDependencies) = source.provenance else {
@@ -597,6 +796,12 @@ public struct RenderedSpecification: Sendable {
                     path: "refinements.\(name).source", expected: "a complete generated concrete module",
                     actual: "an incomplete or external module", nextSafeAction: "Render the generated concrete model first.")
             }
+            let property = behavior == .specification
+                ? "\(linkedInstance)!Spec"
+                : "\(linkedInstance)!Init /\\ [][\(linkedInstance)!Next]_\(mappedFrame ?? "\(linkedInstance)!vars")"
+            let constants = constantNames.isEmpty ? "" : "CONSTANTS \(constantNames.sorted().joined(separator: ", "))\n"
+            let definitions = constants + (existingInstance ? "" : "\(linkedInstance) == \(instanceBody)\n")
+                + "\(name) == \(property)\n"
             let sourceText = String(source.root.tla[..<end.lowerBound]) + definitions + source.root.tla[end.lowerBound...]
             var imports = source.imports
             for file in [target.root] + target.imports {
@@ -610,19 +815,20 @@ public struct RenderedSpecification: Sendable {
             let identityInput = rootIdentity.value + ":" + targetIdentity.value + ":" + definitions
             let identity = CompilationIdentity(value: SHA256.hash(data: Data(identityInput.utf8))
                 .map { String(format: "%02x", $0) }.joined())
-            let path = [instance]
+            let path = [linkedInstance]
             let ownership = rootOwnership + targetOwnership.map {
                 TLAModuleBundle.OwnershipEntry(moduleName: $0.moduleName,
                     owningRoot: source.root.name, structuralPath: path + $0.structuralPath)
-            }
-            let dependencies = rootDependencies
-                + [.init(importingModule: source.root.name, importedModule: target.root.name, structuralPath: path)]
+            }.filter { !rootOwnership.contains($0) }
+            let linkedDependencies = [TLAModuleBundle.ModuleDependency(
+                importingModule: source.root.name, importedModule: target.root.name, structuralPath: path)]
                 + targetDependencies.map {
-                    .init(importingModule: $0.importingModule, importedModule: $0.importedModule,
+                    TLAModuleBundle.ModuleDependency(importingModule: $0.importingModule, importedModule: $0.importedModule,
                         structuralPath: path + $0.structuralPath)
                 }
+            let dependencies = rootDependencies + linkedDependencies.filter { !rootDependencies.contains($0) }
             let bundle = TLAModuleBundle(root: .init(name: source.root.name, tla: sourceText,
-                cfg: selected.render(usesSymmetryReduction: false)), imports: imports,
+                cfg: try selected.render(usesSymmetryReduction: false)), imports: imports,
                 provenance: .compiled(identity: identity, ownership: ownership, dependencies: dependencies))
             try bundle.validateDeclaredClosure()
             return bundle
@@ -634,7 +840,14 @@ public struct RenderedSpecification: Sendable {
             case .failure(let diagnostic): return .failure(diagnostic)
             }
         }
-        return try Self(tlaBundle: linked(tlaBundle), configuration: selected, actions: actions,
+        let template = try linked(refinementBundle)
+        return try Self(tlaBundle: linked(tlaBundle), configuration: selected, constantValues: rootConstants,
+            parameterNames: parameterNames,
+            configurationNamespaceSources: configurationNamespaceSources,
+            configurationDefinitionNames: configurationDefinitionNames,
+            refinementBundle: template,
+            initialEvaluationFailure: initialEvaluationFailure,
+            initialEvaluationFailureRecord: initialEvaluationFailureRecord, actions: actions,
             renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map(linkedResult),
             renderedPlusCalProfiles: renderedPlusCalProfiles.mapValues(linkedResult),
             fairnessProfileOperators: fairnessProfileOperators, temporalObligations: temporalObligations)
@@ -648,7 +861,7 @@ public struct RenderedSpecification: Sendable {
             root: .init(
                 name: tlaBundle.root.name,
                 tla: tlaBundle.root.tla,
-                cfg: configuration.render(usesSymmetryReduction: usesSymmetryReduction)
+                cfg: try configuration.render(usesSymmetryReduction: usesSymmetryReduction)
             ),
             imports: tlaBundle.imports,
             provenance: tlaBundle.provenance
@@ -665,6 +878,54 @@ public struct RenderedSpecification: Sendable {
     public var postconditionName: String? { configuration.postcondition }
     public var isAssumptionsOnly: Bool { configuration.assumptionsOnly }
     public var behavior: ModelBehavior { configuration.behavior }
+
+    /// A zero-state TLC input for checking initial evaluation failure before graph exploration.
+    public func initialEvaluationFailureBundle(capturingRecord: Bool = false) throws -> TLAModuleBundle? {
+        guard let initialEvaluationFailure else { return nil }
+        guard !capturingRecord || initialEvaluationFailureRecord != nil else { return nil }
+        let base = tlaBundle.root.name
+        var name = base + "__InitialFailureCheck"
+        while tlaBundle.files.contains(where: { $0.name == name }) { name += "_" }
+        var probeInit = name + "__ProbeInit"
+        while tlaBundle.files.contains(where: { $0.tla.contains(probeInit) }) { probeInit += "_" }
+        var probeNext = name + "__ProbeNext"
+        while tlaBundle.files.contains(where: { $0.tla.contains(probeNext) }) { probeNext += "_" }
+        var probeState = name + "__ProbeState"
+        while tlaBundle.files.contains(where: { $0.tla.contains(probeState) }) { probeState += "_" }
+        let record = capturingRecord
+            ? (initialEvaluationFailureRecord.map { "PrintT(\($0)) /\\ " } ?? "")
+            : ""
+        let source = """
+            ---- MODULE \(name) ----
+            EXTENDS \(base)\(capturingRecord ? ", TLC" : "")
+            VARIABLE \(probeState)
+            ASSUME \(record)~\(initialEvaluationFailure)
+            \(probeInit) == FALSE /\\ Init /\\ \(probeState) = 0
+            \(probeNext) == FALSE /\\ \(probeState)' = \(probeState)
+            ====
+
+            """
+        let constants = configuration.declarations.filter { $0.hasPrefix("CONSTANT ") }
+        let check = (["INIT \(probeInit)", "NEXT \(probeNext)", "CHECK_DEADLOCK FALSE"]
+            + constants).joined(separator: "\n") + "\n"
+        guard case .compiled(let identity, let ownership, let dependencies) = tlaBundle.provenance else {
+            throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "initial evaluation failure", expected: "compiled TLA+ provenance",
+                actual: "external TLA+ provenance", nextSafeAction: "Render the compiled model first.")
+        }
+        let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
+            cfg: check),
+            imports: tlaBundle.files.map { .init(name: $0.name, tla: $0.tla) },
+            provenance: .compiled(identity: identity,
+                ownership: ownership + [.init(moduleName: name, owningRoot: name, structuralPath: [])],
+                dependencies: dependencies + [.init(importingModule: name, importedModule: base,
+                    structuralPath: [])]))
+        try bundle.validateDeclaredClosure()
+        try StraightLineRenderedActionCheck.verifyInitialFailureCheckBundle(bundle,
+            base: tlaBundle, aggregate: initialEvaluationFailure, constants: constants,
+            record: capturingRecord ? initialEvaluationFailureRecord : nil)
+        return bundle
+    }
 
     public func temporalObligationBundles(checking name: String) throws -> [TLAModuleBundle]? {
         _ = try configuration.selecting([name], checkDeadlock: false)
@@ -726,16 +987,23 @@ public struct RenderedSpecification: Sendable {
         let selected = try configuration.selecting(names, checkDeadlock: checks.checkDeadlock,
                 behavior: behavior, specificationName: profileOperator)
             .selectingSymmetry(symmetry).selectingView(view).selectingPostcondition(postcondition)
-        func bundle(_ original: TLAModuleBundle, using configuration: TLCConfiguration) -> TLAModuleBundle {
+        func bundle(_ original: TLAModuleBundle, using configuration: TLCConfiguration) throws -> TLAModuleBundle {
             .init(root: .init(name: original.root.name, tla: original.root.tla,
-                cfg: configuration.render(usesSymmetryReduction: symmetry != nil)), imports: original.imports, provenance: original.provenance)
+                cfg: try configuration.render(usesSymmetryReduction: symmetry != nil)), imports: original.imports, provenance: original.provenance)
+        }
+        func selectedBundle(_ original: Result<TLAModuleBundle, CompilationDiagnostic>,
+            using configuration: TLCConfiguration) throws -> Result<TLAModuleBundle, CompilationDiagnostic> {
+            switch original {
+            case .success(let value): return .success(try bundle(value, using: configuration))
+            case .failure: return original
+            }
         }
         let selectedPlusCal: Result<TLAModuleBundle, CompilationDiagnostic>?
         if let fairnessProfile {
             let profileConfiguration = try selected.selecting(names, checkDeadlock: checks.checkDeadlock,
                 specificationName: "Spec")
             if let profile = renderedPlusCalProfiles[fairnessProfile] {
-                selectedPlusCal = profile.map { bundle($0, using: profileConfiguration) }
+                selectedPlusCal = try selectedBundle(profile, using: profileConfiguration)
             } else if renderedPlusCalModuleBundle != nil {
                 selectedPlusCal = .failure(.init(code: .unsupportedFairnessProfile, stage: .rendering,
                     path: "plusCal.fairnessProfile", expected: "a compiled profile-specific PlusCal bundle",
@@ -744,9 +1012,14 @@ public struct RenderedSpecification: Sendable {
                 selectedPlusCal = nil
             }
         } else {
-            selectedPlusCal = renderedPlusCalModuleBundle.map { $0.map { bundle($0, using: selected) } }
+            selectedPlusCal = try renderedPlusCalModuleBundle.map { try selectedBundle($0, using: selected) }
         }
-        return .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected, actions: actions,
+        return try .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected,
+            constantValues: constantValues, parameterNames: parameterNames,
+            configurationNamespaceSources: configurationNamespaceSources,
+            configurationDefinitionNames: configurationDefinitionNames, refinementBundle: refinementBundle,
+            initialEvaluationFailure: initialEvaluationFailure,
+            initialEvaluationFailureRecord: initialEvaluationFailureRecord, actions: actions,
             renderedPlusCalModuleBundle: selectedPlusCal,
             renderedPlusCalProfiles: renderedPlusCalProfiles,
             fairnessProfileOperators: fairnessProfileOperators,
@@ -763,7 +1036,7 @@ public struct RenderedSpecification: Sendable {
         let usesSymmetryReduction = try selected.usesSupportedSymmetryReduction(symmetryReduction)
         return TLAModuleBundle(
             root: .init(name: tlaBundle.root.name, tla: tlaBundle.root.tla,
-                cfg: selected.render(usesSymmetryReduction: usesSymmetryReduction)),
+                cfg: try selected.render(usesSymmetryReduction: usesSymmetryReduction)),
             imports: tlaBundle.imports, provenance: tlaBundle.provenance
         )
     }
@@ -995,17 +1268,78 @@ public extension TLASpec {
         for entry in closure.entries where entry.id != closure.root.id {
             try entry.module.validateSourceDeclarationNames()
         }
-        let module = try compileModule(in: closure)
+        var compiledModules: [CompiledModule] = []
+        var modelValues: Set<String> = []
+        var exportedOperators: [String: [String: String]] = [:]
+        let moduleDeclarations = Set(closure.entries.flatMap { $0.module.renderedDeclarationNames() })
+        for entry in closure.entries {
+            let source = try entry.id == closure.root.id ? self : entry.module.loweredSourceModel()
+            let context = closure.planContext(for: entry)
+            let visible = source.importedOperatorNames(in: closure, exports: exportedOperators, instances: [])
+            let compiled = try source.compileModule(in: context.closure,
+                incomingModuleParameters: context.incomingModuleParameters, importedOperatorNames: visible,
+                moduleDeclarations: moduleDeclarations, knownModelValues: modelValues)
+            exportedOperators[entry.module.name] = compiled.bindings.sourceOperators.mapValues {
+                compiled.bindings.operatorName($0)!
+            }
+            compiledModules.append(compiled)
+            modelValues.formUnion(compiled.metadata.modelValueNames)
+        }
+        let instanceNamespaces = Set(compiledModules.flatMap { $0.layout.moduleInstances.map(\.namespace) })
+        var unavailable = moduleDeclarations.subtracting(instanceNamespaces).union(modelValues)
+        for compiled in compiledModules {
+            unavailable.formUnion(compiled.metadata.constants.map(\.name))
+            unavailable.formUnion(compiled.metadata.formalParameters.map(\.name))
+            unavailable.formUnion(compiled.bindings.operatorNames.values)
+            unavailable.formUnion(compiled.bindings.binders.values)
+            unavailable.formUnion(compiled.layout.variables.map(\.formalName))
+            unavailable.formUnion(compiled.layout.actions.map(\.renderedName))
+            unavailable.formUnion(compiled.layout.properties.map(\.formalName))
+            unavailable.formUnion((compiled.metadata.extendsModules + [.finiteSets, .sequences]
+                + (compiled.metadata.symmetrySets.isEmpty ? [] : [.tlc])).flatMap(\.exportedDeclarationNames))
+            unavailable.formUnion(compiled.requiredStandardModules.flatMap(\.exportedDeclarationNames))
+            unavailable.formUnion(compiled.metadata.symmetrySets.map { "Symm\($0.variableName)" })
+            unavailable.formUnion(compiled.semantics.formalModuleReplacements.map(\.definitionName))
+            unavailable.formUnion(compiled.semantics.behavior.fairnessProfiles.map(\.operatorName))
+            unavailable.formUnion(compiled.generatedRefinements.map(\.instanceName))
+            for (index, scenario) in compiled.semantics.behavior.validationScenarios.enumerated() {
+                if scenario.view != nil { unavailable.insert("__SwiftTLAView\(index)") }
+                if let postcondition = scenario.postconditionName { unavailable.insert(postcondition) }
+            }
+        }
+        var instanceReservations = unavailable.union(tlaPredefinedIdentifierNames)
+            .union(["Init", "Next", "Spec", "vars", "StateConstraint", "ActionConstraint", "Terminating"])
+        unavailable.formUnion(instanceReservations)
+        unavailable.formUnion(instanceNamespaces)
+        // Allocate after every module's bindings and values are known to avoid alias capture.
+        for index in compiledModules.indices {
+            compiledModules[index].layout.resolveModuleInstanceNames(reserving: instanceReservations, avoiding: &unavailable)
+            instanceReservations.formUnion(compiledModules[index].layout.moduleInstances.map(\.formalName))
+        }
+        exportedOperators.removeAll(keepingCapacity: true)
+        for index in compiledModules.indices {
+            let compiled = compiledModules[index]
+            var names = compiled.bindings.operatorNames
+            for (source, rendered) in closure.entries[index].module.importedOperatorNames(in: closure,
+                exports: exportedOperators, instances: compiled.layout.moduleInstances) {
+                if let operation = compiled.bindings.sourceOperators[source] { names[operation] = rendered }
+            }
+            let owned = Array(compiled.semantics.operators.formalDefinitionIDs.prefix(compiled.metadata.formalDefinitionCount))
+                + Array(compiled.semantics.operators.recursiveFunctionIDs.prefix(compiled.metadata.recursiveFunctionCount))
+            for operation in owned where modelValues.contains(names[operation]!) {
+                let name = StateExpr.freshBoundName(names[operation]!, avoiding: unavailable)
+                names[operation] = name
+                unavailable.insert(name)
+            }
+            compiledModules[index].bindings = .init(operatorNames: names, binders: compiled.bindings.binders,
+                sourceOperators: compiled.bindings.sourceOperators)
+            exportedOperators[compiled.metadata.name] = compiled.bindings.sourceOperators.mapValues { names[$0]! }
+        }
+        let module = compiledModules.removeLast()
+        let imports = compiledModules
         let layout = module.layout
         let semantics = module.semantics
-        let compiledRefinements = module.refinements
-        let compiledGeneratedRefinements = module.generatedRefinements
         let identity = compilationIdentity
-        let imports = try closure.entries.filter { $0.id != closure.root.id }.map { entry in
-            let source = try entry.module.loweredSourceModel()
-            let context = closure.planContext(for: entry)
-            return try source.compileModule(in: context.closure, incomingModuleParameters: context.incomingModuleParameters)
-        }
         let provenance = TLAModuleBundle.Provenance.compiled(
             identity: identity,
             ownership: closure.entries.map {
@@ -1035,10 +1369,10 @@ public extension TLASpec {
             algorithms: sourceAlgorithms.map {
                 .init(name: $0.model.name, displayName: $0.model.displayLabel ?? $0.model.name)
             },
-            invariants: semantics.behavior.invariants.map(\.name),
-            reachabilityProperties: semantics.behavior.reachabilityProperties.map(\.name),
-            temporalProperties: semantics.behavior.temporalProperties.map(\.name),
-            refinements: compiledRefinements.map(\.name) + compiledGeneratedRefinements.map(\.name),
+            invariants: layout.stateProperties.filter { $0.declaration.kind == .invariant }.map(\.declaration.name),
+            reachabilityProperties: layout.stateProperties.filter { $0.declaration.kind == .reachability }.map(\.declaration.name),
+            temporalProperties: layout.temporalProperties.map(\.declaration.name),
+            refinements: (layout.refinementProperties + layout.generatedRefinementProperties).map(\.declaration.name),
             stateConstraint: semantics.behavior.constraint.map { _ in "StateConstraint" },
             actionConstraint: semantics.behavior.actionConstraint.map { _ in "ActionConstraint" },
             procedures: layout.procedures.map {
@@ -1067,9 +1401,28 @@ public extension TLASpec {
         return CompiledSpecification(description: description, module: module, imports: imports, provenance: provenance)
     }
 
+    private func importedOperatorNames(in closure: FormalModuleClosure,
+        exports: [String: [String: String]], instances: [CompiledModuleInstanceLayout]) -> [String: String] {
+        var visible: [String: String] = [:]
+        for edge in closure.edges where edge.fromModule == name {
+            for (source, rendered) in exports[edge.toModule, default: [:]] {
+                if case .namedInstance(let namespace, _) = edge.kind {
+                    let formalName = instances.first { $0.namespace == namespace }?.formalName ?? namespace
+                    visible["\(namespace)!\(source)"] = "\(formalName)!\(rendered)"
+                } else {
+                    visible[source] = rendered
+                }
+            }
+        }
+        return visible
+    }
+
     private func compileModule(
         in closure: FormalModuleClosure,
-        incomingModuleParameters: [FormalModuleReplacement] = []
+        incomingModuleParameters: [FormalModuleReplacement],
+        importedOperatorNames: [String: String],
+        moduleDeclarations: Set<String>,
+        knownModelValues: Set<String>
     ) throws -> CompiledModule {
         try validateUnique(variables.map(\.name), code: .duplicateVariable, path: "variables")
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
@@ -1080,7 +1433,7 @@ public extension TLASpec {
         try validateRefinements()
         try validateGeneratedRefinements()
         let definitionOrder = try orderedDirectDefinitions()
-        let layout = CompiledLayout(source: self)
+        var layout = CompiledLayout(source: self)
         var formalControlNames: Set<String> = []
         if let duplicate = layout.controlLocations.map(\.formalName).first(where: {
             !formalControlNames.insert($0).inserted
@@ -1096,7 +1449,7 @@ public extension TLASpec {
         }
         var lowerer = CompiledLowerer(
             spec: self, closure: closure, layout: layout,
-            incomingModuleParameters: incomingModuleParameters
+            incomingModuleParameters: incomingModuleParameters, importedOperatorNames: importedOperatorNames
         )
         var semantics = try lowerer.lower(spec: self)
         let authoredAlgorithm: (plan: CompiledAuthoredPlusCalAlgorithmPlan, declarations: AuthoredPlusCalDeclarationOrder)?
@@ -1110,10 +1463,90 @@ public extension TLASpec {
             lowerer: &lowerer, layout: layout, semantics: semantics)
         semantics.operators = lowerer.operators
         semantics.operators.resolveDependencies()
+        let parameterVariables = Dictionary(uniqueKeysWithValues:
+            (authoredAlgorithm?.plan.procedures ?? []).flatMap { zip($0.parameters, $0.parameterVariables) })
+        let standardModules = Set(extendsModules + [.finiteSets, .sequences]
+            + (symmetrySets.isEmpty ? [] : [.tlc])).union(lowerer.requiredStandardModules)
+        let importedNames = Set(standardModules.flatMap(\.exportedDeclarationNames))
+        var operatorReservations = Set(constants.map(\.name))
+        operatorReservations.formUnion(formalParameters.map(\.name))
+        operatorReservations.formUnion(moduleInstances.map(\.name))
+        operatorReservations.formUnion(generatedModelInstances.map(\.name))
+        operatorReservations.formUnion(symmetrySets.map { "Symm\($0.variableName)" })
+        operatorReservations.formUnion(incomingModuleParameters.map(\.operatorName))
+        operatorReservations.formUnion(semantics.behavior.fairnessProfiles.map(\.operatorName))
+        operatorReservations.formUnion(["Init", "Next", "Spec", "vars"])
+        operatorReservations.formUnion(tlaPredefinedIdentifierNames)
+        if authoredAlgorithm != nil { operatorReservations.insert("Terminating") }
+        if semantics.behavior.constraint != nil { operatorReservations.insert("StateConstraint") }
+        if semantics.behavior.actionConstraint != nil { operatorReservations.insert("ActionConstraint") }
+        for (index, scenario) in semantics.behavior.validationScenarios.enumerated() {
+            if scenario.view != nil { operatorReservations.insert("__SwiftTLAView\(index)") }
+            if let postcondition = scenario.postconditionName { operatorReservations.insert(postcondition) }
+        }
+        operatorReservations.formUnion(knownModelValues)
+        let bindings = lowerer.bindings(reserving: importedNames.union(knownModelValues), operatorReservations: operatorReservations,
+            avoiding: moduleDeclarations)
+        var occupied = renderedDeclarationNames(includingActions: false, includingVariables: false, includingProperties: false)
+            .union(importedNames)
+            .union(tlaPredefinedIdentifierNames)
+            .union(lowerer.modelValueNames).union(knownModelValues)
+            .union(bindings.binders.filter { parameterVariables[$0.key] == nil }.values)
+            .union(bindings.operatorNames.values)
+            .union(symmetrySets.map { "Symm\($0.variableName)" })
+            .union(incomingModuleParameters.map(\.operatorName))
+            .union(generatedModelInstances.map(\.name))
+            .union(semantics.behavior.fairnessProfiles.map(\.operatorName))
+        for (index, scenario) in semantics.behavior.validationScenarios.enumerated() {
+            if scenario.view != nil { occupied.insert("__SwiftTLAView\(index)") }
+            if let postcondition = scenario.postconditionName { occupied.insert(postcondition) }
+        }
+        if semantics.behavior.constraint != nil { occupied.insert("StateConstraint") }
+        if semantics.behavior.actionConstraint != nil { occupied.insert("ActionConstraint") }
+        var propertyReservations = occupied
+        if authoredAlgorithm != nil { propertyReservations.insert("Terminating") }
+        layout.resolvePropertyNames(reserving: propertyReservations)
+        let propertyNames = Dictionary(uniqueKeysWithValues: layout.properties.map { ($0.id, $0.formalName) })
+        semantics.behavior.resolvePropertyNames(propertyNames)
+        let resolvedRefinements = refinements.map {
+            CompiledRefinement(id: $0.id, name: propertyNames[$0.id]!, instance: $0.instance,
+                operator: $0.operator, abstract: $0.abstract, variableMappings: $0.variableMappings)
+        }
+        let resolvedGenerated = compiledGenerated.map {
+            CompiledGeneratedModelRefinement(id: $0.id, name: propertyNames[$0.id]!, instanceName: $0.instanceName,
+                targetModelType: $0.targetModelType, behavior: $0.behavior, parameters: $0.parameters, state: $0.state)
+        }
+        occupied.formUnion(propertyNames.values)
+        var variableReservations = occupied
+        if authoredAlgorithm != nil { variableReservations.insert("Terminating") }
+        layout.resolveVariableNames(reserving: variableReservations)
+        let parameterNames = parameterVariables.mapValues { layout.variables[$0.ordinal].formalName }
+        let resolvedBindings = CompiledBindingTable(operatorNames: bindings.operatorNames,
+            binders: bindings.binders.merging(parameterNames) { _, name in name },
+            sourceOperators: bindings.sourceOperators)
+        occupied.formUnion(layout.variables.map(\.formalName))
+        let directNext = layout.actions.count == 1 && layout.actions[0].renderedName == "Next"
+            && semantics.behavior.actions.count == 1
+            && semantics.behavior.actions[0].bindings.isEmpty && !occupied.contains("Next")
+        // Model values and generated operator/binder names are complete only after lowering.
+        var actionReservations = occupied
+        if authoredAlgorithm != nil, !layout.actions.contains(where: \.isTermination) {
+            actionReservations.insert("Terminating")
+        }
+        layout.resolveActionNames(reserving: actionReservations, preservingDirectNext: directNext)
         try validateAuthoredProperties(algorithm: authoredAlgorithm?.plan, layout: layout)
+        let constantReservations = occupied.subtracting(constants.map(\.name))
+            .union(importedNames).union(tlaPredefinedIdentifierNames)
+            .union(lowerer.modelValueNames).union(knownModelValues)
+            .union(formalParameters.map(\.name)).union(resolvedBindings.binders.values)
+            .union(resolvedBindings.operatorNames.values).union(layout.actions.map(\.renderedName))
+            .union(layout.properties.map(\.formalName)).union(layout.variables.map(\.formalName))
+            .union(["Init", "Next", "Spec", "vars"])
+            .union(authoredAlgorithm == nil ? [] : ["Terminating"])
         return CompiledModule(
-            metadata: .init(source: self, modelValueNames: lowerer.modelValueNames), layout: layout, bindings: lowerer.bindings, semantics: semantics,
-            refinements: refinements, generatedRefinements: compiledGenerated,
+            metadata: .init(source: self, modelValueNames: lowerer.modelValueNames,
+                reserving: constantReservations), layout: layout, bindings: resolvedBindings, semantics: semantics,
+            refinements: resolvedRefinements, generatedRefinements: resolvedGenerated,
             authoredAlgorithm: authoredAlgorithm,
             requiredStandardModules: lowerer.requiredStandardModules,
             definitionsBeforeInstances: definitionOrder.beforeInstances,
@@ -1883,10 +2316,11 @@ extension CompiledProgram {
         }
         var metadata = moduleMetadata
         metadata.modelValueNames = exportedModelValueNames
-        let renderer = CompiledTLARenderer(moduleName: metadata.name,
+        let renderer = CompiledTLARenderer(moduleName: declarations.moduleName,
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions, enums: enums, parameterDomains: behavior.parameterDomains)
+            actions: behavior.actions, functions: functions, enums: enums, moduleNames: declarations.moduleNames,
+            parameterDomains: behavior.parameterDomains)
         let constants = metadata.constants.sorted { $0.name < $1.name }.map { "ASSUME \($0.name) = \($0.value)" }
         let prelude = try constants + renderer.resolvedFunctionDefinitions()
             + formalModuleReplacements.map(renderer.formalModuleReplacement) + renderer.assumptions(behavior)
@@ -1908,14 +2342,17 @@ extension CompiledProgram {
     }
 
     package func renderModule() throws -> RenderedModule {
-        try renderModule(named: moduleName, owningRoot: moduleName, structuralPath: [])
+        try renderModule(named: moduleName, owningRoot: moduleName, structuralPath: [], reserving: [])
     }
 
     package func renderGeneratedModelValue(_ value: CompiledStateQuery) throws -> String {
-        let renderer = CompiledTLARenderer(moduleName: moduleName,
+        let moduleNames = moduleImports.names(for: moduleMetadata.imports,
+            rootName: moduleName, namespace: false, configured: !formalModuleReplacements.isEmpty, reserving: [])
+        let renderer = CompiledTLARenderer(moduleName: moduleNames[moduleMetadata.name]!,
             reservedNames: exportedModelValueNames.union(moduleMetadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions, enums: enums, parameterDomains: behavior.parameterDomains)
+            actions: behavior.actions, functions: functions, enums: enums, moduleNames: moduleNames,
+            parameterDomains: behavior.parameterDomains)
         return try renderer.state(value.expression)
     }
 
@@ -1926,7 +2363,8 @@ extension CompiledProgram {
         }
     }
 
-    private func renderModule(named name: String, owningRoot: String, structuralPath: [String]) throws -> RenderedModule {
+    private func renderModule(named name: String, owningRoot: String, structuralPath: [String],
+        reserving reservedModuleNames: Set<String>) throws -> RenderedModule {
         guard moduleMetadata.formalParameters.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
                 path: "export.\(moduleMetadata.name)", expected: "a resolved standalone module",
@@ -1934,13 +2372,17 @@ extension CompiledProgram {
                 nextSafeAction: "Resolve the complete module closure before typed export.")
         }
         var metadata = moduleMetadata
-        metadata.name = name
         let moduleNames = moduleImports.names(for: metadata.imports,
-            namespace: structuralPath.isEmpty ? nil : name, configured: !formalModuleReplacements.isEmpty)
+            rootName: name, namespace: !structuralPath.isEmpty, configured: !formalModuleReplacements.isEmpty,
+            reserving: reservedModuleNames)
+        metadata.name = moduleNames[moduleMetadata.name]!
+        let renderedName = metadata.name
+        let renderedOwner = structuralPath.isEmpty ? renderedName : owningRoot
         var replacements = formalModuleReplacements.map { $0.configuration(moduleNames: moduleNames) }
             + moduleImports.replacements(for: metadata.imports, moduleNames: moduleNames)
         let modelValues = exportedModelValueNames
-        var reserved = Set(layout.declarations.map(\.name))
+        var reserved = Set(layout.declarations.filter { $0.kind != .variable }.map(\.name))
+            .union(layout.variables.map(\.formalName)).union(layout.properties.map(\.formalName))
         reserved.formUnion(metadata.constants.map(\.name))
         reserved.formUnion(layout.parameters.map { $0.reference.name })
         reserved.formUnion(layout.moduleInstances.map(\.namespace))
@@ -1957,15 +2399,18 @@ extension CompiledProgram {
             }
         }
         metadata.modelValueNames = modelValues
-        let renderer = CompiledTLARenderer(moduleName: name,
+        let renderer = CompiledTLARenderer(moduleName: renderedName,
             reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
-            actions: behavior.actions, functions: functions, enums: enums, parameterDomains: behavior.parameterDomains)
+            actions: behavior.actions, functions: functions, enums: enums, moduleNames: moduleNames,
+            parameterDomains: behavior.parameterDomains)
         var imports: [TLAModuleFile] = []
         var ownership: [TLAModuleBundle.OwnershipEntry] = []
         var dependencies: [TLAModuleBundle.ModuleDependency] = []
         var instances: [String] = []
         var renderedRefinements: [String] = []
+        var nestedModuleNames = Set(moduleImports.modules.map { $0.metadata.name })
+            .union(moduleNames.values).union(reservedModuleNames)
         for refinement in refinements {
             guard let instance = layout.moduleInstances.first(where: { $0.id == refinement.instance }) else {
                 throw CompilationDiagnostic(code: .unresolvedRefinementInstance, stage: .rendering,
@@ -1977,16 +2422,19 @@ extension CompiledProgram {
                     path: "export.\(name).refinements.\(refinement.name)", expected: "a resolved specification target",
                     actual: "\(refinement.operator)", nextSafeAction: "Resolve the target behavior before typed export.")
             }
-            let importedName = "\(name)__Refinement\(instance.id.ordinal)"
+            let importedName = "\(renderedName)__Refinement\(instance.id.ordinal)"
             let path = structuralPath + [instance.namespace]
-            let abstract = try refinement.abstract.renderModule(named: importedName, owningRoot: owningRoot, structuralPath: path)
+            let abstract = try refinement.abstract.renderModule(named: importedName, owningRoot: renderedOwner,
+                structuralPath: path, reserving: nestedModuleNames)
+            nestedModuleNames.insert(abstract.moduleName)
+            nestedModuleNames.formUnion(abstract.imports.map(\.name))
             guard refinement.abstract.layout.variables.count == refinement.variableMappings.count else {
                 throw CompilationDiagnostic(code: .incompleteRefinementMapping, stage: .rendering,
                     path: "export.\(name).refinements.\(refinement.name)", expected: "one resolved mapping per abstract variable",
                     actual: "mapping count differs", nextSafeAction: "Resolve all variable mappings before typed export.")
             }
             var mappings = try zip(refinement.abstract.layout.variables, refinement.variableMappings).map {
-                "\($0.declaration.name) <- \(try renderer.state($1.expression))"
+                "\($0.formalName) <- \(try renderer.state($1.expression))"
             }
             for parameter in refinement.abstract.layout.parameters {
                 guard let concrete = layout.parameters.first(where: { $0.reference == parameter.reference }),
@@ -2003,19 +2451,19 @@ extension CompiledProgram {
             mappings += constants.map { "\($0.name) <- \($0.value)" }
             mappings += refinement.abstract.exportedModelValueNames.subtracting(constants.map(\.name)).sorted()
                 .map { "\($0) <- \($0)" }
-            instances.append("\(instance.namespace) == INSTANCE \(importedName)" + (mappings.isEmpty ? "" : " WITH " + mappings.joined(separator: ", ")))
+            instances.append("\(instance.formalName) == INSTANCE \(abstract.moduleName)" + (mappings.isEmpty ? "" : " WITH " + mappings.joined(separator: ", ")))
             for (offset, replacement) in abstract.moduleReplacements.enumerated() {
-                let forwarded = "\(importedName)__Configuration\(offset)"
-                instances.append("\(forwarded) == \(instance.namespace)!\(replacement.definitionName)")
+                let forwarded = "\(abstract.moduleName)__Configuration\(offset)"
+                instances.append("\(forwarded) == \(instance.formalName)!\(replacement.definitionName)")
                 replacements.append(.init(moduleName: replacement.moduleName,
                     operatorName: replacement.operatorName, definitionName: forwarded))
             }
-            renderedRefinements.append("\(refinement.name) == \(instance.namespace)!Spec")
-            imports.append(.init(name: importedName, tla: abstract.renderedModuleSource))
+            renderedRefinements.append("\(refinement.name) == \(instance.formalName)!Spec")
+            imports.append(.init(name: abstract.moduleName, tla: abstract.renderedModuleSource))
             imports += abstract.imports
-            ownership.append(.init(moduleName: importedName, owningRoot: owningRoot, structuralPath: path))
+            ownership.append(.init(moduleName: abstract.moduleName, owningRoot: renderedOwner, structuralPath: path))
             ownership += abstract.importedOwnership
-            dependencies.append(.init(importingModule: name, importedModule: importedName, structuralPath: path))
+            dependencies.append(.init(importingModule: renderedName, importedModule: abstract.moduleName, structuralPath: path))
             dependencies += abstract.dependencies
         }
         var uniqueReplacements: [TLCModuleReplacement] = []
@@ -2048,7 +2496,7 @@ extension CompiledProgram {
         result.importedOwnership = ownership
         result.dependencies = dependencies
         try moduleImports.append(to: &result, directImports: metadata.imports, moduleNames: moduleNames,
-            rootName: name, owningRoot: owningRoot, structuralPath: structuralPath)
+            rootName: renderedName, owningRoot: renderedOwner, structuralPath: structuralPath)
         var uniqueImports: [TLAModuleFile] = []
         for imported in result.imports {
             if let existing = uniqueImports.first(where: { $0.name == imported.name }) {
@@ -2070,7 +2518,7 @@ extension CompiledProgram {
 }
 
 private extension CompiledModuleMetadata {
-    func renderModule(_ module: CompiledModule, moduleNames: [String: String] = [:]) throws -> RenderedModule {
+    func renderModule(_ module: CompiledModule, moduleNames: [String: String]) throws -> RenderedModule {
         var metadata = self
         metadata.name = moduleNames[name] ?? name
         metadata.imports = imports.map { moduleNames[$0] ?? $0 }
@@ -2165,11 +2613,22 @@ private extension CompiledModuleMetadata {
                     nextSafeAction: "Compile the source model again."
                 )
             }
+            let renderedBody = try renderer.action(compiled.body)
+            let requiresIndependentCheck = orderedIntProofActionNames.contains(declaration.declaration.name)
+            if !requiresIndependentCheck {
+                try StraightLineRenderedActionCheck.verifyStructure(compiled.body,
+                    rendered: renderedBody, renderer: renderer)
+            }
+            try StraightLineRenderedActionCheck.verify(compiled.body, rendered: renderedBody,
+                layout: layout, binders: renderer.bindings.binders,
+                moduleName: renderer.moduleName,
+                reservedNames: renderer.reservedNames.union(renderer.bindings.operatorNames.values),
+                required: requiresIndependentCheck)
             return DirectModuleAction(
                 sourceName: declaration.declaration.name,
                 renderedName: renderedName,
                 renderedParameters: try compiled.bindings.map { try renderer.binderName($0.binder) },
-                renderedBody: try renderer.action(compiled.body),
+                renderedBody: renderedBody,
                 calls: try callsByAction[compiled.id, default: []].map { emitted in
                     RenderedAction(
                         sourceName: declaration.declaration.name,
@@ -2202,10 +2661,35 @@ private extension CompiledModuleMetadata {
             importedNames: importedNames,
             instancesAfterBehavior: instancesAfterBehavior
         )
+        for index in behavior.enabledActionIndices {
+            let rendered = directModuleActions[index]
+            guard !rendered.sourceName.isEmpty else { continue }
+            try StraightLineRenderedActionCheck.verifyDeclaration(behavior.actions[index],
+                named: rendered.renderedName, body: rendered.renderedBody,
+                module: directOutput.source, layout: layout, binders: renderer.bindings.binders,
+                failureDeclarations: directOutput.evaluationFailureDeclarations,
+                moduleName: renderer.moduleName,
+                reservedNames: renderer.reservedNames.union(renderer.bindings.operatorNames.values),
+                required: orderedIntProofActionNames.contains(rendered.sourceName))
+        }
+        try StraightLineRenderedActionCheck.verifyFiniteInvocations(behavior,
+            layout: layout, binders: renderer.bindings.binders, module: directOutput.source)
+        let renderedConfiguration = configuration.includingIntrinsicInvariant(directOutput.evaluationInvariant)
+        try StraightLineRenderedActionCheck.verifyCheckingConfiguration(renderedConfiguration,
+            rendered: renderedConfiguration.render(usesSymmetryReduction: false),
+            requiringSourceDefaultDeadlock: sourceSpecDefaultDeadlockWitness && !orderedIntProofActionNames.isEmpty)
+        try StraightLineRenderedActionCheck.verifyEvaluationSelection(behavior,
+            module: directOutput.source,
+            failureDeclarations: directOutput.evaluationFailureDeclarations,
+            evaluationInvariant: directOutput.evaluationInvariant,
+            configuration: renderedConfiguration, renderer: renderer)
         return RenderedModule(
-            renderedModuleSource: directOutput.source,
+            moduleName: name, moduleNames: renderer.moduleNames,
+            renderedModuleSource: directOutput.source, constantValues: constants,
             evaluationFailureDeclarations: directOutput.evaluationFailureDeclarations,
-            configuration: configuration.includingIntrinsicInvariant(directOutput.evaluationInvariant),
+            initialEvaluationFailure: directOutput.initialFailureAggregate,
+            initialEvaluationFailureRecord: directOutput.initialFailureRecord,
+            configuration: renderedConfiguration,
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             symbolicActions: behavior.actions.filter { $0.bindings.contains { $0.literalMembers == nil } }.map(\.id),
             definitions: definitions, instances: instances, refinements: renderedRefinements,
@@ -2238,8 +2722,9 @@ private extension CompiledModuleMetadata {
         requiredStandardModules: Set<StandardModule>,
         importedNames: [String],
         instancesAfterBehavior: Bool
-    ) throws -> (source: String, evaluationFailureDeclarations: [String], evaluationInvariant: String?) {
-        let varNames = layout.variables.map(\.declaration.name)
+    ) throws -> (source: String, evaluationFailureDeclarations: [String],
+        evaluationInvariant: String?, initialFailureAggregate: String?, initialFailureRecord: String?) {
+        let varNames = layout.variables.map(\.formalName)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
         let isLibraryModule = varNames.isEmpty && renderedActions.isEmpty
         var lines: [String] = []
@@ -2302,15 +2787,17 @@ private extension CompiledModuleMetadata {
         lines += try renderer.assumptions(behavior)
         if behavior.assume != nil { lines.append("") }
 
-        if !isLibraryModule, varNames.count > 1 {
-            lines.append("vars == \(varsTuple)")
-            lines.append("")
-        }
         var occupied = renderer.reservedNames.union(renderer.bindings.binders.values)
             .union(renderer.bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name))
+            .union(layout.declarations.map(\.name)).union(layout.properties.map(\.formalName))
+            .union(layout.variables.map(\.formalName))
             .union(layout.actions.map(\.renderedName))
             .union(renderedActions.flatMap(\.calls).map(\.renderedName))
+        if !isLibraryModule, varNames.count > 1, !occupied.contains("vars") {
+            lines.append("vars == \(varsTuple)")
+            lines.append("")
+            occupied.insert("vars")
+        }
         var evaluationFailureDeclarations: [String] = []
         var actionFailureReferences: [String] = []
         var actionDeclarations: [(header: String, definition: String)] = []
@@ -2465,7 +2952,7 @@ private extension CompiledModuleMetadata {
             lines.append("====")
             let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
             try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
-            return (source, evaluationFailureDeclarations, evaluationInvariant)
+            return (source, evaluationFailureDeclarations, evaluationInvariant, nil, nil)
         }
 
         let initializations = Dictionary(
@@ -2473,8 +2960,17 @@ private extension CompiledModuleMetadata {
                 ($0.variable, $0.initialization)
             }
         )
+        let intStateVariables = Set(layout.variables.filter {
+            $0.resolvedValueType.map { $0 == .int } ?? ($0.generatedSwiftType == "Int")
+        }.map(\.id))
+        // Keep exact Swift bounds lazy for TLC's Int32-valued states.
+        func intStatePredicate(_ name: String) -> String {
+            let small = "(\(name) >= \(TLAValue.int(Int(Int32.min)).description) /\\ \(name) <= \(TLAValue.int(Int(Int32.max)).description))"
+            let allowed = "\(name) \\in \(TLAValue.int(Int.min).description)..\(TLAValue.int(Int.max).description)"
+            return "(IF \(small) THEN TRUE ELSE \(allowed))"
+        }
         var initialPredicates = try layout.variables.map { variable -> String in
-            let name = variable.declaration.name
+            let name = variable.formalName
             guard let initialization = initializations[variable.id] else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
@@ -2492,10 +2988,14 @@ private extension CompiledModuleMetadata {
                     .map { "(IF \($0) THEN \(assignment) ELSE FALSE)" } ?? assignment
             case .memberOf(let set):
                 let literal = set.computation
+                let defined = try renderer.evaluationDefined(set)
+                func guarded(_ predicate: String) -> String {
+                    defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate
+                }
                 if case .randomSubset = literal.operation {
                     let count = try renderer.state(literal.children[0])
                     let domain = try renderer.state(literal.children[1])
-                    return "(\(count) > 0 /\\ \(name) \\in \(domain))"
+                    return guarded("(\(count) > 0 /\\ \(name) \\in \(domain))")
                 }
                 func isRecord(_ expression: CompiledExpression) -> Bool {
                     var value = expression
@@ -2522,11 +3022,13 @@ private extension CompiledModuleMetadata {
                 }
                 if let alternatives {
                     let alternatives = alternatives.sorted().map { "\(name) = \($0)" }
-                    return alternatives.isEmpty ? "FALSE" : "(\(alternatives.joined(separator: " \\/ ")))"
+                    return guarded(alternatives.isEmpty ? "FALSE" : "(\(alternatives.joined(separator: " \\/ ")))")
                 }
-                return "\(name) \\in \(try renderer.state(set))"
+                return guarded("\(name) \\in \(try renderer.state(set))")
             }
         }
+        initialPredicates += layout.variables.filter { intStateVariables.contains($0.id) }
+            .map { intStatePredicate($0.formalName) }
         var selectedInitialInvariant: CompiledStatePredicate?
         if let selected = behavior.initialInvariant {
             guard let invariant = behavior.invariants.first(where: { $0.id == selected }) else {
@@ -2551,12 +3053,14 @@ private extension CompiledModuleMetadata {
         }
         lines.append("")
 
-        // shortcut: only total prefixes receive this relation; other initial failures still need outcome lowering.
+        // shortcut: prefixes without a definedness rule still need outcome lowering.
         func isTotalInitialExpression(_ expression: CompiledExpression) -> Bool {
             switch expression.operation {
             case .value, .stateVariable, .controlLocation:
                 return true
-            case .convert, .setLiteral:
+            case .integerSet:
+                return expression.children.isEmpty
+            case .convert, .setLiteral, .integerRange, .equal, .ifThenElse:
                 return expression.children.allSatisfy(isTotalInitialExpression)
             default:
                 return false
@@ -2591,6 +3095,9 @@ private extension CompiledModuleMetadata {
             var relation = "(\(failedCount) < 0 /\\ \(failedCount) = \(count))"
             for prior in layout.variables.prefix(index).reversed() {
                 let binder = prefixNames[prior.id]!
+                if intStateVariables.contains(prior.id) {
+                    relation = "(IF \(intStatePredicate(binder)) THEN \(relation) ELSE FALSE)"
+                }
                 switch initializations[prior.id]! {
                 case .value(let expression):
                     relation = "(LET \(binder) == \(try renderer.state(expression, stateNames: prefixNames)) IN \(relation))"
@@ -2600,18 +3107,29 @@ private extension CompiledModuleMetadata {
             }
             lines.append("\(name)(\(failedCount)) == \(relation)")
         }
+        var initialFailureDeclarations: [String] = []
+        var initialFailurePredicates: [String] = []
+        var initialFailureRecordExpressions: [String] = []
+        var initialFailureEventExpressions: [String] = []
+        let requiredInitialFailures = StraightLineRenderedActionCheck.requiredInitialIntFailureObservations(
+            behavior, layout: layout)
+        var initialFailureRecordEligible = selectedInitialInvariant == nil
         func appendInitialEvaluationFailures(
             _ expression: CompiledExpression,
             after prefix: ArraySlice<(variable: VariableID, initialization: CompiledVariableInitialization)>,
             namePrefix: String,
-            indexSuffix: String
+            site: (variable: VariableID, initialization: CompiledVariableInitialization)?
         ) throws {
-            guard prefix.allSatisfy({ prior in
-                switch prior.initialization {
-                case .value(let expression), .memberOf(let expression):
-                    return isTotalInitialExpression(expression)
+            let siteOrdinal = site?.variable.ordinal
+            let indexSuffix = siteOrdinal.map(String.init) ?? ""
+            for prior in prefix {
+                let expression: CompiledExpression = switch prior.initialization {
+                case .value(let expression), .memberOf(let expression): expression
                 }
-            }) else { return }
+                let defined = try renderer.evaluationDefined(expression)
+                guard isTotalInitialExpression(expression) || defined != nil else { return }
+            }
+            let occupiedBeforePrefix = occupied
             var prefixNames: [VariableID: String] = [:]
             for prior in prefix {
                 var binder = "__SwiftTLAInitialValue\(prior.variable.ordinal)"
@@ -2620,7 +3138,18 @@ private extension CompiledModuleMetadata {
                 prefixNames[prior.variable] = binder
             }
             var occurrences: [String: Int] = [:]
-            for failure in try renderer.expressionEvaluationFailures(expression, stateNames: prefixNames) {
+            let failures = try renderer.expressionEvaluationFailures(expression, stateNames: prefixNames)
+            if failures.isEmpty {
+                switch site?.initialization {
+                case .none, .some(.memberOf(_)): occupied = occupiedBeforePrefix
+                case .some(.value(_)): break
+                }
+            }
+            var emitted: [(failure: RenderedEvaluationFailure, relation: String,
+                           operandsName: String?, selection: String,
+                           operationDeclaration: String?, record: String?)] = []
+            var emittedEventSets: [String] = []
+            for failure in failures {
                 let stem: String
                 let operation: String?
                 switch failure.kind {
@@ -2662,37 +3191,151 @@ private extension CompiledModuleMetadata {
                     operandsName = nil
                 }
                 var relation = failure.predicate
+                var selection = failure.predicate
+                var record: String?
+                var events: String?
+                if case .overflow(.addition) = failure.kind,
+                   let siteOrdinal, let operands = failure.operands {
+                    let before = layout.variables.filter { prefixNames[$0.id] != nil }
+                        .sorted { FormalStringIdentity.less($0.formalName, $1.formalName) }
+                        .map { variable in
+                            "[name |-> \(TLAValue.string(variable.formalName)), value |-> \(prefixNames[variable.id]!)]"
+                        }.joined(separator: ", ")
+                    let event = "[site |-> \(siteOrdinal), kind |-> \"integerOverflow.addition\", operands |-> \(operands), before |-> <<\(before)>>]"
+                    record = "(IF \(failure.predicate) THEN \(event) ELSE FALSE)"
+                    if requiredInitialFailures.events {
+                        events = "(IF \(failure.predicate) THEN {\(event)} ELSE {})"
+                    }
+                } else {
+                    initialFailureRecordEligible = false
+                }
                 if let operandsName, let operands = failure.operands {
                     relation = "(IF \(failure.predicate) THEN \(operandsName) = \(operands) ELSE FALSE)"
                 }
                 for prior in prefix.reversed() {
                     let binder = prefixNames[prior.variable]!
+                    if intStateVariables.contains(prior.variable) {
+                        let predicate = intStatePredicate(binder)
+                        relation = "(IF \(predicate) THEN \(relation) ELSE FALSE)"
+                        selection = "(IF \(predicate) THEN \(selection) ELSE FALSE)"
+                        record = record.map { "(IF \(predicate) THEN \($0) ELSE FALSE)" }
+                        events = events.map { "(IF \(predicate) THEN \($0) ELSE {})" }
+                    }
                     switch prior.initialization {
                     case .value(let expression):
-                        relation = "(LET \(binder) == \(try renderer.state(expression, stateNames: prefixNames)) IN \(relation))"
+                        let value = try renderer.state(expression, stateNames: prefixNames)
+                        let bound = "(LET \(binder) == \(value) IN \(relation))"
+                        let selected = "(LET \(binder) == \(value) IN \(selection))"
+                        record = record.map { "(LET \(binder) == \(value) IN \($0))" }
+                        events = events.map { "(LET \(binder) == \(value) IN \($0))" }
+                        let defined = try renderer.evaluationDefined(expression, stateNames: prefixNames)
+                        relation = defined
+                            .map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
+                        selection = defined
+                            .map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
+                        if let defined {
+                            record = record.map { "(IF \(defined) THEN \($0) ELSE FALSE)" }
+                            events = events.map { "(IF \(defined) THEN \($0) ELSE {})" }
+                        }
                     case .memberOf(let expression):
-                        relation = "(\\E \(binder) \\in \(try renderer.state(expression, stateNames: prefixNames)): \(relation))"
+                        initialFailureRecordEligible = false
+                        record = nil
+                        let domain = try renderer.state(expression, stateNames: prefixNames)
+                        let bound = "(\\E \(binder) \\in \(domain): \(relation))"
+                        let selected = "(\\E \(binder) \\in \(domain): \(selection))"
+                        let defined = try renderer.evaluationDefined(expression, stateNames: prefixNames)
+                        relation = defined
+                            .map { "(IF \($0) THEN \(bound) ELSE FALSE)" } ?? bound
+                        selection = defined
+                            .map { "(IF \($0) THEN \(selected) ELSE FALSE)" } ?? selected
+                        events = events.map { "UNION {\($0) : \(binder) \\in \(domain)}" }
+                        if let defined { events = events.map { "(IF \(defined) THEN \($0) ELSE {})" } }
                     }
                 }
+                initialFailurePredicates.append(selection)
+                if let record { initialFailureRecordExpressions.append(record) }
+                if let events {
+                    initialFailureEventExpressions.append(events)
+                    emittedEventSets.append(events)
+                }
                 let parameters = operandsName.map { "(\($0))" } ?? ""
-                lines.append("\(name)\(parameters) == \(relation)")
+                let declaration = "\(name)\(parameters) == \(relation)"
+                lines.append(declaration)
+                initialFailureDeclarations.append(declaration)
+                var operationDeclaration: String?
                 if let operation {
                     var operationName = "__SwiftTLA\(namePrefix)OverflowOperation\(suffix)"
                     while occupied.contains(operationName) { operationName += "_" }
                     occupied.insert(operationName)
-                    lines.append("\(operationName) == \"\(operation)\"")
+                    let declaration = "\(operationName) == \"\(operation)\""
+                    lines.append(declaration)
+                    initialFailureDeclarations.append(declaration)
+                    operationDeclaration = declaration
                 }
+                emitted.append((failure, relation, operandsName, selection, operationDeclaration, record))
             }
+            try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(expression,
+                after: prefix, names: prefixNames, emitted: emitted,
+                siteOrdinal: siteOrdinal,
+                eventSets: requiredInitialFailures.events ? emittedEventSets : nil, layout: layout,
+                binders: renderer.bindings.binders)
         }
         for (index, initialization) in behavior.initializations.enumerated() {
-            guard case .value(let expression) = initialization.initialization else { continue }
+            let expression: CompiledExpression = switch initialization.initialization {
+            case .value(let value): value
+            case .memberOf(let domain): domain
+            }
             try appendInitialEvaluationFailures(expression,
                 after: behavior.initializations.prefix(index), namePrefix: "Initial",
-                indexSuffix: "\(initialization.variable.ordinal)")
+                site: initialization)
         }
         if let selectedInitialInvariant {
             try appendInitialEvaluationFailures(selectedInitialInvariant.predicate.expression,
-                after: behavior.initializations[...], namePrefix: "SelectedInitial", indexSuffix: "")
+                after: behavior.initializations[...], namePrefix: "SelectedInitial", site: nil)
+        }
+        let initialFailureAggregate: String?
+        if initialFailurePredicates.isEmpty {
+            initialFailureAggregate = nil
+        } else {
+            var name = "__SwiftTLAAnyInitialEvaluationFailure"
+            while occupied.contains(name) { name += "_" }
+            occupied.insert(name)
+            lines.append("\(name) == " + initialFailurePredicates.map { "(\($0))" }.joined(separator: " \\/ "))
+            initialFailureAggregate = name
+        }
+        let initialFailureRecord: String?
+        let requiresInitialFailureRecord = initialFailureRecordEligible
+            && !initialFailureRecordExpressions.isEmpty
+            && initialFailureRecordExpressions.count == initialFailurePredicates.count
+            && behavior.initializations.allSatisfy({ if case .value = $0.initialization { true } else { false } })
+        if requiresInitialFailureRecord {
+            var name = "__SwiftTLASelectedInitialFailureRecord"
+            while occupied.contains(name) { name += "_" }
+            occupied.insert(name)
+            let selected = Array(zip(initialFailurePredicates, initialFailureRecordExpressions)).reversed()
+                .reduce("FALSE") { rest, entry in
+                    "(IF \(entry.0) THEN \(entry.1) ELSE \(rest))"
+                }
+            lines.append("\(name) == \(selected)")
+            initialFailureRecord = name
+        } else {
+            initialFailureRecord = nil
+        }
+        if requiredInitialFailures.events {
+            guard !initialFailureEventExpressions.isEmpty,
+                  initialFailureEventExpressions.count == initialFailurePredicates.count else {
+                throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                    path: "tla.initialEvaluationFailureEvents",
+                    expected: "one event set for every checked initial failure site",
+                    actual: "an initial failure event set is missing",
+                    nextSafeAction: "Regenerate the TLA+ initial failure event sets.")
+            }
+            var name = "__SwiftTLAInitialFailureEvents"
+            while occupied.contains(name) { name += "_" }
+            occupied.insert(name)
+            let declaration = "\(name) == UNION {\(initialFailureEventExpressions.joined(separator: ", "))}"
+            lines.append(declaration)
+            initialFailureDeclarations.append(declaration)
         }
         if lines.last != "" { lines.append("") }
 
@@ -2743,10 +3386,60 @@ private extension CompiledModuleMetadata {
         if instancesAfterBehavior { lines += instanceDeclarations }
         lines.append("====")
         let source = FormalStringEncoding.declare(in: lines.joined(separator: "\n") + "\n")
+        for declaration in initialFailureDeclarations {
+            guard let first = source.range(of: declaration),
+                  source.range(of: declaration,
+                    range: first.upperBound..<source.endIndex) == nil else {
+                throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                    path: "tla.initialEvaluationFailures",
+                    expected: "each checked initial failure declaration in the emitted module",
+                    actual: "an initial failure declaration is missing or duplicated",
+                    nextSafeAction: "Regenerate the TLA+ initial failure declarations.")
+            }
+        }
+        try StraightLineRenderedActionCheck.verifyInitialFailureAggregate(source,
+            predicates: initialFailurePredicates, name: initialFailureAggregate)
+        try StraightLineRenderedActionCheck.verifyInitialFailureRecord(source,
+            name: initialFailureRecord, predicates: initialFailurePredicates,
+            records: initialFailureRecordExpressions,
+            required: requiredInitialFailures.selected)
         try verifyRenderedVariableDeclaration(source, names: varNames + formalVariableSymbols)
-        try verifyRenderedInitialConjunction(source, predicates: initialPredicates)
+        let expectedIntLiterals = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
+            variable -> (String, Int)? in
+            guard case .value(let expression)? = initializations[variable.id],
+                  case .value(.integer(let value)) = expression.operation,
+                  expression.children.isEmpty else { return nil }
+            return (variable.formalName, value)
+        })
+        let expectedControlLocations = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
+            variable -> (String, String)? in
+            guard case .value(let expression)? = initializations[variable.id],
+                  case .controlLocation(let id) = expression.operation,
+                  expression.children.isEmpty,
+                  let location = layout.controlLocation(id) else { return nil }
+            return (variable.formalName, location.formalName)
+        })
+        let expectedIntPredicates = Dictionary(uniqueKeysWithValues: layout.variables.compactMap {
+            variable -> (String, String)? in
+            guard let initialization = initializations[variable.id],
+                  let predicate = StraightLineRenderedActionCheck.initialIntPredicate(
+                    initialization, named: variable.formalName, layout: layout) else { return nil }
+            return (variable.formalName, predicate)
+        })
+        try verifyRenderedInitialConjunction(source, predicates: initialPredicates,
+            expectedIntLiterals: expectedIntLiterals,
+            expectedControlLocations: expectedControlLocations,
+            expectedIntPredicates: expectedIntPredicates,
+            expectedIntStateNames: Set(layout.variables.filter { intStateVariables.contains($0.id) }
+                .map { $0.formalName }),
+            expectedPredicateCount: layout.variables.count + intStateVariables.count
+                + (selectedInitialInvariant == nil ? 0 : 1),
+            requireCompleteSimpleInitials: behavior.initialInvariant == nil
+                && expectedIntLiterals.count + expectedIntPredicates.count
+                    + expectedControlLocations.count == layout.variables.count)
         try verifyRenderedActionDeclarations(source, declarations: actionDeclarations)
-        return (source, evaluationFailureDeclarations, evaluationInvariant)
+        return (source, evaluationFailureDeclarations, evaluationInvariant,
+            initialFailureAggregate, initialFailureRecord)
     }
 
     func tlcConfiguration(behavior: CompiledBehavior, replacements: [TLCModuleReplacement],
@@ -2801,7 +3494,13 @@ func verifyRenderedVariableDeclaration(_ source: String, names: [String]) throws
     }
 }
 
-func verifyRenderedInitialConjunction(_ source: String, predicates: [String]) throws {
+func verifyRenderedInitialConjunction(_ source: String, predicates: [String],
+                                      expectedIntLiterals: [String: Int] = [:],
+                                      expectedControlLocations: [String: String] = [:],
+                                      expectedIntPredicates: [String: String] = [:],
+                                      expectedIntStateNames: Set<String> = [],
+                                      expectedPredicateCount: Int? = nil,
+                                      requireCompleteSimpleInitials: Bool = false) throws {
     let lines = source.components(separatedBy: "\n")
     let starts = lines.indices.filter { lines[$0] == "Init ==" || lines[$0].hasPrefix("Init == ") }
     let expected = predicates.isEmpty
@@ -2817,7 +3516,24 @@ func verifyRenderedInitialConjunction(_ source: String, predicates: [String]) th
     } else {
         actual = "\(starts.count) Init declarations"
     }
-    guard actual == expected else {
+    guard actual == expected,
+          expectedPredicateCount.map({ predicates.count == $0 }) ?? true,
+          (!requireCompleteSimpleInitials
+              || predicates.count == expectedIntLiterals.count + expectedIntPredicates.count
+                  + expectedControlLocations.count + expectedIntStateNames.count),
+          expectedIntLiterals.allSatisfy({ name, value in
+              predicates.filter { $0 == "\(name) = \(StraightLineRenderedActionCheck.checkedIntegerLiteral(value))" }.count == 1
+          }),
+          expectedControlLocations.allSatisfy({ name, location in
+              predicates.filter { $0 == "\(name) = \(TLAValue.string(location).description)" }.count == 1
+          }),
+          expectedIntPredicates.values.allSatisfy({ predicate in
+              predicates.filter { $0 == predicate }.count == 1
+          }),
+          expectedIntStateNames.allSatisfy({ name in
+              let predicate = StraightLineRenderedActionCheck.initialIntStatePredicate(named: name)
+              return predicates.filter { $0 == predicate }.count == 1
+          }) else {
         throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
             path: "tla.Init", expected: expected, actual: actual,
             nextSafeAction: "Regenerate the TLA+ module from the compiled initializations.")

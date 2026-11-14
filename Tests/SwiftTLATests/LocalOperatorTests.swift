@@ -453,7 +453,7 @@ struct LocalOperatorTests {
     #expect(throws: EvalError.expected(.set, actual: [.integer(0)])) {
       try compiledValue(call(domain: .int(0), argument: .int(1)))
     }
-    #expect(throws: EvalError.recursiveArgumentOutsideDomain) {
+    #expect(throws: NativeMachineEvaluationError.functionArgumentOutsideDomain) {
       try compiledValue(call(domain: .setLiteral([]), argument: .int(1)))
     }
   }
@@ -464,7 +464,7 @@ struct LocalOperatorTests {
       LocalOperator("OnlyZero", parameters: ["value"], domain: .setLiteral([.int(0)]), body: .variable("value"))
     ], .recursiveCall("OnlyZero", [.int(1)]))
 
-    #expect(throws: EvalError.self) {
+    #expect(throws: NativeMachineEvaluationError.functionArgumentOutsideDomain) {
       try compiledValue(expression)
     }
   }
@@ -581,23 +581,27 @@ struct LocalOperatorTests {
     #expect(try spec.compile().render().tlaBundle.tla.contains("IN AddOne(41)"))
   }
 
-  @Test("compiled rendering declares recursive LET operators")
-  func rendersRecursiveLetOperatorDeclaration() throws {
+  @Test("compiled rendering declares recursive LET operators",
+    arguments: ["SumTo", "WF_sum", "SF_sum", "_1", "TRUE", "FALSE", "BOOLEAN", "STRING"])
+  func rendersRecursiveLetOperatorDeclaration(name: String) throws {
     let sumTo = LocalOperator(
-      "SumTo",
+      name,
       parameters: ["number"],
       body: .ifThenElse(
         .equal(.variable("number"), .int(0)),
         .int(0),
-        .add(.variable("number"), .recursiveCall("SumTo", [.subtract(.variable("number"), .int(1))]))
+        .add(.variable("number"), .recursiveCall(name, [.subtract(.variable("number"), .int(1))]))
       )
     )
     let spec = TLASpec("RecursiveLocalOperatorSource") {
-      FormalDefinition("Answer", parameters: [], body: .letIn([sumTo], .recursiveCall("SumTo", [.int(4)])))
+      FormalDefinition("Answer", parameters: [], body: .letIn([sumTo], .recursiveCall(name, [.int(4)])))
     }
 
     let compilation = try spec.compile()
-    #expect(try compilation.render().tlaBundle.tla.contains("LET RECURSIVE SumTo(_)"))
+    let expected = ["WF_sum": "_WF_sum", "SF_sum": "_SF_sum", "_1": "v_1",
+                    "TRUE": "TRUE_1", "FALSE": "FALSE_1", "BOOLEAN": "BOOLEAN_1", "STRING": "STRING_1"][name] ?? name
+    #expect(try compilation.render().tlaBundle.tla.contains("LET RECURSIVE \(expected)(_)"))
+    #expect(try compiledValue(.letIn([sumTo], .recursiveCall(name, [.int(4)]))) == .int(10))
 
     let definitionID = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
     let definition = try #require(compilation.semantics.operators[definitionID])
@@ -607,6 +611,7 @@ struct LocalOperatorTests {
     }
     let id = try #require(operators.first)
     let operation = try #require(compilation.semantics.operators[id])
+    #expect(compilation.bindings.operatorName(id) == expected)
     #expect(operation.isRecursive)
   }
 

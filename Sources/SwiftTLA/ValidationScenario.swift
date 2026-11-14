@@ -112,11 +112,14 @@ public protocol ModelValidationScenario: Sendable {
     func render() throws -> RenderedSpecification
     var formalPropertyNames: [Property: String] { get }
     var usesView: Bool { get }
+    /// Custom implementations must forward the supplied fairness scopes to native traversal.
     func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
         stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
     func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: Int,
         checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
     func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
         atLevel level: Int) throws -> TLAStateProjection
@@ -144,7 +147,7 @@ public protocol AssumptionValidationScenario: Sendable {
 
 extension ModelValidationScenario {
     public func initialOutcomes() throws -> InitialEvaluationOutcomes<Machine> {
-        try .init(states: initialMachines(), firstFailure: nil)
+        try .init(states: initialMachines(), failures: [])
     }
 
     public var checkingMode: ValidationCheckingMode { .exhaustive }
@@ -156,32 +159,35 @@ extension ModelValidationScenario {
 
     public func runValidation(maximumStates: Int, checking: ModelChecks<Property>,
         stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
         try runValidation(initialOutcomes: initialOutcomes(), maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, emit: emit)
+            stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
     }
 
     public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: Int,
         checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
         if initialOutcomes.firstFailure == nil {
             return try runValidation(initialMachines: initialOutcomes.states, maximumStates: maximumStates,
                 checking: checking, stopOnViolation: stopOnViolation,
-                stopOnReachability: stopOnReachability, emit: emit)
+                stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
         }
         guard !usesView else { throw ExplorationError.viewRequiresStreamingValidation }
         return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, emit: emit)
+            stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
     }
 
     public func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
         stopOnViolation: Bool, stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
         try MachineValidator.run(initialMachines: initialMachines, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, emit: emit)
+            stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
     }
 
     public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,

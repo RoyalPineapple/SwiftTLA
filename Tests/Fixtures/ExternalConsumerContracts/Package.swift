@@ -30,6 +30,10 @@ let package = Package(
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
+      name: "InvalidInlineSpecBuilder",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
       name: "InvalidModelClassHost",
       dependencies: generatedMachineDependencies
     ),

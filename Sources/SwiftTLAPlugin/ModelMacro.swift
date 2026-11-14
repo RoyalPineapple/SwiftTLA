@@ -40,6 +40,8 @@ enum TLASpecVerifier {
         let parsed = parser.parseSpecClosure(named: source.name, source.closure)
         do {
             let compilation = try parsed.compile()
+            try OrderedIntSourceSyntaxCheck.verify(source.closure, parsed: parsed, enums: enumInfos,
+                sourceTypes: sourceMetadata)
             if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty && parsed.assumptions.isEmpty {
                 throw ModelMacroError.emptyState
             }
@@ -223,13 +225,17 @@ enum TLASpecVerifier {
                     let encoded: TLAValue
                     if constructor == "constant", case .string(let raw) = value {
                         encoded = .constant(raw)
+                    } else if constructor == "canonicalSwiftString", case .string(let raw) = value {
+                        encoded = .canonicalSwiftString(raw)
                     } else {
                         encoded = value
                     }
                     guard caseNames.insert(caseName).inserted else {
                         throw ModelMacroError.duplicateEnumCase(typeName: enumDecl.name.sourceIdentifierName, caseName: caseName)
                     }
-                    guard caseValues.insert(encoded).inserted else {
+                    // Normalization must not reject distinct raw declarations.
+                    let uniquenessValue = constructor == "canonicalSwiftString" ? value : encoded
+                    guard caseValues.insert(uniquenessValue).inserted else {
                         throw ModelMacroError.duplicateEnumRawValue(typeName: enumDecl.name.sourceIdentifierName, caseName: caseName)
                     }
                     cases.append((caseName, encoded))
@@ -258,7 +264,7 @@ enum TLASpecVerifier {
         let encodings = declaration.memberBlock.members.compactMap { $0.decl.as(VariableDeclSyntax.self) }.filter {
             $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "tlaValue" }
         }
-        guard let encoding = encodings.first else { return .rawValue(intBacked ? "int" : "string") }
+        guard let encoding = encodings.first else { return .rawValue(intBacked ? "int" : "canonicalSwiftString") }
         let failure = ModelMacroError.unsupportedEnumEncoding(typeName: declaration.name.text)
         guard encodings.count == 1, encoding.bindings.count == 1,
               !encoding.modifiers.contains(where: { $0.name.text == "static" }),

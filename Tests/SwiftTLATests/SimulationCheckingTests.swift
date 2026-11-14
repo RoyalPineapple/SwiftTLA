@@ -1,5 +1,7 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
+@testable import UpstreamParity
 
 struct SimulationCheckingTests {
     @Test("Simulation revisits complete states and never treats a depth cutoff as success")
@@ -46,6 +48,22 @@ struct SimulationCheckingTests {
         }
         #expect(witness.violations == [.invariant(.NonZero)])
         #expect(witness.trace.map { $0.state.state.value } == [2, 0])
+
+        let fairness: [MachineFairnessCondition<CandidateSafetySimulationModel.Snapshot,
+            CandidateSafetySimulationModel.Action>] = [
+                (name: "choose", isStrong: false, matches: { _ in true },
+                 changes: { _, _ in throw NativeMachineEvaluationError.noMatchingCase })
+            ]
+        let partial = try MachineValidator.run(initialMachines: [initial], maximumStates: 4,
+            checking: .init(properties: [.NonZero], checkDeadlock: false),
+            stopOnViolation: true, fairness: fairness) { _ in }
+        #expect(partial.completion == .decisiveViolation)
+        #expect(partial.fairnessEnabledness == nil)
+        #expect(throws: NativeMachineEvaluationError.noMatchingCase) {
+            _ = try MachineValidator.run(initialMachines: [initial], maximumStates: 4,
+                checking: .init(properties: [.NonZero], checkDeadlock: false),
+                stopOnViolation: false, fairness: fairness) { _ in }
+        }
     }
 
     @Test("Simulation checks initial invariants before excluding constrained states")
@@ -137,17 +155,51 @@ struct SimulationCheckingTests {
         #expect(reason == .maximumDepth)
     }
 
-    @Test("a sampled graph cannot decide fairness from missing actions")
-    func sampledFairnessDoesNotInventCounterexample() throws {
+    @Test("constraints and sampling cannot treat an omitted fair action as disabled")
+    func fairnessUsesRawEnablednessAcrossConstraintsAndSampling() throws {
         let scenario = try #require(SampledFairTemporalModel.validationScenarios().first)
+        let initial = try scenario.initialMachines()
+        var raw = try #require(initial.first)
+        #expect(try raw.isEnabled(.advance))
+        _ = try raw.send(.advance)
+        #expect(raw.state.value == 1)
+        #expect(try !raw.satisfiesStateConstraint())
+
         var generator = LastCandidateGenerator()
-        let result = try MachineSimulator.run(initialMachines: scenario.initialMachines(),
+        let result = try MachineSimulator.run(initialMachines: initial,
             maximumDepth: 1, checking: scenario.checking, using: &generator)
         guard case .inconclusive(let trace, _) = result else {
             Issue.record("An unvisited fair action cannot be treated as disabled")
             return
         }
         #expect(trace.map { $0.state.state.value } == [0, 0])
+
+        let retained = try ReachabilityGraph(initialMachines: initial, maximumStates: 4,
+            checking: scenario.checking)
+        #expect(Set(retained.transitions.keys.map { $0.state.value }) == [0])
+        #expect(retained.temporalResults[.EventuallyOne]?.status == .satisfied)
+
+        let captured = try MachineValidationGraph(initialMachines: initial, maximumStates: 4)
+        #expect(Set(captured.transitions.keys.map { $0.state.value }) == [0])
+        let capturedResults = try captured.temporalResults(checking: [.EventuallyOne])
+        #expect(capturedResults[.EventuallyOne]?.status == .satisfied)
+
+        let exhaustive = SampledFairTemporalModel.ValidationScenario(
+            name: scenario.name, displayName: scenario.displayName, checking: scenario.checking,
+            checkingMode: .exhaustive, behavior: scenario.behavior,
+            selectedSymmetry: scenario.selectedSymmetry,
+            selectedFairnessProfile: scenario.selectedFairnessProfile,
+            selectedFairnessProfileName: scenario.selectedFairnessProfileName,
+            selectedView: scenario.selectedView, selectedPostcondition: scenario.selectedPostcondition,
+            postconditionName: scenario.postconditionName,
+            postconditionExpectation: scenario.postconditionExpectation,
+            expectations: scenario.expectations, deadlockExpectation: scenario.deadlockExpectation)
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: output) }
+        let report = try NativeValidationRunner.run(scenario: exhaustive,
+            caseID: "constrained-fairness", maximumStates: 4, to: output)
+        #expect(report.graphComplete && report.states == 1)
+        #expect(report.properties["EventuallyOne"] == .satisfied)
     }
 
     @Test("a sampled trace reports a fair counterexample when the fair action becomes disabled")

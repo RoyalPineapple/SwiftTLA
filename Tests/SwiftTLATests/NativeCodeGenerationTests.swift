@@ -19,37 +19,94 @@ struct NativeCodeGenerationTests {
             model: try MacroCompilation(typeName: "FiniteOrdering", program: program), sharedTypes: declarations)
         let generated = try emitter.ordering(.oneOf(first, second))
         #expect(generated.components(separatedBy: "case ").count - 1 <= 8 * 32)
-        #expect(!generated.contains("TLAValue"))
-        #expect(!Parser.parse(source: "let order = \(generated)").hasError)
+        for (extra, expectedNative) in [
+            ("", true),
+            ("\nlet unexpectedFormalValue: SwiftTLA.TLAValue = .int(0)", false),
+            ("\nlet unexpectedFormalValue = SwiftTLA.TLAValue.int(0)", false)
+        ] {
+            let candidate = generated + extra
+            if !expectedNative {
+                #expect(candidate != generated)
+                #expect(candidate.components(separatedBy: "unexpectedFormalValue").count == 2)
+            }
+            let syntax = Parser.parse(source: "let order = \(candidate)")
+            #expect(!syntax.hasError)
+            let tokens = Array(syntax.tokens(viewMode: .sourceAccurate))
+            let nativeOnly = tokens.enumerated().allSatisfy { index, token in
+                token.tokenKind != .identifier("TLAValue") || (
+                    tokens[..<index].suffix(2).map(\.text) == ["SwiftTLA", "."]
+                    && [[".", "IntegerLiteralType"], [".", "BooleanLiteralType"],
+                        [".", "StringLiteralType"]].contains(tokens.dropFirst(index + 1).prefix(2).map(\.text)))
+            }
+            #expect(nativeOnly == expectedNative)
+        }
     }
 
-    @Test("Native bindings retain resolved declaration names")
+    @Test("Bound parameters retain source APIs and valid emitted declaration names")
     func preservesBindingNames() throws {
-        let compilation = try TLASpec(name: "BindingNames", variables: [
-            .init(name: "count", initial: .int(0))
-        ], actions: [.init(name: "advance", body: .assign(.named("count"), .variable("amount")),
-            bindings: [.init(name: "amount", values: [.int(1)])])], invariants: []).compile()
-        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
-        let parameter = try #require(program.behavior.actions.first?.bindings.first?.binder)
-        let name = try #require(compilation.bindings.binderName(parameter))
-        #expect(program.binderNames[parameter] == name)
-        var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "BindingNames", program: program))
-        let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
-        #expect(generated.contains("_\(name)_\(parameter.ordinal)"))
+        for (sourceName, expected) in [("amount", "amount"), ("WF_amount", "_WF_amount"),
+                                       ("SF_amount", "_SF_amount"), ("_1", "v_1"),
+                                       ("TRUE", "TRUE_1"), ("FALSE", "FALSE_1"), ("BOOLEAN", "BOOLEAN_1"), ("STRING", "STRING_1")] {
+            let compilation = try TLASpec(name: "BindingNames", variables: [
+                .init(name: "count", initial: .int(0))
+            ], actions: [.init(name: "advance", body: .assign(.named("count"), .variable(sourceName)),
+                bindings: [.init(name: sourceName, values: [.int(1), .int(2)])])], invariants: []).compile()
+            let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            let parameter = try #require(program.behavior.actions.first?.bindings.first?.binder)
+            let name = try #require(compilation.bindings.binderName(parameter))
+            #expect(name == expected)
+            #expect(program.binderNames[parameter] == name)
+            let api = try GeneratedMachineAPI(layout: program.layout, actions: program.behavior.actions)
+            #expect(api.actions.first?.bindings.first?.swiftIdentifier == sourceName)
+            #expect(api.actions.first?.bindings.first?.isPublic == true)
+            let runtime = CompiledRuntime(compilation: compilation)
+            let initial = try #require(try runtime.initialStates().first)
+            let count = try #require(compilation.layout.testVariableID(named: "count"))
+            #expect(Set(try runtime.successors(from: initial).map { try $0.state.value(for: count) })
+                == [.integer(1), .integer(2)])
+            var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "BindingNames", program: program))
+            let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
+            #expect(generated.contains("_\(name)_\(parameter.ordinal)"))
+        }
     }
 
-    @Test("Record construction preserves field names across execution and rendering")
-    func recordFieldNames() throws {
+    @Test("Record construction and access retain keys across execution and TLA rendering", arguments: [
+        ("z", true), ("IF", true), ("WF_", true), ("_", true),
+        ("WF_z", false), ("SF_z", false), ("_1", false)
+    ])
+    func recordFieldNames(field: String, bareField: Bool) throws {
         let record = StateRecordExpression([
-            .init(name: "z", value: .variable("count")),
-            .init(name: "a", value: .int(2))
+            .init(name: field, value: .variable("count")),
+            .init(name: "a", value: .variable("__RecordIdentity_record0"))
         ])
-        let specification = TLASpec(name: "RecordIdentity", variables: [
-            .init(name: "count", initial: .int(0))
+        let domain = StateExpr.unionAll(.setMap(.setMap(.recordLiteral(.init([
+            .init(name: field, value: .variable("second")),
+            .init(name: "a", value: .variable("first"))
+        ])), "second", .value(.set([.int(0), .int(1)]))),
+            "first", .value(.set([.int(0), .int(1)]))))
+        var specification = TLASpec(name: "RecordIdentity", variables: [
+            .init(name: "count", initial: .int(0)),
+            .init(name: "__RecordIdentity_record0", initial: .int(2)),
+            .init(name: "raw", initial: .record(TLARecord([
+                .init(field, .int(0)), .init("a", .constant("__tla_fn_0"))
+            ])))
         ], actions: [], invariants: [
             .init(name: "Equal", body: .equal(.recordLiteral(record), .recordLiteral(record))),
-            .init(name: "Read", body: .equal(.recordAccess(.recordLiteral(record), "z"), .int(0)))
+            .init(name: "Read", body: .equal(.recordAccess(.recordLiteral(record), field), .int(0))),
+            .init(name: "Domain", body: .equal(.cardinality(domain), .int(4)))
         ])
+        if field == "z" {
+            specification.invariants.append(.init(name: "Empty", body: .equal(
+                .recordLiteral(StateRecordExpression(orderedFields: [])), .value(.record(TLARecord([]))))))
+        }
+        if field == "WF_z" {
+            let failing = StateRecordExpression(orderedFields: [
+                .init(name: field, value: .int(0)),
+                .init(name: "a", value: .divide(.int(1), .int(0)))
+            ])
+            specification.invariants.append(.init(name: "StrictRead", body: .equal(
+                .recordAccess(.recordLiteral(failing), field), .int(0))))
+        }
         let compilation = try specification.compile()
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         let predicate = try #require(program.behavior.invariants.first).predicate.expression
@@ -58,24 +115,78 @@ struct NativeCodeGenerationTests {
             Issue.record("Expected resolved record construction")
             return
         }
-        #expect(fields == ["a", "z"])
+        #expect(fields == ["a", field].sorted())
         #expect(constructor.children.map(\.resultType) == [.int, .int])
+        var recordNameIndex = 0
         let syntax = try constructor.operation.tlaSyntax(operandCount: constructor.children.count,
-            binderName: { _ in "unused" })
-        #expect(syntax == [.text("["), .text("a |-> "), .operand(0), .text(", "),
-            .text("z |-> "), .operand(1), .text("]")])
-        var values: [CompiledValue] = [.integer(2), .integer(0)]
+            binderName: { _ in "unused" }, recordName: {
+                defer { recordNameIndex += 1 }
+                return "record\(recordNameIndex)"
+            })
+        let text = syntax.compactMap { part -> String? in
+            if case .text(let value) = part { return value }
+            return nil
+        }.joined()
+        if bareField {
+            #expect(text.contains("\(field) |-> "))
+        } else {
+            #expect(!text.contains("\(field) |-> "))
+            #expect(text.contains("\"\(field)\""))
+            #expect(text.contains("\\in {"))
+        }
+        #expect(syntax.compactMap { part -> Int? in
+            if case .operand(let index) = part { return index }
+            return nil
+        } == Array(fields.indices))
+        var values: [CompiledValue] = fields.map { .integer($0 == "a" ? 2 : 0) }
         try constructor.operation.apply(to: &values, operandCount: 2)
         #expect(values == [.record(CompiledRecord([
             .init(key: .string("a"), value: .integer(2)),
-            .init(key: .string("z"), value: .integer(0))
+            .init(key: .string(field), value: .integer(0))
         ]))])
         let read = try #require(program.behavior.invariants.first { $0.name == "Read" })
         let access = try #require(read.predicate.expression.children.first)
-        #expect(access.operation == .recordAccess(try #require(fields.last)))
+        #expect(access.operation == .recordAccess(field))
         #expect(access.resultType == .int)
         try access.operation.apply(to: &values, operandCount: 1)
         #expect(values == [.integer(0)])
+        let runtime = CompiledRuntime(compilation: compilation)
+        let initial = try #require(try runtime.initialStates().first)
+        for invariant in compilation.semantics.behavior.invariants {
+            if invariant.name == "StrictRead" {
+                #expect(throws: EvalError.divisionByZero) {
+                    try runtime.invariantHolds(invariant, in: initial)
+                }
+            } else {
+                #expect(try runtime.invariantHolds(invariant, in: initial))
+            }
+        }
+        let bundle = try compilation.render().tlaBundle
+        let typed = try program.renderModule().renderedModuleSource
+        for source in [bundle.tla, typed] {
+            if field == "WF_z" {
+                let strict = try #require(source.split(whereSeparator: \.isNewline).first { $0.hasPrefix("StrictRead ==") })
+                #expect(strict.contains("CHOOSE "))
+                #expect(strict.contains("\\in {<<"))
+            }
+            if field == "z" {
+                let empty = try #require(source.split(whereSeparator: \.isNewline).first { $0.hasPrefix("Empty ==") })
+                #expect(empty.components(separatedBy: "\\in {} |-> TRUE]").count - 1 == 2)
+            }
+            if bareField {
+                #expect(source.contains(".\(field)"))
+                #expect(source.contains("\(field): "))
+            } else {
+                #expect(!source.contains("\(field) |-> "))
+                #expect(!source.contains(".\(field)"))
+                #expect(!source.contains("\(field): "))
+                #expect(source.contains("[\"\(field)\"]"))
+                #expect(!source.contains("[__RecordIdentity_record0 \\in"))
+                #expect(source.contains("<<count, __RecordIdentity_record0>>"))
+                #expect(!source.contains("[__tla_fn_0 \\in"))
+                #expect(source.contains(") -> __tla_fn_0"))
+            }
+        }
     }
 
     @Test("Fixed record updates omit unused storage while retaining operand evaluation")
@@ -364,7 +475,7 @@ struct NativeCodeGenerationTests {
         let union = CompiledValueType.union([.int, record])
         let declarations = NativeTypeDeclarations(types: [union, record, union], literals: [], namedDomains: [:])
         #expect(declarations.records == [record])
-        #expect(declarations.unions == [[.int, record]])
+        #expect(declarations.unions == [union])
         #expect(declarations.finiteValues == [[.integer(1), .string("missing")]])
         #expect(declarations.names.count == 3)
     }
@@ -486,10 +597,29 @@ struct NativeCodeGenerationTests {
             guard let function = $0.as(FunctionDeclSyntax.self) else { return true }
             return !exportMethods.contains(function.name.text)
         }.map(\.description).joined(separator: "\n")
-        #expect(!execution.contains("TLAValue"))
+        for (extra, expectedNative) in [
+            ("", true),
+            ("\nlet unexpectedFormalValue: SwiftTLA.TLAValue = .int(0)", false),
+            ("\nlet unexpectedFormalValue = SwiftTLA.TLAValue.int(0)", false)
+        ] {
+            let candidate = execution + extra
+            if !expectedNative {
+                #expect(candidate != execution)
+                #expect(candidate.components(separatedBy: "unexpectedFormalValue").count == 2)
+            }
+            let syntax = Parser.parse(source: "struct Expansion {\n\(candidate)\n}")
+            #expect(!syntax.hasError)
+            let tokens = Array(syntax.tokens(viewMode: .sourceAccurate))
+            let nativeOnly = tokens.enumerated().allSatisfy { index, token in
+                token.tokenKind != .identifier("TLAValue") || (
+                    tokens[..<index].suffix(2).map(\.text) == ["SwiftTLA", "."]
+                    && [[".", "IntegerLiteralType"], [".", "BooleanLiteralType"],
+                        [".", "StringLiteralType"]].contains(tokens.dropFirst(index + 1).prefix(2).map(\.text)))
+            }
+            #expect(nativeOnly == expectedNative)
+        }
         #expect(!execution.contains("formalProjection("))
         #expect(!execution.contains("formalCall("))
-        #expect(generated.contains("_NativeMachineOperations.add"))
         #expect(generated.contains("switch action"))
         #expect(generated.contains("guard"))
         #expect(!generated.contains("func _enabledActions"))
@@ -528,6 +658,27 @@ struct NativeCodeGenerationTests {
         let wrong = Parser.parse(source: wrongSource).statements.first?.item.as(DeclSyntax.self)
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedSnapshotOutput(wrong, hiddenFields: hiddenFields)
+        }
+
+        let recordSource = Parser.parse(source: try String(contentsOf: fixture.deletingLastPathComponent()
+            .appendingPathComponent("GeneratedSwiftRecordFixtures.swift"), encoding: .utf8))
+        let recordDeclaration = try #require(recordSource.statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "GeneratedSwiftRecord" })
+        let record = try TLASpecVerifier.parseAndVerify(recordDeclaration)
+        var recordEmitter = NativeSwiftEmitter(model: record)
+        let recordMembers = try recordEmitter.machineMembers()
+        let recordSnapshot = try #require(recordMembers.first { $0.as(StructDeclSyntax.self)?.name.text == "Snapshot" })
+        let recordHidden = try record.program.layout.variables.filter { recordEmitter.stateMemberNames[$0.id] == nil }
+            .map { (name: recordEmitter.variable($0.id), type: try recordEmitter.swiftType(record.program.variableTypes[$0.id]!)) }
+        try verifyGeneratedSnapshotOutput(recordSnapshot, hiddenFields: recordHidden, structuralIdentity: true)
+        let stateField = "public let state: State"
+        try #require(recordSnapshot.description.components(separatedBy: stateField).count - 1 == 1)
+        let missingPublicState = recordSnapshot.description.replacingOccurrences(of: stateField, with: "")
+        #expect(missingPublicState != recordSnapshot.description)
+        let missingPublic = Parser.parse(source: missingPublicState).statements.first?.item.as(DeclSyntax.self)
+        #expect(throws: CompilationDiagnostic.self) {
+            try verifyGeneratedSnapshotOutput(missingPublic, hiddenFields: recordHidden, structuralIdentity: true)
         }
     }
     @Test("Finite union state preserves declared Swift alternatives without anonymous replacement")

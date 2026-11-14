@@ -15,7 +15,14 @@ struct UnboundedSequenceTests {
         #expect(throws: NativeMachineEvaluationError.nonEnumerableSequenceDomain) {
             try UnboundedSequenceModel.makeMachine()
         }
-        let bundle = try UnboundedSequenceModel.spec.compile().render().tlaBundle
+        #expect(throws: NativeMachineEvaluationError.nonEnumerableSequenceDomain) {
+            try UnboundedSequenceModel.initialOutcomes()
+        }
+        let compilation = try UnboundedSequenceModel.spec.compile()
+        #expect(throws: EvalError.nonEnumerableSequenceDomain) {
+            try CompiledRuntime(compilation: compilation).initialOutcomes()
+        }
+        let bundle = try compilation.render().tlaBundle
         #expect(bundle.tla.contains("Seq({1, 2})"))
     }
 

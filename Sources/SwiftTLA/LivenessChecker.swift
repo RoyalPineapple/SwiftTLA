@@ -174,7 +174,8 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
                 let branch = Self(states: reachable,
                     transitions: transitions.filter { reachable.contains($0.key) },
                     fairness: fairness, matches: matches, changes: changes,
-                    actionOrder: actionOrder, stateOrder: stateOrder)
+                    actionOrder: actionOrder, stateOrder: stateOrder,
+                    enabledness: enabled.mapValues { $0.filter { reachable.contains($0.key) } })
                 let result = try branch.analyze(condition, initialStates: initial,
                     isComplete: isComplete, renderScope: renderScope)
                 if result.status != .satisfied { return result }

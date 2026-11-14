@@ -50,7 +50,8 @@ struct CheckedViewKindMismatchTests {
         let proofInput = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/IncompatibleCheckedRecordView.tla")
             .standardizedFileURL
-        #expect(source == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let expectedProofModule = try String(contentsOf: proofInput, encoding: .utf8)
+        #expect(source == expectedProofModule)
         let cfg = try #require(rendered.tlaBundle(checking: [], checkDeadlock: false).root.cfg)
         #expect(cfg.contains("INVARIANT __SwiftTLAEvaluationOK\n"))
     }
@@ -130,7 +131,7 @@ struct CheckedViewKindMismatchTests {
         })
         let swiftInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("NestedCheckedSequenceViewSwiftVisitor.txt")
-        let expectedSwift = try String(contentsOf: swiftInput, encoding: .utf8)
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: swiftInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }
@@ -176,7 +177,7 @@ struct CheckedViewKindMismatchTests {
         })
         let swiftInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("NestedCheckedSetViewSwiftVisitor.txt")
-        let expectedSwift = try String(contentsOf: swiftInput, encoding: .utf8)
+        let expectedSwift = nativeWitnessSource(try String(contentsOf: swiftInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }

@@ -4,18 +4,39 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct RefinementExportTests {
-    @Test("imported concrete constants and model values receive explicit substitutions")
-    func bindsImportedConstants() throws {
+    @Test("imported concrete constants and model values receive explicit substitutions", arguments: [
+        ("ConcreteConstants", "v_1", "Limit"), ("v_1", "v_1_1", "Limit"),
+        ("ConcreteConstants", "v_1", "WF_Limit"), ("ConcreteConstants", "v_1", "SF_Limit"),
+        ("ConcreteConstants", "v_1", "TRUE"), ("ConcreteConstants", "v_1", "Len")
+    ])
+    func bindsImportedConstants(rootName: String, expectedImport: String, constantName: String) throws {
         enum Step: String, CaseIterable { case stay }
+        let marker = constantName == "WF_Limit" ? "_WF_Limit" : "Token"
         let value = Var<Int>("value")
         let abstract = TLASpec("AbstractConstants") {
-            Constant("Limit", 2)
-            Constant("Marker", TLAValue.constant("Token"))
+            Import(TLASpec("_1") {})
+            Constant(constantName, -2)
+            Constant("Marker", TLAValue.constant(marker))
             Variable(value, 0)
             Action("stay") { value.stays }
         }
+        let direct = try abstract.compile().render().tlaBundle
+        #expect(abstract.constants.first?.name == constantName)
+        let definition = try #require(direct.tla.split(separator: "\n").first { $0.hasSuffix(" == -2") })
+        let limitDefinition = definition.prefix { !$0.isWhitespace }
+        let limitBinding = try #require(direct.cfg.split(separator: "\n").first {
+            $0.hasPrefix("CONSTANT ") && $0.hasSuffix(" <- \(limitDefinition)")
+        })
+        let limitName = String(limitBinding.dropFirst("CONSTANT ".count).prefix { !$0.isWhitespace })
+        #expect(constantName == "Limit" ? limitName == constantName : limitName != constantName)
+        #expect(!limitName.hasPrefix("WF_") && !limitName.hasPrefix("SF_"))
+        #expect(!["TRUE", "Len"].contains(limitName))
+        #expect(limitName != marker)
+        #expect(direct.tla.contains("\(limitDefinition) == -2\n"))
+        #expect(!direct.cfg.contains("CONSTANT \(limitName) ="))
         let instance = Instance("Abstract", of: abstract)
-        let source = TLASpec("ConcreteConstants") {
+        let source = TLASpec(rootName) {
+            if constantName == "WF_Limit" { Constant(constantName, 3) }
             Algorithm("Loop", scoped: { scope in
                 let state = scope.sharedVar(_name: "value", initial: 0)
                 While(Step.stay, true) { Assign(state, to: state) }
@@ -23,20 +44,39 @@ struct RefinementExportTests {
             instance
             Refinement(_name: "Refines", instance: instance, mappings: [.init(value, from: value)])
         }
-        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: source.compile()))
+        let compilation = try source.compile()
+        let valueID = try #require(compilation.layout.testVariableID(named: "value"))
+        let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        #expect(try initial.value(for: valueID) == .integer(0))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         let module = try program.renderModule()
-        #expect(module.renderedModuleSource.contains("CONSTANTS Token\n"))
-        #expect(module.renderedModuleSource.contains("Limit <- 2"))
-        #expect(module.renderedModuleSource.contains("Marker <- Token"))
-        #expect(module.renderedModuleSource.contains("Token <- Token"))
-        #expect(module.configuration.declarations.contains("CONSTANT Token = Token"))
-        #expect(try #require(module.imports.first).tla.contains("CONSTANTS Limit, Marker, Token\n"))
+        var rootConstantNames = [marker]
+        if constantName == "WF_Limit" {
+            #expect(source.constants == [ConstantDecl(constantName, .int(3))])
+            let binding = try #require(module.configuration.declarations.first {
+                $0.hasPrefix("CONSTANT ") && $0.hasSuffix(" = 3")
+            })
+            let rootName = String(binding.dropFirst("CONSTANT ".count).prefix { !$0.isWhitespace })
+            #expect(rootName != marker)
+            #expect(module.renderedModuleSource.contains("ASSUME \(rootName) = 3"))
+            rootConstantNames.append(rootName)
+        }
+        let rootDeclaration = "CONSTANTS \(rootConstantNames.sorted().joined(separator: ", "))\n"
+        #expect(module.imports.contains { $0.name == expectedImport })
+        let imported = try #require(module.imports.first { $0.name == "\(rootName)__Refinement0" })
+        #expect(imported.tla.contains("EXTENDS Integers, FiniteSets, Sequences, \(expectedImport)\n"))
+        #expect(module.renderedModuleSource.contains(rootDeclaration))
+        #expect(module.renderedModuleSource.contains("\(limitName) <- -2"))
+        #expect(module.renderedModuleSource.contains("Marker <- \(marker)"))
+        #expect(module.renderedModuleSource.contains("\(marker) <- \(marker)"))
+        #expect(module.configuration.declarations.contains("CONSTANT \(marker) = \(marker)"))
+        #expect(try #require(module.imports.first).tla.contains("CONSTANTS \([limitName, "Marker", marker].sorted().joined(separator: ", "))\n"))
         let plusCal = try #require(try program.renderAuthoredPlusCal(declarations: module))
-        #expect(plusCal.contains("CONSTANTS Token\n"))
-        #expect(plusCal.contains("Abstract == INSTANCE ConcreteConstants__Refinement0"))
-        #expect(plusCal.contains("Limit <- 2"))
-        #expect(plusCal.contains("Marker <- Token"))
-        #expect(plusCal.contains("Token <- Token"))
+        #expect(plusCal.contains(rootDeclaration))
+        #expect(plusCal.contains("Abstract == INSTANCE \(rootName)__Refinement0"))
+        #expect(plusCal.contains("\(limitName) <- -2"))
+        #expect(plusCal.contains("Marker <- \(marker)"))
+        #expect(plusCal.contains("\(marker) <- \(marker)"))
         let instancePosition = try #require(plusCal.range(of: "Abstract == INSTANCE"))
         let claimPosition = try #require(plusCal.range(of: "Refines == Abstract!Spec"))
         #expect(instancePosition.lowerBound < claimPosition.lowerBound)
@@ -72,8 +112,16 @@ struct RefinementExportTests {
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: root.compile()))
         let module = try program.renderModule()
         #expect(module.imports.count == 2)
+        let expectedInit = #"""
+        Init ==
+          /\ value = 3
+          /\ (IF (value >= (-2 * 1000000000 - 147483648) /\ value <= (2 * 1000000000 + 147483647)) THEN TRUE ELSE value \in ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)..((9 * 1000000000 + 223372036) * 1000000000 + 854775807))
+        """#
         for imported in module.imports {
-            #expect(imported.tla.contains("Init == value = 3"))
+            let initial = try #require(imported.tla.components(separatedBy: "\n\n").first {
+                $0.hasPrefix("Init ==")
+            })
+            #expect(initial == expectedInit)
             #expect(!imported.tla.contains("CONSTANTS Limit"))
         }
         try validateBundle(module, name: program.moduleName, identity: program.identity)
@@ -169,6 +217,7 @@ struct RefinementExportTests {
         let configuration = module.configuration
         let rendered = try RenderedSpecification(_generatedModule: name, source: module.renderedModuleSource,
             compilationIdentity: identity.value, declarations: configuration.declarations,
+            _generatedConstants: module.constantValues,
             checkDeadlock: configuration.checkDeadlock,
             _generatedIntegerBitWidth: Int.bitWidth,
             _generatedIntrinsicInvariants: configuration.intrinsicInvariants,

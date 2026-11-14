@@ -5,8 +5,9 @@ struct NativeTypeDeclarations: Sendable {
     let names: [CompiledValueType: String]
     let records: [CompiledValueType]
     let nominalRecords: [CompiledValueType]
+    let identityElements: [CompiledValueType]
     let enumNames: Set<String>
-    let unions: [[CompiledValueType]]
+    let unions: [CompiledValueType]
     let finiteValues: [[CompiledValue]]
     let modelValueCases: [String: String]
 
@@ -15,12 +16,34 @@ struct NativeTypeDeclarations: Sendable {
         return elements.allSatisfy(supportsPublicValueType)
     }
 
+    private static func containsNominal(_ type: CompiledValueType) -> Bool {
+        var pending = [type]
+        while let value = pending.popLast() {
+            switch value {
+            case .named, .nominalRecord: return true
+            default: pending.append(contentsOf: value.components)
+            }
+        }
+        return false
+    }
+
     private static func supportsPublicValueType(_ type: CompiledValueType) -> Bool {
         switch type {
-        case .int, .bool, .string, .named, .nominalRecord: return true
-        case .oneOf(let first, let second), .dictionary(let first, let second):
+        case .int, .bool, .string, .named: return true
+        case .nominalRecord(_, let fields):
+            var pending = fields.map(\.type)
+            while let field = pending.popLast() {
+                if field == .string { return false }
+                pending.append(contentsOf: field.components)
+            }
+            return fields.allSatisfy { supportsPublicValueType($0.type) }
+        case .oneOf(let first, let second):
             return supportsPublicValueType(first) && supportsPublicValueType(second)
-        case .set(let element), .array(let element): return supportsPublicValueType(element)
+        case .dictionary(let key, let value):
+            return !containsNominal(key) && supportsPublicValueType(key) && supportsPublicValueType(value)
+        case .set(let element):
+            return !containsNominal(element) && supportsPublicValueType(element)
+        case .array(let element): return supportsPublicValueType(element)
         case .tuple: return usesPublicTuple(type)
         default: return false
         }
@@ -99,22 +122,35 @@ struct NativeTypeDeclarations: Sendable {
         var names: [CompiledValueType: String] = [:]
         var records: [CompiledValueType] = []
         var nominalRecords: [CompiledValueType] = []
-        var unions: [[CompiledValueType]] = []
+        var identityElements: [CompiledValueType] = []
+        func registerIdentity(_ type: CompiledValueType) {
+            if !identityElements.contains(type) { identityElements.append(type) }
+        }
+        var unions: [CompiledValueType] = []
         var finiteValues: [[CompiledValue]] = []
         var visited: Set<CompiledValueType> = []
         var pending = Array(types.reversed())
         while let type = pending.popLast() {
             guard visited.insert(type).inserted else { continue }
             switch type {
+            case .set(let element) where Self.containsNominal(element):
+                registerIdentity(element)
+            case .dictionary(let key, let value) where Self.containsNominal(key):
+                registerIdentity(key)
+                registerIdentity(value)
             case .nominalRecord:
                 nominalRecords.append(type)
+                if !Self.supportsPublicValueType(type) {
+                    names[type] = "NativeRecord\(records.count)"
+                    records.append(type)
+                }
             case .tuple where Self.usesPublicTuple(type): break
             case .record, .tuple:
                 names[type] = "NativeRecord\(records.count)"
                 records.append(type)
-            case .union(let alternatives):
+            case .oneOf where !Self.supportsPublicValueType(type), .union:
                 names[type] = "NativeUnion\(unions.count)"
-                unions.append(alternatives)
+                unions.append(type)
             case .finite(let members):
                 names[type] = "NativeValue\(finiteValues.count)"
                 finiteValues.append(members)
@@ -136,6 +172,7 @@ struct NativeTypeDeclarations: Sendable {
         self.names = names
         self.records = records
         self.nominalRecords = nominalRecords
+        self.identityElements = identityElements
         self.enumNames = Set(visited.compactMap {
             if case .named(let name) = $0 { return name }
             return nil

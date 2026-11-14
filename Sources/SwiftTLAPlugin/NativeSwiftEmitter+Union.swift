@@ -61,13 +61,13 @@ extension NativeSwiftEmitter {
         }
         switch (source, target) {
         case (.set(let input), .set(let output)):
-            return "Set<\(try swiftType(output))>(try (\(value)).map { element in \(try checkedView("element", from: input, to: output)) })"
+            return "\(try swiftType(target))(try (\(value)).map { element in \(try checkedView("element", from: input, to: output)) })"
         case (.array(let input), .array(let output)):
             return "(try (\(value)).map { element in \(try checkedView("element", from: input, to: output)) })"
         case (.dictionary(let sourceKey, let sourceValue), .dictionary(let targetKey, let targetValue)):
             let key = try checkedView("entry.key", from: sourceKey, to: targetKey)
             let item = try checkedView("entry.value", from: sourceValue, to: targetValue)
-            return "Dictionary<\(try swiftType(targetKey)), \(try swiftType(targetValue))>(uniqueKeysWithValues: try (\(value)).map { entry in (\(key), \(item)) })"
+            return "\(try dictionaryConstructor(target))(uniqueKeysWithValues: try (\(value)).map { entry in (\(key), \(item)) })"
         case (.tuple(let inputs), .tuple(let outputs)) where inputs.count == outputs.count:
             return try checkedFields(value, from: source, to: target, inputs: inputs, outputs: outputs)
         default:
@@ -78,7 +78,7 @@ extension NativeSwiftEmitter {
     func finiteViewMembers(_ type: CompiledValueType) -> [CompiledValue] {
         switch type {
         case .finite(let members): return members
-        case .named(let name): return program.enums.cases[name]?.map(\.value) ?? []
+        case .named(let name): return (program.enums.domains[name] ?? []).sorted()
         case .union(let alternatives): return Array(Set(alternatives.flatMap(finiteViewMembers))).sorted()
         case .oneOf(let first, let second): return Array(Set(finiteViewMembers(first) + finiteViewMembers(second))).sorted()
         default: return []
@@ -115,10 +115,17 @@ extension NativeSwiftEmitter {
         return "switch (lhs, rhs) { \(cases.joined(separator: "\n")) }"
     }
 
-    private func crossOrdering(_ left: CompiledValueType, _ right: CompiledValueType) throws -> String {
-        if left == right { return try ordering(left) }
+    func crossOrdering(_ left: CompiledValueType, _ right: CompiledValueType) throws -> String {
+        switch left {
+        case .int, .bool, .string, .modelValue, .controlLocation:
+            if left == right { return try ordering(left) }
+        default: break
+        }
+        if left == right, case .finite(let members) = left, members == Set(members).sorted() {
+            return try ordering(left)
+        }
         func closure(_ body: String) throws -> String {
-            "{ (lhs: \(try swiftType(left)), rhs: \(try swiftType(right))) -> Bool in\n\(body)\n}"
+            "{ (lhs: \(try swiftType(left)), rhs: \(try swiftType(right))) -> \(nativeBoolType) in\n\(body)\n}"
         }
         func compare(_ lhs: String, _ left: CompiledValueType, _ rhs: String, _ right: CompiledValueType) throws -> String {
             "if (\(try crossOrdering(left, right)))(\(lhs), \(rhs)) { return true }; if (\(try crossOrdering(right, left)))(\(rhs), \(lhs)) { return false }"
@@ -149,8 +156,8 @@ extension NativeSwiftEmitter {
                 values.map { "case .\($0.name): return \(ranks[$0.value]!)" }.joined(separator: "\n")
             }
             return try closure("""
-            func leftRank(_ value: \(try swiftType(left))) -> Int { switch value { \(cases(a)) } }
-            func rightRank(_ value: \(try swiftType(right))) -> Int { switch value { \(cases(b)) } }
+            func leftRank(_ value: \(try swiftType(left))) -> \(nativeIntType) { switch value { \(cases(a)) } }
+            func rightRank(_ value: \(try swiftType(right))) -> \(nativeIntType) { switch value { \(cases(b)) } }
             return leftRank(lhs) < rightRank(rhs)
             """)
         }
@@ -162,7 +169,7 @@ extension NativeSwiftEmitter {
             let cases = try values.map { item in
                 let result: String
                 if let value = try? literal(item.value, as: other) {
-                    result = "(\(try ordering(other)))(\(fromLeft ? value : valueName), \(fromLeft ? valueName : value))"
+                    result = "(\(try crossOrdering(other, other)))(\(fromLeft ? value : valueName), \(fromLeft ? valueName : value))"
                 } else {
                     guard rank != String(item.value.orderingKind) else {
                         throw unsupported("ordering finite value against incompatible composite shape")
@@ -184,13 +191,13 @@ extension NativeSwiftEmitter {
         switch (left, right) {
         case (.array(let a), .array(let b)), (.set(let a), .set(let b)):
             let isSet: Bool = if case .set = left { true } else { false }
-            let lhs = isSet ? "lhs.sorted(by: \(try ordering(a)))" : "lhs"
-            let rhs = isSet ? "rhs.sorted(by: \(try ordering(b)))" : "rhs"
+            let lhs = isSet ? "lhs.sorted(by: \(try crossOrdering(a, a)))" : "lhs"
+            let rhs = isSet ? "rhs.sorted(by: \(try crossOrdering(b, b)))" : "rhs"
             return try closure("for (a, b) in zip(\(lhs), \(rhs)) { \(try compare("a", a, "b", b)) }; return lhs.count < rhs.count")
         case (.dictionary(let ak, let av), .dictionary(let bk, let bv)):
             return try closure("""
-            let a = lhs.sorted { (\(try ordering(ak)))($0.key, $1.key) }
-            let b = rhs.sorted { (\(try ordering(bk)))($0.key, $1.key) }
+            let a = lhs.sorted { (\(try crossOrdering(ak, ak)))($0.key, $1.key) }
+            let b = rhs.sorted { (\(try crossOrdering(bk, bk)))($0.key, $1.key) }
             for (x, y) in zip(a, b) {
                 \(try compare("x.key", ak, "y.key", bk))
                 \(try compare("x.value", av, "y.value", bv))
@@ -226,14 +233,14 @@ extension NativeSwiftEmitter {
             let cases = try alternatives.enumerated().map { index, alternative in
                 "case .\(unionCase(type, index: index))(let payload): return \(try formalKindRank("payload", type: alternative))"
             }.joined(separator: "\n")
-            return "({ (value: \(try swiftType(type))) -> Int in\nswitch value { \(cases) } })(\(value))"
+            return "({ (value: \(try swiftType(type))) -> \(nativeIntType) in\nswitch value { \(cases) } })(\(value))"
         case .finite(let members):
             let cases = members.indices.map { "case .\(finiteCaseName(members, index: $0)): return \(members[$0].orderingKind)" }.joined(separator: "\n")
-            return "({ (value: \(try swiftType(type))) -> Int in\nswitch value { \(cases) } })(\(value))"
+            return "({ (value: \(try swiftType(type))) -> \(nativeIntType) in\nswitch value { \(cases) } })(\(value))"
         case .named(let name):
             guard let members = program.enums.cases[name] else { throw unsupported("union enum rank") }
             let cases = members.map { "case .`\($0.name)`: return \($0.value.orderingKind)" }.joined(separator: "\n")
-            return "({ (value: \(name)) -> Int in\nswitch value { \(cases) } })(\(value))"
+            return "({ (value: \(name)) -> \(nativeIntType) in\nswitch value { \(cases) } })(\(value))"
         default: throw unsupported("union alternative order")
         }
         return String(representative.orderingKind)

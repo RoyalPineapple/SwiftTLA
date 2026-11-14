@@ -618,7 +618,7 @@ package struct CompiledOperators: Sendable {
 }
 
 package struct CompiledSemantics: Sendable {
-    package let behavior: CompiledBehavior
+    package var behavior: CompiledBehavior
     package var operators: CompiledOperators
     let formalModuleReplacements: [CompiledFormalModuleReplacement]
     let moduleInstances: [CompiledModuleInstance]

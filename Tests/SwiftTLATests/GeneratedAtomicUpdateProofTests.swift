@@ -1,7 +1,9 @@
+import SwiftTLACompilerSupport
 import Foundation
 import Testing
 import SwiftParser
 import SwiftSyntax
+import SwiftTLAMacros
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
@@ -24,7 +26,7 @@ struct GeneratedAtomicUpdateProofTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/GeneratedAtomicCopySwiftWitness.txt")
             .standardizedFileURL
-        let checked = try String(contentsOf: proofInput, encoding: .utf8)
+        let checked = nativeWitnessSource(try String(contentsOf: proofInput, encoding: .utf8))
         #expect(actual == checked.trimmingCharacters(in: .newlines))
 
         let initials = try #require(members.first {
@@ -33,15 +35,49 @@ struct GeneratedAtomicUpdateProofTests {
         let values = try #require(try checkedInitialValues(initials.description))
         #expect(values.first == 0 && values.second == 1)
         let wrongGuard = initials.description.replacingOccurrences(
-            of: "_selectedInitial!.second", with: "_selectedInitial!.first")
+            of: "_selectedInitial?.second", with: "_selectedInitial?.first")
         #expect(wrongGuard != initials.description)
         #expect(try checkedInitialValues(wrongGuard).map { _ in true } == nil)
+
+        let siteConversion = "SwiftTLA._nativeInitialFailure("
+        let siteOrdinal = "evaluatingInitializerOrdinal,"
+        try #require(initials.description.components(separatedBy: siteConversion).count == 2)
+        try #require(initials.description.components(separatedBy: siteOrdinal).count == 2)
+        let callerSite = initials.description.replacingOccurrences(of: siteConversion,
+            with: "SwiftTLA.InitialEvaluationFailure(").replacingOccurrences(of: siteOrdinal,
+            with: "site: evaluatingInitializerOrdinal.map(SwiftTLA.InitialEvaluationFailure.Site.initializer) ?? .selectedInvariant,")
+        try #require(callerSite != initials.description)
+        let wrongSite = try #require(Parser.parse(source: callerSite).statements.first?.item.as(DeclSyntax.self))
+        try emitter.verifyIntInitialOutput(initials)
+        do {
+            try emitter.verifyIntInitialOutput(wrongSite)
+            Issue.record("An initializer failure using caller construction or Optional operations was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+        }
+
+        let prefixEntry = "SwiftTLA._nativeFormalProjectionEntry(Self.__swifttlaFormalProjectionTokens, at: 0,"
+        try #require(initials.description.components(separatedBy: prefixEntry).count == 2)
+        for callerEntry in [
+            "SwiftTLA.TLAStateProjection.Entry(token: SwiftTLA._nativeFormalProjectionToken(Self.__swifttlaFormalProjectionTokens, at: 0),",
+            "SwiftTLA._nativeFormalProjectionEntry([Self.__swifttlaFormalProjectionTokens[0]], at: 0,",
+        ] {
+            let altered = initials.description.replacingOccurrences(of: prefixEntry, with: callerEntry)
+            try #require(altered != initials.description)
+            let wrongEntry = try #require(Parser.parse(source: altered).statements.first?.item.as(DeclSyntax.self))
+            do {
+                try emitter.verifyIntInitialOutput(wrongEntry)
+                Issue.record("An initial prefix using caller entry construction or token-array indexing was accepted")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+            }
+        }
 
         let templateFile = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/GeneratedAtomicCopySwiftTemplate.txt")
             .standardizedFileURL
-        let template = Parser.parse(source: try String(contentsOf: templateFile, encoding: .utf8))
+        let template = Parser.parse(source: nativeWitnessSource(try String(contentsOf: templateFile, encoding: .utf8)))
         let templateMembers = template.statements.compactMap { $0.item.as(DeclSyntax.self) }
         let bindings = try checkedTransitionBindings(members, templateMembers)
         #expect(bindings["__PROOF_FIRST_FIELD__"] == "first")
@@ -57,19 +93,80 @@ struct GeneratedAtomicUpdateProofTests {
             #require(member(named: "makeMachine", parameterCount: 1, in: members)),
         ]
         let emittedConstructor = try #require(member(named: "makeMachine", parameterCount: 0, in: members))
+        let uniqueBinding = try #require(emittedConstructor.as(FunctionDeclSyntax.self)?.body?.statements.first)
+        try #require(emittedConstructor.description.components(separatedBy: uniqueBinding.description).count == 2)
         let wrongUniqueness = emittedConstructor.description.replacingOccurrences(
-            of: "guard candidates.isEmpty else", with: "guard !candidates.isEmpty else")
+            of: uniqueBinding.description, with: "let execution = try (Self._completedInitialStates(_selectedInitial: nil as State?) as [Snapshot])[0]\n")
         #expect(wrongUniqueness != emittedConstructor.description)
         let wrongConstructor = try #require(Parser.parse(source: wrongUniqueness)
             .statements.first?.item.as(DeclSyntax.self))
         #expect(wrongConstructor.as(FunctionDeclSyntax.self)?.name.text == "makeMachine")
-        var wrongConstruction = initialConstruction
-        wrongConstruction[4] = wrongConstructor
+        let completedResult = " as [Snapshot]"
+        try #require(emittedConstructor.description.components(separatedBy: completedResult).count == 2)
+        let inferredCompletedResult = emittedConstructor.description.replacingOccurrences(of: completedResult, with: "")
+        try #require(inferredCompletedResult != emittedConstructor.description)
+        let wrongCompletedResult = try #require(Parser.parse(source: inferredCompletedResult)
+            .statements.first?.item.as(DeclSyntax.self))
+        let publicOutcomes = initialConstruction[2].description
+        let initialMachines = initialConstruction[3].description
+        let conversion = "SwiftTLA._mapNativeOutcomes(try Self._completedInitialStates(_selectedInitial: nil as State?) as [Snapshot])"
+        try #require(initialMachines.components(separatedBy: conversion).count == 2)
+        let wrongMapping = initialMachines.replacingOccurrences(of: conversion,
+            with: "(try Self._completedInitialStates(_selectedInitial: nil as State?) as [Snapshot]).map")
+        try #require(wrongMapping != initialMachines)
+        let wrongOutcomes = try #require(Parser.parse(source: wrongMapping)
+            .statements.first?.item.as(DeclSyntax.self))
+        let outcomeConversion = "return SwiftTLA._mapNativeInitialOutcomes(outcome) { Self(execution: $0) }"
+        try #require(publicOutcomes.components(separatedBy: outcomeConversion).count == 2)
+        let callerReads = publicOutcomes.replacingOccurrences(of: outcomeConversion,
+            with: "return SwiftTLA._nativeInitialOutcomes(states: SwiftTLA._mapNativeOutcomes(outcome.states) { Self(execution: $0) }, failures: outcome.failures)")
+        try #require(callerReads != publicOutcomes)
+        let wrongOutcomeReads = try #require(Parser.parse(source: callerReads)
+            .statements.first?.item.as(DeclSyntax.self))
+        let completedOutcomes = initialConstruction[1].description
+        let completion = "return try SwiftTLA._completeNativeInitialOutcomes(outcome)"
+        try #require(completedOutcomes.components(separatedBy: completion).count == 2)
+        let callerCompletion = completedOutcomes.replacingOccurrences(of: completion,
+            with: "if let failure = outcome.firstFailure { throw failure }\nreturn outcome.states")
+        try #require(callerCompletion != completedOutcomes)
+        let wrongCompletionReads = try #require(Parser.parse(source: callerCompletion)
+            .statements.first?.item.as(DeclSyntax.self))
+        let initialCall = "Self._initialStates(_selectedInitial: nil as State?)"
+        try #require(publicOutcomes.components(separatedBy: initialCall).count == 2)
+        let defaultedCall = publicOutcomes.replacingOccurrences(of: initialCall, with: "Self._initialStates()")
+        try #require(defaultedCall != publicOutcomes)
+        let wrongInitialCall = try #require(Parser.parse(source: defaultedCall)
+            .statements.first?.item.as(DeclSyntax.self))
+        let nominalResult = "let outcome: SwiftTLA.InitialEvaluationOutcomes<Snapshot> ="
+        try #require(publicOutcomes.components(separatedBy: nominalResult).count == 2)
+        let inferredResult = publicOutcomes.replacingOccurrences(of: nominalResult, with: "let outcome =")
+        try #require(inferredResult != publicOutcomes)
+        let wrongResultContext = try #require(Parser.parse(source: inferredResult)
+            .statements.first?.item.as(DeclSyntax.self))
+        let factoryCall = "SwiftTLA._nativeInitialOutcomes(states:"
+        try #require(initials.description.components(separatedBy: factoryCall).count == 2)
+        let callerFactory = initials.description.replacingOccurrences(
+            of: factoryCall, with: "SwiftTLA.InitialEvaluationOutcomes(states:")
+        try #require(callerFactory != initials.description)
+        let wrongOutcomeFactory = try #require(Parser.parse(source: callerFactory)
+            .statements.first?.item.as(DeclSyntax.self))
         do {
-            try verifyGeneratedInitialConstruction(wrongConstruction, configured: false)
-            Issue.record("A generated constructor with reversed uniqueness was accepted")
+            try emitter.verifyIntInitialOutput(wrongOutcomeFactory)
+            Issue.record("An initializer using a caller-specialized outcome constructor was accepted")
         } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.path == "native.initialConstruction")
+            #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+        }
+        try verifyGeneratedInitialConstruction(initialConstruction, configured: false)
+        for (index, declaration) in [(4, wrongConstructor), (4, wrongCompletedResult), (3, wrongOutcomes), (2, wrongInitialCall),
+                                      (2, wrongResultContext), (2, wrongOutcomeReads), (1, wrongCompletionReads)] {
+            var wrongConstruction = initialConstruction
+            wrongConstruction[index] = declaration
+            do {
+                try verifyGeneratedInitialConstruction(wrongConstruction, configured: false)
+                Issue.record("A generated constructor with changed uniqueness, state conversion or helper binding was accepted")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native.initialConstruction")
+            }
         }
         let emittedUpdate = try #require(member(named: "_visitUpdates0", in: members))
         let expectedUpdate = try #require(member(named: "_visitUpdates0", in: templateMembers))
@@ -217,10 +314,61 @@ struct GeneratedAtomicUpdateProofTests {
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedUpdateMergeOutput(wrongMergeMember, slots: [firstSlot, secondSlot])
         }
+        let recordEmitter = NativeSwiftEmitter(model: try swiftRecordModel())
+        let recordUpdates = try #require(try recordEmitter.updateDeclarations().first)
+        let recordSlots = recordEmitter.program.layout.variables.map { recordEmitter.variable($0.id) }
+        let recordTypes = Dictionary(uniqueKeysWithValues: try recordEmitter.program.layout.variables.compactMap {
+            slot -> (String, String)? in
+            let type = recordEmitter.program.variableTypes[slot.id]!
+            return recordEmitter.containsSourceNominal(type) ? (recordEmitter.variable(slot.id), try recordEmitter.swiftType(type)) : nil
+        })
+        try verifyGeneratedUpdateMergeOutput(recordUpdates, slots: recordSlots, recordTypes: recordTypes)
+        let recordSlot = try #require(recordTypes.keys.first)
+        try #require(recordTypes.count == 1)
+        let relation = "return _mergeEqual_\(recordSlot)(lhs, rhs)"
+        try #require(recordUpdates.description.components(separatedBy: relation).count - 1 == 1)
+        let ignoredIncoming = recordUpdates.description.replacingOccurrences(
+            of: relation, with: "return _mergeEqual_\(recordSlot)(lhs, lhs)")
+        #expect(ignoredIncoming != recordUpdates.description)
+        let ignoredMerge = Parser.parse(source: ignoredIncoming).statements.first?.item.as(DeclSyntax.self)
+        do {
+            try verifyGeneratedUpdateMergeOutput(ignoredMerge, slots: recordSlots, recordTypes: recordTypes)
+            Issue.record("A record-update compatibility relation that ignores the incoming value was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._Updates.merging")
+        }
+
         let firstField = try #require(bindings["__PROOF_FIRST_FIELD__"])
         let secondField = try #require(bindings["__PROOF_SECOND_FIELD__"])
         let projectionTokens = try #require(member(named: "__swifttlaFormalProjectionTokens", in: members))
         let projection = try #require(member(named: "formalProjection", in: members))
+        let projectionFields = [firstField, secondField].map { field in
+            (formalName: field, route: "snapshot.state.\(field)", type: CompiledValueType.int,
+                value: "SwiftTLA._nativeFormalInt(snapshot.state.\(field))")
+        }
+        try verifyGeneratedFormalProjectionOutput([projectionTokens, projection], fields: projectionFields)
+        for (callee, replacement, occurrences, reason) in [
+            ("SwiftTLA._nativeFormalInt(", "SwiftTLA.TLAValue.int(", 2,
+                "the projected Int value for \(firstField) does not use the library integer conversion"),
+            ("SwiftTLA._nativeFormalProjection(", "SwiftTLA.TLAStateProjection(validating:", 1,
+                "the projection call shape or formal token ordering differs from the checked rule"),
+        ] {
+            try #require(projection.description.components(separatedBy: callee).count - 1 == occurrences)
+            let wrongSource = projection.description.replacingOccurrences(of: callee, with: replacement)
+            try #require(wrongSource != projection.description)
+            let wrong = try #require(Parser.parse(source: wrongSource).statements.first?.item.as(DeclSyntax.self))
+            let wrongFields = projectionFields.map { field in
+                (formalName: field.formalName, route: field.route, type: field.type,
+                    value: field.value.replacingOccurrences(of: callee, with: replacement))
+            }
+            do {
+                try verifyGeneratedFormalProjectionOutput([projectionTokens, wrong], fields: wrongFields)
+                Issue.record("A caller-replaceable projection call was accepted")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native.formalProjection")
+                #expect(diagnostic.actual == reason)
+            }
+        }
         let wrongProjectionSource = projection.description.replacingOccurrences(
             of: "snapshot.state.\(secondField)", with: "snapshot.state.\(firstField)")
         #expect(wrongProjectionSource != projection.description)
@@ -228,16 +376,20 @@ struct GeneratedAtomicUpdateProofTests {
             .statements.first?.item.as(DeclSyntax.self))
         do {
             try verifyGeneratedFormalProjectionOutput([projectionTokens, wrongProjection], fields: [
-                (formalName: firstField, route: "snapshot.state.\(firstField)",
-                    value: "TLAValue.int(snapshot.state.\(firstField))"),
-                (formalName: secondField, route: "snapshot.state.\(secondField)",
-                    value: "TLAValue.int(snapshot.state.\(firstField))"),
+                (formalName: firstField, route: "snapshot.state.\(firstField)", type: .int,
+                    value: "SwiftTLA._nativeFormalInt(snapshot.state.\(firstField))"),
+                (formalName: secondField, route: "snapshot.state.\(secondField)", type: .int,
+                    value: "SwiftTLA._nativeFormalInt(snapshot.state.\(firstField))"),
             ])
             Issue.record("A projection routed through the wrong state field was accepted")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.actual == "the projected value for \(secondField) reads a different snapshot field")
         }
         let emittedState = try #require(member(named: "State", in: members))
+        try verifyGeneratedStateConstructorOutput(emittedState, fields: [
+            (name: firstField, type: nativeIntType, ordinal: 0, formalName: firstField),
+            (name: secondField, type: nativeIntType, ordinal: 1, formalName: secondField),
+        ])
         let wrongStateSource = emittedState.description.replacingOccurrences(
             of: "self.\(secondField) = _value1", with: "self.\(secondField) = _value0")
         #expect(wrongStateSource != emittedState.description)
@@ -245,8 +397,8 @@ struct GeneratedAtomicUpdateProofTests {
         let wrongStateMember = try #require(wrongState.statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedStateConstructorOutput(wrongStateMember, fields: [
-                (name: firstField, type: "Int", ordinal: 0, formalName: firstField),
-                (name: secondField, type: "Int", ordinal: 1, formalName: secondField),
+                (name: firstField, type: nativeIntType, ordinal: 0, formalName: firstField),
+                (name: secondField, type: nativeIntType, ordinal: 1, formalName: secondField),
             ])
         }
         let wrongIdentitySource = emittedState.description.replacingOccurrences(
@@ -256,8 +408,8 @@ struct GeneratedAtomicUpdateProofTests {
             .statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
             try verifyGeneratedStateConstructorOutput(wrongIdentity, fields: [
-                (name: firstField, type: "Int", ordinal: 0, formalName: firstField),
-                (name: secondField, type: "Int", ordinal: 1, formalName: secondField),
+                (name: firstField, type: nativeIntType, ordinal: 0, formalName: firstField),
+                (name: secondField, type: nativeIntType, ordinal: 1, formalName: secondField),
             ])
         }
         let wrongApplySource = emittedUpdates.description.replacingOccurrences(
@@ -581,10 +733,11 @@ struct GeneratedAtomicUpdateProofTests {
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.guard."))
         }
-        let invertedInequality = source.replacingOccurrences(
-            of: "state.state.left != \"beta\"",
-            with: "state.state.left == \"beta\"")
-        #expect(invertedInequality != source)
+        let inequality = "state.state.left != SwiftTLA._NativeString(formalString: \"beta\")"
+        try #require(source.components(separatedBy: inequality).count == 2)
+        let invertedInequality = source.replacingOccurrences(of: inequality,
+            with: "state.state.left == SwiftTLA._NativeString(formalString: \"beta\")")
+        try #require(invertedInequality != source)
         let inequalityMutant = try #require(Parser.parse(source: invertedInequality)
             .statements.first?.item.as(DeclSyntax.self))
         do {
@@ -713,13 +866,66 @@ struct GeneratedAtomicUpdateProofTests {
         }
     }
 
-    @Test("A generated concatenation retains its operand order")
+    @Test("Pure sequence append and concatenation retain their actual Swift and TLA operands")
     func sequenceConcatenationRetainsOrder() throws {
-        let compiled = try SequenceConcatenationMachine.spec.compile()
+        let specification = #spec("SequenceExpressionOutput") { scope in
+            let front = scope.sharedVar(initial: [Int]([1]))
+            let back = scope.sharedVar(initial: [Int]([2, 2]))
+            Do(SequenceConcatenationMachine.Step.combine) {
+                Assign(front, to: front.appending(3).concatenating(back))
+            }
+        }
+        let compiled = try specification.compile()
+        let sourceAction = try #require(try specification.loweredSourceModel().actions.first)
+        let untypedAction = try #require(compiled.semantics.behavior.actions.first)
+        try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+            bindings: untypedAction.bindings, body: untypedAction.body, layout: compiled.layout)
+        for mutation in ["append read", "concatenation read", "concatenation order",
+                         "appended element", "omitted append", "changed constructor"] {
+            var changed = 0
+            let body = untypedAction.body.map { expression in
+                guard expression.operation == .tupleConcatenate,
+                      expression.children.count == 2 else { return expression }
+                let append = expression.children[0]
+                guard append.operation == .tupleAppend, append.children.count == 2 else {
+                    return expression
+                }
+                let sequence = append.children[0]
+                let element = append.children[1]
+                let right = expression.children[1]
+                let operands: [CompiledExpression]
+                switch mutation {
+                case "append read":
+                    operands = [.init(operation: .tupleAppend, resultType: append.resultType,
+                        children: [right, element]), right]
+                case "concatenation read": operands = [append, sequence]
+                case "concatenation order": operands = [right, append]
+                case "appended element":
+                    operands = [.init(operation: .tupleAppend, resultType: append.resultType,
+                        children: [sequence, .init(operation: .value(.integer(4)),
+                            resultType: element.resultType, children: [])]), right]
+                case "omitted append": operands = [sequence, right]
+                default:
+                    changed += 1
+                    return append
+                }
+                changed += 1
+                return .init(operation: expression.operation, resultType: expression.resultType,
+                    children: operands)
+            }
+            try #require(changed == 1)
+            do {
+                try StraightLineAssignmentCheck.verifyCompiled(sourceAction,
+                    bindings: untypedAction.bindings, body: body, layout: compiled.layout)
+                Issue.record("Sequence \(mutation) escaped normalized-source verification")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "actions.\(sourceAction.name).compiledAssignments")
+            }
+        }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         let action = try #require(program.behavior.actions.first)
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
-            typeName: "SequenceConcatenationMachine", program: program))
+            typeName: "SequenceExpressionOutput", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
         let writes = try emitter.actionFunctions(action.body).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
@@ -736,6 +942,45 @@ struct GeneratedAtomicUpdateProofTests {
             Issue.record("A generated concatenation accepted reversed operands")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+        let changedAppend = visitor.description.replacingOccurrences(
+            of: "sequenceAppend(_sequenceValue, _appendedValue)",
+            with: "sequenceAppend(_sequenceValue, 4)")
+        #expect(changedAppend != visitor.description)
+        let wrongElement = try #require(Parser.parse(source: changedAppend)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(wrongElement, action: action.body,
+                program: program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("A nested append accepted a changed element")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.binding."))
+        }
+
+        let output = try program.renderModule()
+        let renderer = CompiledTLARenderer(moduleName: program.moduleName,
+            reservedNames: [], layout: program.layout,
+            bindings: .init(binders: program.binderNames), operators: .init(),
+            actions: program.behavior.actions, functions: program.functions,
+            enums: program.enums, parameterDomains: program.behavior.parameterDomains)
+        let rendered = try renderer.action(action.body)
+        #expect(output.renderedModuleSource.contains(rendered))
+        try StraightLineRenderedActionCheck.verify(action.body, rendered: rendered,
+            layout: program.layout, binders: program.binderNames, required: true)
+        for (original, replacement) in [
+            ("(Append(front, 3) \\o back)", "(back \\o Append(front, 3))"),
+            ("Append(front, 3)", "Append(back, 3)"),
+            ("Append(front, 3)", "Append(front, 4)"),
+        ] {
+            let changed = rendered.replacingOccurrences(of: original, with: replacement)
+            #expect(changed != rendered)
+            do {
+                try StraightLineRenderedActionCheck.verify(action.body, rendered: changed,
+                    layout: program.layout, binders: program.binderNames, required: true)
+                Issue.record("The actual TLA sequence output accepted a changed operand")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "tla.action.scalarAssignments")
+            }
         }
     }
 
@@ -869,7 +1114,7 @@ struct GeneratedAtomicUpdateProofTests {
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let wrongSource = visitor.description.replacingOccurrences(
-            of: "sequenceHead(state.state.sequence)", with: "sequenceHead([Int]())")
+            of: "sequenceHead(state.state.sequence)", with: "sequenceHead([\(nativeIntType)]())")
         #expect(wrongSource != visitor.description)
         let mutant = try #require(Parser.parse(source: wrongSource)
             .statements.first?.item.as(DeclSyntax.self))
@@ -895,7 +1140,7 @@ struct GeneratedAtomicUpdateProofTests {
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let wrongSource = visitor.description.replacingOccurrences(
-            of: "sequenceTail(state.state.sequence)", with: "sequenceTail([Int]())")
+            of: "sequenceTail(state.state.sequence)", with: "sequenceTail([\(nativeIntType)]())")
         #expect(wrongSource != visitor.description)
         let mutant = try #require(Parser.parse(source: wrongSource)
             .statements.first?.item.as(DeclSyntax.self))
@@ -917,9 +1162,9 @@ struct GeneratedAtomicUpdateProofTests {
             typeName: "SequenceEditBoundsMachine", program: program))
         let members = try emitter.machineMembers()
         for (actionIndex, original, replacement) in [
-            (0, "let _sequenceValue = state.state.row", "let _sequenceValue = [Int]()"),
+            (0, "let _sequenceValue = state.state.row", "let _sequenceValue = [\(nativeIntType)]()"),
             (0, "let _sequenceIndex = state.state.position", "let _sequenceIndex = 1"),
-            (1, "let _sequenceValue = state.state.row", "let _sequenceValue = [Int]()"),
+            (1, "let _sequenceValue = state.state.row", "let _sequenceValue = [\(nativeIntType)]()"),
             (1, "let _prefixLength = state.state.position", "let _prefixLength = 1")
         ] {
             let action = program.behavior.actions[actionIndex]
@@ -954,7 +1199,7 @@ struct GeneratedAtomicUpdateProofTests {
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         for (original, replacement) in [
-            ("let _sequenceValue = state.state.sequence", "let _sequenceValue = [Int]()"),
+            ("let _sequenceValue = state.state.sequence", "let _sequenceValue = [\(nativeIntType)]()"),
             ("let _sequenceIndex = 1", "let _sequenceIndex = 2")
         ] {
             let wrongOperand = visitor.description.replacingOccurrences(of: original, with: replacement)
@@ -1031,7 +1276,7 @@ struct GeneratedAtomicUpdateProofTests {
             .deletingLastPathComponent()
             .appendingPathComponent("../../Verification/Semantics/GeneratedAtomicCopySwiftTemplate.txt")
             .standardizedFileURL
-        let template = Parser.parse(source: try String(contentsOf: templateFile, encoding: .utf8))
+        let template = Parser.parse(source: nativeWitnessSource(try String(contentsOf: templateFile, encoding: .utf8)))
         let bindings = try checkedTransitionBindings(
             members, template.statements.compactMap { $0.item.as(DeclSyntax.self) })
         #expect(bindings["__PROOF_FIRST_FIELD__"] == "left")
@@ -1126,23 +1371,38 @@ struct GeneratedAtomicUpdateProofTests {
     }
 
     private func checkedInitialValues(_ source: String) throws -> (first: Int, second: Int)? {
+        let integerType = NSRegularExpression.escapedPattern(for: nativeIntType)
         let pattern = #"""
         \A private \s+ static \s+ func \s+ _initialStates
         \( _selectedInitial: \s* State\? \s* = \s* nil \)
-        \s* throws \s* -> \s* InitialEvaluationOutcomes \s* < \s* Snapshot \s* > \s* \{
+        \s* throws \s* -> \s* SwiftTLA\.InitialEvaluationOutcomes \s* < \s* Snapshot \s* > \s* \{
         \s* var \s+ result: \s* \[Snapshot\] \s* = \s* \[\]
-        \s* var \s+ firstFailure: \s* NativeMachineEvaluationError\?
-        \s* try \s+ _NativeMachineOperations\.visitInitialBranch \s* \( \s* \{
-        \s* let \s+ _value_first_0: \s* Int \s* = \s* (-?[0-9]+)
-        \s* if \s+ _selectedInitial \s* == \s* nil \s* \|\| \s* _selectedInitial!\.first \s* == \s* _value_first_0 \s* \{
-        \s* let \s+ _value_second_1: \s* Int \s* = \s* (-?[0-9]+)
-        \s* if \s+ _selectedInitial \s* == \s* nil \s* \|\| \s* _selectedInitial!\.second \s* == \s* _value_second_1 \s* \{
-        \s* result\.append \( Snapshot \( state: \s* State \( first: \s* _value_first_0, \s* second: \s* _value_second_1 \) \) \)
+        \s* var \s+ failures: \s* \[SwiftTLA\.InitialEvaluationFailure\] \s* = \s* \[\]
+        \s* var \s+ evaluatingInitializerOrdinal: \s* \#(integerType)\?
+        \s* var \s+ evaluatingInitialBindings: \s* @Sendable \s* \(\) \s* throws \s* -> \s* SwiftTLA\.TLAStateProjection
+        \s* = \s* \{ \s* try \s+ SwiftTLA\._nativeFormalProjection \( \s* \[\] \) \s* \}
+        \s* try \s+ SwiftTLA\._visitNativeInitialBranch \s* \( \s* \{
+        \s* evaluatingInitialBindings \s* = \s* \{ \s* try \s+ SwiftTLA\._nativeFormalProjection \( \s* \[\] \) \s* \}
+        \s* evaluatingInitializerOrdinal \s* = \s* 0
+        \s* let \s+ _value_first_0: \s* \#(integerType) \s* = \s* (-?[0-9]+)
+        \s* evaluatingInitializerOrdinal \s* = \s* nil
+        \s* if \s+ SwiftTLA\._nativeIntInitialMatches \( _selectedInitial\?\.first, \s* _value_first_0 \) \s* \{
+        \s* evaluatingInitialBindings \s* = \s* \{ \s* \[_value_first_0\] \s+ in
+        \s* try \s+ SwiftTLA\._nativeFormalProjection \( \s* \[
+        SwiftTLA\._nativeFormalProjectionEntry\(Self\.__swifttlaFormalProjectionTokens,\s*at:\s*0,
+        \s* value: \s* SwiftTLA\._nativeFormalInt\(_value_first_0\) \) \] \) \s* \}
+        \s* evaluatingInitializerOrdinal \s* = \s* 1
+        \s* let \s+ _value_second_1: \s* \#(integerType) \s* = \s* (-?[0-9]+)
+        \s* evaluatingInitializerOrdinal \s* = \s* nil
+        \s* if \s+ SwiftTLA\._nativeIntInitialMatches \( _selectedInitial\?\.second, \s* _value_second_1 \) \s* \{
+        \s* SwiftTLA\._appendNativeOutcome \( &result, \s* Snapshot \( state: \s* State \( first: \s* _value_first_0, \s* second: \s* _value_second_1 \) \) \)
         \s* \} \s* \}
         \s* \}, \s* onEvaluationFailure: \s* \{ \s* failure \s+ in
-        \s* if \s+ firstFailure \s* == \s* nil \s* \{ \s* firstFailure \s* = \s* failure \s* \}
+        \s* SwiftTLA\._appendNativeOutcome \( &failures, \s* SwiftTLA\._nativeInitialFailure \(
+        \s* evaluatingInitializerOrdinal,
+        \s* failure: \s* failure, \s* projectingBefore: \s* evaluatingInitialBindings \) \)
         \s* \} \s* \)
-        \s* return \s+ InitialEvaluationOutcomes \s* \( \s* states: \s* result, \s* firstFailure: \s* firstFailure \s* \)
+        \s* return \s+ SwiftTLA\._nativeInitialOutcomes \s* \( \s* states: \s* result, \s* failures: \s* failures \)
         \s* \} \s* \z
         """#
         let regex = try NSRegularExpression(pattern: pattern, options: .allowCommentsAndWhitespace)
@@ -1171,7 +1431,8 @@ struct GeneratedAtomicUpdateProofTests {
         var all: [String: String] = [:]
         let declarations: [(String, Int?)] = [
             ("_Updates", nil), ("_visitUpdates0", 3), ("_visitSuccessors0", 3),
-            ("visitSuccessors", 2), ("_visitSuccessors", 3), ("_visitSuccessors", 2),
+            ("visitSuccessors", 2), ("_visitActionCandidates", 1),
+            ("_visitSuccessors", 3), ("_visitSuccessors", 2),
         ]
         for (name, parameterCount) in declarations {
             let emitted = try #require(member(named: name, parameterCount: parameterCount, in: actualMembers))

@@ -6,10 +6,10 @@ struct ElevatorBankDemoTests {
     @Test("car and passenger dictionaries retain Swift records and validate formal fields")
     func preservesRecordState() throws {
         let machine = try ElevatorBank.makeMachine()
-        let cars: [ElevatorBank.CarID: ElevatorBank.Car] = machine.state.cars
-        let riders: [ElevatorBank.Rider: ElevatorBank.Passenger] = machine.state.riders
-        let car = try #require(cars[.carA])
-        let rider = try #require(riders[.alice])
+        let cars = machine.state.cars
+        let riders = machine.state.riders
+        let car: ElevatorBank.Car = try #require(cars[.carA])
+        let rider: ElevatorBank.Passenger = try #require(riders[.alice])
         #expect(ElevatorBank.Car(formalValue: car.tlaValue) == car)
         #expect(ElevatorBank.Passenger(formalValue: rider.tlaValue) == rider)
         #expect(ElevatorBank.Car(formalValue: .record([

@@ -27,8 +27,11 @@ extension NativeSwiftEmitter {
         let displayNames = parameters.map {
             "\\Configuration.`\($0.reference.name)`: \(String(reflecting: $0.reference.displayLabel ?? $0.reference.name))"
         }.joined(separator: ",\n")
-        let formalNames = parameters.map {
-            "\\Configuration.`\($0.reference.name)`: .init(swiftName: \(String(reflecting: $0.reference.name)), formalName: \(String(reflecting: $0.reference.name)))"
+        let formalNames = try parameters.map { parameter in
+            guard let formalName = program.binderNames[parameter.binder] else {
+                throw unsupported("unresolved configuration parameter: \(parameter.reference.name)")
+            }
+            return "\\Configuration.`\(parameter.reference.name)`: .init(swiftName: \(String(reflecting: parameter.reference.name)), formalName: \(String(reflecting: formalName)))"
         }.joined(separator: ",\n")
         var body: [String] = []
         for parameter in parameters {
@@ -45,15 +48,15 @@ extension NativeSwiftEmitter {
             guard \(try expression(membership, state: "", substitutions: inputs)) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
                     path: \(String(reflecting: "configuration." + parameter.reference.name)),
-                    expected: "a member of the declared parameter domain", actual: String(describing: \(value)))
+                    expected: "a member of the declared parameter domain", actual: \(nativeStringType)(describing: \(value)))
             }
             self.`\(parameter.reference.name)` = \(value)
             """)
         }
-        return try nativeDeclarations("""
+        var declarations = try nativeDeclarations("""
         public struct Configuration: Hashable, GeneratedModelFields {
             \(fields)
-            public static var displayNames: [PartialKeyPath<Configuration>: String] {
+            public static var displayNames: [PartialKeyPath<Configuration>: \(nativeStringType)] {
                 [\(displayNames)]
             }
             public static var fieldIdentities: [PartialKeyPath<Configuration>: GeneratedModelFieldIdentity] {
@@ -65,5 +68,9 @@ extension NativeSwiftEmitter {
         }
         \(includeStoredConfiguration ? "public let configuration: Configuration" : "")
         """)
+        try addStructuralIdentity(to: &declarations, fields: parameters.map {
+            (name: $0.reference.name, type: program.bindingTypes[$0.binder]!)
+        })
+        return declarations
     }
 }

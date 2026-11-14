@@ -33,7 +33,7 @@ struct CompiledRuntime {
     func initialOutcomes() throws -> InitialEvaluationOutcomes<CompiledState> {
         var pending: [(Int, [VariableID: CompiledValue])] = [(0, [:])]
         var states: [CompiledState] = []
-        var firstFailure: NativeMachineEvaluationError?
+        var failures: [InitialEvaluationFailure] = []
         let initializations = behavior.initializations
         let selectedInvariant = behavior.initialInvariant.map { selected in
             guard let invariant = behavior.invariants.first(where: { $0.id == selected }) else {
@@ -42,7 +42,7 @@ struct CompiledRuntime {
             return invariant
         }
         while let (index, values) = pending.popLast() {
-            try _NativeMachineOperations.visitInitialBranch {
+            try _visitNativeInitialBranch {
                 guard index < initializations.count else {
                     let state = try CompiledState(values: layout.variables.map { variable in
                         guard let value = values[variable.id] else {
@@ -107,10 +107,23 @@ struct CompiledRuntime {
                     }
                 }
             } onEvaluationFailure: { failure in
-                if firstFailure == nil { firstFailure = failure }
+                let site: InitialEvaluationFailure.Site = index < initializations.count
+                    ? .initializer(initializations[index].0.ordinal) : .selectedInvariant
+                failures.append(.init(site: site, failure: failure, projectingBefore: { [values, layout = self.layout] in
+                    let entries = try values.map { variable, value -> TLAStateProjection.Entry in
+                        guard let field = layout.variables.first(where: { $0.id == variable }) else {
+                            throw CompiledEvaluationError.invalidVariableID(variable)
+                        }
+                        guard let token = TLAStateProjection.Token(validating: field.formalName) else {
+                            throw TLAStateProjectionDiagnostic.invalidKey(path: field.formalName)
+                        }
+                        return .init(token: token, value: try value.rendered(using: layout))
+                    }
+                    return try TLAStateProjection(validating: entries)
+                }))
             }
         }
-        return .init(states: states, firstFailure: firstFailure)
+        return .init(states: states, failures: failures)
     }
 
     func successors(from state: CompiledState) throws -> [CompiledSuccessor] {

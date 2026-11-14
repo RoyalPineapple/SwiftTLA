@@ -30,9 +30,26 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
     case emptySequence
     case functionArgumentOutsideDomain
     case tupleIndexOutsideDomain(Int)
-    case recordFieldUnavailable(String)
+    case recordFieldUnavailable(_NativeString)
     case invalidRandomSubsetCount(Int)
     case emptyRandomElementDomain
+
+    /// Execution limits and missing context do not establish a model failure.
+    @_documentation(visibility: internal)
+    public var isModelEvaluationFailure: Bool {
+        switch self {
+        case .nonEnumerableIntegerDomain, .nonEnumerableSequenceDomain,
+             .collectionCardinalityOverflow, .powerSetTooLarge,
+             .recursionDepthExceeded, .checkingContextRequired:
+            false
+        case .noMatchingCase, .noSatisfyingChoice, .integerOverflow,
+             .divisionByZero, .negativeModuloDivisor, .indexOutOfBounds,
+             .invalidSequenceDomain, .emptySequence, .functionArgumentOutsideDomain,
+             .tupleIndexOutsideDomain, .recordFieldUnavailable,
+             .invalidRandomSubsetCount, .emptyRandomElementDomain:
+            true
+        }
+    }
 
     public var description: String {
         switch self {
@@ -75,43 +92,194 @@ public struct MachineActionEvaluationFailure<Action: Hashable & Sendable>: Error
     }
 }
 
-/// Complete successful alternatives and the first model failure encountered while visiting them.
+/// A reached initial failure with an immutable prefix for formal projection.
+public struct InitialEvaluationFailure: Sendable {
+    public enum Site: Equatable, Sendable {
+        case initializer(Int)
+        case selectedInvariant
+
+        var initializerOrdinal: Int? {
+            if case .initializer(let ordinal) = self { return ordinal }
+            return nil
+        }
+    }
+
+    public let site: Site
+    public let failure: NativeMachineEvaluationError
+    private let projectBefore: @Sendable () throws -> TLAStateProjection
+
+    public init(site: Site, failure: NativeMachineEvaluationError,
+                projectingBefore: @escaping @Sendable () throws -> TLAStateProjection) {
+        self.site = site
+        self.failure = failure
+        self.projectBefore = projectingBefore
+    }
+
+    /// Convert the captured prefix only at the formal evidence boundary.
+    public func formalBindingsBeforeFailure() throws -> TLAStateProjection {
+        try projectBefore()
+    }
+}
+
+/// Successful alternatives and the model failures encountered while visiting initial branches.
 public struct InitialEvaluationOutcomes<State: Sendable>: Sendable {
     public let states: [State]
-    public let firstFailure: NativeMachineEvaluationError?
+    public let failures: [InitialEvaluationFailure]
 
-    public init(states: [State], firstFailure: NativeMachineEvaluationError?) {
+    public var firstFailure: NativeMachineEvaluationError? { failures.first?.failure }
+    public var firstFailureInitializerOrdinal: Int? { failures.first?.site.initializerOrdinal }
+
+    public init(states: [State], failures: [InitialEvaluationFailure]) {
         self.states = states
-        self.firstFailure = firstFailure
+        self.failures = failures
+    }
+}
+
+/// Keep generated outcome construction in library scope, away from caller initializers.
+@_documentation(visibility: internal)
+public func _nativeInitialOutcomes<State: Sendable>(
+    states: [State], failures: [InitialEvaluationFailure]
+) -> InitialEvaluationOutcomes<State> {
+    InitialEvaluationOutcomes(states: states, failures: failures)
+}
+
+/// Keep generated outcome reads and conversion outside caller specializations.
+@_documentation(visibility: internal)
+public func _mapNativeInitialOutcomes<Source: Sendable, Result: Sendable>(
+    _ outcomes: InitialEvaluationOutcomes<Source>, _ transform: (Source) -> Result
+) -> InitialEvaluationOutcomes<Result> {
+    _nativeInitialOutcomes(states: _mapNativeOutcomes(outcomes.states, transform), failures: outcomes.failures)
+}
+
+/// Keep generated first-failure selection and state reads in library scope.
+@_documentation(visibility: internal)
+public func _completeNativeInitialOutcomes<State: Sendable>(
+    _ outcomes: InitialEvaluationOutcomes<State>
+) throws -> [State] {
+    if let failure = outcomes.firstFailure { throw failure }
+    return outcomes.states
+}
+
+/// Bind generated addition in library scope, away from caller extensions.
+@_documentation(visibility: internal)
+public func _nativeIntAdd(_ lhs: Int, _ rhs: Int) throws -> Int {
+    try _NativeMachineOperations.add(lhs, rhs)
+}
+
+/// Bind the minimum integer literal away from caller member declarations.
+@_documentation(visibility: internal)
+public func _nativeIntMinimum() -> Int { Int.min }
+
+/// Keep generated collection mutation in library scope, away from caller overloads.
+@_documentation(visibility: internal)
+public func _appendNativeOutcome<Outcome: Sendable>(_ outcomes: inout [Outcome], _ outcome: Outcome) {
+    outcomes.append(outcome)
+}
+
+/// Keep generated state conversion in library scope, away from caller overloads.
+@_documentation(visibility: internal)
+public func _mapNativeOutcomes<Source: Sendable, Result: Sendable>(
+    _ outcomes: [Source], _ transform: (Source) -> Result
+) -> [Result] {
+    outcomes.map(transform)
+}
+
+/// Select one generated outcome without calling caller collection overloads.
+@_documentation(visibility: internal)
+public func _singleNativeOutcome<Outcome: Sendable>(
+    _ outcomes: [Outcome], missing: GeneratedMachineError, ambiguous: GeneratedMachineError
+) throws -> Outcome {
+    guard let first = outcomes.first else { throw missing }
+    guard outcomes.count == 1 else { throw ambiguous }
+    return first
+}
+
+/// Bind formal integer construction in library scope, away from caller extensions.
+@_documentation(visibility: internal)
+public func _nativeFormalInt(_ value: Int) -> TLAValue { .int(value) }
+
+/// Bind raw formal string construction in library scope without normalization.
+@_documentation(visibility: internal)
+public func _nativeFormalString(_ value: String) -> TLAValue { .string(value) }
+
+/// Validate generated projections in library scope, away from caller initializers.
+@_documentation(visibility: internal)
+public func _nativeFormalProjection(_ entries: [TLAStateProjection.Entry]) throws -> TLAStateProjection {
+    try TLAStateProjection(validating: entries)
+}
+
+/// Validate formal token names in library scope, away from caller initializers.
+@_documentation(visibility: internal)
+public func _nativeFormalProjectionToken(validating identifier: String) -> TLAStateProjection.Token? {
+    TLAStateProjection.Token(validating: identifier)
+}
+
+/// Keep formal token indexing in library scope, away from caller subscripts.
+@_documentation(visibility: internal)
+public func _nativeFormalProjectionToken(
+    _ tokens: [TLAStateProjection.Token], at index: Int
+) -> TLAStateProjection.Token {
+    tokens[index]
+}
+
+/// Keep projection entry construction in library scope, preserving its token and value.
+@_documentation(visibility: internal)
+public func _nativeFormalProjectionEntry(
+    _ tokens: [TLAStateProjection.Token], at index: Int, value: TLAValue
+) -> TLAStateProjection.Entry {
+    TLAStateProjection.Entry(token: _nativeFormalProjectionToken(tokens, at: index), value: value)
+}
+
+/// Keep generated failure construction independent of caller initializers and Optional operations.
+@_documentation(visibility: internal)
+public func _nativeInitialFailure(
+    _ ordinal: Int?, failure: NativeMachineEvaluationError,
+    projectingBefore: @escaping @Sendable () throws -> TLAStateProjection
+) -> InitialEvaluationFailure {
+    let site: InitialEvaluationFailure.Site = if let ordinal { .initializer(ordinal) } else { .selectedInvariant }
+    return InitialEvaluationFailure(site: site, failure: failure, projectingBefore: projectingBefore)
+}
+
+/// Keep generated Int selection independent of caller Boolean and equality overloads.
+@_documentation(visibility: internal)
+public func _nativeIntInitialMatches(_ selected: Int?, _ value: Int) -> Bool {
+    guard let selected else { return true }
+    return selected == value
+}
+
+/// Handle a model failure within one initial branch without abandoning other branches.
+/// Enumeration, capacity, call-depth and missing-context errors propagate without a completed branch result.
+@_documentation(visibility: internal)
+public func _visitNativeInitialBranch(
+    _ visit: () throws -> Void,
+    onEvaluationFailure: (NativeMachineEvaluationError) -> Void
+) throws {
+    do {
+        try visit()
+    } catch let failure as NativeMachineEvaluationError {
+        guard failure.isModelEvaluationFailure else { throw failure }
+        onEvaluationFailure(failure)
+    } catch let failure as EvalError {
+        guard let native = failure.nativeFailure else { throw failure }
+        guard native.isModelEvaluationFailure else { throw failure }
+        onEvaluationFailure(native)
     }
 }
 
 /// Value operations emitted by the native machine generator.
 @_documentation(visibility: internal)
 public enum _NativeMachineOperations: Sendable {
-    public static let maximumRecursiveDepth = 4_096
+    public typealias StateHasher = Swift.Hasher
 
-    /// Handle a model failure within one initial branch without abandoning other branches.
-    public static func visitInitialBranch(
-        _ visit: () throws -> Void,
-        onEvaluationFailure: (NativeMachineEvaluationError) -> Void
-    ) throws {
-        do {
-            try visit()
-        } catch let failure as NativeMachineEvaluationError {
-            onEvaluationFailure(failure)
-        } catch let failure as EvalError {
-            guard let native = failure.nativeFailure else { throw failure }
-            onEvaluationFailure(native)
-        }
-    }
+    public static let maximumRecursiveDepth = 4_096
 
     @inlinable
     public static func mergeUpdate<Value: Equatable & Sendable>(
-        _ current: inout Value?, _ incoming: Value?
+        _ current: inout Value?, _ incoming: Value?,
+        equivalent: @Sendable (Value, Value) -> Bool = { $0 == $1 }
     ) -> Bool {
         guard let incoming else { return true }
-        if let current, current != incoming { return false }
+        if let current, !equivalent(current, incoming) { return false }
         current = incoming
         return true
     }
@@ -202,17 +370,29 @@ public enum _NativeMachineOperations: Sendable {
     }
 
     public static func sequenceSet<Element: Hashable & Sendable>(_ values: Set<Element>) throws -> Set<[Element]> {
+        try sequenceSet(values, forming: Set<[Element]>.self)
+    }
+
+    public static func sequenceSet<Values: Collection & Sendable, Result: SetAlgebra & Sendable>(
+        _ values: Values, forming: Result.Type
+    ) throws -> Result where Values.Element: Sendable, Result.Element == [Values.Element] {
         guard values.isEmpty else { throw NativeMachineEvaluationError.nonEnumerableSequenceDomain }
-        return [[]]
+        return Result([[]])
     }
 
     public static func powerSet<Element: Hashable & Sendable>(_ values: Set<Element>) throws -> Set<Set<Element>> {
+        try powerSet(values, forming: Set<Set<Element>>.self)
+    }
+
+    public static func powerSet<Values: Collection & SetAlgebra & Sendable, Result: SetAlgebra & Sendable>(
+        _ values: Values, forming: Result.Type
+    ) throws -> Result where Result.Element == Values {
         guard values.count < Int.bitWidth - 1 else {
             throw NativeMachineEvaluationError.powerSetTooLarge(actualCount: values.count, maximumCount: Int.bitWidth - 2)
         }
         let members = Array(values)
-        return Set((0..<(1 << members.count)).map { mask in
-            Set(members.enumerated().compactMap { index, member in
+        return Result((0..<(1 << members.count)).map { mask in
+            Values(members.enumerated().compactMap { index, member in
                 mask & (1 << index) == 0 ? nil : member
             })
         })
@@ -221,18 +401,26 @@ public enum _NativeMachineOperations: Sendable {
     public static func functionSet<Key: Hashable & Sendable, Value: Hashable & Sendable>(
         _ domain: Set<Key>, _ range: Set<Value>
     ) throws -> Set<[Key: Value]> {
+        try functionSet(domain, range, forming: Set<[Key: Value]>.self)
+    }
+
+    public static func functionSet<Domain: Collection & Sendable, Range: Collection & Sendable, Result: SetAlgebra & Sendable>(
+        _ domain: Domain, _ range: Range, forming: Result.Type
+    ) throws -> Result where Domain.Element: Sendable, Range.Element: Sendable,
+        Result.Element: _NativeFunctionStorage & Sendable,
+        Result.Element.Key == Domain.Element, Result.Element.Value == Range.Element {
         try validateFunctionSetCardinality(domainCount: domain.count, rangeCount: range.count)
-        var functions: [[Key: Value]] = [[:]]
+        var functions: [Result.Element] = [.init()]
         for key in domain {
             functions = functions.flatMap { partial in
                 range.map { value in
                     var next = partial
-                    next[key] = value
+                    next.updateValue(value, forKey: key)
                     return next
                 }
             }
         }
-        return Set(functions)
+        return Result(functions)
     }
 
     public static func randomSubset<Element: Hashable & Sendable>(
@@ -240,6 +428,29 @@ public enum _NativeMachineOperations: Sendable {
     ) throws -> Set<Element> {
         try validateRandomSubsetCount(count)
         return Set(values.shuffled().prefix(count))
+    }
+
+    public static func randomSubset<Identity: _NativeSetIdentity>(
+        upTo count: Int, from values: _NativeSet<Identity>
+    ) throws -> _NativeSet<Identity> {
+        try validateRandomSubsetCount(count)
+        return _NativeSet(values.shuffled().prefix(count))
+    }
+
+    public static func randomSubsetInitialSupport<Identity: _NativeSetIdentity>(
+        upTo count: Int, from values: _NativeSet<Identity>
+    ) throws -> _NativeSet<Identity> {
+        try validateRandomSubsetCount(count)
+        return count == 0 ? [] : values
+    }
+
+    public static func randomElement<Identity: _NativeSetIdentity>(
+        from values: _NativeSet<Identity>
+    ) throws -> Identity.Element {
+        guard let value = values.randomElement() else {
+            throw NativeMachineEvaluationError.emptyRandomElementDomain
+        }
+        return value
     }
 
     public static func randomSubsetInitialSupport<Element: Hashable & Sendable>(
@@ -252,8 +463,16 @@ public enum _NativeMachineOperations: Sendable {
     public static func randomFunctionInitialSupport<Key: Hashable & Sendable, Value: Hashable & Sendable>(
         upTo count: Int, from domain: Set<Key>, to range: Set<Value>
     ) throws -> Set<[Key: Value]> {
+        try randomFunctionInitialSupport(upTo: count, from: domain, to: range, forming: Set<[Key: Value]>.self)
+    }
+
+    public static func randomFunctionInitialSupport<Domain: Collection & Sendable, Range: Collection & Sendable, Result: SetAlgebra & Sendable>(
+        upTo count: Int, from domain: Domain, to range: Range, forming: Result.Type
+    ) throws -> Result where Domain.Element: Sendable, Range.Element: Sendable,
+        Result.Element: _NativeFunctionStorage & Sendable,
+        Result.Element.Key == Domain.Element, Result.Element.Value == Range.Element {
         try validateRandomSubsetCount(count)
-        guard count > 0 else { return [] }
+        guard count > 0 else { return Result() }
         let maximum = 1_000_000
         var cardinality = 1
         for _ in domain {
@@ -268,7 +487,7 @@ public enum _NativeMachineOperations: Sendable {
             throw ExplorationError.initialStateLimitExceeded(
                 actualCount: cardinality, maximumCount: maximum)
         }
-        return try functionSet(domain, range)
+        return try functionSet(domain, range, forming: forming)
     }
 
     public static func validateRandomSubsetCount(_ count: Int) throws {
@@ -287,10 +506,18 @@ public enum _NativeMachineOperations: Sendable {
     public static func randomFunctionSubset<Key: Hashable & Sendable, Value: Hashable & Sendable>(
         upTo count: Int, from domain: Set<Key>, to range: Set<Value>
     ) throws -> Set<[Key: Value]> {
+        try randomFunctionSubset(upTo: count, from: domain, to: range, forming: Set<[Key: Value]>.self)
+    }
+
+    public static func randomFunctionSubset<Domain: Collection & Sendable, Range: Collection & Sendable, Result: SetAlgebra & Collection & Sendable>(
+        upTo count: Int, from domain: Domain, to range: Range, forming: Result.Type
+    ) throws -> Result where Domain.Element: Sendable, Range.Element: Sendable,
+        Result.Element: _NativeFunctionStorage & Sendable,
+        Result.Element.Key == Domain.Element, Result.Element.Value == Range.Element {
         try validateRandomSubsetCount(count)
-        guard count > 0 else { return [] }
-        guard !domain.isEmpty else { return [[:]] }
-        guard !range.isEmpty else { return [] }
+        guard count > 0 else { return Result() }
+        guard !domain.isEmpty else { return Result([Result.Element()]) }
+        guard !range.isEmpty else { return Result() }
 
         var cardinality = 1
         var exceedsCount = false
@@ -307,16 +534,16 @@ public enum _NativeMachineOperations: Sendable {
             }
         }
         if !exceedsCount {
-            return try functionSet(domain, range)
+            return try functionSet(domain, range, forming: forming)
         }
 
         let keys = Array(domain)
         let values = Array(range)
-        var chosen: Set<[Key: Value]> = []
+        var chosen = Result()
         while chosen.count < count {
             try Task<Never, Never>.checkCancellation()
-            var function: [Key: Value] = [:]
-            for key in keys { function[key] = values.randomElement()! }
+            var function = Result.Element()
+            for key in keys { function.updateValue(values.randomElement()!, forKey: key) }
             chosen.insert(function)
         }
         return chosen
@@ -336,6 +563,7 @@ public enum _NativeMachineOperations: Sendable {
     }
 
     /// Visit independent alternatives, retaining successes and the first model failure.
+    /// Execution limits propagate without visiting later alternatives.
     public static func visitAlternatives<Alternative: Sendable, Update: Sendable>(
         _ alternatives: [Alternative],
         emit: (Update) throws -> Void,
@@ -346,7 +574,7 @@ public enum _NativeMachineOperations: Sendable {
             var updates: [Update] = []
             do {
                 try visit(alternative) { updates.append($0) }
-            } catch let failure as NativeMachineEvaluationError {
+            } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
                 if firstFailure == nil { firstFailure = failure }
             }
             for update in updates { try emit(update) }
@@ -471,11 +699,34 @@ public enum _NativeMachineOperations: Sendable {
         return value
     }
 
+    public static func functionValue<KeyIdentity: _NativeSetIdentity, ValueIdentity: _NativeSetIdentity>(
+        _ function: _NativeDictionary<KeyIdentity, ValueIdentity>, at key: KeyIdentity.Element
+    ) throws -> ValueIdentity.Element {
+        guard let value = function[key] else { throw NativeMachineEvaluationError.functionArgumentOutsideDomain }
+        return value
+    }
+
     public static func functionDomain<Key: Hashable & Sendable, Value: Sendable>(_ function: [Key: Value]) -> Set<Key> {
         Set(function.keys)
     }
 
+    public static func functionDomain<KeyIdentity: _NativeSetIdentity, ValueIdentity: _NativeSetIdentity>(
+        _ function: _NativeDictionary<KeyIdentity, ValueIdentity>
+    ) -> _NativeSet<KeyIdentity> {
+        function.keys
+    }
+
     public static func functionUpdated<Key: Hashable & Sendable, Value: Sendable>(_ function: [Key: Value], at key: Key, to value: Value) -> [Key: Value] {
+        guard function[key] != nil else { return function }
+        var updated = function
+        updated[key] = value
+        return updated
+    }
+
+    public static func functionUpdated<KeyIdentity: _NativeSetIdentity, ValueIdentity: _NativeSetIdentity>(
+        _ function: _NativeDictionary<KeyIdentity, ValueIdentity>, at key: KeyIdentity.Element,
+        to value: ValueIdentity.Element
+    ) -> _NativeDictionary<KeyIdentity, ValueIdentity> {
         guard function[key] != nil else { return function }
         var updated = function
         updated[key] = value

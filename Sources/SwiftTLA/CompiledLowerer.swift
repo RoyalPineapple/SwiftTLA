@@ -61,6 +61,7 @@ struct CompiledLowerer {
     private let authoredAlgorithm: AlgorithmModel?
     private let reservedRenderedNames: Set<String>
     private let rootOperators: [String: OperatorID]
+    private let importedOperatorIDs: Set<OperatorID>
     private var operatorArities: [OperatorID: Int]
     private var nextBinderOrdinal = 0
     private var nextOperatorOrdinal: Int
@@ -76,7 +77,8 @@ struct CompiledLowerer {
         spec: TLASpec,
         closure: FormalModuleClosure,
         layout: CompiledLayout,
-        incomingModuleParameters: [FormalModuleReplacement] = []
+        incomingModuleParameters: [FormalModuleReplacement] = [],
+        importedOperatorNames: [String: String] = [:]
     ) {
         self.closure = closure
         self.layout = layout
@@ -104,22 +106,43 @@ struct CompiledLowerer {
         }
         operatorArities = arities
         rootOperators = operators
-        operatorNames = Dictionary(uniqueKeysWithValues: operators.map { ($0.value, $0.key) })
+        importedOperatorIDs = Set(importedOperatorNames.keys.compactMap { operators[$0] })
+        operatorNames = Dictionary(uniqueKeysWithValues: operators.map {
+            ($0.value, importedOperatorNames[$0.key] ?? $0.key)
+        })
         nextOperatorOrdinal = operators.count
     }
 
-    var bindings: CompiledBindingTable {
+    func bindings(reserving importedNames: Set<String>, operatorReservations: Set<String>,
+        avoiding moduleDeclarations: Set<String>) -> CompiledBindingTable {
         var names = binderNames
-        var unavailable = reservedRenderedNames.union(modelValueNames)
+        var operations = operatorNames
+        var unavailable = reservedRenderedNames.union(modelValueNames).union(importedNames)
             .union(binderNames.values).union(operatorNames.values)
+            .union(operatorReservations)
+            .union(moduleDeclarations)
+        let importedDeclarations = importedNames.union(importedOperatorIDs.compactMap { operatorNames[$0] })
+        let reservedOperators = operatorReservations.union(importedDeclarations).union(modelValueNames)
+        for (operation, name) in operatorNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
+            where !importedOperatorIDs.contains(operation) {
+            let preferred = tlaDeclarationStem(isTLADeclarationName(name) ? name : "_\(name)")
+            guard reservedOperators.contains(name) || preferred != name else { continue }
+            let renamed = StateExpr.freshBoundName(preferred, avoiding: unavailable)
+            operations[operation] = renamed
+            unavailable.insert(renamed)
+        }
         let parameterIDs = Set(layout.parameters.map(\.binder))
         for (binder, name) in binderNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
-            where modelValueNames.contains(name) || (parameterIDs.contains(binder) && reservedRenderedNames.contains(name)) {
-            let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
+            where modelValueNames.contains(name) || importedDeclarations.contains(name)
+                || (parameterIDs.contains(binder)
+                    && (reservedRenderedNames.contains(name) || operatorReservations.contains(name)
+                        || tlaDeclarationStem(name) != name)) {
+            let preferred = parameterIDs.contains(binder) ? tlaDeclarationStem(name) : name
+            let renamed = StateExpr.freshBoundName(preferred, avoiding: unavailable)
             names[binder] = renamed
             unavailable.insert(renamed)
         }
-        return .init(operatorNames: operatorNames, binders: names)
+        return .init(operatorNames: operations, binders: names, sourceOperators: rootOperators)
     }
 
     private var rootScope: BindingScope {
@@ -179,11 +202,18 @@ struct CompiledLowerer {
             if case .value(let value) = declaration.initialization {
                 try validateValue(value, at: "\(path).initialization")
             }
-            initializations[variableLayout.id] = try lower(
+            let lowered = try lower(
                 declaration.initialization,
                 at: "\(path).initialization",
                 scope: rootScope
             )
+            try StraightLineAssignmentCheck.verifyInitialIntExpression(
+                declaration.initialization, lowered: lowered, layout: layout,
+                at: "\(path).initialization")
+            try StraightLineAssignmentCheck.verifyInitialControlLocation(
+                declaration.initialization, lowered: lowered, layout: layout,
+                at: "\(path).initialization")
+            initializations[variableLayout.id] = lowered
         }
         let actions: [CompiledAction] = try zip(spec.actions, layout.actions).map {
             try lower($0.0, id: $0.1.id)
@@ -1216,6 +1246,8 @@ struct CompiledLowerer {
         var scope = rootScope
         let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
         let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope)
+        try StraightLineAssignmentCheck.verifyCompiled(action, bindings: bindings,
+            body: body, layout: layout)
         try body.verifyBranchwiseContinuation(at: "actions.\(action.name).body")
         return CompiledAction(
             id: id,
@@ -2461,11 +2493,12 @@ struct CompiledLowerer {
         let binder = BinderID(ordinal: nextBinderOrdinal)
         nextBinderOrdinal += 1
         knownBinderNames.insert(name)
-        var preferredRenderedName = exactRenderedName ?? name
+        var preferredRenderedName = exactRenderedName ?? tlaDeclarationStem(name)
         while isPlusCalDeclarationName(preferredRenderedName) == false {
             preferredRenderedName = "_\(preferredRenderedName)"
         }
-        var unavailableNames = reservedRenderedNames
+        var unavailableNames = reservedRenderedNames.union(tlaPredefinedIdentifierNames)
+        unavailableNames.formUnion(layout.parameters.compactMap { binderNames[$0.binder] })
         unavailableNames.formUnion(scope.values.values.compactMap { binderNames[$0] })
         unavailableNames.formUnion(scope.operators.values.compactMap { operatorNames[$0] })
         let renderedName = exactRenderedName == nil

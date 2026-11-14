@@ -52,7 +52,7 @@ public protocol StateMachine: Sendable {
         checking context: inout CheckingContext<CheckingRegisters>,
         _ visit: (Action, Self) throws -> Bool
     ) throws -> Bool
-    /// Visits successes and evaluation failures without discarding later actions.
+    /// Visits successes and model failures without discarding later actions. Execution limits throw.
     func visitValidationOutcomes(
         checking context: inout CheckingContext<CheckingRegisters>,
         _ visit: (Action, Self) throws -> Bool,
@@ -70,6 +70,11 @@ public struct GeneratedModelFieldIdentity: Hashable, Sendable {
     public init(swiftName: String, formalName: String) {
         self.swiftName = swiftName
         self.formalName = formalName
+    }
+
+    var sourceName: String {
+        guard swiftName.hasPrefix("`"), swiftName.hasSuffix("`") else { return swiftName }
+        return String(swiftName.dropFirst().dropLast())
     }
 }
 
@@ -130,9 +135,10 @@ extension StateMachine {
                 }
                 found = found || actionFound
                 if !keepGoing { return found }
-            } catch let failure as MachineActionEvaluationFailure<Action> where !callbackFailed {
+            } catch let failure as MachineActionEvaluationFailure<Action>
+                where !callbackFailed && failure.reason.isModelEvaluationFailure {
                 if try !onEvaluationFailure(failure.action, failure.reason) { return found }
-            } catch let reason as NativeMachineEvaluationError where !callbackFailed {
+            } catch let reason as NativeMachineEvaluationError where !callbackFailed && reason.isModelEvaluationFailure {
                 if try !onEvaluationFailure(action, reason) { return found }
             }
         }
@@ -209,7 +215,9 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     public private(set) var refinementFailures: [Machine.Property: RefinementFailure<Machine.Snapshot, Machine.Action>] = [:]
     public private(set) var temporalResults: [Machine.Property: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] = [:]
     private var checker: LivenessChecker<Machine.Snapshot, Machine.Action, Int>?
-    private let selectedFairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?
+    private let selectedFairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]
+    private let fairnessEnabledness: [Int: [Machine.Snapshot: Bool]]
+    private let fairnessFailure: (any Error)?
     public let initialStates: Set<Machine.Snapshot>
     public let transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]]
     public let checking: ModelChecks<Machine.Property>
@@ -269,8 +277,18 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         let checking = checking ?? ModelChecks(properties: Set(Machine.Property.allCases), checkDeadlock: Machine.checksDeadlock)
         self.checking = checking
         self.behavior = behavior
-        selectedFairness = fairness
         let properties = try initialMachine.temporalProperties(checking: checking.properties)
+        var scopes: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = []
+        var fairnessFailure: (any Error)?
+        // Later refinement queries still need the original raw enabledness.
+        if behavior == .specification {
+            do { scopes = try fairness ?? initialMachine.fairnessConditions() }
+            catch { fairnessFailure = error }
+        }
+        selectedFairness = scopes
+        var enabledness = Dictionary(uniqueKeysWithValues: scopes.indices.map {
+            ($0, [Machine.Snapshot: Bool]())
+        })
         machine = initialMachine
         var transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]] = [:]
         var pending: [Machine] = []
@@ -401,8 +419,20 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
                  target: try discover(successor.machine, from: (machine.snapshot, successor.action)))
             }
             transitions[machine.snapshot] = edges
+            if fairnessFailure == nil {
+                do {
+                    for (scope, condition) in scopes.enumerated() {
+                        enabledness[scope, default: [:]][machine.snapshot] = try successors.contains {
+                            try condition.matches($0.action) && (condition.changes?(machine.snapshot,
+                                $0.machine.snapshot) ?? (machine.snapshot != $0.machine.snapshot))
+                        }
+                    }
+                } catch { fairnessFailure = error }
+            }
         }
         self.transitions = transitions
+        fairnessEnabledness = enabledness
+        self.fairnessFailure = fairnessFailure
         self.predecessors = predecessors
         safetyViolations = violations
         self.deadlockedStates = deadlockedStates
@@ -412,7 +442,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         })
         if !properties.isEmpty {
             let checker = try temporalChecker()
-            let fairness = behavior == .specification ? try (selectedFairness ?? initialMachine.fairnessConditions()) : []
+            let fairness = selectedFairness
             temporalResults = try properties.mapValues {
                 try checker.analyze($0, initialStates: Array(initialStates), renderScope: { fairness[$0].name })
             }
@@ -467,13 +497,14 @@ extension ReachabilityGraph {
     }
 
     mutating func temporalChecker() throws -> LivenessChecker<Machine.Snapshot, Machine.Action, Int> {
+        if let fairnessFailure { throw fairnessFailure }
         if let checker { return checker }
         let snapshots = Array(transitions.keys)
         let stateOrder = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map { ($0.element, $0.offset) })
         let actionNames = Dictionary(uniqueKeysWithValues: Set(transitions.values.flatMap { $0.map(\.action) }).map {
             ($0, String(describing: $0))
         })
-        let fairness = behavior == .specification ? try (selectedFairness ?? machine.fairnessConditions()) : []
+        let fairness = selectedFairness
         let progress: [[Machine.Snapshot: Set<Machine.Snapshot>]?] = try fairness.map { condition in
             guard let changes = condition.changes else { return nil }
             return try Dictionary(uniqueKeysWithValues: transitions.map { source, successors in
@@ -496,7 +527,8 @@ extension ReachabilityGraph {
                 return projected[source]?.contains(target) == true
             },
             actionOrder: { actionNames[$0]! < actionNames[$1]! },
-            stateOrder: { stateOrder[$0]! < stateOrder[$1]! }
+            stateOrder: { stateOrder[$0]! < stateOrder[$1]! },
+            enabledness: fairnessEnabledness
         )
         self.checker = checker
         return checker

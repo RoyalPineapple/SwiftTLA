@@ -2,6 +2,66 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
+struct OrderedAlgorithmCopyProofModel {
+    enum Step: String, CaseIterable { case copy }
+
+    static var spec: TLASpec {
+        #spec("OrderedAlgorithmCopyProofModel") {
+            let algorithm = Algorithm(label: "OrderedAlgorithmCopyProofModel", scoped: { scope in
+                let first = scope.sharedVar(_name: "first", initial: 1)
+                let second = scope.sharedVar(_name: "second", initial: 2)
+                While(Step.copy, true) {
+                    Assign(first, to: second)
+                    Assign(second, to: first)
+                }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
+struct SequentialCopyProofModel {
+    enum Step: String, CaseIterable { case copy, finish }
+
+    static var spec: TLASpec {
+        #spec("SequentialCopyProofModel") {
+            let algorithm = Algorithm(label: "SequentialCopyProofModel", scoped: { scope in
+                let first = scope.sharedVar(_name: "first", initial: 1)
+                let second = scope.sharedVar(_name: "second", initial: 2)
+                Do(Step.copy) {
+                    Assign(first, to: second)
+                    Assign(second, to: first)
+                }
+                Do(Step.finish) {
+                    Assign(first, to: 1)
+                    Assign(second, to: 2)
+                }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
+struct SequentialDependentIntInitialProofModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("SequentialDependentIntInitialProofModel") {
+            let algorithm = Algorithm(scoped: { scope in
+                let first = scope.sharedVar(initial: 1)
+                let second = scope.sharedVar(initial: (first + 2) + 1)
+                Do(Step.advance) {
+                    Assign(first, to: second + 1)
+                }
+            })
+            algorithm
+        }
+    }
+}
+
+@TLAModel
 struct OrderedCopyModel {
     enum Step: String, CaseIterable { case copy, repeatWrites }
 

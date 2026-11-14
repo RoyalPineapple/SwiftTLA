@@ -76,13 +76,22 @@ jobs:
       - uses: actions/cache@v4
         id: binary-cache
         with:
-          path: .build/release/tlc-validate
-          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-xcode-16.4-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
+          path: |
+            .build/release/tlc-validate
+            .build/release/native-initial-source.swift
+            .build/release/native-initial-source.json
+          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-xcode-16.4-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', '.github/workflows/validation-pipeline.yml', 'scripts/retain-native-initial-source.py') }}
       - name: Build validator for this revision
         if: steps.binary-cache.outputs.cache-hit != 'true'
-        run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
-      - name: Verify cached or built executable
-        run: test -x .build/release/tlc-validate
+        run: |
+          set -euo pipefail
+          native_source_build_started=$(python3 -c 'import time; print(time.time_ns())')
+          swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -Xswiftc -g -j 1
+          python3 scripts/retain-native-initial-source.py capture "$native_source_build_started"
+      - name: Verify cached or built executable and compiler input
+        run: |
+          test -x .build/release/tlc-validate
+          python3 scripts/retain-native-initial-source.py verify
       - name: Enumerate complete case coverage
         id: cases
         env:
@@ -135,7 +144,10 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
-          path: .build/release/tlc-validate
+          path: |
+            .build/release/tlc-validate
+            .build/release/native-initial-source.swift
+            .build/release/native-initial-source.json
           if-no-files-found: error
           overwrite: true
 
@@ -189,9 +201,281 @@ jobs:
           path: .build/temporal-symmetry-conformance
           if-no-files-found: error
 
+  initial-failure-contract:
+    name: Ordered Int initial failure output proof
+    needs: prepare
+    if: ${{ needs.prepare.result == 'success' && (github.event_name != 'workflow_dispatch' || (inputs.case_id == '' && inputs.case_ids == '' && inputs.replay_run_id == '')) }}
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          fetch-depth: 0
+          submodules: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+      - uses: actions/download-artifact@v5
+        with:
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
+          path: .build/release
+      - name: Retain generated outputs and native failure
+        run: |
+          set -euo pipefail
+          chmod +x .build/release/tlc-validate
+          test -x .build/release/tlc-validate
+          python3 scripts/retain-native-initial-source.py verify
+          mkdir -p .build/initial-failure-artifacts
+          .build/release/tlc-validate initial-failure prepare \
+            --native-source .build/release/native-initial-source.swift \
+            --output .build/initial-failure-artifacts/case
+          cp .build/release/native-initial-source.json .build/initial-failure-artifacts/case/
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          case = Path(".build/initial-failure-artifacts/case")
+          report = json.loads((case / "preparation.json").read_text())
+          native = json.loads((case / "native-initial-failure.json").read_text())
+          compiler = json.loads((case / "native-initial-source.json").read_text())
+          assert compiler["semanticInterpretation"] == "OPEN"
+          assert hashlib.sha256((case / "native-initial-source.swift").read_bytes()).hexdigest() == compiler["sourceSHA256"]
+          assert report["nativeSourceSHA256"] == compiler["sourceSHA256"]
+          expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
+          assert report["schema"] == "swifttla.initial-failure-proof-v14"
+          assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
+          assert report["result"] == "prepared" and report["graphCompared"] is False
+          assert (report["site"], report["kind"], report["operands"]) == expected
+          assert native["successfulInitialStates"] == 0
+          assert (native["site"], native["kind"], native["operands"]) == expected
+          assert len(native["failures"]) == 1
+          event = native["failures"][0]
+          assert (event["site"], event["kind"], event["operands"]) == expected
+          assert event["before"] == [
+              {"name": "first", "value": {"version": 1, "tag": "int", "value": 1}},
+              {"name": "pc", "value": {"version": 1, "tag": "string", "value": "stay"}},
+              {"name": "second", "value": {"version": 1, "tag": "int", "value": 3}},
+          ]
+          files = {
+              "moduleSHA256": case / "generated-tla" / (report["module"] + ".tla"),
+              "checkModuleSHA256": case / "generated-tla" / (report["checkModule"] + ".tla"),
+              "checkConfigurationSHA256": case / "generated-tla" / (report["checkModule"] + ".cfg"),
+              "proofSHA256": case / "generated-tla" / "SwiftTLAInitialFailureProof.tla",
+              "nativeSHA256": case / "native-initial-failure.json",
+              "nativeSourceSHA256": case / "native-initial-source.swift",
+          }
+          assert all(
+              path.is_file() and path.stat().st_size
+              and hashlib.sha256(path.read_bytes()).hexdigest() == report[key]
+              for key, path in files.items()
+          )
+          proof_lines = files["proofSHA256"].read_text().splitlines()
+          for name, key in [("SourceInitializers", "sourceInitializersSHA256"),
+                            ("SourceInitialControl", "sourceInitialControlSHA256"),
+                            ("LoweredInitializers", "loweredInitializersSHA256"),
+                            ("ResolvedInitializers", "resolvedInitializersSHA256"),
+                            ("NativeInitializers", "nativeInitializersSHA256"),
+                            ("ResolvedVariableTypes", "resolvedVariableTypesSHA256"),
+                            ("ActualLayout", "layoutSHA256"),
+                            ("ActualInitializationOrder", "initializationOrderSHA256"),
+                            ("NativeInitializationOrder", "nativeInitializationOrderSHA256"),
+                            ("ActualPrefixOrders", "prefixOrdersSHA256"),
+                            ("NativePrefixOrders", "nativePrefixOrdersSHA256"),
+                            ("ActualControlSeeds", "controlSeedsSHA256"),
+                            ("NativeControlSeeds", "nativeControlSeedsSHA256")]:
+              prefix = name + " == "
+              definitions = [line[len(prefix):] for line in proof_lines if line.startswith(prefix)]
+              assert len(definitions) == 1
+              assert hashlib.sha256(definitions[0].encode()).hexdigest() == report[key]
+          assert len(report["sourceCompilationIdentity"]) == 64
+          lowered = [line for line in proof_lines if line.startswith("LoweredInitializers == ")]
+          assert len(lowered) == 1
+          operand = "literals |-> <<0, 2, 0>>"
+          assert lowered[0].count(operand) == 1
+          changed = lowered[0].replace(operand, "literals |-> <<0, 0, 0>>")
+          assert changed != lowered[0]
+          proof = files["proofSHA256"].read_text()
+          wrong = proof.replace(lowered[0], changed, 1)
+          assert wrong != proof
+          module = "MODULE SwiftTLAInitialFailureProof"
+          assert wrong.count(module) == 1
+          wrong = wrong.replace(module, "MODULE SwiftTLAInitialFailureWrongLowering", 1)
+          (case / "generated-tla" / "SwiftTLAInitialFailureWrongLowering.tla").write_text(wrong)
+          layout = [line for line in proof_lines if line.startswith("ActualLayout == ")]
+          assert len(layout) == 1
+          control_name = 'name |-> "pc"'
+          assert layout[0].count(control_name) == 1
+          changed = layout[0].replace(control_name, 'name |-> "first"')
+          assert changed != layout[0]
+          wrong = proof.replace(layout[0], changed, 1)
+          assert wrong != proof and wrong.count(module) == 1
+          wrong = wrong.replace(module, "MODULE SwiftTLAInitialFailureWrongLayout", 1)
+          (case / "generated-tla" / "SwiftTLAInitialFailureWrongLayout.tla").write_text(wrong)
+          seeds = [line for line in proof_lines if line.startswith("ActualControlSeeds == ")]
+          assert len(seeds) == 1
+          seed_value = 'value |-> "stay"'
+          assert seeds[0].count(seed_value) == 1
+          changed = seeds[0].replace(seed_value, 'value |-> "changed-control-seed"')
+          assert changed != seeds[0]
+          wrong = proof.replace(seeds[0], changed, 1)
+          assert wrong != proof and wrong.count(module) == 1
+          wrong = wrong.replace(module, "MODULE SwiftTLAInitialFailureWrongControlSeed", 1)
+          (case / "generated-tla" / "SwiftTLAInitialFailureWrongControlSeed.tla").write_text(wrong)
+          resolved = [line for line in proof_lines if line.startswith("ResolvedInitializers == ")]
+          assert len(resolved) == 1 and resolved[0].count(operand) == 1
+          changed = resolved[0].replace(operand, "literals |-> <<0, 0, 0>>")
+          assert changed != resolved[0]
+          wrong = proof.replace(resolved[0], changed, 1)
+          assert wrong != proof and wrong.count(module) == 1
+          wrong = wrong.replace(module, "MODULE SwiftTLAInitialFailureWrongResolved", 1)
+          (case / "generated-tla" / "SwiftTLAInitialFailureWrongResolved.tla").write_text(wrong)
+          PY
+      - uses: ./.github/actions/setup-pinned-tlaps
+        id: proof-tool
+        with:
+          evidence: .build/initial-failure-artifacts/toolchain
+      - name: Prove complete initialization and actual failure observations
+        run: |
+          set -euo pipefail
+          # Pinned TLC cannot evaluate Int.max; TLAPS proves this emitted TLA+ result.
+          proof_tool_dir='${{ steps.proof-tool.outputs.directory }}'
+          proof_inputs=.build/initial-failure-artifacts/proof-inputs
+          mkdir -p "$proof_inputs"
+          proof_sources=(OrderedIntExpressionRule IndexedHistoryRules OrderedIntInitializationComposition
+            InitializationComposition InitializationOutcomeRules FiniteSetMembershipRule)
+          for module in "${proof_sources[@]}"; do
+            cp "Verification/Semantics/$module.tla" "$proof_inputs/"
+          done
+          shasum -a 256 "$proof_inputs/"*.tla \
+            > .build/initial-failure-artifacts/proof-inputs.sha256
+          "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/initial-failure-artifacts/tlapm-version.txt
+          grep -Eq '^941f894(-dirty)?$' .build/initial-failure-artifacts/tlapm-version.txt
+          "$proof_tool_dir/tlapm/lib/tlapm/backends/bin/z3" --version > .build/initial-failure-artifacts/z3-version.txt
+          "$proof_tool_dir/tlapm/bin/tlapm" --nofp --timing --toolbox-vsn 1 -I "$proof_inputs" \
+            .build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla </dev/null \
+            2>&1 | tee .build/initial-failure-artifacts/proof.log
+          grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \
+            .build/initial-failure-artifacts/proof.log
+          ! grep -q '^\[ERROR\]' .build/initial-failure-artifacts/proof.log
+          source_proof=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla
+          wrong_proof=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongPayload.tla
+          test "$(grep -c '^ExpectedOperand1 ==' "$source_proof")" -eq 1
+          sed -e 's/MODULE SwiftTLAInitialFailureProof/MODULE SwiftTLAInitialFailureWrongPayload/' \
+              -e 's/^ExpectedOperand1 == .*/ExpectedOperand1 == 0/' \
+              "$source_proof" > "$wrong_proof"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_proof" \
+              > .build/initial-failure-artifacts/wrong-payload.log 2>&1; then
+            echo 'wrong-payload proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-payload.log
+          wrong_before=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongBefore.tla
+          test "$(grep -c '^ExpectedBefore ==' "$source_proof")" -eq 1
+          sed -e 's/MODULE SwiftTLAInitialFailureProof/MODULE SwiftTLAInitialFailureWrongBefore/' \
+              -e 's/^ExpectedBefore == .*/ExpectedBefore == <<>>/' \
+              "$source_proof" > "$wrong_before"
+          ! cmp -s "$source_proof" "$wrong_before"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_before" \
+              > .build/initial-failure-artifacts/wrong-before.log 2>&1; then
+            echo 'wrong-before proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-before.log
+          wrong_events=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongEvents.tla
+          test "$(grep -c '^ExpectedFailures ==' "$source_proof")" -eq 1
+          sed -e 's/MODULE SwiftTLAInitialFailureProof/MODULE SwiftTLAInitialFailureWrongEvents/' \
+              -e 's/^ExpectedFailures == .*/ExpectedFailures == {}/' \
+              "$source_proof" > "$wrong_events"
+          ! cmp -s "$source_proof" "$wrong_events"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_events" \
+              > .build/initial-failure-artifacts/wrong-events.log 2>&1; then
+            echo 'wrong-events proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-events.log
+          wrong_lowering=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongLowering.tla
+          test -s "$wrong_lowering"
+          ! cmp -s "$source_proof" "$wrong_lowering"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_lowering" \
+              > .build/initial-failure-artifacts/wrong-lowering.log 2>&1; then
+            echo 'wrong-lowering proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-lowering.log
+          wrong_layout=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongLayout.tla
+          test -s "$wrong_layout"
+          ! cmp -s "$source_proof" "$wrong_layout"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_layout" \
+              > .build/initial-failure-artifacts/wrong-layout.log 2>&1; then
+            echo 'wrong-layout proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-layout.log
+          wrong_seed=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongControlSeed.tla
+          test -s "$wrong_seed"
+          ! cmp -s "$source_proof" "$wrong_seed"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_seed" \
+              > .build/initial-failure-artifacts/wrong-control-seed.log 2>&1; then
+            echo 'wrong-control-seed proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-control-seed.log
+          wrong_resolved=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongResolved.tla
+          test -s "$wrong_resolved"
+          ! cmp -s "$source_proof" "$wrong_resolved"
+          if "$proof_tool_dir/tlapm/bin/tlapm" --nofp -I "$proof_inputs" "$wrong_resolved" \
+              > .build/initial-failure-artifacts/wrong-resolved.log 2>&1; then
+            echo 'wrong-resolved proof unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Eq '^\[ERROR\]: [1-9][0-9]*/[1-9][0-9]* obligations failed\.$' \
+            .build/initial-failure-artifacts/wrong-resolved.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path(".build/initial-failure-artifacts")
+          result = json.loads((root / "case" / "preparation.json").read_text())
+          compiler = json.loads((root / "case" / "native-initial-source.json").read_text())
+          result.update(result="proved", proofMethod="TLAPS", wrongPayloadRejected=True,
+                        wrongBeforeRejected=True, wrongEventsRejected=True, wrongLoweringRejected=True,
+                        wrongLayoutRejected=True, wrongControlSeedRejected=True,
+                        wrongResolvedRejected=True,
+                        retainedNativeSwift={"sha256": compiler["sourceSHA256"],
+                                             "producerSHA": compiler["producerSHA"],
+                                             "origin": compiler["origin"],
+                                             "semanticInterpretation": "OPEN", "consumedByProof": False,
+                                             "decodedInitializerPlansSHA256": result["nativeInitializersSHA256"],
+                                             "decodedPrefixOrdersSHA256": result["nativePrefixOrdersSHA256"],
+                                             "decodedInitializationOrderSHA256": result["nativeInitializationOrderSHA256"],
+                                             "decodedInitializationOrderConsumer": "ProofCount/ProofOrder/ProofControlSeed",
+                                             "decodedPrefixConsumer": "ProofPrefixOrder",
+                                             "decodedPlanConsumer": "ProofGeneratedExpressions"})
+          (root / "proof-result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+          PY
+      - name: Retain source revision
+        if: always()
+        run: |
+          mkdir -p .build/initial-failure-artifacts
+          printf '%s\n' "$SWIFT_TLA_SHA" > .build/initial-failure-artifacts/source-sha.txt
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: initial-failure-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/initial-failure-artifacts
+          if-no-files-found: error
+
   validation-pipeline:
     name: ${{ github.event_name == 'workflow_dispatch' && (inputs.case_id != '' || inputs.case_ids != '') && 'Independent validation diagnostic' || 'Independent validation admission' }}
-    needs: [prepare, case-validation, temporal-symmetry-parity]
+    needs: [prepare, case-validation, temporal-symmetry-parity, initial-failure-contract]
     if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.replay_run_id == '') }}
     runs-on: ubuntu-latest
     steps:
@@ -200,6 +484,7 @@ jobs:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           CASE_RESULT: ${{ needs.case-validation.result }}
           TEMPORAL_RESULT: ${{ needs.temporal-symmetry-parity.result }}
+          INITIAL_FAILURE_RESULT: ${{ needs.initial-failure-contract.result }}
           FOCUSED_CASE: ${{ inputs.case_id }}
           BATCH_CASES: ${{ inputs.case_ids }}
         run: |
@@ -207,8 +492,10 @@ jobs:
           test "$CASE_RESULT" = success
           if [ -n "$BATCH_CASES" ] || [ -n "$FOCUSED_CASE" ]; then
             test "$TEMPORAL_RESULT" = skipped
+            test "$INITIAL_FAILURE_RESULT" = skipped
           else
             test "$TEMPORAL_RESULT" = success
+            test "$INITIAL_FAILURE_RESULT" = success
           fi
 
   comparison-replay:

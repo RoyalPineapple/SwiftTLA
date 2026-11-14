@@ -1,30 +1,32 @@
 import SwiftSyntax
 import SwiftParser
 import SwiftTLA
+import SwiftTLACompilerSupport
 
 extension NativeSwiftEmitter {
     /// Serialize resolved native values only at the independent validation boundary.
     func formalProjectionDeclarations() throws -> [DeclSyntax] {
         let fields = try program.layout.variables.map { variable in
-            let name = variable.declaration.name
+            let name = variable.formalName
             guard TLAStateProjection.Token(validating: name) != nil else {
                 throw unsupported("invalid formal state identifier: \(name)")
             }
             let route = stateValue(variable.id, prefix: "snapshot.")
-            return (formalName: name, route: route,
-                value: try formalValue(route, type: program.variableTypes[variable.id]!))
+            let type = program.variableTypes[variable.id]!
+            return (formalName: name, route: route, type: type,
+                value: try formalValue(route, type: type))
         }
         let tokens = fields.map { field in
-            "TLAStateProjection.Token(validating: \(String(reflecting: field.formalName)))!"
+            "SwiftTLA._nativeFormalProjectionToken(validating: \(String(reflecting: field.formalName)))!"
         }.joined(separator: ", ")
         let entries = fields.enumerated().map { index, field in
-            ".init(token: Self.__swifttlaFormalProjectionTokens[\(index)], value: \(field.value))"
+            "SwiftTLA._nativeFormalProjectionEntry(Self.__swifttlaFormalProjectionTokens, at: \(index), value: \(field.value))"
         }.joined(separator: ",\n")
         let declarations = [DeclSyntax(stringLiteral: """
-        private static let __swifttlaFormalProjectionTokens: [TLAStateProjection.Token] = [\(tokens)]
+        private static let __swifttlaFormalProjectionTokens: [SwiftTLA.TLAStateProjection.Token] = [\(tokens)]
         """), DeclSyntax(stringLiteral: """
-        public func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection {
-            try TLAStateProjection(validating: [\(entries)])
+        public func formalProjection(of snapshot: Snapshot) throws -> SwiftTLA.TLAStateProjection {
+            try SwiftTLA._nativeFormalProjection([\(entries)])
         }
         """)]
         try verifyGeneratedFormalProjectionOutput(declarations, fields: fields)
@@ -33,16 +35,16 @@ extension NativeSwiftEmitter {
 
     func formalValue(_ value: String, type: CompiledValueType) throws -> String {
         func switching(_ cases: [String]) -> String {
-            "try { () throws -> TLAValue in switch \(value) {\n\(cases.joined(separator: "\n"))\n} }()"
+            "try { () throws -> SwiftTLA.TLAValue in switch \(value) {\n\(cases.joined(separator: "\n"))\n} }()"
         }
         switch type {
-        case .int: return "TLAValue.int(\(value))"
-        case .bool: return "TLAValue.bool(\(value))"
-        case .string: return "TLAValue.canonicalSwiftString(\(value))"
-        case .modelValue: return "TLAValue.constant(\(value).rawValue)"
+        case .int: return "SwiftTLA._nativeFormalInt(\(value))"
+        case .bool: return "SwiftTLA.TLAValue.bool(\(value))"
+        case .string: return "SwiftTLA._nativeFormalString(\(value).formalString)"
+        case .modelValue: return "SwiftTLA.TLAValue.constant(\(value).rawValue)"
         case .controlLocation:
             return switching(program.layout.controlLocations.map {
-                "case .location\($0.id.ordinal): return .string(\(String(reflecting: $0.formalName)))"
+                "case .location\($0.id.ordinal): return SwiftTLA._nativeFormalString(\(String(reflecting: $0.formalName)))"
             })
         case .named(let name):
             guard let members = program.enums.cases[name] else { throw unsupported("unresolved formal enum: \(name)") }
@@ -58,22 +60,22 @@ extension NativeSwiftEmitter {
                 "case .\(unionCase(type, index: $0.offset))(let payload): return \(try formalValue("payload", type: $0.element))"
             })
         case .set(let element):
-            return "try TLAStateProjection.losslessSet(\(value)) { (element) throws -> TLAValue in \(try formalValue("element", type: element)) }"
+            return "try SwiftTLA.TLAStateProjection.losslessSet(\(value)) { (element) throws -> SwiftTLA.TLAValue in \(try formalValue("element", type: element)) }"
         case .array(let element):
-            return "TLAValue.tuple(try \(value).map { (element) throws -> TLAValue in \(try formalValue("element", type: element)) })"
+            return "SwiftTLA.TLAValue.tuple(try \(value).map { (element) throws -> SwiftTLA.TLAValue in \(try formalValue("element", type: element)) })"
         case .tuple(let elements):
             let values = try elements.enumerated().map {
                 try formalValue(value + "." + fieldName(type, index: $0.offset), type: $0.element)
             }
-            return "TLAValue.tuple([\(values.joined(separator: ", "))])"
+            return "SwiftTLA.TLAValue.tuple([\(values.joined(separator: ", "))])"
         case .record(let fields), .nominalRecord(_, let fields):
             let values = try fields.enumerated().map {
                 ".init(\(String(reflecting: $0.element.name)), \(try formalValue(value + "." + fieldName(type, index: $0.offset), type: $0.element.type)))"
             }
-            return "TLAValue.record(TLARecord([\(values.joined(separator: ", "))]))"
+            return "SwiftTLA.TLAValue.record(TLARecord([\(values.joined(separator: ", "))]))"
         case .dictionary(let key, let element):
             return """
-            TLAValue.function(try \(value).reduce(into: [TLAValue: TLAValue]()) { result, entry in
+            SwiftTLA.TLAValue.function(try \(value).reduce(into: [SwiftTLA.TLAValue: SwiftTLA.TLAValue]()) { result, entry in
                 let key = \(try formalValue("entry.key", type: key))
                 let value = \(try formalValue("entry.value", type: element))
                 guard result.updateValue(value, forKey: key) == nil else {
@@ -97,7 +99,7 @@ extension NativeSwiftEmitter {
         case .bool:
             return decode("guard case .boolean(let result) = \(value) else { \(invalid) }; return result")
         case .string:
-            return decode("guard case .string(let result) = \(value) else { \(invalid) }; return result")
+            return decode("guard case .string(let result) = \(value) else { \(invalid) }; return SwiftTLA._NativeString(formalString: result)")
         case .modelValue:
             return decode("guard case .string(let name) = \(value), let result = _ModelValue(rawValue: name) else { \(invalid) }; return result")
         case .named(let name):
@@ -116,7 +118,7 @@ extension NativeSwiftEmitter {
             return decode("""
                 guard case .array(let items) = \(value) else { \(invalid) }
                 let members = try items.map { item in \(member) }
-                let result = Set(members)
+                let result = \(try swiftType(type))(members)
                 guard result.count == members.count else { \(invalid) }
                 return result
                 """)
@@ -136,11 +138,11 @@ extension NativeSwiftEmitter {
             guard key == .int else { throw unsupported("formal JSON dictionary key type") }
             let member = try formalJSONValue("item", type: element)
             return decode("""
-                var result: [Int: \(try swiftType(element))] = [:]
+                var result: [\(nativeIntType): \(try swiftType(element))] = [:]
                 switch \(value) {
                 case .object(let fields):
                     for (name, item) in fields {
-                        guard let key = Int(name), String(key) == name else { \(invalid) }
+                        guard let key = \(nativeIntType)(name), \(nativeStringType)(key) == name else { \(invalid) }
                         guard result.updateValue(\(member), forKey: key) == nil else { \(invalid) }
                     }
                 case .array(let items):
@@ -176,7 +178,7 @@ extension NativeSwiftEmitter {
 
     private func formalJSONLiteral(_ value: CompiledValue) throws -> String {
         switch try value.rendered(using: program.layout) {
-        case .int(let value): return ".integer(\(value == Int.min ? "Int.min" : String(value)))"
+        case .int(let value): return ".integer(\(value == Int.min ? "SwiftTLA._nativeIntMinimum()" : String(value)))"
         case .bool(let value): return ".boolean(\(value))"
         case .string(let value), .constant(let value): return ".string(\(String(reflecting: value)))"
         default: throw unsupported("formal JSON enum literal")
@@ -190,68 +192,18 @@ extension NativeSwiftEmitter {
     func renderedLiteral(_ value: TLAValue) -> String {
         func emit(_ value: TLAValue) -> String {
             switch value {
-            case .int(let value): return "TLAValue.int(\(value == Int.min ? "Int.min" : String(value)))"
-            case .bool(let value): return "TLAValue.bool(\(value))"
-            case .string(let value): return "TLAValue.string(\(String(reflecting: value)))"
-            case .constant(let value): return "TLAValue.constant(\(String(reflecting: value)))"
-            case .set(let values): return "TLAValue.set([\(values.sorted().map(emit).joined(separator: ", "))])"
-            case .tuple(let values): return "TLAValue.tuple([\(values.map(emit).joined(separator: ", "))])"
-            case .record(let fields): return "TLAValue.record(TLARecord([\(fields.fields.map { ".init(\(String(reflecting: $0.name)), \(emit($0.value)))" }.joined(separator: ", "))]))"
+            case .int(let value): return "SwiftTLA._nativeFormalInt(\(value == Int.min ? "SwiftTLA._nativeIntMinimum()" : String(value)))"
+            case .bool(let value): return "SwiftTLA.TLAValue.bool(\(value))"
+            case .string(let value): return "SwiftTLA._nativeFormalString(\(String(reflecting: value)))"
+            case .constant(let value): return "SwiftTLA.TLAValue.constant(\(String(reflecting: value)))"
+            case .set(let values): return "SwiftTLA.TLAValue.set([\(values.sorted().map(emit).joined(separator: ", "))])"
+            case .tuple(let values): return "SwiftTLA.TLAValue.tuple([\(values.map(emit).joined(separator: ", "))])"
+            case .record(let fields): return "SwiftTLA.TLAValue.record(TLARecord([\(fields.fields.map { ".init(\(String(reflecting: $0.name)), \(emit($0.value)))" }.joined(separator: ", "))]))"
             case .function(let values):
                 let entries = values.sorted { $0.key < $1.key }.map { "\(emit($0.key)): \(emit($0.value))" }
-                return "TLAValue.function([\(entries.isEmpty ? ":" : entries.joined(separator: ", "))])"
+                return "SwiftTLA.TLAValue.function([\(entries.isEmpty ? ":" : entries.joined(separator: ", "))])"
             }
         }
         return emit(value)
-    }
-}
-
-func verifyGeneratedFormalProjectionOutput(
-    _ declarations: [DeclSyntax], fields: [(formalName: String, route: String, value: String)]
-) throws {
-    func tokens(_ syntax: some SyntaxProtocol) -> [String] {
-        Array(syntax.tokens(viewMode: .sourceAccurate)).map(\.text)
-    }
-    func reject(_ reason: String) -> CompilationDiagnostic {
-        CompilationDiagnostic(
-            code: .unsupportedGeneratedValueShape, stage: .validation,
-            path: "native.formalProjection",
-            expected: "one ordered formal entry from each complete snapshot field",
-            actual: reason,
-            nextSafeAction: "Report this native code generation failure."
-        )
-    }
-    let tokenValues = fields.map {
-        "TLAStateProjection.Token(validating: \(String(reflecting: $0.formalName)))!"
-    }.joined(separator: ", ")
-    let expectedTokens = Parser.parse(source: """
-    private static let __swifttlaFormalProjectionTokens: [TLAStateProjection.Token] = [\(tokenValues)]
-    """).statements.first?.item
-    guard declarations.count == 2, let expectedTokens,
-          tokens(declarations[0]) == tokens(expectedTokens) else {
-        throw reject("the formal state token list differs from the compiled variable names")
-    }
-    for field in fields {
-        let expectedRoute = Parser.parse(source: field.route).statements.first?.item
-        let value = Parser.parse(source: field.value).statements.first?.item
-        guard let expectedRoute, let value else { throw reject("the projected value cannot be parsed") }
-        let route = tokens(expectedRoute)
-        let valueTokens = tokens(value)
-        let references = valueTokens.indices.filter { valueTokens[$0] == "snapshot" }
-        guard !references.isEmpty, references.allSatisfy({ index in
-            index + route.count <= valueTokens.count
-                && Array(valueTokens[index..<(index + route.count)]) == route
-        }) else { throw reject("the projected value for \(field.formalName) reads a different snapshot field") }
-    }
-    let expectedEntries = fields.enumerated().map { index, field in
-        ".init(token: Self.__swifttlaFormalProjectionTokens[\(index)], value: \(field.value))"
-    }.joined(separator: ",\n")
-    let expectedFunction = Parser.parse(source: """
-    public func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection {
-        try TLAStateProjection(validating: [\(expectedEntries)])
-    }
-    """).statements.first?.item
-    guard let expectedFunction, tokens(declarations[1]) == tokens(expectedFunction) else {
-        throw reject("the projection call shape or formal token ordering differs from the checked rule")
     }
 }

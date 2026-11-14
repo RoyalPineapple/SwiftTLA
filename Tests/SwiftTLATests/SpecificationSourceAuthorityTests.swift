@@ -1,7 +1,7 @@
 import Testing
 import SwiftParser
 import SwiftSyntax
-import SwiftTLA
+@testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
 @Suite("Specification source authority")
@@ -82,18 +82,46 @@ struct SpecificationSourceAuthorityTests {
         ("Pair<Int, String>.literal(1, \"one\")", "Pair<Int, String>"),
         ("ZeroBasedSequence<Int>.filled(with: 0, count: 2)", "ZeroBasedSequence<Int>"),
         ("SetExpr<Int>()", "SetExpr<Int>"),
+        ("SetExpr<Int>(1, 2)", "SetExpr<Int>"),
+        ("SwiftTLA.SetExpr<Mode>(Mode.idle)", "SwiftTLA.SetExpr<Mode>"),
         ("Mode.idle", "Mode"),
         ("OneOf<Int, String>.first(1)", "OneOf<Int, String>"),
-        ("1", "Int")
+        ("1", "Int"),
+        ("true", "Bool"),
+        ("\"literal\"", "String")
     ])
     func initializerResultTypes(_ source: String, _ expected: String) throws {
-        let parser = ParserSession(sourceTypes: .init(enums: [
-            .init(typeName: "Mode", cases: [(name: "idle", value: .string("idle"))])
-        ]))
-        for depth in [0, 1, 8] {
-            let parenthesized = String(repeating: "(", count: depth) + source + String(repeating: ")", count: depth)
-            let expression = try #require(Parser.parse(source: parenthesized).statements.first?.item.as(ExprSyntax.self))
-            #expect(parser.initialValueTypeName(from: expression) == expected)
+        let scalar: (CompiledValueType, CompiledValue)? = switch expected {
+        case "Int": (.int, .integer(1))
+        case "Bool": (.bool, .boolean(true))
+        case "String": (.string, .string("literal"))
+        default: nil
+        }
+        for shadowsPrimitiveNames in [false, true] {
+            let names = shadowsPrimitiveNames ? ["Int", "Bool", "String"] : []
+            let metadata = SourceTypeMetadata(enums: [
+                .init(typeName: "Mode", cases: [(name: "idle", value: .string("idle"))])
+            ] + names.map { .init(typeName: $0, cases: [(name: "other", value: .string("other"))]) })
+            let parser = ParserSession(sourceTypes: metadata)
+            for depth in [0, 1, 8] {
+                let parenthesized = String(repeating: "(", count: depth) + source + String(repeating: ")", count: depth)
+                let expression = try #require(Parser.parse(source: parenthesized).statements.first?.item.as(ExprSyntax.self))
+                guard let scalar else {
+                    #expect(parser.initialValueTypeName(from: expression) == expected)
+                    continue
+                }
+                let specification = SpecParser.parseSpecClosure(named: "InitializerResultTypes",
+                    try parseSpecTestClosure("{ scope in let value = scope.sharedVar(initial: \(parenthesized)) }"),
+                    sourceTypes: metadata)
+                try #require(specification.diagnostics.isEmpty)
+                let compilation = try specification.compile()
+                let program = try CompiledProgram(inputs: SourceTypeResolver(metadata: metadata).resolve(in: compilation))
+                let variable = try #require(program.layout.variables.first { $0.declaration.name == "value" })
+                #expect(program.variableTypes[variable.id] == scalar.0)
+                let states = try CompiledRuntime(compilation: compilation).initialStates()
+                try #require(states.count == 1)
+                #expect(try states[0].value(for: variable.id) == scalar.1)
+            }
         }
     }
 
@@ -351,13 +379,21 @@ struct SpecificationSourceAuthorityTests {
         for (initializer, count) in [("[.second, Self.first]", 2), ("[]", 0), ("allCases", 2)] {
             let declaration = try declaration("""
             enum Phase: String, CaseIterable, FiniteTLAValueDomain {
-                case first, second
+                case first = "e\u{301}", second = "é"
                 static let finiteValues: [Self] = \(initializer)
+            }
+            static var spec: TLASpec {
+                #spec("AliasDomain") { scope in
+                    let phase = scope.sharedVar(initial: Phase.first)
+                    Invariant("Allowed") { phase.assuming(Phase.self) == Phase.first }
+                }
             }
             """)
             let enums = try TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members)
             let domain = try #require(enums.first?.finiteValues)
             #expect(domain.count == count)
+            #expect(enums.first?.cases.map(\.name) == ["first", "second"])
+            if count > 0 { _ = try TLASpecVerifier.parseAndVerify(declaration) }
         }
     }
 

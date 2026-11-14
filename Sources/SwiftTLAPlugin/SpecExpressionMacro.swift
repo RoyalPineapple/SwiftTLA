@@ -42,6 +42,23 @@ public struct SpecExpressionMacro: ExpressionMacro {
             return specCall(named: StringLiteralExprSyntax(content: "InvalidSpec"), body: closure)
         }
 
+        for statement in closure.statements {
+            guard case .expr(let expression) = statement.item,
+                  var call = expression.as(FunctionCallExprSyntax.self) else { continue }
+            while let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+                  let base = member.base?.as(FunctionCallExprSyntax.self) {
+                call = base
+            }
+            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self)
+            let member = call.calledExpression.as(MemberAccessExprSyntax.self)
+            let constructor = reference?.baseName.sourceIdentifierName
+                ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SwiftTLA"
+                    ? member?.declName.baseName.sourceIdentifierName : nil)
+            if constructor == "Algorithm" || constructor == "Validation" {
+                context.diagnose(Diagnostic(node: Syntax(statement.item), message: BuilderBindingDiagnostic()))
+            }
+        }
+
         let parameterScope: String?
         switch closure.signature?.parameterClause {
         case .simpleInput(let list): parameterScope = list.first?.name.sourceIdentifierName
@@ -50,13 +67,16 @@ public struct SpecExpressionMacro: ExpressionMacro {
         }
         let rewriter = DSLRewriter(context: context, parameterScope: parameterScope)
         let rewritten = rewriter.rewrite(closure).as(ClosureExprSyntax.self) ?? closure
-        return specCall(named: name, body: rewritten)
+        try OrderedIntSourceSyntaxCheck.verifyRewrite(closure, rewritten: rewritten)
+        return try OrderedIntSourceSyntaxCheck.checkingBuilderOutput(closure,
+            built: specCall(named: name, body: rewritten))
     }
 
     private static func specCall(
         named name: some ExprSyntaxProtocol,
         body: ClosureExprSyntax
     ) -> ExprSyntax {
+        // Use the macro's result type so caller declarations cannot capture its constructor.
         let arguments: LabeledExprListSyntax
         if body.signature == nil {
             arguments = [
@@ -64,7 +84,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
                 LabeledExprSyntax(expression: ExprSyntax(body))
             ]
             return ExprSyntax(FunctionCallExprSyntax(
-                calledExpression: DeclReferenceExprSyntax(baseName: .identifier("TLASpec")),
+                calledExpression: ExprSyntax(stringLiteral: ".init"),
                 leftParen: .leftParenToken(),
                 arguments: arguments,
                 rightParen: .rightParenToken()
@@ -79,7 +99,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
             )
         ]
         return ExprSyntax(FunctionCallExprSyntax(
-            calledExpression: DeclReferenceExprSyntax(baseName: .identifier("TLASpec")),
+            calledExpression: ExprSyntax(stringLiteral: ".init"),
             leftParen: .leftParenToken(),
             arguments: arguments,
             rightParen: .rightParenToken()

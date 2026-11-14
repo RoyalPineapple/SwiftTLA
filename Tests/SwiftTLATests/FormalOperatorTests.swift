@@ -203,8 +203,9 @@ struct FormalOperatorTests {
     )
   }
 
-  @Test("formal value parameters shadow state variables")
-  func formalParametersAreLexicallyScoped() throws {
+  @Test("formal value parameters shadow state variables without changing values",
+    arguments: [TLAValue.int(4), .constant("TRUE"), .constant("FALSE"), .constant("BOOLEAN"), .constant("STRING")])
+  func formalParametersAreLexicallyScoped(value: TLAValue) throws {
     let identity = FormalOperatorDefinition(
       name: "identity",
       parameters: [.value("value")],
@@ -212,11 +213,11 @@ struct FormalOperatorTests {
     )
     let expression = StateExpr.operatorApplication(
       .reference("identity", arity: 1),
-      [.value(.int(4))]
+      [.value(.value(value))]
     )
 
     #expect(
-      try compiledValue(expression, values: [("value", .int(99))], formalOperators: [identity]) == .int(4)
+      try compiledValue(expression, values: [("value", .int(99))], formalOperators: [identity]) == value
     )
   }
 
@@ -235,15 +236,19 @@ struct FormalOperatorTests {
     #expect(try compiledValue(expression, formalOperators: [first]) == .int(42))
   }
 
-  @Test("exploration and compiled execution apply a specification-owned formal operator")
-  func appliesFormalOperatorAtTheTransitionBoundary() throws {
+  @Test("exploration and emitted calls retain specification-owned operator identity", arguments: [
+    ("applyTwice", "operation"), ("Len", "operation"), ("Spec", "operation"),
+    ("WF_step", "WF_operation"), ("SF_step", "SF_operation"), ("_1", "_2"), ("applyTwice", "IF"),
+    ("TRUE", "TRUE"), ("FALSE", "FALSE"), ("BOOLEAN", "BOOLEAN"), ("STRING", "STRING")
+  ])
+  func appliesFormalOperatorAtTheTransitionBoundary(name: String, parameterName: String) throws {
     let applyTwice = FormalOperatorDefinition(
-      name: "applyTwice",
-      parameters: [.operator("operation", arity: 1), .value("initial")],
+      name: name,
+      parameters: [.operator(parameterName, arity: 1), .value("initial")],
       body: .operatorApplication(
-        .reference("operation", arity: 1),
+        .reference(parameterName, arity: 1),
         [.value(.operatorApplication(
-          .reference("operation", arity: 1),
+          .reference(parameterName, arity: 1),
           [.value(.variable("initial"))]
         ))]
       )
@@ -260,7 +265,7 @@ struct FormalOperatorTests {
         body: .assign(
           .named("counter"),
           .operatorApplication(
-            .reference("applyTwice", arity: 2),
+            .reference(name, arity: 2),
             [.operator(increment), .value(.variable("counter"))]
           )
         )
@@ -274,6 +279,30 @@ struct FormalOperatorTests {
     )
 
     let compilation = try spec.compile()
+    let rendered = try compilation.render().tlaBundle.root.tla
+    let operation = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
+    let formalName = try #require(compilation.bindings.operatorName(operation))
+    #expect(compilation.bindings.sourceOperators[name] == operation)
+    if let expected = ["WF_step": "_WF_step", "SF_step": "_SF_step", "_1": "v_1",
+                       "TRUE": "TRUE_1", "FALSE": "FALSE_1", "BOOLEAN": "BOOLEAN_1", "STRING": "STRING_1"][name] {
+      #expect(formalName == expected)
+    }
+    let definition = try #require(compilation.semantics.operators[operation])
+    let firstParameter = try #require(definition.parameters.first)
+    guard case .operator(let parameter, let arity) = firstParameter else {
+      Issue.record("Expected the declared operator parameter")
+      return
+    }
+    #expect(arity == 1)
+    let formalParameterName = try #require(compilation.bindings.operatorName(parameter))
+    if let expected = ["WF_operation": "_WF_operation", "SF_operation": "_SF_operation", "_2": "v_2", "IF": "_IF",
+                       "TRUE": "TRUE_2", "FALSE": "FALSE_2", "BOOLEAN": "BOOLEAN_2", "STRING": "STRING_2"][parameterName] {
+      #expect(formalParameterName == expected)
+    }
+    #expect(rendered.contains("\(formalName)(\(formalParameterName)(_),"))
+    #expect(!["Len", "Spec"].contains(formalName))
+    #expect(rendered.contains("\(formalName)("))
+    #expect(rendered.split(separator: "\n").filter { $0.hasPrefix("Spec ==") }.count == 1)
     let initial = try firstCompiledState(in: compilation)
     let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
     #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(2))
@@ -287,8 +316,9 @@ struct FormalOperatorTests {
     #expect(try exploration.outcome.diagnostic?.trace.map { try value("counter", in: $0.state) } == [.int(0), .int(2), .int(4)])
   }
 
-  @Test("an imported module exports executable formal operators")
-  func resolvesImportedFormalOperators() throws {
+  @Test("imported and instance-qualified formal calls retain exported operator names",
+    arguments: ["applyTwice", "Len", "Spec", "WF_step", "SF_step", "_1", "TRUE", "FALSE", "BOOLEAN", "STRING"])
+  func resolvesImportedFormalOperators(name: String) throws {
     let increment = FormalOperator.lambda(FormalLambda(
       parameters: ["value"],
       body: .add(.variable("value"), .int(1))
@@ -299,7 +329,7 @@ struct FormalOperatorTests {
       actions: [],
       invariants: [],
       formalOperatorDefinitions: [FormalOperatorDefinition(
-        name: "applyTwice",
+        name: name,
         parameters: [.operator("operation", arity: 1), .value("initial")],
         body: .operatorApplication(
           .reference("operation", arity: 1),
@@ -310,32 +340,66 @@ struct FormalOperatorTests {
         )
       )]
     )
-    let consumer = TLASpec(
-      name: "FormalConsumer",
-      variables: [NamedVar(name: "counter", initial: .int(0))],
-      actions: [NamedAction(
-        name: "advance",
-        body: .assign(
-          .named("counter"),
-          .operatorApplication(
-            .reference("applyTwice", arity: 2),
-            [.operator(increment), .value(.variable("counter"))]
+    for qualified in [false, true] {
+      let reference = qualified ? "Operators!\(name)" : name
+      let consumer = TLASpec(
+        name: "FormalConsumer",
+        variables: [NamedVar(name: "counter", initial: .int(0))],
+        actions: [NamedAction(
+          name: "advance",
+          body: .assign(
+            .named("counter"),
+            .letIn([
+              LocalOperator("Len_1", parameters: [], body: .int(0)),
+              LocalOperator("Spec_1_1", parameters: [], body: .int(0)),
+              LocalOperator("_WF_step", parameters: [], body: .int(0)),
+              LocalOperator("_SF_step", parameters: [], body: .int(0)),
+              LocalOperator("v_1", parameters: [], body: .int(0)),
+              LocalOperator("TRUE_1", parameters: [], body: .int(0)),
+              LocalOperator("FALSE_1", parameters: [], body: .int(0)),
+              LocalOperator("BOOLEAN_1", parameters: [], body: .int(0)),
+              LocalOperator("STRING_1", parameters: [], body: .int(0))
+            ],
+              .operatorApplication(
+                .reference(reference, arity: 2),
+                [.operator(increment), .value(.variable("counter"))]
+              )
+            )
           )
-        )
-      )],
-      invariants: [],
-      constraints: [.init(.lessOrEqual(.variable("counter"), .int(2)))],
-      imports: [library]
-    )
+        )],
+        invariants: [.init(name: "keepsModelValue", body: .equal(
+          .value(.constant("Spec_1")), .value(.constant("Spec_1"))
+        ))],
+        constraints: [.init(.lessOrEqual(.variable("counter"), .int(2)))],
+        imports: qualified ? [] : [library],
+        moduleInstances: qualified ? [.init("Operators", of: library)] : []
+      )
 
-    let compilation = try consumer.compile()
-    let initial = try firstCompiledState(in: compilation)
-    let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
-    #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(2))
-    let exploration = try ModelChecker(compilation: compilation, configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
-    #expect(exploration.isComplete)
-    #expect(exploration.graph.states.count == 2)
-    #expect(exploration.safetyViolations.isEmpty)
+      let compilation = try consumer.compile()
+      let bundle = try compilation.render().tlaBundle
+      let operation = try #require(compilation.bindings.sourceOperators[reference])
+      let formalName = try #require(compilation.bindings.operatorName(operation))
+      let exportedName = try #require(formalName.split(separator: "!").last)
+      #expect(!["Len", "Spec"].contains(String(exportedName)))
+      if let expected = ["WF_step": "_WF_step", "SF_step": "_SF_step", "_1": "v_1",
+                         "TRUE": "TRUE_1", "FALSE": "FALSE_1", "BOOLEAN": "BOOLEAN_1", "STRING": "STRING_1"][name] {
+        #expect(String(exportedName) == expected)
+      }
+      #expect(!compilation.moduleMetadata.modelValueNames.contains(formalName),
+        "An imported operator alias must stay distinct from the caller's model value")
+      #expect(bundle.root.tla.contains("CONSTANTS Spec_1"))
+      #expect(compilation.bindings.operatorNames.values.filter { $0 == formalName }.count == 1,
+        "An imported operator alias must not be captured by a distinct local declaration")
+      #expect(bundle.root.tla.contains("\(formalName)("))
+      #expect(try #require(bundle.imports.first).tla.contains("\(exportedName)("))
+      let initial = try firstCompiledState(in: compilation)
+      let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
+      #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(2))
+      let exploration = try ModelChecker(compilation: compilation, configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
+      #expect(exploration.isComplete)
+      #expect(exploration.graph.states.count == 2)
+      #expect(exploration.safetyViolations.isEmpty)
+    }
   }
 
   @Test("Folds is executable after import, not only emitted source")

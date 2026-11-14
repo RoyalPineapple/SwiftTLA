@@ -1,8 +1,10 @@
 import Foundation
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
+import SwiftTLACompilerSupport
 import SwiftParser
 import SwiftSyntax
+import SwiftTLAMacros
 import Testing
 
 @Suite("Dependent initialization output proof input")
@@ -36,6 +38,8 @@ struct DependentInitializationOutputProofTests {
             "pc = \"finish\"",
             "seed \\in 0..1",
             "choice \\in (IF (seed = 0) THEN {0} ELSE {0, 1})",
+            StraightLineRenderedActionCheck.initialIntStatePredicate(named: "seed"),
+            StraightLineRenderedActionCheck.initialIntStatePredicate(named: "choice"),
         ]
         let missingDependentClause = rendered.replacingOccurrences(
             of: "  /\\ choice \\in (IF (seed = 0) THEN {0} ELSE {0, 1})\n", with: "")
@@ -45,8 +49,314 @@ struct DependentInitializationOutputProofTests {
             Issue.record("A missing dependent initializer was accepted")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "tla.Init")
-            #expect(diagnostic.actual == "Init ==\n  /\\ pc = \"finish\"\n  /\\ seed \\in 0..1")
+            let remaining = predicates.filter { !$0.hasPrefix("choice \\in ") }
+            #expect(diagnostic.actual == (["Init =="] + remaining.map { "  /\\ \($0)" }).joined(separator: "\n"))
         }
+
+        let compilation = try DependentInitializationOutputProofModel.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let independentDomains = Dictionary(uniqueKeysWithValues: program.behavior.initializations.compactMap {
+            initialization -> (String, String)? in
+            let name = program.layout.variables[initialization.variable.ordinal].declaration.name
+            guard let predicate = StraightLineRenderedActionCheck.initialIntPredicate(
+                initialization.initialization, named: name, layout: program.layout) else { return nil }
+            return (name, predicate)
+        })
+        #expect(independentDomains.count == 2)
+        for initialization in compilation.semantics.behavior.initializations {
+            guard case .memberOf = initialization.initialization else { continue }
+            let name = compilation.layout.variables[initialization.variable.ordinal].declaration.name
+            #expect(StraightLineRenderedActionCheck.initialIntPredicate(
+                initialization.initialization, named: name, layout: compilation.layout) == independentDomains[name])
+        }
+        try verifyRenderedInitialConjunction(rendered, predicates: predicates,
+            expectedControlLocations: ["pc": "finish"], expectedIntPredicates: independentDomains,
+            expectedIntStateNames: ["seed", "choice"], expectedPredicateCount: 5,
+            requireCompleteSimpleInitials: true)
+        let extraConjunct = rendered.replacingOccurrences(of: "Init ==\n",
+            with: "Init ==\n  /\\ FALSE\n")
+        #expect(extraConjunct != rendered)
+        do {
+            try verifyRenderedInitialConjunction(extraConjunct, predicates: ["FALSE"] + predicates,
+                expectedControlLocations: ["pc": "finish"], expectedIntPredicates: independentDomains,
+                expectedIntStateNames: ["seed", "choice"], expectedPredicateCount: 5,
+                requireCompleteSimpleInitials: true)
+            Issue.record("Complete TLA Init corruption accepted: extraConjunct")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.Init")
+        }
+        let wrongRange = rendered.replacingOccurrences(of: "seed \\in 0..1", with: "seed \\in 0..2")
+        #expect(wrongRange != rendered)
+        do {
+            try verifyRenderedInitialConjunction(wrongRange,
+                predicates: predicates.map { $0.replacingOccurrences(of: "seed \\in 0..1", with: "seed \\in 0..2") },
+                expectedControlLocations: ["pc": "finish"], expectedIntPredicates: independentDomains,
+                expectedIntStateNames: ["seed", "choice"], expectedPredicateCount: 5,
+                requireCompleteSimpleInitials: true)
+            Issue.record("Complete TLA Init corruption accepted: rangeBounds")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "tla.Init")
+        }
+
+        let fallible = #spec("DependentInitializationOutputProofModel") {
+            let proof = Algorithm(label: "DependentInitializationOutputProofModel", scoped: { scope in
+                let seed = scope.sharedVar(in: 0...1)
+                let choice = scope.sharedVar(in: If(seed == 0,
+                    then: SetExpr<Int>.literal(0),
+                    else: SetExpr<Int>.literal(seed, seed + 9_223_372_036_854_775_807)))
+                Do(DependentInitializationOutputProofModel.Step.finish) {
+                    Assign(choice, to: choice)
+                    Stop()
+                }
+            })
+            proof
+        }
+        let fallibleProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: fallible.compile()))
+        let outcomes = try CompiledRuntime(program: fallibleProgram).initialOutcomes()
+        try #require(outcomes.states.count == 1)
+        let seedID = try #require(fallibleProgram.layout.variables.first { $0.declaration.name == "seed" }).id
+        let choiceID = try #require(fallibleProgram.layout.variables.first { $0.declaration.name == "choice" }).id
+        #expect(try outcomes.states[0].value(for: seedID) == .integer(0))
+        #expect(try outcomes.states[0].value(for: choiceID) == .integer(0))
+        #expect(outcomes.firstFailure == .integerOverflow(.addition, operands: [1, Int.max]))
+        #expect(outcomes.firstFailureInitializerOrdinal == choiceID.ordinal)
+        try #require(outcomes.failures.count == 1)
+        let seed = try #require(TLAStateProjection.Token(validating: "seed"))
+        let pc = try #require(TLAStateProjection.Token(validating: "pc"))
+        #expect(outcomes.failures[0].site == .initializer(choiceID.ordinal))
+        #expect(try outcomes.failures[0].formalBindingsBeforeFailure() == TLAStateProjection(validating: [
+            .init(token: pc, value: .string("finish")), .init(token: seed, value: .int(1))
+        ]))
+        var fallibleEmitter = NativeSwiftEmitter(model: try MacroCompilation(
+            typeName: "DependentInitializationOutputProofModel", program: fallibleProgram))
+        let native = try #require(try fallibleEmitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        try #require(native.description.contains("SwiftTLA._nativeIntAdd(_arithmetic0, _arithmetic1)"))
+        try fallibleEmitter.verifyIntInitialOutput(native)
+        let changedNativeOutputs = [
+            ("additionOperand", native.description.replacingOccurrences(
+                of: "SwiftTLA._nativeIntAdd(_arithmetic0, _arithmetic1)",
+                with: "SwiftTLA._nativeIntAdd(_arithmetic0, 0)")),
+            ("initializerSite", native.description.replacingOccurrences(
+                of: "evaluatingInitializerOrdinal = \(choiceID.ordinal)",
+                with: "evaluatingInitializerOrdinal = \(seedID.ordinal)")),
+            ("earlyReturn", native.description.replacingOccurrences(
+                of: "var result: [Snapshot] = []",
+                with: "var result: [Snapshot] = []\nreturn SwiftTLA._nativeInitialOutcomes(states: result, failures: [])")),
+        ]
+        for (label, changed) in changedNativeOutputs {
+            try #require(changed != native.description)
+            let declaration = try #require(Parser.parse(source: changed).statements.first?.item.as(DeclSyntax.self))
+            do {
+                try fallibleEmitter.verifyIntInitialOutput(declaration)
+                Issue.record("Fallible domain native corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+            }
+        }
+        let fallibleTLA = try fallibleProgram.renderModule().renderedModuleSource
+        #expect(try fallible.compile().render().tlaBundle.root.tla == fallibleTLA)
+        let eventDeclaration = try #require(fallibleTLA.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAInitialFailureEvents == ")
+        })
+        let eventSet = String(eventDeclaration.dropFirst("__SwiftTLAInitialFailureEvents == UNION {".count).dropLast())
+        if !fallibleTLA.contains("__SwiftTLAInitialOverflowFailure\(choiceID.ordinal)(") {
+            Issue.record("Fallible memberOf domain lost its TLA initial failure relation")
+        } else {
+            try #require(fallibleTLA.split(separator: "\n").contains {
+                $0.hasPrefix("  /\\ (IF ") && $0.contains("THEN choice \\in ")
+            })
+            #expect(!fallibleTLA.contains("__SwiftTLASelectedInitialFailureRecord"))
+            let index = try #require(fallibleProgram.behavior.initializations.firstIndex {
+                $0.variable == choiceID
+            })
+            let prefix = fallibleProgram.behavior.initializations[..<index]
+            guard case .memberOf(let domain) = fallibleProgram.behavior.initializations[index].initialization else {
+                Issue.record("The actual fallible domain changed its initializer kind")
+                return
+            }
+            let declaration = try #require(fallibleTLA.split(separator: "\n").first {
+                $0.hasPrefix("__SwiftTLAInitialOverflowFailure\(choiceID.ordinal)(")
+            }).description
+            let separator = try #require(declaration.range(of: " == "))
+            let header = String(declaration[..<separator.lowerBound])
+            let relation = String(declaration[separator.upperBound...])
+            let open = try #require(header.firstIndex(of: "("))
+            let close = try #require(header.lastIndex(of: ")"))
+            let operandsName = String(header[header.index(after: open)..<close])
+            let binderPattern = try NSRegularExpression(
+                pattern: #"(?:LET|\\E) (__SwiftTLAInitialValue[0-9]+_*) (?:==|\\in)"#)
+            let boundNames = binderPattern.matches(in: relation,
+                range: NSRange(relation.startIndex..<relation.endIndex, in: relation)).compactMap {
+                match -> String? in
+                Range(match.range(at: 1), in: relation).map { String(relation[$0]) }
+            }
+            try #require(boundNames.count == prefix.count)
+            let names = Dictionary(uniqueKeysWithValues: zip(prefix.map(\.variable), boundNames))
+            let renderer = CompiledTLARenderer(moduleName: fallibleProgram.moduleName,
+                reservedNames: [], layout: fallibleProgram.layout,
+                bindings: .init(binders: fallibleProgram.binderNames), operators: .init(),
+                actions: fallibleProgram.behavior.actions, functions: fallibleProgram.functions,
+                enums: fallibleProgram.enums, parameterDomains: fallibleProgram.behavior.parameterDomains)
+            let failure = try #require(try renderer.expressionEvaluationFailures(domain, stateNames: names).first)
+            let operands = try #require(failure.operands)
+            let operation = try #require(fallibleTLA.split(separator: "\n").first {
+                $0.hasPrefix("__SwiftTLAInitialOverflowOperation\(choiceID.ordinal) == ")
+            }).description
+            let aggregateName = "__SwiftTLAAnyInitialEvaluationFailure"
+            let aggregate = try #require(fallibleTLA.split(separator: "\n").first {
+                $0.hasPrefix("\(aggregateName) == ")
+            })
+            let selected = String(aggregate.dropFirst("\(aggregateName) == ".count))
+            try #require(selected.hasPrefix("(") && selected.hasSuffix(")"))
+            let selection = String(selected.dropFirst().dropLast())
+            func verifyEvents(_ events: [String]) throws {
+                try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(domain,
+                    after: prefix, names: names,
+                    emitted: [(failure, relation, operandsName, selection, operation, nil)],
+                    siteOrdinal: choiceID.ordinal, eventSets: events, layout: fallibleProgram.layout)
+            }
+            try verifyEvents([eventSet])
+            let pcID = try #require(prefix.first { prior in
+                fallibleProgram.layout.variables[prior.variable.ordinal].declaration.origin == .programCounter
+            }?.variable)
+            let pcName = try #require(names[pcID])
+            let seedName = try #require(names[seedID])
+            let before = "before |-> <<[name |-> \"pc\", value |-> \(pcName)], [name |-> \"seed\", value |-> \(seedName)]>>"
+            let eventCorruptions = [
+                ("site", eventSet.replacingOccurrences(of: "site |-> \(choiceID.ordinal)",
+                    with: "site |-> \(seedID.ordinal)")),
+                ("before", eventSet.replacingOccurrences(of: before, with: "before |-> <<>>")),
+                ("branch", eventSet.replacingOccurrences(of: " \\in 0..1}", with: " \\in 0..0}"))
+            ]
+            for (label, changed) in eventCorruptions {
+                try #require(changed != eventSet)
+                do {
+                    try verifyEvents([changed])
+                    Issue.record("Fallible domain event-set corruption accepted: \(label)")
+                } catch let diagnostic as CompilationDiagnostic {
+                    #expect(diagnostic.path == "tla.initialEvaluationFailures")
+                }
+            }
+            #expect(throws: CompilationDiagnostic.self) { try verifyEvents([]) }
+            for label in ["payload", "prefix", "missingRelation"] {
+                var changedModule = fallibleTLA
+                var emitted: [(failure: RenderedEvaluationFailure, relation: String,
+                    operandsName: String?, selection: String, operationDeclaration: String?, record: String?)]
+                    = [(failure, relation, operandsName, selection, operation, nil)]
+                switch label {
+                case "payload":
+                    emitted[0].relation = relation.replacingOccurrences(of: "\(operandsName) = \(operands)",
+                        with: "\(operandsName) = <<0, 0>>")
+                    try #require(emitted[0].relation != relation)
+                    changedModule = changedModule.replacingOccurrences(of: declaration,
+                        with: "\(header) == \(emitted[0].relation)")
+                case "prefix":
+                    emitted[0].relation = relation.replacingOccurrences(of: " \\in 0..1:", with: " \\in 0..0:")
+                    emitted[0].selection = selection.replacingOccurrences(of: " \\in 0..1:", with: " \\in 0..0:")
+                    try #require(emitted[0].relation != relation && emitted[0].selection != selection)
+                    changedModule = changedModule.replacingOccurrences(of: declaration,
+                        with: "\(header) == \(emitted[0].relation)")
+                        .replacingOccurrences(of: String(aggregate),
+                            with: "\(aggregateName) == (\(emitted[0].selection))")
+                default:
+                    changedModule = changedModule.replacingOccurrences(of: declaration + "\n", with: "")
+                    emitted.removeAll()
+                }
+                try #require(changedModule != fallibleTLA)
+                try #require(changedModule.split(separator: "\n").filter {
+                    $0.hasPrefix("__SwiftTLAInitialOverflowFailure\(choiceID.ordinal)(")
+                }.count == emitted.count)
+                if let output = emitted.first {
+                    try #require(changedModule.contains("\(header) == \(output.relation)"))
+                    try #require(changedModule.contains("\(aggregateName) == (\(output.selection))"))
+                }
+                do {
+                    try StraightLineRenderedActionCheck.verifyInitialAdditionFailures(domain,
+                        after: prefix, names: names, emitted: emitted,
+                        siteOrdinal: nil, eventSets: nil, layout: fallibleProgram.layout)
+                    Issue.record("Fallible domain TLA corruption accepted: \(label)")
+                } catch let diagnostic as CompilationDiagnostic {
+                    #expect(diagnostic.path == "tla.initialEvaluationFailures")
+                }
+            }
+            let independent = try #require(StraightLineRenderedActionCheck.initialIntPredicate(
+                .memberOf(domain), named: "choice", layout: fallibleProgram.layout))
+            let initStart = try #require(fallibleTLA.range(of: "Init ==\n"))
+            let tail = fallibleTLA[initStart.upperBound...]
+            let initEnd = try #require(tail.range(of: "\n\n"))
+            let clauses = tail[..<initEnd.lowerBound].split(separator: "\n")
+            try #require(clauses.allSatisfy { $0.hasPrefix("  /\\ ") })
+            let predicates = clauses.map { String($0.dropFirst("  /\\ ".count)) }
+            try verifyRenderedInitialConjunction(fallibleTLA, predicates: predicates,
+                expectedIntPredicates: ["choice": independent])
+            let unguarded = "choice \\in \(try renderer.state(domain))"
+            for (label, replacement) in [
+                ("definedness", unguarded),
+                ("branchValue", independent.replacingOccurrences(of: "THEN {0} ELSE", with: "THEN {1} ELSE")),
+            ] {
+                try #require(replacement != independent)
+                let changedModule = fallibleTLA.replacingOccurrences(of: independent, with: replacement)
+                try #require(changedModule != fallibleTLA)
+                do {
+                    try verifyRenderedInitialConjunction(changedModule,
+                        predicates: predicates.map { $0 == independent ? replacement : $0 },
+                        expectedIntPredicates: ["choice": independent])
+                    Issue.record("Fallible domain TLA Init corruption accepted: \(label)")
+                } catch let diagnostic as CompilationDiagnostic {
+                    #expect(diagnostic.path == "tla.Init")
+                }
+            }
+        }
+
+        let plainSet = #spec("DependentInitializationOutputProofModel") {
+            let proof = Algorithm(label: "DependentInitializationOutputProofModel", scoped: { scope in
+                let seed = scope.sharedVar(in: 0...1)
+                let choice = scope.sharedVar(in: SetExpr<Int>.literal(seed, seed + 9_223_372_036_854_775_807))
+                Do(DependentInitializationOutputProofModel.Step.finish) {
+                    Assign(choice, to: choice)
+                    Stop()
+                }
+            })
+            proof
+        }
+        let afterRange = #spec("DependentInitializationOutputProofModel") {
+            let proof = Algorithm(label: "DependentInitializationOutputProofModel", scoped: { scope in
+                let seed = scope.sharedVar(in: 0...1)
+                let choice = scope.sharedVar(initial: seed + 9_223_372_036_854_775_807)
+                Do(DependentInitializationOutputProofModel.Step.finish) {
+                    Assign(choice, to: choice)
+                    Stop()
+                }
+            })
+            proof
+        }
+        for (label, specification, expectedChoices) in [
+            ("plainSet", plainSet, [0, Int.max]),
+            ("afterRange", afterRange, [Int.max]),
+        ] {
+            let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+            let seed = try #require(program.layout.variables.first { $0.declaration.name == "seed" }).id
+            let choice = try #require(program.layout.variables.first { $0.declaration.name == "choice" }).id
+            let outcomes = try CompiledRuntime(program: program).initialOutcomes()
+            try #require(outcomes.states.count == expectedChoices.count)
+            #expect(try outcomes.states.map { try $0.value(for: seed) }
+                == expectedChoices.map { _ in CompiledValue.integer(0) })
+            #expect(Set(try outcomes.states.map { try $0.value(for: choice) })
+                == Set(expectedChoices.map(CompiledValue.integer)))
+            #expect(outcomes.firstFailure == .integerOverflow(.addition, operands: [1, Int.max]))
+            #expect(outcomes.firstFailureInitializerOrdinal == choice.ordinal)
+            var emitter = NativeSwiftEmitter(model: try MacroCompilation(
+                typeName: "DependentInitializationOutputProofModel", program: program))
+            _ = try emitter.machineMembers()
+            let tla = try program.renderModule().renderedModuleSource
+            #expect(try specification.compile().render().tlaBundle.root.tla == tla)
+            if !tla.contains("__SwiftTLAInitialOverflowFailure\(choice.ordinal)(") {
+                Issue.record("Fallible Int initialization lost its TLA failure relation: \(label)")
+            }
+        }
+
     }
 
     @Test("Generated Swift initial bindings follow the compiled initialization plan")
@@ -60,9 +370,12 @@ struct DependentInitializationOutputProofTests {
         }.first { $0.name.text == "DependentInitializationOutputProofModel" })
         let model = try TLASpecVerifier.parseAndVerify(declaration)
         var emitter = NativeSwiftEmitter(model: model)
-        let initialStates = try #require(try emitter.machineMembers().first {
+        let emittedMembers = try emitter.machineMembers()
+        let initialIndex = try #require(emittedMembers.firstIndex {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
         })
+        let initialDeclarations = Array(emittedMembers[initialIndex...])
+        let initialStates = try #require(initialDeclarations.first)
         let expected = model.program.behavior.initializations.map { initialization in
             let name = emitter.variable(initialization.variable)
             switch initialization.initialization {
@@ -85,14 +398,20 @@ struct DependentInitializationOutputProofTests {
         })
         let choiceName = emitter.variable(choice.id)
         let expectedChoiceSource = """
-        ((\(name) == 0) ? Set<Int>([0]) : Set<Int>([0, 1])).sorted(by: { (lhs: Int, rhs: Int) -> Bool in
+        ((\(name) == 0) ? Set<\(nativeIntType)>([0]) : Set<\(nativeIntType)>([0, 1])).sorted(by: { (lhs: \(nativeIntType), rhs: \(nativeIntType)) -> \(nativeBoolType) in
         return lhs < rhs
         })
         """
         func verify(_ declaration: DeclSyntax) throws {
             try verifyGeneratedInitialBindings(declaration, expected: expected,
                 expectedLoops: expectedLoops,
-                expectedCandidateSources: ["\(choiceName)Candidates": expectedChoiceSource])
+                expectedCandidateSources: ["\(choiceName)Candidates": expectedChoiceSource],
+                expectedControlLocations: Dictionary(uniqueKeysWithValues:
+                    model.program.behavior.initializations.compactMap { initialization -> (String, Int)? in
+                        guard case .value(let expression) = initialization.initialization,
+                              case .controlLocation(let location) = expression.operation else { return nil }
+                        return (emitter.variable(initialization.variable), location.ordinal)
+                    }))
         }
         try verify(initialStates)
 
@@ -115,7 +434,7 @@ struct DependentInitializationOutputProofTests {
         }
 
         let wrongCandidateSource = initialStates.description.replacingOccurrences(
-            of: "Set<Int>([0, 1])).sorted", with: "Set<Int>([0])).sorted")
+            of: "Set<\(nativeIntType)>([0, 1])).sorted", with: "Set<\(nativeIntType)>([0])).sorted")
         #expect(wrongCandidateSource != initialStates.description)
         let wrongCandidate = try #require(Parser.parse(source: wrongCandidateSource).statements.first?.item.as(DeclSyntax.self))
         #expect(throws: CompilationDiagnostic.self) {
@@ -180,6 +499,165 @@ struct DependentInitializationOutputProofTests {
             Issue.record("An initializer that appends the wrong complete state was accepted")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native._initialStates.assembly")
+        }
+
+        func verifyComplete(_ declaration: DeclSyntax) throws {
+            try verify(declaration)
+            try verifySelection(declaration)
+            try emitter.verifyInitialStateAssembly(declaration)
+            try emitter.verifyIntInitialOutput(declaration)
+            try verifyRandomSubsetInitialSupport(declaration, expected: [])
+            try verifyGeneratedInitialConstruction(
+                [declaration] + Array(initialDeclarations.dropFirst()), configured: false)
+        }
+        try verifyComplete(initialStates)
+        let callback = "try SwiftTLA._visitNativeInitialBranch({"
+        try #require(initialStates.description.components(separatedBy: callback).count - 1 == expectedLoops.count + 1)
+        let callbackRange = try #require(initialStates.description.range(of: callback))
+        var replacedVisitor = initialStates.description
+        replacedVisitor.replaceSubrange(callbackRange,
+            with: "try SwiftTLA._NativeMachineOperations.visitInitialBranch({")
+        var earlyReturn = initialStates.description
+        earlyReturn.replaceSubrange(callbackRange, with: callback + "\nreturn\n")
+        let prunedSibling = initialStates.description.replacingOccurrences(
+            of: "for \(choiceName) in \(choiceName)Candidates {",
+            with: "for \(choiceName) in \(choiceName)Candidates {\nif \(choiceName) == 1 { continue }\n")
+        let wrongRangeBounds = initialStates.description.replacingOccurrences(
+            of: "let bounds = (0, 1)", with: "let bounds = (0, 2)")
+        let collection = "SwiftTLA._appendNativeOutcome(&result, "
+        try #require(initialStates.description.components(separatedBy: collection).count == 2)
+        let droppedCollection = initialStates.description.replacingOccurrences(of: collection, with: "result.append(")
+        let completePath = "native._initialStates.completeIntOutput"
+        for (label, source, expectedPath) in [
+            ("callerVisitor", replacedVisitor, completePath),
+            ("earlyReturn", earlyReturn, completePath), ("prunedSibling", prunedSibling, completePath),
+            ("rangeBounds", wrongRangeBounds, completePath),
+            ("collector", droppedCollection, "native._initialStates.assembly")
+        ] {
+            #expect(source != initialStates.description)
+            let mutated = try #require(Parser.parse(source: source).statements.first?.item.as(DeclSyntax.self))
+            do {
+                try verifyComplete(mutated)
+                Issue.record("Complete Swift initialization corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == expectedPath)
+            }
+        }
+
+        let record = try swiftRecordModel()
+        var recordEmitter = NativeSwiftEmitter(model: record)
+        let recordInitial = try #require(try recordEmitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        try recordEmitter.verifyInitialSelection(recordInitial, expectedMembershipSources: [:])
+        let packet = try #require(record.program.layout.variables.first { $0.declaration.name == "packet" })
+        let selectedPacket = "_selectedInitial!.packet"
+        try #require(recordInitial.description.components(separatedBy: selectedPacket).count - 1 == 2)
+        let ignoredSelection = recordInitial.description.replacingOccurrences(
+            of: selectedPacket, with: recordEmitter.variable(packet.id))
+        #expect(ignoredSelection != recordInitial.description)
+        let ignoredSelectionDeclaration = try #require(Parser.parse(source: ignoredSelection)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try recordEmitter.verifyInitialSelection(ignoredSelectionDeclaration, expectedMembershipSources: [:])
+            Issue.record("A record initializer that compares the candidate with itself was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.selection.\(recordEmitter.variable(packet.id))")
+        }
+
+        let namedSource = try String(contentsOf: fixture, encoding: .utf8)
+            .replacingOccurrences(of: "enum Step: String, CaseIterable { case finish }",
+                with: "enum Seed: Int, CaseIterable { case zero = 0, one = 1 }\n    enum Step: String, CaseIterable { case finish }")
+            .replacingOccurrences(of: "let seed = scope.sharedVar(in: 0...1)",
+                with: "let seed = scope.sharedVar(in: SetExpr<Seed>.literal(.zero, .one))")
+            .replacingOccurrences(of: "If(seed == 0,", with: "If(seed == Seed.zero,")
+        let namedDeclaration = try #require(Parser.parse(source: namedSource).statements.compactMap {
+            $0.item.as(StructDeclSyntax.self)
+        }.first { $0.name.text == "DependentInitializationOutputProofModel" })
+        let named = try TLASpecVerifier.parseAndVerify(namedDeclaration)
+        let namedSeed = try #require(named.program.layout.variables.first {
+            $0.declaration.name == "seed"
+        })
+        #expect(named.program.variableTypes[namedSeed.id] == .named("Seed"))
+        _ = try named.program.renderModule()
+        var namedEmitter = NativeSwiftEmitter(model: named)
+        _ = try namedEmitter.machineMembers()
+
+        let mathematicalSource = try String(contentsOf: fixture, encoding: .utf8)
+            .replacingOccurrences(of: "let seed = scope.sharedVar(in: 0...1)",
+                with: "let seed = scope.sharedVar(in: Int.all)")
+        let mathematicalDeclaration = try #require(Parser.parse(source: mathematicalSource)
+            .statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "DependentInitializationOutputProofModel" })
+        let mathematical = try TLASpecVerifier.parseAndVerify(mathematicalDeclaration)
+        let mathematicalSeed = try #require(mathematical.program.layout.variables.first {
+            $0.declaration.name == "seed"
+        })
+        let mathematicalInitialization = try #require(mathematical.program.behavior.initializations.first {
+            $0.variable == mathematicalSeed.id
+        }?.initialization)
+        guard case .memberOf(let mathematicalDomain) = mathematicalInitialization else {
+            Issue.record("The mathematical Int initializer must retain its membership domain")
+            return
+        }
+        #expect(mathematicalDomain.operation == .integerSet)
+        #expect(mathematicalDomain.children.isEmpty)
+        #expect(mathematicalDomain.resultType == .set(.int))
+        _ = try mathematical.program.renderModule()
+        var mathematicalEmitter = NativeSwiftEmitter(model: mathematical)
+        let mathematicalInitial = try #require(try mathematicalEmitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        try mathematicalEmitter.verifyIntInitialOutput(mathematicalInitial)
+        let emitted = mathematicalInitial.description
+        let enumeration = "(try SwiftTLA._NativeMachineOperations.integerSet())"
+        let membership = "return { _ in true }"
+        try #require(emitted.components(separatedBy: enumeration).count == 2)
+        try #require(emitted.components(separatedBy: membership).count == 2)
+        for (label, changed) in [
+            ("enumeration", emitted.replacingOccurrences(of: enumeration, with: "Set<\(nativeIntType)>()")),
+            ("membership", emitted.replacingOccurrences(of: membership, with: "return { _ in false }")),
+            ("earlyReturn", emitted.replacingOccurrences(of: "var result: [Snapshot] = []",
+                with: "var result: [Snapshot] = []\nif _selectedInitial == nil { return SwiftTLA._nativeInitialOutcomes(states: result, failures: []) }")),
+        ] {
+            try #require(changed != emitted)
+            let corrupted = try #require(Parser.parse(source: changed).statements.first?.item.as(DeclSyntax.self))
+            do {
+                try mathematicalEmitter.verifyIntInitialOutput(corrupted)
+                Issue.record("Complete Swift integerSet corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "native._initialStates.completeIntOutput")
+            }
+        }
+
+        let specification = try #require(try TLASpecVerifier.findSpec(in: declaration.memberBlock.members))
+        try #require(declaration.description.components(separatedBy: specification.closure.description).count == 2)
+        let assumptionOnlySource = declaration.description.replacingOccurrences(
+            of: specification.closure.description, with: "{ Assume(true) }")
+        let assumptionOnlyDeclaration = try #require(Parser.parse(source: assumptionOnlySource)
+            .statements.first?.item.as(StructDeclSyntax.self))
+        let assumptionOnly = try TLASpecVerifier.parseAndVerify(assumptionOnlyDeclaration)
+        #expect(assumptionOnly.program.layout.variables.isEmpty)
+        #expect(assumptionOnly.program.behavior.initializations.isEmpty)
+        let emptyStateOutcomes = try CompiledRuntime(program: assumptionOnly.program).initialOutcomes()
+        #expect(emptyStateOutcomes.states.count == 1)
+        #expect(emptyStateOutcomes.failures.isEmpty)
+        var assumptionOnlyEmitter = NativeSwiftEmitter(model: assumptionOnly)
+        let emptyStateInitial = try #require(try assumptionOnlyEmitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+        })
+        try assumptionOnlyEmitter.verifyIntInitialOutput(emptyStateInitial)
+        let appendEmptyState = "SwiftTLA._appendNativeOutcome(&result, Snapshot(state: State()))"
+        try #require(emptyStateInitial.description.components(separatedBy: appendEmptyState).count == 2)
+        let droppedEmptyState = emptyStateInitial.description.replacingOccurrences(of: appendEmptyState, with: "")
+        try #require(droppedEmptyState != emptyStateInitial.description)
+        let corruptedEmptyState = try #require(Parser.parse(source: droppedEmptyState)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try assumptionOnlyEmitter.verifyIntInitialOutput(corruptedEmptyState)
+            Issue.record("A generated initializer that loses the only empty state was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native._initialStates.completeIntOutput")
         }
     }
 }

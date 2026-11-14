@@ -93,6 +93,19 @@ final class SourceTypeResolver {
         try resolveType(source).type
     }
 
+    func normalizedStateType(_ spelling: String?, resolved: CompiledValueType?)
+        -> (spelling: String?, resolved: CompiledValueType?) {
+        guard let resolved else { return (spelling, nil) }
+        let primitives: [CompiledValueType] = [.int, .bool, .string]
+        if primitives.contains(resolved) {
+            let canonical = resolved.swiftType
+            if (try? resolve(canonical)) == resolved { return (canonical, nil) }
+            return (spelling, resolved)
+        }
+        let needsWitness = spelling == nil || ["Int", "Bool", "String"].contains(spelling ?? "")
+        return (spelling, needsWitness ? resolved : nil)
+    }
+
     func formalShape(for source: String) throws -> FormalValueShape {
         try resolveType(source).view
     }
@@ -310,7 +323,13 @@ final class SourceTypeResolver {
         }
         let view: FormalValueShape
         if let declaration = metadata.enums.first(where: { $0.typeName == name && $0.isFiniteDomain }) {
-            view = .finite(typeName: identity, values: declaration.finiteValues)
+            var values = declaration.finiteValues
+            if Set(declaration.cases.map(\.value)).count < declaration.cases.count {
+                // Normalized aliases denote one finite-view member.
+                var seen: Set<TLAValue> = []
+                values = values.filter { seen.insert($0).inserted }
+            }
+            view = .finite(typeName: identity, values: values)
         } else {
             view = .unsupported(name)
         }

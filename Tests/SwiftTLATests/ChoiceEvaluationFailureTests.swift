@@ -48,19 +48,20 @@ struct ChoiceEvaluationFailureTests {
         }
         var states = 0
         var edges = 0
-        var failures = 0
+        var failures: [NativeMachineEvaluationError] = []
         let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
             checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { event in
             switch event {
             case .state: states += 1
             case .edge: edges += 1
             case .evaluationFailure(let source, let action, let reason):
-                failures += 1
-                #expect(source == 0 && action == .pick && reason == .divisionByZero)
+                failures.append(reason)
+                #expect(source == 0 && action == .pick)
             default: break
             }
         }
-        #expect(states == 1 && edges == 0 && failures == 1)
+        #expect(states == 1 && edges == 0)
+        #expect(failures == [.divisionByZero, .negativeModuloDivisor(-1)])
         #expect(outcome.completion == .evaluationFailure(.divisionByZero))
 
         let rendered = try OrderedEnumCandidateFailuresModel.render()
@@ -90,7 +91,7 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("OrderedEnumCandidateFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
             == expected.tokens(viewMode: .sourceAccurate).map(\.text))
@@ -226,6 +227,18 @@ struct ChoiceEvaluationFailureTests {
         #expect(states == [0: 0, 1: 1])
         #expect(edges.count == 2 && edges[0] == (0, 1) && edges[1] == (1, 1))
 
+        var context = CheckingContext(registers: try machine.initialCheckingRegisters())
+        var classifiedCallbackErrors = 0
+        #expect(throws: NativeMachineEvaluationError.emptySequence) {
+            try machine.visitValidationOutcomes(checking: &context) { _, _ in
+                throw NativeMachineEvaluationError.emptySequence
+            } onEvaluationFailure: { _, _ in
+                classifiedCallbackErrors += 1
+                return true
+            }
+        }
+        #expect(classifiedCallbackErrors == 0)
+
         let rendered = try MixedCandidateDivisionFailureModel.render()
         #expect(rendered.intrinsicInvariantNames == Set(["__SwiftTLAEvaluationOK"]))
         let definitions = rendered.tlaBundle.root.tla.split(separator: "\n")
@@ -273,7 +286,7 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("MixedCandidateDivisionFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         let expectedTokens = expected.tokens(viewMode: .sourceAccurate).map(\.text)
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
@@ -341,6 +354,35 @@ struct ChoiceEvaluationFailureTests {
         #expect(machine.state.divisor == 0 && machine.state.modulus == -1 && machine.state.result == 0)
         #expect(throws: NativeMachineEvaluationError.divisionByZero) {
             try machine.successors(for: .pick)
+        }
+
+        var context = CheckingContext(registers: try machine.initialCheckingRegisters())
+        var failures: [NativeMachineEvaluationError] = []
+        var successes = 0
+        let enabled = try machine.visitValidationOutcomes(checking: &context) { action, _ in
+            #expect(action == .pick)
+            successes += 1
+            return true
+        } onEvaluationFailure: { action, reason in
+            #expect(action == .pick)
+            failures.append(reason)
+            return true
+        }
+        #expect(!enabled && successes == 0)
+        #expect(failures == [.divisionByZero, .negativeModuloDivisor(-1)])
+
+        var stoppedContext = CheckingContext(registers: try machine.initialCheckingRegisters())
+        var stoppedFailures: [NativeMachineEvaluationError] = []
+        _ = try machine.visitValidationOutcomes(checking: &stoppedContext) { _, _ in true }
+            onEvaluationFailure: { _, reason in
+                stoppedFailures.append(reason)
+                return false
+            }
+        #expect(stoppedFailures == [.divisionByZero])
+        var throwingContext = CheckingContext(registers: try machine.initialCheckingRegisters())
+        #expect(throws: NativeMachineEvaluationError.emptySequence) {
+            try machine.visitValidationOutcomes(checking: &throwingContext) { _, _ in true }
+                onEvaluationFailure: { _, _ in throw NativeMachineEvaluationError.emptySequence }
         }
 
         let rendered = try EitherDistinctFailuresModel.render()
@@ -415,7 +457,7 @@ struct ChoiceEvaluationFailureTests {
                 $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
             })
             let witness = semanticFixture(witnessName)
-            let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+            let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
                 .statements.first?.item.as(FunctionDeclSyntax.self))
             #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
                 == expected.tokens(viewMode: .sourceAccurate).map(\.text))
@@ -483,7 +525,7 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("CandidateChoiceFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         #expect(update.tokens(viewMode: .sourceAccurate).map(\.text)
             == expected.tokens(viewMode: .sourceAccurate).map(\.text))
@@ -543,7 +585,7 @@ struct ChoiceEvaluationFailureTests {
         let binderPattern = try Regex(#"___binder_SpecParser_[0-9]+_0_2"#)
         let normalized = update.description.replacing(binderPattern, with: "__PROOF_MEMBER__")
         let actualTokens = Parser.parse(source: normalized).tokens(viewMode: .sourceAccurate).map(\.text)
-        let expectedTokens = try Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expectedTokens = try Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expectedTokens)
     }
@@ -596,7 +638,7 @@ struct ChoiceEvaluationFailureTests {
         let normalizedSwift = update.description.replacing(swiftBinder, with: "__PROOF_MEMBER__")
         let swiftWitness = semanticFixture("ConditionalChoiceThenModuloFailureSwiftWitness.txt")
         let actualTokens = Parser.parse(source: normalizedSwift).tokens(viewMode: .sourceAccurate).map(\.text)
-        let expectedTokens = try Parser.parse(source: String(contentsOf: swiftWitness, encoding: .utf8))
+        let expectedTokens = try Parser.parse(source: nativeWitnessSource(String(contentsOf: swiftWitness, encoding: .utf8)))
             .tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expectedTokens)
 
@@ -797,7 +839,11 @@ struct ChoiceEvaluationFailureTests {
                 #expect(Set(successors.map(\.selected)) == expectedSelections)
                 let expectedFailure: NativeMachineEvaluationError? = divisor == 0 || modulus == 0
                     ? .divisionByZero : modulus < 0 ? .negativeModuloDivisor(modulus) : nil
-                #expect(failures == (expectedFailure.map { [$0] } ?? []))
+                var expectedFailures: [NativeMachineEvaluationError] = []
+                if divisor == 0 { expectedFailures.append(.divisionByZero) }
+                if modulus < 0 { expectedFailures.append(.negativeModuloDivisor(modulus)) }
+                else if modulus == 0 || divisor == 0 { expectedFailures.append(.divisionByZero) }
+                #expect(failures == expectedFailures)
                 if let expectedFailure {
                     #expect(outcome.completion == .evaluationFailure(expectedFailure))
                 } else {
@@ -892,13 +938,45 @@ struct ChoiceEvaluationFailureTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let witness = semanticFixture("EitherBranchDivisionFailureSwiftWitness.txt")
-        let expected = try #require(Parser.parse(source: String(contentsOf: witness, encoding: .utf8))
+        let expected = try #require(Parser.parse(source: nativeWitnessSource(String(contentsOf: witness, encoding: .utf8)))
             .statements.first?.item.as(FunctionDeclSyntax.self))
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expected.tokens(viewMode: .sourceAccurate).map(\.text))
         let writes = try emitter.actionFunctions(action.body).writes
         try verifyGeneratedActionWriteOutput(update, action: action.body,
             program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+        let rootPart = try #require(update.as(FunctionDeclSyntax.self)?.body?.statements.compactMap {
+            $0.item.as(FunctionDeclSyntax.self)
+        }.first { $0.name.text == "_actionPart0" })
+        let rootSource = rootPart.description
+        try #require(rootSource.components(separatedBy: "failures.append(failure)").count == 2)
+        try #require(update.description.components(separatedBy: rootSource).count == 2)
+        let lostFailureSource = update.description.replacingOccurrences(of: rootSource,
+            with: rootSource.replacingOccurrences(of: "failures.append(failure)", with: ""))
+        #expect(lostFailureSource != update.description)
+        let lostFailure = try #require(Parser.parse(source: lostFailureSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(lostFailure, action: action.body,
+                program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("The generated action dropped a reached model failure")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.failures.0")
+        }
+        let classification = " where failure.isModelEvaluationFailure"
+        try #require(rootSource.components(separatedBy: classification).count == 2)
+        let uncheckedSource = update.description.replacingOccurrences(of: rootSource,
+            with: rootSource.replacingOccurrences(of: classification, with: ""))
+        try #require(uncheckedSource != update.description)
+        let unchecked = try #require(Parser.parse(source: uncheckedSource)
+            .statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verifyGeneratedActionWriteOutput(unchecked, action: action.body,
+                program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
+            Issue.record("The generated action classified execution limits as model failures")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "native.action.failures.0")
+        }
         let reversedOrder = update.description.replacingOccurrences(
             of: "visitAlternatives([false, true]", with: "visitAlternatives([true, false]")
         #expect(reversedOrder != update.description)

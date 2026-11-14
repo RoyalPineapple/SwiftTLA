@@ -8,6 +8,7 @@ extension ParserSession {
 
     func parseSpecClosure(named name: String, _ closure: ClosureExprSyntax) -> TLASpec {
         var components = TLASpec(name: name, variables: [], actions: [], invariants: [])
+        components.sourceSpecDefaultDeadlockWitness = true
         stateDeclarationOffsets = [:]
         actionDeclarationOffsets = [:]
         propertyDeclarationOffsets = [:]
@@ -115,7 +116,8 @@ extension ParserSession {
                 continue
             }
             guard let call = initializer.as(FunctionCallExprSyntax.self) else {
-                if let value = decodeTypedFacadeValue(initializer, scope: sourceScope) {
+                if let value = decodeTypedFacadeValue(initializer, scope: sourceScope,
+                    requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation)) {
                     sourceScope = sourceScope.extending(binding: sourceName, to: value,
                         shape: typedFacadeValueType(initializer, scope: sourceScope))
                 } else {
@@ -374,7 +376,8 @@ extension ParserSession {
                 parseVariableBinding(binding, call: call, constructor: constructor, into: &components)
             } else if let value = decodeTypedFacadeValue(
                 ExprSyntax(call),
-                scope: sourceScope
+                scope: sourceScope,
+                requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation)
             ) {
                 sourceScope = sourceScope.extending(binding: sourceName, to: value,
                     shape: typedFacadeValueType(ExprSyntax(call), scope: sourceScope))
@@ -448,8 +451,27 @@ extension ParserSession {
             return
         }
 
+        if var condition = forStmt.whereClause?.condition {
+            while let tuple = condition.as(TupleExprSyntax.self), tuple.elements.count == 1,
+                  let element = tuple.elements.first, element.label == nil {
+                condition = element.expression
+            }
+            if let literal = condition.as(BooleanLiteralExprSyntax.self), literal.literal.text == "false" {
+                return
+            }
+            if let reference = condition.as(DeclReferenceExprSyntax.self),
+               case .value(.bool(false))? = sourceScope.value(for: reference) {
+                return
+            }
+        }
         let body = forStmt.body.statements
         for i in range {
+            if let condition = forStmt.whereClause?.condition,
+               case .bool(false)? = decodeSwiftScalarValue(condition,
+                    scope: sourceScope.extending(binding: pattern, to: .int(i), shape: .int)) {
+                continue
+            }
+            // shortcut: opaque, non-scalar or trapping filters still need source-outcome lowering.
             for bodyStmt in body {
                 guard case .expr(let expr) = bodyStmt.item,
                       let fc = expr.as(FunctionCallExprSyntax.self)
@@ -512,11 +534,12 @@ extension ParserSession {
                     ))
                     valueType = nil
                 }
+                let stateType = sourceTypeResolver.normalizedStateType(variable.generatedSwiftType, resolved: valueType)
                 components.variables[components.variables.count - 1] = .init(
                     name: variable.name, initialization: variable.initialization,
                     displayLabel: variable.displayLabel,
-                    generatedSwiftType: variable.generatedSwiftType,
-                    resolvedValueType: variable.generatedSwiftType == nil ? valueType : nil,
+                    generatedSwiftType: stateType.spelling,
+                    resolvedValueType: stateType.resolved,
                     origin: variable.origin)
                 sourceScope = sourceScope.extending(binding: patternName,
                     to: .variable(variable.name),
@@ -845,6 +868,11 @@ extension ParserSession {
               element.label == nil {
             expression = element.expression
         }
+        if let array = expression.as(ArrayExprSyntax.self), let first = array.elements.first,
+           let element = initialValueTypeName(from: first.expression),
+           array.elements.allSatisfy({ initialValueTypeName(from: $0.expression) == element }) {
+            return "Array<\(element)>"
+        }
         if let call = expression.as(FunctionCallExprSyntax.self), let record = nominalRecordType(call.calledExpression) {
             return record.swiftType
         }
@@ -874,13 +902,19 @@ extension ParserSession {
            let type = typedFacadeType(member.base), type.name == "PartialFunction" {
             return type.renderedSourceName
         }
-        if expression.is(IntegerLiteralExprSyntax.self) { return "Int" }
-        if expression.is(BooleanLiteralExprSyntax.self) { return "Bool" }
-        if expression.is(StringLiteralExprSyntax.self) { return "String" }
+        if expression.is(IntegerLiteralExprSyntax.self) || SourceIntegerLiteral.value(expression) != nil {
+            return sourceTypeResolver.normalizedStateType("Swift.Int", resolved: .int).spelling
+        }
+        if expression.is(BooleanLiteralExprSyntax.self) {
+            return sourceTypeResolver.normalizedStateType("Swift.Bool", resolved: .bool).spelling
+        }
+        if expression.is(StringLiteralExprSyntax.self) {
+            return sourceTypeResolver.normalizedStateType("Swift.String", resolved: .string).spelling
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.arguments.isEmpty,
            call.trailingClosure == nil,
-           let constructor = typedFacadeType(call.calledExpression) {
+           let constructor = typedFacadeType(call.calledExpression),
+           call.arguments.isEmpty || constructor.name == "SetExpr" {
             switch constructor.name {
             case "SetExpr", "TupleExpr", "ZeroBasedSequence":
                 return constructor.renderedSourceName

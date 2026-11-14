@@ -3,7 +3,12 @@ import SwiftTLAMacros
 
 @TLAModel
 struct DependentRecordSetModel {
-    struct Pair: Hashable, Sendable { let first: Int; let second: Int }
+    struct Pair: Hashable, Sendable {
+        let first: Int
+        let second: Int
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.first == rhs.first }
+        func hash(into hasher: inout Hasher) { hasher.combine(first) }
+    }
     enum Step: String, CaseIterable { case stay }
 
     static var spec: TLASpec {

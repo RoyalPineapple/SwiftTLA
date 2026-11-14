@@ -828,7 +828,7 @@ private struct DuckRingCanvas: View {
         ZStack {
             Circle().stroke(.white.opacity(0.25), lineWidth: 4)
                 .frame(width: layout.radius * 2, height: layout.radius * 2)
-            DuckRingSeats(nodes: nodes, identifiers: state.identifiers, leader: state.leader, layout: layout)
+            DuckRingSeats(nodes: nodes, state: state, layout: layout)
             DuckRingMessages(state: state, activeDelivery: delivery, layout: layout)
             if let delivery {
                 DuckMessageBadge(candidate: delivery.candidate)
@@ -843,17 +843,16 @@ private struct DuckRingCanvas: View {
 
 private struct DuckRingSeats: View {
     let nodes: [ChangRoberts.Node]
-    let identifiers: [ChangRoberts.Node: Int]
-    let leader: Int
+    let state: ChangRoberts.State
     let layout: DuckRingLayout
 
     var body: some View {
         ForEach(Array(nodes.enumerated()), id: \.offset) { index, node in
-            if let identifier = identifiers[node] {
+            if let identifier = state.identifiers[node] {
                 DuckSeat(
                     number: index + 1,
                     identifier: identifier,
-                    isLeaderHome: identifier == leader && leader != 0
+                    isLeaderHome: identifier == state.leader && state.leader != 0
                 )
                 .position(layout.ringPoint(for: node))
             }

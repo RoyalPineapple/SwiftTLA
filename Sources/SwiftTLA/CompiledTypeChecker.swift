@@ -172,6 +172,8 @@ private enum ExpressionCheckTask {
     case reconcile(CompiledExpression, CompiledExpression, expected: CompiledValueType)
     case finish(expected: CompiledValueType)
     case completeOccurrence(CheckedType)
+    case caseOperands(index: Int, type: CompiledValueType, expected: CompiledValueType)
+    case caseValue(index: Int, expected: CompiledValueType)
     case recordFields(ArraySlice<CompiledRecordEntry>, expected: CompiledValueType)
     case finishRecord(expected: CompiledValueType)
     case updateKey(expected: CompiledValueType)
@@ -186,6 +188,8 @@ private enum ExpressionCheckTask {
     case sequenceContext(element: CompiledValueType, source: CompiledExpression)
     case sequenceValue(CompiledExpression, expected: CompiledValueType)
     case finishSequenceConstruction(expected: CompiledValueType)
+    case membership(expected: CompiledValueType)
+    case finishMembership(expected: CompiledValueType)
     case comparison(expected: CompiledValueType)
     case subset(expected: CompiledValueType)
     case setOperands(CompiledExpression, CompiledExpression, expected: CompiledValueType)
@@ -720,15 +724,6 @@ package struct CompiledTypeChecker: Sendable {
         return result
     }
 
-    private mutating func checkMembership(value: CompiledExpression, domain: CompiledExpression, expected: CompiledValueType) throws -> CheckedType {
-        let checkedDomain = try checkOperand(domain, expected: .set(.unknown))
-        let checkedValue = try checkOperand(value)
-        let context = try Self.operandContext(element(checkedDomain.resultType), checkedValue.resultType)
-        let children = try [refineOperand(checkedValue, from: value, expected: context),
-                            refineOperand(checkedDomain, from: domain, expected: .set(context))]
-        return try checkedType(.bool, expected: expected, children: children)
-    }
-
     /// Selects contextual type information without admitting a conversion. Both
     /// expressions must subsequently prove that they can inhabit this shape.
     private static func operandContext(_ lhs: CompiledValueType, _ rhs: CompiledValueType) throws -> CompiledValueType {
@@ -1177,7 +1172,7 @@ package struct CompiledTypeChecker: Sendable {
             catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
             if case .checked(let result) = check { return checkedOccurrence(expression, annotation: result) }
             return try checkWorklist(startingWith: .boundValue(id, check, expected: expected))
-        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .except, .recordAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving, .tuplePrefix, .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral, .cardinality, .powerSet, .sequenceSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate, .operatorApplication, .functionApply:
+        case .in, .caseExpr, .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .except, .recordAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving, .tuplePrefix, .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral, .cardinality, .powerSet, .sequenceSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate, .operatorApplication, .functionApply:
             return try checkWorklist(startingWith: .check(expression, expected: expected))
         default: break
         }
@@ -1394,6 +1389,14 @@ package struct CompiledTypeChecker: Sendable {
                         }
                     }
                     switch expression.operation {
+                    case .caseExpr(let hasOtherwise):
+                        let branchOperands = expression.children.count - (hasOtherwise ? 1 : 0)
+                        guard branchOperands >= 2, branchOperands.isMultiple(of: 2) else {
+                            throw CompiledValueType.diagnostic("case", "expected at least one condition/value branch")
+                        }
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(.caseOperands(index: 0, type: expected, expected: expected))
                     case .recordAccess(_):
                         let source = expression.children[0]
 
@@ -1524,6 +1527,14 @@ package struct CompiledTypeChecker: Sendable {
                         pending.append(contentsOf: [
                             .finish(expected: expected), .result(.int),
                             .discard, .retainOperand(0), .check(operand, expected: .int),
+                        ])
+                    case .in:
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(contentsOf: [
+                            .membership(expected: expected),
+                            .retainOperand(0), .check(expression.children[0], expected: .unknown),
+                            .retainOperand(1), .check(expression.children[1], expected: .set(.unknown)),
                         ])
                     case .equal, .notEqual, .subset:
                         let lhs = expression.children[0]
@@ -2056,6 +2067,29 @@ package struct CompiledTypeChecker: Sendable {
                         .retainOperand(1), .check(rhs, expected: context),
                         .discard, .retainOperand(0), .check(lhs, expected: context),
                     ])
+                case .membership(let expected):
+                    guard let value = results.popLast(), let domain = results.popLast(),
+                          let expression = ancestors.last, let operands = operandFrames.last else {
+                        throw CompiledValueType.diagnostic("checking", "missing checked membership operands")
+                    }
+                    let context = try Self.operandContext(element(domain), value)
+                    pending.append(.finishMembership(expected: expected))
+                    for (index, target) in [(0, context), (1, CompiledValueType.set(context))].reversed() {
+                        if operands[index]?.resultType != target {
+                            pending.append(contentsOf: [
+                                .discard, .retainOperand(index),
+                                .check(expression.children[index], expected: target),
+                            ])
+                        }
+                    }
+                case .finishMembership(let expected):
+                    guard let operands = operandFrames.last,
+                          let value = operands[0], let domain = operands[1] else {
+                        throw CompiledValueType.diagnostic("checking", "missing refined membership operands")
+                    }
+                    let checked = try checkedType(.bool, expected: expected, children: [value, domain])
+                    results.append(checked.type)
+                    try finish(checked, in: &self, refineOperands: false)
                 case .comparison(let expected), .subset(let expected):
                     guard let context = results.popLast() else {
                         throw CompiledValueType.diagnostic("checking", "missing checked comparison operands")
@@ -2064,6 +2098,35 @@ package struct CompiledTypeChecker: Sendable {
                     let checked = try checkedType(.bool, expected: expected, operandContexts: [context, context])
                     results.append(checked.type)
                     try finish(checked, in: &self)
+                case .caseOperands(let index, let type, let expected):
+                    guard let expression = ancestors.last, case .caseExpr(let hasOtherwise) = expression.operation else {
+                        throw CompiledValueType.diagnostic("case", "missing checked case expression")
+                    }
+                    let branchOperands = expression.children.count - (hasOtherwise ? 1 : 0)
+                    if index == expression.children.count {
+                        let checked = try checkedType(type, expected: expected)
+                        let contexts = expression.children.indices.map {
+                            $0 < branchOperands && $0.isMultiple(of: 2) ? CompiledValueType.bool : checked.computationType
+                        }
+                        results.append(checked.type)
+                        try finish(.init(type: checked.type, computationType: checked.computationType,
+                            operandContexts: contexts), in: &self)
+                    } else if index < branchOperands && index.isMultiple(of: 2) {
+                        pending.append(contentsOf: [
+                            .caseOperands(index: index + 1, type: type, expected: expected),
+                            .discard, .retainOperand(index), .check(expression.children[index], expected: .bool)
+                        ])
+                    } else {
+                        pending.append(contentsOf: [
+                            .caseValue(index: index + 1, expected: expected),
+                            .retainOperand(index), .check(expression.children[index], expected: type)
+                        ])
+                    }
+                case .caseValue(let index, let expected):
+                    guard let type = results.popLast() else {
+                        throw CompiledValueType.diagnostic("case", "missing checked case value")
+                    }
+                    pending.append(.caseOperands(index: index, type: type, expected: expected))
                 case .finish(let expected):
                     guard let result = results.popLast(), let expression = ancestors.last else {
                         throw CompiledValueType.diagnostic("checking", "missing checked expression type")
@@ -2399,27 +2462,6 @@ package struct CompiledTypeChecker: Sendable {
         return .init(type: checked.type, computationType: type, operandContexts: operands)
     }
 
-    private mutating func inferCases(_ first: CompiledCaseBranch, rest: [CompiledCaseBranch], otherwise: CompiledExpression?, expected: CompiledValueType) throws -> CheckedType {
-        var type = expected
-        var children: [CompiledExpression] = []
-        for branch in [first] + rest {
-            children.append(try checkOperand(branch.condition, expected: .bool))
-            let value = try checkOperand(branch.value, expected: type)
-            children.append(value)
-            type = value.resultType
-        }
-        if let otherwise {
-            let value = try checkOperand(otherwise, expected: type)
-            children.append(value)
-            type = value.resultType
-        }
-        let checked = try checkedType(type, expected: expected)
-        let operands = ([first] + rest).flatMap { _ in [CompiledValueType.bool, checked.computationType] }
-            + (otherwise == nil ? [] : [checked.computationType])
-        let expressions = ([first] + rest).flatMap { [$0.condition, $0.value] } + (otherwise.map { [$0] } ?? [])
-        return try retaining(children, from: expressions, in: .init(type: checked.type, computationType: checked.computationType, operandContexts: operands))
-    }
-
     private mutating func inferResolved(_ expression: CompiledExpression, expected: CompiledValueType = .unknown) throws -> CheckedType {
         if expected.unionAlternatives != nil, let checked = try checkUnionConstructor(expression, expected: expected) {
             return checked
@@ -2469,11 +2511,6 @@ package struct CompiledTypeChecker: Sendable {
             else { result = try CompiledValueType.merge(existing, expected); variables[id] = result }
         case .controlLocation: result = .controlLocation
         case .enabledAction: result = .bool
-        case .in:
-            let value = expression.children[0]
-            let domain = expression.children[1]
-
-            return try checkMembership(value: value, domain: domain, expected: expected)
         case .randomSubset:
             let count = try checkOperand(expression.children[0], expected: .int)
             let domain = try checkOperand(expression.children[1], expected: expected == .unknown ? .set(.unknown) : expected)
@@ -2524,13 +2561,6 @@ package struct CompiledTypeChecker: Sendable {
             let function = expression.children[0]
 
             return try inferDomain(function, expected: expected)
-        case .caseExpr(let hasOtherwise):
-            let branches = stride(from: 0, to: expression.children.count - (hasOtherwise ? 1 : 0), by: 2).map { CompiledCaseBranch(condition: expression.children[$0], value: expression.children[$0 + 1]) }
-            let first = branches[0]
-            let rest = Array(branches.dropFirst())
-            let otherwise = hasOtherwise ? expression.children.last : nil
-
-            return try inferCases(first, rest: rest, otherwise: otherwise, expected: expected)
         default: throw CompiledValueType.diagnostic("expression", "expression is outside the native machine subset: \(expression.diagnosticName)")
         }
         return try checkedType(result, expected: expected)

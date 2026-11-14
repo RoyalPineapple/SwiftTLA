@@ -1241,8 +1241,8 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: [.init(name: "PositiveSum", body: .greaterThan(sum, .int(0)))]
         )
 
-        let expectedKey = (1...64).reduce("value(0)") { key, value in
-            "add(\(key),value(\(value)))"
+        let expectedKey = (1...64).reduce("value(int[1:0])") { key, value in
+            "add(\(key),value(int[\(String(value).utf8.count):\(value)]))"
         }
         let expectedSum = (1...64).reduce("0") { expression, value in
             "(\(expression) + \(value))"
@@ -1258,30 +1258,30 @@ struct CompilerPipelineCanonicalizationTests {
         let values: [(StateExpr, String)] = [
             (
                 .setFilter(.setLiteral([.int(2), .int(1)]), "element", .equal(.variable("element"), .int(1))),
-                "filter(set[value(1),value(2)],@0,equal(var(@0),value(1)))"
+                "filter(set[value(int[1:1]),value(int[1:2])],@0,equal(var(@0),value(int[1:1])))"
             ),
             (
                 .setMap(.add(.variable("element"), .int(1)), "element", .setLiteral([.int(1)])),
-                "map(add(var(@0),value(1)),@0,set[value(1)])"
+                "map(add(var(@0),value(int[1:1])),@0,set[value(int[1:1])])"
             ),
             (
                 .functionLiteral(.setLiteral([.int(1)]), "input", .tupleLiteral([.variable("input"), .int(2)])),
-                "function(set[value(1)],@0,tuple[var(@0),value(2)])"
+                "function(set[value(int[1:1])],@0,tuple[var(@0),value(int[1:2])])"
             ),
             (
                 .forAll(.setLiteral([.int(1)]), "item", .exists(.setLiteral([.int(2)]), "item", .equal(.variable("item"), .int(2)))),
-                "forall(set[value(1)],@0,exists(set[value(2)],@1,equal(var(@1),value(2))))"
+                "forall(set[value(int[1:1])],@0,exists(set[value(int[1:2])],@1,equal(var(@1),value(int[1:2]))))"
             ),
             (
                 .choose(.setLiteral([.int(1)]), "candidate", .equal(.variable("candidate"), .int(1))),
-                "choose(set[value(1)],@0,equal(var(@0),value(1)))"
+                "choose(set[value(int[1:1])],@0,equal(var(@0),value(int[1:1])))"
             ),
             (
                 .recordLiteral(.init([
                     .init(name: "second", value: .caseExpr([.bool(true)], .bool(false))),
                     .init(name: "first", value: .except(.variable("table"), .int(1), .int(2)))
                 ])),
-                "record[first:except(var(table),value(1),value(2)),second:case[value(TRUE)]/value(FALSE)]"
+                "record[first:except(var(table),value(int[1:1]),value(int[1:2])),second:case[value(bool[4:true])]/value(bool[5:false])]"
             ),
             (
                 .foldFunction(
@@ -1289,7 +1289,7 @@ struct CompilerPipelineCanonicalizationTests {
                     initial: .int(0),
                     sequence: .tupleLiteral([.int(1)])
                 ),
-                "fold([@0,@1],add(var(@0),var(@1)),value(0),tuple[value(1)])"
+                "fold([@0,@1],add(var(@0),var(@1)),value(int[1:0]),tuple[value(int[1:1])])"
             ),
             (
                 .operatorApplication(
@@ -1299,11 +1299,11 @@ struct CompilerPipelineCanonicalizationTests {
                         .operator(.lambda(.init(parameters: ["argument"], body: .variable("argument"))))
                     ]
                 ),
-                "apply(lambda([@0],var(@0)),[value(value(1)),operatorLambda([@1],var(@1))])"
+                "apply(lambda([@0],var(@0)),[value(value(int[1:1])),operatorLambda([@1],var(@1))])"
             ),
             (
                 .letValue("value", .int(1), .add(.variable("value"), .int(2))),
-                "letValue(@0,value(1),add(var(@0),value(2)))"
+                "letValue(@0,value(int[1:1]),add(var(@0),value(int[1:2])))"
             ),
             (
                 .letIn(
@@ -1322,7 +1322,7 @@ struct CompilerPipelineCanonicalizationTests {
                     ],
                     .recursiveCall("Walk", [.int(2)])
                 ),
-                "letIn([local(Walk,[@0],set[value(1)],recursive(Walk,subtract(var(@0),value(1)))),local(Identity,[@1],unbounded,var(@1))],recursive(Walk,value(2)))"
+                "letIn([local(Walk,[@0],set[value(int[1:1])],recursive(Walk,subtract(var(@0),value(int[1:1])))),local(Identity,[@1],unbounded,var(@1))],recursive(Walk,value(int[1:2])))"
             )
         ]
 
@@ -1486,7 +1486,7 @@ struct CompilerPipelineCanonicalizationTests {
 
     @Test("variable initialization follows dependencies instead of declaration order")
     func variableInitializationFollowsDependencies() throws {
-        let compilation = try TLASpec(
+        let specification = TLASpec(
             name: "InitializerDependencyOrder",
             variables: [
                 .init(name: "firstIndependent", initial: .int(10)),
@@ -1503,20 +1503,140 @@ struct CompilerPipelineCanonicalizationTests {
                     generatedSwiftType: "Int",
                     origin: .source
                 ),
-                .init(name: "limit", initial: .int(3))
+                .init(name: "limit", initial: .int(3)),
+                .init(name: "lastIndependent", initial: .int(99))
             ],
             actions: [],
             invariants: []
-        ).compile()
+        )
+        let compilation = try specification.compile()
         let states = try CompiledRuntime(compilation: compilation).initialStates()
         let initializationOrder = compilation.semantics.behavior.initializations.map { initialization in
             compilation.layout.variables.first { $0.id == initialization.variable }?.declaration.name
         }
 
-        #expect(initializationOrder == ["firstIndependent", "secondIndependent", "limit", "choice", "derived"])
+        #expect(initializationOrder == ["firstIndependent", "secondIndependent", "limit", "choice", "derived", "lastIndependent"])
         #expect(Set(try states.map {
             try renderedValue(named: "derived", in: $0, compilation: compilation)
         }) == [.int(2), .int(3), .int(4)])
+
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        try program.validateInitializationDependencies()
+        func reorderedProgram(_ program: CompiledProgram, positions: [Int]) throws -> CompiledProgram {
+            try #require(program.behavior.initializations.count == positions.count)
+            let source = program.behavior
+            let reorderedInitials = positions.map { source.initializations[$0] }
+            try #require(reorderedInitials.map(\.variable) != source.initializations.map(\.variable))
+            let reordered = CompiledBehavior(checkDeadlock: source.checkDeadlock,
+                parameterDomains: source.parameterDomains,
+                checkingRegisterInitializations: source.checkingRegisterInitializations,
+                validationScenarios: source.validationScenarios,
+                initializations: reorderedInitials,
+                initialInvariant: source.initialInvariant, actions: source.actions,
+                enabledActionIndices: source.enabledActionIndices,
+                enabledActionDependencies: source.enabledActionDependencies,
+                invariants: source.invariants, reachabilityProperties: source.reachabilityProperties,
+                temporalProperties: source.temporalProperties, fairness: source.fairness,
+                fairnessProfiles: source.fairnessProfiles, constraint: source.constraint,
+                actionConstraint: source.actionConstraint, assume: source.assume)
+            return CompiledProgram(identity: program.identity, moduleMetadata: program.moduleMetadata,
+                moduleImports: program.moduleImports,
+                formalModuleReplacements: program.formalModuleReplacements,
+                requiredStandardModules: program.requiredStandardModules, layout: program.layout,
+                behavior: reordered, refinements: program.refinements,
+                generatedRefinements: program.generatedRefinements, enums: program.enums,
+                projections: program.projections, variableTypes: program.variableTypes,
+                checkingRegisterTypes: program.checkingRegisterTypes, bindingTypes: program.bindingTypes,
+                binderNames: program.binderNames, functions: program.functions,
+                authoredAlgorithm: program.authoredAlgorithm)
+        }
+        for (label, positions, target) in [
+            ("independentTie", [1, 0, 2, 3, 4, 5], "secondIndependent"),
+            ("laterReadyLimit", [0, 2, 1, 3, 4, 5], "limit"),
+            ("newlyReadyRead", [0, 1, 2, 3, 5, 4], "lastIndependent"),
+        ] {
+            let altered = try reorderedProgram(program, positions: positions)
+            do {
+                try altered.validateInitializationDependencies()
+                Issue.record("Resolved initialization order corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .unsupportedGeneratedValueShape)
+                #expect(diagnostic.stage == .validation)
+                #expect(diagnostic.path == "variables.\(target).initialization")
+                #expect(diagnostic.expected == "the first ready variable in declaration order")
+            }
+        }
+
+        for (label, domain) in [
+            ("readyRange", StateExpr.integerRange(.int(1), .variable("limit"))),
+            ("readyMathematical", StateExpr.integerSet),
+            ("readyMembers", StateExpr.setLiteral([.int(1), .int(2), .variable("limit")])),
+            ("readyConditional", StateExpr.ifThenElse(
+                .equal(.variable("limit"), .int(3)),
+                .setLiteral([.int(1), .int(2), .variable("limit")]),
+                .integerRange(.int(1), .variable("limit")))),
+        ] {
+            var domainSpecification = specification
+            let choice = domainSpecification.variables[3]
+            domainSpecification.variables[3] = .init(name: choice.name,
+                initialization: .memberOf(domain), generatedSwiftType: "Int", origin: choice.origin)
+            let domainCompilation = try domainSpecification.compile()
+            let domainProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: domainCompilation))
+            if domain != .integerSet {
+                let domainStates = try CompiledRuntime(program: domainProgram).initialStates()
+                #expect(domainStates.count == 3)
+                #expect(Set(try domainStates.map {
+                    try renderedValue(named: "derived", in: $0, compilation: domainCompilation)
+                }) == [.int(2), .int(3), .int(4)])
+            }
+            let altered = try reorderedProgram(domainProgram,
+                positions: domain == .integerSet ? [0, 1, 4, 2, 3, 5] : [0, 1, 2, 5, 3, 4])
+            do {
+                try altered.validateInitializationDependencies()
+                Issue.record("Resolved initialization order corruption accepted: \(label)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .unsupportedGeneratedValueShape)
+                #expect(diagnostic.stage == .validation)
+                let target = domain == .integerSet ? "limit" : "lastIndependent"
+                #expect(diagnostic.path == "variables.\(target).initialization")
+                #expect(diagnostic.expected == "the first ready variable in declaration order")
+            }
+        }
+
+        var fallible = specification
+        for (index, expression) in [
+            (0, StateExpr.add(.variable("limit"), .int(Int.max))),
+            (2, StateExpr.add(.add(.variable("limit"), .int(1)), .int(Int.max))),
+        ] {
+            let variable = fallible.variables[index]
+            fallible.variables[index] = .init(name: variable.name,
+                initialization: .expression(expression), generatedSwiftType: "Int", origin: variable.origin)
+        }
+        let failureProgram = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: fallible.compile()))
+        let failureOrder = failureProgram.behavior.initializations.map { entry in
+            failureProgram.layout.variables[entry.variable.ordinal].declaration.name
+        }
+        #expect(failureOrder == ["limit", "firstIndependent", "secondIndependent", "choice", "derived", "lastIndependent"])
+        let firstFailure = try CompiledRuntime(program: failureProgram).initialOutcomes()
+        #expect(firstFailure.states.isEmpty)
+        #expect(firstFailure.firstFailure == .integerOverflow(.addition, operands: [3, Int.max]))
+        let first = try #require(failureProgram.layout.variables.first { $0.declaration.name == "firstIndependent" })
+        #expect(firstFailure.firstFailureInitializerOrdinal == first.id.ordinal)
+        let changed = try reorderedProgram(failureProgram, positions: [0, 2, 1, 3, 4, 5])
+        let changedFailure = try CompiledRuntime(program: changed).initialOutcomes()
+        #expect(changedFailure.states.isEmpty)
+        #expect(changedFailure.firstFailure == .integerOverflow(.addition, operands: [4, Int.max]))
+        let second = try #require(failureProgram.layout.variables.first { $0.declaration.name == "secondIndependent" })
+        #expect(changedFailure.firstFailureInitializerOrdinal == second.id.ordinal)
+        do {
+            try changed.validateInitializationDependencies()
+            Issue.record("Resolved initialization order corruption accepted: firstFailurePayload")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unsupportedGeneratedValueShape)
+            #expect(diagnostic.stage == .validation)
+            #expect(diagnostic.path == "variables.secondIndependent.initialization")
+            #expect(diagnostic.expected == "the first ready variable in declaration order")
+        }
     }
 
     @Test("resolved initialization rejects a forward state read through a formal call")

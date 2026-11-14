@@ -19,17 +19,23 @@ struct PropertyDeclarationNamesTests {
         }
     }
 
-    @Test("refinement binding names supply distinct identities despite equal labels")
-    func derivesRefinementNames() throws {
-        let first = try labelledRefinements("label: \"Shared label\"").compile()
-        let second = try labelledRefinements("label: \"Changed label\"").compile()
+    @Test("refinement binding names supply distinct identities despite equal labels",
+        arguments: ["firstClaim", "Len", "Spec", "WF_claim", "SF_claim", "_1", "TRUE", "FALSE", "BOOLEAN", "STRING"])
+    func derivesRefinementNames(name: String) throws {
+        let first = try labelledRefinements("label: \"Shared label\"", firstName: name).compile()
+        let second = try labelledRefinements("label: \"Changed label\"", firstName: name).compile()
         #expect(first.identity == second.identity)
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: first))
-        #expect(program.refinements.map(\.name) == ["firstClaim", "secondClaim"])
+        #expect(program.layout.refinementProperties.map(\.declaration.name) == [name, "secondClaim"])
+        #expect(program.refinements.map(\.name).allSatisfy { !["Len", "Spec"].contains($0) })
+        if let expected = ["WF_claim": "_WF_claim", "SF_claim": "_SF_claim", "_1": "v_1",
+                           "TRUE": "TRUE__2", "FALSE": "FALSE__2", "BOOLEAN": "BOOLEAN__2", "STRING": "STRING__2"][name] {
+            #expect(program.refinements.first?.name == expected)
+        }
         #expect(Set(program.refinements.map(\.id)).count == 2)
         #expect(program.refinements.map { program.layout.propertyDisplayName($0.id) } == ["Shared label", "Shared label"])
         let module = try program.renderModule()
-        #expect(module.configuration.refinements == ["firstClaim", "secondClaim"])
+        #expect(module.configuration.refinements == program.refinements.map(\.name))
         #expect(!module.renderedModuleSource.contains("Shared label"))
     }
 
@@ -42,7 +48,7 @@ struct PropertyDeclarationNamesTests {
         #expect(throws: (any Error).self) { try spec.compile() }
     }
 
-    private func labelledRefinements(_ arguments: String) throws -> TLASpec {
+    private func labelledRefinements(_ arguments: String, firstName: String = "firstClaim") throws -> TLASpec {
         SpecParser.parseSpecClosure(named: "RefinementLabels", try parseSpecTestClosure("""
         {
             let abstract = TLASpec("Abstract") {
@@ -57,9 +63,9 @@ struct PropertyDeclarationNamesTests {
             first
             let second = Instance("Second", of: abstract)
             second
-            let firstClaim = Refinement(instance: first,
+            let \(firstName) = Refinement(instance: first,
                 mappings: [.init(Var<Int>("value"), from: count)], \(arguments))
-            firstClaim
+            \(firstName)
             let secondClaim = Refinement(instance: second,
                 mappings: [.init(Var<Int>("value"), from: count)], label: "Shared label")
             secondClaim
@@ -127,17 +133,40 @@ struct PropertyDeclarationNamesTests {
         #expect(throws: (any Error).self) { try spec.compile() }
     }
 
-    @Test("a label change does not change compilation identity")
-    func excludesLabelsFromIdentity() throws {
+    @Test("property binding names preserve selections independently of labels",
+        arguments: ["safe", "Len", "Spec"], ["Invariant", "Reachable", "Always"])
+    func excludesLabelsFromIdentity(name: String, kind: String) throws {
         func compiled(_ label: String) throws -> CompiledSpecification {
             try SpecParser.parseSpecClosure(named: "LabelIdentity", parseSpecTestClosure("""
-            {
-                let safe = Invariant(label: "\(label)")
-                safe { true }
+            { scope in
+                let count = scope.sharedVar(initial: 0)
+                let \(name) = \(kind)(label: "\(label)")
+                \(kind == "Always" ? "\(name)(count == 0)" : "\(name) { count == 0 }")
             }
             """)).compile()
         }
-        #expect(try compiled("First label").identity == compiled("Second label").identity)
+        let first = try compiled("First label")
+        #expect(first.identity == (try compiled("Second label")).identity)
+        let runtime = CompiledRuntime(compilation: first)
+        let initial = try #require(try runtime.initialStates().first)
+        let queries = (first.semantics.behavior.invariants + first.semantics.behavior.reachabilityProperties).map(\.predicate)
+            + first.semantics.behavior.temporalProperties.flatMap { $0.expression.predicates }
+        #expect(queries.count == 1)
+        #expect(try runtime.predicateHolds(try #require(queries.first), in: initial))
+        #expect(first.layout.properties.map(\.declaration.name) == [name])
+        #expect(first.layout.propertyDisplayName(try #require(first.layout.properties.first).id) == "First label")
+        #expect(first.description.invariants + first.description.reachabilityProperties + first.description.temporalProperties == [name])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: first))
+        let module = try program.renderModule()
+        let selected = module.configuration.invariants + module.configuration.reachabilityProperties + module.configuration.properties
+        #expect(selected.count == 1)
+        let formalName = try #require(selected.first)
+        #expect(!["Len", "Spec"].contains(formalName))
+        #expect(module.renderedModuleSource.contains("\(formalName) =="))
+        let emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "LabelIdentity", program: program))
+        let nativeNames = try emitter.propertyIdentityDeclarations().map(\.description).joined(separator: "\n")
+        #expect(nativeNames.contains(".\(name): \"\(formalName)\""))
+        #expect(module.renderedModuleSource.split(separator: "\n").filter { $0.hasPrefix("Spec ==") }.count == 1)
     }
 
     @Test("qualified property constructors share Swift names across built and generated models")

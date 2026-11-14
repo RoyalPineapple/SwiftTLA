@@ -168,7 +168,9 @@ struct CompiledTLARenderer {
 
     private func stateCaptureName(_ variable: VariableID) throws -> String {
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.properties.map(\.formalName))
+            .union(layout.actions.map(\.renderedName))
         var name = "__\(moduleName)_state\(variable.ordinal)"
         while occupied.contains(name) { name += "_" }
         return name
@@ -177,7 +179,9 @@ struct CompiledTLARenderer {
     private func resolvedFunctionName(_ id: ResolvedFunctionID) throws -> String {
         guard functions.indices.contains(id.ordinal) else { throw missing("resolved function", id.ordinal) }
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.properties.map(\.formalName))
+            .union(layout.actions.map(\.renderedName))
         var name = "__\(moduleName)_resolvedFunction\(id.ordinal)"
         while occupied.contains(name) { name += "_" }
         return name
@@ -546,16 +550,17 @@ struct CompiledTLARenderer {
         selected: String,
         otherwise: String
     ) throws -> String {
-        guard case .set(let memberType) = domain.resultType,
-              let failure = anyFailure else {
+        guard let failure = anyFailure else {
             throw CompilationDiagnostic(code: .unsupportedCanonicalCandidateOrder, stage: .rendering,
                 path: "actions.with[\(binder.ordinal)].domain",
-                expected: "a set domain and an identified branch failure",
-                actual: "the candidate failure order cannot be established",
-                nextSafeAction: "Use a set domain whose candidate order the TLA+ renderer can reproduce.")
+                expected: "an aggregate branch-failure predicate",
+                actual: "the branch has no aggregate failure predicate",
+                nextSafeAction: "Report the missing compiled failure predicate for this With branch.")
         }
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.properties.map(\.formalName))
+            .union(layout.actions.map(\.renderedName))
         var names: [String] = []
         for stem in ["FailedCandidates", "FirstFailingCandidate", "EarlierCandidate"] {
             var name = "__SwiftTLA\(stem)\(binder.ordinal)"
@@ -567,7 +572,8 @@ struct CompiledTLARenderer {
         let first = names[1]
         let earlier = names[2]
         let ordered: String
-        if let typedOrder = try canonicalLeastPredicate(memberType, first, earlier) {
+        if case .set(let memberType) = domain.resultType,
+           let typedOrder = try canonicalLeastPredicate(memberType, first, earlier) {
             ordered = typedOrder
         } else if let members = closedChoiceMembers(domain) ?? parameterChoiceMembers(domain) {
             ordered = try rankedLeastPredicate(members, first, earlier)
@@ -634,9 +640,7 @@ struct CompiledTLARenderer {
             var precedingGuards: [String] = []
             for site in try arithmeticSites(value, stateNames: stateNames) {
                 let failure = "~(\(site.guard_))"
-                let predicate = precedingGuards.isEmpty
-                    ? failure
-                    : "(\(precedingGuards.joined(separator: " /\\ ")) /\\ \(failure))"
+                let predicate = preceded(failure, by: precedingGuards)
                 failures.append(.init(predicate: predicate, operands: site.operands,
                     kind: .overflow(site.operation)))
                 precedingGuards.append(site.guard_)
@@ -754,7 +758,7 @@ struct CompiledTLARenderer {
                     guard_: "(\(sum) >= \(minimum) /\\ \(sum) <= \(maximum))",
                     operands: try sortedSummationOperands(value, stateNames: stateNames))]
             case .add, .subtract, .multiply, .negate, .divide, .integerDivide, .modulo:
-                guard value.resultType == .int,
+                guard value.resultType == .int || value.resultType == .unknown,
                       value.children.count == (value.operation == .negate ? 1 : 2) else { return nil }
                 var preceding: [OrderedEvaluationSite] = []
                 let children = value.operation.evaluatesRightOperandFirst ? Array(value.children.reversed()) : value.children
@@ -785,7 +789,7 @@ struct CompiledTLARenderer {
                         guard_: site.guard_, operands: site.operands)]
                 }
             case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
-                 .in, .setLiteral, .tupleLiteral, .tupleAppend, .tupleConcatenate, .tupleLength,
+                 .in, .setLiteral, .integerRange, .union, .tupleLiteral, .tupleAppend, .tupleConcatenate, .tupleLength,
                  .cardinality:
                 var preceding: [OrderedEvaluationSite] = []
                 let children = value.operation.evaluatesRightOperandFirst
@@ -831,7 +835,9 @@ struct CompiledTLARenderer {
         let function = try state(expression.children[0], stateNames: stateNames)
         let domain = try state(expression.children[1], stateNames: stateNames)
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.properties.map(\.formalName))
+            .union(layout.actions.map(\.renderedName))
             .union(stateNames.values)
         var names: [String] = []
         for role in ["index", "candidate", "member"] {
@@ -853,7 +859,7 @@ struct CompiledTLARenderer {
     ) throws -> String? {
         let sites = try arithmeticSites(value, stateNames: stateNames)
         guard !sites.isEmpty else { return nil }
-        return sites.count == 1 ? sites[0].guard_ : "(\(sites.map(\.guard_).joined(separator: " /\\ ")))"
+        return sites.count == 1 ? sites[0].guard_ : preceded("TRUE", by: sites.map(\.guard_))
     }
 
     private func arithmeticSites(
@@ -911,11 +917,11 @@ struct CompiledTLARenderer {
     private func arithmeticTreeIsRepeatable(_ expression: CompiledExpression) -> Bool {
         switch expression.operation {
         case .add, .subtract, .multiply, .negate:
-            return expression.resultType == .int
+            return (expression.resultType == .int || expression.resultType == .unknown)
                 && expression.children.count == (expression.operation == .negate ? 1 : 2)
                 && expression.children.allSatisfy(arithmeticTreeIsRepeatable)
         case .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
-             .tupleLiteral:
+             .tupleLiteral, .setLiteral, .integerRange:
             return expression.children.allSatisfy(arithmeticTreeIsRepeatable)
         default:
             return repeatable(expression)
@@ -939,7 +945,7 @@ struct CompiledTLARenderer {
         switch expression.operation {
         case .value, .stateVariable, .boundValue, .controlLocation,
              .setLiteral, .tupleLiteral, .equal, .notEqual, .lessThan, .lessOrEqual,
-             .greaterThan, .greaterOrEqual, .and, .or, .not, .in:
+             .greaterThan, .greaterOrEqual, .and, .or, .not, .in, .ifThenElse:
             return expression.children.allSatisfy(repeatable)
         default:
             return false
@@ -1044,11 +1050,17 @@ struct CompiledTLARenderer {
         }
         let target: String
         switch refinement.operator {
-        case .spec: target = "Spec"
+        case .spec:
+            let abstract = refinement.abstract
+            if abstract.layout.variables.isEmpty, abstract.semantics.behavior.actions.isEmpty,
+               let operation = bindings.sourceOperators["\(instance.namespace)!Spec"] {
+                return "\(refinement.name) == \(try operatorName(operation))"
+            }
+            target = "Spec"
         case .liveSpec: target = "LiveSpec"
         case .liveSpecEquals: target = "LiveSpecEquals"
         }
-        return "\(refinement.name) == \(instance.namespace)!\(target)"
+        return "\(refinement.name) == \(instance.formalName)!\(target)"
     }
 
     func formalModuleReplacement(_ replacement: CompiledFormalModuleReplacement) throws -> String {
@@ -1063,14 +1075,16 @@ struct CompiledTLARenderer {
             "\($0.parameter) <- \(try state($0.value))"
         }.joined(separator: ", ")
         let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
-        return "\(layout.namespace) == INSTANCE \(moduleNames[layout.moduleName] ?? layout.moduleName)\(withClause)"
+        return "\(layout.formalName) == INSTANCE \(moduleNames[layout.moduleName] ?? layout.moduleName)\(withClause)"
     }
 
     func state(_ expression: CompiledExpression, stateNames: [VariableID: String] = [:]) throws -> String {
         var tasks = [StateRenderingTask.expression(expression)]
         var parts: [String] = []
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
-            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(layout.declarations.map(\.name)).union(layout.variables.map(\.formalName))
+            .union(layout.properties.map(\.formalName))
+            .union(layout.actions.map(\.renderedName))
             .union(stateNames.values)
         var nextDivisionName = 0
         var nextChoiceName = 0
@@ -1091,7 +1105,7 @@ struct CompiledTLARenderer {
 
         func schedule(_ operation: CompiledOperation, _ operands: [CompiledExpression]) throws {
             let syntax = try operation.tlaSyntax(operandCount: operands.count,
-                binderName: binderName)
+                binderName: binderName, recordName: { choiceName("record") })
             for part in syntax.reversed() {
                 switch part {
                 case .text(let text): tasks.append(.text(text))
@@ -1355,7 +1369,7 @@ struct CompiledTLARenderer {
         default:
             return nil
         }
-        guard members.count > 1, members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }
+        guard !members.isEmpty, members.allSatisfy(choiceMemberHasExactIdentity) else { return nil }
         return Array(Set(members)).sorted()
     }
 
@@ -1459,7 +1473,8 @@ struct CompiledTLARenderer {
         }
         guard case .recordLiteral(let names) = body.operation,
               names.count == domains.count, names.count == body.children.count,
-              Set(names).count == names.count else { return nil }
+              Set(names).count == names.count,
+              names.allSatisfy(isTLARecordFieldName) else { return nil }
         var fields: [(name: String, domain: CompiledExpression)] = []
         var used: Set<BinderID> = []
         for (name, value) in zip(names, body.children) {
@@ -1493,7 +1508,7 @@ struct CompiledTLARenderer {
 
     func variableName(_ id: VariableID) throws -> String {
         guard layout.variables.indices.contains(id.ordinal) else { throw missing("variable", id.ordinal) }
-        return layout.variables[id.ordinal].declaration.name
+        return layout.variables[id.ordinal].formalName
     }
 
     func actionReference(_ id: ActionID, named operatorName: String? = nil) throws -> String {
@@ -1538,7 +1553,7 @@ struct CompiledTLARenderer {
 
     private func controlLocationName(_ id: ControlLocationID) throws -> String {
         guard let location = layout.controlLocation(id) else { throw missing("control location", id.ordinal) }
-        return "\"\(location.formalName)\""
+        return TLAValue.string(location.formalName).description
     }
 
     private func missing(_ kind: String, _ ordinal: Int) -> CompilationDiagnostic {
@@ -1613,7 +1628,8 @@ enum TLAExpressionPart: Equatable, Sendable {
 extension CompiledOperation {
     func tlaSyntax(
         operandCount: Int,
-        binderName: (BinderID) throws -> String
+        binderName: (BinderID) throws -> String,
+        recordName: () -> String
     ) throws -> [TLAExpressionPart] {
         if let syntax = tlaOperandSyntax {
             var parts: [TLAExpressionPart] = [.text(syntax.prefix)]
@@ -1653,6 +1669,26 @@ extension CompiledOperation {
             guard fields.count == operandCount else {
                 throw CompiledValueType.diagnostic("rendering.record", "each record field requires one operand")
             }
+            if fields.isEmpty || !fields.allSatisfy(isTLARecordFieldName) {
+                let key = recordName()
+                if fields.isEmpty { return [.text("[\(key) \\in {} |-> TRUE]")] }
+                let values = recordName()
+                let result = recordName()
+                let domain = fields.map { TLAValue.string($0).description }.joined(separator: ", ")
+                // Evaluate each operand once before field selection can make the function lazy.
+                var record: [TLAExpressionPart] = [.text("(CHOOSE \(result) \\in {[\(key) \\in {\(domain)} |-> CASE ")]
+                for (index, field) in fields.enumerated() {
+                    if index > 0 { record.append(.text(" [] ")) }
+                    record.append(.text("(\(key) = \(TLAValue.string(field))) -> \(values)[\(index + 1)]"))
+                }
+                record.append(.text("] : \(values) \\in {<<"))
+                for index in fields.indices {
+                    if index > 0 { record.append(.text(", ")) }
+                    record.append(.operand(index))
+                }
+                record.append(.text(">>}} : TRUE)"))
+                return record
+            }
             var record: [TLAExpressionPart] = [.text("[")]
             for (index, field) in fields.enumerated() {
                 if index > 0 { record.append(.text(", ")) }
@@ -1661,7 +1697,8 @@ extension CompiledOperation {
             record.append(.text("]"))
             parts = record
         case .recordAccess(let field):
-            parts = [.text("("), .operand(0), .text(").\(field)")]
+            parts = [.text("("), .operand(0), .text(isTLARecordFieldName(field)
+                ? ").\(field)" : ")[\(TLAValue.string(field))]")]
         case .functionLiteral(let binder):
             parts = [.text("[\(try binderName(binder)) \\in "), .operand(0), .text(" |-> "), .operand(1), .text("]")]
         case .except:
@@ -1671,12 +1708,15 @@ extension CompiledOperation {
             guard branchOperands >= 2, branchOperands.isMultiple(of: 2) else {
                 throw CompiledValueType.diagnostic("rendering.case", "CASE requires condition/value pairs and an optional default")
             }
-            var branches: [TLAExpressionPart] = [.text("CASE ")]
-            for index in stride(from: 0, to: branchOperands, by: 2) {
-                if index > 0 { branches.append(.text(" [] ")) }
-                branches += [.operand(index), .text(" -> "), .operand(index + 1)]
+            // Overlapping TLA CASE arms do not guarantee the first matching value.
+            var branches: [TLAExpressionPart] = []
+            for index in stride(from: 0, to: branchOperands - 2, by: 2) {
+                branches += [.text("(IF "), .operand(index), .text(" THEN "),
+                    .operand(index + 1), .text(" ELSE ")]
             }
+            branches += [.text("CASE "), .operand(branchOperands - 2), .text(" -> "), .operand(branchOperands - 1)]
             if hasOtherwise { branches += [.text(" [] OTHER -> "), .operand(branchOperands)] }
+            if branchOperands > 2 { branches.append(.text(String(repeating: ")", count: branchOperands / 2 - 1))) }
             parts = branches
         case .forAll(let binder):
             parts = [.text("(\\A \(try binderName(binder)) \\in "), .operand(0), .text(" : "), .operand(1), .text(")")]

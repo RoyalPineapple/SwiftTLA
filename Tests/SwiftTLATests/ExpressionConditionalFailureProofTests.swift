@@ -62,9 +62,9 @@ struct ExpressionConditionalFailureProofTests {
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }
-        let visitor = try String(contentsOf:
+        let visitor = nativeWitnessSource(try String(contentsOf:
             proofDirectory.appendingPathComponent("ExpressionConditionalFailureSwiftVisitor.txt"),
-            encoding: .utf8)
+            encoding: .utf8))
         #expect(tokens(update.description) == tokens(visitor))
         let reversedSwiftBranch = update.description.replacingOccurrences(
             of: "((state.state.mode == 1) ? (try Self._closedChoice0.get()) :",
@@ -73,9 +73,9 @@ struct ExpressionConditionalFailureProofTests {
         #expect(tokens(reversedSwiftBranch) != tokens(visitor))
         let swiftBinder = try Regex(#"___binder_SpecParser_[0-9]+_0_1"#)
         let normalizedChoice = closedChoice.description.replacing(swiftBinder, with: "__PROOF_MEMBER__")
-        let choice = try String(contentsOf:
+        let choice = nativeWitnessSource(try String(contentsOf:
             proofDirectory.appendingPathComponent("ExpressionConditionalFailureSwiftChoice.txt"),
-            encoding: .utf8)
+            encoding: .utf8))
         #expect(tokens(normalizedChoice) == tokens(choice))
 
         let tlaBinder = try Regex(#"__binder_SpecParser_[0-9]+_0"#)

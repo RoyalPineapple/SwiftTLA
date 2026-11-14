@@ -1,4 +1,5 @@
 import Testing
+import SwiftSyntax
 import UpstreamParity
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
@@ -84,17 +85,45 @@ struct ParameterResolutionTests {
         #expect(throws: CompilationDiagnostic.self) { try compilation.render() }
     }
 
-    @Test("formal parameter names cannot capture state declarations")
+    @Test("formal parameter names cannot capture state, library or generated declarations")
     func separatesParameterAndStateNames() throws {
-        var spec = TLASpec(name: "ParameterNames", variables: [.init(name: "limit", initial: .int(0))],
-            actions: [.init(name: "advance", body: .assign(.named("limit"), .int(1)))], invariants: [])
-        spec.parameters = [.init(reference: .init(name: "limit"), swiftType: "Int", domain: .integerRange(.int(1), .int(3)))]
-        let compilation = try spec.compile()
-        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
-        let parameter = try #require(program.layout.parameters.first)
-        #expect(program.binderNames[parameter.binder] != "limit")
-        let module = try program.renderModule()
-        #expect(module.renderedModuleSource.contains("VARIABLES limit"))
-        #expect(!module.renderedModuleSource.contains("CONSTANTS limit\n"))
+        for (name, needsAlias) in [
+            ("ceiling", false), ("limit", true), ("Len", true),
+            ("Init", true), ("Next", true), ("Spec", true),
+            ("WF_count", true), ("SF_count", true), ("_1", true),
+            ("IF", true), ("LET", true), ("CONSTANTS", true),
+            ("TRUE", true), ("FALSE", true), ("BOOLEAN", true), ("STRING", true),
+        ] {
+            let reference = ParameterReference(name: name)
+            var spec = TLASpec(name: "ParameterNames", variables: [.init(name: "limit", initial: .int(0))],
+                actions: [.init(name: "advance", body: .assign(.named("limit"), .int(1)))], invariants: [])
+            spec.parameters = [.init(reference: reference, swiftType: "Int", domain: .integerRange(.int(1), .int(3)))]
+            let compilation = try spec.compile()
+            let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            let parameter = try #require(program.layout.parameters.first)
+            #expect(parameter.reference == reference)
+            let formalName = try #require(program.binderNames[parameter.binder])
+            #expect((formalName != name) == needsAlias, "Parameter \(name) must retain a distinct formal name only when needed")
+            if let expected = ["WF_count": "_WF_count", "SF_count": "_SF_count", "_1": "v_1",
+                               "IF": "_IF", "LET": "_LET", "CONSTANTS": "_CONSTANTS",
+                               "TRUE": "TRUE_1", "FALSE": "FALSE_1", "BOOLEAN": "BOOLEAN_1", "STRING": "STRING_1"][name] {
+                #expect(formalName == expected)
+            }
+            let module = try program.renderModule()
+            #expect(module.renderedModuleSource.contains("VARIABLES limit"))
+            #expect(module.renderedModuleSource.contains("CONSTANTS \(formalName)\n"))
+            if needsAlias { #expect(!module.renderedModuleSource.contains("CONSTANTS \(name)\n")) }
+            var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "ParameterNames", program: program))
+            let declarations = try emitter.configurationDeclarations()
+            let configuration = try #require(declarations.compactMap { $0.as(StructDeclSyntax.self) }
+                .first { $0.name.text == "Configuration" })
+            let identities = try #require(configuration.memberBlock.members.compactMap { $0.decl.as(VariableDeclSyntax.self) }
+                .first { $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "fieldIdentities" } })
+            let identityNames = identities.tokens(viewMode: .sourceAccurate).compactMap { token -> String? in
+                if case .stringSegment(let value) = token.tokenKind { return value }
+                return nil
+            }
+            #expect(identityNames == [name, formalName])
+        }
     }
 }

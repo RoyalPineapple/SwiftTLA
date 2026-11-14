@@ -34,13 +34,19 @@ struct DieHardestCorpusCheckingTests {
         let initial = try DieHardestGlobalFreezeModel.initialMachines(configuration: scenario.configuration)
         func data(_ states: [DieHardestGlobalFreezeModel.State]) throws -> Data {
             let encoded: [[Any]] = states.enumerated().map { index, state in
-                [index + 1, ["c1": state.c1, "c2": state.c2, "s1": state.s1, "s2": state.s2] as [String: Any]]
+                [index + 1, [
+                    "c1": Dictionary(uniqueKeysWithValues: state.c1.map { ($0.key.formalString, $0.value) }),
+                    "c2": Dictionary(uniqueKeysWithValues: state.c2.map { ($0.key.formalString, $0.value) }),
+                    "s1": state.s1, "s2": state.s2
+                ] as [String: Any]]
             }
             let actions: [[Any]] = encoded.indices.dropFirst().map { index in
                 [encoded[index - 1], ["name": "NextParallelGlobalFreeze"], encoded[index]]
             }
-            return try JSONSerialization.data(withJSONObject: ["vars": ["c1", "c2", "s1", "s2"],
-                "counterexample": ["state": encoded, "action": actions]])
+            let document: [String: Any] = ["vars": ["c1", "c2", "s1", "s2"],
+                "counterexample": ["state": encoded, "action": actions]]
+            try #require(JSONSerialization.isValidJSONObject(document))
+            return try JSONSerialization.data(withJSONObject: document)
         }
         let states = result.trace.map { $0.state.state }
         let replay = try TLCTraceParser().replayCounterexample(data(states), initialMachines: initial,

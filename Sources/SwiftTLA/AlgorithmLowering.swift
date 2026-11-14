@@ -260,7 +260,8 @@ enum AlgorithmLowerer {
                     .caseExpr(controlCases, nil)))
             }
             variables.insert(NamedVar(
-                name: CompilerControlSymbol.programCounter.rawValue,
+                name: StateExpr.freshBoundName(CompilerControlSymbol.programCounter.rawValue,
+                    avoiding: Set(variables.map(\.name) + procedureSlots(procedures).map(\.root))),
                 initialization: initialControl,
                 origin: .programCounter
             ), at: 0)
@@ -301,8 +302,8 @@ enum AlgorithmLowerer {
         let localRoots = Set(localStates.map(\.root) + procedureSlots(procedures).map(\.root))
         var generatedAssertionInvariants: [NamedStatePredicate] = []
         var fairness: [FairnessCondition] = []
-        var actions = processes.enumerated().flatMap { processIndex, process in
-            process.steps.enumerated().map { index, atomic in
+        var actions = try processes.enumerated().flatMap { processIndex, process in
+            try process.steps.enumerated().map { index, atomic in
                 let controlOwner = ControlOwner.process(
                     algorithm: algorithm.name,
                     ordinal: processIndex,
@@ -337,7 +338,7 @@ enum AlgorithmLowerer {
                 }
                 let generatedAction = NamedAction(
                     name: requiresProgramCounter ? atomic.label.name : processNames[processIndex],
-                    body: ActionNormalization.complete(
+                    body: try ActionNormalization.checkedComplete(
                         requiresProgramCounter
                             ? .and(
                                 .guard_(.equal(
@@ -347,7 +348,8 @@ enum AlgorithmLowerer {
                                 body
                             )
                             : body,
-                        variables: variables
+                        variables: variables,
+                        at: "actions.\(atomic.label.name).normalization"
                     ),
                     bindings: [ActionBinding(
                         name: processBinding.rawValue,
@@ -378,8 +380,8 @@ enum AlgorithmLowerer {
             actionOffset += process.steps.count
         }
 
-        let procedureActions = procedures.flatMap { procedure in
-            procedure.steps.enumerated().map { index, atomic in
+        let procedureActions = try procedures.flatMap { procedure in
+            try procedure.steps.enumerated().map { index, atomic in
                 let control = ControlFlow(
                     algorithm: algorithm.name,
                     owner: .procedure(algorithm: algorithm.name, name: procedure.name)
@@ -408,7 +410,8 @@ enum AlgorithmLowerer {
                     enabled: guardExpression, domain: controlDomain(processes))
                 return NamedAction(
                     name: label,
-                    body: ActionNormalization.complete(.and(.guard_(guardExpression), body), variables: variables),
+                    body: try ActionNormalization.checkedComplete(.and(.guard_(guardExpression), body),
+                        variables: variables, at: "actions.\(label).normalization"),
                     bindings: [ActionBinding(
                         name: processBinding.rawValue,
                         domain: controlDomain(processes),
@@ -502,9 +505,8 @@ enum AlgorithmLowerer {
 
     /// A nonempty literal or range-domain process with one control-free loop has no `pc`.
     private static func requiresProgramCounter(for algorithm: AlgorithmModel) -> Bool {
-        guard !algorithm.processes.isEmpty, algorithm.procedures.isEmpty else {
-            return true
-        }
+        guard !algorithm.processes.isEmpty else { return !algorithm.procedures.isEmpty }
+        guard algorithm.procedures.isEmpty else { return true }
         return !algorithm.processes.allSatisfy { process in
             let hasRangeDomain: Bool
             if case .integerRange = process.domain {
@@ -636,7 +638,8 @@ enum AlgorithmLowerer {
         )
         let needsProgramCounter = !procedures.isEmpty || !isControlFreeLoop(steps)
         var variables = (needsProgramCounter ? [NamedVar(
-            name: CompilerControlSymbol.programCounter.rawValue,
+            name: StateExpr.freshBoundName(CompilerControlSymbol.programCounter.rawValue,
+                avoiding: Set((sharedVariables + procedureVariables).map(\.name))),
             initialization: enumerateInitialControl
                 ? .memberOf(.setLiteral(steps.map { sequentialControl.location($0.label.name) }))
                 : .expression(sequentialControl.location(first.label.name)),
@@ -693,11 +696,12 @@ enum AlgorithmLowerer {
             }
             actions.append(NamedAction(
                 name: label,
-                body: ActionNormalization.complete(
+                body: try ActionNormalization.checkedComplete(
                     needsProgramCounter
                         ? .and(.guard_(.equal(.programCounter, control.location(atomic.label.name))), body)
                         : body,
-                    variables: variables
+                    variables: variables,
+                    at: "actions.\(label).normalization"
                 )
             ))
             let atStep = StateExpr.equal(.programCounter, control.location(atomic.label.name))

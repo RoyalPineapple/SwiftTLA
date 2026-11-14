@@ -17,7 +17,7 @@ struct EnumDomainTests {
     #expect(tla.contains("toggle =="))
   }
 
-  @Test("String-backed enum TLA+ output uses raw string values")
+  @Test("String-backed enum defaults use canonical Swift strings in TLA+ output")
   func stringEnumTLAOutput() throws {
     let state = Var<StringEnumToggleModel.Status>("state")
     let spec = TLASpec("StringEnum") {
@@ -28,7 +28,7 @@ struct EnumDomainTests {
       }
     }
     let tla = try spec.compile().render().tlaBundle.tla
-    #expect(tla.contains("state = \"on\""))
+    #expect(tla.contains("state = \(TLAValue.string("é").description)"))
     #expect(tla.contains("toggle =="))
   }
 
@@ -67,23 +67,44 @@ struct EnumDomainTests {
     let initialMachines = try IntEnumToggleModel.initialMachines()
     #expect(initialMachines.count == 1)
     let initial = try #require(initialMachines.first)
-    #expect(initial.state.mode == .idle)
+    #expect(IntEnumToggleModel.Mode.idle == .active)
+    #expect(initial.state.mode.rawValue == 0)
+    #expect(throws: GeneratedMachineError.invalidInitialState) {
+      _ = try IntEnumToggleModel.makeMachine(.init(mode: .active))
+    }
     let mode = try #require(TLAStateProjection.Token(validating: "mode"))
     #expect(try initial.formalProjection(of: initial.snapshot).value(for: mode) == .int(0))
     let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 2)
-    #expect(Set(graph.transitions.keys.map(\.state.mode)) == [.idle, .active])
-    #expect(graph.transitions[initial.snapshot]?.first?.target.state.mode == .active)
-    let active = try #require(graph.transitions.keys.first { $0.state.mode == .active })
-    #expect(graph.transitions[active]?.first?.target.state.mode == .idle)
+    #expect(graph.transitions.keys.map { $0.state.mode.rawValue }.sorted() == [0, 1])
+    #expect(graph.transitions[initial.snapshot]?.first?.target.state.mode.rawValue == 1)
+    let active = try #require(graph.transitions.keys.first { $0.state.mode.rawValue == 1 })
+    #expect(graph.transitions[active]?.first?.target.state.mode.rawValue == 0)
     #expect(graph.transitions.values.flatMap { $0 }.map(\.action) == [.toggle, .toggle])
     #expect(graph.safetyViolations.isEmpty)
     #expect(try IntEnumToggleModel.render().tlaBundle.tla.contains("mode = 0"))
   }
 
-  @Test("string-backed enum states retain typed toggles and raw TLA values")
+  @Test("string-backed enum defaults retain typed toggles and canonical formal values")
   func checksStringEnumMachine() throws {
     let initial = try #require(StringEnumToggleModel.initialMachines().first)
     #expect(initial.state.status == .on)
+    #expect(StringEnumToggleModel.Status.on.rawValue.utf8.elementsEqual("e\u{301}".utf8))
+    #expect(StringEnumToggleModel.Status.on.tlaValue == .string("é"))
+    #expect(StringEnumToggleModel.Status.alias.rawValue.utf8.elementsEqual("é".utf8))
+    #expect(StringEnumToggleModel.Status.alias.tlaValue == .string("é"))
+    let canonical = StringEnumToggleModel.State(status: .on)
+    let equivalentAlias = StringEnumToggleModel.State(status: .alias)
+    #expect(canonical == equivalentAlias)
+    #expect(Set([canonical, equivalentAlias]).count == 1)
+    let token = try #require(TLAStateProjection.Token(validating: "status"))
+    let projection = try initial.formalProjection(of: initial.snapshot)
+    let projected = try #require(projection.value(for: token))
+    #expect(projected == .string("é"))
+    #expect(StringEnumToggleModel.Status(formalValue: projected) == .on)
+    var alias = try StringEnumToggleModel.makeMachine(.init(status: .alias))
+    #expect(try alias.formalProjection(of: alias.snapshot).value(for: token) == projected)
+    #expect(try alias.violatedInvariants(checking: [.TypeOK], atLevel: 1).isEmpty)
+    #expect(try alias.send(.toggle).after.status == .off)
     let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 2)
     #expect(Set(graph.transitions.keys.map(\.state.status)) == [.on, .off])
     #expect(graph.transitions[initial.snapshot]?.first?.target.state.status == .off)
@@ -91,6 +112,6 @@ struct EnumDomainTests {
     #expect(graph.transitions[off]?.first?.target.state.status == .on)
     #expect(graph.transitions.values.flatMap { $0 }.map(\.action) == [.toggle, .toggle])
     #expect(graph.safetyViolations.isEmpty)
-    #expect(try StringEnumToggleModel.render().tlaBundle.tla.contains("status = \"on\""))
+    #expect(try StringEnumToggleModel.render().tlaBundle.tla.contains("status = \(TLAValue.string("é").description)"))
   }
 }

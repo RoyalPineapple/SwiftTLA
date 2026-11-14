@@ -8,7 +8,7 @@ public static func visitAlternatives<Alternative: Sendable, Update: Sendable>(
         var updates: [Update] = []
         do {
             try visit(alternative) { updates.append($0) }
-        } catch let failure as NativeMachineEvaluationError {
+        } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
             if firstFailure == nil { firstFailure = failure }
         }
         for update in updates { try emit(update) }

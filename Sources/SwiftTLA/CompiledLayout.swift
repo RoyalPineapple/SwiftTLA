@@ -82,6 +82,17 @@ package struct CompiledVariableLayout: Hashable, Sendable {
     package let displayLabel: String?
     package let generatedSwiftType: String?
     package let resolvedValueType: CompiledValueType?
+    package let formalName: String
+
+    init(id: VariableID, declaration: CompiledDeclaration, displayLabel: String?,
+         generatedSwiftType: String?, resolvedValueType: CompiledValueType?, formalName: String? = nil) {
+        self.id = id
+        self.declaration = declaration
+        self.displayLabel = displayLabel
+        self.generatedSwiftType = generatedSwiftType
+        self.resolvedValueType = resolvedValueType
+        self.formalName = formalName ?? declaration.name
+    }
 }
 
 package struct CompiledActionLayout: Hashable, Sendable {
@@ -95,6 +106,14 @@ package struct CompiledPropertyLayout: Hashable, Sendable {
     package let id: PropertyID
     package let declaration: CompiledDeclaration
     package let reference: PropertyReference?
+    package let formalName: String
+
+    init(id: PropertyID, declaration: CompiledDeclaration, reference: PropertyReference?, formalName: String? = nil) {
+        self.id = id
+        self.declaration = declaration
+        self.reference = reference
+        self.formalName = formalName ?? declaration.name
+    }
 }
 
 struct CompiledProcedureLayout: Hashable, Sendable {
@@ -171,6 +190,7 @@ package struct CompiledControlLocation: Hashable, Sendable {
 struct CompiledModuleInstanceLayout: Hashable, Sendable {
     let id: ModuleInstanceID
     let namespace: String
+    let formalName: String
     let moduleName: String
 }
 
@@ -186,15 +206,15 @@ package struct CompiledLayout: Hashable, Sendable {
 
     package let parameters: [CompiledParameterLayout]
     package let checkingRegisters: [CompiledCheckingRegisterLayout]
-    package let variables: [CompiledVariableLayout]
-    package let actions: [CompiledActionLayout]
-    let stateProperties: [CompiledPropertyLayout]
-    let temporalProperties: [CompiledPropertyLayout]
-    let refinementProperties: [CompiledPropertyLayout]
-    let generatedRefinementProperties: [CompiledPropertyLayout]
+    package private(set) var variables: [CompiledVariableLayout]
+    package private(set) var actions: [CompiledActionLayout]
+    private(set) var stateProperties: [CompiledPropertyLayout]
+    private(set) var temporalProperties: [CompiledPropertyLayout]
+    private(set) var refinementProperties: [CompiledPropertyLayout]
+    private(set) var generatedRefinementProperties: [CompiledPropertyLayout]
     let procedures: [CompiledProcedureLayout]
     package let controlLocations: [CompiledControlLocation]
-    let moduleInstances: [CompiledModuleInstanceLayout]
+    private(set) var moduleInstances: [CompiledModuleInstanceLayout]
     let declarations: [CompiledDeclaration]
 
     init(source spec: TLASpec) {
@@ -271,6 +291,7 @@ package struct CompiledLayout: Hashable, Sendable {
             .init(
                 id: .init(ordinal: $0.offset),
                 namespace: $0.element.name,
+                formalName: $0.element.name,
                 moduleName: $0.element.module.name
             )
         }
@@ -288,10 +309,82 @@ package struct CompiledLayout: Hashable, Sendable {
         }?.id
     }
 
+    mutating func resolvePropertyNames(reserving names: Set<String>) {
+        let reserved = names.union(["Init", "Next", "Spec", "vars"])
+        var used = reserved.union(properties.map(\.declaration.name))
+        func resolve(_ property: CompiledPropertyLayout) -> CompiledPropertyLayout {
+            let stem = tlaDeclarationStem(property.declaration.name)
+            var name = stem
+            if reserved.contains(name) || stem != property.declaration.name {
+                var suffix = 2
+                while !used.insert(name).inserted {
+                    name = "\(stem)__\(suffix)"
+                    suffix += 1
+                }
+            }
+            return .init(id: property.id, declaration: property.declaration,
+                reference: property.reference, formalName: name)
+        }
+        stateProperties = stateProperties.map(resolve)
+        temporalProperties = temporalProperties.map(resolve)
+        refinementProperties = refinementProperties.map(resolve)
+        generatedRefinementProperties = generatedRefinementProperties.map(resolve)
+    }
+
+    mutating func resolveVariableNames(reserving names: Set<String>) {
+        let reserved = names.union(["Init", "Next", "Spec"]).union(tlaPredefinedIdentifierNames)
+        var used = reserved.union(variables.map(\.declaration.name))
+        variables = variables.map { variable in
+            let stem = tlaDeclarationStem(variable.declaration.name)
+            var name = stem
+            if reserved.contains(name) || stem != variable.declaration.name {
+                var suffix = 2
+                while !used.insert(name).inserted {
+                    name = "\(stem)__\(suffix)"
+                    suffix += 1
+                }
+            }
+            return .init(id: variable.id, declaration: variable.declaration, displayLabel: variable.displayLabel,
+                generatedSwiftType: variable.generatedSwiftType, resolvedValueType: variable.resolvedValueType,
+                formalName: name)
+        }
+    }
+
+    mutating func resolveActionNames(reserving names: Set<String>, preservingDirectNext: Bool) {
+        var used = names.union(["Init", "Next", "Spec", "vars", "StateConstraint", "ActionConstraint"])
+        if actions.contains(where: \.isTermination) { used.insert("Terminating") }
+        if preservingDirectNext { used.remove("Next") }
+        actions = actions.map { action in
+            let stem = action.renderedName
+            if action.isTermination, stem == "Terminating", !names.contains(stem) {
+                used.remove(stem)
+            }
+            var name = stem
+            var suffix = 2
+            while !used.insert(name).inserted {
+                name = "\(stem)__\(suffix)"
+                suffix += 1
+            }
+            return .init(id: action.id, declaration: action.declaration,
+                renderedName: name, isTermination: action.isTermination)
+        }
+    }
+
     func procedureStackID() -> VariableID? {
         variables.first {
             $0.declaration.origin == .procedureStack
         }?.id
+    }
+
+    mutating func resolveModuleInstanceNames(reserving names: Set<String>, avoiding occupied: inout Set<String>) {
+        moduleInstances = moduleInstances.map { instance in
+            let stem = tlaDeclarationStem(instance.namespace)
+            let name = names.contains(instance.namespace) || stem != instance.namespace
+                ? StateExpr.freshBoundName(stem, avoiding: occupied) : instance.namespace
+            occupied.insert(name)
+            return .init(id: instance.id, namespace: instance.namespace, formalName: name,
+                moduleName: instance.moduleName)
+        }
     }
 
     func moduleInstanceID(named namespace: String) -> ModuleInstanceID? {
@@ -460,7 +553,7 @@ package struct CompiledLayout: Hashable, Sendable {
                 }
             }.joined()
             let candidate = raw.isEmpty ? "Action" : (raw.first?.isNumber == true ? "_\(raw)" : raw)
-            let stem = isTLADeclarationName(candidate) ? candidate : "_\(candidate)"
+            let stem = tlaDeclarationStem(isTLADeclarationName(candidate) ? candidate : "_\(candidate)")
             var renderedName = stem.isEmpty ? "Action" : stem
             var suffix = 2
             while !used.insert(renderedName).inserted {
@@ -480,13 +573,16 @@ package struct CompiledLayout: Hashable, Sendable {
 struct CompiledBindingTable: Sendable {
     let binders: [BinderID: String]
     let operatorNames: [OperatorID: String]
+    let sourceOperators: [String: OperatorID]
 
     init(
         operatorNames: [OperatorID: String] = [:],
-        binders: [BinderID: String] = [:]
+        binders: [BinderID: String] = [:],
+        sourceOperators: [String: OperatorID] = [:]
     ) {
         self.binders = binders
         self.operatorNames = operatorNames
+        self.sourceOperators = sourceOperators
     }
 
     func binderName(_ id: BinderID) -> String? { binders[id] }

@@ -39,7 +39,7 @@ struct DictionaryConfigurationTests {
     ])
     func rejectsInvalidFunctions(_ capacity: [String: Int]) {
         #expect(throws: (any Error).self) {
-            try ConfiguredDictionaryValues.Configuration(jugs: ["small", "big"], capacity: capacity)
+            try ConfiguredDictionaryValues.Configuration(jugs: ["small", "big"], capacity: .init(uniqueKeysWithValues: capacity.map { (_NativeString(sourceString: $0.key), $0.value) }))
         }
     }
 

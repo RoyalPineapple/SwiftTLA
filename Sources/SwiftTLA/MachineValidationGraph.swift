@@ -40,7 +40,7 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
     private let offsets: [Int]
     public let behavior: ModelBehavior
     private let selectedFairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?
-    private let selectedEnabledness: [Int: [Machine.Snapshot: Bool]]?
+    private let selectedEnabledness: [[Bool]]?
 
     public var initialStates: Set<Machine.Snapshot> {
         Set(initialIDs.map { snapshots[$0] })
@@ -64,11 +64,17 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
     package init(initialMachines: [Machine], maximumStates: Int, behavior: ModelBehavior,
         fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?) throws {
         guard let machine = initialMachines.first else { throw ExplorationError.noInitialStates }
+        var scopes: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = []
+        var fairnessFailure: (any Error)?
+        if behavior == .specification {
+            do { scopes = try fairness ?? machine.fairnessConditions() }
+            catch { fairnessFailure = error }
+        }
         var capture = MachineValidationGraphCapture<Machine>()
         let summary = try MachineValidator.run(
             initialMachines: initialMachines, maximumStates: maximumStates,
             checking: .init(properties: [], checkDeadlock: false),
-            stopOnViolation: false
+            stopOnViolation: false, fairness: scopes
         ) { event in
             try capture.observe(event)
         }
@@ -76,7 +82,12 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
         guard case .exhausted = summary.completion else {
             throw ExplorationError.configurationMismatch
         }
-        try self.init(machine: machine, capture: capture, behavior: behavior, fairness: fairness)
+        if let fairnessFailure { throw fairnessFailure }
+        guard let enabledness = summary.fairnessEnabledness else {
+            throw ExplorationError.configurationMismatch
+        }
+        try self.init(machine: machine, capture: capture, behavior: behavior,
+            fairness: scopes, enabledness: enabledness)
     }
 
     package init(machine: Machine, initialStates: Set<Machine.Snapshot>,
@@ -107,15 +118,24 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
                 try capture.observe(.edge(source: source, action: edge.action, target: ids[edge.target]!))
             }
         }
+        let indexedEnabledness = enabledness.map { values in
+            (fairness ?? []).indices.map { scope in states.map { values[scope]![$0]! } }
+        }
         try self.init(machine: machine, capture: capture, behavior: behavior,
-            fairness: fairness, enabledness: enabledness)
+            fairness: fairness, enabledness: indexedEnabledness)
     }
 
     package init(machine: Machine, capture: MachineValidationGraphCapture<Machine>,
         behavior: ModelBehavior,
         fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?,
-        enabledness: [Int: [Machine.Snapshot: Bool]]? = nil) throws {
+        enabledness: [[Bool]]? = nil) throws {
         guard !capture.initialIDs.isEmpty else { throw ExplorationError.noInitialStates }
+        if let enabledness {
+            guard let fairness, enabledness.count == fairness.count,
+                  enabledness.allSatisfy({ $0.count == capture.snapshots.count }) else {
+                throw ExplorationError.configurationMismatch
+            }
+        }
         self.machine = machine
         snapshots = capture.snapshots
         initialIDs = capture.initialIDs
@@ -244,10 +264,9 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
             })
         }
         let indexedEnabledness = selectedEnabledness.map { selected in
-            let ids = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map { ($0.element, $0.offset) })
-            return selected.mapValues { values in
-                Dictionary(uniqueKeysWithValues: values.map { (ids[$0.key]!, $0.value) })
-            }
+            Dictionary(uniqueKeysWithValues: selected.enumerated().map { scope, values in
+                (scope, Dictionary(uniqueKeysWithValues: values.enumerated().map { ($0.offset, $0.element) }))
+            })
         }
         return LivenessChecker<Int, Machine.Action, Int>(
             states: Set(snapshots.indices),

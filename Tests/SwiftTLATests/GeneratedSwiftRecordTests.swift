@@ -20,33 +20,102 @@ struct GeneratedSwiftRecordTests {
         }
     }
 
-    @Test("ordinary Swift records execute through generated typed transitions")
-    func executesRecordTransition() throws {
-        var machine = try GeneratedSwiftRecord.makeMachine()
-        #expect(machine.state.packet == .init(count: 0, ready: false))
-        let transition = try machine.send(.advance)
-        #expect(transition.before.packet == .init(count: 0, ready: false))
-        #expect(transition.after.packet == .init(count: 1, ready: true))
-        #expect(transition.before.previousCount == -1)
-        #expect(transition.after.previousCount == 0)
-        #expect(machine.state == transition.after)
+    @Test("ordinary Swift record choices retain values and report ambiguous actions")
+    func executesRecordChoices() throws {
+        let authoredArchive = SetExpr(GeneratedSwiftRecord.Packet(count: 0, ready: false),
+            GeneratedSwiftRecord.Packet(count: 1, ready: false))
+        #expect(authoredArchive.elements.map(\.count).sorted() == [0, 1])
+        let machine = try GeneratedSwiftRecord.makeMachine()
+        #expect(machine.state.archive.map(\.count).sorted() == [0, 1])
+        let sameArchive = type(of: machine.state.archive).init([
+            GeneratedSwiftRecord.Packet(count: 1, ready: false), .init(count: 0, ready: false)])
+        #expect(Set([sameArchive, machine.state.archive]).count == 1)
+        #expect(machine.state.archive.contains(.init(count: 1, ready: false)))
+        #expect(!machine.state.archive.contains(.init(count: 9, ready: false)))
+        var archive = machine.state.archive
+        #expect(!archive.insert(.init(count: 1, ready: false)).inserted)
+        #expect(archive.remove(.init(count: 0, ready: false))?.count == 0)
+        #expect(archive.count == 1 && archive.first?.count == 1)
+        #expect(archive.update(with: .init(count: 1, ready: false))?.count == 1)
+        #expect(archive.symmetricDifference(machine.state.archive).map(\.count) == [0])
+        #expect(machine.state.lookup.count == 2)
+        #expect(machine.state.lookup[.init(count: 0, ready: false)] == 0)
+        #expect(machine.state.lookup[.init(count: 1, ready: false)] == 1)
+        #expect(machine.state.lookup[.init(count: 9, ready: false)] == nil)
+        var lookup = machine.state.lookup
+        #expect(lookup.updateValue(9, forKey: .init(count: 0, ready: false)) == 0)
+        #expect(lookup[.init(count: 1, ready: false)] == 1)
+        #expect(lookup.removeValue(forKey: .init(count: 0, ready: false)) == 9)
+        #expect(lookup.count == 1 && lookup.keys.contains(.init(count: 1, ready: false)))
+        let different = GeneratedSwiftRecord.Packet(count: 9, ready: false)
+        #expect(machine.state.packet == different)
+        #expect(machine.state.packet.tlaValue != different.tlaValue)
+        #expect(machine.state.packet.count == 0 && !machine.state.packet.ready)
+        #expect(try machine.violatedInvariants(checking: [.Bounded], atLevel: 1).isEmpty)
+        for property: GeneratedSwiftRecord.Property in [.RecordCardinality, .RecordForAll, .RecordExists, .RecordMapping, .RecordSelection,
+            .RecordFilterDomain, .RecordMapDomain, .RecordUnionDomain, .RecordIntersectionDomain,
+            .RecordDifferenceDomain, .RecordFlattenedDomain, .RecordConditionalDomain, .OrderedCaseSelection, .RecordSymbolicDomain] {
+            #expect(try machine.violatedInvariants(checking: [property], atLevel: 1).isEmpty)
+        }
+        let caseName = try #require(GeneratedSwiftRecord.formalPropertyNames[.OrderedCaseSelection])
+        let caseDefinition = try #require(try GeneratedSwiftRecord.render().tlaBundle.tla
+            .split(separator: "\n").first { $0.hasPrefix(caseName + " ==") })
+        #expect(caseDefinition.contains("(IF ((packet).count >= 0) THEN 1 ELSE CASE ((packet).count >= 0) -> 2 [] OTHER -> 0)"))
+        let candidates = try machine.successors(for: .advance)
+        #expect(candidates.map { $0.state.packet.count }.sorted() == [1, 1, 2, 2])
+        for candidate in candidates {
+            let input = candidate.state.packet.count
+            #expect(candidate.state.packet.ready)
+            #expect(candidate.state.history.map(\.count) == [input])
+            #expect(candidate.state.archive.map(\.count).sorted() == [0, 1])
+            #expect(candidate.state.lookup.count == 2)
+            #expect(candidate.state.lookup[.init(count: 0, ready: false)] == 1)
+            #expect(candidate.state.lookup[.init(count: 1, ready: false)] == 1)
+            #expect(candidate.state.previousCount == 0)
+            #expect(try candidate.violatedInvariants(checking: [.OrderedCaseSelection], atLevel: 2).isEmpty)
+            #expect(try candidate.violatedInvariants(checking: [.RecordConditionalDomain], atLevel: 2).isEmpty)
+            #expect(try candidate.violatedInvariants(checking: [.Bounded], atLevel: 2)
+                == (input == 1 ? [] : [.Bounded]))
+        }
+        var unchanged = machine
+        #expect(throws: GeneratedMachineError.ambiguousAction) { try unchanged.send(.advance) }
+        #expect(unchanged.state.packet.count == 0 && !unchanged.state.packet.ready)
+        #expect(unchanged.state.previousCount == -1)
+        #expect(unchanged.state.history.map(\.count) == [0])
     }
 
     @Test("record expression fields retain their Swift field types")
-    func readsTypedFields() {
+    func readsTypedFields() throws {
         let record = Expr<GeneratedSwiftRecord.Packet>(.variable("packet"))
         let count: Expr<Int> = record.count
         let ready: Expr<Bool> = record.ready
         #expect(count.stateExpr == .recordAccess(.variable("packet"), "count"))
         #expect(ready.stateExpr == .recordAccess(.variable("packet"), "ready"))
+
+        typealias Packet = GeneratedSwiftRecord.Packet
+        let counts: [Expr<Int>] = [
+            Expr(Packet(count: 7, ready: false)).count,
+            SwiftTLA.Expr(Packet(count: 7, ready: false)).count,
+            Expr<Packet>(Packet(count: 7, ready: false)).count,
+            Expr([1, 2]).count,
+            Expr([0: 1]).keys.cardinality,
+            SwiftTLA.Expr([0: 1]).keys.cardinality,
+            Expr<[Int: Int]>([0: 1]).keys.cardinality,
+            Expr([Packet(count: 7, ready: false)]).head().count,
+            Expr([0: Packet(count: 7, ready: false)])[0].count
+        ]
+        #expect(try counts.map { try compiledValue($0.stateExpr) }
+            == [.int(7), .int(7), .int(7), .int(2), .int(1), .int(1), .int(1), .int(7), .int(7)])
     }
 
     @Test("generated record conversion validates every key and value")
-    func validatesFormalConversion() {
+    func validatesFormalConversion() throws {
         typealias Packet = GeneratedSwiftRecord.Packet
         let packet = Packet(count: 3, ready: true)
-        #expect(Packet(formalValue: packet.tlaValue) == packet)
-        #expect(Packet.defaultValue == .init(count: 0, ready: false))
+        #expect(packet.tlaValue == .record(["count": .int(3), "ready": .bool(true)]))
+        let decoded = try #require(Packet(formalValue: .record(["count": .int(3), "ready": .bool(true)])))
+        #expect(decoded.count == 3 && decoded.ready)
+        #expect(Packet.defaultValue.count == 0 && !Packet.defaultValue.ready)
         #expect(Packet(formalValue: .record(["count": .int(3)])) == nil)
         #expect(Packet(formalValue: .record(["count": .bool(true), "ready": .bool(true)])) == nil)
         #expect(Packet(formalValue: .record(["count": .int(3), "ready": .bool(true), "extra": .int(0)])) == nil)

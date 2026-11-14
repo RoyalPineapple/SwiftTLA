@@ -48,7 +48,8 @@ struct ArrayValueTests {
         #expect(try compiledValue(Fold(values.expr, startingWith: 0) { value, sum in value + sum }.stateExpr) == .int(5))
         let parser = ParserSession()
         let literal: ExprSyntax = "Array<Int>([2, 1, 2])"
-        #expect(parser.decodeTypedFacadeValue(literal, scope: .empty) == .tupleLiteral([.int(2), .int(1), .int(2)]))
+        let parsed = try #require(parser.decodeTypedFacadeValue(literal, scope: .empty))
+        #expect(try compiledValue(parsed) == .tuple([.int(2), .int(1), .int(2)]))
     }
 
     @Test("array configuration and native operations preserve ordinary Swift state and nominal members")
@@ -141,7 +142,7 @@ struct ArrayValueTests {
         })
         let swiftProofInput = proofInput.deletingLastPathComponent()
             .appendingPathComponent("GeneratedSequenceIndexFailureSwiftVisitor.txt")
-        let expectedVisitor = try String(contentsOf: swiftProofInput, encoding: .utf8)
+        let expectedVisitor = nativeWitnessSource(try String(contentsOf: swiftProofInput, encoding: .utf8))
         func tokens(_ source: String) -> [String] {
             Parser.parse(source: source).tokens(viewMode: .sourceAccurate).map(\.text)
         }
@@ -203,7 +204,7 @@ struct ArrayValueTests {
                 "_NativeMachineOperations.sequencePrefix(_sequenceValue, length: _prefixLength)")
         ] {
             let visitor = try #require(visitors.first { $0.name.text == name })
-            let expected = try String(contentsOf: proofDirectory.appendingPathComponent(file), encoding: .utf8)
+            let expected = nativeWitnessSource(try String(contentsOf: proofDirectory.appendingPathComponent(file), encoding: .utf8))
             #expect(tokens(visitor.description) == tokens(expected))
             let unchecked = visitor.description.replacingOccurrences(of: checkedCall, with: "_sequenceValue")
             #expect(unchecked != visitor.description)
@@ -283,8 +284,8 @@ struct ArrayValueTests {
                 Issue.record("Unexpected generated action visitor: \(visitor.name.text)")
                 return
             }
-            let expected = try String(contentsOf: proofInput.deletingLastPathComponent()
-                .appendingPathComponent(name), encoding: .utf8)
+            let expected = nativeWitnessSource(try String(contentsOf: proofInput.deletingLastPathComponent()
+                .appendingPathComponent(name), encoding: .utf8))
             #expect(tokens(visitor.description) == tokens(expected))
         }
         #expect(rendered.intrinsicInvariantNames.contains("__SwiftTLAEvaluationOK"))

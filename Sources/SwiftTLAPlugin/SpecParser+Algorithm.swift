@@ -1040,9 +1040,10 @@ extension ParserSession {
             algorithmParseFailure = "State '\(declaredName)' has an invalid value type: \(error)"
             return nil
         }
+        let stateType = sourceTypeResolver.normalizedStateType(state.swiftTypeName, resolved: valueType)
         let resolvedState = AlgorithmStateModel(root: state.root, initialization: state.initialization,
-            displayLabel: state.displayLabel, swiftTypeName: state.swiftTypeName,
-            resolvedValueType: inferredType, exposed: state.exposed)
+            displayLabel: state.displayLabel, swiftTypeName: stateType.spelling,
+            resolvedValueType: stateType.resolved, exposed: state.exposed)
         recordStateDeclaration(named: resolvedState.root, at: binding)
         let component: AlgorithmComponentModel = kind == .shared ? .shared(resolvedState) : .local(resolvedState)
         return (sourceName, component, valueType)
@@ -1092,7 +1093,8 @@ extension ParserSession {
             algorithmParseFailure = "Algorithm values must be immutable let bindings. Use scope.sharedVar and Assign for mutable state."
             return nil
         }
-        guard let expression = decodeTypedFacadeValue(initializer, scope: scope)
+        guard let expression = decodeTypedFacadeValue(initializer, scope: scope,
+                requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation))
             ?? decodeStateExpr(initializer) else {
             algorithmParseFailure = algorithmParseFailure
                 ?? "Algorithm let '\(name)' requires a supported formal expression."
@@ -1275,7 +1277,8 @@ extension ParserSession {
               let binding = declaration.bindings.first,
               let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
               let initializer = binding.initializer?.value,
-              let value = decodeAlgorithmStateExpression(initializer, scope: scope)
+              let value = decodeTypedFacadeValue(initializer, scope: scope,
+                requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation))
         else { return nil }
         return (name, value)
     }

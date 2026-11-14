@@ -1,0 +1,5 @@
+# Shared indexed-history definitions are unchanged from the admitted base.
+IndexedHistoryRules
+ActionOutcomeInterface
+BooleanExpressionConstructorRules
+BooleanExpressionComposition

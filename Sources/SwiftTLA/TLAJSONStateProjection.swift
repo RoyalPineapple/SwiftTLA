@@ -10,6 +10,23 @@ public indirect enum TLAJSONValue: Equatable, Sendable {
     case array([Self])
     case object([String: Self])
 
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.integer(let a), .integer(let b)): return a == b
+        case (.boolean(let a), .boolean(let b)): return a == b
+        case (.string(let a), .string(let b)): return FormalStringIdentity.equal(a, b)
+        case (.array(let a), .array(let b)): return a == b
+        case (.object(let a), .object(let b)):
+            guard a.count == b.count else { return false }
+            let left = a.sorted { FormalStringIdentity.less($0.key, $1.key) }
+            let right = b.sorted { FormalStringIdentity.less($0.key, $1.key) }
+            return zip(left, right).allSatisfy {
+                FormalStringIdentity.equal($0.0.key, $0.1.key) && $0.0.value == $0.1.value
+            }
+        default: return false
+        }
+    }
+
     package static func decode(_ raw: Any, at path: String) throws -> Self {
         if let object = raw as? [String: Any] {
             return .object(try object.mapValues { try decode($0, at: path) })

@@ -17,16 +17,18 @@ import Testing
         #expect(try !scenario.render().tlaBundle.tla.contains("Visit limit"))
     }
 
-    @Test("changing a parameter label preserves compiled identity")
-    func labelIsPresentationOnly() throws {
+    @Test("changing a parameter label preserves compiled identity",
+        arguments: ["limit", "IF", "LET", "CONSTANTS", "TRUE", "FALSE", "BOOLEAN", "STRING"])
+    func labelIsPresentationOnly(name: String) throws {
         func compile(_ label: String) throws -> CompiledSpecification {
             try SpecParser.parseSpecClosure(named: "ParameterIdentity", parseSpecTestClosure("""
-            { scope in let limit = scope.parameter(as: Int.self, in: 0...2, label: "\(label)") }
+            { scope in let \(name) = scope.parameter(as: Int.self, in: 0...2, label: "\(label)") }
             """)).compile()
         }
         let first = try compile("Visit limit")
         let second = try compile("Maximum visits")
         #expect(first.identity == second.identity)
+        #expect(first.description.parameters.first?.name == name)
         #expect(first.description.parameters.first?.name == second.description.parameters.first?.name)
         #expect(first.description.parameters.first?.displayName == "Visit limit")
         #expect(second.description.parameters.first?.displayName == "Maximum visits")

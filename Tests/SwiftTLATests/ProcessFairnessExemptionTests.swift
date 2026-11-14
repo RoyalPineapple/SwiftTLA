@@ -31,6 +31,34 @@ struct ProcessFairnessExemptionTests {
         #expect(strictRender.tlaBundle.cfg.contains("SPECIFICATION Spec"))
         #expect(relaxedRender.tlaBundle.cfg.contains("SPECIFICATION SwiftTLAProfile0"))
         #expect(relaxedRender.tlaBundle.tla.contains("SwiftTLAProfile0 =="))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(
+            in: ScenarioFairnessSelectionModel.spec.compile()))
+        let profile = try #require(program.behavior.fairnessProfiles.first)
+        let module = try program.renderModule().renderedModuleSource
+        try StraightLineRenderedActionCheck.verifyFiniteInvocations(program.behavior,
+            layout: program.layout, binders: program.binderNames, module: module)
+        let variables = program.layout.variables.map(\.formalName)
+        let frame = variables.count == 1 ? variables[0] : "<<\(variables.joined(separator: ", "))>>"
+        for name in ["Spec", profile.operatorName] {
+            let prefix = "\(name) ==\n  /\\ Init\n  /\\ [][Next]_\(frame)\n"
+            try #require(module.components(separatedBy: prefix).count == 2)
+            for replacement in [
+                prefix.replacingOccurrences(of: "/\\ Init", with: "/\\ TRUE"),
+                prefix.replacingOccurrences(of: "[Next]", with: "[FALSE]"),
+                prefix.replacingOccurrences(of: "_\(frame)", with: "_unownedFrame"),
+                prefix + "\n" + prefix
+            ] {
+                let changed = module.replacingOccurrences(of: prefix, with: replacement)
+                #expect(changed != module)
+                do {
+                    try StraightLineRenderedActionCheck.verifyFiniteInvocations(program.behavior,
+                        layout: program.layout, binders: program.binderNames, module: changed)
+                    Issue.record("A specification changed its initial predicate, next relation or complete frame")
+                } catch let diagnostic as CompilationDiagnostic {
+                    #expect(diagnostic.path == "tla.\(name)")
+                }
+            }
+        }
     }
 
     @Test("process fairness is one obligation over all eligible atomic steps")

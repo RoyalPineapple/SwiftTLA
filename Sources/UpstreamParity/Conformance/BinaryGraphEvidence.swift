@@ -31,7 +31,7 @@ struct BinaryEvaluationFailure {
         case .emptySequence: self.init(14)
         case .functionArgumentOutsideDomain: self.init(15)
         case .tupleIndexOutsideDomain(let index): self.init(16, integers: [index])
-        case .recordFieldUnavailable(let field): self.init(17, detail: field)
+        case .recordFieldUnavailable(let field): self.init(17, detail: field.formalString)
         case .invalidRandomSubsetCount(let count): self.init(18, integers: [count])
         case .emptyRandomElementDomain: self.init(19)
         }

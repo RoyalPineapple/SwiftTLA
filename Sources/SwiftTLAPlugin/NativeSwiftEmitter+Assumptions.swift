@@ -30,7 +30,7 @@ extension NativeSwiftEmitter {
         }
         declarations += try nativeDeclarations("""
         public static func evaluateAssumptions(\(parameterArgument)) throws -> AssumptionEvaluation {
-            \(recordsOutput ? "var" : "let") _evaluatedValues: [TLAValue] = []
+            \(recordsOutput ? "var" : "let") _evaluatedValues: [SwiftTLA.TLAValue] = []
             let satisfied = \(assumptionExpression)
             return AssumptionEvaluation(
                 satisfied: satisfied,
@@ -52,8 +52,8 @@ extension NativeSwiftEmitter {
         }
         declarations += try nativeDeclarations("""
         public struct ValidationScenario: AssumptionValidationScenario {
-            public let name: String
-            public let displayName: String
+            public let name: \(nativeStringType)
+            public let displayName: \(nativeStringType)
             \(configured ? "public let configuration: Configuration" : "")
             public func evaluateAssumptions() throws -> AssumptionEvaluation {
                 try \(model.typeName).evaluateAssumptions(\(parameterCall))

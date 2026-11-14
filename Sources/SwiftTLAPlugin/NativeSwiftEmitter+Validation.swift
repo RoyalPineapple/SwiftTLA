@@ -1,10 +1,11 @@
+import SwiftParser
 import SwiftSyntax
 import SwiftTLA
 
 extension NativeSwiftEmitter {
     func propertyIdentityDeclarations() throws -> [DeclSyntax] {
         let properties = program.layout.properties
-        let names = properties.map { $0.declaration.name }
+        let names = properties.map(\.formalName)
         let identifiers = properties.map { propertyCases[$0.id]! }
         let cases = identifiers.map { "case \($0)" }.joined(separator: "\n")
         let projections = zip(identifiers, names).map {
@@ -18,10 +19,10 @@ extension NativeSwiftEmitter {
         public enum Property: Hashable, CaseIterable, Sendable {
             \(cases)
         }
-        public static var formalPropertyNames: [Property: String] {
+        public static var formalPropertyNames: [Property: \(nativeStringType)] {
             [\(identifiers.isEmpty ? ":" : projections)]
         }
-        public static var propertyDisplayNames: [Property: String] {
+        public static var propertyDisplayNames: [Property: \(nativeStringType)] {
             [\(identifiers.isEmpty ? ":" : displayProjections)]
         }
         """)
@@ -66,13 +67,13 @@ extension NativeSwiftEmitter {
                 case \(index):
                     return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
                         checking: checking, stopOnViolation: stopOnViolation,
-                        stopOnReachability: stopOnReachability,
+                        stopOnReachability: stopOnReachability, fairness: fairness,
                         identity: { machine, level in \(identity) }, emit: emit)
                 """)
                 viewProjections.append("""
                 case \(index):
-                    return try TLAStateProjection(validating: [
-                        .init(token: TLAStateProjection.Token(validating: "View")!,
+                    return try SwiftTLA._nativeFormalProjection([
+                        .init(token: SwiftTLA.TLAStateProjection.Token(validating: "View")!,
                               value: \(try formalValue(projected, type: view.resultType)))])
                 """)
             }
@@ -118,28 +119,28 @@ extension NativeSwiftEmitter {
         }
         let arguments = hasConfiguration ? "configuration: configuration" : ""
         let hasRandomSubset = hasRandomSubsetInitializer
-        return try nativeDeclarations("""
+        let declarations = try nativeDeclarations("""
         public struct ValidationScenario: ModelValidationScenario {
             public typealias Machine = \(model.typeName)
             public typealias Property = \(model.typeName).Property
-            public let name: String
-            public let displayName: String
+            public let name: \(nativeStringType)
+            public let displayName: \(nativeStringType)
             \(hasConfiguration ? "public let configuration: Configuration" : "")
             public let checking: ModelChecks<Property>
             public let checkingMode: ValidationCheckingMode
             public let behavior: ModelBehavior
-            let selectedSymmetry: String?
-            let selectedFairnessProfile: Int?
-            let selectedFairnessProfileName: String?
-            let selectedView: Int?
-            let selectedPostcondition: Int?
-            public let postconditionName: String?
+            let selectedSymmetry: \(nativeStringType)?
+            let selectedFairnessProfile: \(nativeIntType)?
+            let selectedFairnessProfileName: \(nativeStringType)?
+            let selectedView: \(nativeIntType)?
+            let selectedPostcondition: \(nativeIntType)?
+            public let postconditionName: \(nativeStringType)?
             public let postconditionExpectation: ValidationExpectation?
             public let expectations: [Property: ValidationExpectation]
             public let deadlockExpectation: ValidationExpectation?
-            public var usesView: Bool { selectedView != nil }
+            public var usesView: \(nativeBoolType) { selectedView != nil }
 
-            public func postconditionSatisfied(after summary: MachineValidationSummary<Property>) throws -> Bool? {
+            public func postconditionSatisfied(after summary: MachineValidationSummary<Property>) throws -> \(nativeBoolType)? {
                 guard case .exhausted = summary.completion else { return nil }
                 switch selectedPostcondition {
                 \(postconditionCases.joined(separator: "\n"))
@@ -148,16 +149,15 @@ extension NativeSwiftEmitter {
                 }
             }
 
-            public func initialOutcomes() throws -> InitialEvaluationOutcomes<Machine> {
-                \(hasRandomSubset ? "if case .simulation = checkingMode { return try .init(states: \(model.typeName).sampledInitialMachines(\(arguments)), firstFailure: nil) }" : "")
+            public func initialOutcomes() throws -> SwiftTLA.InitialEvaluationOutcomes<Machine> {
+                \(hasRandomSubset ? "if case .simulation = checkingMode { return try .init(states: \(model.typeName).sampledInitialMachines(\(arguments)), failures: []) }" : "")
                 return try \(model.typeName).initialOutcomes(\(arguments))
             }
             public func initialMachines() throws -> [\(model.typeName)] {
                 let outcome = try initialOutcomes()
-                if let failure = outcome.firstFailure { throw failure }
-                return outcome.states
+                return try SwiftTLA._completeNativeInitialOutcomes(outcome)
             }
-            public var formalPropertyNames: [Property: String] {
+            public var formalPropertyNames: [Property: \(nativeStringType)] {
                 Machine.formalPropertyNames
             }
             public func fairnessConditions(on machine: Machine) throws -> [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] {
@@ -169,27 +169,29 @@ extension NativeSwiftEmitter {
                 default: throw ExplorationError.configurationMismatch
                 }
             }
-            public func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
-                stopOnViolation: Bool, stopOnReachability: Bool,
+            public func runValidation(initialMachines: [Machine], maximumStates: \(nativeIntType), checking: ModelChecks<Property>,
+                stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
+                fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
                 emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
-                try runValidation(initialOutcomes: .init(states: initialMachines, firstFailure: nil),
+                try runValidation(initialOutcomes: .init(states: initialMachines, failures: []),
                     maximumStates: maximumStates, checking: checking,
-                    stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability, emit: emit)
+                    stopOnViolation: stopOnViolation, stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
             }
-            public func runValidation(initialOutcomes: InitialEvaluationOutcomes<Machine>, maximumStates: Int,
-                checking: ModelChecks<Property>, stopOnViolation: Bool, stopOnReachability: Bool,
+            public func runValidation(initialOutcomes: SwiftTLA.InitialEvaluationOutcomes<Machine>, maximumStates: \(nativeIntType),
+                checking: ModelChecks<Property>, stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
+                fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
                 emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
                 switch selectedView {
                 \(viewRuns.joined(separator: "\n"))
                 case nil:
                     return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
                         checking: checking, stopOnViolation: stopOnViolation,
-                        stopOnReachability: stopOnReachability, emit: emit)
+                        stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
                 default: throw ExplorationError.configurationMismatch
                 }
             }
             public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
-                atLevel level: Int) throws -> TLAStateProjection {
+                atLevel level: \(nativeIntType)) throws -> SwiftTLA.TLAStateProjection {
                 switch selectedView {
                 \(viewProjections.joined(separator: "\n"))
                 case nil:
@@ -209,5 +211,118 @@ extension NativeSwiftEmitter {
             [\(scenarios.joined(separator: ",\n"))]
         }
         """)
+        if program.requiresSourceDefaultDeadlockOutput && viewRuns.isEmpty && !hasRandomSubset {
+            try verifyOrderedIntValidationOutput(declarations, model: model, arguments: arguments)
+        }
+        return declarations
+    }
+}
+
+func verifyOrderedIntValidationOutput(_ declarations: [DeclSyntax], model: MacroCompilation,
+                                      arguments: String) throws {
+    let modelName = model.typeName
+    func mismatch() -> CompilationDiagnostic {
+        CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.validation.initialOutcome",
+            expected: "the ordered Int initial outcomes and failures reach the shared checker",
+            actual: "the generated validation scenario changes or discards an initial outcome",
+            nextSafeAction: "Report this generated validation translation failure.")
+    }
+    let structures = declarations.compactMap { $0.as(StructDeclSyntax.self) }
+        .filter { $0.name.text == "ValidationScenario" }
+    guard structures.count == 1, let members = structures.first?.memberBlock.members else {
+        throw mismatch()
+    }
+    func actual(_ name: String, firstParameter: String? = nil) -> FunctionDeclSyntax? {
+        members.compactMap { $0.decl.as(FunctionDeclSyntax.self) }.first {
+            $0.name.text == name && $0.signature.parameterClause.parameters.first?.firstName.text == firstParameter
+        }
+    }
+    func matches(_ declaration: FunctionDeclSyntax?, expected source: String) -> Bool {
+        guard let expected = Parser.parse(source: source).statements.first?.item.as(FunctionDeclSyntax.self),
+              let declaration else { return false }
+        return Array(declaration.tokens(viewMode: .sourceAccurate)).map(\.text)
+            == Array(expected.tokens(viewMode: .sourceAccurate)).map(\.text)
+    }
+    guard matches(actual("initialOutcomes"), expected: """
+        public func initialOutcomes() throws -> SwiftTLA.InitialEvaluationOutcomes<Machine> {
+            return try \(modelName).initialOutcomes(\(arguments))
+        }
+        """), matches(actual("runValidation", firstParameter: "initialOutcomes"), expected: """
+        public func runValidation(initialOutcomes: SwiftTLA.InitialEvaluationOutcomes<Machine>, maximumStates: \(nativeIntType),
+            checking: ModelChecks<Property>, stopOnViolation: \(nativeBoolType), stopOnReachability: \(nativeBoolType),
+            fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
+            emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+            switch selectedView {
+            case nil:
+                return try MachineValidator.run(initialOutcomes: initialOutcomes, maximumStates: maximumStates,
+                    checking: checking, stopOnViolation: stopOnViolation,
+                    stopOnReachability: stopOnReachability, fairness: fairness, emit: emit)
+            default: throw ExplorationError.configurationMismatch
+            }
+        }
+        """) else { throw mismatch() }
+
+    func selectionMismatch() -> CompilationDiagnostic {
+        CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.validation.checkingSelection",
+            expected: "the compiled scenario's selected properties and deadlock setting in both output routes",
+            actual: "the generated scenario changes a check selection or its formal projection",
+            nextSafeAction: "Report this generated validation translation failure.")
+    }
+    guard matches(actual("render"), expected: """
+        public func render() throws -> RenderedSpecification {
+            try \(modelName).render(\(arguments)).selectingChecks(checking,
+                formalPropertyNames: Machine.formalPropertyNames, behavior: behavior,
+                symmetry: selectedSymmetry, fairnessProfile: selectedFairnessProfileName,
+                view: selectedView.map { "__SwiftTLAView\\($0)" },
+                postcondition: postconditionName)
+        }
+        """) else { throw selectionMismatch() }
+
+    let constructors = declarations.compactMap { $0.as(FunctionDeclSyntax.self) }
+        .filter { $0.name.text == "validationScenarios" }
+    guard constructors.count == 1, let body = constructors.first?.body,
+          body.statements.count == 1, let statement = body.statements.first,
+          let values = (statement.item.as(ExprSyntax.self)
+              ?? statement.item.as(ReturnStmtSyntax.self)?.expression)?.as(ArrayExprSyntax.self),
+          values.elements.count == model.program.behavior.validationScenarios.count else {
+        throw selectionMismatch()
+    }
+    let properties = model.program.layout.properties
+    let identifiers = GeneratedMachineAPI.generatedIdentifiers(
+        properties.map { $0.declaration.name }, fallback: "property").map {
+            $0.hasPrefix("`") ? String($0.dropFirst().dropLast()) : $0
+        }
+    let names = Dictionary(uniqueKeysWithValues: zip(properties.map(\.id), identifiers))
+    for (element, scenario) in zip(values.elements, model.program.behavior.validationScenarios) {
+        guard let constructor = element.expression.as(FunctionCallExprSyntax.self),
+              constructor.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ValidationScenario"
+        else { throw selectionMismatch() }
+        let selections = constructor.arguments.filter { $0.label?.text == "checking" }
+        guard selections.count == 1,
+              let call = selections.first?.expression.as(FunctionCallExprSyntax.self),
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModelChecks",
+              call.arguments.count == 2,
+              let propertyList = call.arguments.first(where: { $0.label?.text == "properties" })?
+                .expression.as(ArrayExprSyntax.self),
+              let deadlock = call.arguments.first(where: { $0.label?.text == "checkDeadlock" })?
+                .expression.as(BooleanLiteralExprSyntax.self),
+              deadlock.literal.text == (scenario.checkDeadlock ? "true" : "false") else {
+            throw selectionMismatch()
+        }
+        var selected: Set<String> = []
+        for property in propertyList.elements {
+            guard let member = property.expression.as(MemberAccessExprSyntax.self), member.base == nil else {
+                throw selectionMismatch()
+            }
+            selected.insert(member.declName.baseName.sourceIdentifierName)
+        }
+        var expected: Set<String> = []
+        for property in scenario.checks {
+            guard let name = names[property] else { throw selectionMismatch() }
+            expected.insert(name)
+        }
+        guard selected == expected else { throw selectionMismatch() }
     }
 }

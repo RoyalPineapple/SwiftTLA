@@ -25,14 +25,20 @@ struct RecordUnionOrderingTests {
     @Test("model-value sentinel unions preserve native identity and reject string substitutes")
     func preservesSentinelIdentity() throws {
         typealias Model = RecordUnionSentinelModel
-        let values = try Model.initialMachines().map { $0.state.value }
+        let machines = try Model.initialMachines()
+        let values = machines.map(\.state.value)
         #expect(values.count == 3)
-        let formal = values.map { CompiledValue(formal: $0.tlaValue) }
+        let valueToken = try #require(TLAStateProjection.Token(validating: "value"))
+        let projectedValues = try machines.map { machine in
+            try #require(try machine.formalProjection(of: machine.snapshot).value(for: valueToken))
+        }
+        let formal = projectedValues.map { CompiledValue(formal: $0) }
         #expect(formal == formal.sorted())
         #expect(values.last == .second(.noBlock))
         #expect(Set(formal).count == 3)
-        for value in values {
-            #expect(Model.Value(formalValue: value.tlaValue) == value)
+        for value in projectedValues {
+            let decoded = try #require(Model.Value(formalValue: value))
+            #expect(decoded.tlaValue == value)
         }
         #expect(Model.Value(formalValue: .constant("NoBlock")) == .second(.noBlock))
         #expect(Model.Value(formalValue: .string("NoBlock")) == nil)
@@ -103,11 +109,21 @@ struct RecordUnionOrderingTests {
         let values = machines.map(\.state.value)
         #expect(values.count == 6)
         #expect(Set(values).count == 6)
-        let formal = values.map { CompiledValue(formal: $0.tlaValue) }
+        let graph = try ReachabilityGraph(initialMachines: machines, maximumStates: 12)
+        #expect(graph.initialStates.count == 6)
+        #expect(graph.transitions.count == 12)
+        #expect(graph.safetyViolations.isEmpty && graph.deadlockedStates.isEmpty)
+        let valueToken = try #require(TLAStateProjection.Token(validating: "value"))
+        let projectedValues = try machines.map { machine in
+            try #require(try machine.formalProjection(of: machine.snapshot).value(for: valueToken))
+        }
+        let formal = projectedValues.map { CompiledValue(formal: $0) }
         #expect(formal == formal.sorted())
         for var machine in machines {
             let before = machine.state.value
-            #expect(Model.Value(formalValue: before.tlaValue) == before)
+            let projected = try #require(try machine.formalProjection(of: machine.snapshot).value(for: valueToken))
+            let decoded = try #require(Model.Value(formalValue: projected))
+            #expect(decoded.tlaValue == projected)
             #expect(machine.state.ledger == ["hash": .second(.value)])
             #expect(machine.state.pending == [.second(.value)])
             #expect(try machine.send(.finish).after.value == before)

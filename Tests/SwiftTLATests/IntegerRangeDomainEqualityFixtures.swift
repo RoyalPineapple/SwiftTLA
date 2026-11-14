@@ -25,7 +25,7 @@ struct IntegerRangeDomainEqualityModel: Sendable {
                 Assign(result, to: IntRange(lower, through: upper) == values.keys)
             }
             Do(Step.large) {
-                Assign(result, to: values.keys == IntRange(0, through: 1_000_000_000))
+                Assign(result, to: values.keys == IntRange(0, through: 9_223_372_036_854_775_807))
             }
             Do(Step.domainFirstFailure) {
                 Assign(result, to: invalidDomain == IntRange(0, through: 9_223_372_036_854_775_807))

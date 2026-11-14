@@ -167,7 +167,11 @@ run_guarded() {
         git diff --check
         ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }' \
             .github/workflows/ci.yml .github/workflows/validation-pipeline.yml \
-            .github/workflows/validation-case.yml
+            .github/workflows/validation-case.yml .github/actions/setup-pinned-tlaps/action.yml
+        bash -n scripts/build-pinned-tlaps.sh scripts/check-language-proof-batch.sh scripts/proof-family-inputs.sh
+        ruby Tests/Fixtures/ProofFamily/assert_routing.rb
+        python3 Tests/Fixtures/TLAPSBootstrap/assert_inputs.py
+        python3 "$(dirname "$0")/retain-native-initial-source.py" --self-check
         "$(dirname "$0")/setup-finite-graph-tools.sh" --verify-bridge-sources
         bash "$(dirname "$0")/verify-finite-graph-input-pins.sh"
         return
@@ -232,7 +236,7 @@ run_guarded() {
         macro_key="$({
             printf '%s\n' 'swiftpm-local-validation-macro-sources-v1'
             git ls-files --cached --others --exclude-standard -z -- \
-                Sources/SwiftTLA Sources/SwiftTLAPlugin Sources/SwiftTLAMacros |
+                Sources/SwiftTLA Sources/SwiftTLAPlugin Sources/SwiftTLAMacros Sources/SwiftTLACompilerSupport |
                 while IFS= read -r -d '' input_path; do
                     if [[ -f "$input_path" && ! -L "$input_path" ]]; then
                         shasum -a 256 -- "$input_path"

@@ -38,6 +38,9 @@ package enum ScenarioEvidenceComparison {
             throw ValidationEvidenceComparisonError.invalidEvidence("generated TLC graph input")
         }
         let inputMap = Dictionary(uniqueKeysWithValues: inputPairs)
+        try verifyInitialEvaluationFailure(
+            rendered: rendered, caseID: caseID, swift: swift, tlc: tlc,
+            oracle: oracle, graphProcess: process)
         func matches(_ bundle: TLAModuleBundle) -> Bool {
             configuration == bundle.cfg && inputMap == Dictionary(uniqueKeysWithValues:
                 bundleInputJSON(bundle).map { ($0["file"]!, $0["sha256"]!) })
@@ -128,6 +131,7 @@ package enum ScenarioEvidenceComparison {
               tlc.caseID == caseID, swift.scenario == scenario.name,
               tlc.scenario == scenario.name, swift.maximumStates == tlc.maximumStates,
               !swift.graphComplete, !tlc.graphComplete,
+              swift.initialEvaluationFailure == nil, tlc.initialEvaluationFailure == nil,
               Set(swift.properties.keys) == Set(coverage.selectedProperties),
               Set(tlc.properties.keys) == Set(coverage.selectedProperties),
               swift.deadlockSelected == coverage.checksDeadlock,
@@ -203,7 +207,8 @@ package enum ScenarioEvidenceComparison {
         let report = ValidationEvidenceComparisonReport(
             schema: "swifttla.validation-evidence-comparison", caseID: caseID,
             result: difference == nil ? "exact" : "different", graphCompared: false,
-            difference: difference, properties: swift.properties, deadlock: swift.deadlock,
+            difference: difference, initialEvaluationFailure: nil,
+            properties: swift.properties, deadlock: swift.deadlock,
             deadlockSelected: swift.deadlockSelected,
             postconditionName: nil, postcondition: nil)
         let encoder = JSONEncoder()
@@ -211,5 +216,57 @@ package enum ScenarioEvidenceComparison {
         try encoder.encode(report).write(to: directory.appendingPathComponent("comparison.json"), options: .atomic)
         try coverage.attach(to: directory.appendingPathComponent("comparison.json"))
         return report
+    }
+
+    private static func verifyInitialEvaluationFailure(
+        rendered: RenderedSpecification, caseID: String,
+        swift: NativeValidationReport, tlc: GeneratedTLCOracleReport,
+        oracle: URL, graphProcess: [String: Any]?
+    ) throws {
+        let retained = oracle.appendingPathComponent("tlc-initial-failure/tlc-process.json")
+        guard let bundle = try rendered.initialEvaluationFailureBundle() else {
+            guard swift.initialEvaluationFailure == nil, tlc.initialEvaluationFailure == nil,
+                  !FileManager.default.fileExists(atPath: retained.path) else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("unexpected initial failure check")
+            }
+            return
+        }
+        guard FileManager.default.fileExists(atPath: retained.path) else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("missing initial failure TLC check")
+        }
+        let process = try JSONSerialization.jsonObject(with: Data(contentsOf: retained)) as? [String: Any]
+        let inputs = process?["inputs"] as? [[String: String]]
+        let inputPairs = inputs?.compactMap { input -> (String, String)? in
+            guard input.count == 2, let file = input["file"], let hash = input["sha256"] else {
+                return nil
+            }
+            return (file, hash)
+        }
+        guard swift.initialEvaluationFailure != nil,
+              let verdict = tlc.initialEvaluationFailure,
+              verdict == .satisfied || verdict == .violated,
+              let process,
+              process["caseID"] as? String == caseID,
+              process["configuration"] as? String == bundle.cfg,
+              let inputs, let inputPairs,
+              inputs.count == bundle.files.count + 1,
+              Set(inputs.compactMap { $0["file"] }).count == inputs.count,
+              inputPairs.count == inputs.count,
+              Dictionary(uniqueKeysWithValues: inputPairs) == Dictionary(uniqueKeysWithValues:
+                  bundleInputJSON(bundle).map { ($0["file"]!, $0["sha256"]!) }),
+              let graphPin = graphProcess?["toolPin"] as? NSDictionary,
+              let initialPin = process["toolPin"] as? NSDictionary,
+              graphPin.isEqual(initialPin),
+              let invocation = process["invocation"] as? [String: Any],
+              invocation["exitStatus"] as? Int == (verdict == .satisfied ? 0 : 10),
+              (try? GeneratedTLCOracle.initialFailureVerdict(
+                  outcome: verdict == .satisfied ? .completed : .assumptionViolation,
+                  retained: oracle.appendingPathComponent("tlc-initial-failure"),
+                  module: bundle.root.name)) == verdict,
+              let arguments = invocation["arguments"] as? [String],
+              arguments.contains("-workers"), arguments.contains("-fp"),
+              !arguments.contains("-simulate") else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("initial failure TLC input or outcome")
+        }
     }
 }

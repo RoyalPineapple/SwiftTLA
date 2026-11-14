@@ -52,3 +52,21 @@ struct RecordedOverflowModel {
         }
     }
 }
+
+@TLAModel
+struct InitialFailureWithSiblingModel {
+    enum Step: String, CaseIterable { case stay }
+
+    static var spec: TLASpec {
+        #spec("InitialFailureWithSiblingModel") {
+            let algorithm = Algorithm(label: "InitialFailureWithSiblingModel", scoped: { scope in
+                let divisor = scope.sharedVar(in: SetExpr<Int>.literal(0, 1))
+                let quotient = scope.sharedVar(initial: 1 / divisor)
+                Do(Step.stay) { Assign(quotient, to: quotient) }
+            })
+            algorithm
+            let validation = Validation(label: "Initial outcomes") {}
+            validation
+        }
+    }
+}

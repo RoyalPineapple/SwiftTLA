@@ -165,7 +165,7 @@ struct UpstreamParityTests {
             Set<DijkstraMutexModel.Process>([.one, .two, .three, .four]),
         ] {
             let initial = try DijkstraMutexModel.initialMachines(
-                configuration: DijkstraMutexModel.Configuration(Proc: population))
+                configuration: DijkstraMutexModel.Configuration(Proc: .init(population)))
             let members = Set(population.map(\.tlaValue))
             let flags = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map { ($0, TLAValue.bool(true)) }))
             let controls = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map { ($0, TLAValue.string("Li0")) }))
@@ -200,7 +200,7 @@ struct UpstreamParityTests {
         })
         let scenario = try #require(DijkstraMutexModel.validationScenarios().first)
         #expect(scenario.name == "Safety4Processors")
-        #expect(scenario.configuration.Proc == Set<DijkstraMutexModel.Process>([.one, .two, .three, .four]))
+        #expect(scenario.configuration.Proc == [.one, .two, .three, .four])
         #expect(scenario.behavior == .specification)
         #expect(scenario.checking.properties == [.MutualExclusion])
         #expect(scenario.checking.checkDeadlock)
@@ -235,7 +235,7 @@ struct UpstreamParityTests {
         let scenario = try #require(DijkstraMutexModel.validationScenarios().first {
             $0.name == "Liveness3Processors"
         })
-        #expect(scenario.configuration.Proc == Set<DijkstraMutexModel.Process>([.one, .two, .three]))
+        #expect(scenario.configuration.Proc == [.one, .two, .three])
         #expect(scenario.behavior == .specification)
         #expect(scenario.checking.properties == [.MutualExclusion, .DeadlockFreedom])
         #expect(scenario.checking.checkDeadlock)

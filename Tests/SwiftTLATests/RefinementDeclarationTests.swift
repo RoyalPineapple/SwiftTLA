@@ -142,22 +142,45 @@ struct RefinementDeclarationTests {
       "Stable": [true], "Progress": [false, true]])
   }
 
-  @Test("direct module rendering follows linked instance declarations")
-  func rendersLinkedTarget() throws {
+  @Test("direct module rendering follows linked behavior or explicit operator targets", arguments: [
+    (false, "C", "C"), (true, "C", "C"), (false, "TRUE", "TRUE_1"), (true, "TRUE", "TRUE_1"),
+    (false, "FALSE", "FALSE_1"), (true, "FALSE", "FALSE_1"),
+    (false, "BOOLEAN", "BOOLEAN_1"), (true, "BOOLEAN", "BOOLEAN_1"),
+    (false, "STRING", "STRING_1"), (true, "STRING", "STRING_1"),
+    (false, "Len", "Len_1"), (true, "Len", "Len_1"),
+    (false, "WF_C", "_WF_C"), (true, "WF_C", "_WF_C"), (false, "_1", "v_1"), (true, "_1", "v_1")
+  ])
+  func rendersLinkedTarget(library: Bool, name: String, expected: String) throws {
     let state = Var<Int>("state", 0)
     let abstract = TLASpec("Abstract") {
-      Variable(state)
-      Action("stay") { state.stays }
+      if library {
+        FormalDefinition("Spec", parameters: [], body: true)
+      } else {
+        Variable(state)
+        Action("stay") { state.stays }
+      }
     }
-    let instance = Instance("C", of: abstract)
+    let instance = Instance(name, of: abstract)
     let concrete = TLASpec("Concrete") {
       instance
-      Refinement(_name: "Refines", instance: instance, mappings: [.init(state, from: 0)])
+      Refinement(_name: "Refines", instance: instance, mappings: library ? [] : [.init(state, from: 0)])
     }
 
-    let source = try concrete.compile().render().tlaBundle.tla
-    let instanceRange = try #require(source.range(of: "C == INSTANCE Abstract WITH state <- 0"))
-    let refinementRange = try #require(source.range(of: "Refines == C!Spec"))
+    let bundle = try concrete.compile().render().tlaBundle
+    let source = bundle.root.tla
+    let declaration = library ? "\(expected) == INSTANCE Abstract" : "\(expected) == INSTANCE Abstract WITH state <- 0"
+    let instanceRange = try #require(source.range(of: declaration))
+    let target: String
+    if library {
+      let imported = try #require(bundle.imports.first).tla
+      let definition = try #require(imported.split(separator: "\n").first { $0.hasSuffix(" == TRUE") })
+      target = String(try #require(definition.split(separator: " ").first))
+      #expect(target != "Spec")
+      #expect(try #require(bundle.imports.first).tla.contains("\(target) == TRUE"))
+    } else {
+      target = "Spec"
+    }
+    let refinementRange = try #require(source.range(of: "Refines == \(expected)!\(target)"))
     #expect(instanceRange.lowerBound < refinementRange.lowerBound)
   }
 

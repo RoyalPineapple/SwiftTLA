@@ -200,28 +200,34 @@ struct AlgorithmPlusCalRendererTests {
         #expect(definitionRange.lowerBound < actionRange.lowerBound)
     }
 
-    @Test("renders typed properties outside the authored Algorithm")
-    func rendersTopLevelTypedProperty() throws {
+    @Test("renders typed properties outside the authored Algorithm", arguments: ["CountIsZero", "Len", "Spec", "Terminating"])
+    func rendersTopLevelTypedProperty(name: String) throws {
         let spec = TLASpec("CompilerProperty") {
             Algorithm("Counter", scoped: { scope in
                 let _ = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.done) { Stop() }
             })
-            Invariant("CountIsZero") { StateExpr.variable("count") == 0 }
+            Invariant(name) { StateExpr.variable("count") == 0 }
         }
 
-        let rendered = try spec.compile().render().plusCalBundle().root.tla
-
-        #expect(rendered.contains("CountIsZero =="))
+        let compilation = try spec.compile()
+        #expect(compilation.description.invariants == [name])
+        let rendered = try compilation.render()
+        let formalName = try #require(compilation.layout.stateProperties.first).formalName
+        #expect(!["Len", "Spec", "Terminating"].contains(formalName))
+        #expect(rendered.invariantNames.contains(formalName))
+        #expect(try rendered.plusCalBundle().root.tla.contains("\(formalName) =="))
+        #expect(rendered.tlaBundle.root.tla.contains("\(formalName) =="))
+        #expect(try rendered.plusCalBundle().root.cfg?.contains("INVARIANT \(formalName)") == true)
     }
 
-    @Test("compiled authored properties preserve their lowered identities")
-    func compiledAuthoredPropertiesPreserveLoweredIdentities() throws {
+    @Test("compiled authored properties preserve their lowered identities", arguments: ["AuthoredInvariant", "Len", "Spec"])
+    func compiledAuthoredPropertiesPreserveLoweredIdentities(name: String) throws {
         let source = TLASpec("PropertyIdentity") {
             Invariant("TopLevel") { true }
             Algorithm("PropertyIdentity") {
                 Do(TestControlLabel.done) { Stop() }
-                Invariant("AuthoredInvariant") { true }
+                Invariant(name) { true }
                 Eventually("AuthoredTemporal", true)
             }
         }
@@ -236,7 +242,12 @@ struct AlgorithmPlusCalRendererTests {
         #expect(semantics.behavior.invariants.map(\.id) == [.init(ordinal: 0), .init(ordinal: 1)])
         #expect(semantics.behavior.temporalProperties.map(\.id) == [.init(ordinal: 2)])
         #expect(plan.properties.map(\.id) == [.init(ordinal: 1), .init(ordinal: 2)])
-        #expect(plan.properties.map(\.declaration.name) == ["AuthoredInvariant", "AuthoredTemporal"])
+        #expect(plan.properties.map(\.declaration.name) == [name, "AuthoredTemporal"])
+        let compiled = try source.compile()
+        let rendered = try compiled.render()
+        let formalName = try #require(compiled.layout.stateProperties.first { $0.id == .init(ordinal: 1) }).formalName
+        #expect(!["Len", "Spec"].contains(formalName))
+        #expect(try rendered.plusCalBundle().root.tla.contains("\(formalName) =="))
     }
 
     @Test("compilation leaves standard process termination to the PlusCal translator")
@@ -340,7 +351,7 @@ struct AlgorithmPlusCalRendererTests {
     @Test("#spec preserves distinct authored binder locations")
     func macroPreservesDistinctAuthoredBinderLocations() throws {
         let spec = #spec("MacroBinderLocations") {
-            Algorithm("MacroBinderLocations") {
+            let algorithm = Algorithm(label: "MacroBinderLocations") {
                 Do(ProcessStep.done) { Stop() }
                 Invariant("Distinct") {
                     ForAll(Node.all) { first in
@@ -350,6 +361,7 @@ struct AlgorithmPlusCalRendererTests {
                     }
                 }
             }
+            algorithm
         }
 
         let rendered = try spec.compile().render().plusCalBundle().root.tla
@@ -384,8 +396,8 @@ struct AlgorithmPlusCalRendererTests {
         }
     }
 
-    @Test("renders procedure parameters with compiled state names")
-    func rendersProcedureParametersWithCompiledStateNames() throws {
+    @Test("renders procedure parameters with compiled state names", arguments: [false, true])
+    func rendersProcedureParametersWithCompiledStateNames(reservingParameterName: Bool) throws {
         let algorithm = Algorithm("Procedures", scoped: { scope in
             let output = scope.sharedVar(_name: "output", initial: 0)
             Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
@@ -399,17 +411,32 @@ struct AlgorithmPlusCalRendererTests {
             Do(ProcedureStep.finished) { Stop() }
         })
 
-        let compilation = try TLASpec("Procedures") { algorithm }.compile()
+        let compilation = try TLASpec("Procedures") {
+            if reservingParameterName { Constant("parameter0", 9) }
+            algorithm
+        }.compile()
+        let runtime = CompiledRuntime(compilation: compilation)
+        var state = try #require(try runtime.initialStates().first)
+        for label in ["start", "procedure.work.enter"] {
+            let action = try #require(compilation.layout.testActionID(named: label))
+            state = try #require(try runtime.successors(for: action, from: state).first).state
+        }
+        let output = try #require(compilation.layout.testVariableID(named: "output"))
+        #expect(try state.value(for: output) == .integer(8))
         let rendered = try compilation.render().plusCalBundle().root.tla
         let renderedTLA = try compilation.render().tlaBundle.root.tla
+        let parameter = reservingParameterName ? "parameter0__2" : "parameter0"
+        let start = try #require(rendered.range(of: "(*--algorithm Procedures {"))
+        let end = try #require(rendered.range(of: "} *)", range: start.upperBound..<rendered.endIndex))
+        let authored = rendered[start.lowerBound..<end.upperBound]
 
-        #expect(rendered.contains("procedure work(parameter0)"))
-        #expect(rendered.contains("enter:"))
-        #expect(rendered.contains("(parameter0 + offset)"))
-        #expect(rendered.contains("output :="))
-        #expect(rendered.contains("call work(7);"))
-        #expect(rendered.contains("{\n  start:"))
-        #expect(renderedTLA.contains("VARIABLES pc, output, stack, parameter0, offset"))
+        #expect(authored.contains("procedure work(\(parameter))"))
+        #expect(authored.contains("enter:"))
+        #expect(authored.contains("(\(parameter) + offset)"))
+        #expect(authored.contains("output :="))
+        #expect(authored.contains("call work(7);"))
+        #expect(authored.contains("{\n  start:"))
+        #expect(renderedTLA.contains("VARIABLES pc, output, stack, \(parameter), offset"))
     }
 
     @Test("procedure call capture avoids authored binders and retains tail return")

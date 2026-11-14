@@ -89,6 +89,8 @@ public struct MachineValidationSummary<Property: Hashable & Sendable>: Sendable 
     public let violatedInvariants: Set<Property>
     public let reachedProperties: Set<Property>
     public let deadlockFound: Bool
+    /// Exhausted traversal only: selected fairness scope, then emitted state ID.
+    public let fairnessEnabledness: [[Bool]]?
     public let timing: MachineValidationTiming
 }
 
@@ -117,12 +119,13 @@ public enum MachineValidator {
         checking: ModelChecks<Machine.Property>,
         stopOnViolation: Bool,
         stopOnReachability: Bool = false,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         emit: (MachineValidationEvent<Machine>) throws -> Void
     ) throws -> MachineValidationSummary<Machine.Property> {
         try runWithIdentity(initialMachines: initialOutcomes.states,
             initialFailure: initialOutcomes.firstFailure, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, identity: { machine, _ in machine.snapshot },
+            stopOnReachability: stopOnReachability, fairness: fairness, identity: { machine, _ in machine.snapshot },
             usesView: false, emit: emit)
     }
 
@@ -132,11 +135,12 @@ public enum MachineValidator {
         checking: ModelChecks<Machine.Property>,
         stopOnViolation: Bool,
         stopOnReachability: Bool = false,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         emit: (MachineValidationEvent<Machine>) throws -> Void
     ) throws -> MachineValidationSummary<Machine.Property> {
         try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, identity: { machine, _ in machine.snapshot }, usesView: false, emit: emit)
+            stopOnReachability: stopOnReachability, fairness: fairness, identity: { machine, _ in machine.snapshot }, usesView: false, emit: emit)
     }
 
     /// The identity is a typed state function. Equal identities share one exploration node;
@@ -148,13 +152,14 @@ public enum MachineValidator {
         checking: ModelChecks<Machine.Property>,
         stopOnViolation: Bool,
         stopOnReachability: Bool = false,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         identity: (Machine) throws -> Identity,
         emit: (MachineValidationEvent<Machine>) throws -> Void
     ) throws -> MachineValidationSummary<Machine.Property> {
         try runWithIdentity(initialMachines: initialOutcomes.states,
             initialFailure: initialOutcomes.firstFailure, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, identity: { machine, _ in try identity(machine) },
+            stopOnReachability: stopOnReachability, fairness: fairness, identity: { machine, _ in try identity(machine) },
             usesView: true, emit: emit)
     }
 
@@ -164,12 +169,13 @@ public enum MachineValidator {
         checking: ModelChecks<Machine.Property>,
         stopOnViolation: Bool,
         stopOnReachability: Bool = false,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         identity: (Machine) throws -> Identity,
         emit: (MachineValidationEvent<Machine>) throws -> Void
     ) throws -> MachineValidationSummary<Machine.Property> {
         try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, identity: { machine, _ in try identity(machine) },
+            stopOnReachability: stopOnReachability, fairness: fairness, identity: { machine, _ in try identity(machine) },
             usesView: true, emit: emit)
     }
 
@@ -181,13 +187,14 @@ public enum MachineValidator {
         checking: ModelChecks<Machine.Property>,
         stopOnViolation: Bool,
         stopOnReachability: Bool = false,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         identity: (Machine, Int) throws -> Identity,
         emit: (MachineValidationEvent<Machine>) throws -> Void
     ) throws -> MachineValidationSummary<Machine.Property> {
         try runWithIdentity(initialMachines: initialOutcomes.states,
             initialFailure: initialOutcomes.firstFailure, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, identity: identity,
+            stopOnReachability: stopOnReachability, fairness: fairness, identity: identity,
             usesView: true, emit: emit)
     }
 
@@ -197,12 +204,13 @@ public enum MachineValidator {
         checking: ModelChecks<Machine.Property>,
         stopOnViolation: Bool,
         stopOnReachability: Bool = false,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] = [],
         identity: (Machine, Int) throws -> Identity,
         emit: (MachineValidationEvent<Machine>) throws -> Void
     ) throws -> MachineValidationSummary<Machine.Property> {
         try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, identity: identity, usesView: true, emit: emit)
+            stopOnReachability: stopOnReachability, fairness: fairness, identity: identity, usesView: true, emit: emit)
     }
 
     private static func runWithIdentity<Machine: StateMachine, Identity: Hashable & Sendable>(
@@ -212,6 +220,7 @@ public enum MachineValidator {
         checking: ModelChecks<Machine.Property>,
         stopOnViolation: Bool,
         stopOnReachability: Bool,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
         identity: (Machine, Int) throws -> Identity,
         usesView: Bool,
         emit: (MachineValidationEvent<Machine>) throws -> Void
@@ -244,6 +253,9 @@ public enum MachineValidator {
         var configurationNanoseconds: UInt64 = 0
         var eventNanoseconds: UInt64 = 0
         var successorCalls = 0
+        var fairnessEnabledness = fairness.map { _ in [Bool]() }
+        // Completed fairness queries must not preempt a decisive safety result.
+        var fairnessFailure: (any Error)?
         let reachability = Set(Machine.reachabilityProperties).intersection(checking.properties)
 
         func summary(_ completion: MachineValidationSummary<Machine.Property>.Completion)
@@ -252,6 +264,7 @@ public enum MachineValidator {
                   initialStates: initialCount, states: seen.count,
                   edges: edgeCount, maximumLevel: maximumLevel, violatedInvariants: violated,
                   reachedProperties: reached, deadlockFound: deadlockFound,
+                  fairnessEnabledness: completion == .exhausted ? fairnessEnabledness : nil,
                   timing: .init(
                     elapsedNanoseconds: DispatchTime.now().uptimeNanoseconds - startedAt,
                     successorNanoseconds: successorNanoseconds,
@@ -340,6 +353,7 @@ public enum MachineValidator {
             let id = seen.insert(value, hash: hash)
             seenInsertNanoseconds += DispatchTime.now().uptimeNanoseconds - insertStarted
             pending.append((id, machine))
+            for scope in fairness.indices { fairnessEnabledness[scope].append(false) }
             maximumLevel = max(maximumLevel, level)
             if initial { initialCount += 1 }
             try emitEvent(.state(id: id, snapshot: snapshot, initial: initial,
@@ -404,6 +418,15 @@ public enum MachineValidator {
                     }
                     guard sameConfiguration(successor) else {
                         throw ExplorationError.configurationMismatch
+                    }
+                    if fairnessFailure == nil {
+                        do {
+                            for scope in fairness.indices where !fairnessEnabledness[scope][source]
+                                && fairness[scope].matches(action) {
+                                fairnessEnabledness[scope][source] = try fairness[scope].changes?(
+                                    machine.snapshot, successor.snapshot) ?? (machine.snapshot != successor.snapshot)
+                            }
+                        } catch { fairnessFailure = error }
                     }
                     if !permitted {
                         let reached = try checkReachability(successor, predecessor: source, action: action)
@@ -517,6 +540,7 @@ public enum MachineValidator {
                 head = 0
             }
         }
+        if firstEvaluationFailure == nil, let fairnessFailure { throw fairnessFailure }
         return summary(firstEvaluationFailure.map { .evaluationFailure($0) } ?? .exhausted)
     }
 }
