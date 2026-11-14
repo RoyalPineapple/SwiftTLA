@@ -99,7 +99,7 @@ struct InitialFailureEvidenceTests {
         #expect(report.sourceCompilationIdentity == (try CheckedAdditionPrefixInitialModel.spec.compile()).identity.description)
         #expect(proofText.contains("THEOREM SourceInitializersMatchLoweredIR =="))
         #expect(proofText.contains("THEOREM InitializerPlansInvokeCheckedExpressionParent =="))
-        #expect(proofText.contains("ProofInitialization!Expressions!PartialOrderedIntExpressionsPreserveValueAndFailure"))
+        #expect(proofText.contains("ProofInitialization!Expressions!LiteralReadAddCertificateSuppliesExpressionParent"))
         let layout = "<<" + [
             "[declaration |-> \"pc\", name |-> \"pc\", ordinal |-> 0, origin |-> \"programCounter\"]",
             "[declaration |-> \"first\", name |-> \"first\", ordinal |-> 1, origin |-> \"source\"]",

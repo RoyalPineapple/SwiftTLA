@@ -2675,4 +2675,173 @@ THEOREM EnumerationGuardCanExcludeALogicalSelectedRangeValue ==
         BY <1>1, RangeBoundsGuardMatchesIndependentWidthBudget
     <1>. QED BY <1>1, <1>2, <1>3, SMT
 
+
+\* Structural certificate data only: no evaluator or preservation premise.
+LiteralReadAddCertificate(view, emitted, inverse, fallback, bound) ==
+    /\ bound \subseteq Keys /\ fallback \in Keys
+    /\ NodeEmissionArrays(emitted) /\ emitted.count > 0
+    /\ AllNodePayloadsMatchSource(view, emitted)
+    /\ TypedVisitedSourceInputs(view, emitted)
+    /\ inverse \in [DOMAIN view.kinds -> 1..emitted.count]
+    /\ emitted.origins \in [1..emitted.count -> DOMAIN view.kinds]
+    /\ \A index \in 1..emitted.count : inverse[emitted.origins[index]] = index
+    /\ \A node \in DOMAIN view.kinds : emitted.origins[inverse[node]] = node
+    /\ emitted.origins[emitted.count] = view.root
+    /\ \A index \in 1..emitted.count : emitted.nodes[index].kind = "read"
+           => emitted.nodes[index].payload \in bound
+
+THEOREM CertifiedPlanHistoriesSupplySourceSyntaxHistories ==
+    ASSUME NEW view, NEW emitted, NEW inverse, NEW fallback, NEW bound,
+           LiteralReadAddCertificate(view, emitted, inverse, fallback, bound),
+           NEW state, NEW history,
+           LET plan == ExtractedNodePlan(emitted, fallback)
+           IN SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
+                  plan.reads, plan.left, plan.right, state, history)
+    PROVE SourceSyntaxHistory(view, state,
+              [node \in DOMAIN view.kinds |-> history[inverse[node]]])
+    PROOF
+    <1>. DEFINE plan == ExtractedNodePlan(emitted, fallback)
+                meaning == [node \in DOMAIN view.kinds |-> history[inverse[node]]]
+    <1>1. \A node \in DOMAIN view.kinds : meaning[node] =
+        IF view.kinds[node] = "literal" THEN Success(view.literals[node])
+        ELSE IF view.kinds[node] = "read" THEN Success(state[view.reads[node]])
+        ELSE SourceCombine(meaning[view.left[node]], meaning[view.right[node]])
+        PROOF
+        <2>. SUFFICES ASSUME NEW node \in DOMAIN view.kinds
+                     PROVE meaning[node] =
+                       IF view.kinds[node] = "literal" THEN Success(view.literals[node])
+                       ELSE IF view.kinds[node] = "read" THEN Success(state[view.reads[node]])
+                       ELSE SourceCombine(meaning[view.left[node]], meaning[view.right[node]])
+            BY SMT
+        <2>. DEFINE index == inverse[node]
+        <2>1. /\ index \in 1..emitted.count /\ emitted.origins[index] = node
+              /\ NodePayloadMatchesSource(view, emitted, index)
+            BY SMT DEF index, LiteralReadAddCertificate, AllNodePayloadsMatchSource
+        <2>2. history[index] = SourceNode(index, plan.kinds, plan.literals,
+                          plan.reads, plan.left, plan.right, state, history)
+            BY <2>1, SMT DEF plan, ExtractedNodePlan, SourceExpressionHistory
+        <2>3. view.kinds[node] \in {"literal", "read", "add"}
+            BY <2>1 DEF NodePayloadMatchesSource
+        <2>4. CASE view.kinds[node] = "literal"
+            BY <2>1, <2>2, <2>4, SMT
+                DEF meaning, index, plan, ExtractedNodePlan, NodePayloadMatchesSource, SourceNode
+        <2>5. CASE view.kinds[node] = "read"
+            BY <2>1, <2>2, <2>5, SMT
+                DEF meaning, index, plan, ExtractedNodePlan, NodePayloadMatchesSource, SourceNode
+        <2>6. CASE view.kinds[node] = "add"
+            PROOF
+            <3>1. /\ emitted.nodes[index].left \in 1..emitted.count
+                  /\ emitted.nodes[index].right \in 1..emitted.count
+                  /\ emitted.origins[emitted.nodes[index].left] = view.left[node]
+                  /\ emitted.origins[emitted.nodes[index].right] = view.right[node]
+                PROOF
+                <4>1. /\ emitted.nodes[index].kind = "add"
+                      /\ emitted.origins[index] = node
+                      /\ index \in 1..emitted.count
+                    BY ONLY <2>1, <2>6, SMT DEF NodePayloadMatchesSource
+                <4>2. /\ emitted.nodes[index].left \in 1..(index - 1)
+                      /\ emitted.nodes[index].right \in 1..(index - 1)
+                      /\ emitted.origins[emitted.nodes[index].left] = view.left[node]
+                      /\ emitted.origins[emitted.nodes[index].right] = view.right[node]
+                    BY ONLY <2>1, <4>1, SMT DEF NodePayloadMatchesSource
+                <4>3. emitted.count \in Nat
+                    BY SMT DEF LiteralReadAddCertificate, NodeEmissionArrays
+                <4>. QED BY ONLY <4>1, <4>2, <4>3, SMT
+            <3>2. /\ view.left[node] \in DOMAIN view.kinds
+                  /\ view.right[node] \in DOMAIN view.kinds
+                  /\ inverse[view.left[node]] = emitted.nodes[index].left
+                  /\ inverse[view.right[node]] = emitted.nodes[index].right
+                BY <3>1, SMT DEF LiteralReadAddCertificate
+            <3>. QED BY <2>1, <2>2, <2>6, <3>2, SMT
+                DEF meaning, index, plan, ExtractedNodePlan, NodePayloadMatchesSource, SourceNode
+        <2>. QED BY <2>3, <2>4, <2>5, <2>6, SMT
+    <1>. QED BY <1>1, SMT DEF meaning, SourceSyntaxHistory
+
+THEOREM LiteralReadAddCertificateSuppliesExpressionParent ==
+    ASSUME NEW view, NEW emitted, NEW inverse, NEW fallback, NEW bound,
+           LiteralReadAddCertificate(view, emitted, inverse, fallback, bound),
+           NEW state \in [bound -> SwiftIntMin..SwiftIntMax]
+    PROVE LET plan == ExtractedNodePlan(emitted, fallback)
+          IN /\ PartialExpressionPlan(plan.count, plan.kinds, plan.literals,
+                    plan.reads, plan.left, plan.right, bound, state)
+             /\ \A history : SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
+                    plan.reads, plan.left, plan.right, state, history) =>
+                   /\ \E meaning : SourceSyntaxHistory(view, state, meaning)
+                   /\ \A meaning : SourceSyntaxHistory(view, state, meaning)
+                          => history[plan.count] = meaning[view.root]
+             /\ \E source, generated :
+                   /\ SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
+                          plan.reads, plan.left, plan.right, state, source)
+                   /\ GeneratedExpressionHistory(plan.count, plan.kinds, plan.literals,
+                          plan.reads, plan.left, plan.right, state, generated)
+                   /\ \A index \in 0..plan.count :
+                          /\ OutcomeAgrees(source, generated, index)
+                          /\ source[index] \in ExpressionOutcomes
+                          /\ generated[index] \in ExpressionOutcomes
+    PROOF
+    <1>. DEFINE plan == ExtractedNodePlan(emitted, fallback)
+                completed == CompleteIntBindings(bound, state)
+    <1>1. completed \in [Keys -> SwiftIntMin..SwiftIntMax]
+        BY CompletingPartialBindingsRetainsEveryBoundValue, SMT
+            DEF completed, LiteralReadAddCertificate
+    <1>2. ExpressionPlan(plan.count, plan.kinds, plan.literals, plan.reads,
+                         plan.left, plan.right, completed)
+        BY <1>1, SourceMatchedNodesSupplyTheTypedExpressionPlan, SMT
+            DEF plan, LiteralReadAddCertificate
+    <1>3. ExpressionReadKeys(plan.count, plan.kinds, plan.reads) \subseteq bound
+        BY SMT DEF plan, ExtractedNodePlan, ExpressionReadKeys, LiteralReadAddCertificate
+    <1>4. PartialExpressionPlan(plan.count, plan.kinds, plan.literals,
+                plan.reads, plan.left, plan.right, bound, state)
+        BY <1>2, <1>3, SMT DEF PartialExpressionPlan, completed, LiteralReadAddCertificate
+    <1>5. \E source, generated :
+              /\ SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
+                     plan.reads, plan.left, plan.right, state, source)
+              /\ GeneratedExpressionHistory(plan.count, plan.kinds, plan.literals,
+                     plan.reads, plan.left, plan.right, state, generated)
+              /\ \A index \in 0..plan.count :
+                     /\ OutcomeAgrees(source, generated, index)
+                     /\ source[index] \in ExpressionOutcomes
+                     /\ generated[index] \in ExpressionOutcomes
+        BY <1>4, PartialOrderedIntExpressionsPreserveValueAndFailure
+    <1>6. \A history : SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
+                plan.reads, plan.left, plan.right, state, history) =>
+              /\ \E meaning : SourceSyntaxHistory(view, state, meaning)
+              /\ \A meaning : SourceSyntaxHistory(view, state, meaning)
+                     => history[plan.count] = meaning[view.root]
+        PROOF
+        <2>. SUFFICES ASSUME NEW history,
+                     SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
+                         plan.reads, plan.left, plan.right, state, history)
+                     PROVE /\ \E meaning : SourceSyntaxHistory(view, state, meaning)
+                           /\ \A meaning : SourceSyntaxHistory(view, state, meaning)
+                                  => history[plan.count] = meaning[view.root]
+            BY SMT
+        <2>1. SourceSyntaxHistory(view, state,
+                  [node \in DOMAIN view.kinds |-> history[inverse[node]]])
+            BY CertifiedPlanHistoriesSupplySourceSyntaxHistories DEF plan
+        <2>2. \A meaning : SourceSyntaxHistory(view, state, meaning)
+                     => history[plan.count] = meaning[view.root]
+            PROOF
+            <3>. SUFFICES ASSUME NEW meaning, SourceSyntaxHistory(view, state, meaning)
+                         PROVE history[plan.count] = meaning[view.root]
+                BY SMT
+            <3>1. /\ SourceExpressionHistory(plan.count, plan.kinds, plan.literals,
+                       plan.reads, plan.left, plan.right, state, EmittedSourceSyntaxHistory(emitted, meaning))
+                  /\ EmittedSourceSyntaxHistory(emitted, meaning)[plan.count] = meaning[view.root]
+                BY MatchedPostorderNodesRetainIndependentSourceSyntaxMeaning, SMT
+                    DEF plan, LiteralReadAddCertificate
+            <3>2. PICK generated : GeneratedExpressionHistory(plan.count, plan.kinds,
+                          plan.literals, plan.reads, plan.left, plan.right, state, generated)
+                BY <1>5, SMT
+            <3>3. \A index \in 0..plan.count : OutcomeAgrees(history, generated, index)
+                BY <1>4, <3>2, AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
+            <3>4. \A index \in 0..plan.count :
+                    OutcomeAgrees(EmittedSourceSyntaxHistory(emitted, meaning), generated, index)
+                BY <1>4, <3>1, <3>2, AnyPartialOrderedIntHistoriesPreserveValueAndFailure, SMT
+            <3>5. plan.count \in 0..plan.count
+                BY SMT DEF plan, ExtractedNodePlan, LiteralReadAddCertificate, NodeEmissionArrays
+            <3>. QED BY ONLY <3>1, <3>3, <3>4, <3>5, SMT DEF OutcomeAgrees
+        <2>. QED BY <2>1, <2>2, SMT
+    <1>. QED BY <1>4, <1>5, <1>6 DEF plan
+
 =============================================================================
