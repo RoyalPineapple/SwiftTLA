@@ -195,7 +195,7 @@ run_guarded() {
 
     scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
     export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
-    if [[ "$mode" == "swiftpm-test" ]]; then
+    if [[ "$mode" == "swiftpm-test" || "$mode" == "proof-prepare" ]]; then
         local cache_root="$common_git_dir/swifttla-local-validation-cache"
         local worktree_key worktree_cache
         local cache_key cache_key_file toolchain_key toolchain_key_file macro_key macro_key_file
@@ -292,7 +292,7 @@ run_guarded() {
             python3 scripts/check-initial-proof-step.py "${proof_arguments[@]}" &
             ;;
         proof-prepare)
-            python3 scripts/prepare-initial-proof.py "$scratch_dir" "${proof_arguments[@]}" &
+            python3 scripts/prepare-initial-proof.py "$scratch_dir" "$build_dir" "${proof_arguments[@]}" &
             ;;
         swiftpm-test)
             swift test -Xswiftc -warnings-as-errors --disable-automatic-resolution --filter "$selector" -j 1 --scratch-path "$build_dir" &

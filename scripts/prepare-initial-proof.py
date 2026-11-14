@@ -9,7 +9,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 
 
@@ -30,8 +29,9 @@ def main():
     if not guarded_scratch or not scratch.samefile(guarded_scratch):
         raise ValueError("invoke through local-validation.sh proof-prepare")
     common = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], text=True).strip()).resolve()
-    output = Path(sys.argv[2]).resolve()
-    expected = Path(sys.argv[3]).resolve(strict=True)
+    build = Path(sys.argv[2]).resolve(strict=True)
+    output = Path(sys.argv[3]).resolve()
+    expected = Path(sys.argv[4]).resolve(strict=True)
     if not output.is_relative_to(common / "swifttla-proof-evidence") or output.exists():
         raise ValueError("output must be a new proof-evidence directory")
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"]):
@@ -47,9 +47,46 @@ def main():
     (output / "inputs.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(f"Fresh compiler diagnostic evidence: {output}", flush=True)
     try:
-        build = scratch / "build"
+        spec = importlib.util.spec_from_file_location("native_source", root / "scripts/retain-native-initial-source.py")
+        native_source = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(native_source)
+        products = (build / "debug").resolve(strict=True)
+        plugin = products / "SwiftTLAPlugin"
+        if not plugin.is_file() or not (products / "SwiftTLA.swiftmodule").exists():
+            raise ValueError("verified compiler cache is unavailable; no consumer rebuild started")
+        compiler_temporary = scratch / "native-compiler"
+        compiler_temporary.mkdir()
+        compiler_env = dict(os.environ, TMPDIR=str(compiler_temporary) + "/")
         started = time.time_ns()
-        command = ["swift", "test", "-Xswiftc", "-warnings-as-errors", "-Xswiftc", "-g",
+        command = ["xcrun", "swiftc", "-c", "-g", "-parse-as-library", "-swift-version", "5",
+                   "-target", "arm64-apple-macos14.0", "-warnings-as-errors",
+                   "-enable-experimental-feature", "StrictConcurrency",
+                   "-package-name", "SwiftTLA", "-module-name", "UpstreamParity", "-I", str(products),
+                   "-load-plugin-executable", str(plugin) + "#SwiftTLAPlugin",
+                   "-Xfrontend", "-emit-macro-expansion-files", "-Xfrontend", "debug",
+                   "-o", str(compiler_temporary / "pilot.o"), str(root / native_source.MODEL)]
+        receipt["nativeCompilerCommand"] = command
+        receipt["macroPluginSHA256"] = digest(plugin)
+        with (output / "native-compiler.log").open("wb") as log:
+            run = subprocess.run(command, env=compiler_env, stdout=log, stderr=subprocess.STDOUT)
+        receipt["nativeCompilerExit"] = run.returncode
+        if run.returncode:
+            raise ValueError("focused pilot compiler capture failed; no consumer rebuild started")
+        expansions = [p for p in (compiler_temporary / "swift-generated-sources").glob(native_source.EXPANSION)
+                      if p.stat().st_mtime_ns >= started]
+        if len(expansions) != 1 or expansions[0].is_symlink():
+            raise ValueError("expected exactly one fresh actual compiler expansion for the existing pilot")
+        expansion = expansions[0]
+        before = expansion.stat()
+        data = expansion.read_bytes()
+        after = expansion.stat()
+        if (before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_ino, after.st_size, after.st_mtime_ns):
+            raise ValueError("compiler expansion changed while retaining it")
+        original_range = native_source.source_range(data, root)
+        retained = output / "native-initial-source.swift"
+        retained.write_bytes(data)
+        print("Fresh existing-pilot compiler output retained; running focused consumer.", flush=True)
+        command = ["swift", "test", "-Xswiftc", "-warnings-as-errors",
                    "--disable-automatic-resolution", "--filter", "InitialFailureEvidenceTests", "-j", "1",
                    "--scratch-path", str(build)]
         receipt["consumerCommand"] = command
@@ -64,22 +101,6 @@ def main():
         binary = (build / "debug/tlc-validate").resolve(strict=True)
         if not binary.is_relative_to(build):
             raise ValueError("validator is outside the fresh focused build")
-        spec = importlib.util.spec_from_file_location("native_source", root / "scripts/retain-native-initial-source.py")
-        native_source = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(native_source)
-        expansions = [p for p in (Path(tempfile.gettempdir()) / "swift-generated-sources").glob(native_source.EXPANSION)
-                      if p.stat().st_mtime_ns >= started]
-        if len(expansions) != 1 or expansions[0].is_symlink():
-            raise ValueError("expected exactly one fresh actual compiler expansion for the existing pilot")
-        expansion = expansions[0]
-        before = expansion.stat()
-        data = expansion.read_bytes()
-        after = expansion.stat()
-        if (before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_ino, after.st_size, after.st_mtime_ns):
-            raise ValueError("compiler expansion changed while retaining it")
-        original_range = native_source.source_range(data, root)
-        retained = output / "native-initial-source.swift"
-        retained.write_bytes(data)
         # A local receipt has no hosted run identity and cannot replace one.
         capture = {"schema": "swifttla.local-compiler-native-initial-source-v1", "sourceSHA": head,
                    "buildStartedEpochNS": started, "expansionModifiedEpochNS": before.st_mtime_ns,
