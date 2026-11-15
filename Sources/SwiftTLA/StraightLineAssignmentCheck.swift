@@ -32,9 +32,10 @@ package enum StraightLineAssignmentCheck {
             case .value(.int(let value)): source.append(.literal(value))
             case .variable(let name) where reads.contains(name): source.append(.read(name))
             case .add(let left, let right):
-                source.append(.add(expressions.count + 1, expressions.count + 2))
                 expressions.append(left)
+                let leftOrigin = expressions.count
                 expressions.append(right)
+                source.append(.add(leftOrigin, expressions.count))
             default: return nil
             }
             position += 1
@@ -43,6 +44,7 @@ package enum StraightLineAssignmentCheck {
         var nodes: [OrderedIntNode] = []
         var origins: [Int] = []
         var indices = Array(repeating: 0, count: source.count)
+        var completed: [Int] = []
         while let (origin, expanded) = pending.popLast() {
             let node: OrderedIntNode
             switch source[origin - 1] {
@@ -55,16 +57,21 @@ package enum StraightLineAssignmentCheck {
                     pending.append((left, false))
                     continue
                 }
-                guard indices[left - 1] > 0, indices[right - 1] > 0 else { return nil }
+                guard completed.count >= 2,
+                      completed[completed.count - 2] == left,
+                      completed[completed.count - 1] == right,
+                      indices[left - 1] > 0, indices[right - 1] > 0 else { return nil }
                 node = .add(indices[left - 1], indices[right - 1])
+                completed.removeLast(2)
             default: return nil
             }
             guard indices[origin - 1] == 0 else { return nil }
             nodes.append(node)
             origins.append(origin)
             indices[origin - 1] = nodes.count
+            completed.append(origin)
         }
-        guard !indices.contains(0), origins.last == 1 else { return nil }
+        guard completed == [1], !indices.contains(0), origins.last == 1 else { return nil }
         return OrderedIntCertificate(nodes: nodes, origins: origins, indices: indices)
     }
 

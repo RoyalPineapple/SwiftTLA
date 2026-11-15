@@ -3078,4 +3078,818 @@ THEOREM CompilerCertificatePrefixesRealizeTheConstructor ==
         BY SMT DEF appended, AppendCertificateConstructor
     <1>. QED BY ONLY <1>5, <1>6, <1>7a, <1>7b, SMT DEF before, after, appended
 
+
+\* orderedIntCertificate's second loop: completed contains source occurrence IDs;
+\* current.emitted.nodes/origins and current.inverse correspond to nodes/origins/indices.
+\* These guard lemmas feed EmittingACompilerFramePreservesLoopInvariants.
+CompletedCertificateRoots(view, current, completed) ==
+    /\ WellFormedVisitPrefix(completed)
+    /\ \A position \in 1..completed.height :
+        /\ completed.terms[position] \in DOMAIN view.kinds
+        /\ current.inverse[completed.terms[position]] \in 1..current.emitted.count
+
+THEOREM EmptyCompilerCertificateHasNoCompletedRoots ==
+    ASSUME NEW view
+    PROVE CompletedCertificateRoots(view, EmptyCertificateConstruction(view), EmptyVisitPrefix)
+    BY SMT DEF CompletedCertificateRoots, WellFormedVisitPrefix, EmptyVisitPrefix, VisitPrefix
+
+THEOREM PendingCompilerAddHasItsOrderedCompletedChildren ==
+    ASSUME NEW view, NEW before, NEW height, NEW pending, NEW completed, NEW goal,
+           PendingVisitContract(height, pending, completed, goal, view.left, view.right),
+           CompletedCertificateRoots(view, before, completed),
+           height > 0, pending[height].expanded
+    PROVE LET origin == pending[height].node
+          IN /\ completed.height >= 2
+             /\ completed.terms[completed.height - 1] = view.left[origin]
+             /\ completed.terms[completed.height] = view.right[origin]
+             /\ view.left[origin] \in DOMAIN view.kinds
+             /\ view.right[origin] \in DOMAIN view.kinds
+             /\ before.inverse[view.left[origin]] \in 1..before.emitted.count
+             /\ before.inverse[view.right[origin]] \in 1..before.emitted.count
+    PROOF
+    <1>1. /\ completed = pending[height].prefix
+          /\ WellFormedVisitFrame(pending[height], view.left, view.right)
+        BY SMT DEF PendingVisitContract
+    <1>2. /\ completed.height \in Nat /\ completed.height >= 2
+          /\ completed.terms[completed.height - 1] = view.left[pending[height].node]
+          /\ completed.terms[completed.height] = view.right[pending[height].node]
+        BY <1>1, SMT DEF WellFormedVisitFrame, WellFormedVisitPrefix
+    <1>3. /\ completed.height - 1 \in 1..completed.height
+          /\ completed.height \in 1..completed.height
+        BY ONLY <1>2, SMT
+    <1>. QED BY <1>2, <1>3, SMT DEF CompletedCertificateRoots
+
+THEOREM PendingCompilerEmissionDerivesConstructorReadiness ==
+    ASSUME NEW view, NEW before, NEW height, NEW pending, NEW completed, NEW goal,
+           PendingVisitContract(height, pending, completed, goal, view.left, view.right),
+           CompletedCertificateRoots(view, before, completed),
+           height > 0, pending[height].node \in DOMAIN view.kinds,
+           before.inverse[pending[height].node] = 0,
+           (pending[height].expanded /\ view.kinds[pending[height].node] = "add")
+             \/ (~pending[height].expanded /\ view.kinds[pending[height].node] \in {"literal", "read"})
+    PROVE /\ CertificateConstructorReady(view, before, pending[height].node)
+          /\ (CertificateConstructionInvariant(view, before) =>
+                CertificateConstructionInvariant(view,
+                  AppendCertificateConstructor(view, before, pending[height].node)))
+    PROOF
+    <1>1. pending[height].expanded =>
+              /\ view.left[pending[height].node] \in DOMAIN view.kinds
+              /\ view.right[pending[height].node] \in DOMAIN view.kinds
+              /\ before.inverse[view.left[pending[height].node]] \in 1..before.emitted.count
+              /\ before.inverse[view.right[pending[height].node]] \in 1..before.emitted.count
+        PROOF
+        <2>. SUFFICES ASSUME pending[height].expanded
+                     PROVE /\ view.left[pending[height].node] \in DOMAIN view.kinds
+                           /\ view.right[pending[height].node] \in DOMAIN view.kinds
+                           /\ before.inverse[view.left[pending[height].node]] \in 1..before.emitted.count
+                           /\ before.inverse[view.right[pending[height].node]] \in 1..before.emitted.count
+            BY SMT
+        <2>1. LET origin == pending[height].node
+              IN /\ completed.height >= 2
+                 /\ completed.terms[completed.height - 1] = view.left[origin]
+                 /\ completed.terms[completed.height] = view.right[origin]
+                 /\ view.left[origin] \in DOMAIN view.kinds
+                 /\ view.right[origin] \in DOMAIN view.kinds
+                 /\ before.inverse[view.left[origin]] \in 1..before.emitted.count
+                 /\ before.inverse[view.right[origin]] \in 1..before.emitted.count
+            BY PendingCompilerAddHasItsOrderedCompletedChildren
+        <2>. QED BY ONLY <2>1, SMT
+    <1>2. CertificateConstructorReady(view, before, pending[height].node)
+        BY <1>1, SMT DEF CertificateConstructorReady
+    <1>. QED BY <1>2, CompilerCertificateConstructorPreservesTheInvariant, SMT
+
+
+THEOREM AppendingCompilerNodePreservesCompletedRoots ==
+    ASSUME NEW view, NEW before, NEW completed,
+           CompletedCertificateRoots(view, before, completed),
+           before.emitted.count \in Nat, NEW origin \in DOMAIN view.kinds,
+           NEW retained \in 0..completed.height
+    PROVE CompletedCertificateRoots(view, AppendCertificateConstructor(view, before, origin),
+              PushVisitPrefix(VisitPrefix(retained, HistoryPrefix(completed.terms, retained)), origin))
+    PROOF
+    <1>. DEFINE after == AppendCertificateConstructor(view, before, origin)
+                next == PushVisitPrefix(VisitPrefix(retained, HistoryPrefix(completed.terms, retained)), origin)
+    <1>1. /\ completed.height \in Nat /\ retained \in Nat
+          /\ after.emitted.count = before.emitted.count + 1
+          /\ next.height = retained + 1
+          /\ WellFormedVisitPrefix(next)
+        BY SMT DEF after, next, CompletedCertificateRoots, WellFormedVisitPrefix,
+            AppendCertificateConstructor, PushVisitPrefix, VisitPrefix, HistoryPrefix, HistoryAppend
+    <1>2. \A position \in 1..retained :
+              /\ next.terms[position] = completed.terms[position]
+              /\ completed.terms[position] \in DOMAIN view.kinds
+              /\ before.inverse[completed.terms[position]] \in 1..before.emitted.count
+        BY <1>1, SMT DEF next, CompletedCertificateRoots, PushVisitPrefix,
+            VisitPrefix, HistoryPrefix, HistoryAppend
+    <1>3. \A position \in 1..retained :
+              after.inverse[next.terms[position]] \in 1..after.emitted.count
+        BY <1>1, <1>2, SMT DEF after, AppendCertificateConstructor
+    <1>4. /\ next.terms[retained + 1] = origin
+          /\ after.inverse[origin] = after.emitted.count
+          /\ after.emitted.count \in 1..after.emitted.count
+        BY <1>1, SMT DEF after, next, AppendCertificateConstructor,
+            PushVisitPrefix, VisitPrefix, HistoryAppend
+    <1>5. \A position \in 1..next.height :
+              /\ next.terms[position] \in DOMAIN view.kinds
+              /\ after.inverse[next.terms[position]] \in 1..after.emitted.count
+        BY ONLY <1>1, <1>2, <1>3, <1>4, SMT
+    <1>. QED BY <1>1, <1>5 DEF CompletedCertificateRoots, after, next
+
+
+THEOREM EmittingACompilerFramePreservesLoopInvariants ==
+    ASSUME NEW view, NEW before, NEW height, NEW pending, NEW completed, NEW goal,
+           PendingVisitContract(height, pending, completed, goal, view.left, view.right),
+           CompletedCertificateRoots(view, before, completed),
+           CertificateConstructionInvariant(view, before),
+           height > 0, pending[height].node \in DOMAIN view.kinds,
+           before.inverse[pending[height].node] = 0,
+           (pending[height].expanded /\ view.kinds[pending[height].node] = "add")
+             \/ (~pending[height].expanded /\ view.kinds[pending[height].node] \in {"literal", "read"})
+    PROVE LET after == AppendCertificateConstructor(view, before, pending[height].node)
+              nextCompleted == VisitFrameExit(pending[height])
+          IN /\ PendingVisitContract(height - 1, HistoryPrefix(pending, height - 1),
+                    nextCompleted, goal, view.left, view.right)
+             /\ CertificateConstructionInvariant(view, after)
+             /\ CompletedCertificateRoots(view, after, nextCompleted)
+    PROOF
+    <1>. DEFINE origin == pending[height].node
+                after == AppendCertificateConstructor(view, before, origin)
+                nextCompleted == VisitFrameExit(pending[height])
+                retained == IF pending[height].expanded THEN completed.height - 2 ELSE completed.height
+    <1>1. /\ CertificateConstructorReady(view, before, pending[height].node)
+          /\ (CertificateConstructionInvariant(view, before) =>
+                CertificateConstructionInvariant(view,
+                    AppendCertificateConstructor(view, before, pending[height].node)))
+        BY PendingCompilerEmissionDerivesConstructorReadiness
+    <1>2. /\ completed = pending[height].prefix
+          /\ WellFormedVisitPrefix(completed)
+          /\ completed.height \in Nat
+          /\ (pending[height].expanded => completed.height >= 2)
+          /\ before.emitted.count \in Nat
+        BY SMT DEF PendingVisitContract, WellFormedVisitFrame, WellFormedVisitPrefix,
+            CertificateConstructionInvariant, NodeEmissionArrays
+    <1>3. retained \in 0..completed.height
+        BY <1>2, SMT DEF retained
+    <1>4. nextCompleted =
+              PushVisitPrefix(VisitPrefix(retained, HistoryPrefix(completed.terms, retained)), origin)
+        BY <1>2, <1>3, SMT DEF nextCompleted, retained, origin, VisitFrameExit,
+            FoldVisitPrefix, PushVisitPrefix, VisitPrefix, HistoryPrefix, HistoryAppend,
+            WellFormedVisitPrefix
+    <1>5. CompletedCertificateRoots(view, AppendCertificateConstructor(view, before, origin),
+              PushVisitPrefix(VisitPrefix(retained, HistoryPrefix(completed.terms, retained)), origin))
+        BY <1>2, <1>3, AppendingCompilerNodePreservesCompletedRoots, SMT DEF origin
+    <1>6. PendingVisitContract(height - 1, HistoryPrefix(pending, height - 1),
+              VisitFrameExit(pending[height]), goal, view.left, view.right)
+        BY CompletingAPendingFramePreservesTheVisitContract
+    <1>. QED BY <1>1, <1>4, <1>5, <1>6, SMT DEF after, nextCompleted, origin
+
+
+\* Required output property of the Swift allocation loop, not a proved interpretation
+\* of that loop. The traversal results below are conditional on this source shape.
+CompilerOccurrenceTree(view, count) ==
+    /\ count \in Nat \ {0}
+    /\ view.root = 1
+    /\ DOMAIN view.kinds = 1..count
+    /\ \A node \in 1..count :
+        /\ view.kinds[node] \in {"literal", "read", "add"}
+        /\ (view.kinds[node] = "add" =>
+            /\ view.left[node] \in (node + 1)..count
+            /\ view.right[node] \in (node + 1)..count
+            /\ view.left[node] # view.right[node])
+    /\ \A first, second \in 1..count :
+        (view.kinds[first] = "add" /\ view.kinds[second] = "add" /\
+         {view.left[first], view.right[first]} \cap {view.left[second], view.right[second]} # {})
+        => first = second
+    /\ \A child \in 2..count : \E parent \in 1..(child - 1) :
+        view.kinds[parent] = "add" /\ child \in {view.left[parent], view.right[parent]}
+
+CompilerScheduledOccurrences(view, opened) ==
+    {view.root} \cup {view.left[node] : node \in opened} \cup {view.right[node] : node \in opened}
+CompilerPendingTasks(height, pending) ==
+    {<<pending[position].node, pending[position].expanded>> : position \in 1..height}
+CompilerExpectedTasks(view, opened, done) ==
+    {<<node, FALSE>> : node \in CompilerScheduledOccurrences(view, opened) \ (opened \cup done)}
+    \cup {<<node, TRUE>> : node \in opened \ done}
+CompilerOccurrenceStages(view, height, pending, opened, done) ==
+    /\ height \in Nat
+    /\ opened \subseteq {node \in DOMAIN view.kinds : view.kinds[node] = "add"}
+    /\ opened \subseteq CompilerScheduledOccurrences(view, opened)
+    /\ done \subseteq CompilerScheduledOccurrences(view, opened)
+    /\ \A node \in done : view.kinds[node] = "add" => node \in opened
+    /\ CompilerPendingTasks(height, pending) = CompilerExpectedTasks(view, opened, done)
+    /\ \A first, second \in 1..height :
+        (pending[first].node = pending[second].node /\
+         pending[first].expanded = pending[second].expanded) => first = second
+
+THEOREM SourceRootStartsTheOccurrenceStages ==
+    ASSUME NEW view
+    PROVE CompilerOccurrenceStages(view, 1,
+              <<VisitFrame(view.root, FALSE, EmptyVisitPrefix)>>, {}, {})
+    BY SMT DEF CompilerOccurrenceStages, CompilerPendingTasks, CompilerExpectedTasks,
+        CompilerScheduledOccurrences, VisitFrame
+
+THEOREM AnUnexpandedCompilerParentSchedulesFreshOccurrences ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW opened \in SUBSET {node \in DOMAIN view.kinds : view.kinds[node] = "add"},
+           NEW origin \in DOMAIN view.kinds,
+           view.kinds[origin] = "add", origin \notin opened
+    PROVE /\ view.left[origin] \notin CompilerScheduledOccurrences(view, opened)
+          /\ view.right[origin] \notin CompilerScheduledOccurrences(view, opened)
+          /\ view.left[origin] # view.right[origin]
+    PROOF
+    <1>1. /\ view.left[origin] \in (origin + 1)..count
+          /\ view.right[origin] \in (origin + 1)..count
+          /\ view.left[origin] # view.right[origin]
+          /\ origin \in 1..count /\ view.root = 1
+        BY SMT DEF CompilerOccurrenceTree
+    <1>2. \A prior \in opened :
+              /\ view.left[origin] \notin {view.left[prior], view.right[prior]}
+              /\ view.right[origin] \notin {view.left[prior], view.right[prior]}
+        BY SMT DEF CompilerOccurrenceTree
+    <1>. QED BY <1>1, <1>2, SMT DEF CompilerScheduledOccurrences
+
+THEOREM PendingCompilerFramesHaveFreshEmissionOrigins ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW height, NEW pending, NEW opened, NEW done,
+           CompilerOccurrenceStages(view, height, pending, opened, done), height > 0,
+           NEW current, CertificateConstructionInvariant(view, current),
+           \A node \in DOMAIN view.kinds : (current.inverse[node] > 0) \equiv (node \in done)
+    PROVE /\ pending[height].node \in DOMAIN view.kinds
+          /\ pending[height].expanded \in BOOLEAN
+          /\ current.inverse[pending[height].node] = 0
+          /\ (pending[height].expanded => view.kinds[pending[height].node] = "add")
+          /\ (~pending[height].expanded => pending[height].node \notin opened)
+    PROOF
+    <1>1. CompilerScheduledOccurrences(view, opened) \subseteq DOMAIN view.kinds
+        BY SMT DEF CompilerOccurrenceTree, CompilerOccurrenceStages, CompilerScheduledOccurrences
+    <1>2. <<pending[height].node, pending[height].expanded>> \in CompilerExpectedTasks(view, opened, done)
+        BY SMT DEF CompilerOccurrenceStages, CompilerPendingTasks
+    <1>3. /\ pending[height].node \in DOMAIN view.kinds
+          /\ pending[height].node \notin done
+          /\ pending[height].expanded \in BOOLEAN
+          /\ (pending[height].expanded => pending[height].node \in opened)
+          /\ (~pending[height].expanded => pending[height].node \notin opened)
+        BY <1>1, <1>2, SMT DEF CompilerExpectedTasks, CompilerOccurrenceStages
+    <1>. QED BY <1>3, SMT DEF CertificateConstructionInvariant, CompilerOccurrenceStages
+
+THEOREM CompilerOccurrenceStagesDeriveEmissionReadiness ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW before, NEW height, NEW pending, NEW completed, NEW goal,
+           NEW opened, NEW done,
+           CompilerOccurrenceStages(view, height, pending, opened, done),
+           PendingVisitContract(height, pending, completed, goal, view.left, view.right),
+           CompletedCertificateRoots(view, before, completed),
+           CertificateConstructionInvariant(view, before), height > 0,
+           \A node \in DOMAIN view.kinds : (before.inverse[node] > 0) \equiv (node \in done),
+           pending[height].expanded \/ view.kinds[pending[height].node] # "add"
+    PROVE /\ CertificateConstructorReady(view, before, pending[height].node)
+          /\ CertificateConstructionInvariant(view,
+                 AppendCertificateConstructor(view, before, pending[height].node))
+    PROOF
+    <1>1. /\ pending[height].node \in DOMAIN view.kinds
+          /\ pending[height].expanded \in BOOLEAN
+          /\ before.inverse[pending[height].node] = 0
+          /\ (pending[height].expanded => view.kinds[pending[height].node] = "add")
+          /\ (~pending[height].expanded => pending[height].node \notin opened)
+        BY PendingCompilerFramesHaveFreshEmissionOrigins
+    <1>2. (pending[height].expanded /\ view.kinds[pending[height].node] = "add")
+            \/ (~pending[height].expanded /\ view.kinds[pending[height].node] \in {"literal", "read"})
+        BY <1>1, SMT DEF CompilerOccurrenceTree
+    <1>3. /\ CertificateConstructorReady(view, before, pending[height].node)
+          /\ (CertificateConstructionInvariant(view, before) =>
+                CertificateConstructionInvariant(view,
+                    AppendCertificateConstructor(view, before, pending[height].node)))
+        BY <1>1, <1>2, PendingCompilerEmissionDerivesConstructorReadiness
+    <1>. QED BY <1>3
+
+
+THEOREM PoppingAUniqueCompilerTaskRemovesOnlyThatTask ==
+    ASSUME NEW height \in Nat \ {0}, NEW pending,
+           \A first, second \in 1..height :
+               (pending[first].node = pending[second].node /\
+                pending[first].expanded = pending[second].expanded) => first = second
+    PROVE CompilerPendingTasks(height - 1, HistoryPrefix(pending, height - 1)) =
+              CompilerPendingTasks(height, pending) \ {<<pending[height].node, pending[height].expanded>>}
+    PROOF
+    <1>1. \A position \in 1..(height - 1) :
+              <<pending[position].node, pending[position].expanded>> #
+                  <<pending[height].node, pending[height].expanded>>
+        BY SMT
+    <1>. QED BY <1>1, SMT DEF CompilerPendingTasks, HistoryPrefix
+
+THEOREM ExpandingACompilerParentPreservesOccurrenceStages ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW height, NEW pending, NEW opened, NEW done,
+           CompilerOccurrenceStages(view, height, pending, opened, done),
+           height > 0, ~pending[height].expanded, view.kinds[pending[height].node] = "add"
+    PROVE CompilerOccurrenceStages(view, height + 2,
+              ReplaceTopVisitFrame(pending, height,
+                  ExpandedVisitFrames(pending[height], view.left, view.right)),
+              opened \cup {pending[height].node}, done)
+    PROOF
+    <1>. DEFINE origin == pending[height].node
+                left == view.left[origin]
+                right == view.right[origin]
+                next == ReplaceTopVisitFrame(pending, height,
+                    ExpandedVisitFrames(pending[height], view.left, view.right))
+                scheduled == CompilerScheduledOccurrences(view, opened)
+    <1>1. /\ origin \in scheduled /\ origin \notin opened /\ origin \notin done
+          /\ origin \in DOMAIN view.kinds /\ height \in Nat
+          /\ scheduled \subseteq DOMAIN view.kinds
+          /\ opened \subseteq scheduled /\ done \subseteq scheduled
+        PROOF
+        <2>1. /\ scheduled \subseteq DOMAIN view.kinds
+              /\ opened \subseteq scheduled /\ done \subseteq scheduled /\ height \in Nat
+            BY SMT DEF scheduled, CompilerOccurrenceTree, CompilerOccurrenceStages, CompilerScheduledOccurrences
+        <2>2. <<origin, pending[height].expanded>> \in CompilerExpectedTasks(view, opened, done)
+            BY SMT DEF origin, CompilerOccurrenceStages, CompilerPendingTasks
+        <2>3. /\ origin \in scheduled /\ origin \notin opened /\ origin \notin done
+            BY <2>2, SMT DEF CompilerExpectedTasks, scheduled
+        <2>. QED BY ONLY <2>1, <2>3, SMT
+    <1>2. /\ left \notin scheduled /\ right \notin scheduled /\ left # right
+        BY <1>1, AnUnexpandedCompilerParentSchedulesFreshOccurrences, SMT
+            DEF left, right, scheduled, CompilerOccurrenceStages, origin
+    <1>3. /\ \A position \in 1..(height - 1) : next[position] = pending[position]
+          /\ next[height].node = origin /\ next[height].expanded = TRUE
+          /\ next[height + 1].node = right /\ next[height + 1].expanded = FALSE
+          /\ next[height + 2].node = left /\ next[height + 2].expanded = FALSE
+        BY <1>1, SMT DEF next, left, right, origin, ReplaceTopVisitFrame, ExpandedVisitFrames, VisitFrame
+    <1>4. CompilerPendingTasks(height - 1, HistoryPrefix(pending, height - 1)) =
+              CompilerPendingTasks(height, pending) \ {<<origin, FALSE>>}
+        PROOF
+        <2>1. /\ height \in Nat \ {0}
+              /\ \A first, second \in 1..height :
+                  (pending[first].node = pending[second].node /\
+                   pending[first].expanded = pending[second].expanded) => first = second
+            BY SMT DEF CompilerOccurrenceStages
+        <2>2. CompilerPendingTasks(height - 1, HistoryPrefix(pending, height - 1)) =
+                  CompilerPendingTasks(height, pending) \ {<<pending[height].node, pending[height].expanded>>}
+            BY <2>1, PoppingAUniqueCompilerTaskRemovesOnlyThatTask
+        <2>3. <<origin, pending[height].expanded>> \in CompilerExpectedTasks(view, opened, done)
+            BY SMT DEF origin, CompilerOccurrenceStages, CompilerPendingTasks
+        <2>4. pending[height].expanded = FALSE
+            BY <2>3, SMT DEF CompilerExpectedTasks
+        <2>. QED BY ONLY <2>2, <2>4 DEF origin
+    <1>5. CompilerPendingTasks(height + 2, next) =
+              (CompilerPendingTasks(height, pending) \ {<<origin, FALSE>>})
+                  \cup {<<origin, TRUE>>, <<right, FALSE>>, <<left, FALSE>>}
+        PROOF
+        <2>. DEFINE rest == CompilerPendingTasks(height - 1, HistoryPrefix(pending, height - 1))
+                    added == {<<origin, TRUE>>, <<right, FALSE>>, <<left, FALSE>>}
+        <2>1. CompilerPendingTasks(height + 2, next) \subseteq rest \cup added
+            PROOF
+            <3>. SUFFICES ASSUME NEW task \in CompilerPendingTasks(height + 2, next)
+                         PROVE task \in rest \cup added
+                BY SMT
+            <3>1. PICK position \in 1..(height + 2) :
+                      task = <<next[position].node, next[position].expanded>>
+                BY DEF CompilerPendingTasks
+            <3>2. position < height => task \in rest
+                BY ONLY <1>1, <1>3, <3>1, SMT DEF rest, CompilerPendingTasks, HistoryPrefix
+            <3>3. position >= height => task \in added
+                BY ONLY <1>1, <1>3, <3>1, SMT DEF added
+            <3>. QED BY ONLY <1>1, <3>1, <3>2, <3>3, SMT
+        <2>2. rest \subseteq CompilerPendingTasks(height + 2, next)
+            PROOF
+            <3>. SUFFICES ASSUME NEW task \in rest
+                         PROVE task \in CompilerPendingTasks(height + 2, next)
+                BY SMT
+            <3>1. PICK position \in 1..(height - 1) :
+                      task = <<pending[position].node, pending[position].expanded>>
+                BY SMT DEF rest, CompilerPendingTasks, HistoryPrefix
+            <3>. QED BY ONLY <1>1, <1>3, <3>1, SMT DEF CompilerPendingTasks
+        <2>3. added \subseteq CompilerPendingTasks(height + 2, next)
+            PROOF
+            <3>1. height \in 1..(height + 2) /\ height + 1 \in 1..(height + 2)
+                  /\ height + 2 \in 1..(height + 2)
+                BY <1>1, SMT
+            <3>2. \A position \in 1..(height + 2) :
+                      <<next[position].node, next[position].expanded>> \in CompilerPendingTasks(height + 2, next)
+                BY SMT DEF CompilerPendingTasks
+            <3>. QED BY ONLY <1>3, <3>1, <3>2, SMT DEF added
+        <2>. QED BY ONLY <1>4, <2>1, <2>2, <2>3, SMT DEF rest, added
+    <1>6. CompilerScheduledOccurrences(view, opened \cup {origin}) = scheduled \cup {left, right}
+        BY SMT DEF CompilerScheduledOccurrences, scheduled, left, right
+    <1>7. CompilerExpectedTasks(view, opened \cup {origin}, done) =
+              (CompilerExpectedTasks(view, opened, done) \ {<<origin, FALSE>>})
+                  \cup {<<origin, TRUE>>, <<right, FALSE>>, <<left, FALSE>>}
+        BY ONLY <1>1, <1>2, <1>6, SMT DEF CompilerExpectedTasks, scheduled
+    <1>8. \A position \in 1..height :
+              /\ pending[position].node \in scheduled
+              /\ (pending[position].expanded => pending[position].node \in opened)
+        PROOF
+        <2>. SUFFICES ASSUME NEW position \in 1..height
+                     PROVE /\ pending[position].node \in scheduled
+                           /\ (pending[position].expanded => pending[position].node \in opened)
+            BY SMT
+        <2>1. <<pending[position].node, pending[position].expanded>> \in CompilerExpectedTasks(view, opened, done)
+            BY SMT DEF CompilerOccurrenceStages, CompilerPendingTasks
+        <2>. QED BY ONLY <1>1, <2>1, SMT DEF CompilerExpectedTasks, scheduled
+    <1>9. \A first, second \in 1..(height + 2) :
+              (next[first].node = next[second].node /\ next[first].expanded = next[second].expanded)
+                  => first = second
+        BY <1>1, <1>2, <1>3, <1>8, SMT DEF CompilerOccurrenceStages
+    <1>. QED BY <1>1, <1>5, <1>6, <1>7, <1>9, SMT
+        DEF CompilerOccurrenceStages, next, origin
+
+THEOREM EmittingACompilerNodePreservesOccurrenceStages ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW height, NEW pending, NEW opened, NEW done,
+           CompilerOccurrenceStages(view, height, pending, opened, done), height > 0,
+           pending[height].expanded \/ view.kinds[pending[height].node] # "add"
+    PROVE CompilerOccurrenceStages(view, height - 1, HistoryPrefix(pending, height - 1),
+              opened, done \cup {pending[height].node})
+    PROOF
+    <1>. DEFINE origin == pending[height].node
+                task == <<origin, pending[height].expanded>>
+    <1>1. /\ origin \in CompilerScheduledOccurrences(view, opened) /\ origin \notin done
+          /\ pending[height].expanded \in BOOLEAN /\ height \in Nat
+          /\ (pending[height].expanded => origin \in opened)
+          /\ (~pending[height].expanded => origin \notin opened)
+          /\ (view.kinds[origin] = "add" => origin \in opened)
+        PROOF
+        <2>1. /\ height \in Nat
+              /\ opened \subseteq CompilerScheduledOccurrences(view, opened)
+            BY DEF CompilerOccurrenceStages
+        <2>2. <<origin, pending[height].expanded>> \in CompilerExpectedTasks(view, opened, done)
+            BY SMT DEF origin, CompilerOccurrenceStages, CompilerPendingTasks
+        <2>3. /\ origin \in CompilerScheduledOccurrences(view, opened) /\ origin \notin done
+              /\ pending[height].expanded \in BOOLEAN
+              /\ (pending[height].expanded => origin \in opened)
+              /\ (~pending[height].expanded => origin \notin opened)
+            BY ONLY <2>1, <2>2, SMT DEF CompilerExpectedTasks
+        <2>. QED BY <2>1, <2>3, SMT DEF origin
+    <1>2. CompilerPendingTasks(height - 1, HistoryPrefix(pending, height - 1)) =
+              CompilerPendingTasks(height, pending) \ {task}
+        BY <1>1, PoppingAUniqueCompilerTaskRemovesOnlyThatTask, SMT
+            DEF CompilerOccurrenceStages, task, origin
+    <1>3. CompilerExpectedTasks(view, opened, done \cup {origin}) =
+              CompilerExpectedTasks(view, opened, done) \ {task}
+        BY <1>1, SMT DEF CompilerExpectedTasks, task
+    <1>. QED BY <1>1, <1>2, <1>3, SMT DEF CompilerOccurrenceStages, HistoryPrefix, origin
+
+
+THEOREM EmptyCompilerPendingStackHasEmittedEveryOccurrence ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW pending, NEW opened, NEW done,
+           CompilerOccurrenceStages(view, 0, pending, opened, done)
+    PROVE done = DOMAIN view.kinds
+    PROOF
+    <1>1. CompilerExpectedTasks(view, opened, done) = {}
+        BY SMT DEF CompilerOccurrenceStages, CompilerPendingTasks
+    <1>2. /\ opened \subseteq done
+          /\ CompilerScheduledOccurrences(view, opened) \subseteq done
+        BY <1>1, SMT DEF CompilerExpectedTasks
+    <1>3. /\ count \in Nat /\ view.root = 1 /\ DOMAIN view.kinds = 1..count
+          /\ done \subseteq DOMAIN view.kinds
+          /\ view.root \in done
+        BY <1>2, SMT DEF CompilerOccurrenceTree, CompilerOccurrenceStages, CompilerScheduledOccurrences
+    <1>. DEFINE reached(index) == index \in 1..count => index \in done
+    <1>4. reached(0) BY SMT DEF reached
+    <1>5. \A index \in 1..count :
+              (\A prior \in 0..(index - 1) : reached(prior)) => reached(index)
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 1..count,
+                             \A prior \in 0..(index - 1) : reached(prior)
+                     PROVE reached(index)
+            BY SMT
+        <2>1. CASE index = 1
+            BY <1>3, <2>1, SMT DEF reached
+        <2>2. CASE index # 1
+            PROOF
+            <3>1. PICK parent \in 1..(index - 1) :
+                      view.kinds[parent] = "add" /\ index \in {view.left[parent], view.right[parent]}
+                BY <2>2, SMT DEF CompilerOccurrenceTree
+            <3>2. parent \in done
+                BY <1>3, <3>1, SMT DEF reached
+            <3>3. parent \in opened
+                BY <3>1, <3>2, SMT DEF CompilerOccurrenceStages
+            <3>4. index \in CompilerScheduledOccurrences(view, opened)
+                BY <3>1, <3>3, SMT DEF CompilerScheduledOccurrences
+            <3>. QED BY <1>2, <3>4, SMT DEF reached
+        <2>. QED BY <2>1, <2>2
+    <1>6. HIDE DEF reached
+    <1>7. \A index \in 0..count : reached(index)
+        BY <1>3, <1>4, <1>5, FiniteIndexedPrefixProperty
+    <1>. QED BY <1>3, <1>7, SMT DEF reached
+
+CompilerRemainingTasks(view, opened, done) ==
+    {<<node, FALSE>> : node \in (DOMAIN view.kinds) \ (opened \cup done)}
+    \cup {<<node, TRUE>> : node \in {node \in DOMAIN view.kinds : view.kinds[node] = "add"} \ done}
+
+THEOREM CompilerTaskExpansionStrictlyRemovesOneRemainingTask ==
+    ASSUME NEW view, NEW origin \in DOMAIN view.kinds,
+           NEW opened, NEW done, origin \notin opened, origin \notin done
+    PROVE /\ <<origin, FALSE>> \in CompilerRemainingTasks(view, opened, done)
+          /\ CompilerRemainingTasks(view, opened \cup {origin}, done) =
+               CompilerRemainingTasks(view, opened, done) \ {<<origin, FALSE>>}
+    BY SMT DEF CompilerRemainingTasks
+
+THEOREM CompilerTaskEmissionStrictlyRemovesOneRemainingTask ==
+    ASSUME NEW view, NEW origin \in DOMAIN view.kinds, NEW expanded \in BOOLEAN,
+           NEW opened, NEW done, origin \notin done,
+           IF expanded THEN origin \in opened /\ view.kinds[origin] = "add"
+           ELSE origin \notin opened /\ view.kinds[origin] # "add"
+    PROVE /\ <<origin, expanded>> \in CompilerRemainingTasks(view, opened, done)
+          /\ CompilerRemainingTasks(view, opened, done \cup {origin}) =
+               CompilerRemainingTasks(view, opened, done) \ {<<origin, expanded>>}
+    BY SMT DEF CompilerRemainingTasks
+
+THEOREM CompilerRemainingTaskCountIsFinite ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count), NEW opened, NEW done
+    PROVE /\ LayoutNamesFS!IsFiniteSet(CompilerRemainingTasks(view, opened, done))
+          /\ LayoutNamesFS!Cardinality(CompilerRemainingTasks(view, opened, done)) \in Nat
+    PROOF
+    <1>1. /\ LayoutNamesFS!IsFiniteSet(1..count)
+          /\ LayoutNamesFS!IsFiniteSet({TRUE} \cup {FALSE})
+        PROOF
+        <2>1. 1 \in Int /\ count \in Int
+            BY SMT DEF CompilerOccurrenceTree
+        <2>2. /\ LayoutNamesFS!IsFiniteSet(1..count)
+              /\ LayoutNamesFS!Cardinality(1..count) = IF 1 > count THEN 0 ELSE count - 1 + 1
+            BY <2>1, LayoutNamesFS!FS_Interval
+        <2>3. LayoutNamesFS!IsFiniteSet({TRUE})
+            BY LayoutNamesFS!FS_Singleton
+        <2>4. /\ LayoutNamesFS!IsFiniteSet({TRUE} \cup {FALSE})
+              /\ LayoutNamesFS!Cardinality({TRUE} \cup {FALSE}) =
+                   IF FALSE \in {TRUE} THEN LayoutNamesFS!Cardinality({TRUE})
+                   ELSE LayoutNamesFS!Cardinality({TRUE}) + 1
+            BY <2>3, LayoutNamesFS!FS_AddElement
+        <2>. QED BY ONLY <2>2, <2>4
+    <1>2. LayoutNamesFS!IsFiniteSet((1..count) \X ({TRUE} \cup {FALSE}))
+        BY <1>1, LayoutNamesFS!FS_Product
+    <1>3. CompilerRemainingTasks(view, opened, done) \subseteq (1..count) \X ({TRUE} \cup {FALSE})
+        BY SMT DEF CompilerRemainingTasks, CompilerOccurrenceTree
+    <1>4. LayoutNamesFS!IsFiniteSet(CompilerRemainingTasks(view, opened, done))
+        BY <1>2, <1>3, LayoutNamesFS!FS_Subset
+    <1>. QED BY <1>4, LayoutNamesFS!FS_CardinalityType
+
+
+\* height = pending.count; frame.node/expanded model the actual tuple fields.
+\* frame.prefix, opened and done are ghost data, not a retained Swift execution.
+\* No Swift-body-to-TLA refinement theorem is supplied by these definitions.
+InitialCompilerTraversal(view) ==
+    [height |-> 1, pending |-> <<VisitFrame(view.root, FALSE, EmptyVisitPrefix)>>,
+     completed |-> EmptyVisitPrefix, current |-> EmptyCertificateConstruction(view),
+     opened |-> {}, done |-> {}]
+
+CompilerTraversalNext(view, state) ==
+    LET frame == state.pending[state.height]
+        origin == frame.node
+        expands == view.kinds[origin] = "add" /\ ~frame.expanded
+    IN [height |-> IF expands THEN state.height + 2 ELSE state.height - 1,
+        pending |-> IF expands THEN ReplaceTopVisitFrame(state.pending, state.height,
+                           ExpandedVisitFrames(frame, view.left, view.right))
+                    ELSE HistoryPrefix(state.pending, state.height - 1),
+        completed |-> IF expands THEN state.completed ELSE VisitFrameExit(frame),
+        current |-> IF expands THEN state.current ELSE AppendCertificateConstructor(view, state.current, origin),
+        opened |-> IF expands THEN state.opened \cup {origin} ELSE state.opened,
+        done |-> IF expands THEN state.done ELSE state.done \cup {origin}]
+
+CompilerTraversalInvariant(view, state) ==
+    /\ CompilerOccurrenceStages(view, state.height, state.pending, state.opened, state.done)
+    /\ PendingVisitContract(state.height, state.pending, state.completed,
+           PushVisitPrefix(EmptyVisitPrefix, view.root), view.left, view.right)
+    /\ CertificateConstructionInvariant(view, state.current)
+    /\ CompletedCertificateRoots(view, state.current, state.completed)
+    /\ \A node \in DOMAIN view.kinds : (state.current.inverse[node] > 0) \equiv (node \in state.done)
+    /\ (state.completed.height > 0 =>
+           state.completed.terms[state.completed.height] = state.current.emitted.origins[state.current.emitted.count])
+
+THEOREM CompilerTraversalStartsWithItsLoopInvariants ==
+    ASSUME NEW view
+    PROVE CompilerTraversalInvariant(view, InitialCompilerTraversal(view))
+    PROOF
+    <1>1. CompilerOccurrenceStages(view, 1,
+              <<VisitFrame(view.root, FALSE, EmptyVisitPrefix)>>, {}, {})
+        BY SourceRootStartsTheOccurrenceStages
+    <1>2. PendingVisitContract(1, <<VisitFrame(view.root, FALSE, EmptyVisitPrefix)>>,
+              EmptyVisitPrefix, PushVisitPrefix(EmptyVisitPrefix, view.root), view.left, view.right)
+        BY ASourceRootStartsItsOwnPendingVisitContract
+    <1>3. CertificateConstructionInvariant(view, EmptyCertificateConstruction(view))
+        BY EmptyCompilerCertificateStartsTheConstruction
+    <1>4. CompletedCertificateRoots(view, EmptyCertificateConstruction(view), EmptyVisitPrefix)
+        BY EmptyCompilerCertificateHasNoCompletedRoots
+    <1>. QED BY <1>1, <1>2, <1>3, <1>4, SMT DEF CompilerTraversalInvariant,
+        InitialCompilerTraversal, EmptyCertificateConstruction, EmptyVisitPrefix, VisitPrefix
+
+THEOREM ExpandingACompilerFramePreservesAllLoopInvariants ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW state, CompilerTraversalInvariant(view, state), state.height > 0,
+           view.kinds[state.pending[state.height].node] = "add", ~state.pending[state.height].expanded
+    PROVE CompilerTraversalInvariant(view, CompilerTraversalNext(view, state))
+    PROOF
+    <1>1. CompilerOccurrenceStages(view, state.height + 2,
+              ReplaceTopVisitFrame(state.pending, state.height,
+                  ExpandedVisitFrames(state.pending[state.height], view.left, view.right)),
+              state.opened \cup {state.pending[state.height].node}, state.done)
+        BY ExpandingACompilerParentPreservesOccurrenceStages DEF CompilerTraversalInvariant
+    <1>2. PendingVisitContract(state.height + 2,
+              ReplaceTopVisitFrame(state.pending, state.height,
+                  ExpandedVisitFrames(state.pending[state.height], view.left, view.right)),
+              state.completed, PushVisitPrefix(EmptyVisitPrefix, view.root), view.left, view.right)
+        BY ExpandingAPendingParentPreservesTheVisitContract DEF CompilerTraversalInvariant
+    <1>. QED BY <1>1, <1>2, SMT DEF CompilerTraversalInvariant, CompilerTraversalNext
+
+THEOREM EmittingACompilerFramePreservesAllLoopInvariants ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW state, CompilerTraversalInvariant(view, state), state.height > 0,
+           state.pending[state.height].expanded \/ view.kinds[state.pending[state.height].node] # "add"
+    PROVE CompilerTraversalInvariant(view, CompilerTraversalNext(view, state))
+    PROOF
+    <1>. DEFINE frame == state.pending[state.height]
+                origin == frame.node
+                after == AppendCertificateConstructor(view, state.current, origin)
+                completed == VisitFrameExit(frame)
+    <1>1. /\ frame.node \in DOMAIN view.kinds /\ frame.expanded \in BOOLEAN
+          /\ state.current.inverse[frame.node] = 0
+          /\ (frame.expanded => view.kinds[frame.node] = "add")
+          /\ (~frame.expanded => frame.node \notin state.opened)
+        BY PendingCompilerFramesHaveFreshEmissionOrigins DEF CompilerTraversalInvariant, frame
+    <1>2. (frame.expanded /\ view.kinds[origin] = "add")
+              \/ (~frame.expanded /\ view.kinds[origin] \in {"literal", "read"})
+        BY <1>1, SMT DEF CompilerOccurrenceTree, frame, origin
+    <1>3. LET after == AppendCertificateConstructor(view, state.current, state.pending[state.height].node)
+              nextCompleted == VisitFrameExit(state.pending[state.height])
+          IN /\ PendingVisitContract(state.height - 1, HistoryPrefix(state.pending, state.height - 1),
+                    nextCompleted, PushVisitPrefix(EmptyVisitPrefix, view.root), view.left, view.right)
+             /\ CertificateConstructionInvariant(view, after)
+             /\ CompletedCertificateRoots(view, after, nextCompleted)
+        BY <1>1, <1>2, EmittingACompilerFramePreservesLoopInvariants
+            DEF CompilerTraversalInvariant, frame, origin
+    <1>4. CompilerOccurrenceStages(view, state.height - 1, HistoryPrefix(state.pending, state.height - 1),
+              state.opened, state.done \cup {state.pending[state.height].node})
+        BY EmittingACompilerNodePreservesOccurrenceStages DEF CompilerTraversalInvariant
+    <1>5. /\ state.current.emitted.count \in Nat
+          /\ state.completed = frame.prefix /\ WellFormedVisitPrefix(state.completed)
+          /\ (frame.expanded => state.completed.height >= 2)
+        BY SMT DEF CompilerTraversalInvariant, CertificateConstructionInvariant, NodeEmissionArrays,
+            PendingVisitContract, WellFormedVisitFrame, frame
+    <1>6. \A node \in DOMAIN view.kinds : (after.inverse[node] > 0) \equiv (node \in state.done \cup {origin})
+        BY <1>1, <1>5, SMT DEF after, AppendCertificateConstructor, CompilerTraversalInvariant
+    <1>7. /\ completed.height > 0
+          /\ completed.terms[completed.height] = origin
+          /\ after.emitted.origins[after.emitted.count] = origin
+        BY <1>1, <1>5, SMT DEF completed, after, origin, VisitFrameExit, FoldVisitPrefix,
+            PushVisitPrefix, VisitPrefix, HistoryAppend, AppendCertificateConstructor, WellFormedVisitPrefix
+    <1>. QED BY <1>1, <1>3, <1>4, <1>6, <1>7, SMT
+        DEF CompilerTraversalInvariant, CompilerTraversalNext, frame, origin, after, completed
+
+
+THEOREM CompilerTraversalStepPreservesInvariantsAndMakesProgress ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW state, CompilerTraversalInvariant(view, state), state.height > 0
+    PROVE LET next == CompilerTraversalNext(view, state)
+              task == <<state.pending[state.height].node, state.pending[state.height].expanded>>
+              remaining == CompilerRemainingTasks(view, state.opened, state.done)
+          IN /\ CompilerTraversalInvariant(view, next)
+             /\ task \in remaining
+             /\ CompilerRemainingTasks(view, next.opened, next.done) = remaining \ {task}
+    PROOF
+    <1>. DEFINE origin == state.pending[state.height].node
+                expanded == state.pending[state.height].expanded
+                next == CompilerTraversalNext(view, state)
+                remaining == CompilerRemainingTasks(view, state.opened, state.done)
+    <1>1. /\ origin \in DOMAIN view.kinds /\ expanded \in BOOLEAN
+          /\ state.current.inverse[origin] = 0
+          /\ (expanded => view.kinds[origin] = "add")
+          /\ (~expanded => origin \notin state.opened)
+        BY PendingCompilerFramesHaveFreshEmissionOrigins DEF origin, expanded, CompilerTraversalInvariant
+    <1>2. /\ origin \notin state.done
+          /\ (expanded => origin \in state.opened)
+        BY <1>1, SMT DEF origin, expanded, CompilerTraversalInvariant,
+            CompilerOccurrenceStages, CompilerPendingTasks, CompilerExpectedTasks
+    <1>3. CASE view.kinds[origin] = "add" /\ ~expanded
+        PROOF
+        <2>1. CompilerTraversalInvariant(view, next)
+            BY <1>3, ExpandingACompilerFramePreservesAllLoopInvariants DEF origin, expanded, next
+        <2>2. /\ <<origin, FALSE>> \in remaining
+              /\ CompilerRemainingTasks(view, state.opened \cup {origin}, state.done) =
+                   remaining \ {<<origin, FALSE>>}
+            BY <1>1, <1>2, <1>3, CompilerTaskExpansionStrictlyRemovesOneRemainingTask DEF remaining
+        <2>. QED BY <1>1, <1>3, <2>1, <2>2, SMT DEF next, remaining, CompilerTraversalNext, origin, expanded
+    <1>4. CASE ~(view.kinds[origin] = "add" /\ ~expanded)
+        PROOF
+        <2>1. expanded \/ view.kinds[origin] # "add"
+            BY <1>1, <1>4, SMT
+        <2>2. CompilerTraversalInvariant(view, next)
+            BY <2>1, EmittingACompilerFramePreservesAllLoopInvariants DEF origin, expanded, next
+        <2>3. IF expanded THEN origin \in state.opened /\ view.kinds[origin] = "add"
+              ELSE origin \notin state.opened /\ view.kinds[origin] # "add"
+            BY ONLY <1>1, <1>2, <2>1, SMT
+        <2>4. /\ <<origin, expanded>> \in remaining
+              /\ CompilerRemainingTasks(view, state.opened, state.done \cup {origin}) =
+                   remaining \ {<<origin, expanded>>}
+            BY <1>1, <1>2, <2>3, CompilerTaskEmissionStrictlyRemovesOneRemainingTask DEF remaining
+        <2>. QED BY <1>4, <2>2, <2>4, SMT DEF next, remaining, CompilerTraversalNext, origin, expanded
+    <1>. QED BY <1>3, <1>4
+
+CompilerTraversalCompletion(view, initial, steps, history) ==
+    /\ steps \in Nat
+    /\ history[0] = initial
+    /\ \A step \in 1..steps :
+        /\ history[step - 1].height > 0
+        /\ history[step] = CompilerTraversalNext(view, history[step - 1])
+    /\ history[steps].height = 0
+    /\ CompilerTraversalInvariant(view, history[steps])
+
+THEOREM FiniteCompilerTasksConstructATerminatingTraversal ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW initial, CompilerTraversalInvariant(view, initial)
+    PROVE \E steps, history : CompilerTraversalCompletion(view, initial, steps, history)
+    PROOF
+    <1>. DEFINE initialTasks == CompilerRemainingTasks(view, initial.opened, initial.done)
+                completes(tasks) == \A state :
+                    (CompilerTraversalInvariant(view, state) /\
+                     CompilerRemainingTasks(view, state.opened, state.done) = tasks)
+                    => \E steps, history : CompilerTraversalCompletion(view, state, steps, history)
+    <1>1. LayoutNamesFS!IsFiniteSet(initialTasks)
+        BY CompilerRemainingTaskCountIsFinite DEF initialTasks
+    <1>2. ASSUME NEW tasks \in SUBSET initialTasks,
+                 \A smaller \in (SUBSET tasks) \ {tasks} : completes(smaller)
+          PROVE completes(tasks)
+        PROOF
+        <2>. SUFFICES ASSUME NEW state, CompilerTraversalInvariant(view, state),
+                             CompilerRemainingTasks(view, state.opened, state.done) = tasks
+                     PROVE \E steps, history : CompilerTraversalCompletion(view, state, steps, history)
+            BY SMT DEF completes
+        <2>1. state.height \in Nat
+            BY DEF CompilerTraversalInvariant, CompilerOccurrenceStages
+        <2>2. CASE state.height = 0
+            PROOF
+            <3>1. CompilerTraversalCompletion(view, state, 0, [step \in 0..0 |-> state])
+                BY <2>2, SMT DEF CompilerTraversalCompletion
+            <3>. QED BY <3>1, SMT
+        <2>3. CASE state.height # 0
+            PROOF
+            <3>. DEFINE next == CompilerTraversalNext(view, state)
+                        task == <<state.pending[state.height].node, state.pending[state.height].expanded>>
+                        smaller == CompilerRemainingTasks(view, next.opened, next.done)
+            <3>1. state.height > 0 BY <2>1, <2>3, SMT
+            <3>2. /\ CompilerTraversalInvariant(view, next)
+                  /\ task \in tasks /\ smaller = tasks \ {task}
+                BY <3>1, CompilerTraversalStepPreservesInvariantsAndMakesProgress
+                    DEF next, task, smaller
+            <3>3. smaller \in (SUBSET tasks) \ {tasks}
+                BY ONLY <3>2, SMT
+            <3>4. completes(smaller)
+                BY <3>3, (\A smaller \in (SUBSET tasks) \ {tasks} : completes(smaller)), SMT
+            <3>5. PICK steps, history : CompilerTraversalCompletion(view, next, steps, history)
+                BY <3>2, <3>4, SMT DEF completes, smaller
+            <3>. DEFINE extended == [step \in 0..(steps + 1) |-> IF step = 0 THEN state ELSE history[step - 1]]
+            <3>6. /\ steps \in Nat /\ extended[0] = state /\ extended[1] = next
+                  /\ extended[steps + 1] = history[steps]
+                BY <3>5, SMT DEF extended, CompilerTraversalCompletion
+            <3>7. \A step \in 1..(steps + 1) :
+                      /\ extended[step - 1].height > 0
+                      /\ extended[step] = CompilerTraversalNext(view, extended[step - 1])
+                BY <3>1, <3>5, <3>6, SMT DEF extended, CompilerTraversalCompletion, next
+            <3>8. CompilerTraversalCompletion(view, state, steps + 1, extended)
+                BY <3>5, <3>6, <3>7, SMT DEF CompilerTraversalCompletion
+            <3>. QED BY <3>8, SMT
+        <2>. QED BY <2>2, <2>3
+    <1>3. HIDE DEF completes
+    <1>4. completes(initialTasks)
+        BY <1>1, <1>2, LayoutNamesFS!FS_WFInduction, IsaM("blast")
+    <1>. QED BY <1>4, SMT DEF completes, initialTasks
+
+THEOREM TerminatedCompilerTraversalSuppliesTheCertificate ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW bound, CertificateSource(view, bound), NEW fallback \in Keys,
+           NEW final, CompilerTraversalInvariant(view, final), final.height = 0
+    PROVE LiteralReadAddCertificate(view, final.current.emitted, final.current.inverse, fallback, bound)
+    PROOF
+    <1>1. final.done = DOMAIN view.kinds
+        BY EmptyCompilerPendingStackHasEmittedEveryOccurrence DEF CompilerTraversalInvariant
+    <1>2. /\ \A node \in DOMAIN view.kinds : final.current.inverse[node] > 0
+          /\ CertificateConstructionInvariant(view, final.current)
+          /\ final.completed = PushVisitPrefix(EmptyVisitPrefix, view.root)
+        BY <1>1, SMT DEF CompilerTraversalInvariant, PendingVisitContract
+    <1>3. /\ final.current.emitted.count > 0
+          /\ final.current.emitted.origins[final.current.emitted.count] = view.root
+        BY <1>2, SMT DEF CompilerTraversalInvariant, CertificateConstructionInvariant,
+            NodeEmissionArrays, CompilerOccurrenceTree, PushVisitPrefix, EmptyVisitPrefix, VisitPrefix, HistoryAppend
+    <1>4. TypedVisitedSourceInputs(view, final.current.emitted)
+        BY <1>2, SMT DEF CertificateConstructionInvariant, CertificateSource, TypedVisitedSourceInputs
+    <1>. QED BY <1>2, <1>3, <1>4, SMT DEF LiteralReadAddCertificate,
+        CertificateConstructionInvariant, CertificateSource, AllNodePayloadsMatchSource, NodePayloadMatchesSource
+
+
+THEOREM OccurrenceTreeTraversalConstructsAValidCertificate ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW bound, CertificateSource(view, bound), NEW fallback \in Keys
+    PROVE \E steps, history :
+              /\ CompilerTraversalCompletion(view, InitialCompilerTraversal(view), steps, history)
+              /\ LiteralReadAddCertificate(view, history[steps].current.emitted,
+                     history[steps].current.inverse, fallback, bound)
+    PROOF
+    <1>1. CompilerTraversalInvariant(view, InitialCompilerTraversal(view))
+        BY CompilerTraversalStartsWithItsLoopInvariants
+    <1>2. PICK steps, history : CompilerTraversalCompletion(view, InitialCompilerTraversal(view), steps, history)
+        BY <1>1, FiniteCompilerTasksConstructATerminatingTraversal
+    <1>3. LiteralReadAddCertificate(view, history[steps].current.emitted,
+              history[steps].current.inverse, fallback, bound)
+        BY <1>2, TerminatedCompilerTraversalSuppliesTheCertificate DEF CompilerTraversalCompletion
+    <1>. QED BY <1>2, <1>3, SMT
+
 =============================================================================
