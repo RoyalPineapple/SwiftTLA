@@ -138,7 +138,8 @@ package enum InitialFailureEvidence {
             site: site, operands: operands, before: failures[0].before,
             sourceInitializers: sourceInitializers, sourceSyntaxViews: sourceInputs.views,
             sourceSyntaxOrigins: sourceInputs.origins, sourceSyntaxIndices: sourceInputs.indices,
-            sourcePlanEmissions: sourceInputs.emissions, sourceInitializerCount: sourceInputs.count,
+            sourcePlanEmissions: sourceInputs.emissions, sourceCertificateProofs: sourceInputs.proofs,
+            sourceInitializerCount: sourceInputs.count,
             sourceInitialControl: sourceInitialControl,
             loweredInitializers: loweredInitializers,
             resolvedInitializers: resolvedInitializers, nativeInitializers: nativeInitializers.plans,
@@ -188,7 +189,7 @@ package enum InitialFailureEvidence {
 
     // Retain the existing macro witness, independently of the built Algorithm model.
     private static func sourceInitializerInputs(_ components: [_OrderedIntSourceComponent]) throws
-        -> (plans: String, views: String, origins: String, indices: String, emissions: String, count: Int) {
+        -> (plans: String, views: String, origins: String, indices: String, emissions: String, proofs: String, count: Int) {
         let states = components.compactMap { component -> (root: String, initialization: VariableInitialization)? in
             guard case .variable(let root, let initialization) = component else { return nil }
             return (root, initialization)
@@ -201,28 +202,32 @@ package enum InitialFailureEvidence {
             case .expression(let value): expression = value
             case .memberOf: throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
-            guard let nodes = StraightLineAssignmentCheck.orderedIntPlan(expression, reads: reads) else {
+            guard let certificate = StraightLineAssignmentCheck.orderedIntCertificate(expression, reads: reads) else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
-            let syntax = try sourceSyntaxView(expression, root: state.root, reads: reads, nodes: nodes)
+            let nodes = certificate.nodes
+            let syntax = try sourceSyntaxView(expression, root: state.root, reads: reads, certificate: certificate)
+            let emission = "[count |-> \(nodes.count), height |-> 1, indices |-> <<\(nodes.count)>>, "
+                + "origins |-> SourceSyntaxOrigins[\(offset + 1)], nodes |-> \(syntax.nodes)]"
             return (
                 plan: "<<\(TLAValue.string(state.root)), \(try initializerPlan(nodes, root: state.root))>>",
                 view: "<<\(TLAValue.string(state.root)), \(syntax.view)>>",
                 origins: syntax.origins, indices: syntax.indices,
-                emission: "[count |-> \(nodes.count), height |-> 1, indices |-> <<\(nodes.count)>>, "
-                    + "origins |-> SourceSyntaxOrigins[\(offset + 1)], nodes |-> \(syntax.nodes)]")
+                emission: emission,
+                proof: initializerCertificateProof(row: offset + 1, view: syntax.view,
+                    emission: emission, origins: syntax.origins, indices: syntax.indices))
         }
         guard !rows.isEmpty else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
         return ("<<\(rows.map(\.plan).joined(separator: ", "))>>",
                 "<<\(rows.map(\.view).joined(separator: ", "))>>",
                 "<<\(rows.map(\.origins).joined(separator: ", "))>>",
                 "<<\(rows.map(\.indices).joined(separator: ", "))>>",
-                "<<\(rows.map(\.emission).joined(separator: ", "))>>", rows.count)
+                "<<\(rows.map(\.emission).joined(separator: ", "))>>", rows.map(\.proof).joined(separator: "\n"), rows.count)
     }
 
     // Keep source-tree identities independent of postorder extraction and repeated subtrees distinct.
     private static func sourceSyntaxView(_ rootExpression: StateExpr, root: String,
-                                         reads: Set<String>, nodes: [StraightLineAssignmentCheck.OrderedIntNode]) throws
+                                         reads: Set<String>, certificate: StraightLineAssignmentCheck.OrderedIntCertificate) throws
         -> (view: String, origins: String, indices: String, nodes: String) {
         var expressions = [rootExpression]
         var kinds: [String] = [], literals: [String] = [], names: [String] = []
@@ -246,25 +251,9 @@ package enum InitialFailureEvidence {
             left.append(lhs); right.append(rhs)
             index += 1
         }
-        // Propose occurrence identities only; the proof checks payloads and ordered children.
-        var origins = Array(repeating: 0, count: nodes.count)
-        var indices = Array(repeating: 0, count: expressions.count)
-        var pending = [(source: 1, emitted: nodes.count)]
-        while let (source, emitted) = pending.popLast() {
-            guard source > 0, source <= expressions.count, emitted > 0, emitted <= nodes.count,
-                  origins[emitted - 1] == 0, indices[source - 1] == 0 else {
-                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-            }
-            origins[emitted - 1] = source
-            indices[source - 1] = emitted
-            if case .add(let lhs, let rhs) = nodes[emitted - 1] {
-                pending.append((right[source - 1], rhs))
-                pending.append((left[source - 1], lhs))
-            }
-        }
-        guard !origins.contains(0), !indices.contains(0) else {
-            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-        }
+        let nodes = certificate.nodes
+        let origins = certificate.origins
+        let indices = certificate.indices
         func tuple(_ values: [String]) -> String { "<<\(values.joined(separator: ", "))>>" }
         let view = "[root |-> 1, kinds |-> \(tuple(kinds)), literals |-> \(tuple(literals)), "
             + "reads |-> \(tuple(names)), left |-> \(tuple(left.map(String.init))), right |-> \(tuple(right.map(String.init)))]"
@@ -484,54 +473,126 @@ package enum InitialFailureEvidence {
                 tuple(seeds), tuple(nativeSeeds), tuple(types))
     }
 
-    private static func initializerCertificateProof(row: Int) -> String {
+    private static func initializerCertificateProof(row: Int, view: String, emission: String,
+                                                    origins: String, indices: String) -> String {
         """
           <1>\(row). InitializerExpressionCertificate(\(row))
             PROOF
+            <2>0. /\\ SourceSyntaxViews[\(row)][2] = \(view)
+                  /\\ SourcePlanEmission(\(row)) = \(emission)
+                  /\\ SourceSyntaxOrigins[\(row)] = \(origins)
+                  /\\ SourceSyntaxIndices[\(row)] = \(indices)
+              BY ONLY SMT DEF SourceSyntaxViews, SourcePlanEmission, SourcePlanEmissions, SourceSyntaxOrigins, SourceSyntaxIndices
             <2>1. ProofIntSlots = ProofIntKeys
               BY ONLY ActualLayoutSuppliesInitializationDecoderInputs, SMT
             <2>2.
                 /\\ ProofBoundKeys(\(row)) \\subseteq ProofIntSlots
                 /\\ SourceInitializers[\(row)][1] \\in ProofIntSlots
               BY ONLY <2>1, SMT DEF ProofBoundKeys, ProofIntKeys, SourceInitializers
-            <2>3.
-                /\\ ProofInitialization!Expressions!NodeEmissionArrays(SourcePlanEmission(\(row)))
-                /\\ SourcePlanEmission(\(row)).count > 0
-              BY ONLY ProofInitialSentinels, SMT DEF SourcePlanEmission, SourcePlanEmissions, SourceInitializers, SourceSyntaxOrigins,
-                ProofInitialization!Expressions!NodeEmissionArrays
-            <2>4.
-                ProofInitialization!Expressions!AllNodePayloadsMatchSource(SourceSyntaxViews[\(row)][2], SourcePlanEmission(\(row)))
-              BY ONLY ProofInitialSentinels, SMT DEF SourcePlanEmission, SourcePlanEmissions, SourceInitializers, SourceSyntaxOrigins,
-                SourceSyntaxViews, ProofInitialization!Expressions!AllNodePayloadsMatchSource,
-                ProofInitialization!Expressions!NodePayloadMatchesSource
-            <2>5.
-                ProofInitialization!Expressions!TypedVisitedSourceInputs(SourceSyntaxViews[\(row)][2], SourcePlanEmission(\(row)))
-              BY ONLY <2>1, ProofIntegerBounds, ProofInitialSentinels, SMT DEF SourcePlanEmission, SourcePlanEmissions, SourceInitializers,
-                SourceSyntaxOrigins, SourceSyntaxViews, ProofIntKeys, ProofIntMin, ProofIntMax,
-                ProofInitialization!Expressions!TypedVisitedSourceInputs, ProofInitialization!Expressions!InRange
-            <2>6a. SourceSyntaxIndices[\(row)] \\in [DOMAIN SourceSyntaxViews[\(row)][2].kinds -> 1..SourcePlanEmission(\(row)).count]
-              BY ONLY SMT DEF SourcePlanEmission, SourcePlanEmissions, SourceInitializers, SourceSyntaxOrigins, SourceSyntaxViews, SourceSyntaxIndices, ProofBoundKeys
-            <2>6b. SourcePlanEmission(\(row)).origins \\in [1..SourcePlanEmission(\(row)).count -> DOMAIN SourceSyntaxViews[\(row)][2].kinds]
-              BY ONLY SMT DEF SourcePlanEmission, SourcePlanEmissions, SourceInitializers, SourceSyntaxOrigins, SourceSyntaxViews, SourceSyntaxIndices, ProofBoundKeys
-            <2>6c. \\A index \\in 1..SourcePlanEmission(\(row)).count :
-                  SourceSyntaxIndices[\(row)][SourcePlanEmission(\(row)).origins[index]] = index
-              BY ONLY SMT DEF SourcePlanEmission, SourcePlanEmissions, SourceInitializers, SourceSyntaxOrigins, SourceSyntaxViews, SourceSyntaxIndices, ProofBoundKeys
-            <2>6d. \\A node \\in DOMAIN SourceSyntaxViews[\(row)][2].kinds :
-                  SourcePlanEmission(\(row)).origins[SourceSyntaxIndices[\(row)][node]] = node
-              BY ONLY SMT DEF SourcePlanEmission, SourcePlanEmissions, SourceInitializers, SourceSyntaxOrigins, SourceSyntaxViews, SourceSyntaxIndices, ProofBoundKeys
-            <2>6e. SourcePlanEmission(\(row)).origins[SourcePlanEmission(\(row)).count] = SourceSyntaxViews[\(row)][2].root
-              BY ONLY SMT DEF SourcePlanEmission, SourcePlanEmissions, SourceInitializers, SourceSyntaxOrigins, SourceSyntaxViews, SourceSyntaxIndices, ProofBoundKeys
-            <2>6f. \\A index \\in 1..SourcePlanEmission(\(row)).count :
-                  SourcePlanEmission(\(row)).nodes[index].kind = "read"
-                    => SourcePlanEmission(\(row)).nodes[index].payload \\in ProofBoundKeys(\(row))
-              BY ONLY SMT DEF SourcePlanEmission, SourcePlanEmissions, SourceInitializers, SourceSyntaxOrigins, SourceSyntaxViews, SourceSyntaxIndices, ProofBoundKeys
+            <2>3. ProofInitialization!Expressions!CertificateSource(SourceSyntaxViews[\(row)][2], ProofBoundKeys(\(row)))
+              PROOF
+              <3>1. \\A node \\in DOMAIN SourceSyntaxViews[\(row)][2].kinds :
+                  SourceSyntaxViews[\(row)][2].kinds[node] = "literal" =>
+                    ProofInitialization!Expressions!InRange(SourceSyntaxViews[\(row)][2].literals[node])
+                BY ONLY <2>0, ProofIntegerBounds, SMT
+                  DEF ProofIntMin, ProofIntMax, ProofInitialization!Expressions!InRange
+              <3>2. /\\ SourceSyntaxViews[\(row)][2].root \\in DOMAIN SourceSyntaxViews[\(row)][2].kinds
+                    /\\ \\A node \\in DOMAIN SourceSyntaxViews[\(row)][2].kinds :
+                      /\\ SourceSyntaxViews[\(row)][2].kinds[node] \\in {"literal", "read", "add"}
+                      /\\ (SourceSyntaxViews[\(row)][2].kinds[node] = "read" =>
+                           SourceSyntaxViews[\(row)][2].reads[node] \\in ProofBoundKeys(\(row)))
+                      /\\ (SourceSyntaxViews[\(row)][2].kinds[node] = "add" =>
+                           /\\ SourceSyntaxViews[\(row)][2].left[node] \\in DOMAIN SourceSyntaxViews[\(row)][2].kinds
+                           /\\ SourceSyntaxViews[\(row)][2].right[node] \\in DOMAIN SourceSyntaxViews[\(row)][2].kinds)
+                BY ONLY <2>0, SMT DEF SourceInitializers, ProofBoundKeys
+              <3>. QED BY ONLY <2>2, <3>1, <3>2, SMT DEF ProofInitialization!Expressions!CertificateSource
+            <2>4a. SourceCertificateHistory(\(row))[0] =
+                ProofInitialization!Expressions!EmptyCertificateConstruction(SourceSyntaxViews[\(row)][2])
+              BY ONLY <2>0, SMT DEF SourceCertificateHistory, ProofInitialization!Expressions!CompilerCertificatePrefix,
+                ProofInitialization!Expressions!EmptyCertificateConstruction, ProofInitialization!Expressions!EmptyNodeEmission
+            <2>4b. \\A step \\in 1..SourcePlanEmission(\(row)).count :
+                ProofInitialization!Expressions!CertificateConstructorReady(SourceSyntaxViews[\(row)][2],
+                  SourceCertificateHistory(\(row))[step - 1], SourceSyntaxOrigins[\(row)][step])
+              BY ONLY <2>0, SMT DEF SourceCertificateHistory, ProofInitialization!Expressions!CompilerCertificatePrefix,
+                ProofInitialization!Expressions!CertificateConstructorReady
+            <2>4c. \\A step \\in 1..SourcePlanEmission(\(row)).count :
+                SourceCertificateHistory(\(row))[step] =
+                  ProofInitialization!Expressions!AppendCertificateConstructor(SourceSyntaxViews[\(row)][2],
+                    SourceCertificateHistory(\(row))[step - 1], SourceSyntaxOrigins[\(row)][step])
+              PROOF
+              <3>0. SourcePlanEmission(\(row)).count \\in Nat
+                BY ONLY <2>0, SMT
+              <3>1. \\A step \\in 1..SourcePlanEmission(\(row)).count :
+                  SourcePlanEmission(\(row)).nodes[step] =
+                    ProofInitialization!Expressions!AppendCertificateConstructor(SourceSyntaxViews[\(row)][2],
+                      SourceCertificateHistory(\(row))[step - 1], SourceSyntaxOrigins[\(row)][step]).emitted.nodes[step]
+                BY ONLY <2>0, SMT DEF SourceCertificateHistory,
+                  ProofInitialization!Expressions!CompilerCertificatePrefix,
+                  ProofInitialization!Expressions!AppendCertificateConstructor, ProofInitialization!Expressions!HistoryAppend
+              <3>2. \\A step \\in 1..SourcePlanEmission(\(row)).count :
+                  \\A node \\in DOMAIN SourceSyntaxViews[\(row)][2].kinds :
+                    SourceCertificateHistory(\(row))[step].inverse[node] =
+                      ProofInitialization!Expressions!AppendCertificateConstructor(SourceSyntaxViews[\(row)][2],
+                        SourceCertificateHistory(\(row))[step - 1], SourceSyntaxOrigins[\(row)][step]).inverse[node]
+                BY ONLY <2>0, SMT DEF SourceCertificateHistory,
+                  ProofInitialization!Expressions!CompilerCertificatePrefix, ProofInitialization!Expressions!AppendCertificateConstructor
+              <3>3. \\A step \\in 1..SourcePlanEmission(\(row)).count :
+                  SourceCertificateHistory(\(row))[step] =
+                    ProofInitialization!Expressions!AppendCertificateConstructor(SourceSyntaxViews[\(row)][2],
+                      SourceCertificateHistory(\(row))[step - 1], SourceSyntaxOrigins[\(row)][step])
+                PROOF
+                <4>. SUFFICES ASSUME NEW step \\in 1..SourcePlanEmission(\(row)).count
+                             PROVE SourceCertificateHistory(\(row))[step] =
+                               ProofInitialization!Expressions!AppendCertificateConstructor(SourceSyntaxViews[\(row)][2],
+                                 SourceCertificateHistory(\(row))[step - 1], SourceSyntaxOrigins[\(row)][step])
+                  BY SMT
+                <4>0. /\\ step \\in Nat \\ {0}
+                      /\\ step \\in 0..SourcePlanEmission(\(row)).count
+                      /\\ step - 1 \\in 0..SourcePlanEmission(\(row)).count
+                  BY ONLY <3>0, SMT
+                <4>1. LET before == ProofInitialization!Expressions!CompilerCertificatePrefix(
+                            SourceSyntaxViews[\(row)][2], SourcePlanEmission(\(row)), SourceSyntaxIndices[\(row)], step - 1)
+                          after == ProofInitialization!Expressions!CompilerCertificatePrefix(
+                            SourceSyntaxViews[\(row)][2], SourcePlanEmission(\(row)), SourceSyntaxIndices[\(row)], step)
+                          appended == ProofInitialization!Expressions!AppendCertificateConstructor(
+                            SourceSyntaxViews[\(row)][2], before, SourcePlanEmission(\(row)).origins[step])
+                      IN /\\ SourcePlanEmission(\(row)).nodes[step] = appended.emitted.nodes[step]
+                         /\\ \\A node \\in DOMAIN SourceSyntaxViews[\(row)][2].kinds : after.inverse[node] = appended.inverse[node]
+                  BY ONLY <2>0, <3>1, <3>2, <4>0, SMT DEF SourceCertificateHistory
+                <4>2. ProofInitialization!Expressions!CompilerCertificatePrefix(
+                        SourceSyntaxViews[\(row)][2], SourcePlanEmission(\(row)), SourceSyntaxIndices[\(row)], step) =
+                      ProofInitialization!Expressions!AppendCertificateConstructor(SourceSyntaxViews[\(row)][2],
+                        ProofInitialization!Expressions!CompilerCertificatePrefix(
+                          SourceSyntaxViews[\(row)][2], SourcePlanEmission(\(row)), SourceSyntaxIndices[\(row)], step - 1),
+                        SourcePlanEmission(\(row)).origins[step])
+                  BY ONLY <4>0, <4>1, ProofIntegerBounds, ProofInitialSentinels,
+                    ProofInitialization!Expressions!CompilerCertificatePrefixesRealizeTheConstructor, SMT
+                <4>. QED BY ONLY <2>0, <4>0, <4>2, SMT DEF SourceCertificateHistory
+              <3>. QED BY <3>3
+            <2>4d. /\\ SourcePlanEmission(\(row)).count \\in Nat \\ {0}
+                  /\\ SourceSyntaxOrigins[\(row)] \\in [1..SourcePlanEmission(\(row)).count -> DOMAIN SourceSyntaxViews[\(row)][2].kinds]
+                  /\\ \\A node \\in DOMAIN SourceSyntaxViews[\(row)][2].kinds :
+                       SourceCertificateHistory(\(row))[SourcePlanEmission(\(row)).count].inverse[node] > 0
+                  /\\ SourceCertificateHistory(\(row))[SourcePlanEmission(\(row)).count].emitted.origins[
+                         SourceCertificateHistory(\(row))[SourcePlanEmission(\(row)).count].emitted.count] = SourceSyntaxViews[\(row)][2].root
+              BY ONLY <2>0, SMT DEF SourceCertificateHistory, ProofInitialization!Expressions!CompilerCertificatePrefix
+            <2>4. ProofInitialization!Expressions!CompilerCertificateConstruction(SourceSyntaxViews[\(row)][2],
+                SourcePlanEmission(\(row)).count, SourceSyntaxOrigins[\(row)], SourceCertificateHistory(\(row)))
+              BY ONLY <2>4a, <2>4b, <2>4c, <2>4d DEF ProofInitialization!Expressions!CompilerCertificateConstruction
+            <2>5. /\\ SourceCertificateHistory(\(row))[SourcePlanEmission(\(row)).count].emitted = SourcePlanEmission(\(row))
+                  /\\ SourceCertificateHistory(\(row))[SourcePlanEmission(\(row)).count].inverse = SourceSyntaxIndices[\(row)]
+              BY ONLY <2>0, SMT DEF SourceCertificateHistory, ProofInitialization!Expressions!CompilerCertificatePrefix
+            <2>6. ProofInitialization!Expressions!LiteralReadAddCertificate(
+                SourceSyntaxViews[\(row)][2], SourcePlanEmission(\(row)), SourceSyntaxIndices[\(row)],
+                SourceInitializers[\(row)][1], ProofBoundKeys(\(row)))
+              BY ONLY <2>0, <2>2, <2>3, <2>4, <2>5, ProofIntegerBounds, ProofInitialSentinels,
+                ProofInitialization!Expressions!CompilerConstructionSuppliesLiteralReadAddCertificate, SMT
             <2>7.
                 ProofInitialization!Expressions!ExtractedNodePlan(
                   SourcePlanEmission(\(row)), SourceInitializers[\(row)][1]) = SourceInitializers[\(row)][2]
               BY ONLY ProofInitialSentinels, SMT DEF SourcePlanEmission, SourcePlanEmissions, SourceInitializers,
                 ProofInitialization!Expressions!ExtractedNodePlan
-            <2>. QED BY ONLY <2>2, <2>3, <2>4, <2>5, <2>6a, <2>6b, <2>6c, <2>6d, <2>6e, <2>6f, <2>7, ProofInitialSentinels, SMT
-              DEF InitializerExpressionCertificate, ProofInitialization!Expressions!LiteralReadAddCertificate
+            <2>. QED BY ONLY <2>6, <2>7 DEF InitializerExpressionCertificate
         """
     }
 
@@ -539,7 +600,7 @@ package enum InitialFailureEvidence {
                                     operands: [Int], before: [NativeInitialBindingOutput],
                                     sourceInitializers: String, sourceSyntaxViews: String,
                                     sourceSyntaxOrigins: String, sourceSyntaxIndices: String,
-                                    sourcePlanEmissions: String, sourceInitializerCount: Int, sourceInitialControl: String,
+                                    sourcePlanEmissions: String, sourceCertificateProofs: String, sourceInitializerCount: Int, sourceInitialControl: String,
                                     loweredInitializers: String,
                                     resolvedInitializers: String, nativeInitializers: String, nativePrefixOrders: String,
                                     nativeInitializationOrder: String,
@@ -563,7 +624,7 @@ package enum InitialFailureEvidence {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let failureDefs = failures.joined(separator: ", ")
-        let certificateRows = (1...sourceInitializerCount).map { initializerCertificateProof(row: $0) }.joined(separator: "\n")
+        let certificateRows = sourceCertificateProofs
         let certificateSteps = (1...sourceInitializerCount).map { "<1>\($0)" }.joined(separator: ", ")
         let bindings = try before.map { binding in
             let value: String
@@ -781,6 +842,11 @@ package enum InitialFailureEvidence {
         SourcePlanEmissions == \(sourcePlanEmissions)
 
         SourcePlanEmission(row) == SourcePlanEmissions[row]
+
+        SourceCertificateHistory(row) ==
+          [upto \\in 0..SourcePlanEmission(row).count |->
+            ProofInitialization!Expressions!CompilerCertificatePrefix(SourceSyntaxViews[row][2],
+              SourcePlanEmission(row), SourceSyntaxIndices[row], upto)]
 
         InitializerExpressionCertificate(row) ==
           /\\ ProofInitialization!Expressions!LiteralReadAddCertificate(

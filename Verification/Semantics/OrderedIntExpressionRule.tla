@@ -2844,4 +2844,238 @@ THEOREM LiteralReadAddCertificateSuppliesExpressionParent ==
         <2>. QED BY <2>1, <2>2, SMT
     <1>. QED BY <1>4, <1>5, <1>6 DEF plan
 
+
+CertificateSource(view, bound) ==
+    /\ bound \subseteq Keys
+    /\ view.root \in DOMAIN view.kinds
+    /\ \A node \in DOMAIN view.kinds :
+        /\ view.kinds[node] \in {"literal", "read", "add"}
+        /\ (view.kinds[node] = "literal" => InRange(view.literals[node]))
+        /\ (view.kinds[node] = "read" => view.reads[node] \in bound)
+        /\ (view.kinds[node] = "add" =>
+               /\ view.left[node] \in DOMAIN view.kinds
+               /\ view.right[node] \in DOMAIN view.kinds)
+
+EmptyCertificateConstruction(view) ==
+    [emitted |-> EmptyNodeEmission,
+     inverse |-> [node \in DOMAIN view.kinds |-> 0]]
+
+CertificateConstructorReady(view, before, origin) ==
+    /\ origin \in DOMAIN view.kinds
+    /\ before.inverse[origin] = 0
+    /\ view.kinds[origin] \in {"literal", "read", "add"}
+    /\ (view.kinds[origin] = "add" =>
+           /\ view.left[origin] \in DOMAIN view.kinds
+           /\ view.right[origin] \in DOMAIN view.kinds
+           /\ before.inverse[view.left[origin]] \in 1..before.emitted.count
+           /\ before.inverse[view.right[origin]] \in 1..before.emitted.count)
+
+AppendCertificateConstructor(view, before, origin) ==
+    LET emitted == before.emitted
+        count == emitted.count + 1
+        kind == view.kinds[origin]
+        node == [kind |-> kind,
+                 payload |-> IF kind = "literal" THEN view.literals[origin]
+                             ELSE IF kind = "read" THEN view.reads[origin] ELSE 0,
+                 left |-> IF kind = "add" THEN before.inverse[view.left[origin]] ELSE 0,
+                 right |-> IF kind = "add" THEN before.inverse[view.right[origin]] ELSE 0]
+    IN [emitted |-> [count |-> count, height |-> 1, indices |-> <<count>>,
+                    nodes |-> HistoryAppend(emitted.nodes, emitted.count, node),
+                    origins |-> HistoryAppend(emitted.origins, emitted.count, origin)],
+        inverse |-> [source \in DOMAIN view.kinds |->
+                     IF source = origin THEN count ELSE before.inverse[source]]]
+
+CertificateConstructionInvariant(view, current) ==
+    /\ NodeEmissionArrays(current.emitted)
+    /\ current.emitted.origins \in [1..current.emitted.count -> DOMAIN view.kinds]
+    /\ current.inverse \in [DOMAIN view.kinds -> 0..current.emitted.count]
+    /\ \A index \in 1..current.emitted.count :
+           current.inverse[current.emitted.origins[index]] = index
+    /\ \A node \in DOMAIN view.kinds : current.inverse[node] > 0 =>
+           current.emitted.origins[current.inverse[node]] = node
+    /\ AllNodePayloadsMatchSource(view, current.emitted)
+
+THEOREM EmptyCompilerCertificateStartsTheConstruction ==
+    ASSUME NEW view
+    PROVE CertificateConstructionInvariant(view, EmptyCertificateConstruction(view))
+    BY SMT DEF CertificateConstructionInvariant, EmptyCertificateConstruction,
+        EmptyNodeEmission, NodeEmissionArrays, AllNodePayloadsMatchSource
+
+THEOREM CompilerCertificateConstructorPreservesTheInvariant ==
+    ASSUME NEW view, NEW before, NEW origin,
+           CertificateConstructionInvariant(view, before),
+           CertificateConstructorReady(view, before, origin)
+    PROVE CertificateConstructionInvariant(view, AppendCertificateConstructor(view, before, origin))
+    PROOF
+    <1>. DEFINE after == AppendCertificateConstructor(view, before, origin)
+                count == before.emitted.count
+    <1>1. count \in Nat
+        BY SMT DEF count, CertificateConstructionInvariant, NodeEmissionArrays
+    <1>2. /\ after.emitted.count = count + 1
+          /\ NodeEmissionArrays(after.emitted)
+          /\ after.emitted.origins \in [1..(count + 1) -> DOMAIN view.kinds]
+          /\ after.inverse \in [DOMAIN view.kinds -> 0..(count + 1)]
+        BY <1>1, SMT DEF after, count, AppendCertificateConstructor,
+            CertificateConstructionInvariant, CertificateConstructorReady, NodeEmissionArrays, HistoryAppend
+    <1>3. \A index \in 1..count :
+          /\ after.emitted.nodes[index] = before.emitted.nodes[index]
+          /\ after.emitted.origins[index] = before.emitted.origins[index]
+          /\ before.emitted.origins[index] # origin
+          /\ after.inverse[before.emitted.origins[index]] = index
+        BY <1>1, SMT DEF after, count, AppendCertificateConstructor,
+            CertificateConstructionInvariant, CertificateConstructorReady, HistoryAppend
+    <1>4. /\ after.emitted.origins[count + 1] = origin
+          /\ after.inverse[origin] = count + 1
+        BY <1>1, SMT DEF after, count, AppendCertificateConstructor, CertificateConstructorReady, HistoryAppend
+    <1>5. \A index \in 1..after.emitted.count :
+              after.inverse[after.emitted.origins[index]] = index
+        BY ONLY <1>1, <1>2, <1>3, <1>4, SMT
+    <1>6. \A node \in DOMAIN view.kinds : after.inverse[node] > 0 =>
+              after.emitted.origins[after.inverse[node]] = node
+        BY <1>1, <1>3, <1>4, SMT DEF after, count, AppendCertificateConstructor,
+            CertificateConstructionInvariant
+    <1>7. \A index \in 1..count : NodePayloadMatchesSource(view, after.emitted, index)
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 1..count
+                     PROVE NodePayloadMatchesSource(view, after.emitted, index)
+            BY SMT
+        <2>1. NodePayloadMatchesSource(view, before.emitted, index)
+            BY SMT DEF count, CertificateConstructionInvariant, AllNodePayloadsMatchSource
+        <2>2. before.emitted.nodes[index].kind = "add" =>
+              /\ before.emitted.nodes[index].left \in 1..count
+              /\ before.emitted.nodes[index].right \in 1..count
+            BY ONLY <1>1, <2>1, SMT DEF NodePayloadMatchesSource
+        <2>. QED BY ONLY <1>3, <2>1, <2>2, SMT DEF NodePayloadMatchesSource
+    <1>8. NodePayloadMatchesSource(view, after.emitted, count + 1)
+        PROOF
+        <2>1. view.kinds[origin] = "add" =>
+              /\ before.inverse[view.left[origin]] \in 1..count
+              /\ before.inverse[view.right[origin]] \in 1..count
+            BY SMT DEF count, CertificateConstructorReady
+        <2>2. view.kinds[origin] = "add" =>
+              /\ before.emitted.origins[before.inverse[view.left[origin]]] = view.left[origin]
+              /\ before.emitted.origins[before.inverse[view.right[origin]]] = view.right[origin]
+            BY <2>1, SMT DEF count, CertificateConstructionInvariant, CertificateConstructorReady
+        <2>. QED BY <1>1, <1>3, <1>4, <2>1, <2>2, SMT
+            DEF after, count, AppendCertificateConstructor, CertificateConstructorReady,
+                NodePayloadMatchesSource, HistoryAppend
+    <1>9. AllNodePayloadsMatchSource(view, after.emitted)
+        BY ONLY <1>1, <1>2, <1>7, <1>8, SMT DEF AllNodePayloadsMatchSource
+    <1>. QED BY <1>2, <1>5, <1>6, <1>9 DEF CertificateConstructionInvariant, after
+
+CompilerCertificateConstruction(view, steps, origins, history) ==
+    /\ steps \in Nat \ {0}
+    /\ origins \in [1..steps -> DOMAIN view.kinds]
+    /\ history[0] = EmptyCertificateConstruction(view)
+    /\ \A step \in 1..steps :
+        /\ CertificateConstructorReady(view, history[step - 1], origins[step])
+        /\ history[step] = AppendCertificateConstructor(view, history[step - 1], origins[step])
+    /\ \A node \in DOMAIN view.kinds : history[steps].inverse[node] > 0
+    /\ history[steps].emitted.origins[history[steps].emitted.count] = view.root
+
+THEOREM CompilerConstructionSuppliesLiteralReadAddCertificate ==
+    ASSUME NEW view, NEW bound, NEW fallback \in Keys,
+           CertificateSource(view, bound), NEW steps, NEW origins, NEW history,
+           CompilerCertificateConstruction(view, steps, origins, history)
+    PROVE LiteralReadAddCertificate(view, history[steps].emitted,
+              history[steps].inverse, fallback, bound)
+    PROOF
+    <1>. DEFINE holds(step) == CertificateConstructionInvariant(view, history[step])
+    <1>1. holds(0)
+        BY EmptyCompilerCertificateStartsTheConstruction DEF holds, CompilerCertificateConstruction
+    <1>2. \A step \in 1..steps :
+              (\A prior \in 0..(step - 1) : holds(prior)) => holds(step)
+        PROOF
+        <2>. SUFFICES ASSUME NEW step \in 1..steps,
+                             \A prior \in 0..(step - 1) : holds(prior)
+                     PROVE holds(step)
+            BY SMT
+        <2>1. holds(step - 1)
+            BY SMT DEF CompilerCertificateConstruction
+        <2>. QED BY <2>1, CompilerCertificateConstructorPreservesTheInvariant, SMT
+            DEF holds, CompilerCertificateConstruction
+    <1>3. steps \in Nat
+        BY SMT DEF CompilerCertificateConstruction
+    <1>4. \A step \in 0..steps : holds(step)
+        BY <1>1, <1>2, <1>3, FiniteIndexedPrefixProperty
+    <1>5. CertificateConstructionInvariant(view, history[steps])
+        BY <1>3, <1>4, SMT DEF holds
+    <1>6. history[steps].emitted.count > 0
+        PROOF
+        <2>0. history[steps].emitted.count \in Nat
+            BY <1>5 DEF CertificateConstructionInvariant, NodeEmissionArrays
+        <2>1. view.root \in DOMAIN view.kinds
+            BY DEF CertificateSource
+        <2>2. /\ history[steps].inverse[view.root] \in 0..history[steps].emitted.count
+              /\ history[steps].inverse[view.root] > 0
+            BY <1>5, <2>1, SMT DEF CertificateConstructionInvariant, CompilerCertificateConstruction
+        <2>. QED BY ONLY <2>0, <2>2, SMT
+    <1>7. TypedVisitedSourceInputs(view, history[steps].emitted)
+        BY <1>5, SMT DEF CertificateConstructionInvariant, CertificateSource, TypedVisitedSourceInputs
+    <1>. QED BY <1>5, <1>6, <1>7, SMT DEF LiteralReadAddCertificate,
+        CertificateConstructionInvariant, CertificateSource, CompilerCertificateConstruction,
+        AllNodePayloadsMatchSource, NodePayloadMatchesSource
+
+
+CompilerCertificatePrefix(view, emitted, inverse, upto) ==
+    [emitted |-> [count |-> upto, height |-> IF upto = 0 THEN 0 ELSE 1,
+       indices |-> [position \in 1..(IF upto = 0 THEN 0 ELSE 1) |-> upto],
+       nodes |-> [index \in 1..upto |-> emitted.nodes[index]],
+       origins |-> [index \in 1..upto |-> emitted.origins[index]]],
+     inverse |-> [source \in DOMAIN view.kinds |->
+       IF inverse[source] <= upto THEN inverse[source] ELSE 0]]
+
+THEOREM CompilerCertificatePrefixesRealizeTheConstructor ==
+    ASSUME NEW view, NEW emitted, NEW inverse, NEW step \in Nat \ {0},
+           LET before == CompilerCertificatePrefix(view, emitted, inverse, step - 1)
+               after == CompilerCertificatePrefix(view, emitted, inverse, step)
+               appended == AppendCertificateConstructor(view, before, emitted.origins[step])
+           IN /\ emitted.nodes[step] = appended.emitted.nodes[step]
+              /\ \A node \in DOMAIN view.kinds : after.inverse[node] = appended.inverse[node]
+    PROVE CompilerCertificatePrefix(view, emitted, inverse, step)
+        = AppendCertificateConstructor(view,
+            CompilerCertificatePrefix(view, emitted, inverse, step - 1), emitted.origins[step])
+    PROOF
+    <1>. DEFINE before == CompilerCertificatePrefix(view, emitted, inverse, step - 1)
+                after == CompilerCertificatePrefix(view, emitted, inverse, step)
+                appended == AppendCertificateConstructor(view, before, emitted.origins[step])
+    <1>1. /\ before.emitted.count = step - 1
+          /\ appended.emitted.count = step
+          /\ after.emitted.count = step
+          /\ after.emitted.height = appended.emitted.height
+          /\ after.emitted.indices = appended.emitted.indices
+        BY SMT DEF before, after, appended, CompilerCertificatePrefix, AppendCertificateConstructor
+    <1>2. \A index \in 1..step : after.emitted.nodes[index] = appended.emitted.nodes[index]
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 1..step
+                     PROVE after.emitted.nodes[index] = appended.emitted.nodes[index]
+            BY SMT
+        <2>1. CASE index = step
+            BY <2>1, SMT DEF after, CompilerCertificatePrefix, appended, before
+        <2>2. CASE index # step
+            BY <2>2, SMT DEF before, after, appended, CompilerCertificatePrefix,
+                AppendCertificateConstructor, HistoryAppend
+        <2>. QED BY <2>1, <2>2, SMT
+    <1>3. after.emitted.nodes = appended.emitted.nodes
+        BY <1>2, SMT DEF before, after, appended, CompilerCertificatePrefix,
+            AppendCertificateConstructor, HistoryAppend
+    <1>4. after.emitted.origins = appended.emitted.origins
+        BY SMT DEF before, after, appended, CompilerCertificatePrefix,
+            AppendCertificateConstructor, HistoryAppend
+    <1>5. after.inverse = appended.inverse
+        BY SMT DEF before, after, appended, CompilerCertificatePrefix, AppendCertificateConstructor
+    <1>6a. after.emitted = [count |-> after.emitted.count, height |-> after.emitted.height,
+                indices |-> after.emitted.indices, nodes |-> after.emitted.nodes, origins |-> after.emitted.origins]
+        BY SMT DEF after, CompilerCertificatePrefix
+    <1>6b. appended.emitted = [count |-> appended.emitted.count, height |-> appended.emitted.height,
+                indices |-> appended.emitted.indices, nodes |-> appended.emitted.nodes, origins |-> appended.emitted.origins]
+        BY SMT DEF appended, AppendCertificateConstructor
+    <1>6. after.emitted = appended.emitted
+        BY ONLY <1>1, <1>3, <1>4, <1>6a, <1>6b, SMT
+    <1>7a. after = [emitted |-> after.emitted, inverse |-> after.inverse]
+        BY SMT DEF after, CompilerCertificatePrefix
+    <1>7b. appended = [emitted |-> appended.emitted, inverse |-> appended.inverse]
+        BY SMT DEF appended, AppendCertificateConstructor
+    <1>. QED BY ONLY <1>5, <1>6, <1>7a, <1>7b, SMT DEF before, after, appended
+
 =============================================================================

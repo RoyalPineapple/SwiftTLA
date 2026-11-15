@@ -13,6 +13,21 @@ private enum OrderedAssignmentStep: String, CaseIterable, Sendable {
 
 @Suite("Ordered assignment lowering")
 struct OrderedAssignmentLoweringTests {
+    @Test("An Int certificate preserves distinct occurrences and ordered children of repeated subtrees")
+    func repeatedIntSubtreesRetainTheirOccurrences() throws {
+        let child = StateExpr.add(.variable("first"), .value(.int(1)))
+        let expression = StateExpr.add(child, child)
+        let certificate = try #require(StraightLineAssignmentCheck.orderedIntCertificate(expression, reads: ["first"]))
+        #expect(certificate.nodes == [.read("first"), .literal(1), .add(1, 2),
+                                      .read("first"), .literal(1), .add(4, 5), .add(3, 6)])
+        #expect(certificate.origins == [4, 5, 2, 6, 7, 3, 1])
+        #expect(certificate.indices == [7, 3, 6, 1, 2, 4, 5])
+        #expect(StraightLineAssignmentCheck.orderedIntPlan(expression, reads: ["first"],
+            renaming: ["first": "slot"]) == [.read("slot"), .literal(1), .add(1, 2),
+                                             .read("slot"), .literal(1), .add(4, 5), .add(3, 6)])
+        #expect(StraightLineAssignmentCheck.orderedIntCertificate(expression, reads: []) == nil)
+    }
+
     @Test("An unrelated initializer preserves an ordered action output check")
     func otherIntInitializerRetainsActionCheck() throws {
         let spec = #spec("OtherIntInitializer") {

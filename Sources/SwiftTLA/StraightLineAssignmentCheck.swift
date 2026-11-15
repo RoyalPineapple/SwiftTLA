@@ -10,9 +10,73 @@ package enum StraightLineAssignmentCheck {
         case conditional(Int, Int, Int)
     }
 
+    package struct OrderedIntCertificate: Sendable {
+        package let nodes: [OrderedIntNode]
+        package let origins: [Int]
+        package let indices: [Int]
+
+        fileprivate init(nodes: [OrderedIntNode], origins: [Int], indices: [Int]) {
+            self.nodes = nodes
+            self.origins = origins
+            self.indices = indices
+        }
+    }
+
+    package static func orderedIntCertificate(_ root: StateExpr, reads: Set<String>) -> OrderedIntCertificate? {
+        // Occurrences, not expression equality: repeated subtrees keep distinct identities.
+        var expressions = [root]
+        var source: [OrderedIntNode] = []
+        var position = 0
+        while position < expressions.count {
+            switch expressions[position] {
+            case .value(.int(let value)): source.append(.literal(value))
+            case .variable(let name) where reads.contains(name): source.append(.read(name))
+            case .add(let left, let right):
+                source.append(.add(expressions.count + 1, expressions.count + 2))
+                expressions.append(left)
+                expressions.append(right)
+            default: return nil
+            }
+            position += 1
+        }
+        var pending = [(origin: 1, expanded: false)]
+        var nodes: [OrderedIntNode] = []
+        var origins: [Int] = []
+        var indices = Array(repeating: 0, count: source.count)
+        while let (origin, expanded) = pending.popLast() {
+            let node: OrderedIntNode
+            switch source[origin - 1] {
+            case .literal(let value): node = .literal(value)
+            case .read(let name): node = .read(name)
+            case .add(let left, let right):
+                if !expanded {
+                    pending.append((origin, true))
+                    pending.append((right, false))
+                    pending.append((left, false))
+                    continue
+                }
+                guard indices[left - 1] > 0, indices[right - 1] > 0 else { return nil }
+                node = .add(indices[left - 1], indices[right - 1])
+            default: return nil
+            }
+            guard indices[origin - 1] == 0 else { return nil }
+            nodes.append(node)
+            origins.append(origin)
+            indices[origin - 1] = nodes.count
+        }
+        guard !indices.contains(0), origins.last == 1 else { return nil }
+        return OrderedIntCertificate(nodes: nodes, origins: origins, indices: indices)
+    }
+
     package static func orderedIntPlan(_ root: StateExpr, reads: Set<String>,
                                        renaming: [String: String] = [:],
                                        type: CompiledValueType = .int) -> [OrderedIntNode]? {
+        if type == .int {
+            return orderedIntCertificate(root, reads: reads)?.nodes.map { node in
+                guard case .read(let name) = node else { return node }
+                return .read(renaming[name] ?? name)
+            }
+        }
         var pending = [(root, type, false)]
         var indices: [Int] = []
         var nodes: [OrderedIntNode] = []
