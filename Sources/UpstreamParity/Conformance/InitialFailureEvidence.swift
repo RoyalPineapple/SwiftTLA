@@ -1008,7 +1008,8 @@ package enum InitialFailureEvidence {
                       /\\ \\A index \\in 0..SourceInitializers[row][2].count :
                              ProofInitialization!Expressions!OutcomeAgrees(source, generated, index)
               BY ONLY <2>0, <2>1, InitializerPlansInvokeCheckedExpressionParent, SMT
-            <2>. QED BY <2>0, <2>1, <2>2, SMT
+            <2>. WITNESS position \\in 1..ProofCount
+            <2>. QED BY ONLY <2>1, <2>2, SMT
           <1>. QED BY ONLY <1>3, <1>4, <1>6, SMT
 
         ProofIntPositions == {position \\in 1..ProofCount : ProofOrder[position] \\in ProofIntSlots}
