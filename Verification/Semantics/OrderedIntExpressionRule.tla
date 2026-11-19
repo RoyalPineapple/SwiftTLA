@@ -6445,6 +6445,20 @@ THEOREM ActualSupportedInputReturnsAReviewedCertificate ==
 SwiftArrayAsHistory(array) ==
     [index \in 1..array.count |-> array.items[index - 1]]
 
+THEOREM SwiftIndexedArrayDecodesToHistory ==
+    ASSUME NEW length \in Nat, NEW values,
+           values = [index \in 1..length |-> values[index]]
+    PROVE SwiftArrayAsHistory(SwiftIndexedArray(length, values)) = values
+    PROOF
+    <1>offsets. \A index \in 1..length :
+                   /\ index - 1 \in 0..(length - 1) /\ (index - 1) + 1 = index
+        BY SMT
+    <1>entries. \A index \in 1..length :
+                   SwiftArrayAsHistory(SwiftIndexedArray(length, values))[index] = values[index]
+        BY ONLY <1>offsets DEF SwiftArrayAsHistory, SwiftIndexedArray
+    <1>. QED BY ONLY <1>entries, values = [index \in 1..length |-> values[index]]
+        DEF SwiftArrayAsHistory, SwiftIndexedArray
+
 SwiftSourceArrayAsView(array) ==
     [root |-> 1,
      kinds |-> [origin \in 1..array.count |-> array.items[origin - 1].kind],
@@ -6460,6 +6474,75 @@ SwiftSourceArrayAsView(array) ==
 SwiftCertificateArraysAsEmission(result) ==
     [count |-> result.nodes.count, height |-> 1, indices |-> <<result.nodes.count>>,
      nodes |-> SwiftArrayAsHistory(result.nodes), origins |-> SwiftArrayAsHistory(result.origins)]
+
+THEOREM AllocatedSwiftSourceDecodesToSourceView ==
+    ASSUME NEW state, state.count \in Nat
+    PROVE SwiftSourceArrayAsView(SwiftSourceArray(AllocatedSourceView(state), state.count)) =
+          AllocatedSourceView(state)
+    PROOF
+    <1>. DEFINE view == AllocatedSourceView(state)
+                packed == SwiftSourceArray(view, state.count)
+                decoded == SwiftSourceArrayAsView(packed)
+    <1>offsets. \A origin \in 1..state.count :
+        /\ origin - 1 \in 0..(state.count - 1) /\ (origin - 1) + 1 = origin
+        BY ONLY state.count \in Nat, SMT
+    <1>count. packed.count = state.count
+        BY ONLY DEF packed, SwiftSourceArray
+    <1>allocatedSource. packed = AllocatedSwiftSource(state)
+        BY ONLY state.count \in Nat, AllocatedEnumArrayIsTheTraversalSource DEF packed, view
+    <1>entries. \A origin \in 1..state.count :
+        /\ decoded.kinds[origin] = view.kinds[origin]
+        /\ decoded.literals[origin] = view.literals[origin]
+        /\ decoded.reads[origin] = view.reads[origin]
+        /\ decoded.left[origin] = view.left[origin]
+        /\ decoded.right[origin] = view.right[origin]
+        PROOF
+        <2>. SUFFICES ASSUME NEW origin \in 1..state.count PROVE
+            /\ decoded.kinds[origin] = view.kinds[origin]
+            /\ decoded.literals[origin] = view.literals[origin]
+            /\ decoded.reads[origin] = view.reads[origin]
+            /\ decoded.left[origin] = view.left[origin]
+            /\ decoded.right[origin] = view.right[origin]
+            BY SMT
+        <2>lookup. packed.items[origin - 1] =
+            [kind |-> state.source[origin].kind,
+             payload |-> IF state.source[origin].kind = "literal" THEN state.source[origin].literal
+                         ELSE IF state.source[origin].kind = "read" THEN state.source[origin].read ELSE 0,
+             left |-> IF state.source[origin].kind = "add" THEN state.source[origin].left ELSE 0,
+             right |-> IF state.source[origin].kind = "add" THEN state.source[origin].right ELSE 0]
+            PROOF
+            <3>offset. /\ origin - 1 \in 0..(state.count - 1)
+                        /\ (origin - 1) + 1 = origin
+                BY ONLY <1>offsets, origin \in 1..state.count, SMT
+            <3>. QED BY ONLY <1>allocatedSource, <3>offset DEF AllocatedSwiftSource
+        <2>viewFields.
+            /\ view.kinds[origin] = state.source[origin].kind
+            /\ view.literals[origin] = IF state.source[origin].kind = "literal" THEN state.source[origin].literal ELSE 0
+            /\ view.reads[origin] = IF state.source[origin].kind = "read" THEN state.source[origin].read ELSE 0
+            /\ view.left[origin] = IF state.source[origin].kind = "add" THEN state.source[origin].left ELSE 0
+            /\ view.right[origin] = IF state.source[origin].kind = "add" THEN state.source[origin].right ELSE 0
+            BY ONLY origin \in 1..state.count DEF view, AllocatedSourceView
+        <2>. QED BY ONLY <1>count, <2>lookup, <2>viewFields, origin \in 1..state.count
+            DEF decoded, SwiftSourceArrayAsView
+    <1>root. decoded.root = view.root
+        BY ONLY DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
+    <1>kinds. decoded.kinds = view.kinds
+        BY ONLY <1>count, <1>entries DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
+    <1>literals. decoded.literals = view.literals
+        BY ONLY <1>count, <1>entries DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
+    <1>reads. decoded.reads = view.reads
+        BY ONLY <1>count, <1>entries DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
+    <1>left. decoded.left = view.left
+        BY ONLY <1>count, <1>entries DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
+    <1>right. decoded.right = view.right
+        BY ONLY <1>count, <1>entries DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
+    <1>shape.
+        /\ decoded = [root |-> decoded.root, kinds |-> decoded.kinds, literals |-> decoded.literals,
+                       reads |-> decoded.reads, left |-> decoded.left, right |-> decoded.right]
+        /\ view = [root |-> view.root, kinds |-> view.kinds, literals |-> view.literals,
+                    reads |-> view.reads, left |-> view.left, right |-> view.right]
+        BY ONLY DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
+    <1>. QED BY ONLY <1>root, <1>kinds, <1>literals, <1>reads, <1>left, <1>right, <1>shape DEF decoded, packed, view
 
 THEOREM ActualReviewedCompilerResultSuppliesInitializerCertificate ==
     ASSUME NEW root, NEW terms, NEW syntax, NEW weight, NEW bound,
@@ -6517,18 +6600,6 @@ THEOREM ActualReviewedCompilerResultSuppliesInitializerCertificate ==
         BY SupportedInputHasExactlyOneReviewedCompilerResult
     <1>identified. actualResult = expectedResult
         BY <1>invocation, <1>unique, SMT
-    <1>historyRoundTrip. ASSUME NEW length \in Nat, NEW values,
-                              values = [index \in 1..length |-> values[index]]
-                        PROVE SwiftArrayAsHistory(SwiftIndexedArray(length, values)) = values
-        PROOF
-        <2>offsets. \A index \in 1..length :
-                       /\ index - 1 \in 0..(length - 1) /\ (index - 1) + 1 = index
-            BY SMT
-        <2>entries. \A index \in 1..length :
-                       SwiftArrayAsHistory(SwiftIndexedArray(length, values))[index] = values[index]
-            BY ONLY <2>offsets DEF SwiftArrayAsHistory, SwiftIndexedArray
-        <2>. QED BY ONLY <2>entries, values = [index \in 1..length |-> values[index]]
-            DEF SwiftArrayAsHistory, SwiftIndexedArray
     <1>sourceDomain. DOMAIN view.kinds = 1..allocated.count
         BY ONLY DEF view, AllocatedSourceView
     <1>functionShapes. /\ emitted.nodes = [index \in 1..emitted.count |-> emitted.nodes[index]]
@@ -6540,73 +6611,15 @@ THEOREM ActualReviewedCompilerResultSuppliesInitializerCertificate ==
                 /\ SwiftArrayAsHistory(expectedResult.origins) = emitted.origins
                 /\ SwiftArrayAsHistory(expectedResult.indices) = inverse
                 /\ expectedResult.nodes.count = emitted.count
-        BY <1>fields, <1>types, <1>functionShapes, <1>historyRoundTrip
+        BY <1>fields, <1>types, <1>functionShapes, SwiftIndexedArrayDecodesToHistory
             DEF SwiftIndexedArray
     <1>source. SwiftSourceArrayAsView(expectedResult.source) = view
         PROOF
-        <2>source. expectedResult.source = SwiftSourceArray(view, allocated.count)
+        <2>packed. expectedResult.source = SwiftSourceArray(view, allocated.count)
             BY ONLY <1>fields
-        <2>offsets. \A origin \in 1..allocated.count :
-            /\ origin - 1 \in 0..(allocated.count - 1) /\ (origin - 1) + 1 = origin
-            BY <1>types, SMT
-        <2>. DEFINE decoded == SwiftSourceArrayAsView(expectedResult.source)
-        <2>count. expectedResult.source.count = allocated.count
-            BY ONLY <2>source DEF SwiftSourceArray
-        <2>allocatedSource. expectedResult.source = AllocatedSwiftSource(allocated)
-            BY ONLY <2>source, <1>types, AllocatedEnumArrayIsTheTraversalSource DEF view
-        <2>entries. \A origin \in 1..allocated.count :
-            /\ decoded.kinds[origin] = view.kinds[origin]
-            /\ decoded.literals[origin] = view.literals[origin]
-            /\ decoded.reads[origin] = view.reads[origin]
-            /\ decoded.left[origin] = view.left[origin]
-            /\ decoded.right[origin] = view.right[origin]
-            PROOF
-            <3>. SUFFICES ASSUME NEW origin \in 1..allocated.count PROVE
-                /\ decoded.kinds[origin] = view.kinds[origin]
-                /\ decoded.literals[origin] = view.literals[origin]
-                /\ decoded.reads[origin] = view.reads[origin]
-                /\ decoded.left[origin] = view.left[origin]
-                /\ decoded.right[origin] = view.right[origin]
-                BY SMT
-            <3>lookup. expectedResult.source.items[origin - 1] =
-                [kind |-> allocated.source[origin].kind,
-                 payload |-> IF allocated.source[origin].kind = "literal" THEN allocated.source[origin].literal
-                             ELSE IF allocated.source[origin].kind = "read" THEN allocated.source[origin].read ELSE 0,
-                 left |-> IF allocated.source[origin].kind = "add" THEN allocated.source[origin].left ELSE 0,
-                 right |-> IF allocated.source[origin].kind = "add" THEN allocated.source[origin].right ELSE 0]
-                PROOF
-                <4>offset. /\ origin - 1 \in 0..(allocated.count - 1)
-                            /\ (origin - 1) + 1 = origin
-                    BY ONLY <2>offsets, origin \in 1..allocated.count, SMT
-                <4>. QED BY ONLY <2>allocatedSource, <4>offset DEF AllocatedSwiftSource
-            <3>viewFields.
-                /\ view.kinds[origin] = allocated.source[origin].kind
-                /\ view.literals[origin] = IF allocated.source[origin].kind = "literal" THEN allocated.source[origin].literal ELSE 0
-                /\ view.reads[origin] = IF allocated.source[origin].kind = "read" THEN allocated.source[origin].read ELSE 0
-                /\ view.left[origin] = IF allocated.source[origin].kind = "add" THEN allocated.source[origin].left ELSE 0
-                /\ view.right[origin] = IF allocated.source[origin].kind = "add" THEN allocated.source[origin].right ELSE 0
-                BY ONLY origin \in 1..allocated.count DEF view, AllocatedSourceView
-            <3>. QED BY ONLY <2>count, <3>lookup, <3>viewFields, origin \in 1..allocated.count
-                DEF decoded, SwiftSourceArrayAsView
-        <2>root. decoded.root = view.root
-            BY ONLY DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
-        <2>kinds. decoded.kinds = view.kinds
-            BY ONLY <2>count, <2>entries DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
-        <2>literals. decoded.literals = view.literals
-            BY ONLY <2>count, <2>entries DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
-        <2>reads. decoded.reads = view.reads
-            BY ONLY <2>count, <2>entries DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
-        <2>left. decoded.left = view.left
-            BY ONLY <2>count, <2>entries DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
-        <2>right. decoded.right = view.right
-            BY ONLY <2>count, <2>entries DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
-        <2>shape.
-            /\ decoded = [root |-> decoded.root, kinds |-> decoded.kinds, literals |-> decoded.literals,
-                           reads |-> decoded.reads, left |-> decoded.left, right |-> decoded.right]
-            /\ view = [root |-> view.root, kinds |-> view.kinds, literals |-> view.literals,
-                        reads |-> view.reads, left |-> view.left, right |-> view.right]
-            BY ONLY DEF decoded, SwiftSourceArrayAsView, view, AllocatedSourceView
-        <2>. QED BY ONLY <2>root, <2>kinds, <2>literals, <2>reads, <2>left, <2>right, <2>shape DEF decoded
+        <2>roundTrip. SwiftSourceArrayAsView(SwiftSourceArray(view, allocated.count)) = view
+            BY ONLY <1>types, AllocatedSwiftSourceDecodesToSourceView DEF view
+        <2>. QED BY ONLY <2>packed, <2>roundTrip
     <1>emission. LET decoded == SwiftCertificateArraysAsEmission(expectedResult)
                  IN /\ decoded.count = emitted.count /\ decoded.nodes = emitted.nodes
                     /\ decoded.origins = emitted.origins

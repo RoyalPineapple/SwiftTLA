@@ -812,26 +812,59 @@ package enum InitialFailureEvidence {
             traversalFrames.append("""
                 <2>edge\(next). traversal[\(next)] =
                     \(expressions)CompilerTraversalNext(allocatedView, traversal[\(previous)])
-                  BY ONLY <2>traversalHistory, SMT
+                  BY ONLY SMT DEF traversal, witness, allocatedView, allocated, SourceCompilerInvocationWitness\(row)
                 <2>\(label). \(claim)
                   BY ONLY <2>edge\(next)\(sourceFact), <2>frame\(previous), ProofIntegerBounds, ProofInitialSentinels,
                     \(expressions)CompilerTraversalNextProjectsStoredFields, SMT\(definitions)
             """)
         }
         guard pending.isEmpty else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+        let edgeFacts = (1...traversalCount).map { "<2>edge\($0)" }.joined(separator: ", ")
         let frameFacts = (0..<traversalCount).map { "<2>frame\($0)" }.joined(separator: ", ")
+        var emissionCount = 0
         let currentUpdates = visits.enumerated().map { prior, visit in
             let step = prior + 1
+            let origin = visit.origin
             let before = "traversal[\(prior)].current"
             let update = visit.expands ? before :
-                "\(expressions)AppendCertificateConstructor(allocatedView, \(before), \(visit.origin))"
-            return """
+                "\(expressions)AppendCertificateConstructor(allocatedView, \(before), \(origin))"
+            let current = """
                   <3>current\(step). traversal[\(step)].current = \(update)
                     BY ONLY <2>edge\(step), <2>traversalSource, <2>frame\(prior), ProofIntegerBounds, ProofInitialSentinels,
-                      \(expressions)CompilerTraversalNextProjectsStoredFields, SMT
+                      ProofInitialization!Expressions!CompilerTraversalNextProjectsStoredFields, SMT
             """
+            if visit.expands {
+                let matches = """
+                      <3>matches\(step). traversal[\(step)].current = claimedPrefix(\(emissionCount))
+                        BY ONLY <3>current\(step), <3>matches\(prior)
+                """
+                return current + "\n" + matches
+            }
+            emissionCount += 1
+            let matches = """
+                  <3>matches\(step). traversal[\(step)].current = claimedPrefix(\(emissionCount))
+                    PROOF
+                    <4>origin. claimed.origins[\(emissionCount)] = \(origin)
+                      BY ONLY <2>data, SMT DEF claimed
+                    <4>node. claimed.nodes[\(emissionCount)] = appended(\(emissionCount)).emitted.nodes[\(emissionCount)]
+                      BY ONLY <2>data, <3>view, <4>origin, SMT
+                        DEF claimed, claimedIndices, appended, claimedPrefix,
+                          ProofInitialization!Expressions!CompilerCertificatePrefix,
+                          ProofInitialization!Expressions!AppendCertificateConstructor, ProofInitialization!Expressions!HistoryAppend
+                    <4>inverse. \\A origin \\in DOMAIN allocatedView.kinds :
+                        claimedPrefix(\(emissionCount)).inverse[origin] = appended(\(emissionCount)).inverse[origin]
+                      BY ONLY <2>data, <3>domain, <4>origin, SMT
+                        DEF claimedIndices, appended, claimedPrefix,
+                          ProofInitialization!Expressions!CompilerCertificatePrefix,
+                          ProofInitialization!Expressions!AppendCertificateConstructor
+                    <4>transition. claimedPrefix(\(emissionCount)) = appended(\(emissionCount))
+                      BY ONLY <4>node, <4>inverse, ProofIntegerBounds, ProofInitialSentinels,
+                        ProofInitialization!Expressions!CompilerCertificatePrefixesRealizeTheConstructor, SMT
+                        DEF claimedPrefix, appended
+                    <4>. QED BY ONLY <3>current\(step), <3>matches\(prior), <4>origin, <4>transition DEF appended
+            """
+            return current + "\n" + matches
         }.joined(separator: "\n")
-        let currentSteps = visits.indices.map { "<3>current\($0 + 1)" }.joined(separator: ", ")
         return """
           <1>\(row). InitializerExpressionCertificate(\(row))
             PROOF
@@ -1043,18 +1076,20 @@ package enum InitialFailureEvidence {
             <2>traversalSteps. /\\ witness.traversalSteps = \(traversalCount)
                               /\\ final = traversal[\(traversalCount)]
               BY ONLY SMT DEF witness, final, traversal, SourceCompilerInvocationWitness\(row)
-            <2>traversalHistory. /\\ traversal[0] = \(expressions)InitialCompilerTraversal(allocatedView)
-                                /\\ \\A step \\in 1..\(traversalCount) : traversal[step] =
-                                     \(expressions)CompilerTraversalNext(allocatedView, traversal[step - 1])
+            <2>traversalInitial. traversal[0] = \(expressions)InitialCompilerTraversal(allocatedView)
               BY ONLY SMT DEF traversal, witness, allocatedView, allocated, SourceCompilerInvocationWitness\(row)
             <2>traversalSource. /\\ \(traversalSourceFacts.joined(separator: "\n                        /\\ "))
               BY ONLY <2>data, <2>allocatedSource, SMT
             <2>frame0. /\\ traversal[0].height = 1
                        /\\ traversal[0].pending[1].node = 1
                        /\\ ~traversal[0].pending[1].expanded
-              BY ONLY <2>traversalHistory, <2>traversalSource, SMT
+              BY ONLY <2>traversalInitial, <2>traversalSource, SMT
                 DEF \(expressions)InitialCompilerTraversal, \(expressions)VisitFrame
         \(traversalFrames.joined(separator: "\n"))
+            <2>traversalHistory. /\\ traversal[0] = \(expressions)InitialCompilerTraversal(allocatedView)
+                                /\\ \\A step \\in 1..\(traversalCount) : traversal[step] =
+                                     \(expressions)CompilerTraversalNext(allocatedView, traversal[step - 1])
+              BY ONLY <2>traversalInitial, \(edgeFacts), SMT
             <2>prefix. /\\ \(expressions)CompilerTraversalPrefix(allocatedView,
                               witness.traversalSteps, witness.traversalHistory)
                        /\\ final.height = 0
@@ -1106,9 +1141,15 @@ package enum InitialFailureEvidence {
             <2>last. storage[steps] = ProofInitialization!Expressions!SwiftCompilerStorage(allocatedView, allocated.count, final)
               BY ONLY <2>domain, <2>storage, SMT DEF final, traversal, steps
             <2>exit. ProofInitialization!Expressions!ReviewedSwiftCompilerIteration(swiftSource, storage[steps]).control = "exit"
-              BY ONLY <2>last, <2>prefix
-                DEF ProofInitialization!Expressions!ReviewedSwiftCompilerIteration,
-                  ProofInitialization!Expressions!SwiftCompilerStorage, ProofInitialization!Expressions!SwiftPendingArray
+              PROOF
+              <3>empty. /\\ storage[steps].pending.count = 0
+                         /\\ "control" \\in DOMAIN storage[steps]
+                BY ONLY <2>last, <2>prefix
+                  DEF ProofInitialization!Expressions!SwiftCompilerStorage, ProofInitialization!Expressions!SwiftPendingArray
+              <3>stopped. ProofInitialization!Expressions!ReviewedSwiftCompilerIteration(swiftSource, storage[steps]) =
+                  [storage[steps] EXCEPT !.control = "exit"]
+                BY ONLY <3>empty DEF ProofInitialization!Expressions!ReviewedSwiftCompilerIteration
+              <3>. QED BY ONLY <3>empty, <3>stopped, SMT
             <2>returnFields. actualReturn =
                 [control |-> "return", certificate |->
                     [source |-> swiftSource,
@@ -1127,34 +1168,52 @@ package enum InitialFailureEvidence {
                 /\\ emitted.origins = SourceSyntaxOrigins[\(row)]
                 /\\ inverse = SourceSyntaxIndices[\(row)]
               PROOF
+              <3>. DEFINE claimed == SourcePlanEmission(\(row))
+                          claimedIndices == SourceSyntaxIndices[\(row)]
+                          claimedPrefix(count) == ProofInitialization!Expressions!CompilerCertificatePrefix(
+                              allocatedView, claimed, claimedIndices, count)
+                          appended(count) == ProofInitialization!Expressions!AppendCertificateConstructor(
+                              allocatedView, claimedPrefix(count - 1), claimed.origins[count])
               <3>initial. traversal[0].current =
                   ProofInitialization!Expressions!EmptyCertificateConstruction(allocatedView)
                 BY ONLY <2>traversalHistory DEF ProofInitialization!Expressions!InitialCompilerTraversal
               <3>view. allocatedView = \(view)
                 BY ONLY <2>data, <2>allocatedSource
+              <3>domain. DOMAIN allocatedView.kinds = 1..\(sourceCount)
+                BY ONLY <2>tree DEF ProofInitialization!Expressions!CompilerOccurrenceTree
+              <3>indexBounds. \\A origin \\in 1..\(sourceCount) : claimedIndices[origin] \\in 1..\(sourceCount)
+                BY ONLY <2>data, SMT DEF claimedIndices
+              <3>matches0. traversal[0].current = claimedPrefix(0)
+                BY ONLY <3>initial, <3>domain, <3>indexBounds, SMT
+                  DEF claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix,
+                    ProofInitialization!Expressions!EmptyCertificateConstruction, ProofInitialization!Expressions!EmptyNodeEmission
         \(currentUpdates)
+              <3>last. final.current = claimedPrefix(\(sourceCount))
+                BY ONLY <2>traversalSteps, <3>matches\(traversalCount)
               <3>count. emitted.count = SourcePlanEmission(\(row)).count
-                BY ONLY <2>traversalSteps, <2>data, <3>initial, \(currentSteps), SMT
-                  DEF emitted, ProofInitialization!Expressions!EmptyCertificateConstruction,
-                    ProofInitialization!Expressions!EmptyNodeEmission,
-                    ProofInitialization!Expressions!AppendCertificateConstructor
+                BY ONLY <3>last, <2>data DEF emitted, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
               <3>nodes. emitted.nodes = SourcePlanEmission(\(row)).nodes
-                BY ONLY <2>traversalSteps, <2>data, <3>view, <3>initial, \(currentSteps), SMT
-                  DEF emitted, ProofInitialization!Expressions!EmptyCertificateConstruction,
-                    ProofInitialization!Expressions!EmptyNodeEmission,
-                    ProofInitialization!Expressions!AppendCertificateConstructor,
-                    ProofInitialization!Expressions!HistoryAppend
+                PROOF
+                <4>stored. emitted.nodes = [index \\in 1..\(sourceCount) |-> claimed.nodes[index]]
+                  BY ONLY <3>last DEF emitted, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
+                <4>shape. claimed.nodes = [index \\in 1..\(sourceCount) |-> claimed.nodes[index]]
+                  BY ONLY <2>data, SMT DEF claimed
+                <4>. QED BY ONLY <4>stored, <4>shape DEF claimed
               <3>origins. emitted.origins = SourceSyntaxOrigins[\(row)]
-                BY ONLY <2>traversalSteps, <2>data, <3>initial, \(currentSteps), SMT
-                  DEF emitted, ProofInitialization!Expressions!EmptyCertificateConstruction,
-                    ProofInitialization!Expressions!EmptyNodeEmission,
-                    ProofInitialization!Expressions!AppendCertificateConstructor,
-                    ProofInitialization!Expressions!HistoryAppend
+                PROOF
+                <4>stored. emitted.origins = [index \\in 1..\(sourceCount) |-> claimed.origins[index]]
+                  BY ONLY <3>last DEF emitted, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
+                <4>shape. SourceSyntaxOrigins[\(row)] = [index \\in 1..\(sourceCount) |-> claimed.origins[index]]
+                  BY ONLY <2>data, SMT DEF claimed
+                <4>. QED BY ONLY <4>stored, <4>shape
               <3>indices. inverse = SourceSyntaxIndices[\(row)]
-                BY ONLY <2>traversalSteps, <2>data, <3>view, <3>initial, \(currentSteps), SMT
-                  DEF inverse, ProofInitialization!Expressions!EmptyCertificateConstruction,
-                    ProofInitialization!Expressions!EmptyNodeEmission,
-                    ProofInitialization!Expressions!AppendCertificateConstructor
+                PROOF
+                <4>stored. inverse = [origin \\in 1..\(sourceCount) |-> claimedIndices[origin]]
+                  BY ONLY <3>last, <3>domain, <3>indexBounds, SMT
+                    DEF inverse, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
+                <4>shape. claimedIndices = [origin \\in 1..\(sourceCount) |-> claimedIndices[origin]]
+                  BY ONLY <2>data, SMT DEF claimedIndices
+                <4>. QED BY ONLY <4>stored, <4>shape DEF claimedIndices
               <3>. QED BY ONLY <3>count, <3>nodes, <3>origins, <3>indices
             <2>lengths.
                 /\\ Len(SourceSyntaxViews[\(row)][2].kinds) = allocated.count
@@ -1209,15 +1268,53 @@ package enum InitialFailureEvidence {
                 /\\ ProofInitialization!Expressions!SwiftArrayAsHistory(expected.indices) = SourceSyntaxIndices[\(row)]
               PROOF
               <3>source. ProofInitialization!Expressions!SwiftSourceArrayAsView(expected.source) = SourceSyntaxViews[\(row)][2]
-                BY ONLY <2>data, <2>lengths, <2>tree, SMT DEF expected, SourceCompilerResults,
-                  ProofInitialization!Expressions!SwiftSourceArrayAsView, ProofInitialization!Expressions!SwiftSourceArray
+                PROOF
+                <4>packed. expected.source = swiftSource
+                  BY ONLY <2>lengths, <2>allocatedSource DEF expected, swiftSource, SourceCompilerResults
+                <4>count. allocated.count \\in Nat
+                  BY ONLY <2>tree DEF ProofInitialization!Expressions!CompilerOccurrenceTree
+                <4>roundTrip. ProofInitialization!Expressions!SwiftSourceArrayAsView(swiftSource) = allocatedView
+                  BY ONLY <4>count, ProofIntegerBounds, ProofInitialSentinels, ProofInitialization!Expressions!AllocatedSwiftSourceDecodesToSourceView DEF swiftSource, allocatedView
+                <4>. QED BY ONLY <4>packed, <4>roundTrip, <2>allocatedSource
               <3>emission. ProofInitialization!Expressions!SwiftCertificateArraysAsEmission(expected) = SourcePlanEmission(\(row))
-                BY ONLY <2>data, <2>lengths, <2>finalArrays, <2>tree, SMT DEF expected, SourceCompilerResults,
-                  ProofInitialization!Expressions!SwiftCertificateArraysAsEmission,
-                  ProofInitialization!Expressions!SwiftArrayAsHistory, ProofInitialization!Expressions!SwiftIndexedArray
+                PROOF
+                <4>encoded. /\\ expected.nodes = ProofInitialization!Expressions!SwiftIndexedArray(emitted.count, emitted.nodes)
+                            /\\ expected.origins = ProofInitialization!Expressions!SwiftIndexedArray(emitted.count, emitted.origins)
+                  BY ONLY <2>result, <2>returnFields
+                <4>shapes. /\\ emitted.count \\in Nat
+                           /\\ emitted.nodes = [index \\in 1..emitted.count |-> emitted.nodes[index]]
+                           /\\ emitted.origins = [index \\in 1..emitted.count |-> emitted.origins[index]]
+                  BY ONLY <2>final DEF emitted, ProofInitialization!Expressions!CompilerTraversalInvariant,
+                    ProofInitialization!Expressions!CertificateConstructionInvariant, ProofInitialization!Expressions!NodeEmissionArrays
+                <4>nodes. ProofInitialization!Expressions!SwiftArrayAsHistory(expected.nodes) = emitted.nodes
+                  BY ONLY <4>encoded, <4>shapes, ProofIntegerBounds, ProofInitialSentinels,
+                    ProofInitialization!Expressions!SwiftIndexedArrayDecodesToHistory
+                <4>origins. ProofInitialization!Expressions!SwiftArrayAsHistory(expected.origins) = emitted.origins
+                  BY ONLY <4>encoded, <4>shapes, ProofIntegerBounds, ProofInitialSentinels,
+                    ProofInitialization!Expressions!SwiftIndexedArrayDecodesToHistory
+                <4>count. expected.nodes.count = emitted.count
+                  BY ONLY <4>encoded DEF ProofInitialization!Expressions!SwiftIndexedArray
+                <4>plan. SourcePlanEmission(\(row)) =
+                    [count |-> emitted.count, height |-> 1, indices |-> <<emitted.count>>,
+                     nodes |-> emitted.nodes, origins |-> emitted.origins]
+                  BY ONLY <2>data, <2>finalArrays, SMT
+                <4>. QED BY ONLY <4>nodes, <4>origins, <4>count, <4>plan DEF ProofInitialization!Expressions!SwiftCertificateArraysAsEmission
               <3>indices. ProofInitialization!Expressions!SwiftArrayAsHistory(expected.indices) = SourceSyntaxIndices[\(row)]
-                BY ONLY <2>data, <2>lengths, <2>tree, SMT DEF expected, SourceCompilerResults,
-                  ProofInitialization!Expressions!SwiftArrayAsHistory, ProofInitialization!Expressions!SwiftIndexedArray
+                PROOF
+                <4>encoded. expected.indices = ProofInitialization!Expressions!SwiftIndexedArray(allocated.count, inverse)
+                  BY ONLY <2>result, <2>returnFields
+                <4>domain. /\\ allocated.count \\in Nat
+                           /\\ DOMAIN allocatedView.kinds = 1..allocated.count
+                  BY ONLY <2>tree, SMT DEF ProofInitialization!Expressions!CompilerOccurrenceTree
+                <4>typed. inverse \\in [1..allocated.count -> 0..emitted.count]
+                  BY ONLY <2>final, <4>domain DEF inverse, emitted, ProofInitialization!Expressions!CompilerTraversalInvariant,
+                    ProofInitialization!Expressions!CertificateConstructionInvariant
+                <4>shape. inverse = [index \\in 1..allocated.count |-> inverse[index]]
+                  BY ONLY <4>typed, SMT
+                <4>decoded. ProofInitialization!Expressions!SwiftArrayAsHistory(expected.indices) = inverse
+                  BY ONLY <4>encoded, <4>domain, <4>shape, ProofIntegerBounds, ProofInitialSentinels,
+                    ProofInitialization!Expressions!SwiftIndexedArrayDecodesToHistory
+                <4>. QED BY ONLY <4>decoded, <2>finalArrays
               <3>. QED BY ONLY <3>source, <3>emission, <3>indices
             <2>plan. ProofInitialization!Expressions!ExtractedNodePlan(
                 SourcePlanEmission(\(row)), SourceInitializers[\(row)][1]) = SourceInitializers[\(row)][2]
