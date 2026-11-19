@@ -207,7 +207,7 @@ package enum InitialFailureEvidence {
             case .expression(let value): expression = value
             case .memberOf: throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
-            let input = try sourceCompilerInput(expression, path: "SourceCompilerInputs[\(offset + 1)].root")
+            let input = try sourceCompilerInput(expression, row: offset + 1)
             let compilerInput = "[root |-> \(input.term), reads |-> \(compilerReads)]"
             let compilerSizes = "<<\(input.sizes.map(String.init).joined(separator: ", "))>>"
             let (traversalCount, traversalCountOverflowed) = input.count.addingReportingOverflow(input.additions)
@@ -231,7 +231,7 @@ package enum InitialFailureEvidence {
                 proof: try initializerCertificateProof(row: offset + 1, view: syntax.view, kinds: syntax.kinds,
                     emission: emission, origins: syntax.origins, indices: syntax.indices,
                     scalars: input.scalars, reads: compilerReads.description, term: input.term,
-                    sourceDerivation: input.derivation, sourceSizes: compilerSizes,
+                    sourceDerivation: input.derivation, constructorProof: input.proof, sourceSizes: compilerSizes,
                     sourceExpression: expression, sourceCount: input.count,
                     source: certificate.source, traversalCount: traversalCount))
         }
@@ -247,31 +247,48 @@ package enum InitialFailureEvidence {
                 "<<\(rows.map(\.emission).joined(separator: ", "))>>", rows.map(\.proof).joined(separator: "\n"), rows.count)
     }
 
-    private static func sourceCompilerInput(_ expression: StateExpr, path: String) throws
-        -> (term: String, derivation: String, sizes: [Int], count: Int, additions: Int, scalars: [String]) {
+    private static func sourceCompilerInput(_ expression: StateExpr, row: Int, branches: [Int] = []) throws
+        -> (term: String, derivation: String, sizes: [Int], count: Int, additions: Int, scalars: [String], proof: String) {
         // shortcut: Scalar spellings are checked per packet; prove the general encoding before widening proof coverage.
         let expressions = "ProofInitialization!Expressions!"
+        let bound = "ProofBoundKeys(\(row))"
+        let label = "constructor" + branches.map(String.init).joined()
+        let path = "SourceCompilerInputs[\(row)].root" + branches.map { "[\($0)]" }.joined()
+        let term: String
+        let scalar: String
+        let leafFacts: String
         switch expression {
         case .value(.int(let value)):
-            let term = "<<\"literal\", \(binaryLiteral(value))>>"
-            let scalar = value == Int.max ? "ProofIntMax" : value == Int.min ? "ProofIntMin" : String(value)
-            return (term, "\(expressions)AllocationLeafDerivation(\(term))", [1], 1, 0,
-                    ["\(path)[2] = \(scalar)"])
+            term = "<<\"literal\", \(binaryLiteral(value))>>"
+            scalar = value == Int.max ? "ProofIntMax" : value == Int.min ? "ProofIntMin" : String(value)
+            leafFacts = "ProofIntegerBounds, SMT DEF ProofIntMin, ProofIntMax, \(expressions)InRange,"
         case .variable(let name):
-            let term = "<<\"read\", \(TLAValue.string(name))>>"
-            return (term, "\(expressions)AllocationLeafDerivation(\(term))", [1], 1, 0,
-                    ["\(path)[2] = \(String(reflecting: name))"])
+            term = "<<\"read\", \(TLAValue.string(name))>>"
+            scalar = String(reflecting: name)
+            leafFacts = "SMT DEF ProofBoundKeys, SourceInitializers,"
         case .add(let left, let right):
-            let first = try sourceCompilerInput(left, path: "\(path)[2]")
-            let second = try sourceCompilerInput(right, path: "\(path)[3]")
+            let first = try sourceCompilerInput(left, row: row, branches: branches + [2])
+            let second = try sourceCompilerInput(right, row: row, branches: branches + [3])
             let count = 1 + first.count + second.count
-            return (
-                "<<\"add\", \(first.term), \(second.term)>>",
-                "\(expressions)AllocationAddDerivation(\(first.derivation), \(second.derivation))",
-                first.sizes + second.sizes + [count], count, 1 + first.additions + second.additions,
-                first.scalars + second.scalars)
+            let term = "<<\"add\", \(first.term), \(second.term)>>"
+            let derivation = "\(expressions)AllocationAddDerivation(\(first.derivation), \(second.derivation))"
+            let proof = """
+            \(first.proof)
+            \(second.proof)
+                  <3>\(label). \(expressions)AllocationConstructorDerivation(\(term), \(bound), \(derivation))
+                    BY ONLY <3>\(label)2, <3>\(label)3, ProofIntegerBounds, ProofInitialSentinels, \(expressions)AddingFiniteSourceDerivationsPreservesConstructorClosure, SMT
+            """
+            return (term, derivation, first.sizes + second.sizes + [count], count, 1 + first.additions + second.additions,
+                    first.scalars + second.scalars, proof)
         default: throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
+        let derivation = "\(expressions)AllocationLeafDerivation(\(term))"
+        let proof = """
+              <3>\(label). \(expressions)AllocationConstructorDerivation(\(term), \(bound), \(derivation))
+                BY ONLY <2>keys, \(leafFacts)
+                  \(expressions)AllocationLeafDerivation, \(expressions)AllocationConstructorDerivation
+        """
+        return (term, derivation, [1], 1, 0, ["\(path)[2] = \(scalar)"], proof)
     }
 
     private static func sourceCompilerInvocationWitness(
@@ -298,15 +315,12 @@ package enum InitialFailureEvidence {
         ] + traversalBindings + [
             "allocationHistory == [step \\in 0..\(allocationCount) |-> CASE \(allocationCases)]",
             "traversalHistory == [step \\in 0..\(traversalCount) |-> CASE \(traversalCases)]",
-            "execution == [step \\in 0..\(traversalCount) |-> \(expressions)SwiftCompilerStorage(view, allocated.count, traversalHistory[step])]",
         ]
         return """
         SourceCompilerInvocationWitness\(row)(syntax, weight) ==
           LET \(bindings.joined(separator: "\n      "))
           IN [allocationSteps |-> \(allocationCount), allocationHistory |-> allocationHistory,
-              traversalSteps |-> \(traversalCount), traversalHistory |-> traversalHistory, execution |-> execution,
-              result |-> \(expressions)ReviewedSwiftCertificateReturn(
-                \(expressions)SwiftSourceArray(view, allocated.count), execution[\(traversalCount)]).certificate]
+              traversalSteps |-> \(traversalCount), traversalHistory |-> traversalHistory]
         """
     }
 
@@ -555,7 +569,8 @@ package enum InitialFailureEvidence {
 
     private static func initializerCertificateProof(row: Int, view: String, kinds: String, emission: String,
                                                     origins: String, indices: String, scalars: [String], reads: String,
-                                                    term: String, sourceDerivation: String, sourceSizes: String,
+                                                    term: String, sourceDerivation: String, constructorProof: String,
+                                                    sourceSizes: String,
                                                     sourceExpression: StateExpr, sourceCount: Int,
                                                     source: [StraightLineAssignmentCheck.OrderedIntNode], traversalCount: Int) throws -> String {
         let allocationProgress = (1...sourceCount).map { step in
@@ -577,10 +592,13 @@ package enum InitialFailureEvidence {
                                        syntax, weight, ProofBoundKeys(\(row)), history[\(step)])
                                  /\\ weight[input.root] - history[\(step)].position =
                                       weight[input.root] - history[\(previous)].position - 1
-                    BY ONLY <2>canonical, \(priorInvariant), <3>guard\(step), <3>projection,
+                    PROOF
+                    <4>edge. history[\(step)] = ProofInitialization!Expressions!ReviewedSwiftAllocationIteration(syntax, weight, history[\(previous)])
+                      BY ONLY SMT DEF history, witness, SourceCompilerInvocationWitness\(row)
+                    <4>. QED BY ONLY <2>canonical, \(priorInvariant), <3>guard\(step), <4>edge,
                       ProofInitialSentinels, ProofIntegerBounds,
                       ProofInitialization!Expressions!CompilerAllocationPreservesMassAndMakesProgress, SMT
-                      DEF syntax, history
+                      DEF syntax
                   <3>fuel\(step). weight[input.root] - history[\(step)].position = \(sourceCount - step)
                     BY ONLY <3>advance\(step), \(priorFuel), SMT
             """
@@ -682,7 +700,7 @@ package enum InitialFailureEvidence {
                            right |-> IF selected\(step)[1] = "add" THEN selected\(step)[3] ELSE 0]
                         BY ONLY <3>selectedMember\(step) DEF syntax, ProofInitialization!Expressions!AllocationTermSyntax
                       <3>edge\(step). history[\(step)] = ProofInitialization!Expressions!ReviewedSwiftAllocationIteration(syntax, weight, history[\(previous)])
-                        BY ONLY <3>projection, SMT
+                        BY ONLY SMT DEF history, witness, SourceCompilerInvocationWitness\(row)
                       <3>fields\(step).
                           /\\ history[\(step)].position = \(step)
                           /\\ history[\(step)].count = IF syntax[selected\(step)].kind = "add" THEN history[\(previous)].count + 2 ELSE history[\(previous)].count
@@ -904,13 +922,10 @@ package enum InitialFailureEvidence {
                       /\\ sizes = \(sourceSizes)
                 BY ONLY DEF input, derivation, sizes, SourceCompilerInputs,
                   SourceCompilerInputDerivations, SourceCompilerInputSizes
+        \(constructorProof)
               <3>derivation. ProofInitialization!Expressions!AllocationConstructorDerivation(
                                input.root, ProofBoundKeys(\(row)), derivation)
-                BY ONLY <3>row, <2>scalars, <2>keys, ProofIntegerBounds, SMT
-                  DEF ProofBoundKeys, SourceInitializers, ProofIntMin, ProofIntMax,
-                    ProofInitialization!Expressions!AllocationLeafDerivation,
-                    ProofInitialization!Expressions!AllocationAddDerivation,
-                    ProofInitialization!Expressions!AllocationConstructorDerivation, ProofInitialization!Expressions!InRange
+                BY ONLY <3>row, <3>constructor, SMT
               <3>sizes. ProofInitialization!Expressions!AllocationConstructorSizes(derivation, sizes)
                 BY ONLY <3>row, SMT DEF ProofInitialization!Expressions!AllocationLeafDerivation,
                   ProofInitialization!Expressions!AllocationAddDerivation, ProofInitialization!Expressions!AllocationConstructorSizes
@@ -1096,7 +1111,8 @@ package enum InitialFailureEvidence {
               BY ONLY <2>traversalSteps, <2>traversalHistory, \(frameFacts), <2>terminalHeight, SMT
                 DEF traversal, \(expressions)CompilerTraversalPrefix
             <2>. DEFINE steps == witness.traversalSteps
-                        storage == witness.execution
+                        storage == [step \\in 0..steps |->
+                            \(expressions)SwiftCompilerStorage(allocatedView, allocated.count, traversal[step])]
                         swiftSource == ProofInitialization!Expressions!SwiftSourceArray(allocatedView, allocated.count)
                         actualReturn == ProofInitialization!Expressions!ReviewedSwiftCertificateReturn(swiftSource, storage[steps])
                         expected == SourceCompilerResults(\(row))
@@ -1106,7 +1122,7 @@ package enum InitialFailureEvidence {
               BY ONLY <2>prefix, SMT DEF steps, traversal, ProofInitialization!Expressions!CompilerTraversalPrefix
             <2>storage. \\A step \\in 0..steps : storage[step] =
                 ProofInitialization!Expressions!SwiftCompilerStorage(allocatedView, allocated.count, traversal[step])
-              BY ONLY SMT DEF storage, traversal, steps, allocated, allocatedView, witness, SourceCompilerInvocationWitness\(row)
+              BY ONLY SMT DEF storage
             <2>loop. /\\ storage[0] = ProofInitialization!Expressions!ReviewedSwiftTraversalInitialization(swiftSource)
                      /\\ \\A step \\in 1..steps :
                         /\\ storage[step - 1].pending.count > 0
