@@ -86,10 +86,17 @@ struct InitialFailureEvidenceTests {
         #expect(report.nativeSourceSHA256 == SHA256.hex(Data(nativeSource.utf8)))
         #expect(try String(contentsOf: directory.appendingPathComponent("native-initial-source.swift"),
             encoding: .utf8) == nativeSource)
+        let compilerReads = "{\"first\", \"last\", \"second\"}"
+        let compilerInputs = "<<" + [
+            "[root |-> <<\"literal\", 1>>, reads |-> \(compilerReads)]",
+            "[root |-> <<\"add\", <<\"read\", \"first\">>, <<\"literal\", 2>>>>, reads |-> \(compilerReads)]",
+            "[root |-> <<\"add\", <<\"read\", \"second\">>, <<\"literal\", ((7 * 1073741824 + 1073741823) * 1073741824 + 1073741823)>>>>, reads |-> \(compilerReads)]",
+        ].joined(separator: ", ") + ">>"
+        #expect(proofText.contains("SourceCompilerInputs == \(compilerInputs)\n"))
         let sourceViews = "<<" + [
-            "<<\"first\", [root |-> 1, kinds |-> <<\"literal\">>, literals |-> <<1>>, reads |-> <<\"first\">>, left |-> <<0>>, right |-> <<0>>]>>",
-            "<<\"second\", [root |-> 1, kinds |-> <<\"add\", \"read\", \"literal\">>, literals |-> <<0, 0, 2>>, reads |-> <<\"second\", \"first\", \"second\">>, left |-> <<2, 0, 0>>, right |-> <<3, 0, 0>>]>>",
-            "<<\"last\", [root |-> 1, kinds |-> <<\"add\", \"read\", \"literal\">>, literals |-> <<0, 0, ((7 * 1073741824 + 1073741823) * 1073741824 + 1073741823)>>, reads |-> <<\"last\", \"second\", \"last\">>, left |-> <<2, 0, 0>>, right |-> <<3, 0, 0>>]>>",
+            "<<\"first\", [root |-> 1, kinds |-> <<\"literal\">>, literals |-> <<1>>, reads |-> <<0>>, left |-> <<0>>, right |-> <<0>>]>>",
+            "<<\"second\", [root |-> 1, kinds |-> <<\"add\", \"read\", \"literal\">>, literals |-> <<0, 0, 2>>, reads |-> <<0, \"first\", 0>>, left |-> <<2, 0, 0>>, right |-> <<3, 0, 0>>]>>",
+            "<<\"last\", [root |-> 1, kinds |-> <<\"add\", \"read\", \"literal\">>, literals |-> <<0, 0, ((7 * 1073741824 + 1073741823) * 1073741824 + 1073741823)>>, reads |-> <<0, \"second\", 0>>, left |-> <<2, 0, 0>>, right |-> <<3, 0, 0>>]>>",
         ].joined(separator: ", ") + ">>"
         #expect(proofText.contains("SourceSyntaxViews == \(sourceViews)\n"))
         #expect(proofText.contains("SourceSyntaxOrigins == <<<<1>>, <<2, 3, 1>>, <<2, 3, 1>>>>\n"))

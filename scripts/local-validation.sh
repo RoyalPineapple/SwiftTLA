@@ -15,9 +15,13 @@ usage() {
 usage: scripts/local-validation.sh static
        scripts/local-validation.sh swiftpm-test <test-filter>
        scripts/local-validation.sh xcode-test <test-identifier>
-       scripts/local-validation.sh proof-step <retained-packet> <first-line> <last-line> [candidate-proof]
+       scripts/local-validation.sh proof-step <retained-packet> <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]]
        scripts/local-validation.sh proof-tools
        scripts/local-validation.sh proof-prepare <output-directory> <checked-proof>
+       scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion
+       scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion-sil
+       scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion-function
+       scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion-helper
 EOF
     exit 64
 }
@@ -45,7 +49,7 @@ case "$mode" in
         selector="$2"
         ;;
     proof-step)
-        [[ $# -eq 4 || $# -eq 5 ]] || usage
+        [[ $# -eq 4 || $# -eq 5 || $# -eq 6 || $# -eq 7 ]] || usage
         require_positive_integer first-line "$3"
         require_positive_integer last-line "$4"
         [[ "$3" -le "$4" ]] || fail "first-line must not exceed last-line"
@@ -185,6 +189,7 @@ run_guarded() {
         bash -n scripts/build-pinned-tlaps.sh scripts/check-language-proof-batch.sh scripts/proof-family-inputs.sh scripts/bootstrap-pinned-proof.sh
         python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/check-initial-proof-step.py").read_text())'
         python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/prepare-initial-proof.py").read_text())'
+        python3 scripts/prepare-initial-proof.py --self-check
         ruby Tests/Fixtures/ProofFamily/assert_routing.rb
         python3 Tests/Fixtures/TLAPSBootstrap/assert_inputs.py
         python3 "$(dirname "$0")/retain-native-initial-source.py" --self-check
@@ -195,7 +200,7 @@ run_guarded() {
 
     scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
     export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
-    if [[ "$mode" == "swiftpm-test" || "$mode" == "proof-prepare" ]]; then
+    if [[ "$mode" == "swiftpm-test" || ( "$mode" == "proof-prepare" && "${proof_arguments[1]}" != compiler-expansion* ) ]]; then
         local cache_root="$common_git_dir/swifttla-local-validation-cache"
         local worktree_key worktree_cache
         local cache_key cache_key_file toolchain_key toolchain_key_file macro_key macro_key_file

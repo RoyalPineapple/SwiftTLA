@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import runpy
 import subprocess
 import sys
@@ -124,7 +125,8 @@ target.write_bytes(os.environ["DOWNLOAD_BYTES"].encode())
 print("Proof build pins, packaging boundary, and Isabelle download controls passed.")
 
 # A zero exit status alone cannot establish a nonempty, uncached selected proof.
-selected_result = runpy.run_path(str(root / "scripts/check-initial-proof-step.py"))["selected_result"]
+proof_runner = runpy.run_path(str(root / "scripts/check-initial-proof-step.py"))
+selected_result = proof_runner["selected_result"]
 declared = """@!!BEGIN
 @!!type:obligation
 @!!id:136
@@ -155,3 +157,123 @@ for name, protocol, exit_code, expected in [
     result = selected_result(protocol, 257, 257, exit_code)
     assert (result["status"] == "FOCUSED_PASS_DEPENDENCIES_UNCHECKED") == expected, name
 print("Focused proof selection/status controls passed (no mathematical proof credit).")
+
+# The input boundary preserves arbitrary bytes and page order, without text decoding.
+with tempfile.TemporaryDirectory(prefix="swifttla-proof-byte-input-") as directory:
+    work = Path(directory)
+    source = work / "actual-input"
+    for index, payload in enumerate([b"", bytes(range(256)) * 5 + b"\r\n\x00\xff", b"br bb14\n"]):
+        source.write_bytes(payload)
+        output = work / str(index)
+        output.mkdir()
+        requested = list(range(1, (len(payload) + 15) // 16 + 1))
+        receipt = proof_runner["load_byte_input"](source, output, reversed(requested))
+        assert Path(receipt["retainedPath"]).read_bytes() == payload
+        text = Path(receipt["modulePath"]).read_text()
+        assert not re.search(r"^CompilerInputPage[0-9]+ ==", text, re.M)
+        for item in receipt["pageModules"]:
+            path = Path(item["path"])
+            assert hashlib.sha256(path.read_bytes()).hexdigest() == item["sha256"]
+            block = int(re.fullmatch(r"CompilerInputPageBlock([0-9]+)\.tla", path.name)[1])
+            content = path.read_text()
+            assert f"MODULE CompilerInputPageBlock{block} ----\nEXTENDS CompilerInputBytes\n" in content
+            assert all(int(offset) // 1024 + 1 == block
+                       for offset in re.findall(r"CompilerInputByte\[([0-9]+) \+ j - 1\]", content))
+            text += content
+        pages = re.findall(r"\\A j \\in 1\.\.([0-9]+): CompilerInputByte\[([0-9]+) \+ j - 1\] = <<([0-9, ]+)>>\[j\]", text)
+        assert [(int(count), int(offset)) for count, offset, _ in pages] == [
+            (min(16, len(payload) - (page - 1) * 16), (page - 1) * 16) for page in requested]
+        assert all(int(count) == len(values.split(",")) for count, _, values in pages)
+        decoded = b"".join(bytes(int(value) for value in values.split(",")) for _, _, values in pages)
+        assert decoded == payload, "byte loading changed input data or page order"
+        assert int(re.search(r"^CompilerInputSize == ([0-9]+)$", text, re.M)[1]) == len(payload)
+        assert receipt["sha256"] == hashlib.sha256(payload).hexdigest()
+        assert receipt["semanticTransformationsChecked"] is False
+        try:
+            proof_runner["load_byte_input"](source, output, requested)
+        except FileExistsError:
+            pass
+        else:
+            raise AssertionError("byte input overwrote an existing proof packet")
+    source.write_bytes(bytes(range(256)) * 5)
+    sparse = work / "sparse"
+    sparse.mkdir()
+    receipt = proof_runner["load_byte_input"](source, sparse, [66, 1, 65, 66])
+    pages = re.findall(r"CompilerInputByte\[([0-9]+) \+ j - 1\] = <<([0-9, ]+)>>\[j\]",
+                       "\n".join(Path(item["path"]).read_text() for item in receipt["pageModules"]), re.M)
+    assert [int(offset) for offset, _ in pages] == [0, 1024, 1040]
+    assert [bytes(int(value) for value in values.split(",")) for _, values in pages] == [
+        bytes(range(16)), bytes(range(16)), bytes(range(16, 32))]
+    for requested in [[0], [81]]:
+        try:
+            proof_runner["load_byte_input"](source, work / "invalid", requested)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("out-of-range byte address was accepted")
+# Distinct files may disagree at the same address; their assumptions must stay separate.
+with tempfile.TemporaryDirectory(prefix="swifttla-proof-two-inputs-") as directory:
+    work = Path(directory)
+    first, second = work / "helper", work / "caller"
+    first.write_bytes(b"\x00\xff")
+    second.write_bytes(b"\xff\x00\x0a")
+    helper = proof_runner["load_byte_input"](first, work, [1])
+    helper_files = [Path(helper["modulePath"]), Path(helper["retainedPath"])] + [
+        Path(item["path"]) for item in helper["pageModules"]]
+    preserved = {path: path.read_bytes() for path in helper_files}
+    caller = proof_runner["load_byte_input"](second, work, [1], "CallerInput")
+    assert all(path.read_bytes() == data for path, data in preserved.items())
+    assert Path(caller["retainedPath"]).read_bytes() == b"\xff\x00\x0a"
+    assert Path(caller["retainedPath"]) != Path(helper["retainedPath"])
+    text = Path(caller["modulePath"]).read_text()
+    assert "CONSTANT CallerInputByte\n" in text and "CallerInputSize == 3\n" in text
+    text += "".join(Path(item["path"]).read_text() for item in caller["pageModules"])
+    assert "CompilerInput" not in text
+    assert "CallerInputByte[0 + j - 1] = <<255, 0, 10>>[j]" in text
+    try:
+        proof_runner["load_byte_input"](second, work, [1], "Other")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unrecognized byte-input namespace accepted")
+print("Exact-byte proof input controls passed (external input foundation, not semantic proof).")
+
+with tempfile.TemporaryDirectory(prefix="swifttla-proof-imports-") as directory:
+    work = Path(directory)
+    candidate = work / "Parent.tla"
+    imports = candidate.with_suffix(".imports")
+    imports.mkdir()
+    target = work / "retained"
+    target.mkdir()
+    source = imports / "Child.tla"
+    payload = "---- MODULE Child ----\r\n\\* τ remains UTF-8\r\n====\r\n".encode()
+    source.write_bytes(payload)
+    receipts = proof_runner["copy_proof_imports"](candidate, target, {"CompilerInputBytes.tla"})
+    assert len(receipts) == 1 and Path(receipts[0]["retainedPath"]).read_bytes() == payload
+    assert receipts[0]["sha256"] == hashlib.sha256(payload).hexdigest()
+    assert receipts[0]["proofCheckedByThisInvocation"] is False
+    for name, contents, reserved, symlink in [
+        ("Child.tla", payload, set(), False),  # Cannot overwrite the retained copy.
+        ("CompilerInputBytes.tla", b"---- MODULE CompilerInputBytes ----\n====\n", {"CompilerInputBytes.tla"}, False),
+        ("CompilerInputPageBlock1.tla", b"---- MODULE CompilerInputPageBlock1 ----\n====\n", set(), False),
+        ("CallerInputBytes.tla", b"---- MODULE CallerInputBytes ----\n====\n", {"CallerInputBytes.tla"}, False),
+        ("CallerInputPageBlock1.tla", b"---- MODULE CallerInputPageBlock1 ----\n====\n", set(), False),
+        ("Alias.tla", payload, set(), False),
+        ("Link.tla", payload, set(), True),
+    ]:
+        for path in imports.iterdir():
+            path.unlink()
+        proposed = imports / name
+        if symlink:
+            proposed.symlink_to(target / "Child.tla")
+        else:
+            proposed.write_bytes(contents)
+        try:
+            proof_runner["copy_proof_imports"](candidate, target, reserved)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("unsafe proof import accepted: " + name)
+        assert list(target.iterdir()) == [target / "Child.tla"]
+        assert (target / "Child.tla").read_bytes() == payload
+print("Proof import byte retention and shadowing controls passed (imported proofs remain unchecked).")

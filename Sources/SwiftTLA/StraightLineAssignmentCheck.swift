@@ -11,11 +11,13 @@ package enum StraightLineAssignmentCheck {
     }
 
     package struct OrderedIntCertificate: Sendable {
+        package let source: [OrderedIntNode]
         package let nodes: [OrderedIntNode]
         package let origins: [Int]
         package let indices: [Int]
 
-        fileprivate init(nodes: [OrderedIntNode], origins: [Int], indices: [Int]) {
+        fileprivate init(source: [OrderedIntNode], nodes: [OrderedIntNode], origins: [Int], indices: [Int]) {
+            self.source = source
             self.nodes = nodes
             self.origins = origins
             self.indices = indices
@@ -52,9 +54,7 @@ package enum StraightLineAssignmentCheck {
             case .read(let name): node = .read(name)
             case .add(let left, let right):
                 if !expanded {
-                    pending.append((origin, true))
-                    pending.append((right, false))
-                    pending.append((left, false))
+                    appendOrderedIntExpansion(origin: origin, left: left, right: right, to: &pending)
                     continue
                 }
                 guard completed.count >= 2,
@@ -72,7 +72,14 @@ package enum StraightLineAssignmentCheck {
             completed.append(origin)
         }
         guard completed == [1], !indices.contains(0), origins.last == 1 else { return nil }
-        return OrderedIntCertificate(nodes: nodes, origins: origins, indices: indices)
+        return OrderedIntCertificate(source: source, nodes: nodes, origins: origins, indices: indices)
+    }
+
+    private static func appendOrderedIntExpansion(origin: Int, left: Int, right: Int,
+                                                  to pending: inout [(origin: Int, expanded: Bool)]) {
+        pending.append((origin, true))
+        pending.append((right, false))
+        pending.append((left, false))
     }
 
     package static func orderedIntPlan(_ root: StateExpr, reads: Set<String>,

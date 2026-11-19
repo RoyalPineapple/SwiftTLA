@@ -19,6 +19,84 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def load_byte_input(source, directory, pages, prefix="CompilerInput"):
+    """Exact-byte ingress only; no selection, lexing, decoding or interpretation."""
+    if prefix not in {"CompilerInput", "CallerInput"}:
+        raise ValueError("unknown byte-input namespace")
+    data = source.read_bytes()
+    retained = directory / ("compiler-input.bin" if prefix == "CompilerInput" else "caller-input.bin")
+    module = directory / f"{prefix}Bytes.tla"
+    # Page numbers address bytes, not functions or instructions. Missing pages have no default.
+    page_size = 16
+    pages = sorted(set(pages))
+    if any(type(page) is not int or not 1 <= page <= (len(data) + page_size - 1) // page_size
+           for page in pages):
+        raise ValueError("requested byte page is outside the actual input")
+    lines = [f"---- MODULE {prefix}Bytes ----", "EXTENDS Integers",
+             f"CONSTANT {prefix}Byte", f"{prefix}Size == {len(data)}",
+             f"{prefix}PageSize == {page_size}",
+             "\\* External exact-byte input facts only; no source-selection or semantic premises.",
+             f"ASSUME {prefix}Domain == DOMAIN {prefix}Byte = 0..({prefix}Size - 1)"]
+    blocks = {}
+    for page in pages:
+        block = (page - 1) // 64 + 1
+        if block not in blocks:
+            blocks[block] = []
+        offset = (page - 1) * page_size
+        values = ", ".join(map(str, data[offset:offset + page_size]))
+        count = min(page_size, len(data) - offset)
+        blocks[block].append((page, offset, count, values))
+    lines.append("====")
+    with retained.open("xb") as stream:
+        stream.write(data)
+    with module.open("x") as stream:
+        stream.write("\n".join(lines) + "\n")
+    page_modules = []
+    for block, entries in blocks.items():
+        name = f"{prefix}PageBlock{block}"
+        body = [f"---- MODULE {name} ----", f"EXTENDS {prefix}Bytes",
+                f"ASSUME {name}AtFileOffsets =="]
+        body += [f"    /\\ \\A j \\in 1..{count}: {prefix}Byte[{offset} + j - 1] = <<{values}>>[j]"
+                 for _, offset, count, values in entries]
+        path = directory / f"{name}.tla"
+        with path.open("x") as stream:
+            stream.write("\n".join(body + ["===="]) + "\n")
+        page_modules.append({"path": str(path), "sha256": digest(path)})
+    return {"foundation": "USER_AUTHORIZED_EXACT_BYTE_LOADING_ONLY",
+            "namespace": prefix, "path": str(source), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+            "retainedPath": str(retained), "modulePath": str(module),
+            "moduleSHA256": digest(module), "pageSize": page_size, "loadedPages": pages,
+            "pageModules": page_modules,
+            "indexContract": "Each loaded tuple element j equals file[pageOffset + j - 1]; missing pages have no facts",
+            "semanticTransformationsChecked": False}
+
+
+def copy_proof_imports(candidate, target, reserved):
+    """Retain explicit sibling module bytes; importing a theorem does not check its proof."""
+    directory = candidate.with_suffix(".imports")
+    if not directory.exists():
+        return []
+    if directory.is_symlink() or not directory.is_dir():
+        raise ValueError("proof imports must be a real directory")
+    sources = sorted(directory.iterdir())
+    for source in sources:
+        if (source.is_symlink() or not source.is_file() or source.suffix != ".tla"
+                or source.name in reserved or re.fullmatch(r"(?:CompilerInput|CallerInput)PageBlock[0-9]+\.tla", source.name)
+                or (target / source.name).exists()):
+            raise ValueError("invalid or shadowing proof import: " + source.name)
+        header = re.search(rb"^-+ MODULE ([A-Za-z_][A-Za-z_0-9]*) -+", source.read_bytes())
+        if not header or header[1].decode() != source.stem:
+            raise ValueError("proof import filename/module mismatch: " + source.name)
+    receipts = []
+    for source in sources:
+        retained = target / source.name
+        with retained.open("xb") as stream:
+            stream.write(source.read_bytes())
+        receipts.append({"path": str(source), "retainedPath": str(retained), "sha256": digest(retained),
+                         "proofCheckedByThisInvocation": False})
+    return receipts
+
+
 def selected_result(log, first, last, exit_code):
     events = []
     for block in re.findall(r"@!!BEGIN\n(.*?)@!!END", log, re.S):
@@ -39,11 +117,15 @@ def selected_result(log, first, last, exit_code):
 
 
 def main():
+    if not 4 <= len(sys.argv) <= 7:
+        raise ValueError("expected packet, line range, optional candidate and helper/caller byte inputs")
     root = Path.cwd()
     packet = Path(sys.argv[1]).resolve(strict=True)
     first, last = map(int, sys.argv[2:4])
     original = packet / "case/generated-tla/SwiftTLAInitialFailureProof.tla"
-    candidate = Path(sys.argv[4]).resolve(strict=True) if len(sys.argv) == 5 else original
+    candidate = Path(sys.argv[4]).resolve(strict=True) if len(sys.argv) >= 5 else original
+    byte_source = Path(sys.argv[5]).resolve(strict=True) if len(sys.argv) >= 6 else None
+    caller_byte_source = Path(sys.argv[6]).resolve(strict=True) if len(sys.argv) == 7 else None
     preparation = json.loads((packet / "case/preparation.json").read_text())
     bindings = {
         "proofSHA256": original,
@@ -116,8 +198,24 @@ def main():
         raise ValueError("candidate has no TLA module header")
     target = work / original.relative_to(packet).parent / (module[1] + ".tla")
     target.write_bytes(candidate.read_bytes())
+    reserved = {p.name for p in (tool / "tlapm/lib/tlapm").rglob("*.tla")}
+    reserved.update(p.name for p in work.rglob("*.tla"))
+    reserved.update({"CompilerInputBytes.tla", "CallerInputBytes.tla"})
+    receipt["additionalProofInputs"] = copy_proof_imports(candidate, target.parent, reserved)
+    texts = [candidate.read_text()] + [Path(item["retainedPath"]).read_text()
+                                       for item in receipt["additionalProofInputs"]]
+    for prefix, source, key in [("CompilerInput", byte_source, "byteInput"),
+                                ("CallerInput", caller_byte_source, "callerByteInput")]:
+        if source is None:
+            continue
+        if list(work.rglob(f"{prefix}Bytes.tla")):
+            raise ValueError("retained packet or candidate shadows the byte-input module")
+        pages = {int(page) for text in texts
+                 for page in re.findall(rf"\b{prefix}Page([0-9]+)(?:AtFileOffsets)?\b", text)}
+        receipt[key] = load_byte_input(source, target.parent, pages, prefix)
+    (output / "request.json").write_text(json.dumps(receipt, indent=2) + "\n")
     command = [str(executable), "--strict", "--nofp", "--timing", "--toolbox", str(first), str(last),
-               "--toolbox-vsn", "1", "--printallobs", "--debug", "tempfiles",
+               "--toolbox-vsn", "1", "--debug", "tempfiles",
                "-I", str(work / "proof-inputs"), str(target)]
     receipt.update(command=command, tlapmVersion=version, z3Version=z3)
     with (output / "proof.log").open("wb") as log:
@@ -132,6 +230,18 @@ def main():
         receipt["scope"] = "FULL_GENERATED_MODULE_DIAGNOSTIC_IMPORT_PROOFS_EXTERNAL_NOT_ADMISSION"
     if any(digest(packet / name) != sha for name, sha in inputs.items()):
         raise ValueError("retained packet changed during focused check")
+    if digest(candidate) != receipt["candidateSHA256"] or digest(target) != receipt["candidateSHA256"]:
+        raise ValueError("candidate changed during focused check")
+    for item in receipt["additionalProofInputs"]:
+        if digest(Path(item["path"])) != item["sha256"] or digest(Path(item["retainedPath"])) != item["sha256"]:
+            raise ValueError("proof import changed during focused check")
+    if byte_source is not None:
+        binding = receipt["byteInput"]
+        if (digest(byte_source) != binding["sha256"]
+                or digest(Path(binding["retainedPath"])) != binding["sha256"]
+                or digest(Path(binding["modulePath"])) != binding["moduleSHA256"]
+                or any(digest(Path(item["path"])) != item["sha256"] for item in binding["pageModules"])):
+            raise ValueError("byte input changed during focused check")
     (output / "result.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(receipt["status"], flush=True)
     return 0 if receipt["status"] == "FOCUSED_PASS_DEPENDENCIES_UNCHECKED" else 1
