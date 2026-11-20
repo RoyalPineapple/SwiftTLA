@@ -138,7 +138,7 @@ package enum InitialFailureEvidence {
             site: site, operands: operands, before: failures[0].before,
             sourceInitializers: sourceInitializers, sourceCompilerInputs: sourceInputs.compilerInputs,
             sourceCompilerInputDerivations: sourceInputs.compilerDerivations, sourceCompilerInputSizes: sourceInputs.compilerSizes,
-            sourceCompilerInvocationWitnesses: sourceInputs.compilerWitnesses,
+            sourceAllocationReports: sourceInputs.allocationReports,
             sourceSyntaxViews: sourceInputs.views,
             sourceSyntaxOrigins: sourceInputs.origins, sourceSyntaxIndices: sourceInputs.indices,
             sourcePlanEmissions: sourceInputs.emissions, sourceCapturedNodeTuples: sourceInputs.capturedNodeTuples,
@@ -193,8 +193,8 @@ package enum InitialFailureEvidence {
 
     // Retain the existing macro witness, independently of the built Algorithm model.
     private static func sourceInitializerInputs(_ components: [_OrderedIntSourceComponent]) throws
-        -> (compilerInputs: String, compilerDerivations: String, compilerSizes: String, compilerWitnesses: String,
-            plans: String, views: String, origins: String, indices: String, emissions: String,
+        -> (compilerInputs: String, compilerDerivations: String, compilerSizes: String,
+            allocationReports: String, plans: String, views: String, origins: String, indices: String, emissions: String,
             capturedNodeTuples: String, proofs: String, count: Int) {
         let states = components.compactMap { component -> (root: String, initialization: VariableInitialization)? in
             guard case .variable(let root, let initialization) = component else { return nil }
@@ -212,10 +212,9 @@ package enum InitialFailureEvidence {
             let input = try sourceCompilerInput(expression, row: offset + 1)
             let compilerInput = "[root |-> \(input.term), reads |-> \(compilerReads)]"
             let compilerSizes = "<<\(input.sizes.map(String.init).joined(separator: ", "))>>"
-            let (traversalCount, traversalCountOverflowed) = input.count.addingReportingOverflow(input.additions)
+            let allocationReport = try sourceAllocationReport(row: offset + 1, sizes: input.sizes)
+            let (_, traversalCountOverflowed) = input.count.addingReportingOverflow(input.additions)
             guard !traversalCountOverflowed else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
-            let compilerWitness = sourceCompilerInvocationWitness(row: offset + 1,
-                allocationCount: input.count, traversalCount: traversalCount)
             guard let certificate = StraightLineAssignmentCheck.orderedIntCertificate(expression, reads: reads) else {
                 throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
@@ -227,24 +226,23 @@ package enum InitialFailureEvidence {
             let emission = "\(emissionPrefix)\(capturedTuple)]"
             return (
                 compilerInput: compilerInput, compilerDerivation: input.derivation,
-                compilerSizes: compilerSizes, compilerWitness: compilerWitness,
+                compilerSizes: compilerSizes, allocationReport: allocationReport.definition,
                 plan: "<<\(TLAValue.string(state.root)), \(try initializerPlan(nodes, root: state.root))>>",
                 view: "<<\(TLAValue.string(state.root)), \(syntax.view)>>",
                 origins: syntax.origins, indices: syntax.indices,
                 emission: emission,
                 capturedNodeTuple: "LOCAL SourceCapturedNodeTuple\(offset + 1) == \(capturedTuple)",
-                proof: try initializerCertificateProof(row: offset + 1, view: syntax.view, kinds: syntax.kinds,
+                proof: initializerCertificateProof(row: offset + 1, view: syntax.view,
                     emissionPrefix: emissionPrefix, origins: syntax.origins, indices: syntax.indices,
                     scalars: input.scalars, reads: compilerReads.description, term: input.term,
                     sourceDerivation: input.derivation, constructorProof: input.proof, sourceSizes: compilerSizes,
-                    sourceExpression: expression, sourceCount: input.count,
-                    source: certificate.source, capturedNodes: syntax.nodes, traversalCount: traversalCount))
+                    sourceCount: input.count, sourceOccurrenceSizes: allocationReport.occurrenceSizes, emission: emission))
         }
         guard !rows.isEmpty else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
         return ("<<\(rows.map(\.compilerInput).joined(separator: ", "))>>",
                 "<<\(rows.map(\.compilerDerivation).joined(separator: ", "))>>",
                 "<<\(rows.map(\.compilerSizes).joined(separator: ", "))>>",
-                rows.map(\.compilerWitness).joined(separator: "\n\n"),
+                rows.map(\.allocationReport).joined(separator: "\n"),
                 "<<\(rows.map(\.plan).joined(separator: ", "))>>",
                 "<<\(rows.map(\.view).joined(separator: ", "))>>",
                 "<<\(rows.map(\.origins).joined(separator: ", "))>>",
@@ -298,41 +296,40 @@ package enum InitialFailureEvidence {
         return (term, derivation, [1], 1, 0, ["\(path)[2] = \(scalar)"], proof)
     }
 
-    private static func sourceCompilerInvocationWitness(
-        row: Int, allocationCount: Int, traversalCount: Int
-    ) -> String {
-        let expressions = "ProofInitialization!Expressions!"
-        let allocationBindings = (0...allocationCount).map { step in
-            step == 0
-                ? "allocation0 == \(expressions)InitialCompilerAllocation(SourceCompilerInputs[\(row)].root, weight)"
-                : "allocation\(step) == \(expressions)ReviewedSwiftAllocationIteration(syntax, weight, allocation\(step - 1))"
+    private static func sourceAllocationReport(row: Int, sizes: [Int]) throws
+        -> (definition: String, occurrenceSizes: String) {
+        guard !sizes.isEmpty else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+        var termPositions = [sizes.count]
+        var frontier = [1]
+        var slot = 0
+        while slot < termPositions.count {
+            let term = termPositions[slot]
+            if sizes[term - 1] > 1 {
+                let right = term - 1
+                guard right > 0, termPositions.count <= sizes.count - 2 else {
+                    throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+                }
+                let rightSize = sizes[right - 1]
+                guard (1..<right).contains(rightSize) else {
+                    throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+                }
+                // In postorder, the left root is directly before the right subtree.
+                termPositions.append(right - rightSize)
+                termPositions.append(right)
+            }
+            frontier.append(termPositions.count)
+            slot += 1
         }
-        let traversalBindings = (0...traversalCount).map { step in
-            step == 0
-                ? "traversal0 == \(expressions)InitialCompilerTraversal(view)"
-                : "traversal\(step) == \(expressions)CompilerTraversalNext(view, traversal\(step - 1))"
-        }
-        let allocationCases = (0...allocationCount).map { "step = \($0) -> allocation\($0)" }
-            .joined(separator: " [] ")
-        let traversalCases = (0...traversalCount).map { "step = \($0) -> traversal\($0)" }
-            .joined(separator: " [] ")
-        let bindings = allocationBindings + [
-            "allocated == allocation\(allocationCount)",
-            "view == \(expressions)AllocatedSourceView(allocated)",
-        ] + traversalBindings + [
-            "allocationHistory == [step \\in 0..\(allocationCount) |-> CASE \(allocationCases)]",
-            "traversalHistory == [step \\in 0..\(traversalCount) |-> CASE \(traversalCases)]",
-        ]
-        return """
-        SourceCompilerInvocationWitness\(row)(syntax, weight) ==
-          LET \(bindings.joined(separator: "\n      "))
-          IN [allocationSteps |-> \(allocationCount), allocationHistory |-> allocationHistory,
-              traversalSteps |-> \(traversalCount), traversalHistory |-> traversalHistory]
-        """
+        guard termPositions.count == sizes.count else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+        let positions = termPositions.map(String.init).joined(separator: ", ")
+        let counts = frontier.map(String.init).joined(separator: ", ")
+        let occurrenceSizes = termPositions.map { String(sizes[$0 - 1]) }.joined(separator: ", ")
+        return ("LOCAL SourceAllocationReport\(row) == [terms |-> <<\(positions)>>, frontier |-> <<\(counts)>>]",
+                "<<\(occurrenceSizes)>>")
     }
 
     private static func sourceSyntaxView(_ certificate: StraightLineAssignmentCheck.OrderedIntCertificate) throws
-        -> (view: String, kinds: String, origins: String, indices: String, nodes: [String]) {
+        -> (view: String, origins: String, indices: String, nodes: [String]) {
         var kinds: [String] = [], literals: [String] = [], names: [String] = []
         var left: [Int] = [], right: [Int] = []
         for node in certificate.source {
@@ -371,7 +368,7 @@ package enum InitialFailureEvidence {
             }
             return "[kind |-> \(TLAValue.string(kind)), payload |-> \(payload), left |-> \(lhs), right |-> \(rhs)]"
         }
-        return (view, kindTuple, tuple(origins.map(String.init)), tuple(indices.map(String.init)), records)
+        return (view, tuple(origins.map(String.init)), tuple(indices.map(String.init)), records)
     }
 
     private static func initializerPlans(layout: CompiledLayout,
@@ -574,379 +571,12 @@ package enum InitialFailureEvidence {
                 tuple(seeds), tuple(nativeSeeds), tuple(types))
     }
 
-    private static func initializerCertificateProof(row: Int, view: String, kinds: String, emissionPrefix: String,
+    private static func initializerCertificateProof(row: Int, view: String, emissionPrefix: String,
                                                     origins: String, indices: String, scalars: [String], reads: String,
                                                     term: String, sourceDerivation: String, constructorProof: String,
-                                                    sourceSizes: String,
-                                                    sourceExpression: StateExpr, sourceCount: Int,
-                                                    source: [StraightLineAssignmentCheck.OrderedIntNode], capturedNodes: [String],
-                                                    traversalCount: Int) throws -> String {
-        let capturedTuple = "<<\(capturedNodes.joined(separator: ", "))>>"
-        let emission = "\(emissionPrefix)\(capturedTuple)]"
-        let allocationProgress = (1...sourceCount).map { step in
-            let previous = step - 1
-            let priorInvariant = step == 1 ? "<3>initialInvariant" : "<3>advance\(previous)"
-            let priorFuel = step == 1 ? "<3>initialFuel" : "<3>fuel\(previous)"
-            return """
-                  <3>types\(step). /\\ history[\(previous)].position \\in Nat /\\ history[\(previous)].count \\in Nat
-                                /\\ history[\(previous)].position <= history[\(previous)].count
-                    BY ONLY \(priorInvariant) DEF ProofInitialization!Expressions!CompilerAllocationInvariant
-                  <3>fits\(step). history[\(previous)].position = history[\(previous)].count <=>
-                                   weight[input.root] - history[\(previous)].position = 0
-                    BY ONLY <2>canonical, \(priorInvariant), ProofInitialSentinels, ProofIntegerBounds,
-                      ProofInitialization!Expressions!CompilerAllocationFitsItsFiniteInputSize
-                      DEF syntax
-                  <3>guard\(step). history[\(previous)].position < history[\(previous)].count
-                    BY ONLY <3>types\(step), <3>fits\(step), \(priorFuel), SMT
-                  <3>advance\(step). /\\ ProofInitialization!Expressions!CompilerAllocationInvariant(input.root, terms,
-                                       syntax, weight, ProofBoundKeys(\(row)), history[\(step)])
-                                 /\\ weight[input.root] - history[\(step)].position =
-                                      weight[input.root] - history[\(previous)].position - 1
-                    PROOF
-                    <4>edge. history[\(step)] = ProofInitialization!Expressions!ReviewedSwiftAllocationIteration(syntax, weight, history[\(previous)])
-                      BY ONLY SMT DEF history, witness, SourceCompilerInvocationWitness\(row)
-                    <4>. QED BY ONLY <2>canonical, \(priorInvariant), <3>guard\(step), <4>edge,
-                      ProofInitialSentinels, ProofIntegerBounds,
-                      ProofInitialization!Expressions!CompilerAllocationPreservesMassAndMakesProgress, SMT
-                      DEF syntax
-                  <3>fuel\(step). weight[input.root] - history[\(step)].position = \(sourceCount - step)
-                    BY ONLY <3>advance\(step), \(priorFuel), SMT
-            """
-        }.joined(separator: "\n")
-        let allocationGuards = (1...sourceCount).map { "<3>guard\($0)" }.joined(separator: ", ")
-        let remainingSourceProof: String
-        let remainingSourceFacts: String
-        let returnedSourceProof: String
-        if sourceCount > 1 {
-            let sourcePrefix = """
-                  <3>sourceSteps. witness.allocationSteps = \(sourceCount)
-                    BY ONLY DEF witness, SourceCompilerInvocationWitness\(row)
-                  <3>sourceStart. ProofInitialization!Expressions!CompilerAllocationInvariant(input.root, terms, syntax, weight, ProofBoundKeys(\(row)),
-                      ProofInitialization!Expressions!InitialCompilerAllocation(input.root, weight))
-                    BY ONLY <2>canonical, ProofIntegerBounds, ProofInitialSentinels,
-                      ProofInitialization!Expressions!CompilerAllocationStartsWithItsLoopInvariant DEF syntax
-                  <3>sourceInvariants. \\A stage \\in 0..\(sourceCount) :
-                      ProofInitialization!Expressions!CompilerAllocationInvariant(input.root, terms, syntax, weight, ProofBoundKeys(\(row)), history[stage])
-                    BY ONLY <2>canonical, <2>allocation, <3>sourceSteps, <3>sourceStart, ProofIntegerBounds, ProofInitialSentinels,
-                      ProofInitialization!Expressions!AllocationCompletionRetainsEveryLoopInvariant DEF syntax, history
-                  <3>firstExpressions. history[1].expressions = IF input.root[1] = "add"
-                      THEN [index \\in 1..3 |-> IF index = 3 THEN input.root[3] ELSE IF index = 2 THEN input.root[2] ELSE input.root]
-                      ELSE history[0].expressions
-                    BY ONLY <3>firstFields, <3>initialFields, <3>lookup, SMT DEF ProofInitialization!Expressions!HistoryAppend
-            """
-            var queue = [(expression: sourceExpression, path: "input.root", appendedAt: 0)]
-            let sourceSteps = (1...sourceCount).compactMap { step -> String? in
-                let selected = queue[step - 1]
-                let priorCount = queue.count
-                let isAdd: Bool
-                if case .add(let left, let right) = selected.expression {
-                    isAdd = true
-                    queue.append((left, "\(selected.path)[2]", step))
-                    queue.append((right, "\(selected.path)[3]", step))
-                } else {
-                    isAdd = false
-                }
-                guard step > 1 else { return nil }
-
-                let previous = step - 1
-                let priorFields = step == 2 ? "<3>firstFields" : "<3>fields\(previous)"
-                let priorCountFact = step == 2 ? "<3>firstCount, <3>root" : "<3>count\(previous)"
-                let introduced = selected.appendedAt
-                let introductionFacts = introduced == 1
-                    ? "<3>firstExpressions, <3>root"
-                    : "<3>queueEntries\(introduced), <3>selectedChild\(introduced)"
-                let retentionFacts = ((introduced + 1)..<step).map { "<3>queueEntries\($0)" }
-                let selectionFacts = (["<3>selectedValue\(step)", introductionFacts] + retentionFacts).joined(separator: ", ")
-                let queueProof: String
-                if step == sourceCount {
-                    queueProof = ""
-                } else if isAdd {
-                    queueProof = """
-
-                          <3>queueShape\(step). history[\(step)].expressions =
-                              ProofInitialization!Expressions!HistoryAppend(
-                                  ProofInitialization!Expressions!HistoryAppend(history[\(previous)].expressions, \(priorCount), selected\(step)[2]),
-                                  \(priorCount + 1), selected\(step)[3])
-                            BY ONLY <3>fields\(step), <3>lookup\(step), <3>tag\(step), \(priorCountFact), SMT
-                          <3>queueEntries\(step).
-                              /\\ \\A index \\in 1..\(priorCount) : history[\(step)].expressions[index] = history[\(previous)].expressions[index]
-                              /\\ history[\(step)].expressions[\(priorCount + 1)] = selected\(step)[2]
-                              /\\ history[\(step)].expressions[\(priorCount + 2)] = selected\(step)[3]
-                            BY ONLY <3>queueShape\(step), SMT DEF ProofInitialization!Expressions!HistoryAppend
-                    """
-                } else {
-                    queueProof = """
-
-                          <3>queueEntries\(step).
-                              \\A index \\in 1..\(priorCount) : history[\(step)].expressions[index] = history[\(previous)].expressions[index]
-                            BY ONLY <3>fields\(step), <3>lookup\(step), <3>tag\(step), SMT
-                    """
-                }
-                let tagRelation = isAdd ? "=" : "#"
-                let count = queue.count
-                return """
-                      <3>. DEFINE selected\(step) == history[\(previous)].expressions[history[\(previous)].position + 1]
-                      <3>priorInvariant\(step). ProofInitialization!Expressions!CompilerAllocationInvariant(input.root, terms, syntax, weight, ProofBoundKeys(\(row)), history[\(previous)])
-                        BY ONLY <3>sourceInvariants, SMT
-                      <3>priorGuard\(step). history[\(previous)].position < history[\(previous)].count
-                        BY ONLY \(priorFields), \(priorCountFact), SMT
-                      <3>selectedValue\(step). selected\(step) = history[\(previous)].expressions[\(step)]
-                        BY ONLY \(priorFields), SMT DEF selected\(step)
-                      <3>selectedChild\(step). selected\(step) = \(selected.path)
-                        BY ONLY \(selectionFacts), SMT
-                      <3>tag\(step). selected\(step)[1] \(tagRelation) "add"
-                        BY ONLY <3>selectedChild\(step), <3>root, SMT
-                      <3>queueType\(step). /\\ history[\(previous)].position \\in Nat /\\ history[\(previous)].count \\in Nat
-                          /\\ history[\(previous)].expressions \\in [1..history[\(previous)].count -> terms]
-                        BY ONLY <3>priorInvariant\(step) DEF ProofInitialization!Expressions!CompilerAllocationInvariant
-                      <3>queueIndex\(step). history[\(previous)].position + 1 \\in 1..history[\(previous)].count
-                        BY ONLY <3>queueType\(step), <3>priorGuard\(step), SMT
-                      <3>selectedMember\(step). selected\(step) \\in terms
-                        BY ONLY <3>queueType\(step), <3>queueIndex\(step), SMT DEF selected\(step)
-                      <3>lookup\(step). syntax[selected\(step)] =
-                          [kind |-> selected\(step)[1], literal |-> IF selected\(step)[1] = "literal" THEN selected\(step)[2] ELSE 0,
-                           read |-> IF selected\(step)[1] = "read" THEN selected\(step)[2] ELSE 0,
-                           left |-> IF selected\(step)[1] = "add" THEN selected\(step)[2] ELSE 0,
-                           right |-> IF selected\(step)[1] = "add" THEN selected\(step)[3] ELSE 0]
-                        BY ONLY <3>selectedMember\(step) DEF syntax, ProofInitialization!Expressions!AllocationTermSyntax
-                      <3>edge\(step). history[\(step)] = ProofInitialization!Expressions!ReviewedSwiftAllocationIteration(syntax, weight, history[\(previous)])
-                        BY ONLY SMT DEF history, witness, SourceCompilerInvocationWitness\(row)
-                      <3>fields\(step).
-                          /\\ history[\(step)].position = \(step)
-                          /\\ history[\(step)].count = IF syntax[selected\(step)].kind = "add" THEN history[\(previous)].count + 2 ELSE history[\(previous)].count
-                          /\\ history[\(step)].source = ProofInitialization!Expressions!HistoryAppend(history[\(previous)].source, \(previous),
-                               ProofInitialization!Expressions!CompilerAllocationSourceNode(syntax, history[\(previous)]))
-                          /\\ history[\(step)].expressions = IF syntax[selected\(step)].kind = "add"
-                               THEN ProofInitialization!Expressions!HistoryAppend(ProofInitialization!Expressions!HistoryAppend(history[\(previous)].expressions, history[\(previous)].count, syntax[selected\(step)].left),
-                                      history[\(previous)].count + 1, syntax[selected\(step)].right)
-                               ELSE history[\(previous)].expressions
-                        BY ONLY <3>edge\(step), \(priorFields), ProofIntegerBounds, ProofInitialSentinels,
-                          ProofInitialization!Expressions!ReviewedAllocationIterationProjectsStoredFields, SMT DEF selected\(step)
-                      <3>node\(step). ProofInitialization!Expressions!CompilerAllocationSourceNode(syntax, history[\(previous)]) =
-                          IF syntax[selected\(step)].kind = "add"
-                          THEN [kind |-> "add", literal |-> 0, read |-> 0, left |-> history[\(previous)].count + 1, right |-> history[\(previous)].count + 2]
-                          ELSE syntax[selected\(step)]
-                        BY ONLY DEF selected\(step), ProofInitialization!Expressions!CompilerAllocationSourceNode
-                      <3>sourceAppend\(step). history[\(step)].source = ProofInitialization!Expressions!HistoryAppend(history[\(previous)].source, \(previous),
-                          ProofInitialization!Expressions!CompilerAllocationSourceNode(syntax, history[\(previous)]))
-                        BY ONLY <3>fields\(step)
-                      <3>source\(step). history[\(step)].source = [index \\in 1..\(step) |-> IF index = \(step)
-                          THEN IF syntax[selected\(step)].kind = "add"
-                               THEN [kind |-> "add", literal |-> 0, read |-> 0, left |-> history[\(previous)].count + 1, right |-> history[\(previous)].count + 2]
-                               ELSE syntax[selected\(step)]
-                          ELSE history[\(previous)].source[index]]
-                        BY ONLY <3>sourceAppend\(step), <3>node\(step), SMT DEF ProofInitialization!Expressions!HistoryAppend
-                      <3>count\(step). history[\(step)].count = \(count)
-                        BY ONLY <3>fields\(step), <3>lookup\(step), <3>tag\(step), \(priorCountFact), SMT\(queueProof)
-                """
-            }.joined(separator: "\n")
-            remainingSourceProof = "\n" + sourcePrefix + "\n" + sourceSteps
-            remainingSourceFacts = ", " + (2...sourceCount).flatMap { step in
-                ["selectedChild", "lookup", "source", "count"].map { "<3>\($0)\(step)" }
-            }.joined(separator: ", ")
-            let returned = "SourceSyntaxViews[\(row)][2]"
-            let sourceFields = [
-                (field: "kinds", nodeField: "kind", kind: ""),
-                (field: "literals", nodeField: "literal", kind: "literal"),
-                (field: "reads", nodeField: "read", kind: "read"),
-                (field: "left", nodeField: "left", kind: "add"),
-                (field: "right", nodeField: "right", kind: "add"),
-            ]
-            let viewFields = sourceFields.map { field, nodeField, kind in
-                let column = "\(returned).\(field)"
-                let actual = "allocated.source[index].\(nodeField)"
-                let actualValue = kind.isEmpty ? actual
-                    : "IF allocated.source[index].kind = \"\(kind)\" THEN \(actual) ELSE 0"
-                let normalization = kind.isEmpty ? "" : """
-
-                        <4>normalized. \\A index \\in 1..\(sourceCount) :
-                            (IF \(returned).kinds[index] = "\(kind)" THEN \(column)[index] ELSE 0) = \(column)[index]
-                          BY ONLY <3>returnedView, SMT
-                """
-                let normalizationFact = kind.isEmpty ? "" : ", <4>normalized"
-                return """
-                      <3>view\(field). allocatedView.\(field) = \(column)
-                        PROOF
-                        <4>actual. allocatedView.\(field) = [index \\in 1..\(sourceCount) |-> \(actualValue)]
-                          BY ONLY <3>viewOfAllocation, <3>finalFields, SMT DEF ProofInitialization!Expressions!AllocatedSourceView\(normalization)
-                        <4>matches. \\A index \\in 1..\(sourceCount) : (\(actualValue)) = \(column)[index]
-                          BY ONLY <3>finalFields\(normalizationFact), SMT
-                        <4>column. \(column) = [index \\in 1..\(sourceCount) |-> \(column)[index]]
-                          BY ONLY <3>returnedView, SMT
-                        <4>. QED BY ONLY <4>actual, <4>matches, <4>column, SMT
-                """
-            }.joined(separator: "\n")
-            let viewFacts = sourceFields.map { "<3>view\($0.field)" }.joined(separator: ", ")
-            returnedSourceProof = """
-
-                  <3>viewOfAllocation. allocatedView = ProofInitialization!Expressions!AllocatedSourceView(allocated)
-                    BY ONLY <3>projection, SMT
-                  <3>viewRecord. allocatedView = [root |-> 1, kinds |-> allocatedView.kinds,
-                      literals |-> allocatedView.literals, reads |-> allocatedView.reads,
-                      left |-> allocatedView.left, right |-> allocatedView.right]
-                    BY ONLY <3>viewOfAllocation, SMT DEF ProofInitialization!Expressions!AllocatedSourceView
-            \(viewFields)
-                  <3>. QED BY ONLY <3>viewRecord, <3>returnedView, \(viewFacts), SMT
-            """
-        } else {
-            remainingSourceProof = ""
-            remainingSourceFacts = ""
-            returnedSourceProof = """
-
-                  <3>. QED BY ONLY <3>returnedView, <3>projection, <3>finalFields, SMT
-                    DEF ProofInitialization!Expressions!AllocatedSourceView
-            """
-        }
+                                                    sourceSizes: String, sourceCount: Int,
+                                                    sourceOccurrenceSizes: String, emission: String) -> String {
         let expressions = "ProofInitialization!Expressions!"
-        var pending = [(origin: 1, expanded: false)]
-        var visits: [(origin: Int, expanded: Bool, height: Int, expands: Bool)] = []
-        var traversalSourceFacts = ["allocatedView.root = 1", "allocatedView.kinds = \(kinds)"]
-        var traversalFrames: [String] = []
-        for previous in 0..<traversalCount {
-            guard let frame = pending.popLast(), frame.origin > 0, frame.origin <= source.count else {
-                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-            }
-            let next = previous + 1
-            let height = pending.count + 1
-            let expands: Bool
-            if !frame.expanded, case let .add(left, right) = source[frame.origin - 1] {
-                guard left > frame.origin, right > frame.origin, left <= source.count, right <= source.count,
-                      pending.count <= traversalCount - next - 3 else {
-                    throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-                }
-                traversalSourceFacts.append("allocatedView.left[\(frame.origin)] = \(left)")
-                traversalSourceFacts.append("allocatedView.right[\(frame.origin)] = \(right)")
-                pending.append(contentsOf: [(frame.origin, true), (right, false), (left, false)])
-                expands = true
-            } else {
-                expands = false
-            }
-            visits.append((frame.origin, frame.expanded, height, expands))
-            let definitions: String
-            if expands {
-                definitions = "\n        DEF \(expressions)ReplaceTopVisitFrame,\n          \(expressions)ExpandedVisitFrames,\n          \(expressions)VisitFrame"
-            } else {
-                definitions = pending.isEmpty ? "" : "\n        DEF \(expressions)HistoryPrefix"
-            }
-            let sourceFact = pending.isEmpty && frame.expanded ? "" : ", <2>traversalSource"
-            let nextHeight = "traversal[\(next)].height = \(pending.count)"
-            let label = pending.isEmpty ? "terminalHeight" : "frame\(next)"
-            let fields = pending.indices.reversed().flatMap { offset in
-                let saved = pending[offset]
-                let target = "traversal[\(next)].pending[\(offset + 1)]"
-                return ["\(target).node = \(saved.origin)", saved.expanded ? "\(target).expanded" : "~\(target).expanded"]
-            }
-            let claim = pending.isEmpty ? nextHeight : "/\\ " + ([nextHeight] + fields).joined(separator: "\n               /\\ ")
-            traversalFrames.append("""
-                <2>edge\(next). traversal[\(next)] =
-                    \(expressions)CompilerTraversalNext(allocatedView, traversal[\(previous)])
-                  BY ONLY SMT DEF traversal, witness, allocatedView, allocated, SourceCompilerInvocationWitness\(row)
-                <2>\(label). \(claim)
-                  BY ONLY <2>edge\(next)\(sourceFact), <2>frame\(previous), ProofIntegerBounds, ProofInitialSentinels,
-                    \(expressions)CompilerTraversalNextProjectsStoredFields, SMT\(definitions)
-            """)
-        }
-        guard pending.isEmpty else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
-        let edgeFacts = (1...traversalCount).map { "<2>edge\($0)" }.joined(separator: ", ")
-        let frameFacts = (0..<traversalCount).map { "<2>frame\($0)" }.joined(separator: ", ")
-        var emissionCount = 0
-        let currentUpdates = try visits.enumerated().map { prior, visit in
-            let step = prior + 1
-            let origin = visit.origin
-            let before = "traversal[\(prior)].current"
-            let update = visit.expands ? before :
-                "\(expressions)AppendCertificateConstructor(allocatedView, \(before), \(origin))"
-            let current = """
-                  <3>current\(step). traversal[\(step)].current = \(update)
-                    BY ONLY <2>edge\(step), <2>traversalSource, <2>frame\(prior), ProofIntegerBounds, ProofInitialSentinels,
-                      ProofInitialization!Expressions!CompilerTraversalNextProjectsStoredFields, SMT
-            """
-            if visit.expands {
-                let matches = """
-                      <3>matches\(step). traversal[\(step)].current = claimedPrefix(\(emissionCount))
-                        BY ONLY <3>current\(step), <3>matches\(prior)
-                """
-                return current + "\n" + matches
-            }
-            let priorCount = emissionCount
-            guard capturedNodes.indices.contains(priorCount) else {
-                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-            }
-            let capturedNode = capturedNodes[priorCount]
-            emissionCount += 1
-            let node: (kind: String, payload: String, left: String, right: String)
-            let sourceProjection: String
-            switch source[origin - 1] {
-            case .literal:
-                node = ("literal", "allocatedView.literals[\(origin)]", "0", "0")
-                sourceProjection = " DEF concreteNode"
-            case .read:
-                node = ("read", "allocatedView.reads[\(origin)]", "0", "0")
-                sourceProjection = " DEF concreteNode"
-            case .add:
-                let inverse = "claimedPrefix(\(priorCount)).inverse"
-                node = ("add", "0", "\(inverse)[allocatedView.left[\(origin)]]",
-                        "\(inverse)[allocatedView.right[\(origin)]]")
-                sourceProjection = ", <3>indexData, SMT DEF concreteNode, claimedPrefix,\n"
-                    + "              \(expressions)CompilerCertificatePrefix"
-            default:
-                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-            }
-            let record = "[kind |-> \"\(node.kind)\", payload |-> \(node.payload), "
-                + "left |-> \(node.left), right |-> \(node.right)]"
-            let matches = """
-                  <3>matches\(step). traversal[\(step)].current = claimedPrefix(\(emissionCount))
-                    PROOF
-                    <4>origin. claimed.origins[\(emissionCount)] = \(origin)
-                      BY ONLY <2>data, SMT DEF claimed
-                    <4>node. claimed.nodes[\(emissionCount)] = appended(\(emissionCount)).emitted.nodes[\(emissionCount)]
-                      PROOF
-                      <5>. DEFINE concreteNode == \(record)
-                                  nodeHistory == \(expressions)HistoryAppend(
-                                      claimedPrefix(\(priorCount)).emitted.nodes, \(priorCount), concreteNode)
-                      <5>count. claimedPrefix(\(priorCount)).emitted.count = \(priorCount)
-                        BY ONLY DEF claimedPrefix, \(expressions)CompilerCertificatePrefix
-                      <5>kind. allocatedView.kinds[\(origin)] = "\(node.kind)"
-                        BY ONLY <2>traversalSource, SMT
-                      <5>captured. claimed.nodes[\(emissionCount)] =
-                          \(capturedNode)
-                        BY ONLY <3>nodeTuple, SMT DEF capturedTuple, SourceCapturedNodeTuple\(row)
-                      <5>source. concreteNode =
-                          \(capturedNode)
-                        BY ONLY <3>view\(sourceProjection)
-                      <5>stored. appended(\(emissionCount)).emitted.nodes = nodeHistory
-                        BY ONLY <4>origin, <5>count, <5>kind
-                          DEF appended, nodeHistory, concreteNode, \(expressions)AppendCertificateConstructor
-                      <5>tail. nodeHistory[\(emissionCount)] = concreteNode
-                        BY ONLY SMT DEF nodeHistory, \(expressions)HistoryAppend
-                      <5>. QED BY ONLY <5>captured, <5>source, <5>stored, <5>tail
-                    <4>inverse. \\A source \\in DOMAIN allocatedView.kinds :
-                        claimedPrefix(\(emissionCount)).inverse[source] = appended(\(emissionCount)).inverse[source]
-                      PROOF
-                      <5>. SUFFICES ASSUME NEW source \\in DOMAIN allocatedView.kinds
-                           PROVE claimedPrefix(\(emissionCount)).inverse[source] = appended(\(emissionCount)).inverse[source]
-                        BY SMT
-                      <5>prefix. claimedPrefix(\(emissionCount)).inverse[source] =
-                          IF claimedIndices[source] <= \(emissionCount) THEN claimedIndices[source] ELSE 0
-                        BY ONLY SMT DEF claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
-                      <5>update. appended(\(emissionCount)).inverse[source] =
-                          IF source = \(origin) THEN \(emissionCount)
-                          ELSE IF claimedIndices[source] <= \(emissionCount) - 1 THEN claimedIndices[source] ELSE 0
-                        BY ONLY <4>origin, SMT DEF appended, claimedPrefix,
-                          ProofInitialization!Expressions!CompilerCertificatePrefix,
-                          ProofInitialization!Expressions!AppendCertificateConstructor
-                      <5>position. /\\ claimedIndices[source] \\in 1..\(sourceCount)
-                                   /\\ (claimedIndices[source] = \(emissionCount) <=> source = \(origin))
-                        BY ONLY <3>indexData, <3>domain, SMT
-                      <5>. QED BY ONLY <5>prefix, <5>update, <5>position, SMT
-                    <4>transition. claimedPrefix(\(emissionCount)) = appended(\(emissionCount))
-                      BY ONLY <4>node, <4>inverse, ProofIntegerBounds, ProofInitialSentinels,
-                        ProofInitialization!Expressions!CompilerCertificatePrefixesRealizeTheConstructor, SMT
-                        DEF claimedPrefix, appended
-                    <4>. QED BY ONLY <3>current\(step), <3>matches\(prior), <4>origin, <4>transition DEF appended
-            """
-            return current + "\n" + matches
-        }.joined(separator: "\n")
         return """
           <1>\(row). InitializerExpressionCertificate(\(row))
             PROOF
@@ -1006,372 +636,322 @@ package enum InitialFailureEvidence {
                      ProofInitialization!Expressions!AllocationTermSyntax(terms), weight, ProofBoundKeys(\(row)))
                 /\\ weight[input.root] = sizes[derivation.count]
               BY <2>constructors, ProofInitialization!Expressions!CheckedSourceSizesSupplyTheCanonicalAllocationInput
-            <2>. DEFINE syntax == ProofInitialization!Expressions!AllocationTermSyntax(terms)
-                        witness == SourceCompilerInvocationWitness\(row)(syntax, weight)
-                        allocated == witness.allocationHistory[witness.allocationSteps]
-                        allocatedView == ProofInitialization!Expressions!AllocatedSourceView(allocated)
-                        final == witness.traversalHistory[witness.traversalSteps]
-            <2>capacity. weight[input.root] <= ProofIntMax
-              PROOF
-              <3>row. /\\ derivation = \(sourceDerivation) /\\ sizes = \(sourceSizes)
-                BY ONLY DEF derivation, sizes, SourceCompilerInputDerivations, SourceCompilerInputSizes
-              <3>end. sizes[derivation.count] = \(sourceCount)
-                BY ONLY <3>row DEF ProofInitialization!Expressions!AllocationLeafDerivation,
-                  ProofInitialization!Expressions!AllocationAddDerivation
-              <3>. QED BY ONLY <2>canonical, <3>end, ProofIntegerBounds, SMT
-            <2>allocation. ProofInitialization!Expressions!CompilerAllocationCompletion(syntax, weight,
-                ProofInitialization!Expressions!InitialCompilerAllocation(input.root, weight),
-                witness.allocationSteps, witness.allocationHistory)
-              PROOF
-              <3>root. input.root = \(term)
-                BY ONLY DEF input, SourceCompilerInputs
-              <3>projection. /\\ witness.allocationSteps = \(sourceCount)
-                             /\\ DOMAIN witness.allocationHistory = 0..\(sourceCount)
-                             /\\ witness.allocationHistory[0] = ProofInitialization!Expressions!InitialCompilerAllocation(input.root, weight)
-                             /\\ \\A step \\in 1..\(sourceCount) : witness.allocationHistory[step] =
-                                  ProofInitialization!Expressions!ReviewedSwiftAllocationIteration(syntax, weight,
-                                    witness.allocationHistory[step - 1])
-                BY ONLY DEF witness, SourceCompilerInvocationWitness\(row), input
-              <3>. DEFINE history == witness.allocationHistory
-              <3>sourceSize. weight[input.root] = \(sourceCount)
-                PROOF
-                <4>row. /\\ derivation = \(sourceDerivation) /\\ sizes = \(sourceSizes)
-                  BY ONLY DEF derivation, sizes, SourceCompilerInputDerivations, SourceCompilerInputSizes
-                <4>end. sizes[derivation.count] = \(sourceCount)
-                  BY ONLY <4>row DEF ProofInitialization!Expressions!AllocationLeafDerivation,
-                    ProofInitialization!Expressions!AllocationAddDerivation
-                <4>. QED BY ONLY <2>canonical, <4>end
-              <3>initialInvariant. ProofInitialization!Expressions!CompilerAllocationInvariant(input.root, terms,
-                  syntax, weight, ProofBoundKeys(\(row)), history[0])
-                BY <2>canonical, <3>projection, ProofInitialization!Expressions!CompilerAllocationStartsWithItsLoopInvariant
-                  DEF syntax, history
-              <3>initialPosition. history[0].position = 0
-                BY ONLY <3>projection DEF history, ProofInitialization!Expressions!InitialCompilerAllocation
-              <3>initialFuel. weight[input.root] - history[0].position = \(sourceCount)
-                BY ONLY <3>sourceSize, <3>initialPosition, SMT
-        \(allocationProgress)
-              <3>lastFits. history[\(sourceCount)].position = history[\(sourceCount)].count <=>
-                              weight[input.root] - history[\(sourceCount)].position = 0
-                BY ONLY <2>canonical, <3>advance\(sourceCount), ProofInitialSentinels, ProofIntegerBounds,
-                  ProofInitialization!Expressions!CompilerAllocationFitsItsFiniteInputSize DEF syntax
-              <3>terminal. history[\(sourceCount)].position = history[\(sourceCount)].count
-                BY ONLY <3>lastFits, <3>fuel\(sourceCount), SMT
-              <3>. QED BY ONLY <3>projection, \(allocationGuards), <3>terminal, SMT
-                DEF history, ProofInitialization!Expressions!CompilerAllocationCompletion
-            <2>allocatedSource. allocatedView = SourceSyntaxViews[\(row)][2]
-              PROOF
-              <3>. DEFINE history == witness.allocationHistory
-              <3>projection. /\\ allocated = history[\(sourceCount)]
-                             /\\ allocatedView = ProofInitialization!Expressions!AllocatedSourceView(history[\(sourceCount)])
-                             /\\ history[0] = ProofInitialization!Expressions!InitialCompilerAllocation(input.root, weight)
-                             /\\ \\A step \\in 1..\(sourceCount) : history[step] =
-                                  ProofInitialization!Expressions!ReviewedSwiftAllocationIteration(syntax, weight, history[step - 1])
-                BY ONLY DEF history, allocatedView, allocated, witness, SourceCompilerInvocationWitness\(row), input
-              <3>root. input.root = \(term)
-                BY ONLY DEF input, SourceCompilerInputs
-              <3>member. input.root \\in terms
-                BY ONLY <2>canonical DEF ProofInitialization!Expressions!SupportedAllocationInput
-              <3>lookup. syntax[input.root] =
-                  [kind |-> input.root[1],
-                   literal |-> IF input.root[1] = "literal" THEN input.root[2] ELSE 0,
-                   read |-> IF input.root[1] = "read" THEN input.root[2] ELSE 0,
-                   left |-> IF input.root[1] = "add" THEN input.root[2] ELSE 0,
-                   right |-> IF input.root[1] = "add" THEN input.root[3] ELSE 0]
-                BY ONLY <3>member DEF syntax, ProofInitialization!Expressions!AllocationTermSyntax
-              <3>initialFields. /\\ history[0].position = 0 /\\ history[0].count = 1
-                                /\\ history[0].expressions = [index \\in 1..1 |-> input.root]
-                                /\\ history[0].source = [index \\in 1..0 |-> index]
-                BY ONLY <3>projection DEF ProofInitialization!Expressions!InitialCompilerAllocation
-              <3>firstEdge. history[1] = ProofInitialization!Expressions!ReviewedSwiftAllocationIteration(syntax, weight, history[0])
-                BY ONLY <3>projection, SMT
-              <3>firstFields.
-                  /\\ history[1].position = 1
-                  /\\ history[1].count = IF syntax[input.root].kind = "add" THEN 3 ELSE 1
-                  /\\ history[1].source = ProofInitialization!Expressions!HistoryAppend(history[0].source, 0,
-                       ProofInitialization!Expressions!CompilerAllocationSourceNode(syntax, history[0]))
-                  /\\ history[1].expressions = IF syntax[input.root].kind = "add"
-                       THEN ProofInitialization!Expressions!HistoryAppend(
-                         ProofInitialization!Expressions!HistoryAppend(history[0].expressions, 1, syntax[input.root].left),
-                         2, syntax[input.root].right)
-                       ELSE history[0].expressions
-                BY ONLY <3>firstEdge, <3>initialFields, ProofIntegerBounds, ProofInitialSentinels,
-                  ProofInitialization!Expressions!ReviewedAllocationIterationProjectsStoredFields, SMT
-              <3>firstNode. ProofInitialization!Expressions!CompilerAllocationSourceNode(syntax, history[0]) =
-                  IF syntax[input.root].kind = "add"
-                  THEN [kind |-> "add", literal |-> 0, read |-> 0, left |-> 2, right |-> 3]
-                  ELSE syntax[input.root]
-                BY ONLY <3>initialFields, SMT DEF ProofInitialization!Expressions!CompilerAllocationSourceNode
-              <3>returnedView. SourceSyntaxViews[\(row)][2] = \(view)
-                BY ONLY <2>data
-              <3>sourceAppend. history[1].source = ProofInitialization!Expressions!HistoryAppend(history[0].source, 0,
-                  ProofInitialization!Expressions!CompilerAllocationSourceNode(syntax, history[0]))
-                BY ONLY <3>firstFields
-              <3>firstSource. history[1].source = [index \\in 1..1 |->
-                  IF syntax[input.root].kind = "add"
-                  THEN [kind |-> "add", literal |-> 0, read |-> 0, left |-> 2, right |-> 3]
-                  ELSE syntax[input.root]]
-                BY ONLY <3>sourceAppend, <3>initialFields, <3>firstNode, SMT
-                  DEF ProofInitialization!Expressions!HistoryAppend
-              <3>firstCount. history[1].count = IF input.root[1] = "add" THEN 3 ELSE 1
-                BY ONLY <3>firstFields, <3>lookup, SMT\(remainingSourceProof)
-              <3>finalFields.
-                  /\\ allocated.count = \(sourceCount)
-                  /\\ allocated.source = [index \\in 1..\(sourceCount) |->
-                       [kind |-> SourceSyntaxViews[\(row)][2].kinds[index],
-                        literal |-> SourceSyntaxViews[\(row)][2].literals[index],
-                        read |-> SourceSyntaxViews[\(row)][2].reads[index],
-                        left |-> SourceSyntaxViews[\(row)][2].left[index],
-                        right |-> SourceSyntaxViews[\(row)][2].right[index]]]
-                BY ONLY <3>returnedView, <3>projection, <3>root, <3>lookup, <3>firstCount, <3>firstSource\(remainingSourceFacts), SMT\(returnedSourceProof)
-            <2>tree. /\\ ProofInitialization!Expressions!CompilerOccurrenceTree(allocatedView, allocated.count)
-                     /\\ allocated.count <= ProofIntMax
-                     /\\ allocated.count = \(sourceCount)
-              PROOF
-              <3>supported. ProofInitialization!Expressions!SupportedAllocationInput(input.root, terms,
-                                syntax, weight, ProofBoundKeys(\(row)))
-                BY ONLY <2>canonical DEF syntax
-              <3>initial. ProofInitialization!Expressions!CompilerAllocationInvariant(input.root, terms,
-                              syntax, weight, ProofBoundKeys(\(row)),
-                              ProofInitialization!Expressions!InitialCompilerAllocation(input.root, weight))
-                BY ONLY <3>supported, ProofIntegerBounds, ProofInitialSentinels,
-                  ProofInitialization!Expressions!CompilerAllocationStartsWithItsLoopInvariant
-              <3>terminal. /\\ witness.allocationSteps \\in 0..witness.allocationSteps
-                           /\\ allocated.position = allocated.count
-                BY ONLY <2>allocation, SMT DEF allocated, ProofInitialization!Expressions!CompilerAllocationCompletion
-              <3>invariants. \\A step \\in 0..witness.allocationSteps :
-                  ProofInitialization!Expressions!CompilerAllocationInvariant(input.root, terms,
-                      syntax, weight, ProofBoundKeys(\(row)), witness.allocationHistory[step])
-                BY ONLY <3>supported, <3>initial, <2>allocation, ProofIntegerBounds, ProofInitialSentinels,
-                  ProofInitialization!Expressions!AllocationCompletionRetainsEveryLoopInvariant
-              <3>last. ProofInitialization!Expressions!CompilerAllocationInvariant(input.root, terms,
-                           syntax, weight, ProofBoundKeys(\(row)), allocated)
-                BY ONLY <3>terminal, <3>invariants DEF allocated
-              <3>source. /\\ ProofInitialization!Expressions!CompilerOccurrenceTree(allocatedView, allocated.count)
-                         /\\ allocated.count = weight[input.root]
-                BY ONLY <3>supported, <3>terminal, <3>last, ProofIntegerBounds, ProofInitialSentinels,
-                  ProofInitialization!Expressions!CompletedAllocationSuppliesOccurrenceTreeAndSource
-                  DEF allocatedView
-              <3>sizes. /\\ derivation = \(sourceDerivation) /\\ sizes = \(sourceSizes)
-                BY ONLY DEF derivation, sizes, SourceCompilerInputDerivations, SourceCompilerInputSizes
-              <3>weight. weight[input.root] = \(sourceCount)
-                BY ONLY <2>canonical, <3>sizes, SMT DEF ProofInitialization!Expressions!AllocationLeafDerivation,
-                  ProofInitialization!Expressions!AllocationAddDerivation
-              <3>. QED BY ONLY <3>source, <2>capacity, <3>weight, SMT
-            <2>. DEFINE traversal == witness.traversalHistory
-            <2>traversalSteps. /\\ witness.traversalSteps = \(traversalCount)
-                              /\\ final = traversal[\(traversalCount)]
-              BY ONLY SMT DEF witness, final, traversal, SourceCompilerInvocationWitness\(row)
-            <2>traversalInitial. traversal[0] = \(expressions)InitialCompilerTraversal(allocatedView)
-              BY ONLY SMT DEF traversal, witness, allocatedView, allocated, SourceCompilerInvocationWitness\(row)
-            <2>traversalSource. /\\ \(traversalSourceFacts.joined(separator: "\n                        /\\ "))
-              BY ONLY <2>data, <2>allocatedSource, SMT
-            <2>frame0. /\\ traversal[0].height = 1
-                       /\\ traversal[0].pending[1].node = 1
-                       /\\ ~traversal[0].pending[1].expanded
-              BY ONLY <2>traversalInitial, <2>traversalSource, SMT
-                DEF \(expressions)InitialCompilerTraversal, \(expressions)VisitFrame
-        \(traversalFrames.joined(separator: "\n"))
-            <2>traversalHistory. /\\ traversal[0] = \(expressions)InitialCompilerTraversal(allocatedView)
-                                /\\ \\A step \\in 1..\(traversalCount) : traversal[step] =
-                                     \(expressions)CompilerTraversalNext(allocatedView, traversal[step - 1])
-              BY ONLY <2>traversalInitial, \(edgeFacts), SMT
-            <2>prefix. /\\ \(expressions)CompilerTraversalPrefix(allocatedView,
-                              witness.traversalSteps, witness.traversalHistory)
-                       /\\ final.height = 0
-              BY ONLY <2>traversalSteps, <2>traversalHistory, \(frameFacts), <2>terminalHeight, SMT
-                DEF traversal, \(expressions)CompilerTraversalPrefix
-            <2>. DEFINE steps == witness.traversalSteps
-                        storage == [step \\in 0..steps |->
-                            \(expressions)SwiftCompilerStorage(allocatedView, allocated.count, traversal[step])]
-                        swiftSource == ProofInitialization!Expressions!SwiftSourceArray(allocatedView, allocated.count)
-                        actualReturn == ProofInitialization!Expressions!ReviewedSwiftCertificateReturn(swiftSource, storage[steps])
+            <2>. DEFINE syntax == \(expressions)AllocationTermSyntax(terms)
+                        capturedView == SourceSyntaxViews[\(row)][2]
                         expected == SourceCompilerResults(\(row))
-                        emitted == final.current.emitted
-                        inverse == final.current.inverse
-            <2>domain. /\\ steps \\in Nat /\\ steps \\in 0..steps
-              BY ONLY <2>prefix, SMT DEF steps, traversal, ProofInitialization!Expressions!CompilerTraversalPrefix
-            <2>storage. \\A step \\in 0..steps : storage[step] =
-                ProofInitialization!Expressions!SwiftCompilerStorage(allocatedView, allocated.count, traversal[step])
-              BY ONLY SMT DEF storage
-            <2>loop. /\\ storage[0] = ProofInitialization!Expressions!ReviewedSwiftTraversalInitialization(swiftSource)
-                     /\\ \\A step \\in 1..steps :
-                        /\\ storage[step - 1].pending.count > 0
-                        /\\ storage[step] = ProofInitialization!Expressions!ReviewedSwiftCompilerIteration(swiftSource, storage[step - 1])
+                        fallback == SourceInitializers[\(row)][1]
+                        bound == ProofBoundKeys(\(row))
+                        report == SourceAllocationReport\(row)
+                        termPositions == report.terms
+                        occurrenceTerms == [slot \\in DOMAIN termPositions |-> derivation.terms[termPositions[slot]]]
+                        frontier == [slot \\in 0..(Len(report.frontier) - 1) |-> report.frontier[slot + 1]]
+                        observed == [count |-> Len(capturedView.kinds), position |-> Len(capturedView.kinds),
+                            expressions |-> occurrenceTerms,
+                            source |-> [slot \\in 1..Len(capturedView.kinds) |->
+                                [kind |-> capturedView.kinds[slot], literal |-> capturedView.literals[slot],
+                                 read |-> capturedView.reads[slot], left |-> capturedView.left[slot],
+                                 right |-> capturedView.right[slot]]]]
+                        size == [origin \\in DOMAIN capturedView.kinds |-> sizes[termPositions[origin]]]
+                        captured == [emitted |-> SourcePlanEmission(\(row)), inverse |-> SourceSyntaxIndices[\(row)]]
+                        emitted == captured.emitted
+                        inverse == captured.inverse
+            <2>constructorData. /\\ derivation = \(sourceDerivation) /\\ sizes = \(sourceSizes)
+              BY ONLY DEF derivation, sizes, SourceCompilerInputDerivations, SourceCompilerInputSizes
+            <2>constructorSize. /\\ derivation.count = \(sourceCount)
+                                 /\\ sizes[derivation.count] = \(sourceCount)
+              BY ONLY <2>constructorData, SMT DEF \(expressions)AllocationLeafDerivation,
+                \(expressions)AllocationAddDerivation
+            <2>capacity. weight[input.root] <= ProofIntMax
+              BY ONLY <2>canonical, <2>constructorSize, ProofIntegerBounds, SMT
+            <2>viewData. capturedView = \(view)
+              BY ONLY <2>data DEF capturedView
+            <2>candidateWidth.
+                /\\ observed.count = \(sourceCount)
+                /\\ observed.count \\in Nat \\ {0}
+                /\\ DOMAIN capturedView.kinds = 1..observed.count
+                /\\ observed.count = weight[input.root]
               PROOF
-              <3>direct.
-                  /\\ ProofInitialization!Expressions!SwiftCompilerStorage(allocatedView, allocated.count, traversal[0]) =
-                       ProofInitialization!Expressions!ReviewedSwiftTraversalInitialization(swiftSource)
-                  /\\ \\A step \\in 1..steps :
-                       /\\ ProofInitialization!Expressions!SwiftCompilerStorage(allocatedView, allocated.count, traversal[step - 1]).pending.count > 0
-                       /\\ ProofInitialization!Expressions!SwiftCompilerStorage(allocatedView, allocated.count, traversal[step]) =
-                            ProofInitialization!Expressions!ReviewedSwiftCompilerIteration(swiftSource,
-                              ProofInitialization!Expressions!SwiftCompilerStorage(allocatedView, allocated.count, traversal[step - 1]))
-                BY ONLY <2>tree, <2>prefix, ProofIntegerBounds, ProofInitialSentinels,
-                  ProofInitialization!Expressions!CompilerTraversalPrefixesExecuteTheReviewedSwiftLoop
-                  DEF swiftSource, traversal, steps
-              <3>ranges. /\\ 0 \\in 0..steps
-                         /\\ \\A step \\in 1..steps : step \\in 0..steps /\\ step - 1 \\in 0..steps
-                BY ONLY <2>domain, SMT
-              <3>. QED BY ONLY <2>storage, <3>direct, <3>ranges, SMT
-            <2>final. ProofInitialization!Expressions!CompilerTraversalInvariant(allocatedView, final)
+              <3>viewWidth. Len(capturedView.kinds) = \(sourceCount)
+                BY ONLY <2>viewData, SMT
+              <3>count. observed.count = \(sourceCount)
+                BY ONLY <3>viewWidth DEF observed
+              <3>domain. DOMAIN capturedView.kinds = 1..observed.count
+                BY ONLY <2>viewData, <3>count, SMT
+              <3>. QED BY ONLY <3>count, <3>domain, <2>canonical, <2>constructorSize, SMT
+            <2>positions. /\\ termPositions \\in [1..\(sourceCount) -> 1..derivation.count]
+                           /\\ termPositions[1] = derivation.count
+              BY ONLY <2>constructorSize, SMT DEF termPositions, report, SourceAllocationReport\(row)
+            <2>sourceReport. \(expressions)BreadthFirstSourceReport(input.root, syntax, observed, frontier)
               PROOF
-              <3>invariants. \\A step \\in 0..steps :
-                  ProofInitialization!Expressions!CompilerTraversalInvariant(allocatedView, traversal[step])
-                BY ONLY <2>tree, <2>prefix, ProofIntegerBounds, ProofInitialSentinels,
-                  ProofInitialization!Expressions!CompilerTraversalPrefixesDeriveStorageBounds
-                  DEF traversal, steps
-              <3>. QED BY ONLY <2>domain, <3>invariants, SMT DEF final, traversal, steps
-            <2>returned. ProofInitialization!Expressions!ReviewedReturnMatchesCertificate(allocatedView, allocated.count, final)
-              BY ONLY <2>tree, <2>prefix, <2>final, ProofIntegerBounds, ProofInitialSentinels,
-                ProofInitialization!Expressions!TerminatedCompilerInvariantDerivesEveryReturnGuard
-            <2>last. storage[steps] = ProofInitialization!Expressions!SwiftCompilerStorage(allocatedView, allocated.count, final)
-              BY ONLY <2>domain, <2>storage, SMT DEF final, traversal, steps
-            <2>exit. ProofInitialization!Expressions!ReviewedSwiftCompilerIteration(swiftSource, storage[steps]).control = "exit"
+              <3>syntaxDomain. DOMAIN syntax = terms
+                BY ONLY DEF syntax, \(expressions)AllocationTermSyntax
+              <3>root. derivation.terms[derivation.count] = input.root
+                BY ONLY <2>constructors DEF \(expressions)AllocationConstructorDerivation
+              <3>shape. /\\ observed.count \\in Nat \\ {0}
+                         /\\ observed.position = observed.count
+                         /\\ observed.expressions \\in [1..observed.count -> DOMAIN syntax]
+                         /\\ observed.expressions[1] = input.root
+                BY ONLY <2>canonical, <2>candidateWidth, <3>syntaxDomain, <3>root, <2>positions, SMT
+                  DEF observed, occurrenceTerms
+              <3>frontier. /\\ frontier \\in [0..observed.count -> 1..observed.count]
+                            /\\ \\A slot \\in 1..observed.count : slot <= frontier[slot - 1]
+                BY ONLY <2>candidateWidth, SMT DEF frontier, report, SourceAllocationReport\(row)
+              <3>breadthFirst. \(expressions)BreadthFirstSourceAllocation(observed.source, observed.count, frontier)
+                BY ONLY <2>viewData, <2>candidateWidth, SMT
+                  DEF \(expressions)BreadthFirstSourceAllocation, observed, frontier, report, SourceAllocationReport\(row)
+              <3>syntaxPayload. \\A term \\in DOMAIN syntax : syntax[term] =
+                  [kind |-> term[1], literal |-> IF term[1] = "literal" THEN term[2] ELSE 0,
+                   read |-> IF term[1] = "read" THEN term[2] ELSE 0,
+                   left |-> IF term[1] = "add" THEN term[2] ELSE 0,
+                   right |-> IF term[1] = "add" THEN term[3] ELSE 0]
+                BY ONLY DEF syntax, \(expressions)AllocationTermSyntax
+              <3>payload. \(expressions)CompilerAllocatedPayloadsMatch(syntax, observed)
+                BY ONLY <3>shape, <2>viewData, <3>syntaxPayload, <2>constructorData, SMT
+                  DEF \(expressions)CompilerAllocatedPayloadsMatch, observed, occurrenceTerms,
+                    termPositions, report, SourceAllocationReport\(row),
+                    \(expressions)AllocationLeafDerivation, \(expressions)AllocationAddDerivation
+              <3>. QED BY ONLY <3>shape, <3>frontier, <3>breadthFirst, <3>payload DEF \(expressions)BreadthFirstSourceReport
+            <2>sourceCapture.
+                /\\ \(expressions)AllocatedSwiftSource(observed) = expected.source
+                /\\ \(expressions)SwiftSourceArrayAsView(expected.source) = capturedView
               PROOF
-              <3>empty. /\\ storage[steps].pending.count = 0
-                         /\\ "control" \\in DOMAIN storage[steps]
-                BY ONLY <2>last, <2>prefix
-                  DEF ProofInitialization!Expressions!SwiftCompilerStorage, ProofInitialization!Expressions!SwiftPendingArray
-              <3>stopped. ProofInitialization!Expressions!ReviewedSwiftCompilerIteration(swiftSource, storage[steps]) =
-                  [storage[steps] EXCEPT !.control = "exit"]
-                BY ONLY <3>empty DEF ProofInitialization!Expressions!ReviewedSwiftCompilerIteration
-              <3>. QED BY ONLY <3>empty, <3>stopped, SMT
-            <2>returnFields. actualReturn =
-                [control |-> "return", certificate |->
-                    [source |-> swiftSource,
-                     nodes |-> ProofInitialization!Expressions!SwiftIndexedArray(emitted.count, emitted.nodes),
-                     origins |-> ProofInitialization!Expressions!SwiftIndexedArray(emitted.count, emitted.origins),
-                     indices |-> ProofInitialization!Expressions!SwiftIndexedArray(allocated.count, inverse)]]
-              BY ONLY <2>last, <2>returned
-                DEF actualReturn, swiftSource, emitted, inverse, ProofInitialization!Expressions!ReviewedReturnMatchesCertificate
-            <2>execution. ProofInitialization!Expressions!ReviewedCompilerTraversalExecution(allocatedView,
-                              allocated.count, steps, storage)
-              BY ONLY <2>domain, <2>loop, <2>exit, <2>returnFields
-                DEF actualReturn, swiftSource, ProofInitialization!Expressions!ReviewedCompilerTraversalExecution
-            <2>finalArrays.
-                /\\ emitted.count = SourcePlanEmission(\(row)).count
-                /\\ emitted.nodes = SourcePlanEmission(\(row)).nodes
+              <3>view. \(expressions)AllocatedSourceView(observed) = capturedView
+                BY ONLY <2>viewData, SMT DEF observed, \(expressions)AllocatedSourceView
+              <3>natural. observed.count \\in Nat
+                BY ONLY <2>candidateWidth, SMT
+              <3>packed. \(expressions)AllocatedSwiftSource(observed) =
+                    \(expressions)SwiftSourceArray(\(expressions)AllocatedSourceView(observed), observed.count)
+                BY ONLY <3>natural, ProofIntegerBounds, ProofInitialSentinels,
+                  \(expressions)AllocatedEnumArrayIsTheTraversalSource
+              <3>physical. expected.source = \(expressions)SwiftSourceArray(capturedView, observed.count)
+                BY ONLY DEF expected, capturedView, observed, SourceCompilerResults
+              <3>decoded. \(expressions)SwiftSourceArrayAsView(
+                    \(expressions)SwiftSourceArray(\(expressions)AllocatedSourceView(observed), observed.count)) =
+                    \(expressions)AllocatedSourceView(observed)
+                BY ONLY <3>natural, ProofIntegerBounds, ProofInitialSentinels,
+                  \(expressions)AllocatedSwiftSourceDecodesToSourceView
+              <3>. QED BY ONLY <3>view, <3>packed, <3>physical, <3>decoded
+            <2>emissionData.
+                /\\ emitted = \(emissionPrefix)SourceCapturedNodeTuple\(row)]
                 /\\ emitted.origins = SourceSyntaxOrigins[\(row)]
-                /\\ inverse = SourceSyntaxIndices[\(row)]
+                /\\ SourceSyntaxOrigins[\(row)] = \(origins)
+                /\\ inverse = \(indices)
+                /\\ emitted.count \\in Nat \\ {0}
+                /\\ emitted.count = Len(SourceSyntaxOrigins[\(row)])
+                /\\ Len(SourceSyntaxIndices[\(row)]) = observed.count
               PROOF
-              <3>. DEFINE claimed == SourcePlanEmission(\(row))
-                          claimedIndices == SourceSyntaxIndices[\(row)]
-                          claimedPrefix(count) == ProofInitialization!Expressions!CompilerCertificatePrefix(
-                              allocatedView, claimed, claimedIndices, count)
-                          appended(count) == ProofInitialization!Expressions!AppendCertificateConstructor(
-                              allocatedView, claimedPrefix(count - 1), claimed.origins[count])
-              <3>initial. traversal[0].current =
-                  ProofInitialization!Expressions!EmptyCertificateConstruction(allocatedView)
-                BY ONLY <2>traversalHistory DEF ProofInitialization!Expressions!InitialCompilerTraversal
-              <3>view. allocatedView = \(view)
-                BY ONLY <2>data, <2>allocatedSource
-              <3>domain. DOMAIN allocatedView.kinds = 1..\(sourceCount)
-                BY ONLY <2>tree DEF ProofInitialization!Expressions!CompilerOccurrenceTree
-              <3>. DEFINE capturedTuple == SourceCapturedNodeTuple\(row)
-              <3>record. claimed = \(emissionPrefix)capturedTuple]
-                BY ONLY <2>data DEF claimed, capturedTuple, SourceCapturedNodeTuple\(row)
-              <3>nodeTuple. claimed.nodes = capturedTuple
-                BY ONLY <3>record, SMT
-              <3>indexData. claimedIndices = \(indices)
-                BY ONLY <2>data DEF claimedIndices
-              <3>indexBounds. \\A origin \\in 1..\(sourceCount) : claimedIndices[origin] \\in 1..\(sourceCount)
-                BY ONLY <3>indexData, SMT
-              <3>matches0. traversal[0].current = claimedPrefix(0)
-                BY ONLY <3>initial, <3>domain, <3>indexBounds, SMT
-                  DEF claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix,
-                    ProofInitialization!Expressions!EmptyCertificateConstruction, ProofInitialization!Expressions!EmptyNodeEmission
-        \(currentUpdates)
-              <3>last. final.current = claimedPrefix(\(sourceCount))
-                BY ONLY <2>traversalSteps, <3>matches\(traversalCount)
-              <3>count. emitted.count = SourcePlanEmission(\(row)).count
-                PROOF
-                <4>stored. emitted.count = \(sourceCount)
-                  BY ONLY <3>last DEF emitted, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
-                <4>captured. claimed.count = \(sourceCount)
-                  BY ONLY <3>record, SMT
-                <4>. QED BY ONLY <4>stored, <4>captured DEF claimed
-              <3>nodes. emitted.nodes = SourcePlanEmission(\(row)).nodes
-                PROOF
-                <4>stored. emitted.nodes = [index \\in 1..\(sourceCount) |-> claimed.nodes[index]]
-                  BY ONLY <3>last DEF emitted, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
-                <4>shape. claimed.nodes = [index \\in 1..\(sourceCount) |-> claimed.nodes[index]]
-                  BY ONLY <3>nodeTuple, SMT DEF capturedTuple, SourceCapturedNodeTuple\(row)
-                <4>. QED BY ONLY <4>stored, <4>shape DEF claimed
-              <3>origins. emitted.origins = SourceSyntaxOrigins[\(row)]
-                PROOF
-                <4>stored. emitted.origins = [index \\in 1..\(sourceCount) |-> claimed.origins[index]]
-                  BY ONLY <3>last DEF emitted, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
-                <4>shape. SourceSyntaxOrigins[\(row)] = [index \\in 1..\(sourceCount) |-> claimed.origins[index]]
-                  BY ONLY <2>data, SMT DEF claimed
-                <4>. QED BY ONLY <4>stored, <4>shape
-              <3>indices. inverse = SourceSyntaxIndices[\(row)]
-                PROOF
-                <4>stored. inverse = [origin \\in 1..\(sourceCount) |-> claimedIndices[origin]]
-                  BY ONLY <3>last, <3>domain, <3>indexBounds, SMT
-                    DEF inverse, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
-                <4>shape. claimedIndices = [origin \\in 1..\(sourceCount) |-> claimedIndices[origin]]
-                  BY ONLY <3>indexData, SMT
-                <4>. QED BY ONLY <4>stored, <4>shape DEF claimedIndices
-              <3>. QED BY ONLY <3>count, <3>nodes, <3>origins, <3>indices
-            <2>lengths.
-                /\\ Len(SourceSyntaxViews[\(row)][2].kinds) = allocated.count
-                /\\ Len(SourceSyntaxOrigins[\(row)]) = emitted.count
-                /\\ Len(SourceSyntaxIndices[\(row)]) = allocated.count
+              <3>record. emitted = \(emissionPrefix)SourceCapturedNodeTuple\(row)]
+                BY ONLY <2>data DEF emitted, captured, SourceCapturedNodeTuple\(row)
+              <3>origins. /\\ emitted.origins = SourceSyntaxOrigins[\(row)]
+                           /\\ SourceSyntaxOrigins[\(row)] = \(origins)
+                BY ONLY <3>record, <2>data
+              <3>indices. inverse = \(indices)
+                BY ONLY <2>data DEF inverse, captured
+              <3>width. /\\ emitted.count \\in Nat \\ {0}
+                         /\\ emitted.count = Len(SourceSyntaxOrigins[\(row)])
+                         /\\ Len(SourceSyntaxIndices[\(row)]) = observed.count
+                BY ONLY <3>record, <3>origins, <3>indices, <2>candidateWidth, SMT DEF inverse, captured
+              <3>. QED BY ONLY <3>record, <3>origins, <3>indices, <3>width
+            <2>emissionReport.
+                /\\ \(expressions)CompilerOccurrenceSizes(capturedView, size)
+                /\\ \(expressions)CanonicalEmissionData(capturedView, size, captured, fallback, bound)
               PROOF
-              <3>allocated. allocated.count = \(sourceCount)
-                BY ONLY <2>tree
-              <3>emitted. emitted.count = SourcePlanEmission(\(row)).count
-                BY ONLY <2>finalArrays
-              <3>captured. SourcePlanEmission(\(row)).count = \(sourceCount)
-                BY ONLY <2>data, SMT
-              <3>source. Len(SourceSyntaxViews[\(row)][2].kinds) = \(sourceCount)
-                BY ONLY <2>allocatedSource, <2>traversalSource, SMT
-              <3>origins. Len(SourceSyntaxOrigins[\(row)]) = \(sourceCount)
-                BY ONLY SMT DEF SourceSyntaxOrigins
-              <3>indices. Len(SourceSyntaxIndices[\(row)]) = \(sourceCount)
-                BY ONLY SMT DEF SourceSyntaxIndices
-              <3>. QED BY ONLY <3>allocated, <3>emitted, <3>captured, <3>source, <3>origins, <3>indices
-            <2>result. expected = actualReturn.certificate
+              <3>records. /\\ \(expressions)NodeEmissionArrays(emitted)
+                           /\\ \(expressions)ExactEmissionNodeRecords(emitted)
+                PROOF
+                <4>fields.
+                    /\\ emitted.count = \(sourceCount) /\\ emitted.height = 1 /\\ emitted.indices = <<\(sourceCount)>>
+                    /\\ emitted.nodes = SourceCapturedNodeTuple\(row) /\\ emitted.origins = \(origins)
+                  BY ONLY <2>emissionData
+                <4>. HIDE DEF emitted
+                <4>stack.
+                    /\\ emitted.count \\in Nat /\\ emitted.height \\in Nat
+                    /\\ emitted.indices \\in [1..emitted.height -> 1..emitted.count]
+                    /\\ (emitted.height > 0 => emitted.indices[emitted.height] = emitted.count)
+                  BY ONLY <4>fields, SMT
+                <4>nodeFunction. SourceCapturedNodeTuple\(row) =
+                    [index \\in 1..\(sourceCount) |-> SourceCapturedNodeTuple\(row)[index]]
+                  BY ONLY SMT DEF SourceCapturedNodeTuple\(row)
+                <4>originFunction. (\(origins)) = [index \\in 1..\(sourceCount) |-> (\(origins))[index]]
+                  BY ONLY SMT
+                <4>arrays. \(expressions)NodeEmissionArrays(emitted)
+                  BY ONLY <4>fields, <4>stack, <4>nodeFunction, <4>originFunction
+                    DEF \(expressions)NodeEmissionArrays
+                <4>nodeRecords. \\A index \\in 1..\(sourceCount) :
+                    LET node == SourceCapturedNodeTuple\(row)[index]
+                    IN node = [kind |-> node.kind, payload |-> node.payload, left |-> node.left, right |-> node.right]
+                  BY ONLY SMT DEF SourceCapturedNodeTuple\(row)
+                <4>exact. \(expressions)ExactEmissionNodeRecords(emitted)
+                  BY ONLY <4>fields, <4>nodeRecords DEF \(expressions)ExactEmissionNodeRecords
+                <4>. QED BY ONLY <4>arrays, <4>exact
+              <3>maps.
+                  /\\ inverse \\in [DOMAIN capturedView.kinds -> 1..emitted.count]
+                  /\\ emitted.origins \\in [1..emitted.count -> DOMAIN capturedView.kinds]
+                  /\\ \\A index \\in 1..emitted.count : inverse[emitted.origins[index]] = index
+                  /\\ \\A origin \\in DOMAIN capturedView.kinds : emitted.origins[inverse[origin]] = origin
+                  /\\ emitted.origins[emitted.count] = capturedView.root
+                PROOF
+                <4>. DEFINE originData == \(origins)
+                            inverseData == \(indices)
+                <4>view. /\\ DOMAIN capturedView.kinds = 1..\(sourceCount) /\\ capturedView.root = 1
+                  BY ONLY <2>viewData, SMT
+                <4>arrays. /\\ emitted.count = \(sourceCount) /\\ emitted.origins = originData /\\ inverse = inverseData
+                  BY ONLY <2>emissionData DEF originData, inverseData
+                <4>originType. originData \\in [1..\(sourceCount) -> 1..\(sourceCount)]
+                  BY ONLY SMT DEF originData
+                <4>inverseType. inverseData \\in [1..\(sourceCount) -> 1..\(sourceCount)]
+                  BY ONLY SMT DEF inverseData
+                <4>indexRoundTrip. \\A index \\in 1..\(sourceCount) : inverseData[originData[index]] = index
+                  BY ONLY SMT DEF originData, inverseData
+                <4>originRoundTrip. \\A origin \\in 1..\(sourceCount) : originData[inverseData[origin]] = origin
+                  BY ONLY SMT DEF originData, inverseData
+                <4>rootLast. originData[\(sourceCount)] = 1
+                  BY ONLY DEF originData
+                <4>. HIDE DEF emitted, inverse, capturedView, originData, inverseData
+                <4>. QED BY ONLY <4>view, <4>arrays, <4>originType, <4>inverseType, <4>indexRoundTrip, <4>originRoundTrip, <4>rootLast, SMT
+              <3>payload. \(expressions)AllNodePayloadsMatchSource(capturedView, emitted)
+                BY ONLY <2>viewData, <2>emissionData, SMT DEF SourceCapturedNodeTuple\(row),
+                  \(expressions)AllNodePayloadsMatchSource, \(expressions)NodePayloadMatchesSource
+              <3>typed.
+                  /\\ \(expressions)TypedVisitedSourceInputs(capturedView, emitted)
+                  /\\ \\A index \\in 1..emitted.count : emitted.nodes[index].kind = "read"
+                         => emitted.nodes[index].payload \\in bound
+                PROOF
+                <4>allocation. /\\ observed.expressions \\in [1..observed.count -> DOMAIN syntax]
+                                /\\ observed.position = observed.count
+                                /\\ \(expressions)CompilerAllocatedPayloadsMatch(syntax, observed)
+                  BY ONLY <2>sourceReport DEF \(expressions)BreadthFirstSourceReport
+                <4>termTypes. \\A term \\in DOMAIN syntax :
+                    /\\ syntax[term].kind = "literal" => \(expressions)InRange(syntax[term].literal)
+                    /\\ syntax[term].kind = "read" => syntax[term].read \\in bound
+                  BY ONLY <2>canonical, SMT DEF syntax, bound, \(expressions)SupportedAllocationInput
+                <4>sourceTypes. \\A origin \\in DOMAIN capturedView.kinds :
+                    /\\ capturedView.kinds[origin] = "literal" => \(expressions)InRange(capturedView.literals[origin])
+                    /\\ capturedView.kinds[origin] = "read" => capturedView.reads[origin] \\in bound
+                  PROOF
+                  <5>. SUFFICES ASSUME NEW origin \\in DOMAIN capturedView.kinds
+                       PROVE
+                         /\\ capturedView.kinds[origin] = "literal" => \(expressions)InRange(capturedView.literals[origin])
+                         /\\ capturedView.kinds[origin] = "read" => capturedView.reads[origin] \\in bound
+                    OBVIOUS
+                  <5>. DEFINE node == observed.source[origin]
+                              term == syntax[observed.expressions[origin]]
+                  <5>slot. /\\ origin \\in 1..observed.count /\\ origin \\in 1..observed.position
+                    BY ONLY <2>candidateWidth, <4>allocation, origin \\in DOMAIN capturedView.kinds
+                  <5>fields. /\\ node.kind = capturedView.kinds[origin]
+                             /\\ node.literal = capturedView.literals[origin]
+                             /\\ node.read = capturedView.reads[origin]
+                    BY ONLY <5>slot, SMT DEF node, observed
+                  <5>matches. /\\ node.kind = term.kind
+                              /\\ (term.kind = "literal" => node.literal = term.literal)
+                              /\\ (term.kind = "read" => node.read = term.read)
+                    BY ONLY <4>allocation, <5>slot, SMT DEF node, term, \(expressions)CompilerAllocatedPayloadsMatch
+                  <5>types. /\\ term.kind = "literal" => \(expressions)InRange(term.literal)
+                            /\\ term.kind = "read" => term.read \\in bound
+                    BY ONLY <4>allocation, <4>termTypes, <5>slot, SMT DEF term
+                  <5>. QED BY ONLY <5>fields, <5>matches, <5>types, SMT
+                <4>keys. bound \\subseteq ProofIntSlots
+                  BY ONLY <2>keys DEF bound
+                <4>origins. emitted.origins \\in [1..emitted.count -> DOMAIN capturedView.kinds]
+                  BY ONLY <3>maps
+                <4>visited. \(expressions)TypedVisitedSourceInputs(capturedView, emitted)
+                  BY ONLY <4>sourceTypes, <4>keys, <4>origins, SMT DEF \(expressions)TypedVisitedSourceInputs
+                <4>readPayloads. \\A index \\in 1..emitted.count : emitted.nodes[index].kind = "read"
+                       => emitted.nodes[index].payload \\in bound
+                  PROOF
+                  <5>. SUFFICES ASSUME NEW index \\in 1..emitted.count, emitted.nodes[index].kind = "read"
+                       PROVE emitted.nodes[index].payload \\in bound
+                    OBVIOUS
+                  <5>. DEFINE origin == emitted.origins[index]
+                  <5>read. /\\ capturedView.kinds[origin] = "read"
+                           /\\ emitted.nodes[index].payload = capturedView.reads[origin]
+                    BY ONLY index \\in 1..emitted.count, emitted.nodes[index].kind = "read", <3>payload,
+                      SMT DEF origin, \(expressions)AllNodePayloadsMatchSource, \(expressions)NodePayloadMatchesSource
+                  <5>domain. origin \\in DOMAIN capturedView.kinds
+                    BY ONLY <4>origins, index \\in 1..emitted.count, SMT DEF origin
+                  <5>. QED BY ONLY <5>domain, <5>read, <4>sourceTypes, SMT
+                <4>. QED BY ONLY <4>visited, <4>readPayloads
+              <3>certificate. \(expressions)LiteralReadAddCertificate(capturedView, emitted, inverse, fallback, bound)
+                BY ONLY <2>keys, <2>emissionData, <3>records, <3>maps, <3>payload, <3>typed, SMT
+                  DEF fallback, bound, \(expressions)LiteralReadAddCertificate
+              <3>sizes. \(expressions)CompilerOccurrenceSizes(capturedView, size)
+                PROOF
+                <4>. DEFINE reordered == \(sourceOccurrenceSizes)
+                <4>domain. DOMAIN capturedView.kinds = 1..\(sourceCount)
+                  BY ONLY <2>candidateWidth
+                <4>input. sizes = \(sourceSizes)
+                  BY ONLY <2>constructorData
+                <4>projection. size = [origin \\in 1..\(sourceCount) |-> sizes[termPositions[origin]]]
+                  BY ONLY <4>domain DEF size
+                <4>entries. \\A origin \\in 1..\(sourceCount) :
+                     sizes[termPositions[origin]] = reordered[origin]
+                  BY ONLY <4>input, SMT DEF termPositions, report, SourceAllocationReport\(row), reordered
+                <4>shape. reordered = [origin \\in 1..\(sourceCount) |-> reordered[origin]]
+                  BY ONLY SMT DEF reordered
+                <4>mapped. size = reordered
+                  BY ONLY <4>projection, <4>entries, <4>shape, SMT
+                <4>positive. reordered \\in [1..\(sourceCount) -> Nat \\ {0}]
+                  BY ONLY SMT DEF reordered
+                <4>recurrence. \\A origin \\in 1..\(sourceCount) :
+                    reordered[origin] = IF capturedView.kinds[origin] = "add"
+                        THEN 1 + reordered[capturedView.left[origin]] + reordered[capturedView.right[origin]]
+                        ELSE 1
+                  BY ONLY <2>viewData, SMT DEF reordered
+                <4>. QED BY ONLY <4>domain, <4>mapped, <4>positive, <4>recurrence
+                  DEF \(expressions)CompilerOccurrenceSizes
+              <3>ranks.
+                  /\\ inverse[capturedView.root] = size[capturedView.root]
+                  /\\ \\A origin \\in DOMAIN capturedView.kinds : capturedView.kinds[origin] = "add" =>
+                         \(expressions)AddEmissionRanks(capturedView, size, captured, origin)
+                BY ONLY <2>constructorData, <2>viewData, <2>emissionData, SMT
+                  DEF inverse, captured, size, termPositions, report, SourceAllocationReport\(row),
+                    \(expressions)AddEmissionRanks
+              <3>. QED BY ONLY <3>sizes, <3>certificate, <3>records, <3>ranks
+                DEF emitted, inverse, \(expressions)CanonicalEmissionData
+            <2>packed.
+                /\\ expected.nodes = \(expressions)SwiftIndexedArray(emitted.count, emitted.nodes)
+                /\\ expected.origins = \(expressions)SwiftIndexedArray(emitted.count, emitted.origins)
+                /\\ expected.indices = \(expressions)SwiftIndexedArray(observed.count, inverse)
               PROOF
-              <3>source. expected.source = actualReturn.certificate.source
-                BY ONLY <2>lengths, <2>allocatedSource, <2>returnFields
-                  DEF expected, swiftSource, SourceCompilerResults
-              <3>nodes. expected.nodes = actualReturn.certificate.nodes
-                BY ONLY <2>finalArrays, <2>returnFields DEF expected, SourceCompilerResults
-              <3>origins. expected.origins = actualReturn.certificate.origins
-                BY ONLY <2>lengths, <2>finalArrays, <2>returnFields DEF expected, SourceCompilerResults
-              <3>indices. expected.indices = actualReturn.certificate.indices
-                BY ONLY <2>lengths, <2>finalArrays, <2>returnFields DEF expected, SourceCompilerResults
-              <3>captured. expected = [source |-> expected.source, nodes |-> expected.nodes,
-                                      origins |-> expected.origins, indices |-> expected.indices]
+              <3>nodes. expected.nodes = \(expressions)SwiftIndexedArray(emitted.count, emitted.nodes)
+                BY ONLY DEF expected, emitted, captured, SourceCompilerResults
+              <3>origins. expected.origins = \(expressions)SwiftIndexedArray(emitted.count, emitted.origins)
+                BY ONLY <2>emissionData DEF expected, SourceCompilerResults
+              <3>indices. expected.indices = \(expressions)SwiftIndexedArray(observed.count, inverse)
+                BY ONLY <2>emissionData DEF expected, inverse, captured, SourceCompilerResults
+              <3>. QED BY ONLY <3>nodes, <3>origins, <3>indices
+            <2>invocation. \(expressions)ReviewedOrderedIntCertificateInvocation(input.root, input.reads, syntax, weight, expected)
+              PROOF
+              <3>reported.
+                  LET decoded == \(expressions)SwiftSourceArrayAsView(\(expressions)AllocatedSwiftSource(observed))
+                  IN /\\ \(expressions)CompilerOccurrenceSizes(decoded, size)
+                     /\\ \(expressions)CanonicalEmissionData(decoded, size, captured, fallback, bound)
+                BY ONLY <2>sourceCapture, <2>emissionReport
+              <3>supported. \(expressions)SupportedAllocationInput(input.root, terms, syntax, weight, bound)
+                BY ONLY <2>canonical DEF syntax, bound
+              <3>reads. bound \\subseteq input.reads
+                BY ONLY <2>keys DEF bound
+              <3>fallback. fallback \\in ProofIntSlots
+                BY ONLY <2>keys DEF fallback
+              <3>count. observed.count = weight[input.root]
+                BY ONLY <2>candidateWidth
+              <3>record. expected = [source |-> expected.source, nodes |-> expected.nodes,
+                                    origins |-> expected.origins, indices |-> expected.indices]
                 BY ONLY DEF expected, SourceCompilerResults
-              <3>returned. actualReturn.certificate =
-                  [source |-> actualReturn.certificate.source, nodes |-> actualReturn.certificate.nodes,
-                   origins |-> actualReturn.certificate.origins, indices |-> actualReturn.certificate.indices]
-                BY ONLY <2>returnFields
-              <3>. QED BY ONLY <3>captured, <3>returned, <3>source, <3>nodes, <3>origins, <3>indices
-            <2>invocation. ProofInitialization!Expressions!ReviewedOrderedIntCertificateInvocation(input.root, input.reads,
-                              syntax, weight, expected)
-              PROOF
-              <3>reads. \\A term \\in DOMAIN syntax : syntax[term].kind = "read" => syntax[term].read \\in input.reads
-                BY ONLY <2>canonical, <2>keys, SMT
-                  DEF syntax, ProofInitialization!Expressions!SupportedAllocationInput
-              <3>actual. \\E allocationSteps, allocationHistory, traversalSteps, execution :
-                  /\\ ProofInitialization!Expressions!CompilerAllocationCompletion(syntax, weight,
-                       ProofInitialization!Expressions!InitialCompilerAllocation(input.root, weight),
-                       allocationSteps, allocationHistory)
-                  /\\ LET state == allocationHistory[allocationSteps]
-                         view == ProofInitialization!Expressions!AllocatedSourceView(state)
-                     IN /\\ ProofInitialization!Expressions!ReviewedCompilerTraversalExecution(view, state.count,
-                              traversalSteps, execution)
-                        /\\ expected = ProofInitialization!Expressions!ReviewedSwiftCertificateReturn(
-                             ProofInitialization!Expressions!SwiftSourceArray(view, state.count),
-                             execution[traversalSteps]).certificate
-                PROOF
-                <4>. WITNESS witness.allocationSteps, witness.allocationHistory, steps, storage
-                <4>. QED BY ONLY <2>allocation, <2>execution, <2>result
-                  DEF allocated, allocatedView, swiftSource, actualReturn
-              <3>. QED BY ONLY <3>reads, <3>actual DEF ProofInitialization!Expressions!ReviewedOrderedIntCertificateInvocation
+              <3>matched. expected = [source |-> \(expressions)AllocatedSwiftSource(observed),
+                  nodes |-> \(expressions)SwiftIndexedArray(captured.emitted.count, captured.emitted.nodes),
+                  origins |-> \(expressions)SwiftIndexedArray(captured.emitted.count, captured.emitted.origins),
+                  indices |-> \(expressions)SwiftIndexedArray(observed.count, captured.inverse)]
+                BY ONLY <3>record, <2>sourceCapture, <2>packed DEF emitted, inverse
+              <3>. HIDE DEF input, syntax, observed, frontier, size, captured, fallback, bound, expected
+              <3>checked. \(expressions)ReviewedOrderedIntCertificateInvocation(input.root, input.reads, syntax, weight,
+                  [source |-> \(expressions)AllocatedSwiftSource(observed),
+                   nodes |-> \(expressions)SwiftIndexedArray(captured.emitted.count, captured.emitted.nodes),
+                   origins |-> \(expressions)SwiftIndexedArray(captured.emitted.count, captured.emitted.origins),
+                   indices |-> \(expressions)SwiftIndexedArray(observed.count, captured.inverse)])
+                BY ONLY <3>supported, <3>reads, <3>fallback, <3>count, <2>capacity, <2>sourceReport, <3>reported,
+                  ProofIntegerBounds, ProofInitialSentinels, \(expressions)CheckedReportsIdentifyReviewedCompilerInvocation, SMT
+              <3>. QED BY ONLY <3>checked, <3>matched
             <2>derived. ProofInitialization!Expressions!LiteralReadAddCertificate(
                 ProofInitialization!Expressions!SwiftSourceArrayAsView(expected.source),
                 ProofInitialization!Expressions!SwiftCertificateArraysAsEmission(expected),
@@ -1380,66 +960,35 @@ package enum InitialFailureEvidence {
               BY ONLY <2>canonical, <2>capacity, <2>keys, <2>invocation, ProofIntegerBounds, ProofInitialSentinels,
                 ProofInitialization!Expressions!ActualReviewedCompilerResultSuppliesInitializerCertificate DEF syntax
             <2>projections.
-                /\\ ProofInitialization!Expressions!SwiftSourceArrayAsView(expected.source) = SourceSyntaxViews[\(row)][2]
-                /\\ ProofInitialization!Expressions!SwiftCertificateArraysAsEmission(expected) = SourcePlanEmission(\(row))
-                /\\ ProofInitialization!Expressions!SwiftArrayAsHistory(expected.indices) = SourceSyntaxIndices[\(row)]
+                /\\ \(expressions)SwiftSourceArrayAsView(expected.source) = SourceSyntaxViews[\(row)][2]
+                /\\ \(expressions)SwiftCertificateArraysAsEmission(expected) = SourcePlanEmission(\(row))
+                /\\ \(expressions)SwiftArrayAsHistory(expected.indices) = SourceSyntaxIndices[\(row)]
               PROOF
-              <3>source. ProofInitialization!Expressions!SwiftSourceArrayAsView(expected.source) = SourceSyntaxViews[\(row)][2]
-                PROOF
-                <4>packed. expected.source = swiftSource
-                  BY ONLY <2>lengths, <2>allocatedSource DEF expected, swiftSource, SourceCompilerResults
-                <4>count. allocated.count \\in Nat
-                  BY ONLY <2>tree DEF ProofInitialization!Expressions!CompilerOccurrenceTree
-                <4>roundTrip. ProofInitialization!Expressions!SwiftSourceArrayAsView(swiftSource) = allocatedView
-                  BY ONLY <4>count, ProofIntegerBounds, ProofInitialSentinels, ProofInitialization!Expressions!AllocatedSwiftSourceDecodesToSourceView DEF swiftSource, allocatedView
-                <4>. QED BY ONLY <4>packed, <4>roundTrip, <2>allocatedSource
-              <3>emission. ProofInitialization!Expressions!SwiftCertificateArraysAsEmission(expected) = SourcePlanEmission(\(row))
-                PROOF
-                <4>encoded. /\\ expected.nodes = ProofInitialization!Expressions!SwiftIndexedArray(emitted.count, emitted.nodes)
-                            /\\ expected.origins = ProofInitialization!Expressions!SwiftIndexedArray(emitted.count, emitted.origins)
-                  BY ONLY <2>result, <2>returnFields
-                <4>shapes. /\\ emitted.count \\in Nat
+              <3>shapes. /\\ emitted.count \\in Nat
                            /\\ emitted.nodes = [index \\in 1..emitted.count |-> emitted.nodes[index]]
                            /\\ emitted.origins = [index \\in 1..emitted.count |-> emitted.origins[index]]
-                  BY ONLY <2>final DEF emitted, ProofInitialization!Expressions!CompilerTraversalInvariant,
-                    ProofInitialization!Expressions!CertificateConstructionInvariant, ProofInitialization!Expressions!NodeEmissionArrays
-                <4>nodes. ProofInitialization!Expressions!SwiftArrayAsHistory(expected.nodes) = emitted.nodes
-                  BY ONLY <4>encoded, <4>shapes, ProofIntegerBounds, ProofInitialSentinels,
-                    ProofInitialization!Expressions!SwiftIndexedArrayDecodesToHistory
-                <4>origins. ProofInitialization!Expressions!SwiftArrayAsHistory(expected.origins) = emitted.origins
-                  BY ONLY <4>encoded, <4>shapes, ProofIntegerBounds, ProofInitialSentinels,
-                    ProofInitialization!Expressions!SwiftIndexedArrayDecodesToHistory
-                <4>count. expected.nodes.count = emitted.count
-                  BY ONLY <4>encoded DEF ProofInitialization!Expressions!SwiftIndexedArray
-                <4>plan. SourcePlanEmission(\(row)) =
-                    [count |-> emitted.count, height |-> 1, indices |-> <<emitted.count>>,
-                     nodes |-> emitted.nodes, origins |-> emitted.origins]
-                  PROOF
-                  <5>captured. SourcePlanEmission(\(row)) = \(emissionPrefix)SourceCapturedNodeTuple\(row)]
-                    BY ONLY <2>data DEF SourceCapturedNodeTuple\(row)
-                  <5>fields. /\\ emitted.count = \(sourceCount)
-                             /\\ emitted.nodes = SourceCapturedNodeTuple\(row)
-                             /\\ emitted.origins = SourceSyntaxOrigins[\(row)]
-                    BY ONLY <5>captured, <2>finalArrays, SMT
-                  <5>. QED BY ONLY <5>captured, <5>fields
-                <4>. QED BY ONLY <4>nodes, <4>origins, <4>count, <4>plan DEF ProofInitialization!Expressions!SwiftCertificateArraysAsEmission
-              <3>indices. ProofInitialization!Expressions!SwiftArrayAsHistory(expected.indices) = SourceSyntaxIndices[\(row)]
-                PROOF
-                <4>encoded. expected.indices = ProofInitialization!Expressions!SwiftIndexedArray(allocated.count, inverse)
-                  BY ONLY <2>result, <2>returnFields
-                <4>domain. /\\ allocated.count \\in Nat
-                           /\\ DOMAIN allocatedView.kinds = 1..allocated.count
-                  BY ONLY <2>tree, SMT DEF ProofInitialization!Expressions!CompilerOccurrenceTree
-                <4>typed. inverse \\in [1..allocated.count -> 0..emitted.count]
-                  BY ONLY <2>final, <4>domain DEF inverse, emitted, ProofInitialization!Expressions!CompilerTraversalInvariant,
-                    ProofInitialization!Expressions!CertificateConstructionInvariant
-                <4>shape. inverse = [index \\in 1..allocated.count |-> inverse[index]]
-                  BY ONLY <4>typed, SMT
-                <4>decoded. ProofInitialization!Expressions!SwiftArrayAsHistory(expected.indices) = inverse
-                  BY ONLY <4>encoded, <4>domain, <4>shape, ProofIntegerBounds, ProofInitialSentinels,
-                    ProofInitialization!Expressions!SwiftIndexedArrayDecodesToHistory
-                <4>. QED BY ONLY <4>decoded, <2>finalArrays
-              <3>. QED BY ONLY <3>source, <3>emission, <3>indices
+                           /\\ inverse \\in [1..observed.count -> 1..emitted.count]
+                BY ONLY <2>candidateWidth, <2>emissionReport
+                  DEF \(expressions)CanonicalEmissionData, \(expressions)LiteralReadAddCertificate,
+                    \(expressions)NodeEmissionArrays, emitted, inverse
+              <3>indexShape. inverse = [index \\in 1..observed.count |-> inverse[index]]
+                BY ONLY <3>shapes, SMT
+              <3>nodes. \(expressions)SwiftArrayAsHistory(expected.nodes) = emitted.nodes
+                BY ONLY <2>packed, <3>shapes, ProofIntegerBounds, ProofInitialSentinels,
+                  \(expressions)SwiftIndexedArrayDecodesToHistory
+              <3>origins. \(expressions)SwiftArrayAsHistory(expected.origins) = emitted.origins
+                BY ONLY <2>packed, <3>shapes, ProofIntegerBounds, ProofInitialSentinels,
+                  \(expressions)SwiftIndexedArrayDecodesToHistory
+              <3>indices. \(expressions)SwiftArrayAsHistory(expected.indices) = inverse
+                BY ONLY <2>packed, <3>indexShape, <2>candidateWidth, ProofIntegerBounds, ProofInitialSentinels,
+                  \(expressions)SwiftIndexedArrayDecodesToHistory
+              <3>count. expected.nodes.count = emitted.count
+                BY ONLY <2>packed DEF \(expressions)SwiftIndexedArray
+              <3>surface. emitted = [count |-> emitted.count, height |-> 1, indices |-> <<emitted.count>>,
+                                    nodes |-> emitted.nodes, origins |-> emitted.origins]
+                BY ONLY <2>emissionData
+              <3>. QED BY ONLY <2>sourceCapture, <3>nodes, <3>origins, <3>indices, <3>count, <3>surface
+                DEF capturedView, emitted, inverse, captured, \(expressions)SwiftCertificateArraysAsEmission
             <2>plan. ProofInitialization!Expressions!ExtractedNodePlan(
                 SourcePlanEmission(\(row)), SourceInitializers[\(row)][1]) = SourceInitializers[\(row)][2]
               BY ONLY ProofInitialSentinels, SMT DEF SourcePlanEmission, SourcePlanEmissions, SourceInitializers,
@@ -1452,7 +1001,8 @@ package enum InitialFailureEvidence {
                                     operands: [Int], before: [NativeInitialBindingOutput],
                                     sourceInitializers: String, sourceCompilerInputs: String,
                                     sourceCompilerInputDerivations: String, sourceCompilerInputSizes: String,
-                                    sourceCompilerInvocationWitnesses: String, sourceSyntaxViews: String,
+                                    sourceAllocationReports: String,
+                                    sourceSyntaxViews: String,
                                     sourceSyntaxOrigins: String, sourceSyntaxIndices: String,
                                     sourcePlanEmissions: String, sourceCapturedNodeTuples: String, sourceCertificateProofs: String,
                                     sourceInitializerCount: Int, sourceInitialControl: String,
@@ -1703,7 +1253,7 @@ package enum InitialFailureEvidence {
         SourceCompilerInputDerivations == \(sourceCompilerInputDerivations)
         SourceCompilerInputSizes == \(sourceCompilerInputSizes)
 
-        \(sourceCompilerInvocationWitnesses)
+        \(sourceAllocationReports)
 
         SourceCompilerResults(row) ==
             [source |-> ProofInitialization!Expressions!SwiftSourceArray(

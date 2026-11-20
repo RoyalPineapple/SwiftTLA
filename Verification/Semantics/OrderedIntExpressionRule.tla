@@ -6633,4 +6633,937 @@ THEOREM ActualReviewedCompilerResultSuppliesInitializerCertificate ==
                 TypedVisitedSourceInputs, emitted, inverse, final, view, allocated
     <1>. QED BY ONLY <1>identified, <1>source, <1>arrays, <1>certificate
 
+
+
+THEOREM ReviewedAllocationReturnsStoredEntries ==
+    ASSUME NEW root, NEW syntax, NEW weight, NEW steps, NEW history,
+           CompilerAllocationCompletion(syntax, weight, InitialCompilerAllocation(root, weight), steps, history)
+    PROVE /\ history[steps].position = steps
+          /\ \A slot \in 1..steps : history[steps].source[slot] =
+                 CompilerAllocationSourceNode(syntax, history[slot - 1])
+          /\ \A stage \in 0..steps : history[stage].position = stage
+    PROOF
+    <1>. DEFINE written(k) ==
+             /\ history[k].position = k
+             /\ \A slot \in 1..k : history[k].source[slot] =
+                    CompilerAllocationSourceNode(syntax, history[slot - 1])
+    <1>count. steps \in Nat BY DEF CompilerAllocationCompletion
+    <1>seed. history[0] = InitialCompilerAllocation(root, weight) BY DEF CompilerAllocationCompletion
+    <1>base. written(0) BY ONLY <1>seed, SMT DEF written, InitialCompilerAllocation
+    <1>advance. ASSUME NEW k \in 1..steps, \A i \in 0..(k-1) : written(i)
+                PROVE written(k)
+        PROOF
+        <2>index. /\ k-1 \in 0..(k-1) /\ (k-1)+1 = k BY <1>count, SMT
+        <2>prior. written(k-1) BY ONLY <2>index, (\A i \in 0..(k-1) : written(i)), SMT
+        <2>step. history[k] = ReviewedSwiftAllocationIteration(syntax, weight, history[k-1])
+            BY DEF CompilerAllocationCompletion
+        <2>fields. /\ history[k].position = history[k-1].position + 1
+                   /\ history[k].source = HistoryAppend(history[k-1].source, history[k-1].position,
+                                          CompilerAllocationSourceNode(syntax, history[k-1]))
+            BY ONLY <2>step, ReviewedAllocationIterationProjectsStoredFields
+        <2>tail. history[k].source[k] = CompilerAllocationSourceNode(syntax, history[k-1])
+            BY ONLY <2>fields, <2>prior, <2>index, k \in 1..steps, SMT DEF written, HistoryAppend
+        <2>keep. \A slot \in 1..(k-1) : history[k].source[slot] = history[k-1].source[slot]
+            BY ONLY <2>fields, <2>prior, <2>index, k \in 1..steps, SMT DEF written, HistoryAppend
+        <2>. QED BY ONLY <2>fields, <2>index, <2>prior, <2>tail, <2>keep, k \in 1..steps, SMT DEF written
+    <1>. HIDE DEF written
+    <1>all. \A k \in 0..steps : written(k)
+        BY ONLY <1>count, <1>base, <1>advance, FiniteIndexedPrefixProperty
+    <1>. QED BY ONLY <1>all, <1>count, SMT DEF written
+
+\* frontier records the number of allocated occurrences after each source
+\* entry. It can be checked from the final array without replaying allocation.
+BreadthFirstSourceAllocation(source, count, frontier) ==
+    /\ frontier[0] = 1
+    /\ frontier[count] = count
+    /\ \A slot \in 1..count :
+           LET entry == source[slot]
+               before == frontier[slot - 1]
+           IN /\ frontier[slot] = IF entry.kind = "add" THEN before + 2 ELSE before
+              /\ (entry.kind = "add" => entry.left = before + 1 /\ entry.right = before + 2)
+
+THEOREM ReviewedAllocationReturnsBreadthFirstSource ==
+    ASSUME NEW root, NEW syntax, NEW weight, NEW steps, NEW history,
+           CompilerAllocationCompletion(syntax, weight, InitialCompilerAllocation(root, weight), steps, history)
+    PROVE LET allocated == history[steps]
+              frontier == [index \in 0..steps |-> history[index].count]
+          IN /\ allocated.count = steps
+             /\ BreadthFirstSourceAllocation(allocated.source, allocated.count, frontier)
+    PROOF
+    <1>. DEFINE allocated == history[steps]
+                frontier == [index \in 0..steps |-> history[index].count]
+    <1>stored. /\ allocated.position = steps
+               /\ \A slot \in 1..steps :
+                      allocated.source[slot] = CompilerAllocationSourceNode(syntax, history[slot - 1])
+        BY ReviewedAllocationReturnsStoredEntries DEF allocated
+    <1>domain. /\ steps \in Nat /\ allocated.count = steps
+        BY <1>stored, SMT DEF CompilerAllocationCompletion, allocated
+    <1>seed. history[0].count = 1
+        BY SMT DEF CompilerAllocationCompletion, InitialCompilerAllocation
+    <1>ends. frontier[0] = 1 /\ frontier[steps] = steps
+        BY ONLY <1>domain, <1>seed, SMT DEF frontier, allocated
+    <1>entries. \A slot \in 1..steps :
+           LET entry == allocated.source[slot]
+               before == frontier[slot - 1]
+           IN /\ frontier[slot] = IF entry.kind = "add" THEN before + 2 ELSE before
+              /\ (entry.kind = "add" => entry.left = before + 1 /\ entry.right = before + 2)
+        PROOF
+        <2>. SUFFICES ASSUME NEW slot \in 1..steps
+                     PROVE LET entry == allocated.source[slot]
+                               before == frontier[slot - 1]
+                           IN /\ frontier[slot] = IF entry.kind = "add" THEN before + 2 ELSE before
+                              /\ (entry.kind = "add" => entry.left = before + 1 /\ entry.right = before + 2)
+            OBVIOUS
+        <2>. DEFINE prior == history[slot - 1]
+                    term == syntax[prior.expressions[prior.position + 1]]
+                    entry == allocated.source[slot]
+        <2>range. /\ slot \in 0..steps /\ slot - 1 \in 0..steps
+            BY ONLY (slot \in 1..steps), <1>domain, SMT
+        <2>current. history[slot] = ReviewedSwiftAllocationIteration(syntax, weight, prior)
+            BY (slot \in 1..steps) DEF CompilerAllocationCompletion, prior
+        <2>count. history[slot].count = IF term.kind = "add" THEN prior.count + 2 ELSE prior.count
+            BY ONLY <2>current, ReviewedAllocationIterationProjectsStoredFields, SMT DEF term
+        <2>selected. /\ entry.kind = term.kind
+                     /\ (entry.kind = "add" => entry.left = prior.count + 1 /\ entry.right = prior.count + 2)
+            BY ONLY <1>stored, (slot \in 1..steps), SMT DEF entry, term, prior, CompilerAllocationSourceNode
+        <2>. QED BY ONLY <2>range, <2>count, <2>selected, SMT DEF frontier, entry, prior
+    <1>. QED BY ONLY <1>domain, <1>ends, <1>entries, SMT DEF BreadthFirstSourceAllocation
+
+BreadthFirstSourceReport(root, syntax, state, frontier) ==
+    /\ state.count \in Nat \ {0}
+    /\ state.position = state.count
+    /\ state.expressions \in [1..state.count -> DOMAIN syntax]
+    /\ state.expressions[1] = root
+    /\ CompilerAllocatedPayloadsMatch(syntax, state)
+    /\ frontier \in [0..state.count -> 1..state.count]
+    /\ \A slot \in 1..state.count : slot <= frontier[slot - 1]
+    /\ BreadthFirstSourceAllocation(state.source, state.count, frontier)
+
+THEOREM BreadthFirstSourceReportsWithSameInputAgree ==
+    ASSUME NEW root, NEW syntax, NEW first, NEW firstFrontier, NEW second, NEW secondFrontier,
+           BreadthFirstSourceReport(root, syntax, first, firstFrontier),
+           BreadthFirstSourceReport(root, syntax, second, secondFrontier),
+           first.count = second.count
+    PROVE AllocatedSwiftSource(first) = AllocatedSwiftSource(second)
+    PROOF
+    <1>. DEFINE count == first.count
+                firstPacked == AllocatedSwiftSource(first)
+                secondPacked == AllocatedSwiftSource(second)
+                agrees(prefix) ==
+                    /\ firstFrontier[prefix] = secondFrontier[prefix]
+                    /\ \A position \in 1..firstFrontier[prefix] :
+                           first.expressions[position] = second.expressions[position]
+                    /\ \A slot \in 1..prefix : firstPacked.items[slot - 1] = secondPacked.items[slot - 1]
+    <1>input. /\ count \in Nat \ {0}
+              /\ first.position = count /\ second.position = count
+              /\ first.expressions[1] = root /\ second.expressions[1] = root
+              /\ CompilerAllocatedPayloadsMatch(syntax, first)
+              /\ CompilerAllocatedPayloadsMatch(syntax, second)
+        BY ONLY BreadthFirstSourceReport(root, syntax, first, firstFrontier),
+            BreadthFirstSourceReport(root, syntax, second, secondFrontier), (first.count = second.count), SMT
+            DEF count, BreadthFirstSourceReport
+    <1>frontiers. /\ firstFrontier \in [0..count -> 1..count]
+                  /\ secondFrontier \in [0..count -> 1..count]
+                  /\ \A slot \in 1..count : slot <= firstFrontier[slot - 1]
+                  /\ BreadthFirstSourceAllocation(first.source, count, firstFrontier)
+                  /\ BreadthFirstSourceAllocation(second.source, count, secondFrontier)
+        BY ONLY BreadthFirstSourceReport(root, syntax, first, firstFrontier),
+            BreadthFirstSourceReport(root, syntax, second, secondFrontier), (first.count = second.count), SMT
+            DEF count, BreadthFirstSourceReport
+    <1>seed. firstFrontier[0] = 1 /\ secondFrontier[0] = 1
+        BY ONLY <1>frontiers DEF BreadthFirstSourceAllocation
+    <1>base. agrees(0)
+        BY ONLY <1>input, <1>seed, SMT DEF agrees
+    <1>countType. count \in Nat
+        BY ONLY <1>input, SMT
+    <1>advance. ASSUME NEW slot \in 1..count, \A prior \in 0..(slot - 1) : agrees(prior)
+                PROVE agrees(slot)
+        PROOF
+        <2>. DEFINE before == firstFrontier[slot - 1]
+                    firstEntry == first.source[slot]
+                    secondEntry == second.source[slot]
+                    term == syntax[first.expressions[slot]]
+        <2>range. /\ slot - 1 \in 0..(slot - 1) /\ slot - 1 \in 0..count
+                   /\ slot - 1 \in 0..(count - 1)
+            BY ONLY <1>countType, (slot \in 1..count), SMT
+        <2>old. agrees(slot - 1)
+            BY ONLY <2>range, (\A prior \in 0..(slot - 1) : agrees(prior)), SMT
+        <2>queued. /\ before \in 1..count /\ slot \in 1..before
+                    /\ secondFrontier[slot - 1] = before
+            BY ONLY <1>frontiers, <2>range, <2>old, (slot \in 1..count), SMT DEF before, agrees
+        <2>sameTerm. first.expressions[slot] = second.expressions[slot]
+            BY ONLY <2>old, <2>queued, SMT DEF agrees, before
+        <2>firstSource.
+            /\ firstEntry.kind = term.kind
+            /\ (term.kind = "literal" => firstEntry.literal = term.literal)
+            /\ (term.kind = "read" => firstEntry.read = term.read)
+            /\ (term.kind = "add" =>
+                   /\ first.expressions[firstEntry.left] = term.left
+                   /\ first.expressions[firstEntry.right] = term.right)
+            BY ONLY <1>input, (slot \in 1..count), SMT DEF firstEntry, term, CompilerAllocatedPayloadsMatch
+        <2>secondSource.
+            /\ secondEntry.kind = term.kind
+            /\ (term.kind = "literal" => secondEntry.literal = term.literal)
+            /\ (term.kind = "read" => secondEntry.read = term.read)
+            /\ (term.kind = "add" =>
+                   /\ second.expressions[secondEntry.left] = term.left
+                   /\ second.expressions[secondEntry.right] = term.right)
+            BY ONLY <1>input, (slot \in 1..count), <2>sameTerm, SMT DEF secondEntry, term, CompilerAllocatedPayloadsMatch
+        <2>firstAllocation.
+            /\ firstFrontier[slot] = IF term.kind = "add" THEN before + 2 ELSE before
+            /\ (term.kind = "add" => firstEntry.left = before + 1 /\ firstEntry.right = before + 2)
+            BY ONLY <1>frontiers, (slot \in 1..count), <2>firstSource, SMT
+                DEF BreadthFirstSourceAllocation, firstEntry, before
+        <2>secondAllocation.
+            /\ secondFrontier[slot] = IF term.kind = "add" THEN before + 2 ELSE before
+            /\ (term.kind = "add" => secondEntry.left = before + 1 /\ secondEntry.right = before + 2)
+            BY ONLY <1>frontiers, (slot \in 1..count), <2>queued, <2>secondSource, SMT
+                DEF BreadthFirstSourceAllocation, secondEntry
+        <2>extendedFrontier. firstFrontier[slot] = secondFrontier[slot]
+            BY ONLY <2>firstAllocation, <2>secondAllocation, SMT
+        <2>extendedTerms. \A position \in 1..firstFrontier[slot] :
+                             first.expressions[position] = second.expressions[position]
+            PROOF
+            <3>. SUFFICES ASSUME NEW position \in 1..firstFrontier[slot]
+                         PROVE first.expressions[position] = second.expressions[position]
+                OBVIOUS
+            <3>old. CASE position <= before
+                BY ONLY <3>old, (position \in 1..firstFrontier[slot]), <2>queued, <2>old, SMT DEF before, agrees
+            <3>new. CASE position > before
+                PROOF
+                <4>pair. /\ term.kind = "add" /\ position \in {before + 1, before + 2}
+                    BY ONLY <3>new, (position \in 1..firstFrontier[slot]), <2>queued, <2>firstAllocation, SMT
+                <4>children.
+                    /\ first.expressions[before + 1] = second.expressions[before + 1]
+                    /\ first.expressions[before + 2] = second.expressions[before + 2]
+                    BY ONLY <4>pair, <2>firstSource, <2>secondSource, <2>firstAllocation, <2>secondAllocation, SMT
+                <4>. QED BY ONLY <4>pair, <4>children, SMT
+            <3>order. position <= before \/ position > before
+                BY ONLY (position \in 1..firstFrontier[slot]), <2>queued, SMT
+            <3>. QED BY ONLY <3>order, <3>old, <3>new, SMT
+        <2>secondOffset. slot - 1 \in 0..(second.count - 1)
+            BY ONLY <2>range, (first.count = second.count), SMT DEF count
+        <2>packedEntry. firstPacked.items[slot - 1] = secondPacked.items[slot - 1]
+            BY ONLY <2>range, <2>secondOffset, <2>firstSource, <2>secondSource, <2>firstAllocation,
+                <2>secondAllocation, (first.count = second.count), SMT
+                DEF firstPacked, secondPacked, AllocatedSwiftSource, firstEntry, secondEntry, count
+        <2>extendedEntries. \A index \in 1..slot : firstPacked.items[index - 1] = secondPacked.items[index - 1]
+            BY ONLY <2>old, <2>packedEntry, (slot \in 1..count), SMT DEF agrees
+        <2>. QED BY ONLY <2>extendedFrontier, <2>extendedTerms, <2>extendedEntries DEF agrees
+    <1>. HIDE DEF agrees
+    <1>all. \A slot \in 0..count : agrees(slot)
+        BY ONLY <1>countType, <1>base, <1>advance, FiniteIndexedPrefixProperty
+    <1>lastIndex. count \in 0..count
+        BY ONLY <1>countType, SMT
+    <1>terminal. agrees(count)
+        BY ONLY <1>all, <1>lastIndex, SMT
+    <1>slots. \A slot \in 1..count : firstPacked.items[slot - 1] = secondPacked.items[slot - 1]
+        BY ONLY <1>terminal DEF agrees
+    <1>entries. \A offset \in 0..(count - 1) : firstPacked.items[offset] = secondPacked.items[offset]
+        PROOF
+        <2>. SUFFICES ASSUME NEW offset \in 0..(count - 1)
+                     PROVE firstPacked.items[offset] = secondPacked.items[offset]
+            OBVIOUS
+        <2>slot. /\ offset + 1 \in 1..count /\ (offset + 1) - 1 = offset
+            BY ONLY <1>countType, (offset \in 0..(count - 1)), SMT
+        <2>. QED BY ONLY <1>slots, <2>slot, SMT
+    <1>firstRecord. firstPacked = [count |-> count, items |-> firstPacked.items]
+        BY ONLY DEF count, firstPacked, AllocatedSwiftSource
+    <1>secondRecord. secondPacked = [count |-> second.count, items |-> secondPacked.items]
+        BY ONLY DEF secondPacked, AllocatedSwiftSource
+    <1>firstFunction. firstPacked.items = [offset \in 0..(count - 1) |-> firstPacked.items[offset]]
+        BY ONLY DEF count, firstPacked, AllocatedSwiftSource
+    <1>secondFunction. secondPacked.items = [offset \in 0..(second.count - 1) |-> secondPacked.items[offset]]
+        BY ONLY DEF secondPacked, AllocatedSwiftSource
+    <1>sameDomain. 0..(second.count - 1) = 0..(count - 1)
+        BY ONLY (first.count = second.count) DEF count
+    <1>. HIDE DEF firstPacked, secondPacked
+    <1>functions. [offset \in 0..(count - 1) |-> firstPacked.items[offset]] =
+                  [offset \in 0..(count - 1) |-> secondPacked.items[offset]]
+        BY ONLY <1>entries, SMT
+    <1>items. firstPacked.items = secondPacked.items
+        BY ONLY <1>firstFunction, <1>secondFunction, <1>sameDomain, <1>functions, SMT
+    <1>records. firstPacked = secondPacked
+        BY ONLY <1>firstRecord, <1>secondRecord, <1>items, (first.count = second.count), SMT DEF count
+    <1>. QED BY ONLY <1>records DEF firstPacked, secondPacked
+
+THEOREM GivenCompletedAllocationMatchesBreadthFirstReport ==
+    ASSUME NEW root, NEW terms, NEW syntax, NEW weight, NEW bound,
+           SupportedAllocationInput(root, terms, syntax, weight, bound),
+           NEW allocationSteps, NEW allocationHistory,
+           CompilerAllocationCompletion(syntax, weight, InitialCompilerAllocation(root, weight),
+               allocationSteps, allocationHistory),
+           NEW observed, NEW observedFrontier,
+           BreadthFirstSourceReport(root, syntax, observed, observedFrontier),
+           observed.count = weight[root]
+    PROVE LET allocated == allocationHistory[allocationSteps]
+          IN /\ AllocatedSwiftSource(allocated) = AllocatedSwiftSource(observed)
+             /\ AllocatedSourceView(allocated) = SwiftSourceArrayAsView(AllocatedSwiftSource(observed))
+    PROOF
+    <1>. DEFINE allocated == allocationHistory[allocationSteps]
+                view == AllocatedSourceView(allocated)
+                start == InitialCompilerAllocation(root, weight)
+                frontier == [index \in 0..allocationSteps |-> allocationHistory[index].count]
+    <1>allocation.
+        CompilerAllocationCompletion(syntax, weight, start, allocationSteps, allocationHistory)
+        BY ONLY CompilerAllocationCompletion(syntax, weight, InitialCompilerAllocation(root, weight),
+            allocationSteps, allocationHistory) DEF start
+    <1>positions. \A stage \in 0..allocationSteps : allocationHistory[stage].position = stage
+        BY ONLY <1>allocation, ReviewedAllocationReturnsStoredEntries, SMT DEF start
+    <1>order. /\ allocated.count = allocationSteps
+              /\ BreadthFirstSourceAllocation(allocated.source, allocated.count, frontier)
+        BY ONLY <1>allocation, ReviewedAllocationReturnsBreadthFirstSource DEF start, allocated, frontier
+    <1>completion.
+        /\ allocationSteps \in Nat
+        /\ allocated.position = allocated.count
+        BY ONLY <1>allocation, SMT DEF CompilerAllocationCompletion, allocated
+    <1>initial. CompilerAllocationInvariant(root, terms, syntax, weight, bound, start)
+        BY ONLY SupportedAllocationInput(root, terms, syntax, weight, bound),
+            CompilerAllocationStartsWithItsLoopInvariant DEF start
+    <1>prefix. \A stage \in 0..allocationSteps :
+        CompilerAllocationInvariant(root, terms, syntax, weight, bound, allocationHistory[stage])
+        BY ONLY SupportedAllocationInput(root, terms, syntax, weight, bound), <1>allocation, <1>initial,
+            AllocationCompletionRetainsEveryLoopInvariant DEF start
+    <1>terminal. CompilerAllocationInvariant(root, terms, syntax, weight, bound, allocated)
+        BY ONLY <1>completion, <1>prefix, SMT DEF allocated
+    <1>count. allocated.count = weight[root]
+        BY ONLY <1>terminal, <1>completion, SupportedAllocationInput(root, terms, syntax, weight, bound),
+            CompletedAllocationSuppliesOccurrenceTreeAndSource, SMT
+    <1>shape.
+        /\ allocated.count \in Nat \ {0}
+        /\ allocated.expressions \in [1..allocated.count -> DOMAIN syntax]
+        /\ allocated.expressions[1] = root
+        /\ CompilerAllocatedPayloadsMatch(syntax, allocated)
+        BY ONLY <1>terminal, SupportedAllocationInput(root, terms, syntax, weight, bound), SMT
+            DEF CompilerAllocationInvariant, SupportedAllocationInput
+    <1>frontierTypes. frontier \in [0..allocated.count -> 1..allocated.count]
+        PROOF
+        <2>bounds. \A stage \in 0..allocationSteps :
+                       allocationHistory[stage].count \in 1..allocated.count
+            PROOF
+            <3>. SUFFICES ASSUME NEW stage \in 0..allocationSteps
+                         PROVE allocationHistory[stage].count \in 1..allocated.count
+                OBVIOUS
+            <3>invariant. CompilerAllocationInvariant(root, terms, syntax, weight, bound, allocationHistory[stage])
+                BY ONLY <1>prefix, (stage \in 0..allocationSteps), SMT
+            <3>natural. allocationHistory[stage].count \in Nat \ {0}
+                BY ONLY <3>invariant DEF CompilerAllocationInvariant
+            <3>size. allocationHistory[stage].count <= weight[root]
+                BY ONLY <3>invariant, SupportedAllocationInput(root, terms, syntax, weight, bound),
+                    CompilerAllocationFitsItsFiniteInputSize, SMT
+            <3>. QED BY ONLY <3>natural, <3>size, <1>count, SMT
+        <2>. QED BY ONLY <2>bounds, <1>order, SMT DEF frontier
+    <1>ready. \A slot \in 1..allocated.count : slot <= frontier[slot - 1]
+        PROOF
+        <2>. SUFFICES ASSUME NEW slot \in 1..allocated.count
+                     PROVE slot <= frontier[slot - 1]
+            OBVIOUS
+        <2>stepCount. /\ allocationSteps \in Nat /\ allocated.count = allocationSteps
+            BY ONLY <1>completion, <1>order
+        <2>slot. slot \in 1..allocationSteps
+            BY ONLY (slot \in 1..allocated.count), <2>stepCount
+        <2>range. /\ slot \in 1..allocationSteps /\ slot - 1 \in 0..allocationSteps
+            BY ONLY <2>slot, <2>stepCount, SMT
+        <2>guard. allocationHistory[slot - 1].position < allocationHistory[slot - 1].count
+            BY ONLY <1>allocation, <2>range, SMT DEF CompilerAllocationCompletion
+        <2>position. allocationHistory[slot - 1].position = slot - 1
+            BY ONLY <1>positions, <2>range, SMT
+        <2>read. frontier[slot - 1] = allocationHistory[slot - 1].count
+            BY ONLY <2>range DEF frontier
+        <2>frontierBound. frontier[slot - 1] \in 1..allocated.count
+            BY ONLY <1>frontierTypes, <2>range, <2>stepCount, SMT
+        <2>integers. /\ slot \in Int /\ frontier[slot - 1] \in Int
+            BY ONLY (slot \in 1..allocated.count), <2>frontierBound, <1>shape, SMT
+        <2>strict. slot - 1 < frontier[slot - 1]
+            BY ONLY <2>guard, <2>position, <2>read, SMT
+        <2>. QED BY ONLY <2>integers, <2>strict, SMT
+    <1>report. BreadthFirstSourceReport(root, syntax, allocated, frontier)
+        BY ONLY <1>completion, <1>order, <1>shape, <1>frontierTypes, <1>ready DEF BreadthFirstSourceReport
+    <1>countAgreement. allocated.count = observed.count
+        BY ONLY <1>count, (observed.count = weight[root]), SMT
+    <1>sameSource. AllocatedSwiftSource(allocated) = AllocatedSwiftSource(observed)
+        BY ONLY <1>report, BreadthFirstSourceReport(root, syntax, observed, observedFrontier),
+            <1>countAgreement, BreadthFirstSourceReportsWithSameInputAgree
+    <1>roundTrip. SwiftSourceArrayAsView(AllocatedSwiftSource(allocated)) = view
+        PROOF
+        <2>packed. AllocatedSwiftSource(allocated) = SwiftSourceArray(view, allocated.count)
+            BY ONLY <1>shape, AllocatedEnumArrayIsTheTraversalSource, SMT DEF view
+        <2>decoded. SwiftSourceArrayAsView(SwiftSourceArray(view, allocated.count)) = view
+            BY ONLY <1>shape, AllocatedSwiftSourceDecodesToSourceView, SMT DEF view
+        <2>. QED BY ONLY <2>packed, <2>decoded
+    <1>sameView. view = SwiftSourceArrayAsView(AllocatedSwiftSource(observed))
+        BY ONLY <1>sameSource, <1>roundTrip, SMT
+    <1>. QED BY ONLY <1>sameSource, <1>sameView DEF allocated, view
+
+
+CompilerOccurrenceSizes(view, size) ==
+    /\ size \in [DOMAIN view.kinds -> Nat \ {0}]
+    /\ \A origin \in DOMAIN view.kinds :
+        size[origin] = IF view.kinds[origin] = "add"
+                       THEN 1 + size[view.left[origin]] + size[view.right[origin]]
+                       ELSE 1
+
+CompletedEmissionEnd(state, slot) ==
+    IF slot = 0 THEN 0 ELSE state.current.inverse[state.completed.terms[slot]]
+
+CompletedEmissionSpans(size, state) ==
+    /\ CompletedEmissionEnd(state, state.completed.height) = state.current.emitted.count
+    /\ \A slot \in 1..state.completed.height :
+        CompletedEmissionEnd(state, slot) =
+            CompletedEmissionEnd(state, slot - 1) + size[state.completed.terms[slot]]
+
+AddEmissionRanks(view, size, current, origin) ==
+    LET left == current.inverse[view.left[origin]]
+        right == current.inverse[view.right[origin]]
+    IN /\ left > 0 /\ right > 0
+       /\ current.inverse[origin] = right + 1
+       /\ right = left + size[view.right[origin]]
+       /\ current.inverse[origin] - size[origin] = left - size[view.left[origin]]
+
+EmittedAddRanks(view, size, current) ==
+    \A origin \in DOMAIN view.kinds :
+        view.kinds[origin] = "add" /\ current.inverse[origin] > 0
+        => AddEmissionRanks(view, size, current, origin)
+
+ExactEmissionNodeRecords(emitted) ==
+    \A index \in 1..emitted.count :
+        LET node == emitted.nodes[index]
+        IN node = [kind |-> node.kind, payload |-> node.payload, left |-> node.left, right |-> node.right]
+
+CanonicalEmissionData(view, size, current, fallback, bound) ==
+    /\ LiteralReadAddCertificate(view, current.emitted, current.inverse, fallback, bound)
+    /\ ExactEmissionNodeRecords(current.emitted)
+    /\ current.inverse[view.root] = size[view.root]
+    /\ \A parent \in DOMAIN view.kinds : view.kinds[parent] = "add" =>
+           AddEmissionRanks(view, size, current, parent)
+
+THEOREM EmissionStepPreservesCompletedSpansAndAddRanks ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW size, CompilerOccurrenceSizes(view, size),
+           NEW state, CompilerTraversalInvariant(view, state),
+           CompletedEmissionSpans(size, state), EmittedAddRanks(view, size, state.current),
+           ExactEmissionNodeRecords(state.current.emitted),
+           state.height > 0,
+           state.pending[state.height].expanded \/ view.kinds[state.pending[state.height].node] # "add"
+    PROVE LET next == CompilerTraversalNext(view, state)
+          IN /\ CompletedEmissionSpans(size, next)
+             /\ EmittedAddRanks(view, size, next.current)
+             /\ ExactEmissionNodeRecords(next.current.emitted)
+    PROOF
+    <1>. DEFINE frame == state.pending[state.height]
+                origin == frame.node
+                height == state.completed.height
+                before == state.current
+                next == CompilerTraversalNext(view, state)
+                after == next.current
+                keep == IF frame.expanded THEN height - 2 ELSE height
+    <1>frame. /\ origin \in DOMAIN view.kinds /\ frame.expanded \in BOOLEAN
+              /\ before.inverse[origin] = 0
+              /\ (frame.expanded => view.kinds[origin] = "add")
+        BY ONLY CompilerOccurrenceTree(view, count), CompilerTraversalInvariant(view, state),
+            state.height > 0, PendingCompilerFramesHaveFreshEmissionOrigins
+            DEF CompilerTraversalInvariant, frame, origin, before
+    <1>mode. frame.expanded \equiv (view.kinds[origin] = "add")
+        BY ONLY <1>frame,
+            state.pending[state.height].expanded \/ view.kinds[state.pending[state.height].node] # "add",
+            SMT DEF frame, origin
+    <1>types. /\ height \in Nat /\ before.emitted.count \in Nat
+              /\ frame.prefix = state.completed
+              /\ (frame.expanded => height >= 2)
+        BY ONLY state.height > 0, CompilerTraversalInvariant(view, state), SMT
+            DEF CompilerTraversalInvariant, CertificateConstructionInvariant, NodeEmissionArrays,
+                PendingVisitContract, WellFormedVisitFrame, WellFormedVisitPrefix, frame, height, before
+    <1>keep. keep \in 0..height
+        BY ONLY <1>types, SMT DEF keep
+    <1>step. /\ after = AppendCertificateConstructor(view, before, origin)
+             /\ next.completed = VisitFrameExit(frame)
+        BY ONLY <1>mode, SMT DEF next, after, before, frame, origin, CompilerTraversalNext
+    <1>append. /\ after.emitted.count = before.emitted.count + 1
+               /\ after.inverse[origin] = before.emitted.count + 1
+               /\ \A node \in DOMAIN view.kinds : node # origin =>
+                      after.inverse[node] = before.inverse[node]
+        BY ONLY <1>frame, <1>step, SMT DEF AppendCertificateConstructor
+    <1>pop. /\ next.completed.height = keep + 1
+            /\ next.completed.terms[keep + 1] = origin
+            /\ \A slot \in 1..keep : next.completed.terms[slot] = state.completed.terms[slot]
+        BY ONLY <1>types, <1>keep, <1>step, SMT
+            DEF frame, keep, height, origin, VisitFrameExit,
+                FoldVisitPrefix, PushVisitPrefix, VisitPrefix, HistoryAppend
+    <1>oldSpans. /\ CompletedEmissionEnd(state, height) = before.emitted.count
+                 /\ \A slot \in 1..height :
+                       CompletedEmissionEnd(state, slot) =
+                          CompletedEmissionEnd(state, slot - 1) + size[state.completed.terms[slot]]
+        BY ONLY CompletedEmissionSpans(size, state)
+            DEF CompletedEmissionSpans, height, before
+    <1>retained. \A slot \in 0..keep :
+                   CompletedEmissionEnd(next, slot) = CompletedEmissionEnd(state, slot)
+        PROOF
+        <2>. SUFFICES ASSUME NEW slot \in 0..keep
+                     PROVE CompletedEmissionEnd(next, slot) = CompletedEmissionEnd(state, slot)
+            OBVIOUS
+        <2>zero. CASE slot = 0
+            BY ONLY <2>zero DEF CompletedEmissionEnd
+        <2>nonzero. CASE slot # 0
+            PROOF
+            <3>old. /\ slot \in 1..keep /\ slot \in 1..height
+                    /\ state.completed.terms[slot] \in DOMAIN view.kinds
+                    /\ before.inverse[state.completed.terms[slot]] > 0
+                BY ONLY <2>nonzero, <1>keep, <1>types, slot \in 0..keep,
+                    CompilerTraversalInvariant(view, state), SMT
+                    DEF height, before, CompilerTraversalInvariant, CompletedCertificateRoots
+            <3>. QED BY ONLY <3>old, <1>frame, <1>pop, <1>append, SMT
+                DEF CompletedEmissionEnd, after, before
+        <2>. QED BY ONLY <2>zero, <2>nonzero, SMT
+    <1>add. frame.expanded =>
+        /\ before.emitted.count + 1 = CompletedEmissionEnd(state, keep) + size[origin]
+        /\ AddEmissionRanks(view, size, after, origin)
+        PROOF
+        <2>. SUFFICES ASSUME frame.expanded
+            PROVE /\ before.emitted.count + 1 = CompletedEmissionEnd(state, keep) + size[origin]
+                  /\ AddEmissionRanks(view, size, after, origin)
+            OBVIOUS
+        <2>. DEFINE left == view.left[origin]
+                    right == view.right[origin]
+        <2>children. /\ height >= 2
+                      /\ state.completed.terms[height - 1] = left
+                      /\ state.completed.terms[height] = right
+                      /\ left \in DOMAIN view.kinds /\ right \in DOMAIN view.kinds
+                      /\ before.inverse[left] \in 1..before.emitted.count
+                      /\ before.inverse[right] \in 1..before.emitted.count
+            BY ONLY PendingCompilerAddHasItsOrderedCompletedChildren, frame.expanded, state.height > 0,
+                CompilerTraversalInvariant(view, state)
+                DEF height, left, right, frame, origin, before, CompilerTraversalInvariant
+        <2>sizes. /\ size[origin] = 1 + size[left] + size[right]
+                   /\ size[origin] \in Nat /\ size[left] \in Nat /\ size[right] \in Nat
+                   /\ left # origin /\ right # origin
+            BY ONLY <1>frame, <1>mode, <2>children, frame.expanded,
+                CompilerOccurrenceSizes(view, size), CompilerOccurrenceTree(view, count), SMT
+                DEF left, right, CompilerOccurrenceSizes, CompilerOccurrenceTree
+        <2>prior. /\ keep = height - 2
+                   /\ before.inverse[right] = before.emitted.count
+                   /\ before.inverse[right] = before.inverse[left] + size[right]
+                   /\ before.inverse[left] = CompletedEmissionEnd(state, keep) + size[left]
+            BY ONLY <1>oldSpans, <1>types, <2>children, frame.expanded, SMT
+                DEF height, keep, before, CompletedEmissionEnd
+        <2>ranks. AddEmissionRanks(view, size, after, origin)
+            BY ONLY <1>types, <1>append, <2>children, <2>sizes, <2>prior, SMT
+                DEF left, right, AddEmissionRanks
+        <2>lower. CompletedEmissionEnd(state, keep) \in Nat
+            BY ONLY <1>keep, <1>types, CompilerTraversalInvariant(view, state), SMT
+                DEF CompletedEmissionEnd, height, before, CompilerTraversalInvariant, CompletedCertificateRoots
+        <2>. QED BY ONLY <1>types, <2>children, <2>sizes, <2>prior, <2>ranks, <2>lower, SMT
+    <1>last. CompletedEmissionEnd(next, keep + 1) =
+                 CompletedEmissionEnd(next, keep) + size[origin]
+        PROOF
+        <2>new. CompletedEmissionEnd(next, keep + 1) = before.emitted.count + 1
+            BY ONLY <1>pop, <1>append, <1>keep, SMT DEF CompletedEmissionEnd, after
+        <2>size. before.emitted.count + 1 = CompletedEmissionEnd(state, keep) + size[origin]
+            PROOF
+            <3>leaf. CASE ~frame.expanded
+                BY ONLY <3>leaf, <1>frame, <1>mode, <1>oldSpans, CompilerOccurrenceSizes(view, size), SMT
+                    DEF keep, CompilerOccurrenceSizes
+            <3>. QED BY ONLY <3>leaf, <1>add, SMT
+        <2>. QED BY ONLY <2>new, <2>size, <1>retained, <1>keep, SMT
+    <1>spans. CompletedEmissionSpans(size, next)
+        PROOF
+        <2>tail. CompletedEmissionEnd(next, next.completed.height) = after.emitted.count
+            BY ONLY <1>pop, <1>append, <1>keep, SMT DEF CompletedEmissionEnd, after
+        <2>retained. \A slot \in 1..keep :
+            CompletedEmissionEnd(next, slot) =
+               CompletedEmissionEnd(next, slot - 1) + size[next.completed.terms[slot]]
+            PROOF
+            <3>. SUFFICES ASSUME NEW slot \in 1..keep
+                 PROVE CompletedEmissionEnd(next, slot) =
+                    CompletedEmissionEnd(next, slot - 1) + size[next.completed.terms[slot]]
+                OBVIOUS
+            <3>ranges. /\ slot \in 1..height
+                       /\ slot \in 0..keep /\ slot - 1 \in 0..keep
+                BY ONLY slot \in 1..keep, <1>types, <1>keep, SMT
+            <3>ends. /\ CompletedEmissionEnd(next, slot) = CompletedEmissionEnd(state, slot)
+                     /\ CompletedEmissionEnd(next, slot - 1) = CompletedEmissionEnd(state, slot - 1)
+                BY ONLY <3>ranges, <1>retained, SMT
+            <3>term. next.completed.terms[slot] = state.completed.terms[slot]
+                BY ONLY slot \in 1..keep, <1>pop, SMT
+            <3>span. CompletedEmissionEnd(state, slot) =
+                        CompletedEmissionEnd(state, slot - 1) + size[state.completed.terms[slot]]
+                BY ONLY <3>ranges, <1>oldSpans, SMT
+            <3>. QED BY ONLY <3>ends, <3>term, <3>span
+        <2>. QED BY ONLY <2>tail, <2>retained, <1>pop, <1>last, <1>keep, SMT
+            DEF CompletedEmissionSpans, after
+    <1>ranks. EmittedAddRanks(view, size, after)
+        PROOF
+        <2>. SUFFICES ASSUME NEW parent \in DOMAIN view.kinds,
+                             view.kinds[parent] = "add", after.inverse[parent] > 0
+                     PROVE AddEmissionRanks(view, size, after, parent)
+            BY DEF EmittedAddRanks
+        <2>new. CASE parent = origin
+            BY ONLY <2>new, <1>mode, <1>add, view.kinds[parent] = "add", SMT
+        <2>old. CASE parent # origin
+            PROOF
+            <3>prior. AddEmissionRanks(view, size, before, parent)
+                BY ONLY <1>append, <2>old, parent \in DOMAIN view.kinds, view.kinds[parent] = "add",
+                    after.inverse[parent] > 0, EmittedAddRanks(view, size, state.current), SMT
+                    DEF EmittedAddRanks, before
+            <3>children. /\ view.left[parent] \in DOMAIN view.kinds
+                         /\ view.right[parent] \in DOMAIN view.kinds
+                         /\ view.left[parent] # origin /\ view.right[parent] # origin
+                BY ONLY <3>prior, <1>frame, view.kinds[parent] = "add", parent \in DOMAIN view.kinds,
+                    CompilerOccurrenceTree(view, count), SMT DEF CompilerOccurrenceTree, AddEmissionRanks
+            <3>. QED BY ONLY <3>prior, <3>children, <2>old, <1>append, parent \in DOMAIN view.kinds, SMT
+                DEF AddEmissionRanks
+        <2>. QED BY ONLY <2>new, <2>old, SMT
+    <1>records. ExactEmissionNodeRecords(after.emitted)
+        PROOF
+        <2>retained. \A index \in 1..before.emitted.count :
+            after.emitted.nodes[index] = before.emitted.nodes[index]
+            BY ONLY <1>types, <1>step, SMT DEF AppendCertificateConstructor, HistoryAppend
+        <2>appended. LET node == after.emitted.nodes[after.emitted.count]
+                     IN node = [kind |-> node.kind, payload |-> node.payload,
+                                left |-> node.left, right |-> node.right]
+            PROOF
+            <3>range. before.emitted.count + 1 \in 1..(before.emitted.count + 1)
+                BY ONLY <1>types, SMT
+            <3>constructed.
+                LET node == AppendCertificateConstructor(view, before, origin).emitted.nodes[before.emitted.count + 1]
+                IN node = [kind |-> node.kind, payload |-> node.payload,
+                           left |-> node.left, right |-> node.right]
+                PROOF
+                <4>. DEFINE kind == view.kinds[origin]
+                            record == [kind |-> kind,
+                                payload |-> IF kind = "literal" THEN view.literals[origin]
+                                            ELSE IF kind = "read" THEN view.reads[origin] ELSE 0,
+                                left |-> IF kind = "add" THEN before.inverse[view.left[origin]] ELSE 0,
+                                right |-> IF kind = "add" THEN before.inverse[view.right[origin]] ELSE 0]
+                            at == before.emitted.count + 1
+                <4>array. AppendCertificateConstructor(view, before, origin).emitted.nodes =
+                              HistoryAppend(before.emitted.nodes, before.emitted.count, record)
+                    BY ONLY DEF AppendCertificateConstructor, record, kind
+                <4>last. HistoryAppend(before.emitted.nodes, before.emitted.count, record)[at] = record
+                    BY ONLY <3>range DEF HistoryAppend, at
+                <4>fields. record = [kind |-> record.kind, payload |-> record.payload,
+                                     left |-> record.left, right |-> record.right]
+                    BY ONLY DEF record
+                <4>. QED BY ONLY <4>array, <4>last, <4>fields DEF at
+            <3>. QED BY ONLY <1>step, <1>append, <3>constructed
+        <2>. QED BY ONLY <1>types, <1>append, <2>retained, <2>appended,
+            ExactEmissionNodeRecords(state.current.emitted), SMT DEF ExactEmissionNodeRecords, before
+    <1>. QED BY ONLY <1>spans, <1>ranks, <1>records DEF next, after
+
+THEOREM TerminatedCompilerTraversalSuppliesCanonicalEmissionData ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW size, CompilerOccurrenceSizes(view, size),
+           NEW bound, CertificateSource(view, bound), NEW fallback \in Keys,
+           NEW steps, NEW history,
+           CompilerTraversalCompletion(view, InitialCompilerTraversal(view), steps, history)
+    PROVE /\ CanonicalEmissionData(view, size, history[steps].current, fallback, bound)
+          /\ ReviewedReturnMatchesCertificate(view, count, history[steps])
+    PROOF
+    <1>. DEFINE holds(step) ==
+                /\ CompletedEmissionSpans(size, history[step])
+                /\ EmittedAddRanks(view, size, history[step].current)
+                /\ ExactEmissionNodeRecords(history[step].current.emitted)
+    <1>prefix. CompilerTraversalPrefix(view, steps, history) /\ steps \in Nat
+        BY ONLY CompilerTraversalCompletion(view, InitialCompilerTraversal(view), steps, history)
+            DEF CompilerTraversalCompletion, CompilerTraversalPrefix
+    <1>invariants. \A index \in 0..steps : CompilerTraversalInvariant(view, history[index])
+        BY ONLY <1>prefix, CompilerOccurrenceTree(view, count), CompilerTraversalPrefixesDeriveStorageBounds
+    <1>seed. holds(0)
+        BY ONLY <1>prefix, SMT DEF holds, CompilerTraversalPrefix, InitialCompilerTraversal,
+            CompletedEmissionSpans, CompletedEmissionEnd, EmittedAddRanks, ExactEmissionNodeRecords,
+            EmptyVisitPrefix, VisitPrefix, EmptyCertificateConstruction, EmptyNodeEmission
+    <1>advance. \A index \in 1..steps : (\A prior \in 0..(index - 1) : holds(prior)) => holds(index)
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 1..steps,
+                             \A prior \in 0..(index - 1) : holds(prior)
+                     PROVE holds(index)
+            OBVIOUS
+        <2>. DEFINE state == history[index - 1]
+                    frame == state.pending[state.height]
+        <2>edge. /\ holds(index - 1)
+                 /\ CompilerTraversalInvariant(view, state)
+                 /\ state.height > 0
+                 /\ history[index] = CompilerTraversalNext(view, state)
+            BY ONLY <1>prefix, <1>invariants, index \in 1..steps,
+                (\A prior \in 0..(index - 1) : holds(prior)), SMT DEF state, CompilerTraversalPrefix
+        <2>expand. CASE ~frame.expanded /\ view.kinds[frame.node] = "add"
+            PROOF
+            <3>fields. /\ history[index].completed = state.completed
+                       /\ history[index].current = state.current
+                BY ONLY <2>edge, <2>expand DEF CompilerTraversalNext, frame
+            <3>. QED BY ONLY <2>edge, <3>fields DEF holds, CompletedEmissionSpans, CompletedEmissionEnd, state
+        <2>emit. CASE frame.expanded \/ view.kinds[frame.node] # "add"
+            BY ONLY <2>edge, <2>emit, CompilerOccurrenceTree(view, count), CompilerOccurrenceSizes(view, size),
+                EmissionStepPreservesCompletedSpansAndAddRanks
+                DEF frame, holds
+        <2>. QED BY ONLY <2>expand, <2>emit, SMT
+    <1>all. \A index \in 0..steps : holds(index)
+        BY ONLY <1>prefix, <1>seed, <1>advance, FiniteIndexedPrefixProperty
+    <1>end. /\ CompilerTraversalInvariant(view, history[steps])
+            /\ history[steps].height = 0
+        BY ONLY CompilerTraversalCompletion(view, InitialCompilerTraversal(view), steps, history)
+            DEF CompilerTraversalCompletion
+    <1>terminal. holds(steps)
+        BY ONLY <1>all, <1>prefix, SMT
+    <1>completed. /\ history[steps].completed.height = 1
+                  /\ history[steps].completed.terms[1] = 1
+                  /\ view.root = 1
+        BY ONLY <1>end, CompilerOccurrenceTree(view, count), TerminatedCompilerInvariantDerivesEveryReturnGuard, SMT
+            DEF CompilerOccurrenceTree
+    <1>root. /\ history[steps].current.emitted.count = size[view.root]
+             /\ history[steps].current.inverse[view.root] = size[view.root]
+        BY ONLY <1>terminal, <1>completed, CompilerOccurrenceSizes(view, size), CompilerOccurrenceTree(view, count), SMT
+            DEF holds, CompletedEmissionSpans, CompletedEmissionEnd, CompilerOccurrenceSizes, CompilerOccurrenceTree
+    <1>positive. \A origin \in DOMAIN view.kinds : history[steps].current.inverse[origin] > 0
+        BY ONLY <1>end, CompilerOccurrenceTree(view, count), TerminatedCompilerInvariantDerivesEveryReturnGuard, SMT
+            DEF CompilerOccurrenceTree
+    <1>returned. /\ LiteralReadAddCertificate(view, history[steps].current.emitted,
+                       history[steps].current.inverse, fallback, bound)
+                 /\ ReviewedReturnMatchesCertificate(view, count, history[steps])
+        BY ONLY <1>end, CompilerOccurrenceTree(view, count), CertificateSource(view, bound),
+            fallback \in Keys, TerminatedCompilerTraversalSuppliesTheCertificate
+    <1>. QED BY ONLY <1>root, <1>terminal, <1>positive, <1>returned, SMT
+        DEF CanonicalEmissionData, holds, EmittedAddRanks
+
+
+THEOREM CanonicalEmissionDataDeterminesTheThreeReturnedArrays ==
+    ASSUME NEW view, NEW count, CompilerOccurrenceTree(view, count),
+           NEW size, CompilerOccurrenceSizes(view, size),
+           NEW fallback, NEW bound, NEW actual, NEW observed,
+           CanonicalEmissionData(view, size, actual, fallback, bound),
+           CanonicalEmissionData(view, size, observed, fallback, bound)
+    PROVE /\ SwiftIndexedArray(actual.emitted.count, actual.emitted.nodes) =
+                SwiftIndexedArray(observed.emitted.count, observed.emitted.nodes)
+          /\ SwiftIndexedArray(actual.emitted.count, actual.emitted.origins) =
+                SwiftIndexedArray(observed.emitted.count, observed.emitted.origins)
+          /\ SwiftIndexedArray(count, actual.inverse) = SwiftIndexedArray(count, observed.inverse)
+    PROOF
+    <1>domain. /\ DOMAIN view.kinds = 1..count /\ view.root = 1 /\ count \in Nat
+        BY ONLY CompilerOccurrenceTree(view, count) DEF CompilerOccurrenceTree
+    <1>data. /\ LiteralReadAddCertificate(view, actual.emitted, actual.inverse, fallback, bound)
+             /\ LiteralReadAddCertificate(view, observed.emitted, observed.inverse, fallback, bound)
+             /\ ExactEmissionNodeRecords(actual.emitted)
+             /\ ExactEmissionNodeRecords(observed.emitted)
+             /\ actual.inverse[view.root] = size[view.root]
+             /\ observed.inverse[view.root] = size[view.root]
+             /\ \A parent \in DOMAIN view.kinds : view.kinds[parent] = "add" =>
+                    /\ AddEmissionRanks(view, size, actual, parent)
+                    /\ AddEmissionRanks(view, size, observed, parent)
+        BY ONLY CanonicalEmissionData(view, size, actual, fallback, bound),
+            CanonicalEmissionData(view, size, observed, fallback, bound), SMT DEF CanonicalEmissionData
+    <1>types. /\ actual.emitted.count \in Nat \ {0} /\ observed.emitted.count \in Nat \ {0}
+              /\ actual.inverse \in [1..count -> 1..actual.emitted.count]
+              /\ observed.inverse \in [1..count -> 1..observed.emitted.count]
+              /\ size \in [1..count -> Nat \ {0}]
+        BY ONLY <1>domain, <1>data, CompilerOccurrenceSizes(view, size), SMT
+            DEF LiteralReadAddCertificate, NodeEmissionArrays, CompilerOccurrenceSizes
+    <1>rootLast. /\ actual.inverse[view.root] = actual.emitted.count
+                 /\ observed.inverse[view.root] = observed.emitted.count
+        BY ONLY <1>data, <1>types, SMT DEF LiteralReadAddCertificate
+    <1>count. actual.emitted.count = observed.emitted.count
+        BY ONLY <1>data, <1>rootLast
+    <1>step. \A origin \in 1..count :
+            (\A prior \in 1..(origin - 1) : actual.inverse[prior] = observed.inverse[prior])
+            => actual.inverse[origin] = observed.inverse[origin]
+        PROOF
+        <2>. SUFFICES ASSUME NEW origin \in 1..count,
+                             \A prior \in 1..(origin - 1) : actual.inverse[prior] = observed.inverse[prior]
+                     PROVE actual.inverse[origin] = observed.inverse[origin]
+            OBVIOUS
+        <2>root. CASE origin = 1
+            BY ONLY <2>root, <1>domain, <1>data
+        <2>child. CASE origin # 1
+            PROOF
+            <3>owner. PICK parent \in 1..(origin - 1) :
+                   /\ view.kinds[parent] = "add"
+                   /\ origin \in {view.left[parent], view.right[parent]}
+                BY ONLY <1>domain, <2>child, origin \in 1..count,
+                    CompilerOccurrenceTree(view, count), SMT DEF CompilerOccurrenceTree
+            <3>earlier. /\ parent \in 1..count
+                        /\ actual.inverse[parent] = observed.inverse[parent]
+                BY ONLY <3>owner, <1>domain, origin \in 1..count,
+                    (\A prior \in 1..(origin - 1) : actual.inverse[prior] = observed.inverse[prior]), SMT
+            <3>ranks. /\ AddEmissionRanks(view, size, actual, parent)
+                       /\ AddEmissionRanks(view, size, observed, parent)
+                       /\ view.left[parent] \in 1..count /\ view.right[parent] \in 1..count
+                BY ONLY <3>owner, <3>earlier, <1>data, <1>domain, CompilerOccurrenceTree(view, count), SMT
+                    DEF CompilerOccurrenceTree
+            <3>. QED BY ONLY <3>owner, <3>earlier, <3>ranks, <1>types, SMT DEF AddEmissionRanks
+        <2>. QED BY ONLY <2>root, <2>child, SMT
+    <1>inverse. actual.inverse = observed.inverse
+        BY ONLY <1>domain, <1>types, <1>count, <1>step, FiniteIndexedHistoriesAgree
+    <1>origins. actual.emitted.origins = observed.emitted.origins
+        PROOF
+        <2>entries. \A index \in 1..actual.emitted.count :
+                        actual.emitted.origins[index] = observed.emitted.origins[index]
+            PROOF
+            <3>. SUFFICES ASSUME NEW index \in 1..actual.emitted.count
+                         PROVE actual.emitted.origins[index] = observed.emitted.origins[index]
+                OBVIOUS
+            <3>. DEFINE origin == actual.emitted.origins[index]
+            <3>image. /\ origin \in DOMAIN view.kinds /\ actual.inverse[origin] = index
+                BY ONLY <1>data, index \in 1..actual.emitted.count, SMT
+                    DEF origin, LiteralReadAddCertificate
+            <3>back. observed.emitted.origins[observed.inverse[origin]] = origin
+                BY ONLY <1>data, <3>image, SMT DEF LiteralReadAddCertificate
+            <3>. QED BY ONLY <3>image, <3>back, <1>inverse DEF origin
+        <2>shape. /\ actual.emitted.origins =
+                       [index \in 1..actual.emitted.count |-> actual.emitted.origins[index]]
+                  /\ observed.emitted.origins =
+                       [index \in 1..observed.emitted.count |-> observed.emitted.origins[index]]
+            BY ONLY <1>data DEF LiteralReadAddCertificate, NodeEmissionArrays
+        <2>. QED BY ONLY <2>entries, <2>shape, <1>count, SMT
+    <1>nodes. actual.emitted.nodes = observed.emitted.nodes
+        PROOF
+        <2>entries. \A index \in 1..actual.emitted.count :
+                        actual.emitted.nodes[index] = observed.emitted.nodes[index]
+            PROOF
+            <3>. SUFFICES ASSUME NEW index \in 1..actual.emitted.count
+                PROVE actual.emitted.nodes[index] = observed.emitted.nodes[index]
+                OBVIOUS
+            <3>. DEFINE first == actual.emitted.nodes[index]
+                        second == observed.emitted.nodes[index]
+            <3>matches. /\ index \in 1..observed.emitted.count
+                        /\ NodePayloadMatchesSource(view, actual.emitted, index)
+                        /\ NodePayloadMatchesSource(view, observed.emitted, index)
+                BY ONLY index \in 1..actual.emitted.count, <1>count, <1>data, SMT
+                    DEF LiteralReadAddCertificate, AllNodePayloadsMatchSource
+            <3>samePayload. first.kind = second.kind /\ first.payload = second.payload
+                BY ONLY <3>matches, <1>origins, SMT DEF first, second, NodePayloadMatchesSource
+            <3>sameChildren. first.left = second.left /\ first.right = second.right
+                PROOF
+                <4>leaf. CASE first.kind # "add"
+                    BY ONLY <4>leaf, <3>samePayload, <3>matches, SMT
+                        DEF first, second, NodePayloadMatchesSource
+                <4>add. CASE first.kind = "add"
+                    PROOF
+                    <5>slots. /\ first.left \in 1..(index - 1) /\ first.right \in 1..(index - 1)
+                              /\ second.left \in 1..(index - 1) /\ second.right \in 1..(index - 1)
+                              /\ actual.emitted.origins[first.left] = observed.emitted.origins[second.left]
+                              /\ actual.emitted.origins[first.right] = observed.emitted.origins[second.right]
+                        BY ONLY <4>add, <3>samePayload, <3>matches, <1>origins, SMT
+                            DEF first, second, NodePayloadMatchesSource
+                    <5>countTypes. /\ actual.emitted.count \in Nat /\ observed.emitted.count \in Nat
+                        BY ONLY <1>types, SMT
+                    <5>observedIndex. index \in 1..observed.emitted.count
+                        BY ONLY <3>matches
+                    <5>limits. /\ index - 1 < actual.emitted.count /\ index - 1 < observed.emitted.count
+                        BY ONLY (index \in 1..actual.emitted.count), <5>observedIndex, <5>countTypes, SMT
+                    <5>actualSlots. /\ first.left \in 1..actual.emitted.count
+                                     /\ first.right \in 1..actual.emitted.count
+                        BY ONLY <5>slots, <5>limits, <5>countTypes, (index \in 1..actual.emitted.count), SMT
+                    <5>observedSlots. /\ second.left \in 1..observed.emitted.count
+                                       /\ second.right \in 1..observed.emitted.count
+                        BY ONLY <5>slots, <5>limits, <5>countTypes, <5>observedIndex, SMT
+                    <5>actualMap. \A child \in 1..actual.emitted.count :
+                                      actual.inverse[actual.emitted.origins[child]] = child
+                        BY ONLY <1>data DEF LiteralReadAddCertificate
+                    <5>observedMap. \A child \in 1..observed.emitted.count :
+                                        observed.inverse[observed.emitted.origins[child]] = child
+                        BY ONLY <1>data DEF LiteralReadAddCertificate
+                    <5>actualRanks. /\ actual.inverse[actual.emitted.origins[first.left]] = first.left
+                                     /\ actual.inverse[actual.emitted.origins[first.right]] = first.right
+                        BY ONLY <5>actualSlots, <5>actualMap, SMT
+                    <5>observedRanks. /\ observed.inverse[observed.emitted.origins[second.left]] = second.left
+                                       /\ observed.inverse[observed.emitted.origins[second.right]] = second.right
+                        BY ONLY <5>observedSlots, <5>observedMap, SMT
+                    <5>ranks. /\ actual.inverse[actual.emitted.origins[first.left]] = first.left
+                              /\ actual.inverse[actual.emitted.origins[first.right]] = first.right
+                              /\ observed.inverse[observed.emitted.origins[second.left]] = second.left
+                              /\ observed.inverse[observed.emitted.origins[second.right]] = second.right
+                        BY ONLY <5>actualRanks, <5>observedRanks
+                    <5>. QED BY ONLY <5>slots, <5>ranks, <1>inverse
+                <4>. QED BY ONLY <4>leaf, <4>add, SMT
+            <3>records. /\ first = [kind |-> first.kind, payload |-> first.payload,
+                                     left |-> first.left, right |-> first.right]
+                        /\ second = [kind |-> second.kind, payload |-> second.payload,
+                                      left |-> second.left, right |-> second.right]
+                BY ONLY <1>data, index \in 1..actual.emitted.count, <3>matches, SMT
+                    DEF ExactEmissionNodeRecords, first, second
+            <3>. QED BY ONLY <3>samePayload, <3>sameChildren, <3>records DEF first, second
+        <2>shape. /\ actual.emitted.nodes =
+                       [index \in 1..actual.emitted.count |-> actual.emitted.nodes[index]]
+                  /\ observed.emitted.nodes =
+                       [index \in 1..observed.emitted.count |-> observed.emitted.nodes[index]]
+            BY ONLY <1>data DEF LiteralReadAddCertificate, NodeEmissionArrays
+        <2>. QED BY ONLY <2>entries, <2>shape, <1>count, SMT
+    <1>. QED BY ONLY <1>count, <1>inverse, <1>origins, <1>nodes
+
+
+THEOREM CheckedReportsIdentifyReviewedCompilerInvocation ==
+    ASSUME NEW root, NEW terms, NEW syntax, NEW weight, NEW bound,
+           SupportedAllocationInput(root, terms, syntax, weight, bound), weight[root] <= SwiftIntMax,
+           NEW reads, bound \subseteq reads, NEW fallback \in Keys,
+           NEW observed, NEW frontier,
+           BreadthFirstSourceReport(root, syntax, observed, frontier), observed.count = weight[root],
+           NEW size, NEW captured,
+           LET view == SwiftSourceArrayAsView(AllocatedSwiftSource(observed))
+           IN /\ CompilerOccurrenceSizes(view, size)
+              /\ CanonicalEmissionData(view, size, captured, fallback, bound)
+    PROVE ReviewedOrderedIntCertificateInvocation(root, reads, syntax, weight,
+             [source |-> AllocatedSwiftSource(observed),
+              nodes |-> SwiftIndexedArray(captured.emitted.count, captured.emitted.nodes),
+              origins |-> SwiftIndexedArray(captured.emitted.count, captured.emitted.origins),
+              indices |-> SwiftIndexedArray(observed.count, captured.inverse)])
+    PROOF
+    <1>allocation. PICK a, allocations :
+        /\ CompilerAllocationCompletion(syntax, weight, InitialCompilerAllocation(root, weight), a, allocations)
+        /\ CompilerOccurrenceTree(AllocatedSourceView(allocations[a]), allocations[a].count)
+        /\ CertificateSource(AllocatedSourceView(allocations[a]), bound)
+        /\ allocations[a].count = weight[root]
+        BY ONLY SupportedAllocationInput(root, terms, syntax, weight, bound),
+            ActualAllocationConstructsTheTraversalSource, SMT
+    <1>. DEFINE allocated == allocations[a]
+                count == allocated.count
+                view == AllocatedSourceView(allocated)
+                wire == AllocatedSwiftSource(observed)
+                reported == SwiftSourceArrayAsView(wire)
+    <1>matched. /\ AllocatedSwiftSource(allocated) = wire /\ view = reported
+        BY ONLY SupportedAllocationInput(root, terms, syntax, weight, bound), <1>allocation,
+            BreadthFirstSourceReport(root, syntax, observed, frontier), (observed.count = weight[root]),
+            GivenCompletedAllocationMatchesBreadthFirstReport DEF allocated, view, wire, reported
+    <1>tree. /\ CompilerOccurrenceTree(view, count) /\ CertificateSource(view, bound)
+             /\ count <= SwiftIntMax /\ count = observed.count
+        BY ONLY <1>allocation, (weight[root] <= SwiftIntMax), (observed.count = weight[root])
+            DEF view, count, allocated
+    <1>packed. SwiftSourceArray(view, count) = wire
+        PROOF
+        <2>natural. count \in Nat
+            BY ONLY <1>tree DEF CompilerOccurrenceTree
+        <2>. QED BY ONLY <2>natural, <1>matched, AllocatedEnumArrayIsTheTraversalSource DEF count, view
+    <1>execution. PICK steps, history, storage :
+        /\ CompilerTraversalCompletion(view, InitialCompilerTraversal(view), steps, history)
+        /\ storage = [step \in 0..steps |-> SwiftCompilerStorage(view, count, history[step])]
+        /\ ReviewedCompilerTraversalExecution(view, count, steps, storage)
+        BY ONLY <1>tree, OccurrenceTreeTraversalExecutesTheReviewedSwiftAndReturnsAValidCertificate, SMT
+    <1>. DEFINE final == history[steps]
+                current == final.current
+    <1>report. /\ CompilerOccurrenceSizes(view, size)
+               /\ CanonicalEmissionData(view, size, captured, fallback, bound)
+        BY <1>matched DEF reported, wire
+    <1>actual. /\ CanonicalEmissionData(view, size, current, fallback, bound)
+               /\ ReviewedReturnMatchesCertificate(view, count, final)
+        BY ONLY <1>execution, <1>tree, <1>report, (fallback \in Keys),
+            TerminatedCompilerTraversalSuppliesCanonicalEmissionData DEF current, final
+    <1>arrays. /\ SwiftIndexedArray(current.emitted.count, current.emitted.nodes) =
+                    SwiftIndexedArray(captured.emitted.count, captured.emitted.nodes)
+               /\ SwiftIndexedArray(current.emitted.count, current.emitted.origins) =
+                    SwiftIndexedArray(captured.emitted.count, captured.emitted.origins)
+               /\ SwiftIndexedArray(count, current.inverse) = SwiftIndexedArray(count, captured.inverse)
+        BY ONLY <1>tree, <1>actual, <1>report, CanonicalEmissionDataDeterminesTheThreeReturnedArrays
+    <1>last. storage[steps] = SwiftCompilerStorage(view, count, final)
+        PROOF
+        <2>step. steps \in 0..steps
+            BY ONLY <1>execution, SMT DEF CompilerTraversalCompletion
+        <2>. QED BY ONLY <2>step, <1>execution DEF final
+    <1>return. ReviewedSwiftCertificateReturn(SwiftSourceArray(view, count), storage[steps]).certificate =
+              [source |-> wire, nodes |-> SwiftIndexedArray(captured.emitted.count, captured.emitted.nodes),
+               origins |-> SwiftIndexedArray(captured.emitted.count, captured.emitted.origins),
+               indices |-> SwiftIndexedArray(observed.count, captured.inverse)]
+        BY ONLY <1>actual, <1>packed, <1>last, <1>arrays, <1>tree
+            DEF ReviewedReturnMatchesCertificate, current
+    <1>allowedReads. \A term \in DOMAIN syntax : syntax[term].kind = "read" => syntax[term].read \in reads
+        BY ONLY SupportedAllocationInput(root, terms, syntax, weight, bound), (bound \subseteq reads), SMT
+            DEF SupportedAllocationInput
+    <1>. QED BY <1>allocation, <1>execution, <1>return, <1>allowedReads, SMT
+        DEF ReviewedOrderedIntCertificateInvocation, allocated, view, count, wire
 =============================================================================
