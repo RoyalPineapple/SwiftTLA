@@ -706,10 +706,91 @@ package enum InitialFailureEvidence {
                    right |-> IF term[1] = "add" THEN term[3] ELSE 0]
                 BY ONLY DEF syntax, \(expressions)AllocationTermSyntax
               <3>payload. \(expressions)CompilerAllocatedPayloadsMatch(syntax, observed)
-                BY ONLY <3>shape, <2>viewData, <3>syntaxPayload, <2>constructorData, SMT
-                  DEF \(expressions)CompilerAllocatedPayloadsMatch, observed, occurrenceTerms,
-                    termPositions, report, SourceAllocationReport\(row),
+                PROOF
+                <4>. DEFINE sourceTerms == (\(sourceDerivation)).terms
+                            selected(slot) == sourceTerms[termPositions[slot]]
+                <4>position. observed.position = \(sourceCount)
+                  BY ONLY <3>shape, <2>candidateWidth
+                <4>inputTerms. derivation.terms = sourceTerms
+                  BY ONLY <2>constructorData DEF sourceTerms
+                <4>terms. \\A slot \\in 1..\(sourceCount) :
+                    observed.expressions[slot] = selected(slot)
+                  BY ONLY <2>positions, <4>inputTerms, SMT DEF observed, occurrenceTerms, selected
+                <4>sourceWidth. Len(capturedView.kinds) = \(sourceCount)
+                  BY ONLY <2>viewData, SMT
+                <4>fields. \\A slot \\in 1..\(sourceCount) :
+                    observed.source[slot] =
+                      [kind |-> capturedView.kinds[slot], literal |-> capturedView.literals[slot],
+                       read |-> capturedView.reads[slot], left |-> capturedView.left[slot],
+                       right |-> capturedView.right[slot]]
+                  PROOF
+                  <5>. SUFFICES ASSUME NEW slot \\in 1..\(sourceCount)
+                               PROVE observed.source[slot] =
+                      [kind |-> capturedView.kinds[slot], literal |-> capturedView.literals[slot],
+                       read |-> capturedView.reads[slot], left |-> capturedView.left[slot],
+                       right |-> capturedView.right[slot]]
+                      OBVIOUS
+                  <5>index. slot \\in 1..Len(capturedView.kinds)
+                      BY ONLY (slot \\in 1..\(sourceCount)), <4>sourceWidth
+                  <5>. QED BY ONLY <5>index DEF observed
+                <4>. HIDE DEF observed, occurrenceTerms, syntax
+                <4>kind. \\A slot \\in 1..\(sourceCount) :
+                    capturedView.kinds[slot] = selected(slot)[1]
+                  BY ONLY <2>viewData, SMT DEF selected, sourceTerms, termPositions, report, SourceAllocationReport\(row),
                     \(expressions)AllocationLeafDerivation, \(expressions)AllocationAddDerivation
+                <4>literals. \\A slot \\in 1..\(sourceCount) :
+                    (IF capturedView.kinds[slot] = "literal" THEN capturedView.literals[slot] ELSE 0)
+                      = (IF selected(slot)[1] = "literal" THEN selected(slot)[2] ELSE 0)
+                  BY ONLY <2>viewData, SMT DEF selected, sourceTerms, termPositions, report, SourceAllocationReport\(row),
+                    \(expressions)AllocationLeafDerivation, \(expressions)AllocationAddDerivation
+                <4>reads. \\A slot \\in 1..\(sourceCount) :
+                    (IF capturedView.kinds[slot] = "read" THEN capturedView.reads[slot] ELSE 0)
+                      = (IF selected(slot)[1] = "read" THEN selected(slot)[2] ELSE 0)
+                  BY ONLY <2>viewData, SMT DEF selected, sourceTerms, termPositions, report, SourceAllocationReport\(row),
+                    \(expressions)AllocationLeafDerivation, \(expressions)AllocationAddDerivation
+                <4>left. \\A slot \\in 1..\(sourceCount) : capturedView.kinds[slot] = "add" =>
+                    /\\ capturedView.left[slot] \\in 1..\(sourceCount)
+                    /\\ selected(capturedView.left[slot]) = selected(slot)[2]
+                  BY ONLY <2>viewData, SMT DEF selected, sourceTerms, termPositions, report, SourceAllocationReport\(row),
+                    \(expressions)AllocationLeafDerivation, \(expressions)AllocationAddDerivation
+                <4>right. \\A slot \\in 1..\(sourceCount) : capturedView.kinds[slot] = "add" =>
+                    /\\ capturedView.right[slot] \\in 1..\(sourceCount)
+                    /\\ selected(capturedView.right[slot]) = selected(slot)[3]
+                  BY ONLY <2>viewData, SMT DEF selected, sourceTerms, termPositions, report, SourceAllocationReport\(row),
+                    \(expressions)AllocationLeafDerivation, \(expressions)AllocationAddDerivation
+                <4>. HIDE DEF selected, sourceTerms, capturedView, termPositions, report, derivation
+                <4>entries. \\A slot \\in 1..\(sourceCount) :
+                    LET term == syntax[observed.expressions[slot]]
+                        actual == observed.source[slot]
+                    IN /\\ actual.kind = term.kind
+                       /\\ (term.kind = "literal" => actual.literal = term.literal)
+                       /\\ (term.kind = "read" => actual.read = term.read)
+                       /\\ (term.kind = "add" =>
+                              /\\ observed.expressions[actual.left] = term.left
+                              /\\ observed.expressions[actual.right] = term.right)
+                  PROOF
+                  <5>. SUFFICES ASSUME NEW slot \\in 1..\(sourceCount)
+                       PROVE LET term == syntax[observed.expressions[slot]]
+                                 actual == observed.source[slot]
+                             IN /\\ actual.kind = term.kind
+                                /\\ (term.kind = "literal" => actual.literal = term.literal)
+                                /\\ (term.kind = "read" => actual.read = term.read)
+                                /\\ (term.kind = "add" =>
+                                       /\\ observed.expressions[actual.left] = term.left
+                                       /\\ observed.expressions[actual.right] = term.right)
+                    OBVIOUS
+                  <5>member. observed.expressions[slot] \\in DOMAIN syntax
+                    BY ONLY <3>shape, <2>candidateWidth, (slot \\in 1..\(sourceCount)), SMT
+                  <5>term. syntax[observed.expressions[slot]] =
+                      [kind |-> selected(slot)[1],
+                       literal |-> IF selected(slot)[1] = "literal" THEN selected(slot)[2] ELSE 0,
+                       read |-> IF selected(slot)[1] = "read" THEN selected(slot)[2] ELSE 0,
+                       left |-> IF selected(slot)[1] = "add" THEN selected(slot)[2] ELSE 0,
+                       right |-> IF selected(slot)[1] = "add" THEN selected(slot)[3] ELSE 0]
+                    BY ONLY <5>member, <3>syntaxPayload, <4>terms, (slot \\in 1..\(sourceCount)), SMT
+                  <5>. QED BY ONLY <5>term, <4>fields, <4>terms, <4>kind, <4>literals, <4>reads,
+                    <4>left, <4>right, (slot \\in 1..\(sourceCount)), SMT
+                <4>. QED BY ONLY <4>position, <4>entries DEF \(expressions)CompilerAllocatedPayloadsMatch
               <3>. QED BY ONLY <3>shape, <3>frontier, <3>breadthFirst, <3>payload DEF \(expressions)BreadthFirstSourceReport
             <2>sourceCapture.
                 /\\ \(expressions)AllocatedSwiftSource(observed) = expected.source
@@ -810,8 +891,34 @@ package enum InitialFailureEvidence {
                 <4>. HIDE DEF emitted, inverse, capturedView, originData, inverseData
                 <4>. QED BY ONLY <4>view, <4>arrays, <4>originType, <4>inverseType, <4>indexRoundTrip, <4>originRoundTrip, <4>rootLast, SMT
               <3>payload. \(expressions)AllNodePayloadsMatchSource(capturedView, emitted)
-                BY ONLY <2>viewData, <2>emissionData, SMT DEF SourceCapturedNodeTuple\(row),
-                  \(expressions)AllNodePayloadsMatchSource, \(expressions)NodePayloadMatchesSource
+                PROOF
+                <4>. DEFINE nodeData == SourceCapturedNodeTuple\(row)
+                            originData == \(origins)
+                            sourcePayload(origin) ==
+                                IF capturedView.kinds[origin] = "literal" THEN capturedView.literals[origin]
+                                ELSE IF capturedView.kinds[origin] = "read" THEN capturedView.reads[origin] ELSE 0
+                <4>fields. /\\ emitted.count = \(sourceCount)
+                            /\\ emitted.nodes = nodeData /\\ emitted.origins = originData
+                  BY ONLY <2>emissionData DEF nodeData, originData
+                <4>kinds. \\A index \\in 1..\(sourceCount) :
+                    /\\ nodeData[index].kind \\in {"literal", "read", "add"}
+                    /\\ nodeData[index].kind = capturedView.kinds[originData[index]]
+                  BY ONLY <2>viewData, SMT DEF nodeData, originData, SourceCapturedNodeTuple\(row)
+                <4>scalars. \\A index \\in 1..\(sourceCount) :
+                    nodeData[index].payload = sourcePayload(originData[index])
+                  BY ONLY <2>viewData, SMT DEF nodeData, originData, sourcePayload, SourceCapturedNodeTuple\(row)
+                <4>children. \\A index \\in 1..\(sourceCount) :
+                    LET node == nodeData[index]
+                        origin == originData[index]
+                    IN IF node.kind = "add"
+                       THEN /\\ node.left \\in 1..(index - 1) /\\ node.right \\in 1..(index - 1)
+                            /\\ originData[node.left] = capturedView.left[origin]
+                            /\\ originData[node.right] = capturedView.right[origin]
+                       ELSE /\\ node.left = 0 /\\ node.right = 0
+                  BY ONLY <2>viewData, SMT DEF nodeData, originData, SourceCapturedNodeTuple\(row)
+                <4>. HIDE DEF emitted, capturedView, nodeData, originData
+                <4>. QED BY ONLY <4>fields, <4>kinds, <4>scalars, <4>children, SMT
+                  DEF sourcePayload, \(expressions)AllNodePayloadsMatchSource, \(expressions)NodePayloadMatchesSource
               <3>typed.
                   /\\ \(expressions)TypedVisitedSourceInputs(capturedView, emitted)
                   /\\ \\A index \\in 1..emitted.count : emitted.nodes[index].kind = "read"
