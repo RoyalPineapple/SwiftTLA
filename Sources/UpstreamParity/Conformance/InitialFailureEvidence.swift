@@ -141,7 +141,8 @@ package enum InitialFailureEvidence {
             sourceCompilerInvocationWitnesses: sourceInputs.compilerWitnesses,
             sourceSyntaxViews: sourceInputs.views,
             sourceSyntaxOrigins: sourceInputs.origins, sourceSyntaxIndices: sourceInputs.indices,
-            sourcePlanEmissions: sourceInputs.emissions, sourceCertificateProofs: sourceInputs.proofs,
+            sourcePlanEmissions: sourceInputs.emissions, sourceCapturedNodeTuples: sourceInputs.capturedNodeTuples,
+            sourceCertificateProofs: sourceInputs.proofs,
             sourceInitializerCount: sourceInputs.count,
             sourceInitialControl: sourceInitialControl,
             loweredInitializers: loweredInitializers,
@@ -193,7 +194,8 @@ package enum InitialFailureEvidence {
     // Retain the existing macro witness, independently of the built Algorithm model.
     private static func sourceInitializerInputs(_ components: [_OrderedIntSourceComponent]) throws
         -> (compilerInputs: String, compilerDerivations: String, compilerSizes: String, compilerWitnesses: String,
-            plans: String, views: String, origins: String, indices: String, emissions: String, proofs: String, count: Int) {
+            plans: String, views: String, origins: String, indices: String, emissions: String,
+            capturedNodeTuples: String, proofs: String, count: Int) {
         let states = components.compactMap { component -> (root: String, initialization: VariableInitialization)? in
             guard case .variable(let root, let initialization) = component else { return nil }
             return (root, initialization)
@@ -219,8 +221,10 @@ package enum InitialFailureEvidence {
             }
             let nodes = certificate.nodes
             let syntax = try sourceSyntaxView(certificate)
-            let emission = "[count |-> \(nodes.count), height |-> 1, indices |-> <<\(nodes.count)>>, "
-                + "origins |-> SourceSyntaxOrigins[\(offset + 1)], nodes |-> \(syntax.nodes)]"
+            let emissionPrefix = "[count |-> \(nodes.count), height |-> 1, indices |-> <<\(nodes.count)>>, "
+                + "origins |-> SourceSyntaxOrigins[\(offset + 1)], nodes |-> "
+            let capturedTuple = "<<\(syntax.nodes.joined(separator: ", "))>>"
+            let emission = "\(emissionPrefix)\(capturedTuple)]"
             return (
                 compilerInput: compilerInput, compilerDerivation: input.derivation,
                 compilerSizes: compilerSizes, compilerWitness: compilerWitness,
@@ -228,12 +232,13 @@ package enum InitialFailureEvidence {
                 view: "<<\(TLAValue.string(state.root)), \(syntax.view)>>",
                 origins: syntax.origins, indices: syntax.indices,
                 emission: emission,
+                capturedNodeTuple: "LOCAL SourceCapturedNodeTuple\(offset + 1) == \(capturedTuple)",
                 proof: try initializerCertificateProof(row: offset + 1, view: syntax.view, kinds: syntax.kinds,
-                    emission: emission, origins: syntax.origins, indices: syntax.indices,
+                    emissionPrefix: emissionPrefix, origins: syntax.origins, indices: syntax.indices,
                     scalars: input.scalars, reads: compilerReads.description, term: input.term,
                     sourceDerivation: input.derivation, constructorProof: input.proof, sourceSizes: compilerSizes,
                     sourceExpression: expression, sourceCount: input.count,
-                    source: certificate.source, traversalCount: traversalCount))
+                    source: certificate.source, capturedNodes: syntax.nodes, traversalCount: traversalCount))
         }
         guard !rows.isEmpty else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
         return ("<<\(rows.map(\.compilerInput).joined(separator: ", "))>>",
@@ -244,7 +249,9 @@ package enum InitialFailureEvidence {
                 "<<\(rows.map(\.view).joined(separator: ", "))>>",
                 "<<\(rows.map(\.origins).joined(separator: ", "))>>",
                 "<<\(rows.map(\.indices).joined(separator: ", "))>>",
-                "<<\(rows.map(\.emission).joined(separator: ", "))>>", rows.map(\.proof).joined(separator: "\n"), rows.count)
+                "<<\(rows.map(\.emission).joined(separator: ", "))>>",
+                rows.map(\.capturedNodeTuple).joined(separator: "\n"),
+                rows.map(\.proof).joined(separator: "\n"), rows.count)
     }
 
     private static func sourceCompilerInput(_ expression: StateExpr, row: Int, branches: [Int] = []) throws
@@ -325,7 +332,7 @@ package enum InitialFailureEvidence {
     }
 
     private static func sourceSyntaxView(_ certificate: StraightLineAssignmentCheck.OrderedIntCertificate) throws
-        -> (view: String, kinds: String, origins: String, indices: String, nodes: String) {
+        -> (view: String, kinds: String, origins: String, indices: String, nodes: [String]) {
         var kinds: [String] = [], literals: [String] = [], names: [String] = []
         var left: [Int] = [], right: [Int] = []
         for node in certificate.source {
@@ -364,7 +371,7 @@ package enum InitialFailureEvidence {
             }
             return "[kind |-> \(TLAValue.string(kind)), payload |-> \(payload), left |-> \(lhs), right |-> \(rhs)]"
         }
-        return (view, kindTuple, tuple(origins.map(String.init)), tuple(indices.map(String.init)), tuple(records))
+        return (view, kindTuple, tuple(origins.map(String.init)), tuple(indices.map(String.init)), records)
     }
 
     private static func initializerPlans(layout: CompiledLayout,
@@ -567,12 +574,15 @@ package enum InitialFailureEvidence {
                 tuple(seeds), tuple(nativeSeeds), tuple(types))
     }
 
-    private static func initializerCertificateProof(row: Int, view: String, kinds: String, emission: String,
+    private static func initializerCertificateProof(row: Int, view: String, kinds: String, emissionPrefix: String,
                                                     origins: String, indices: String, scalars: [String], reads: String,
                                                     term: String, sourceDerivation: String, constructorProof: String,
                                                     sourceSizes: String,
                                                     sourceExpression: StateExpr, sourceCount: Int,
-                                                    source: [StraightLineAssignmentCheck.OrderedIntNode], traversalCount: Int) throws -> String {
+                                                    source: [StraightLineAssignmentCheck.OrderedIntNode], capturedNodes: [String],
+                                                    traversalCount: Int) throws -> String {
+        let capturedTuple = "<<\(capturedNodes.joined(separator: ", "))>>"
+        let emission = "\(emissionPrefix)\(capturedTuple)]"
         let allocationProgress = (1...sourceCount).map { step in
             let previous = step - 1
             let priorInvariant = step == 1 ? "<3>initialInvariant" : "<3>advance\(previous)"
@@ -840,7 +850,7 @@ package enum InitialFailureEvidence {
         let edgeFacts = (1...traversalCount).map { "<2>edge\($0)" }.joined(separator: ", ")
         let frameFacts = (0..<traversalCount).map { "<2>frame\($0)" }.joined(separator: ", ")
         var emissionCount = 0
-        let currentUpdates = visits.enumerated().map { prior, visit in
+        let currentUpdates = try visits.enumerated().map { prior, visit in
             let step = prior + 1
             let origin = visit.origin
             let before = "traversal[\(prior)].current"
@@ -858,23 +868,77 @@ package enum InitialFailureEvidence {
                 """
                 return current + "\n" + matches
             }
+            let priorCount = emissionCount
+            guard capturedNodes.indices.contains(priorCount) else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            let capturedNode = capturedNodes[priorCount]
             emissionCount += 1
+            let node: (kind: String, payload: String, left: String, right: String)
+            let sourceProjection: String
+            switch source[origin - 1] {
+            case .literal:
+                node = ("literal", "allocatedView.literals[\(origin)]", "0", "0")
+                sourceProjection = " DEF concreteNode"
+            case .read:
+                node = ("read", "allocatedView.reads[\(origin)]", "0", "0")
+                sourceProjection = " DEF concreteNode"
+            case .add:
+                let inverse = "claimedPrefix(\(priorCount)).inverse"
+                node = ("add", "0", "\(inverse)[allocatedView.left[\(origin)]]",
+                        "\(inverse)[allocatedView.right[\(origin)]]")
+                sourceProjection = ", <3>indexData, SMT DEF concreteNode, claimedPrefix,\n"
+                    + "              \(expressions)CompilerCertificatePrefix"
+            default:
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            let record = "[kind |-> \"\(node.kind)\", payload |-> \(node.payload), "
+                + "left |-> \(node.left), right |-> \(node.right)]"
             let matches = """
                   <3>matches\(step). traversal[\(step)].current = claimedPrefix(\(emissionCount))
                     PROOF
                     <4>origin. claimed.origins[\(emissionCount)] = \(origin)
                       BY ONLY <2>data, SMT DEF claimed
                     <4>node. claimed.nodes[\(emissionCount)] = appended(\(emissionCount)).emitted.nodes[\(emissionCount)]
-                      BY ONLY <2>data, <3>view, <4>origin, SMT
-                        DEF claimed, claimedIndices, appended, claimedPrefix,
-                          ProofInitialization!Expressions!CompilerCertificatePrefix,
-                          ProofInitialization!Expressions!AppendCertificateConstructor, ProofInitialization!Expressions!HistoryAppend
-                    <4>inverse. \\A origin \\in DOMAIN allocatedView.kinds :
-                        claimedPrefix(\(emissionCount)).inverse[origin] = appended(\(emissionCount)).inverse[origin]
-                      BY ONLY <2>data, <3>domain, <4>origin, SMT
-                        DEF claimedIndices, appended, claimedPrefix,
+                      PROOF
+                      <5>. DEFINE concreteNode == \(record)
+                                  nodeHistory == \(expressions)HistoryAppend(
+                                      claimedPrefix(\(priorCount)).emitted.nodes, \(priorCount), concreteNode)
+                      <5>count. claimedPrefix(\(priorCount)).emitted.count = \(priorCount)
+                        BY ONLY DEF claimedPrefix, \(expressions)CompilerCertificatePrefix
+                      <5>kind. allocatedView.kinds[\(origin)] = "\(node.kind)"
+                        BY ONLY <2>traversalSource, SMT
+                      <5>captured. claimed.nodes[\(emissionCount)] =
+                          \(capturedNode)
+                        BY ONLY <3>nodeTuple, SMT DEF capturedTuple, SourceCapturedNodeTuple\(row)
+                      <5>source. concreteNode =
+                          \(capturedNode)
+                        BY ONLY <3>view\(sourceProjection)
+                      <5>stored. appended(\(emissionCount)).emitted.nodes = nodeHistory
+                        BY ONLY <4>origin, <5>count, <5>kind
+                          DEF appended, nodeHistory, concreteNode, \(expressions)AppendCertificateConstructor
+                      <5>tail. nodeHistory[\(emissionCount)] = concreteNode
+                        BY ONLY SMT DEF nodeHistory, \(expressions)HistoryAppend
+                      <5>. QED BY ONLY <5>captured, <5>source, <5>stored, <5>tail
+                    <4>inverse. \\A source \\in DOMAIN allocatedView.kinds :
+                        claimedPrefix(\(emissionCount)).inverse[source] = appended(\(emissionCount)).inverse[source]
+                      PROOF
+                      <5>. SUFFICES ASSUME NEW source \\in DOMAIN allocatedView.kinds
+                           PROVE claimedPrefix(\(emissionCount)).inverse[source] = appended(\(emissionCount)).inverse[source]
+                        BY SMT
+                      <5>prefix. claimedPrefix(\(emissionCount)).inverse[source] =
+                          IF claimedIndices[source] <= \(emissionCount) THEN claimedIndices[source] ELSE 0
+                        BY ONLY SMT DEF claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
+                      <5>update. appended(\(emissionCount)).inverse[source] =
+                          IF source = \(origin) THEN \(emissionCount)
+                          ELSE IF claimedIndices[source] <= \(emissionCount) - 1 THEN claimedIndices[source] ELSE 0
+                        BY ONLY <4>origin, SMT DEF appended, claimedPrefix,
                           ProofInitialization!Expressions!CompilerCertificatePrefix,
                           ProofInitialization!Expressions!AppendCertificateConstructor
+                      <5>position. /\\ claimedIndices[source] \\in 1..\(sourceCount)
+                                   /\\ (claimedIndices[source] = \(emissionCount) <=> source = \(origin))
+                        BY ONLY <3>indexData, <3>domain, SMT
+                      <5>. QED BY ONLY <5>prefix, <5>update, <5>position, SMT
                     <4>transition. claimedPrefix(\(emissionCount)) = appended(\(emissionCount))
                       BY ONLY <4>node, <4>inverse, ProofIntegerBounds, ProofInitialSentinels,
                         ProofInitialization!Expressions!CompilerCertificatePrefixesRealizeTheConstructor, SMT
@@ -1197,8 +1261,15 @@ package enum InitialFailureEvidence {
                 BY ONLY <2>data, <2>allocatedSource
               <3>domain. DOMAIN allocatedView.kinds = 1..\(sourceCount)
                 BY ONLY <2>tree DEF ProofInitialization!Expressions!CompilerOccurrenceTree
+              <3>. DEFINE capturedTuple == SourceCapturedNodeTuple\(row)
+              <3>record. claimed = \(emissionPrefix)capturedTuple]
+                BY ONLY <2>data DEF claimed, capturedTuple, SourceCapturedNodeTuple\(row)
+              <3>nodeTuple. claimed.nodes = capturedTuple
+                BY ONLY <3>record, SMT
+              <3>indexData. claimedIndices = \(indices)
+                BY ONLY <2>data DEF claimedIndices
               <3>indexBounds. \\A origin \\in 1..\(sourceCount) : claimedIndices[origin] \\in 1..\(sourceCount)
-                BY ONLY <2>data, SMT DEF claimedIndices
+                BY ONLY <3>indexData, SMT
               <3>matches0. traversal[0].current = claimedPrefix(0)
                 BY ONLY <3>initial, <3>domain, <3>indexBounds, SMT
                   DEF claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix,
@@ -1247,8 +1318,14 @@ package enum InitialFailureEvidence {
                 BY ONLY <2>lengths, <2>finalArrays, <2>returnFields DEF expected, SourceCompilerResults
               <3>indices. expected.indices = actualReturn.certificate.indices
                 BY ONLY <2>lengths, <2>finalArrays, <2>returnFields DEF expected, SourceCompilerResults
-              <3>. QED BY ONLY <3>source, <3>nodes, <3>origins, <3>indices, <2>returnFields, SMT
-                DEF expected, SourceCompilerResults
+              <3>captured. expected = [source |-> expected.source, nodes |-> expected.nodes,
+                                      origins |-> expected.origins, indices |-> expected.indices]
+                BY ONLY DEF expected, SourceCompilerResults
+              <3>returned. actualReturn.certificate =
+                  [source |-> actualReturn.certificate.source, nodes |-> actualReturn.certificate.nodes,
+                   origins |-> actualReturn.certificate.origins, indices |-> actualReturn.certificate.indices]
+                BY ONLY <2>returnFields
+              <3>. QED BY ONLY <3>captured, <3>returned, <3>source, <3>nodes, <3>origins, <3>indices
             <2>invocation. ProofInitialization!Expressions!ReviewedOrderedIntCertificateInvocation(input.root, input.reads,
                               syntax, weight, expected)
               PROOF
@@ -1346,7 +1423,8 @@ package enum InitialFailureEvidence {
                                     sourceCompilerInputDerivations: String, sourceCompilerInputSizes: String,
                                     sourceCompilerInvocationWitnesses: String, sourceSyntaxViews: String,
                                     sourceSyntaxOrigins: String, sourceSyntaxIndices: String,
-                                    sourcePlanEmissions: String, sourceCertificateProofs: String, sourceInitializerCount: Int, sourceInitialControl: String,
+                                    sourcePlanEmissions: String, sourceCapturedNodeTuples: String, sourceCertificateProofs: String,
+                                    sourceInitializerCount: Int, sourceInitialControl: String,
                                     loweredInitializers: String,
                                     resolvedInitializers: String, nativeInitializers: String, nativePrefixOrders: String,
                                     nativeInitializationOrder: String,
@@ -1588,6 +1666,7 @@ package enum InitialFailureEvidence {
 
         SourcePlanEmissions == \(sourcePlanEmissions)
 
+        \(sourceCapturedNodeTuples)
         SourcePlanEmission(row) == SourcePlanEmissions[row]
 
         SourceCompilerInputDerivations == \(sourceCompilerInputDerivations)
