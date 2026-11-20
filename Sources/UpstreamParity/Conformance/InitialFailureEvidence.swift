@@ -969,9 +969,15 @@ package enum InitialFailureEvidence {
               PROOF
               <3>rows. 1..\(row) \\subseteq DOMAIN SourceInitializers
                 BY ONLY DEF SourceInitializers
+              <3>range. /\\ \(row) \\in 1..\(row)
+                        /\\ 1..(\(row) - 1) \\subseteq 1..\(row)
+                BY ONLY SMT
+              <3>indices. /\\ \(row) \\in DOMAIN SourceInitializers
+                          /\\ 1..(\(row) - 1) \\subseteq DOMAIN SourceInitializers
+                BY ONLY <3>range, <3>rows, SMT
               <3>source. /\\ ProofBoundKeys(\(row)) \\subseteq ProofIntKeys
                          /\\ SourceInitializers[\(row)][1] \\in ProofIntKeys
-                BY ONLY <3>rows, SMT DEF ProofBoundKeys, ProofIntKeys
+                BY ONLY <3>indices, SMT DEF ProofBoundKeys, ProofIntKeys
               <3>slots. ProofIntSlots = \(reads)
                 BY ONLY DEF ProofIntSlots, ActualLayout
               <3>reads. input.reads = \(reads)
@@ -1278,13 +1284,18 @@ package enum InitialFailureEvidence {
               <3>last. final.current = claimedPrefix(\(sourceCount))
                 BY ONLY <2>traversalSteps, <3>matches\(traversalCount)
               <3>count. emitted.count = SourcePlanEmission(\(row)).count
-                BY ONLY <3>last, <2>data DEF emitted, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
+                PROOF
+                <4>stored. emitted.count = \(sourceCount)
+                  BY ONLY <3>last DEF emitted, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
+                <4>captured. claimed.count = \(sourceCount)
+                  BY ONLY <3>record, SMT
+                <4>. QED BY ONLY <4>stored, <4>captured DEF claimed
               <3>nodes. emitted.nodes = SourcePlanEmission(\(row)).nodes
                 PROOF
                 <4>stored. emitted.nodes = [index \\in 1..\(sourceCount) |-> claimed.nodes[index]]
                   BY ONLY <3>last DEF emitted, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
                 <4>shape. claimed.nodes = [index \\in 1..\(sourceCount) |-> claimed.nodes[index]]
-                  BY ONLY <2>data, SMT DEF claimed
+                  BY ONLY <3>nodeTuple, SMT DEF capturedTuple, SourceCapturedNodeTuple\(row)
                 <4>. QED BY ONLY <4>stored, <4>shape DEF claimed
               <3>origins. emitted.origins = SourceSyntaxOrigins[\(row)]
                 PROOF
@@ -1299,7 +1310,7 @@ package enum InitialFailureEvidence {
                   BY ONLY <3>last, <3>domain, <3>indexBounds, SMT
                     DEF inverse, claimedPrefix, ProofInitialization!Expressions!CompilerCertificatePrefix
                 <4>shape. claimedIndices = [origin \\in 1..\(sourceCount) |-> claimedIndices[origin]]
-                  BY ONLY <2>data, SMT DEF claimedIndices
+                  BY ONLY <3>indexData, SMT
                 <4>. QED BY ONLY <4>stored, <4>shape DEF claimedIndices
               <3>. QED BY ONLY <3>count, <3>nodes, <3>origins, <3>indices
             <2>lengths.
