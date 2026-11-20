@@ -1317,7 +1317,20 @@ package enum InitialFailureEvidence {
                 /\\ Len(SourceSyntaxViews[\(row)][2].kinds) = allocated.count
                 /\\ Len(SourceSyntaxOrigins[\(row)]) = emitted.count
                 /\\ Len(SourceSyntaxIndices[\(row)]) = allocated.count
-              BY ONLY <2>tree, <2>data, <2>finalArrays, SMT
+              PROOF
+              <3>allocated. allocated.count = \(sourceCount)
+                BY ONLY <2>tree
+              <3>emitted. emitted.count = SourcePlanEmission(\(row)).count
+                BY ONLY <2>finalArrays
+              <3>captured. SourcePlanEmission(\(row)).count = \(sourceCount)
+                BY ONLY <2>data, SMT
+              <3>source. Len(SourceSyntaxViews[\(row)][2].kinds) = \(sourceCount)
+                BY ONLY <2>allocatedSource, <2>traversalSource, SMT
+              <3>origins. Len(SourceSyntaxOrigins[\(row)]) = \(sourceCount)
+                BY ONLY SMT DEF SourceSyntaxOrigins
+              <3>indices. Len(SourceSyntaxIndices[\(row)]) = \(sourceCount)
+                BY ONLY SMT DEF SourceSyntaxIndices
+              <3>. QED BY ONLY <3>allocated, <3>emitted, <3>captured, <3>source, <3>origins, <3>indices
             <2>result. expected = actualReturn.certificate
               PROOF
               <3>source. expected.source = actualReturn.certificate.source
@@ -1401,7 +1414,14 @@ package enum InitialFailureEvidence {
                 <4>plan. SourcePlanEmission(\(row)) =
                     [count |-> emitted.count, height |-> 1, indices |-> <<emitted.count>>,
                      nodes |-> emitted.nodes, origins |-> emitted.origins]
-                  BY ONLY <2>data, <2>finalArrays, SMT
+                  PROOF
+                  <5>captured. SourcePlanEmission(\(row)) = \(emissionPrefix)SourceCapturedNodeTuple\(row)]
+                    BY ONLY <2>data DEF SourceCapturedNodeTuple\(row)
+                  <5>fields. /\\ emitted.count = \(sourceCount)
+                             /\\ emitted.nodes = SourceCapturedNodeTuple\(row)
+                             /\\ emitted.origins = SourceSyntaxOrigins[\(row)]
+                    BY ONLY <5>captured, <2>finalArrays, SMT
+                  <5>. QED BY ONLY <5>captured, <5>fields
                 <4>. QED BY ONLY <4>nodes, <4>origins, <4>count, <4>plan DEF ProofInitialization!Expressions!SwiftCertificateArraysAsEmission
               <3>indices. ProofInitialization!Expressions!SwiftArrayAsHistory(expected.indices) = SourceSyntaxIndices[\(row)]
                 PROOF
