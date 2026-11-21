@@ -130,15 +130,20 @@ THEOREM CertifiedAssignmentStepIsTypedAndShared ==
             [bindings |-> CopyReplace(Keys, state.bindings, row.target, outcome.value),
              completed |-> Append(state.completed, outcome.value), failure |-> <<>>]
             BY ONLY <1>succeeded, SMT DEF AssignmentListStep, outcome
-        <2>. QED BY ONLY <1>succeeded, <1>ok, <2>record, SMT DEF AssignmentPrefixStates
+        <2>. QED BY ONLY <1>same, <1>succeeded, <1>ok, <2>record, SMT DEF AssignmentPrefixStates
     <1>overflow. CASE state.failure = <<>> /\ ~outcome.ok
         <2>notOk. outcome.ok = FALSE
             BY ONLY <1>overflow, <1>expression, SMT DEF ExpressionOutcomes
+        <2>. DEFINE fault == [before |-> state.bindings, site |-> index, payload |-> outcome.failure]
         <2>record. AssignmentListStep(FALSE, state, row, index) =
-            [bindings |-> state.bindings, completed |-> state.completed,
-             failure |-> [before |-> state.bindings, site |-> index, payload |-> outcome.failure]]
-            BY ONLY <1>overflow, <2>notOk, SMT DEF AssignmentListStep, outcome
-        <2>. QED BY ONLY <1>overflow, <1>typed, <1>failed, <2>record, SMT DEF AssignmentPrefixStates
+            [bindings |-> state.bindings, completed |-> state.completed, failure |-> fault]
+            BY ONLY <1>overflow, <2>notOk, SMT DEF AssignmentListStep, outcome, fault
+        <2>event. fault \in AssignmentFailureEvents
+            BY ONLY <1>overflow, <1>failed, SMT DEF fault
+        <2>. HIDE DEF fault
+        <2>typed. [bindings |-> state.bindings, completed |-> state.completed, failure |-> fault] \in AssignmentPrefixStates
+            BY ONLY <1>typed, <2>event, SMT DEF AssignmentPrefixStates
+        <2>. QED BY ONLY <1>same, <2>record, <2>typed, SMT
     <1>. QED BY ONLY <1>same, <1>stopped, <1>succeeded, <1>overflow, SMT
 
 AssignmentListHistory(generated, before, rows, history) ==

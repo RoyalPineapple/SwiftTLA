@@ -1,6 +1,9 @@
 ---- MODULE SeedAndArithmeticConfiguredBehavior ----
 EXTENDS SeedConfiguredBehavior, SwiftTLACopyCertifiedAssignmentObservation, CallerInputPageBlock1
 
+\* CompilerInputPage1 CompilerInputPage2 CompilerInputPage3
+\* CallerInputPage1 CallerInputPage2 CallerInputPage3 CallerInputPage4 CallerInputPage5
+
 VARIABLES arithmeticPC, arithmeticCount
 
 LOCAL Arithmetic == INSTANCE SwiftTLAOrderedRHSBackendAgreement
