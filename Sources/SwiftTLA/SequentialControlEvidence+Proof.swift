@@ -112,7 +112,8 @@ extension SequentialControlEvidence {
         SequentialActionLabels == \#(labels)
         SequentialControlEntries == <<\#(nativeEntries.joined(separator: ", "))>>
         SequentialControlWrites == <<\#(nativeWrites.joined(separator: ", "))>>
-        AuthoredSequentialLabels == [index \in DOMAIN PhysicalAuthoredSequentialTrace[2] |-> PhysicalAuthoredSequentialTrace[2][index][1]]
+        LOCAL SequentialLabelProjection(rows) == [index \in DOMAIN rows |-> rows[index][1]]
+        AuthoredSequentialLabels == SequentialLabelProjection(PhysicalAuthoredSequentialTrace[2])
         AuthoredSequentialStep == \#(allowedSteps.joined(separator: " \\/ "))
 
         THEOREM ActualLoweredControlPreservesAuthoredRouteShape ==
@@ -138,7 +139,14 @@ extension SequentialControlEvidence {
             /\ DOMAIN NativeActionRows = DOMAIN SequentialActionLabels
             /\ \A index \in DOMAIN NativeActionRows : NativeActionRows[index][1] = SequentialActionLabels[index]
             /\ (Next <=> (\#(next)))
-            BY ONLY SMT DEF NativeActionRows, SequentialActionLabels, LoweredSequentialTrace, Next
+        PROOF
+        <1>lowered. SequentialActionLabels = SequentialLabelProjection(LoweredSequentialTrace[2])
+            BY ONLY SMT DEF SequentialLabelProjection, SequentialActionLabels, LoweredSequentialTrace
+        <1>native. SequentialActionLabels = SequentialLabelProjection(NativeActionRows)
+            BY ONLY SMT DEF SequentialLabelProjection, SequentialActionLabels, NativeActionRows
+        <1>next. Next <=> (\#(next))
+            BY ONLY DEF Next
+        <1>. QED BY ONLY <1>lowered, <1>native, <1>next, SMT DEF SequentialLabelProjection
 
         THEOREM ActualTLAControlTransfersFollowSelectedRoutes ==
             \#(routeStatements.joined(separator: "\n    "))
@@ -163,10 +171,13 @@ extension SequentialControlEvidence {
             /\ \A index \in DOMAIN NativeActionRows : NativeActionRows[index][1] = AuthoredSequentialLabels[index]
             /\ NativeControlUsesAuthoredRoutes
         PROOF
+        <1>authoredLabels. AuthoredSequentialLabels = SequentialLabelProjection(LoweredSequentialSemantics[2])
+            BY ONLY ActualLoweredControlPreservesAuthoredRouteShape, SMT DEF AuthoredSequentialLabels
+        <1>loweredLabels. SequentialLabelProjection(LoweredSequentialSemantics[2]) = SequentialActionLabels
+            BY ONLY SMT DEF SequentialLabelProjection, LoweredSequentialSemantics, SequentialActionLabels
         <1>labels. /\ DOMAIN NativeActionRows = DOMAIN AuthoredSequentialLabels
                    /\ \A index \in DOMAIN NativeActionRows : NativeActionRows[index][1] = AuthoredSequentialLabels[index]
-            BY ONLY ActualLoweredControlPreservesAuthoredRouteShape, ActualBackendsPreserveSequentialActionInventory, SMT
-                DEF AuthoredSequentialLabels, ScheduledSequentialSemantics, ScheduledSequentialTrace
+            BY ONLY <1>authoredLabels, <1>loweredLabels, ActualBackendsPreserveSequentialActionInventory, SMT
         <1>routes. Next => AuthoredSequentialStep
             BY ONLY ActualBackendsPreserveSequentialActionInventory, ActualTLAControlTransfersFollowSelectedRoutes, SMT
                 DEF AuthoredSequentialStep

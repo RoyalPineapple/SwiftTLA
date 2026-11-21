@@ -37,6 +37,9 @@ PROOF
     BY ActualSequentialStepUsesAuthoredRoutes
 <1>stuttering. [Next]_vars => [AuthoredSequentialStep]_vars
     BY <1>step, PTL
-<1>. QED BY <1>stuttering, ActualSequentialStepUsesAuthoredRoutes, PTL
-    DEF SelectedBehavior, SwiftTLACopySelectedBehavior, Spec
+<1>always. ([][Next]_vars) => ([][AuthoredSequentialStep]_vars)
+    BY <1>stuttering, PTL
+<1>behavior. SelectedBehavior => [][AuthoredSequentialStep]_vars
+    BY <1>always, PTL DEF SelectedBehavior, SwiftTLACopySelectedBehavior, Spec, vars
+<1>. QED BY <1>behavior, ActualSequentialStepUsesAuthoredRoutes
 ====
