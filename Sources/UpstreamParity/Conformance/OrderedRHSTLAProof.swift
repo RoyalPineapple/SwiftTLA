@@ -485,6 +485,16 @@ package enum OrderedRHSTLAProof {
         <1>. QED BY <1>terms, <1>guards, <1>roots, ActualRenderedRightHandSidesMatchAuthoredAssignmentRoutes,
             SMT DEF RHSOutputInput!Rule!RenderedAssignmentInventory, RHSOutputRaw
 
+        THEOREM RHSOutputEarlierIndexInBoundedInterval ==
+            ASSUME NEW n \in Nat, NEW k \in 1..n, NEW i \in 1..(k - 1)
+            PROVE i \in 1..n
+        PROOF
+        <1>limit. /\ n \in Int /\ k \in Int /\ k <= n
+            BY ONLY (n \in Nat), (k \in 1..n), SMT
+        <1>index. /\ i \in Int /\ 1 <= i /\ i <= k - 1
+            BY ONLY <1>limit, (i \in 1..(k - 1)), SMT
+        <1>. QED BY ONLY <1>limit, <1>index, SMT
+
         THEOREM ActualEmittedActionUsesThePhysicalGuardTable ==
             ASSUME RHSOutputStateType
             PROVE
@@ -559,6 +569,18 @@ package enum OrderedRHSTLAProof {
                        /\ DOMAIN RHSOutputPlans = DOMAIN RHSOutputRows
             BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory
                 DEF RHSOutputCount, RHSOutputInput!Rule!SupportedAssignmentList
+        <1>countNat. RHSOutputCount \in Nat
+            BY ONLY <1>inventory DEF RHSOutputCount, RHSOutputInput!Rule!SupportedAssignmentList
+        <1>nodeCountsNat. \A row \in 1..RHSOutputCount : RHSOutputPlans[row].count \in Nat
+            <2>. TAKE row \in 1..RHSOutputCount
+            <2>domain. row \in DOMAIN RHSOutputRows
+                BY ONLY <1>rowDomains, (row \in 1..RHSOutputCount)
+            <2>terms. RHSOutputInput!Rule!RenderedRhsTerms(
+                RHSOutputPlans[row], RHSOutputBefore, RHSOutputInput!Rule!HistoryPrefix(RHSOutputRaw.roots, row - 1),
+                RHSOutputRaw.starts[row], RHSOutputRaw.terms[row])
+                BY ONLY <2>domain, <1>plans, <1>inventory, SMT
+                    DEF RHSOutputInput!Rule!RenderedAssignmentInventory
+            <2>. QED BY ONLY <2>terms, SMT DEF RHSOutputInput!Rule!RenderedRhsTerms
         <1>guardRows. \A row \in DOMAIN RHSOutputRows :
             RHSOutputInput!Rule!RenderedRhsGuards(RHSOutputPlans[row], RHSOutputRaw.terms[row], RHSOutputRaw.guards[row])
             BY ONLY <1>plans, <1>inventory, SMT DEF RHSOutputInput!Rule!RenderedAssignmentInventory
@@ -611,17 +633,36 @@ package enum OrderedRHSTLAProof {
                                 RHSOutputRaw.guards[row][node]
                     <4>. TAKE row \in 1..(place[1] - 1)
                     <4>. TAKE node \in 1..RHSOutputPlans[row].count
+                    <4>rowDomain. row \in 1..RHSOutputCount
+                        BY ONLY <1>countNat, <2>bounds, (row \in 1..(place[1] - 1)),
+                            RHSOutputEarlierIndexInBoundedInterval, SMT
                     <4>slot. <<row, node>> \in RHSOutputPhysicalNodeSlots
-                        BY ONLY <1>slotMember, <2>bounds, (row \in 1..(place[1] - 1)),
-                            (node \in 1..RHSOutputPlans[row].count), SMT
-                    <4>. QED BY ONLY <4>slot, (row \in 1..(place[1] - 1)), physicalPrefix(place), SMT
-                        DEF physicalPrefix, earlier, guardAt
+                        BY ONLY <1>slotMember, <4>rowDomain, (node \in 1..RHSOutputPlans[row].count), SMT
+                    <4>strict. row < place[1]
+                        BY ONLY <2>bounds, (row \in 1..(place[1] - 1)), SMT
+                    <4>earlier. earlier(<<row, node>>, place)
+                        BY ONLY <4>strict, SMT DEF earlier
+                    <4>guard. guardAt(<<row, node>>)
+                        BY ONLY physicalPrefix(place), <4>slot, <4>earlier, SMT DEF physicalPrefix
+                    <4>. QED BY ONLY <4>guard, SMT DEF guardAt
                 <3>nodes. \A node \in 1..(place[2] - 1) : RHSOutputRaw.guards[place[1]][node]
                     <4>. TAKE node \in 1..(place[2] - 1)
+                    <4>rowDomain. place[1] \in 1..RHSOutputCount
+                        BY ONLY <2>bounds
+                    <4>nodeCountNat. RHSOutputPlans[place[1]].count \in Nat
+                        BY ONLY <1>nodeCountsNat, <4>rowDomain, SMT
+                    <4>nodeDomain. node \in 1..RHSOutputPlans[place[1]].count
+                        BY ONLY <4>nodeCountNat, <2>bounds, (node \in 1..(place[2] - 1)),
+                            RHSOutputEarlierIndexInBoundedInterval, SMT
                     <4>slot. <<place[1], node>> \in RHSOutputPhysicalNodeSlots
-                        BY ONLY <1>slotMember, <2>bounds, (node \in 1..(place[2] - 1)), SMT
-                    <4>. QED BY ONLY <4>slot, (node \in 1..(place[2] - 1)), physicalPrefix(place), SMT
-                        DEF physicalPrefix, earlier, guardAt
+                        BY ONLY <1>slotMember, <4>rowDomain, <4>nodeDomain, SMT
+                    <4>strict. node < place[2]
+                        BY ONLY <2>bounds, (node \in 1..(place[2] - 1)), SMT
+                    <4>earlier. earlier(<<place[1], node>>, place)
+                        BY ONLY <4>strict, SMT DEF earlier
+                    <4>guard. guardAt(<<place[1], node>>)
+                        BY ONLY physicalPrefix(place), <4>slot, <4>earlier, SMT DEF physicalPrefix
+                    <4>. QED BY ONLY <4>guard, SMT DEF guardAt
                 <3>. QED BY ONLY <3>rows, <3>nodes DEF rowPrefix
             <2>. QED BY ONLY <2>raw, <2>fromRows, <2>fromSlots, SMT
         <1>actualProbe. \A probe \in probes :
