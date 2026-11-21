@@ -107,7 +107,19 @@ PROOF
                 BY <4>root, <3>parts, <3>children, <2>add, FirstOutOfRangeTerm(terms, start, index, bad),
                     GeneratedAddGuardMatchesSource, SMT DEF FirstOutOfRangeTerm, TermsInRange, meaning,
                     RenderedTermOverflow, GeneratedCombine, GeneratedAdd, Success
-            <4>. QED BY <4>left, <4>right, <4>root, <3>parts, (bad \in start..index), SMT
+            <4>partition. bad <= lhs \/ (lhs < bad /\ bad <= rhs) \/ bad = index
+                <5>index. index \in Nat
+                    BY ONLY <1>count, (index \in 1..plan.count), SMT
+                <5>rhs. rhs = index - 1
+                    BY ONLY <3>parts
+                <5>lhs. lhs \in Int
+                    BY ONLY <5>index, <3>parts, SMT
+                <5>start. start \in Int
+                    BY ONLY <5>lhs, <3>parts, SMT
+                <5>bad. bad \in Int /\ bad <= index
+                    BY ONLY <5>start, <5>index, (bad \in start..index), SMT
+                <5>. QED BY ONLY <5>index, <5>rhs, <5>lhs, <5>bad, SMT
+            <4>. QED BY ONLY <4>left, <4>right, <4>root, <4>partition, PTL
         <3>. QED BY <3>fits, <3>fails, SMT DEF meaning, start
     <2>. QED BY <2>leaf, <2>add, SMT
 <1>. HIDE DEF meaning
@@ -232,7 +244,29 @@ PROOF
 <1>fails. \A node \in 1..physical.count : FirstRejectedRenderedGuard(guards, physical.count, node) =>
                 FirstOutOfRangeTerm(terms, 1, physical.count, node)
     BY <1>ranges, <1>types, SMT DEF FirstRejectedRenderedGuard, EveryRenderedGuardPasses, FirstOutOfRangeTerm, TermsInRange
-<1>. QED BY <1>chosen, <1>meaning, <1>leaves, <1>ranges, <1>fails,
-    PhysicalTreeTermsDetermineTheFirstReachedSubexpression, SMT DEF outcome
+<1>tree. /\ (TermsInRange(terms, 1, physical.count) => replay[physical.count] = Success(terms[physical.count]))
+         /\ \A node \in 1..physical.count : FirstOutOfRangeTerm(terms, 1, physical.count, node) =>
+                 /\ physical.kinds[node] = "add"
+                 /\ replay[physical.count] = RenderedTermOverflow(physical, terms, node)
+    BY ONLY <1>chosen, <1>leaves, RenderedRhsTerms(physical, before, completed, starts, terms),
+        PhysicalTreeTermsDetermineTheFirstReachedSubexpression, SMT
+<1>success. EveryRenderedGuardPasses(guards, physical.count) => outcome = Success(terms[physical.count])
+    BY ONLY <1>types, <1>ranges, <1>tree, <1>meaning, SMT
+<1>failure. \A node \in 1..physical.count : FirstRejectedRenderedGuard(guards, physical.count, node) =>
+                /\ physical.kinds[node] = "add"
+                /\ outcome = RenderedTermOverflow(physical, terms, node)
+    <2>. SUFFICES ASSUME NEW node \in 1..physical.count,
+                         FirstRejectedRenderedGuard(guards, physical.count, node)
+                 PROVE /\ physical.kinds[node] = "add"
+                       /\ outcome = RenderedTermOverflow(physical, terms, node)
+        OBVIOUS
+    <2>bad. FirstOutOfRangeTerm(terms, 1, physical.count, node)
+        BY ONLY (node \in 1..physical.count), FirstRejectedRenderedGuard(guards, physical.count, node),
+            <1>fails, SMT
+    <2>observed. /\ physical.kinds[node] = "add"
+                 /\ replay[physical.count] = RenderedTermOverflow(physical, terms, node)
+        BY ONLY (node \in 1..physical.count), <2>bad, <1>tree, SMT
+    <2>. QED BY ONLY <2>observed, <1>meaning, SMT
+<1>. QED BY ONLY <1>success, <1>failure DEF outcome, row, bindings
 
 ====
