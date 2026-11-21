@@ -17,7 +17,8 @@ THEOREM ConfiguredNativeAndTLAUseTheCertifiedCopyAndOverflowOutcomes ==
         /\ \A label : SwiftTLACopyNativeLabeled(label) <=> CertifiedCopyStep(label)
         /\ Next <=> (\E label : CertifiedCopyStep(label)))
     /\ (Arithmetic!RHSOutputStateType =>
-            (Arithmetic!ActualNativeAssignmentAdvance <=> Arithmetic!advance))
+            /\ (Arithmetic!ActualNativeAssignmentAdvance <=> Arithmetic!advance)
+            /\ Arithmetic!ActualNativeAssignmentFailures = Arithmetic!RHSOutputActualFailures)
     /\ Arithmetic!LocalOrderedRHSActualCFG = Arithmetic!LocalOrderedRHSExpectedCFG
     /\ (Arithmetic!Init =>
         /\ Arithmetic!RHSOutputSelectedSubExpressions = {<<2, 3>>}
@@ -39,7 +40,8 @@ PROOF
                     /\ Next <=> (\E label : CertifiedCopyStep(label))
     BY CopyInputTyped, ActualTLAAndNativeCopyStepsUseTheCertifiedAssignmentHistory
 <1>advance. ASSUME Arithmetic!RHSOutputStateType
-             PROVE Arithmetic!ActualNativeAssignmentAdvance <=> Arithmetic!advance
+             PROVE /\ (Arithmetic!ActualNativeAssignmentAdvance <=> Arithmetic!advance)
+                   /\ Arithmetic!ActualNativeAssignmentFailures = Arithmetic!RHSOutputActualFailures
     BY ONLY Arithmetic!RHSOutputStateType, CallerInputDomain, CallerInputPageBlock1AtFileOffsets,
         Arithmetic!ActualNativeAndTLAAdvanceAgreeOnTypedInput, PTL
         DEF CallerInputSize, Arithmetic!CallerInputSize

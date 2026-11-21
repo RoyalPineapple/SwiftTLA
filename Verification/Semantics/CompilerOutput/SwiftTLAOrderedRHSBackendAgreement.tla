@@ -312,9 +312,30 @@ ActualNativeAssignmentAdvance ==
         /\ visited[RHSOutputCount].failure = <<>>
         /\ NativeCompletedAdvance(visited[RHSOutputCount].completed)
 
+LOCAL NativeAssignmentBefore ==
+    [key \in RHSOutputKeys \cup {"pc"} |-> IF key = "pc" THEN pc ELSE RHSOutputBefore[key]]
+
+LOCAL NativeAssignmentSelected ==
+    \A index \in DOMAIN NormalizedNativeAction.guards : pc = NormalizedNativeAction.guards[index]
+
+LOCAL NativeAssignmentRawFailures ==
+    RHSOutputInput!Rule!NativeAssignmentCheckedCallback(NativeAssignmentBefore, RHSOutputActionLabel,
+        NativeActionOrdinal, NativeAssignmentSelected,
+        (CHOOSE visited : NativeCaptureObservation(visited))[RHSOutputCount])
+
+LOCAL NativeAssignmentFailureEvent(event) ==
+    [site |-> event.site, target |-> RHSOutputRows[event.site].target, payload |-> event.payload,
+     completed |-> event.completed,
+     before |-> RHSOutputInput!Rule!CompletedAssignmentBindings(
+         [key \in RHSOutputInput!MasterFields |-> event.before[NativeFormalNames[key]]], RHSOutputRows, event.completed)]
+
+ActualNativeAssignmentFailures ==
+    {NativeAssignmentFailureEvent(event) : event \in NativeAssignmentRawFailures}
+
 THEOREM ActualNativeAndTLAAdvanceAgreeOnTypedInput ==
     ASSUME RHSOutputStateType
-    PROVE ActualNativeAssignmentAdvance <=> advance
+    PROVE /\ (ActualNativeAssignmentAdvance <=> advance)
+          /\ ActualNativeAssignmentFailures = RHSOutputActualFailures
 PROOF
 <1>actual. PICK history : RHSOutputSourceHistory(history) /\ RHSOutputHistoryObservation(history)
     BY ONLY RHSOutputStateType, ActualTLAActionHasACertifiedAssignmentHistory
@@ -363,7 +384,41 @@ PROOF
         (final.failure = <<>>), (RHSOutputAfter \in RHSOutputInput!Rule!AssignmentBindings),
         RHSOutputInput!Rule!SuccessfulNativeAssignmentsUseTheCompleteLastWriteFrame, SMT
         DEF NativeCompletedAdvance, NormalizedNativeAction, RHSOutputSelected, final, RHSOutputCount
-<1>. QED BY ONLY <1>actual, <1>typedFinal, <1>outcome, <1>writes, SMT
-    DEF RHSOutputHistoryObservation, RHSOutputHistoryAdvance, final
+<1>advance. ActualNativeAssignmentAdvance <=> advance
+    BY ONLY <1>actual, <1>typedFinal, <1>outcome, <1>writes, SMT
+        DEF RHSOutputHistoryObservation, RHSOutputHistoryAdvance, final
+<1>guard. NormalizedNativeAction.guards = <<RHSOutputEntry>>
+    BY ONLY ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles, SMT
+        DEF NormalizedNativeAction, RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites,
+            RHSOutputInput!Rule!NativeAssignmentWritesNameLastTargets
+<1>selected. NativeAssignmentSelected <=> RHSOutputSelected
+    BY ONLY <1>guard, SMT DEF NativeAssignmentSelected, RHSOutputSelected
+<1>before. [key \in RHSOutputInput!MasterFields |-> NativeAssignmentBefore[NativeFormalNames[key]]] = RHSOutputBefore
+    BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+        DEF NativeAssignmentBefore, NativeFormalNames, RHSOutputBefore, RHSOutputKeys, RHSOutputInput!MasterFields
+<1>prefix. final.failure # <<>> =>
+    final.failure.before = RHSOutputInput!Rule!CompletedAssignmentBindings(RHSOutputBefore, RHSOutputRows, final.completed)
+    <2>meaning. RHSOutputInput!Rule!AssignmentPrefixMeaning(RHSOutputBefore, RHSOutputRows, history, RHSOutputCount)
+        BY ONLY <1>type, <1>source, <1>finalIndex, RHSOutputInput!Rule!OrderedAssignmentHistoriesRetainTheExactFirstFailurePrefix,
+            SMT DEF RHSOutputCount
+    <2>. QED BY ONLY <2>meaning, SMT DEF RHSOutputInput!Rule!AssignmentPrefixMeaning, final
+<1>last. (CHOOSE visited : NativeCaptureObservation(visited))[RHSOutputCount] =
+    RHSOutputInput!Rule!NativeAssignmentPrefix(final)
+    BY ONLY <1>exists, <1>matching, SMT
+<1>raw. NativeAssignmentRawFailures =
+    IF RHSOutputSelected /\ final.failure # <<>> THEN
+        {[label |-> RHSOutputActionLabel, actionOrdinal |-> NativeActionOrdinal, site |-> final.failure.site,
+          completed |-> final.completed, payload |-> final.failure.payload, before |-> NativeAssignmentBefore]}
+    ELSE {}
+    BY ONLY <1>last, <1>selected, SMT
+        DEF NativeAssignmentRawFailures, RHSOutputInput!Rule!NativeAssignmentCheckedCallback, RHSOutputInput!Rule!NativeAssignmentPrefix
+<1>failures. ActualNativeAssignmentFailures = RHSOutputHistoryFailures(history)
+    <2>inactive. CASE ~RHSOutputSelected \/ final.failure = <<>>
+        BY ONLY <1>raw, <2>inactive, SMT DEF ActualNativeAssignmentFailures, RHSOutputHistoryFailures, final
+    <2>reached. CASE RHSOutputSelected /\ final.failure # <<>>
+        BY ONLY <1>raw, <1>prefix, <1>before, <2>reached, SMT
+            DEF ActualNativeAssignmentFailures, NativeAssignmentFailureEvent, RHSOutputHistoryFailures, final
+    <2>. QED BY ONLY <2>inactive, <2>reached, PTL
+<1>. QED BY ONLY <1>advance, <1>actual, <1>failures DEF RHSOutputHistoryObservation
 
 ====

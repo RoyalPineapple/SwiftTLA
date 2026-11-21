@@ -100,7 +100,9 @@ package enum OrderedRHSTLAProof {
         }))
         let positions = tuple(locations.map { "<<\($0.row), \($0.node)>>" })
         func definitions(_ names: [String]) -> String { names.map { ", " + $0 }.joined() }
-        let actualNames = definitions(probes.flatMap { [$0.failed, $0.operands, $0.operation, $0.before] })
+        let operationNames = definitions(probes.map(\.operation))
+        let operandNames = definitions(probes.map(\.operands))
+        let prefixNames = definitions(probes.map(\.before))
         let predicateNames = definitions(probes.map(\.failed))
         let aggregateName = definitions(aggregate.map { [$0] } ?? [])
         let failureGuards = tuple(probes.map(\.failed))
@@ -506,19 +508,148 @@ package enum OrderedRHSTLAProof {
                     RHSOutputWriteRoutes, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputInput!Rule!RenderedAssignmentsPass,
                     RHSOutputInput!Rule!EveryRenderedGuardPasses, RHSOutputInput!Rule!CopyMaterializedState,
                     RHSOutputInput!Rule!CopyReferenceValue
-        <1>aggregate. RHSOutputFailureSelected = (RHSOutputSelected /\ ~RHSOutputPasses)
-            BY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-                DEF RHSOutputSelected, RHSOutputEntry, RHSOutputFailureSelected\#(aggregateName), RHSOutputPasses,
-                    RHSOutputCount, RHSOutputRaw, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputInput!Rule!RenderedAssignmentsPass,
-                    RHSOutputInput!Rule!EveryRenderedGuardPasses
+        <1>. DEFINE probes == DOMAIN RHSOutputProbePositions
+                    placeAt(probe) == RHSOutputProbePositions[probe]
+                    probePlaces == {placeAt(probe) : probe \in probes}
+                    guardAt(place) == RHSOutputRaw.guards[place[1]][place[2]]
+                    earlier(first, second) ==
+                        first[1] < second[1] \/ (first[1] = second[1] /\ first[2] < second[2])
+                    physicalPrefix(place) ==
+                        \A prior \in RHSOutputPhysicalNodeSlots : earlier(prior, place) => guardAt(prior)
+                    probePrefix(probe) ==
+                        \A prior \in probes : prior < probe => guardAt(placeAt(prior))
+        <1>domains. /\ DOMAIN RHSOutputGuards = probes
+                     /\ DOMAIN RHSOutputPayloads = probes
+            BY ONLY IsaM("simp") DEF probes, RHSOutputProbePositions, RHSOutputGuards, RHSOutputPayloads
+        <1>coordinates. probePlaces =
+            {place \in RHSOutputPhysicalNodeSlots : RHSOutputNodeKinds[place[1]][place[2]] = "add"}
+            BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+                DEF probePlaces, probes, placeAt, RHSOutputProbePositions, RHSOutputPhysicalNodeSlots,
+                    RHSOutputPlans, RHSOutputNodeCounts, RHSOutputNodeKinds
+        <1>order. \A first, second \in probes :
+                (first < second) <=> earlier(placeAt(first), placeAt(second))
+            BY ONLY SMT DEF probes, placeAt, earlier, RHSOutputProbePositions
+        <1>plans. RHSOutputRaw.plans = RHSOutputPlans
+            BY ONLY SMT DEF RHSOutputRaw
+        <1>inventory. /\ RHSOutputInput!Rule!SupportedAssignmentList(RHSOutputRows)
+                       /\ RHSOutputInput!Rule!RenderedAssignmentInventory(RHSOutputRows, RHSOutputBefore, RHSOutputRaw)
+            BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, RHSOutputStateType,
+                ActualRenderedTermsAndGuardsSupplyTheAssignmentInventory
+        <1>slotBounds. \A place \in RHSOutputPhysicalNodeSlots :
+            /\ place[1] \in 1..RHSOutputCount
+            /\ place[2] \in 1..RHSOutputPlans[place[1]].count
+            <2>. TAKE place \in RHSOutputPhysicalNodeSlots
+            <2>row. PICK row \in 1..RHSOutputCount :
+                place \in {<<row, node>> : node \in 1..RHSOutputPlans[row].count}
+                BY ONLY (place \in RHSOutputPhysicalNodeSlots), SMT DEF RHSOutputPhysicalNodeSlots
+            <2>node. PICK node \in 1..RHSOutputPlans[row].count : place = <<row, node>>
+                BY ONLY <2>row, SMT
+            <2>. QED BY ONLY <2>row, <2>node, SMT
+        <1>slotMember. \A row \in 1..RHSOutputCount : \A node \in 1..RHSOutputPlans[row].count :
+            <<row, node>> \in RHSOutputPhysicalNodeSlots
+            <2>. TAKE row \in 1..RHSOutputCount
+            <2>. TAKE node \in 1..RHSOutputPlans[row].count
+            <2>. DEFINE rowSlots == {<<row, other>> : other \in 1..RHSOutputPlans[row].count}
+            <2>row. rowSlots \in {{<<index, other>> : other \in 1..RHSOutputPlans[index].count} : index \in 1..RHSOutputCount}
+                BY ONLY (row \in 1..RHSOutputCount), SMT DEF rowSlots
+            <2>node. <<row, node>> \in rowSlots
+                BY ONLY (node \in 1..RHSOutputPlans[row].count), SMT DEF rowSlots
+            <2>. QED BY ONLY <2>row, <2>node, SMT DEF RHSOutputPhysicalNodeSlots
+        <1>rowDomains. /\ DOMAIN RHSOutputRows = 1..RHSOutputCount
+                       /\ DOMAIN RHSOutputPlans = DOMAIN RHSOutputRows
+            BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory
+                DEF RHSOutputCount, RHSOutputInput!Rule!SupportedAssignmentList
+        <1>guardRows. \A row \in DOMAIN RHSOutputRows :
+            RHSOutputInput!Rule!RenderedRhsGuards(RHSOutputPlans[row], RHSOutputRaw.terms[row], RHSOutputRaw.guards[row])
+            BY ONLY <1>plans, <1>inventory, SMT DEF RHSOutputInput!Rule!RenderedAssignmentInventory
+        <1>unprobed. \A place \in (RHSOutputPhysicalNodeSlots \ probePlaces) : guardAt(place)
+            <2>. TAKE place \in (RHSOutputPhysicalNodeSlots \ probePlaces)
+            <2>axes. /\ place[1] \in DOMAIN RHSOutputRows
+                     /\ place[1] \in DOMAIN RHSOutputPlans
+                     /\ place[2] \in 1..RHSOutputPlans[place[1]].count
+                BY ONLY <1>slotBounds, <1>rowDomains, (place \in (RHSOutputPhysicalNodeSlots \ probePlaces)), SMT
+            <2>kind. RHSOutputPlans[place[1]].kinds[place[2]] = RHSOutputNodeKinds[place[1]][place[2]]
+                BY ONLY <2>axes, SMT DEF RHSOutputPlans
+            <2>notAdd. RHSOutputPlans[place[1]].kinds[place[2]] # "add"
+                BY ONLY <1>coordinates, <2>kind, (place \in (RHSOutputPhysicalNodeSlots \ probePlaces)), SMT
+            <2>. QED BY ONLY <2>axes, <2>notAdd, <1>guardRows, SMT DEF guardAt, RHSOutputInput!Rule!RenderedRhsGuards
+        <1>prefix. \A probe \in probes : physicalPrefix(placeAt(probe)) <=> probePrefix(probe)
+            BY ONLY <1>coordinates, <1>order, <1>unprobed, SMT
+                DEF physicalPrefix, probePrefix, probePlaces
+        <1>. DEFINE rowPrefix(place) ==
+                /\ \A row \in 1..(place[1] - 1) : \A node \in 1..RHSOutputPlans[row].count :
+                       RHSOutputRaw.guards[row][node]
+                /\ \A node \in 1..(place[2] - 1) : RHSOutputRaw.guards[place[1]][node]
+        <1>physical. \A place \in RHSOutputPhysicalNodeSlots :
+            RHSOutputFailsAt(place) <=> (physicalPrefix(place) /\ ~guardAt(place))
+            <2>. TAKE place \in RHSOutputPhysicalNodeSlots
+            <2>bounds. /\ place[1] \in 1..RHSOutputCount
+                       /\ place[2] \in 1..RHSOutputPlans[place[1]].count
+                BY ONLY <1>slotBounds, (place \in RHSOutputPhysicalNodeSlots), SMT
+            <2>raw. RHSOutputFailsAt(place) <=> (rowPrefix(place) /\ ~guardAt(place))
+                BY ONLY <1>plans, <2>bounds, SMT
+                    DEF RHSOutputFailsAt, rowPrefix, guardAt, RHSOutputInput!Rule!RenderedAssignmentFailsAt,
+                        RHSOutputInput!Rule!RenderedAssignmentsPass, RHSOutputInput!Rule!FirstRejectedRenderedGuard,
+                        RHSOutputInput!Rule!EveryRenderedGuardPasses
+            <2>fromRows. ASSUME rowPrefix(place)
+                          PROVE physicalPrefix(place)
+                <3>. SUFFICES ASSUME NEW prior \in RHSOutputPhysicalNodeSlots, earlier(prior, place)
+                             PROVE guardAt(prior)
+                    BY SMT DEF physicalPrefix
+                <3>bounds. /\ prior[1] \in 1..RHSOutputCount
+                           /\ prior[2] \in 1..RHSOutputPlans[prior[1]].count
+                    BY ONLY <1>slotBounds, (prior \in RHSOutputPhysicalNodeSlots), SMT
+                <3>previous. CASE prior[1] < place[1]
+                    BY ONLY <3>previous, <3>bounds, <2>bounds, rowPrefix(place), SMT DEF rowPrefix, guardAt
+                <3>same. CASE prior[1] = place[1]
+                    BY ONLY <3>same, <3>bounds, <2>bounds, earlier(prior, place), rowPrefix(place), SMT
+                        DEF earlier, rowPrefix, guardAt
+                <3>. QED BY ONLY <3>previous, <3>same, earlier(prior, place), SMT DEF earlier
+            <2>fromSlots. ASSUME physicalPrefix(place)
+                           PROVE rowPrefix(place)
+                <3>rows. \A row \in 1..(place[1] - 1) : \A node \in 1..RHSOutputPlans[row].count :
+                                RHSOutputRaw.guards[row][node]
+                    <4>. TAKE row \in 1..(place[1] - 1)
+                    <4>. TAKE node \in 1..RHSOutputPlans[row].count
+                    <4>slot. <<row, node>> \in RHSOutputPhysicalNodeSlots
+                        BY ONLY <1>slotMember, <2>bounds, (row \in 1..(place[1] - 1)),
+                            (node \in 1..RHSOutputPlans[row].count), SMT
+                    <4>. QED BY ONLY <4>slot, (row \in 1..(place[1] - 1)), physicalPrefix(place), SMT
+                        DEF physicalPrefix, earlier, guardAt
+                <3>nodes. \A node \in 1..(place[2] - 1) : RHSOutputRaw.guards[place[1]][node]
+                    <4>. TAKE node \in 1..(place[2] - 1)
+                    <4>slot. <<place[1], node>> \in RHSOutputPhysicalNodeSlots
+                        BY ONLY <1>slotMember, <2>bounds, (node \in 1..(place[2] - 1)), SMT
+                    <4>. QED BY ONLY <4>slot, (node \in 1..(place[2] - 1)), physicalPrefix(place), SMT
+                        DEF physicalPrefix, earlier, guardAt
+                <3>. QED BY ONLY <3>rows, <3>nodes DEF rowPrefix
+            <2>. QED BY ONLY <2>raw, <2>fromRows, <2>fromSlots, SMT
+        <1>actualProbe. \A probe \in probes :
+            RHSOutputGuards[probe] <=> (RHSOutputSelected /\ probePrefix(probe) /\ ~guardAt(placeAt(probe)))
+            BY ONLY SMT DEF probes, probePrefix, placeAt, guardAt, RHSOutputRaw, RHSOutputProbePositions,
+                RHSOutputGuards, RHSOutputSelected, RHSOutputEntry\#(predicateNames)
+        <1>selected. \A probe \in probes :
+            RHSOutputGuards[probe] <=> (RHSOutputSelected /\ RHSOutputFailsAt(placeAt(probe)))
+            BY ONLY <1>coordinates, <1>prefix, <1>physical, <1>actualProbe, SMT DEF probePlaces
+        <1>failedPlaces. \A place \in RHSOutputPhysicalNodeSlots :
+            RHSOutputFailsAt(place) => place \in probePlaces
+            BY ONLY <1>unprobed, <1>physical, SMT
         <1>sites. RHSOutputSelectedSubExpressions =
-            {place \in RHSOutputPhysicalNodeSlots :
-                RHSOutputSelected /\ RHSOutputFailsAt(place)}
-            BY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SetExtensionality, SMT
-                DEF RHSOutputSelectedSubExpressions, RHSOutputPhysicalNodeSlots, RHSOutputFailureProbeSites, RHSOutputProbePositions, RHSOutputGuards,
-                    RHSOutputRaw, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputCount, RHSOutputSelected, RHSOutputEntry, RHSOutputFailsAt,
-                    RHSOutputInput!Rule!RenderedAssignmentFailsAt, RHSOutputInput!Rule!RenderedAssignmentsPass,
-                    RHSOutputInput!Rule!FirstRejectedRenderedGuard, RHSOutputInput!Rule!EveryRenderedGuardPasses\#(predicateNames)
+            {place \in RHSOutputPhysicalNodeSlots : RHSOutputSelected /\ RHSOutputFailsAt(place)}
+            <2>member. \A place : place \in RHSOutputSelectedSubExpressions <=>
+                (place \in RHSOutputPhysicalNodeSlots /\ RHSOutputSelected /\ RHSOutputFailsAt(place))
+                BY ONLY <1>domains, <1>coordinates, <1>selected, <1>failedPlaces, SMT
+                    DEF RHSOutputSelectedSubExpressions, RHSOutputFailureProbeSites, probePlaces, placeAt
+            <2>. QED BY ONLY <2>member, SetExtensionality, SMT
+        <1>actualAggregate. RHSOutputFailureSelected = (RHSOutputFailureProbeSites # {})
+            BY ONLY SMT DEF RHSOutputFailureSelected, RHSOutputFailureProbeSites, RHSOutputGuards\#(aggregateName)\#(predicateNames)
+        <1>firstFailure. ~RHSOutputPasses <=>
+            (\E place \in RHSOutputPhysicalNodeSlots : RHSOutputFailsAt(place))
+            BY ONLY <1>plans, <1>inventory, RHSOutputUsesTheMachineIntegerDomain,
+                RHSOutputInput!Rule!WholeGuardTableHasAnExactFirstFailureSite, SMT
+                DEF RHSOutputPasses, RHSOutputFailsAt, RHSOutputPhysicalNodeSlots, RHSOutputCount
+        <1>aggregate. RHSOutputFailureSelected = (RHSOutputSelected /\ ~RHSOutputPasses)
+            BY ONLY <1>actualAggregate, <1>firstFailure, <1>sites, SMT DEF RHSOutputSelectedSubExpressions
         <1>payloads. \A probe \in RHSOutputFailureProbeSites :
             LET place == RHSOutputProbePositions[probe]
                 row == RHSOutputPlans[place[1]]
@@ -526,8 +657,33 @@ package enum OrderedRHSTLAProof {
             IN RHSOutputPayloads[probe] =
                 [operation |-> "addition", operands |-> <<terms[row.left[place[2]]], terms[row.right[place[2]]]>>,
                  prefix |-> RHSOutputInput!Rule!HistoryPrefix(RHSOutputRaw.roots, place[1] - 1)]
-            BY SMT DEF RHSOutputFailureProbeSites, RHSOutputProbePositions, RHSOutputPayloads, RHSOutputGuards,
-                RHSOutputRaw, RHSOutputPlans, RHSOutputNodeLeft, RHSOutputNodeRight, RHSOutputInput!Rule!HistoryPrefix\#(actualNames)
+            <2>. TAKE probe \in RHSOutputFailureProbeSites
+            <2>. DEFINE place == placeAt(probe)
+                        payload == RHSOutputPayloads[probe]
+                        terms == RHSOutputRaw.terms[place[1]]
+            <2>active. /\ probe \in probes /\ RHSOutputGuards[probe]
+                BY ONLY <1>domains, (probe \in RHSOutputFailureProbeSites), SMT DEF RHSOutputFailureProbeSites
+            <2>located. /\ place \in RHSOutputPhysicalNodeSlots
+                         /\ place[1] \in DOMAIN RHSOutputPlans
+                BY ONLY <1>coordinates, <2>active, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+                    DEF place, probePlaces, RHSOutputPhysicalNodeSlots, RHSOutputCount,
+                        RHSOutputInput!Rule!SupportedAssignmentList
+            <2>shape. payload = [operation |-> payload.operation, operands |-> payload.operands, prefix |-> payload.prefix]
+                BY ONLY <2>active, SMT DEF probes, payload, RHSOutputPayloads, RHSOutputGuards, RHSOutputProbePositions
+            <2>operation. payload.operation = "addition"
+                BY ONLY <2>active, SMT DEF probes, payload, RHSOutputPayloads, RHSOutputGuards, RHSOutputProbePositions\#(operationNames)
+            <2>operands. payload.operands =
+                <<terms[RHSOutputNodeLeft[place[1]][place[2]]], terms[RHSOutputNodeRight[place[1]][place[2]]]>>
+                BY ONLY <2>active, SMT DEF probes, place, placeAt, terms, payload, RHSOutputPayloads, RHSOutputGuards,
+                    RHSOutputProbePositions, RHSOutputRaw, RHSOutputNodeLeft, RHSOutputNodeRight\#(operandNames)
+            <2>prefix. payload.prefix = RHSOutputInput!Rule!HistoryPrefix(RHSOutputRaw.roots, place[1] - 1)
+                BY ONLY <2>active, SMT DEF probes, place, placeAt, payload, RHSOutputPayloads, RHSOutputGuards,
+                    RHSOutputProbePositions, RHSOutputRaw, RHSOutputInput!Rule!HistoryPrefix\#(prefixNames)
+            <2>children. /\ RHSOutputPlans[place[1]].left = RHSOutputNodeLeft[place[1]]
+                          /\ RHSOutputPlans[place[1]].right = RHSOutputNodeRight[place[1]]
+                BY ONLY <2>located, SMT DEF RHSOutputPlans
+            <2>. QED BY ONLY <2>shape, <2>operation, <2>operands, <2>prefix, <2>children, SMT
+                DEF place, placeAt, payload, terms
         <1>. QED BY <1>advance, <1>aggregate, <1>sites, <1>payloads
 
         THEOREM ActualTLAActionObservesTheCertifiedAssignmentHistory ==
