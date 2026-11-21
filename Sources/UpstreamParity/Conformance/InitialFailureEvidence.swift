@@ -418,7 +418,8 @@ package enum InitialFailureEvidence {
     }
 
     static func sourceSyntaxView(_ certificate: StraightLineAssignmentCheck.OrderedIntCertificate) throws
-        -> (view: String, rankView: String, origins: String, indices: String, nodes: [String]) {
+        -> (view: String, rankView: String, origins: String, indices: String, nodes: [String],
+            emitted: [(kind: String, payload: String, left: Int, right: Int)]) {
         var kinds: [String] = [], literals: [String] = [], names: [String] = []
         var left: [Int] = [], right: [Int] = []
         for node in certificate.source {
@@ -445,7 +446,7 @@ package enum InitialFailureEvidence {
         let edges = "left |-> \(tuple(left.map(String.init))), right |-> \(tuple(right.map(String.init)))"
         let view = "[\(tags), literals |-> \(tuple(literals)), reads |-> \(tuple(names)), \(edges)]"
         let rankView = "[\(tags), \(edges)]"
-        let records = try nodes.map { node -> String in
+        let emitted = try nodes.map { node -> (kind: String, payload: String, left: Int, right: Int) in
             let kind: String, payload: String, lhs: Int, rhs: Int
             switch node {
             case .literal(let value):
@@ -456,9 +457,12 @@ package enum InitialFailureEvidence {
                 kind = "add"; payload = "0"; lhs = first; rhs = second
             default: throw InitialFailureEvidenceError.unsupportedGeneratedOutput
             }
-            return "[kind |-> \(TLAValue.string(kind)), payload |-> \(payload), left |-> \(lhs), right |-> \(rhs)]"
+            return (kind, payload, lhs, rhs)
         }
-        return (view, rankView, tuple(origins.map(String.init)), tuple(indices.map(String.init)), records)
+        let records = emitted.map {
+            "[kind |-> \(TLAValue.string($0.kind)), payload |-> \($0.payload), left |-> \($0.left), right |-> \($0.right)]"
+        }
+        return (view, rankView, tuple(origins.map(String.init)), tuple(indices.map(String.init)), records, emitted)
     }
 
     private static func initializerPlans(layout: CompiledLayout,

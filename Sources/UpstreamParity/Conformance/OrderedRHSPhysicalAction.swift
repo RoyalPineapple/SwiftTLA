@@ -3,10 +3,18 @@ import SwiftTLA
 /// Reads the physical LET operands in a checked straight-line action declaration.
 /// Tags distinguish an original variable from a preceding captured RHS value.
 enum OrderedRHSPhysicalAction {
+    struct Plan {
+        let kinds: [TLAValue]
+        let literals: [TLAValue]
+        let reads: [TLAValue]
+        let left: [TLAValue]
+        let right: [TLAValue]
+    }
+
     struct Capture {
         let binding: String
         let rhs: String
-        let plan: TLAValue
+        let plan: Plan
         let terms: [String]
         let starts: [Int]
         let guards: [String]
@@ -109,7 +117,7 @@ enum OrderedRHSPhysicalAction {
     }
 
     private struct Expression {
-        let plan: TLAValue
+        let plan: Plan
         let terms: [String]
         let starts: [Int]
         let additionNodes: [Int]
@@ -219,8 +227,7 @@ enum OrderedRHSPhysicalAction {
             }
             positions[index] = position
         }
-        let plan = TLAValue.record(["count": .int(kinds.count), "kinds": .tuple(kinds), "literals": .tuple(literals),
-            "reads": .tuple(reads), "left": .tuple(left), "right": .tuple(right)])
+        let plan = Plan(kinds: kinds, literals: literals, reads: reads, left: left, right: right)
         return .init(plan: plan, terms: terms, starts: starts, additionNodes: additionNodes)
     }
 

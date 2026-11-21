@@ -38,7 +38,9 @@ PROOF
                     /\ Next <=> (\E label : CertifiedCopyStep(label))
     BY CopyInputTyped, ActualTLAAndNativeCopyStepsUseTheCertifiedAssignmentHistory
 <1>cfg. Arithmetic!LocalOrderedRHSActualCFG = Arithmetic!LocalOrderedRHSExpectedCFG
-    BY ONLY Arithmetic!NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking
+    BY ONLY CallerInputDomain, CallerInputPageBlock1AtFileOffsets,
+        Arithmetic!NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking, SMT
+        DEF CallerInputSize, Arithmetic!CallerInputSize
 <1>overflow. ASSUME Arithmetic!Init
     PROVE /\ Arithmetic!RHSOutputSelectedSubExpressions = {<<2, 3>>}
           /\ Arithmetic!RHSOutputActualFailures = {Arithmetic!ActualNativeProjection}
@@ -48,7 +50,9 @@ PROOF
               completed |-> <<Arithmetic!RHSOutputMax>>, before |-> [count |-> Arithmetic!RHSOutputMax]]}
           /\ ~ENABLED Arithmetic!Next
           /\ ~Arithmetic!RHSOutputSelectedEvaluationCheck
-    BY Arithmetic!Init, Arithmetic!ActualInitialEventRecordsTheExactOverflowAndPrecedingBindings, SMT
+    BY ONLY Arithmetic!Init, CallerInputDomain, CallerInputPageBlock1AtFileOffsets,
+        Arithmetic!ActualInitialEventRecordsTheExactOverflowAndPrecedingBindings, PTL
+        DEF CallerInputSize, Arithmetic!CallerInputSize
 <1>. QED BY ONLY <1>copy, <1>certified, <1>cfg, <1>overflow, PTL
 
 ====

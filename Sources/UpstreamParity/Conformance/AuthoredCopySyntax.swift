@@ -345,24 +345,48 @@ enum AuthoredCopySyntax {
         guard fields.count == authored.fields.count, Set(fields) == authored.fields,
               actual.count == 1, let action = actual.first, action.label == step.label, action.loopCondition == nil,
               action.statements.count == step.statements.count else { throw unsupported }
-        let rows = try zip(step.statements, action.statements).map { source, returned -> String in
+        let rows = try zip(step.statements, action.statements).map { source, returned in
             guard case .set(.root(let target), let sourceValue) = source, authored.fields.contains(target),
                   case .set(.root(let actualTarget), let expression) = returned,
                   actualTarget == target, expression == sourceValue,
                   let certificate = StraightLineAssignmentCheck.orderedIntCertificate(expression, reads: authored.fields)
             else { throw unsupported }
             let syntax = try InitialFailureEvidence.sourceSyntaxView(certificate)
-            let count = certificate.nodes.count
-            let emitted = "[count |-> \(count), height |-> 1, indices |-> <<\(count)>>, origins |-> \(syntax.origins), nodes |-> \(tuple(syntax.nodes))]"
-            return "[target |-> \(TLAValue.string(target)), view |-> \(syntax.view), emitted |-> \(emitted), inverse |-> \(syntax.indices), fallback |-> \(TLAValue.string(fallback))]"
+            let retained = "[view |-> \(syntax.view), origins |-> \(syntax.origins), inverse |-> \(syntax.indices)]"
+            return (target: TLAValue.string(target).description, retained: retained, nodes: syntax.emitted)
         }
+        let countColumns = tuple(rows.map { String($0.nodes.count) })
+        let kindColumns = tuple(rows.map { tuple($0.nodes.map { TLAValue.string($0.kind).description }) })
+        let literalColumns = tuple(rows.map { tuple($0.nodes.map { $0.kind == "literal" ? $0.payload : "0" }) })
+        let formalFallback = TLAValue.string(fallback).description
+        let readColumns = tuple(rows.map { tuple($0.nodes.map { $0.kind == "read" ? $0.payload : formalFallback }) })
+        let leftColumns = tuple(rows.map { tuple($0.nodes.map { String($0.left) }) })
+        let rightColumns = tuple(rows.map { tuple($0.nodes.map { String($0.right) }) })
         guard case .set(.root(let firstTarget), _)? = step.statements.first else { throw unsupported }
         return (step.label.name, #"""
         ---- MODULE SwiftTLAArithmeticAssignmentSource ----
         EXTENDS TLAPS, Integers, Sequences
         MasterFields == \#(TLAValue.set(Set(authored.fields.map(TLAValue.string))))
         MasterTarget == \#(TLAValue.string(firstTarget))
-        MasterRows == \#(tuple(rows))
+        MasterTargets == \#(tuple(rows.map(\.target)))
+        MasterNodeCounts == \#(countColumns)
+        MasterNodeKinds == \#(kindColumns)
+        MasterNodeLiterals == \#(literalColumns)
+        MasterNodeReadKeys == \#(readColumns)
+        MasterNodeLeft == \#(leftColumns)
+        MasterNodeRight == \#(rightColumns)
+        LOCAL MasterRetainedRows == \#(tuple(rows.map(\.retained)))
+        MasterRows == [index \in DOMAIN MasterNodeCounts |->
+            LET row == MasterRetainedRows[index]
+                count == MasterNodeCounts[index]
+                nodes == [node \in 1..count |->
+                    [kind |-> MasterNodeKinds[index][node],
+                     payload |-> IF MasterNodeKinds[index][node] = "read"
+                                 THEN MasterNodeReadKeys[index][node] ELSE MasterNodeLiterals[index][node],
+                     left |-> MasterNodeLeft[index][node], right |-> MasterNodeRight[index][node]]]
+            IN [target |-> MasterTargets[index], view |-> row.view, inverse |-> row.inverse, fallback |-> \#(formalFallback),
+                emitted |-> [count |-> count, height |-> 1, indices |-> <<count>>, origins |-> row.origins, nodes |-> nodes]]]
+
         Rule == INSTANCE OrderedAssignmentOutputRules WITH Keys <- MasterFields,
             SwiftIntMin <- \#(TLAValue.int(Int.min)), SwiftIntMax <- \#(TLAValue.int(Int.max)),
             Vars <- {}, Values <- {}, ActionLabels <- {}, FailureValues <- {}, NoFailure <- <<>>
@@ -373,7 +397,14 @@ enum AuthoredCopySyntax {
         <1>shape. /\ Len(MasterRows) \in Nat
                   /\ DOMAIN MasterRows = 1..Len(MasterRows)
                   /\ Len(MasterRows) = \#(rows.count)
-            BY ONLY SMT DEF MasterRows
+            <2>domain. DOMAIN MasterRows = 1..\#(rows.count)
+                BY ONLY SMT DEF MasterRows, MasterNodeCounts
+            <2>. DEFINE values == {MasterRows[index] : index \in DOMAIN MasterRows}
+            <2>function. MasterRows \in [1..\#(rows.count) -> values]
+                BY ONLY <2>domain, SMT DEF values, MasterRows
+            <2>sequence. MasterRows \in Seq(values)
+                BY ONLY <2>function, Rule!SeqDef, SMT
+            <2>. QED BY ONLY <2>domain, <2>sequence, Rule!LenProperties, SMT
         <1>rows. \A i \in DOMAIN MasterRows :
             /\ MasterRows[i].target \in MasterFields
             /\ Rule!AssignmentRhsCertificate(MasterRows[i])
@@ -384,24 +415,24 @@ enum AuthoredCopySyntax {
             <2>. DEFINE row == MasterRows[i]
             <2>types. /\ row.target \in MasterFields /\ row.fallback \in MasterFields
                       /\ Rule!NodeEmissionArrays(row.emitted) /\ row.emitted.count > 0
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterFields, Rule!NodeEmissionArrays
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows, MasterTargets, MasterFields, Rule!NodeEmissionArrays
             <2>domains. /\ row.inverse \in [DOMAIN row.view.kinds -> 1..row.emitted.count]
                          /\ row.emitted.origins \in [1..row.emitted.count -> DOMAIN row.view.kinds]
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows
             <2>preorder. \A j \in 1..row.emitted.count : row.inverse[row.emitted.origins[j]] = j
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows
             <2>postorder. \A node \in DOMAIN row.view.kinds : row.emitted.origins[row.inverse[node]] = node
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows
             <2>root. row.emitted.origins[row.emitted.count] = row.view.root
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows
             <2>payload. Rule!AllNodePayloadsMatchSource(row.view, row.emitted)
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows,
-                    Rule!AllNodePayloadsMatchSource, Rule!NodePayloadMatchesSource
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows, MasterNodeKinds, MasterNodeReadKeys,
+                    MasterNodeLiterals, MasterNodeLeft, MasterNodeRight, Rule!AllNodePayloadsMatchSource, Rule!NodePayloadMatchesSource
             <2>bound. /\ Rule!TypedVisitedSourceInputs(row.view, row.emitted)
                       /\ \A j \in 1..row.emitted.count :
                              row.emitted.nodes[j].kind = "read" => row.emitted.nodes[j].payload \in MasterFields
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterFields,
-                    Rule!TypedVisitedSourceInputs, Rule!InRange
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows, MasterNodeKinds, MasterNodeReadKeys,
+                    MasterFields, Rule!TypedVisitedSourceInputs, Rule!InRange
             <2>. QED BY ONLY <2>types, <2>domains, <2>preorder, <2>postorder, <2>root, <2>payload, <2>bound, SMT
                 DEF row, Rule!AssignmentRhsCertificate, Rule!LiteralReadAddCertificate
         <1>. QED BY ONLY <1>shape, <1>rows, SMT DEF Rule!SupportedAssignmentList

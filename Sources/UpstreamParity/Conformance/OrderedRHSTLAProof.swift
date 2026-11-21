@@ -85,7 +85,15 @@ package enum OrderedRHSTLAProof {
         let guards = tuple(captures.map { tuple($0.guards) })
         let terms = tuple(captures.map { tuple($0.terms) })
         let values = tuple(captures.map(\.binding))
-        let plans = TLAValue.tuple(captures.map(\.plan))
+        let counts = TLAValue.tuple(captures.map { .int($0.plan.kinds.count) })
+        func column(_ path: KeyPath<OrderedRHSPhysicalAction.Plan, [TLAValue]>) -> TLAValue {
+            .tuple(captures.map { .tuple($0.plan[keyPath: path]) })
+        }
+        let kinds = column(\.kinds)
+        let literals = column(\.literals)
+        let reads = column(\.reads)
+        let left = column(\.left)
+        let right = column(\.right)
         let starts = TLAValue.tuple(captures.map { .tuple($0.starts.map(TLAValue.int)) })
         let writeRoutes = TLAValue.function(Dictionary(uniqueKeysWithValues: physical.writes.map {
             (.string($0.key), $0.value)
@@ -122,7 +130,16 @@ package enum OrderedRHSTLAProof {
         RHSOutputFailureSelected == \#(aggregate ?? "FALSE")
         RHSOutputCount == Len(RHSOutputRows)
 
-        LOCAL RHSOutputPlans == \#(plans)
+        LOCAL RHSOutputNodeCounts == \#(counts)
+        LOCAL RHSOutputNodeKinds == \#(kinds)
+        LOCAL RHSOutputNodeLiterals == \#(literals)
+        LOCAL RHSOutputNodeReads == \#(reads)
+        LOCAL RHSOutputNodeLeft == \#(left)
+        LOCAL RHSOutputNodeRight == \#(right)
+        LOCAL RHSOutputPlans == [index \in DOMAIN RHSOutputNodeCounts |->
+            [count |-> RHSOutputNodeCounts[index], kinds |-> RHSOutputNodeKinds[index],
+             literals |-> RHSOutputNodeLiterals[index], reads |-> RHSOutputNodeReads[index],
+             left |-> RHSOutputNodeLeft[index], right |-> RHSOutputNodeRight[index]]]
         LOCAL RHSOutputStarts == \#(starts)
         LOCAL RHSOutputRaw ==
             \#(scoped)[plans |-> RHSOutputPlans, starts |-> RHSOutputStarts,
@@ -194,21 +211,93 @@ package enum OrderedRHSTLAProof {
                      /\ RHSOutputCount = \#(physical.captures.count)
             BY ONLY RHSOutputInput!\#(supportTheorem), SMT DEF RHSOutputRows, RHSOutputCount
         <1>domain. DOMAIN RHSOutputRows = DOMAIN RHSOutputPlans
-            BY ONLY SMT DEF RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputPlans
+            BY ONLY SMT DEF RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputInput!MasterNodeCounts, RHSOutputPlans, RHSOutputNodeCounts
         <1>. QED BY ONLY <1>fields, <1>authored, <1>domain
+
+        THEOREM RHSOutputUsesTheMachineIntegerDomain ==
+            RHSOutputInput!Rule!IntegerDomain
+            BY ONLY SMT DEF RHSOutputInput!Rule!IntegerDomain
 
         THEOREM ActualRenderedRightHandSidesMatchAuthoredAssignmentRoutes ==
             \A index \in DOMAIN RHSOutputRows :
                 RHSOutputInput!Rule!PhysicalAssignmentReadsMatchRoutes(RHSOutputRows, index, RHSOutputPlans[index])
         PROOF
-        <1>named. \A index \in DOMAIN RHSOutputRows :
-            RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters(RHSOutputRows, index, RHSOutputPlans[index])
-            BY SMT DEF RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputPlans, RHSOutputKeys,
-                RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters, RHSOutputInput!Rule!PhysicalAssignmentOperandsMatch,
-                RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan, RHSOutputInput!Rule!CopyReceiptNamesWriter,
-                RHSOutputInput!Rule!CopyReceiptOrdinal, RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference
-        <1>. QED BY <1>named, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
-            RHSOutputInput!Rule!NamedAssignmentOperandsMatchTheirRoutes, SMT DEF RHSOutputInput!Rule!SupportedAssignmentList
+        <1>domain. /\ Len(RHSOutputRows) \in Nat
+                   /\ DOMAIN RHSOutputRows = 1..Len(RHSOutputRows)
+                   /\ DOMAIN RHSOutputRows = DOMAIN RHSOutputPlans
+            BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory
+                DEF RHSOutputInput!Rule!SupportedAssignmentList
+        <1>counts. RHSOutputNodeCounts = RHSOutputInput!MasterNodeCounts
+            BY ONLY IsaM("simp") DEF RHSOutputNodeCounts, RHSOutputInput!MasterNodeCounts
+        <1>kinds. RHSOutputNodeKinds = RHSOutputInput!MasterNodeKinds
+            BY ONLY IsaM("simp") DEF RHSOutputNodeKinds, RHSOutputInput!MasterNodeKinds
+        <1>literals. RHSOutputNodeLiterals = RHSOutputInput!MasterNodeLiterals
+            BY ONLY SMT DEF RHSOutputNodeLiterals, RHSOutputInput!MasterNodeLiterals
+        <1>children. /\ RHSOutputNodeLeft = RHSOutputInput!MasterNodeLeft
+                     /\ RHSOutputNodeRight = RHSOutputInput!MasterNodeRight
+            BY ONLY IsaM("simp")
+                DEF RHSOutputNodeLeft, RHSOutputNodeRight, RHSOutputInput!MasterNodeLeft, RHSOutputInput!MasterNodeRight
+        <1>. TAKE index \in DOMAIN RHSOutputRows
+        <1>. DEFINE physical == RHSOutputPlans[index]
+                    expected == RHSOutputInput!Rule!AssignmentRhsPlan(RHSOutputRows[index])
+        <1>shape. /\ physical.count = expected.count
+                  /\ expected.count = RHSOutputInput!MasterNodeCounts[index]
+            BY ONLY <1>counts, <1>domain, (index \in DOMAIN RHSOutputRows), SMT
+                DEF physical, expected, RHSOutputPlans, RHSOutputRows, RHSOutputInput!\#(sourceRows),
+                    RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan
+        <1>ops. RHSOutputInput!Rule!PhysicalAssignmentOperandsMatch(RHSOutputRows[index], physical)
+            PROOF
+            <2>nodes. \A node \in 1..expected.count :
+                /\ physical.kinds[node] = expected.kinds[node]
+                /\ (expected.kinds[node] = "literal" => physical.literals[node] = expected.literals[node])
+                /\ (expected.kinds[node] = "add" =>
+                      /\ physical.left[node] = expected.left[node]
+                      /\ physical.right[node] = expected.right[node])
+                BY ONLY <1>shape, <1>domain, <1>kinds, <1>literals, <1>children, (index \in DOMAIN RHSOutputRows), SMT
+                    DEF physical, expected, RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputPlans,
+                        RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan
+            <2>. QED BY ONLY <1>shape, <2>nodes DEF RHSOutputInput!Rule!PhysicalAssignmentOperandsMatch, expected
+        <1>reads. \A node \in 1..expected.count : expected.kinds[node] = "read" =>
+                /\ expected.reads[node] \in RHSOutputInput!\#(sourceFields)
+                /\ RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, index - 1, expected.reads[node], physical.reads[node])
+            <2>. SUFFICES ASSUME NEW node \in 1..expected.count, expected.kinds[node] = "read"
+                PROVE /\ expected.reads[node] \in RHSOutputInput!\#(sourceFields)
+                      /\ RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, index - 1, expected.reads[node], physical.reads[node])
+                OBVIOUS
+            <2>. DEFINE key == RHSOutputInput!MasterNodeReadKeys[index][node]
+                        reference == RHSOutputNodeReads[index][node]
+                        writer == RHSOutputInput!Rule!CopyReceiptOrdinal(reference)
+            <2>projected. /\ key = expected.reads[node] /\ reference = physical.reads[node]
+                BY ONLY <1>domain, <1>shape, (index \in DOMAIN RHSOutputRows), (node \in 1..expected.count),
+                    (expected.kinds[node] = "read"), SMT
+                    DEF key, reference, expected, physical, RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputPlans,
+                        RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan
+            <2>field. key \in RHSOutputInput!\#(sourceFields)
+                BY ONLY <1>domain, <1>shape, (index \in DOMAIN RHSOutputRows), (node \in 1..expected.count), SMT
+                    DEF key, RHSOutputCount, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeReadKeys,
+                        RHSOutputInput!\#(sourceFields), RHSOutputRows, RHSOutputInput!\#(sourceRows)
+            <2>position. RHSOutputInput!Rule!LastDirectCopy(RHSOutputRows, index - 1, key, writer)
+                BY ONLY <1>domain, <1>shape, (index \in DOMAIN RHSOutputRows), (node \in 1..expected.count),
+                    (expected.kinds[node] = "read"), SMT
+                    DEF key, reference, writer, expected, RHSOutputRows, RHSOutputInput!\#(sourceRows),
+                        RHSOutputInput!MasterTargets, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeKinds,
+                        RHSOutputInput!MasterNodeReadKeys, RHSOutputNodeReads, RHSOutputInput!Rule!AssignmentRhsPlan,
+                        RHSOutputInput!Rule!ExtractedNodePlan, RHSOutputInput!Rule!CopyReceiptOrdinal, RHSOutputInput!Rule!LastDirectCopy
+            <2>reference. reference = RHSOutputInput!Rule!DirectCopyReference(key, writer)
+                BY ONLY <1>domain, <1>shape, (index \in DOMAIN RHSOutputRows), (node \in 1..expected.count),
+                    (expected.kinds[node] = "read"), SMT
+                    DEF key, reference, writer, expected, RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputNodeReads,
+                        RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeKinds, RHSOutputInput!MasterNodeReadKeys,
+                        RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan,
+                        RHSOutputInput!Rule!CopyReceiptOrdinal, RHSOutputInput!Rule!DirectCopyReference
+            <2>. QED BY ONLY <2>projected, <2>field, <2>position, <2>reference, SMT
+                DEF writer, RHSOutputInput!Rule!CopyReceiptNamesWriter
+        <1>named. RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters(RHSOutputRows, index, physical)
+            BY ONLY <1>ops, <1>reads, SMT DEF RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters, expected
+        <1>range. index \in 1..Len(RHSOutputRows)
+            BY ONLY <1>domain, (index \in DOMAIN RHSOutputRows), SMT
+        <1>. QED BY ONLY <1>range, <1>named, <1>domain, RHSOutputUsesTheMachineIntegerDomain,
+            RHSOutputInput!Rule!NamedAssignmentOperandsMatchTheirRoutes, SMT DEF physical
 
         THEOREM ActualRenderedWriteRoutesAreTheFinalAuthoredWriters ==
             RHSOutputWriteRoutes = RHSOutputInput!Rule!DirectCopyRoutes(RHSOutputKeys, RHSOutputRows)[RHSOutputCount]
@@ -216,7 +305,8 @@ package enum OrderedRHSTLAProof {
         <1>routes. \A key \in RHSOutputKeys :
             RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, RHSOutputCount, key, RHSOutputWriteRoutes[key])
             BY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-               DEF RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputWriteRoutes, RHSOutputKeys,
+               DEF RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputInput!MasterNodeCounts,
+                   RHSOutputInput!MasterTargets, RHSOutputWriteRoutes, RHSOutputKeys, RHSOutputCount,
                    RHSOutputInput!Rule!CopyReceiptNamesWriter, RHSOutputInput!Rule!CopyReceiptOrdinal,
                    RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference
         <1>. QED BY <1>routes, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
@@ -233,18 +323,21 @@ package enum OrderedRHSTLAProof {
                 RHSOutputInput!Rule!HistoryPrefix(RHSOutputRaw.roots, index - 1),
                 RHSOutputStarts[index], RHSOutputRaw.terms[index])
             BY RHSOutputStateType, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-                DEF RHSOutputRaw, RHSOutputStarts, RHSOutputPlans, RHSOutputStateType, RHSOutputBefore,
+                DEF RHSOutputRaw, RHSOutputStarts, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputNodeKinds,
+                    RHSOutputNodeLiterals, RHSOutputNodeReads, RHSOutputNodeLeft, RHSOutputNodeRight,
+                    RHSOutputStateType, RHSOutputBefore,
                     RHSOutputKeys, RHSOutputInput!Rule!RenderedRhsTerms, RHSOutputInput!Rule!PhysicalRhsBindings,
                     RHSOutputInput!Rule!HistoryPrefix, RHSOutputInput!Rule!CopyReferenceValue
         <1>guards. \A index \in DOMAIN RHSOutputRows :
             RHSOutputInput!Rule!RenderedRhsGuards(RHSOutputPlans[index], RHSOutputRaw.terms[index], RHSOutputRaw.guards[index])
             BY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-               DEF RHSOutputRaw, RHSOutputPlans, RHSOutputMin, RHSOutputMax,
+               DEF RHSOutputRaw, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputNodeKinds, RHSOutputNodeLeft, RHSOutputNodeRight,
+                   RHSOutputMin, RHSOutputMax,
                    RHSOutputInput!Rule!RenderedRhsGuards, RHSOutputInput!Rule!GeneratedAddDefined, RHSOutputInput!Rule!SmallAddOperands
         <1>roots. \A index \in DOMAIN RHSOutputRows :
             RHSOutputRaw.roots[index] = RHSOutputRaw.terms[index][RHSOutputPlans[index].count]
             BY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-                DEF RHSOutputRaw, RHSOutputPlans
+                DEF RHSOutputRaw, RHSOutputPlans, RHSOutputNodeCounts
         <1>. QED BY <1>terms, <1>guards, <1>roots, ActualRenderedRightHandSidesMatchAuthoredAssignmentRoutes,
             SMT DEF RHSOutputInput!Rule!RenderedAssignmentInventory, RHSOutputRaw
 
@@ -268,20 +361,20 @@ package enum OrderedRHSTLAProof {
             BY RHSOutputStateType, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
                 DEF \#(step.renderedName), RHSOutputRawAdvance, RHSOutputRaw, RHSOutputPasses, RHSOutputSelected,
                     RHSOutputEntry, RHSOutputExit, RHSOutputAfter, RHSOutputBefore, RHSOutputCount, RHSOutputKeys,
-                    RHSOutputWriteRoutes, RHSOutputPlans, RHSOutputInput!Rule!RenderedAssignmentsPass,
+                    RHSOutputWriteRoutes, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputInput!Rule!RenderedAssignmentsPass,
                     RHSOutputInput!Rule!EveryRenderedGuardPasses, RHSOutputInput!Rule!CopyMaterializedState,
                     RHSOutputInput!Rule!CopyReferenceValue
         <1>aggregate. RHSOutputFailureSelected = (RHSOutputSelected /\ ~RHSOutputPasses)
             BY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
                 DEF RHSOutputSelected, RHSOutputEntry, RHSOutputFailureSelected\#(aggregateName), RHSOutputPasses,
-                    RHSOutputCount, RHSOutputRaw, RHSOutputPlans, RHSOutputInput!Rule!RenderedAssignmentsPass,
+                    RHSOutputCount, RHSOutputRaw, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputInput!Rule!RenderedAssignmentsPass,
                     RHSOutputInput!Rule!EveryRenderedGuardPasses
         <1>sites. RHSOutputSelectedSubExpressions =
             {place \in RHSOutputPhysicalNodeSlots :
                 RHSOutputSelected /\ RHSOutputFailsAt(place)}
             BY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SetExtensionality, SMT
                 DEF RHSOutputSelectedSubExpressions, RHSOutputPhysicalNodeSlots, RHSOutputFailureProbeSites, RHSOutputProbePositions, RHSOutputGuards,
-                    RHSOutputRaw, RHSOutputPlans, RHSOutputCount, RHSOutputSelected, RHSOutputEntry, RHSOutputFailsAt,
+                    RHSOutputRaw, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputCount, RHSOutputSelected, RHSOutputEntry, RHSOutputFailsAt,
                     RHSOutputInput!Rule!RenderedAssignmentFailsAt, RHSOutputInput!Rule!RenderedAssignmentsPass,
                     RHSOutputInput!Rule!FirstRejectedRenderedGuard, RHSOutputInput!Rule!EveryRenderedGuardPasses\#(predicateNames)
         <1>payloads. \A probe \in RHSOutputFailureProbeSites :
@@ -292,7 +385,7 @@ package enum OrderedRHSTLAProof {
                 [operation |-> "addition", operands |-> <<terms[row.left[place[2]]], terms[row.right[place[2]]]>>,
                  prefix |-> RHSOutputInput!Rule!HistoryPrefix(RHSOutputRaw.roots, place[1] - 1)]
             BY SMT DEF RHSOutputFailureProbeSites, RHSOutputProbePositions, RHSOutputPayloads, RHSOutputGuards,
-                RHSOutputRaw, RHSOutputPlans, RHSOutputInput!Rule!HistoryPrefix\#(actualNames)
+                RHSOutputRaw, RHSOutputPlans, RHSOutputNodeLeft, RHSOutputNodeRight, RHSOutputInput!Rule!HistoryPrefix\#(actualNames)
         <1>. QED BY <1>advance, <1>aggregate, <1>sites, <1>payloads
 
         THEOREM ActualTLAActionObservesTheCertifiedAssignmentHistory ==
