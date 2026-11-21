@@ -25,6 +25,69 @@ extension ScalarCopyActionEvidence.Proof {
         let readDefinitions = actions.indices.map { "\(p)Reads\($0 + 1)" }.joined(separator: ", ")
         let writeDefinitions = actions.indices.map { "\(p)Writes\($0 + 1)" }.joined(separator: ", ")
         let routeTheorems = actions.indices.map { "\(p)Row\($0 + 1)" }.joined(separator: ", ")
+
+        let physicalSlots = TLAValue.set(Set(layout.variables.map { TLAValue.string($0.formalName) }))
+        let nativeOrdinals = layout.actions.indices.map { $0 + 1 }
+        let rowCases = nativeOrdinals.map { "index = \($0)" }.joined(separator: " \\/ ")
+        let rowFacts = nativeOrdinals.map { "<3>row\($0)" }.joined(separator: ", ")
+
+        func nativeRowProofs(_ calculation: (Int) -> String) -> String {
+            nativeOrdinals.map { ordinal in
+                "<3>row\(ordinal). \(calculation(ordinal))"
+            }.joined(separator: "\n        ")
+        }
+
+        let knownReadRows = nativeRowProofs { ordinal in
+            #"""
+            LET row == \#(p)NativeRows[\#(ordinal)][2]
+                        IN \A position \in DOMAIN row.captures : known(row.captures[position])
+                        BY ONLY <2>slots, SMT
+                            DEF known, \#(p)NativeRows, \#(p)Native!NativeActionRows
+            """#
+        }
+
+        let knownWriteRows = nativeRowProofs { ordinal in
+            #"""
+            LET row == \#(p)NativeRows[\#(ordinal)][2]
+                        IN \A position \in DOMAIN row.writes :
+                            /\ row.writes[position][1] \in physical
+                            /\ known(row.writes[position][2])
+                        BY ONLY <2>slots, SMT
+                            DEF known, \#(p)NativeRows, \#(p)Native!NativeActionRows
+            """#
+        }
+
+        let receiptReadRows = nativeRowProofs { ordinal in
+            #"""
+            LET row == \#(p)Receipts[\#(ordinal)]
+                        IN \A position \in DOMAIN row.reads :
+                            /\ row.reads[position][1] \in {"state", "capture", "literal"}
+                            /\ row.reads[position][1] = "state" => row.reads[position][2] \in \#(p)Keys
+                        BY ONLY \#(p)ActualLayoutKeys, SMT
+                            DEF \#(p)Receipts, \#(readDefinitions)
+            """#
+        }
+
+        let receiptCaptureRows = nativeRowProofs { ordinal in
+            #"""
+            \#(p)NativePlan(\#(ordinal)).captures = \#(p)Receipts[\#(ordinal)].reads
+                        BY ONLY <1>inverse, \#(p)ActualLayoutKeys, SMT
+                            DEF \#(p)NativePlan, \#(p)NativeRules!NativeCopyRekey, \#(p)NativeRows,
+                                \#(p)Native!NativeActionRows, \#(p)Receipts, \#(readDefinitions),
+                                \#(p)FormalNames, \#(p)ControlKey
+            """#
+        }
+
+        let nativeWriteDomains = nativeRowProofs { ordinal in
+            #"""
+            LET row == \#(p)NativeRows[\#(ordinal)][2]
+                        IN /\ Len(row.writes) \in Nat
+                           /\ DOMAIN row.writes = 1..Len(row.writes)
+                        BY ONLY IsaM("simp")
+                            DEF \#(p)NativeRows, \#(p)Native!NativeActionRows
+            """#
+        }
+
         let proof = #"""
         ---- MODULE \#(name) ----
         EXTENDS \#(parentName), CompilerInputPageBlock1, SequenceTheorems_proofs
@@ -79,12 +142,39 @@ extension ScalarCopyActionEvidence.Proof {
             BY \#(p)ActualSourceLabelOrder, SMT
                 DEF \#(p)NativeRows, \#(p)Native!NativeActionRows, \#(p)Native!NativeActionDispatchLabels, \#(p)Labels,
                     \#(p)TerminalLabel, \#(p)Receipts, \#(p)RenderedLabels, \#(p)AllSourceLabels
+        <1>rowIndices. \A index \in DOMAIN \#(p)NativeRows : \#(rowCases)
+            BY ONLY <1>labels, SMT DEF \#(p)Receipts
         <1>known. \A index \in DOMAIN \#(p)NativeRows :
             \#(p)NativeRules!NativeCopyKnownRoles(\#(p)NativeRows[index][2], \#(p)Keys,
                 \#(p)FormalNames, \#(p)ControlKey)
-            BY ONLY \#(p)ActualLayoutKeys, SMT
-                DEF \#(p)NativeRules!NativeCopyKnownRoles, \#(p)NativeRules!NativeCopyPhysicalKeys,
-                    \#(p)NativeRows, \#(p)Native!NativeActionRows, \#(p)FormalNames, \#(p)ControlKey
+            PROOF
+            <2>. TAKE index \in DOMAIN \#(p)NativeRows
+            <2>. DEFINE raw == \#(p)NativeRows[index][2]
+                        physical == \#(p)NativeRules!NativeCopyPhysicalKeys(
+                            \#(p)Keys, \#(p)FormalNames, \#(p)ControlKey)
+                        known(reference) == reference[1] = "state" => reference[2] \in physical
+            <2>layout.
+                /\ \#(p)Keys \subseteq STRING
+                /\ DOMAIN \#(p)FormalNames = \#(p)Keys
+                /\ \A key \in \#(p)Keys : \#(p)FormalNames[key] # \#(p)ControlKey
+                /\ \A key, other \in \#(p)Keys :
+                    \#(p)FormalNames[key] = \#(p)FormalNames[other] => key = other
+                BY ONLY \#(p)ActualLayoutKeys, SMT DEF \#(p)FormalNames, \#(p)ControlKey
+            <2>slots. physical = \#(physicalSlots)
+                BY ONLY \#(p)ActualLayoutKeys, SMT
+                    DEF physical, \#(p)NativeRules!NativeCopyPhysicalKeys, \#(p)FormalNames, \#(p)ControlKey
+            <2>reads. \A position \in DOMAIN raw.captures : known(raw.captures[position])
+                PROOF
+                \#(knownReadRows)
+                <3>. QED BY ONLY \#(rowFacts), <1>rowIndices, (index \in DOMAIN \#(p)NativeRows), SMT DEF raw
+            <2>writes. \A position \in DOMAIN raw.writes :
+                /\ raw.writes[position][1] \in physical
+                /\ known(raw.writes[position][2])
+                PROOF
+                \#(knownWriteRows)
+                <3>. QED BY ONLY \#(rowFacts), <1>rowIndices, (index \in DOMAIN \#(p)NativeRows), SMT DEF raw
+            <2>. QED BY ONLY <2>layout, <2>reads, <2>writes, SMT
+                DEF raw, known, physical, \#(p)NativeRules!NativeCopyKnownRoles
         <1>inverse.
             /\ \A key \in \#(p)Keys :
                 \#(p)NativeRules!NativeCopyKey(\#(p)Keys, \#(p)FormalNames, \#(p)ControlKey,
@@ -114,23 +204,28 @@ extension ScalarCopyActionEvidence.Proof {
                             IF value[2] = \#(p)NativeRules!NativeCopyControlSlot
                             THEN \#(p)ControlKey ELSE \#(p)FormalNames[value[2]]>>
                             ELSE value
-            <2>input.
-                /\ plan.guards = <<receipt.entry>>
-                /\ plan.captures = receipt.reads
-                /\ \A position \in DOMAIN receipt.reads :
-                    /\ receipt.reads[position][1] \in {"state", "capture", "literal"}
-                    /\ receipt.reads[position][1] = "state" => receipt.reads[position][2] \in \#(p)Keys
-                BY ONLY (index \in DOMAIN \#(p)NativeRows), <1>inverse, \#(p)ActualLayoutKeys, SMT
+            <2>guard. plan.guards = <<receipt.entry>>
+                BY ONLY (index \in DOMAIN \#(p)NativeRows), SMT
                     DEF plan, receipt, \#(p)NativePlan, \#(p)NativeRules!NativeCopyRekey,
                         \#(p)NativeRows, \#(p)Native!NativeActionRows, \#(p)Receipts,
-                        \#(readDefinitions), \#(p)Entries, \#(p)TerminalControl, \#(p)FormalNames,
-                    \#(p)ControlKey
+                        \#(p)Entries, \#(p)TerminalControl
+            <2>reads. \A position \in DOMAIN receipt.reads :
+                /\ receipt.reads[position][1] \in {"state", "capture", "literal"}
+                /\ receipt.reads[position][1] = "state" => receipt.reads[position][2] \in \#(p)Keys
+                PROOF
+                \#(receiptReadRows)
+                <3>. QED BY ONLY \#(rowFacts), <1>rowIndices, (index \in DOMAIN \#(p)NativeRows), SMT DEF receipt
+            <2>captures. plan.captures = receipt.reads
+                PROOF
+                \#(receiptCaptureRows)
+                <3>. QED BY ONLY \#(rowFacts), <1>rowIndices, (index \in DOMAIN \#(p)NativeRows), SMT DEF plan, receipt
             <2>known. \#(p)NativeRules!NativeCopyKnownRoles(raw, \#(p)Keys, \#(p)FormalNames, \#(p)ControlKey)
                 BY ONLY (index \in DOMAIN \#(p)NativeRows), <1>known, SMT DEF raw
             <2>domain. /\ Len(raw.writes) \in Nat
                        /\ DOMAIN raw.writes = 1..Len(raw.writes)
-                BY ONLY (index \in DOMAIN \#(p)NativeRows), SMT
-                    DEF raw, \#(p)NativeRows, \#(p)Native!NativeActionRows
+                PROOF
+                \#(nativeWriteDomains)
+                <3>. QED BY ONLY \#(rowFacts), <1>rowIndices, (index \in DOMAIN \#(p)NativeRows), SMT DEF raw
             <2>rekey.
                 /\ DOMAIN plan.writes = DOMAIN raw.writes
                 /\ \A position \in DOMAIN raw.writes :
@@ -221,7 +316,7 @@ extension ScalarCopyActionEvidence.Proof {
                                                    THEN receipt.control ELSE receipt.writes[key])
                 BY ONLY <2>rekey, <2>rawValues, <2>roundtrip, <2>roles, <2>refs, <1>inverse, SMT
                     DEF decoded, fields, \#(p)NativeRules!NativeCopyFields
-            <2>. QED BY ONLY <2>input, <2>coverage, <2>payload, <2>roles, SMT
+            <2>. QED BY ONLY <2>guard, <2>reads, <2>captures, <2>coverage, <2>payload, <2>roles, SMT
                 DEF plan, receipt, fields, \#(p)NativeRules!NativeCompleteCopyPlan
         <1>physical. \A index \in DOMAIN \#(p)NativeRows :
             LET receipt == \#(p)Receipts[index] IN
