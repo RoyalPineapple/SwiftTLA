@@ -86,8 +86,15 @@ package struct AlgorithmModel: Sendable {
 
     /// Resolves ordered reads and writes before execution and export diverge.
     func resolvingAtomicSteps() -> AlgorithmModel {
+        resolvingAtomicSteps(retainingScalarCopyRoutes: false).model
+    }
+
+    func resolvingAtomicSteps(retainingScalarCopyRoutes: Bool)
+        -> (model: AlgorithmModel, scalarCopies: [String: StraightLineAssignmentCheck.ScalarCopyReceipt]) {
         var usedBindings = authoredIdentifiers
         var nextBinding = 0
+        let scalarRoots = orderedIntCopyRoots
+        var scalarCopies: [String: StraightLineAssignmentCheck.ScalarCopyReceipt] = [:]
 
         func binding() -> String {
             while true {
@@ -102,6 +109,10 @@ package struct AlgorithmModel: Sendable {
         func component(_ value: AlgorithmComponentModel) -> AlgorithmComponentModel {
             switch value {
             case .step(let step):
+                if let scalarRoots, let plan = scheduleDirectScalarCopies(step.statements, roots: scalarRoots, binding: binding) {
+                    if retainingScalarCopyRoutes { scalarCopies[step.label.name] = plan.receipt }
+                    return .step(.init(label: step.label, statements: plan.statements, loopCondition: step.loopCondition))
+                }
                 return .step(.init(label: step.label, statements: scheduleAtomicStatements(step.statements, binding: binding),
                     loopCondition: step.loopCondition))
             case .process(let process):
@@ -116,8 +127,21 @@ package struct AlgorithmModel: Sendable {
                 return value
             }
         }
-        return .init(name: name, sequentialFairness: sequentialFairness,
+        let resolved = AlgorithmModel(name: name, sequentialFairness: sequentialFairness,
             components: components.map(component))
+        return (resolved, scalarCopies)
+    }
+
+    private var orderedIntCopyRoots: Set<String>? {
+        guard processes.isEmpty, procedures.isEmpty, sequentialSteps.allSatisfy({ $0.loopCondition == nil }) else { return nil }
+        var roots: Set<String> = []
+        for component in components {
+            guard case .shared(let state) = component else { continue }
+            guard state.swiftTypeName == "Int",
+                  state.resolvedValueType == nil || state.resolvedValueType == .int,
+                  roots.insert(state.root).inserted else { return nil }
+        }
+        return roots.isEmpty ? nil : roots
     }
 
     func plusCalProjection() -> AlgorithmModel {
@@ -674,6 +698,46 @@ package indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case `return`
     case stop
     case skip
+}
+
+private func scheduleDirectScalarCopies(
+    _ statements: [AlgorithmStatementModel], roots: Set<String>, binding: () -> String
+) -> (statements: [AlgorithmStatementModel], receipt: StraightLineAssignmentCheck.ScalarCopyReceipt)? {
+    typealias Reference = StraightLineAssignmentCheck.ScalarCopyReceipt.Reference
+    let copies = statements.compactMap { statement -> (target: String, read: String)? in
+        guard case .set(.root(let target), .variable(let read)) = statement,
+              roots.contains(target), roots.contains(read) else { return nil }
+        return (target, read)
+    }
+    guard !copies.isEmpty, copies.count == statements.count else { return nil }
+
+    var writes = Dictionary(uniqueKeysWithValues: roots.map { ($0, Reference.state($0)) })
+    var reads: [Reference] = []
+    var binders: [String] = []
+    for copy in copies {
+        // The RHS uses the previous route even when it reads its own target.
+        reads.append(writes[copy.read, default: .state(copy.read)])
+        binders.append(binding())
+        writes[copy.target] = .capture(binders.count)
+    }
+
+    func expression(_ reference: Reference) -> StateExpr {
+        switch reference {
+        case .state(let root): .variable(root)
+        case .capture(let position): .variable(binders[position - 1])
+        }
+    }
+
+    let assignments = copies.enumerated().compactMap { offset, copy -> AlgorithmAssignmentModel? in
+        let position = offset + 1
+        guard writes[copy.target] == .capture(position) else { return nil }
+        return .init(target: .root(copy.target), value: .variable(binders[offset]))
+    }
+    var body: [AlgorithmStatementModel] = [.parallel(assignments)]
+    for (name, read) in zip(binders, reads).reversed() {
+        body = [.letBinding(variable: name, value: expression(read), body)]
+    }
+    return (body, .init(reads: reads, writes: writes))
 }
 
 func scheduleAtomicStatements(

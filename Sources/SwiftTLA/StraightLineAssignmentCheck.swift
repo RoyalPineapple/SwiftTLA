@@ -605,12 +605,12 @@ package enum StraightLineAssignmentCheck {
 
     static func verifySequential(_ algorithm: AlgorithmModel, lowered: TLASpec,
                                  enumerateInitialControl: Bool) throws -> Set<String> {
-        try verifySequential(algorithm, scheduled: nil, lowered: lowered,
+        try verifySequential(algorithm, scheduledCopies: [:], lowered: lowered,
             enumerateInitialControl: enumerateInitialControl).actionNames
     }
 
-    static func verifySequential(_ algorithm: AlgorithmModel, scheduled: AlgorithmModel?, lowered: TLASpec,
-                                 enumerateInitialControl: Bool)
+    static func verifySequential(_ algorithm: AlgorithmModel, scheduledCopies: [String: ScalarCopyReceipt],
+                                 lowered: TLASpec, enumerateInitialControl: Bool)
         throws -> (actionNames: Set<String>, scalarCopies: [String: ScalarCopyReceipt]) {
         let steps = algorithm.sequentialSteps
         guard steps.contains(where: { $0.loopCondition == nil }) else { return ([], [:]) }
@@ -649,13 +649,6 @@ package enum StraightLineAssignmentCheck {
               zip(lowered.actions, steps).allSatisfy({ action, step in
                   !action.isTermination && action.name == step.label.name
               }) else { throw mismatch() }
-        let scheduledSteps = scheduled?.sequentialSteps
-        if let scheduledSteps {
-            guard scheduledSteps.count == steps.count,
-                  zip(scheduledSteps, steps).allSatisfy({ scheduled, source in
-                      scheduled.label.name == source.label.name
-                  }) else { throw mismatch() }
-        }
         let roots = Set(shared.map(\.root))
         var orderedIntSteps = !enumerateInitialControl
             && steps.allSatisfy { $0.loopCondition == nil }
@@ -671,7 +664,7 @@ package enum StraightLineAssignmentCheck {
             let atomic = AtomicStep(model: step)
             let action = lowered.actions[index].bindings.isEmpty ? lowered.actions[index].body : nil
             if let verified = try verifySequentialIntAssignments(atomic, lowered: action,
-                stateRoots: roots, control: (entry, next), scheduled: scheduledSteps?[index].statements) {
+                stateRoots: roots, control: (entry, next), scheduledCopy: scheduledCopies[step.label.name]) {
                 scalarCopies[step.label.name] = verified.scalarCopy
                 continue
             }
@@ -814,20 +807,15 @@ package enum StraightLineAssignmentCheck {
     private static func verifySequentialIntAssignments(
         _ step: AtomicStep, lowered: ActionExpr?, stateRoots: Set<String>,
         control: (entry: ControlLocationReference, next: ControlLocationReference)?,
-        scheduled: [AlgorithmStatementModel]? = nil
+        scheduledCopy: ScalarCopyReceipt? = nil
     ) throws -> VerifiedSequentialIntAction? {
         guard control != nil, step.bindings.isEmpty, !step.model.statements.isEmpty else { return nil }
         var source: [(root: String, expression: StateExpr)] = []
-        var scheduledTail = scheduled
         for statement in step.model.statements {
             guard case .set(.root(let root), let expression) = statement,
                   stateRoots.contains(root),
                   orderedIntPlan(expression, reads: stateRoots) != nil else { return nil }
             source.append((root, expression))
-            switch expression {
-            case .variable: break
-            default: scheduledTail = nil
-            }
         }
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -850,7 +838,6 @@ package enum StraightLineAssignmentCheck {
                                                    renaming: inverse) else { return false }
             return sourcePlan == loweredPlan
         }
-        var copyReads: [ScalarCopyReceipt.Reference] = []
         var captured = 0
         var capturePositions: [String: Int] = [:]
         func reference(_ name: String) -> ScalarCopyReceipt.Reference {
@@ -875,12 +862,10 @@ package enum StraightLineAssignmentCheck {
                       !stateRoots.contains(name),
                       capturePositions[name] == nil,
                       matches(source[captured].expression, value) else { throw mismatch() }
-                if let tail = scheduledTail {
-                    guard tail.count == 1,
-                          case .letBinding(let scheduledName, .variable(let read), let body) = tail[0],
-                          scheduledName == name, value == .variable(read) else { throw mismatch() }
-                    copyReads.append(reference(read))
-                    scheduledTail = body
+                if let scheduledCopy {
+                    guard case .variable(let read) = value,
+                          scheduledCopy.reads.indices.contains(captured),
+                          scheduledCopy.reads[captured] == reference(read) else { throw mismatch() }
                 }
                 current[source[captured].root] = name
                 captured += 1
@@ -902,19 +887,11 @@ package enum StraightLineAssignmentCheck {
         guard guardSeen, controlWriteSeen, captured == source.count,
               writes.count == stateRoots.count,
               stateRoots.allSatisfy({ writes[$0] == current[$0] }) else { throw mismatch() }
-        guard let scheduledTail else { return VerifiedSequentialIntAction(scalarCopy: nil) }
-        guard scheduledTail.count == 1,
-              case .parallel(let assignments) = scheduledTail[0] else { throw mismatch() }
-        var plannedWrites = Dictionary(uniqueKeysWithValues: stateRoots.map { ($0, ScalarCopyReceipt.Reference.state($0)) })
-        for assignment in assignments {
-            guard case .root(let root) = assignment.target,
-                  plannedWrites[root] == .state(root),
-                  case .variable(let read) = assignment.value,
-                  let position = capturePositions[read] else { throw mismatch() }
-            plannedWrites[root] = .capture(position)
+        if let scheduledCopy {
+            guard scheduledCopy.reads.count == captured,
+                  scheduledCopy.writes == writes.mapValues(reference) else { throw mismatch() }
         }
-        guard plannedWrites == writes.mapValues(reference) else { throw mismatch() }
-        return VerifiedSequentialIntAction(scalarCopy: ScalarCopyReceipt(reads: copyReads, writes: plannedWrites))
+        return VerifiedSequentialIntAction(scalarCopy: scheduledCopy)
     }
 
     private static func verifySingleAssignmentCapture(

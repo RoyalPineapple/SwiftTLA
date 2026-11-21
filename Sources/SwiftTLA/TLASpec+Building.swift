@@ -156,7 +156,8 @@ extension TLASpec {
     if algorithmPhase == .source {
       for algorithm in sourceAlgorithms {
         try algorithm.requireValid()
-        let resolved = algorithm.model.resolvingAtomicSteps()
+        let (resolved, scheduledCopies) = algorithm.model.resolvingAtomicSteps(
+          retainingScalarCopyRoutes: retainingScalarCopyRoutes && initialInvariantSelections.isEmpty)
         let authoredPlusCalPlan = AuthoredPlusCalAlgorithmPlan(resolved)
         let lowered = try AlgorithmLowerer.lower(
           resolved,
@@ -177,7 +178,7 @@ extension TLASpec {
         }
         if algorithm.model.processes.isEmpty, algorithm.model.procedures.isEmpty {
           let verified = try StraightLineAssignmentCheck.verifySequential(
-            algorithm.model, scheduled: retainingScalarCopyRoutes ? resolved : nil, lowered: lowered,
+            algorithm.model, scheduledCopies: scheduledCopies, lowered: lowered,
             enumerateInitialControl: !initialInvariantSelections.isEmpty)
           orderedIntProofActionNames.formUnion(verified.actionNames)
           scalarCopyRoutes = verified.scalarCopies

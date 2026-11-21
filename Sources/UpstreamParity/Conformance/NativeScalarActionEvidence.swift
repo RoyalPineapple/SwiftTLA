@@ -57,12 +57,13 @@ private func checked<T>(_ matches: [T]) throws -> T {
 
 // Interpret only the total scalar continuation grammar. Its reads come from the retained Swift.
 package func nativeScalarActionEvidence(_ source: String, program: CompiledProgram) throws -> Data {
-    let rows = try decodeScalarActions(source, program: program, predicate: nil).map {
-        "<<\(TLAValue.string($0.label)), \($0.plans[0].tla)>>"
-    }
+    let actions = try decodeScalarActions(source, program: program, predicate: nil)
+    let rows = actions.map { "<<\(TLAValue.string($0.label)), \($0.plans[0].tla)>>" }
+    let dispatch = TLAValue.tuple(actions.map { .string($0.formalLabel) })
     return Data("""
     ---- MODULE SwiftTLANativeActions ----
     NativeActionRows == <<\(rows.joined(separator: ", "))>>
+    NativeActionDispatchLabels == \(dispatch)
     ====
 
     """.utf8)
@@ -81,7 +82,7 @@ func nativeConditionalActionPlans(_ source: String, program: CompiledProgram, pr
 }
 
 private func decodeScalarActions(_ source: String, program: CompiledProgram, predicate: [String]?) throws
-    -> [(label: String, fields: [String], visit: NativeConditionalVisit?, plans: [ActionInstructions])] {
+    -> [(label: String, formalLabel: String, fields: [String], visit: NativeConditionalVisit?, plans: [ActionInstructions])] {
 
     let parsed = Parser.parse(source: source)
     guard !parsed.hasError, !source.utf8.contains(0), program.layout.parameters.isEmpty else {
@@ -107,7 +108,7 @@ private func decodeScalarActions(_ source: String, program: CompiledProgram, pre
         }
     }
     let hidden = fields.filter { $0.member == nil }
-    let control = predicate == nil ? try checked(hidden.filter { $0.name == "pc" }) : nil
+    let control = predicate == nil ? try checked(hidden) : nil
     let visible = fields.filter { $0.member != nil }
     let locations = program.layout.controlLocations.map {
         (caseName: "location\($0.id.ordinal)", ordinal: $0.id.ordinal, label: $0.formalName)
@@ -161,17 +162,26 @@ private func decodeScalarActions(_ source: String, program: CompiledProgram, pre
         @_documentation(visibility: internal)
         public enum \(controlType): \(intType), Hashable, Sendable { \(controlCases) }
         """)
-    } else {
+    }
+    do {
         let table = try checked(declarations.filter {
             $0.as(VariableDeclSyntax.self)?.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?
                 .identifier.text == "__swifttlaFormalProjectionTokens"
         })
         let projection = try checked(functions.filter { $0.name.text == "formalProjection" })
-        try verifyGeneratedFormalProjectionOutput([table, DeclSyntax(projection)], fields: visible.map {
-            let route = "snapshot.state.\($0.member!)"
-            let isInt = $0.type == intType
-            let callee = isInt ? "SwiftTLA._nativeFormalInt" : "SwiftTLA.TLAValue.bool"
-            return (formalName: $0.name, route: route, type: isInt ? .int : .bool, value: "\(callee)(\(route))")
+        try verifyGeneratedFormalProjectionOutput([table, DeclSyntax(projection)], fields: fields.map { field in
+            if let member = field.member {
+                let route = "snapshot.state.\(member)"
+                let isInt = field.type == intType
+                let callee = isInt ? "SwiftTLA._nativeFormalInt" : "SwiftTLA.TLAValue.bool"
+                return (formalName: field.name, route: route, type: isInt ? .int : .bool, value: "\(callee)(\(route))")
+            }
+            let route = "snapshot.\(field.slot)"
+            let cases = locations.map {
+                "case .\($0.caseName): return SwiftTLA._nativeFormalString(\(String(reflecting: $0.label)))"
+            }.joined(separator: "\n")
+            let value = "try { () throws -> SwiftTLA.TLAValue in switch \(route) {\n\(cases)\n} }()"
+            return (formalName: field.name, route: route, type: .controlLocation, value: value)
         })
     }
     let storage = fields.map { "var \($0.slot): \($0.type)? = nil" }.joined(separator: "\n")
@@ -207,18 +217,41 @@ private func decodeScalarActions(_ source: String, program: CompiledProgram, pre
         guard let declaration = item.decl.as(EnumCaseDeclSyntax.self), declaration.elements.count == 1 else { return nil }
         return declaration.elements.first?.name.text
     }
-    guard !labels.isEmpty, Set(labels).count == labels.count else {
+    let compiledActions = program.layout.actions
+    guard !labels.isEmpty, Set(labels).count == labels.count,
+          labels.count == compiledActions.count,
+          compiledActions.enumerated().allSatisfy({ $0.offset == $0.element.id.ordinal }) else {
         throw InitialFailureEvidenceError.unsupportedGeneratedOutput
     }
     let actionCases = try labels.map { "case \(try nativeSourceIdentifier($0))" }.joined(separator: "\n")
     try require(action, "public enum Action: Hashable, Sendable { \(actionCases) }")
     let qualifiedLabels = try labels.map(nativeSourceIdentifier)
-    let formalCalls = zip(labels, qualifiedLabels).map {
+    let formalCall = try checked(functions.filter {
+        $0.name.text == "formalCall" && $0.signature.parameterClause.parameters.count == 1
+    })
+    guard let statement = formalCall.body?.statements.first,
+          let choice = (statement.item.as(ExprSyntax.self) ?? statement.item.as(ExpressionStmtSyntax.self)?.expression)?
+              .as(SwitchExprSyntax.self) else {
+        throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+    }
+    let formalLabels = try choice.cases.map { item in
+        guard let branch = item.as(SwitchCaseSyntax.self),
+              let returned = branch.statements.first?.item.as(ReturnStmtSyntax.self),
+              let call = returned.expression?.as(FunctionCallExprSyntax.self),
+              let label = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        return label
+    }
+    guard formalLabels.elementsEqual(compiledActions.map(\.renderedName), by: {
+        $0.utf8.elementsEqual($1.utf8)
+    }) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+    let formalCalls = zip(formalLabels, qualifiedLabels).map {
         "case .\($1): return FormalActionCall(name: \(String(reflecting: $0)), arguments: [])"
     }.joined(separator: "\n")
-    try checkFunction("""
+    try require(formalCall, """
     public func formalCall(for action: Action) throws -> FormalActionCall { switch action { \(formalCalls) } }
-    """, named: "formalCall", arity: 1)
+    """)
     let checking = "checking context: inout CheckingContext<CheckingRegisters>?"
     let candidateCalls = qualifiedLabels.map { "do { try visit(.\($0)) }" }.joined(separator: "\n")
     try checkFunction("""
@@ -234,14 +267,15 @@ private func decodeScalarActions(_ source: String, program: CompiledProgram, pre
     }
     """, named: "_visitSuccessors", arity: 3, firstLabel: "for")
 
-    let rows = try labels.enumerated().map { index, label in
+    let rows = try compiledActions.enumerated().map { index, action in
         let visitor = try checked(functions.filter { $0.name.text == "_visitUpdates\(index)" })
         let decoded = try decodeScalarActionVisitor(visitor, index: index, fields: fields, control: control,
             locations: locations.map { ($0.caseName, $0.label) }, checking: checking, predicate: predicate)
         let successor = try checked(functions.filter { $0.name.text == "_visitSuccessors\(index)" })
         try verifyGeneratedSuccessorOutput(DeclSyntax(successor), actionID: index, parameters: "", arguments: "",
             configurationParameters: "", configurationArguments: "")
-        return (label: label, fields: fields.map(\.name), visit: decoded.visit, plans: decoded.plans)
+        return (label: action.declaration.name, formalLabel: formalLabels[index], fields: fields.map(\.name),
+            visit: decoded.visit, plans: decoded.plans)
     }
     try checkNativeValidationActionRoute(functions)
     return rows

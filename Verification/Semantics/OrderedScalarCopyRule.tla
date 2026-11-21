@@ -276,6 +276,117 @@ THEOREM DirectCopyRoutesFollowEveryCapture ==
         <2>. QED BY <2>bounds, <2>writers, SMT DEF routes, DirectCopyRoutes, DirectCopyReference, CopyReplace, count
     <1>. QED BY <1>step, <1>seed DEF routes, count
 
+\* Projection of the production loop at each visitation boundary. Captures are
+\* numbered by the iteration that appended their binder, independent of its spelling.
+DirectCopySchedulerStart(keys) == [reads |-> <<>>, writes |-> CopyEntryRoutes(keys)]
+
+DirectCopySchedulerStep(keys, copy, index, prior) ==
+    [reads |-> HistoryAppend(prior.reads, index - 1, prior.writes[copy.read]),
+     writes |-> CopyReplace(keys, prior.writes, copy.target, <<"capture", index>>)]
+
+DirectCopySchedulerExecution(keys, copies, states) ==
+    /\ states[0] = DirectCopySchedulerStart(keys)
+    /\ \A index \in 1..Len(copies) :
+           states[index] = DirectCopySchedulerStep(keys, copies[index], index, states[index - 1])
+
+DirectCopyReceiptAtPrefix(keys, copies, prefix) ==
+    LET routes == DirectCopyRoutes(keys, copies)
+    IN [reads |-> [index \in 1..prefix |-> routes[index - 1][copies[index].read]],
+        writes |-> routes[prefix]]
+
+DirectCopySchedulerFold(keys, copies) ==
+    [prefix \in 0..Len(copies) |-> DirectCopyReceiptAtPrefix(keys, copies, prefix)]
+
+DirectCopyScheduledReceipt(keys, copies) == DirectCopySchedulerFold(keys, copies)[Len(copies)]
+
+THEOREM DirectCopySchedulerConstructsTheCompleteCapturePlan ==
+    ASSUME NEW keys, NEW copies, Len(copies) \in Nat, DOMAIN copies = 1..Len(copies),
+           \A index \in DOMAIN copies : copies[index].target \in keys /\ copies[index].read \in keys
+    PROVE LET receipt == DirectCopyScheduledReceipt(keys, copies)
+          IN /\ DOMAIN DirectCopySchedulerFold(keys, copies) = 0..Len(copies)
+             /\ DirectCopySchedulerExecution(keys, copies, DirectCopySchedulerFold(keys, copies))
+             /\ CopyPlan(keys, copies, receipt.reads, receipt.writes, DirectCopyRoutes(keys, copies))
+             /\ \A states : DirectCopySchedulerExecution(keys, copies, states) => states[Len(copies)] = receipt
+    PROOF
+    <1>. DEFINE count == Len(copies)
+                routes == DirectCopyRoutes(keys, copies)
+                receipt(prefix) == DirectCopyReceiptAtPrefix(keys, copies, prefix)
+    <1>routes. /\ routes[0] = CopyEntryRoutes(keys)
+               /\ \A index \in 1..count :
+                      routes[index] = CopyReplace(keys, routes[index - 1],
+                          copies[index].target, <<"capture", index>>)
+        BY DirectCopyRoutesFollowEveryCapture DEF count, routes
+    <1>entry. receipt(0) = DirectCopySchedulerStart(keys)
+        BY ONLY <1>routes, SMT DEF receipt, routes, DirectCopyReceiptAtPrefix, DirectCopySchedulerStart
+    <1>transition. \A index \in 1..count :
+        receipt(index) = DirectCopySchedulerStep(keys, copies[index], index, receipt(index - 1))
+        <2>. TAKE index \in 1..count
+        <2>bounds. index \in Nat /\ index > 0 /\ (index - 1) + 1 = index
+            BY ONLY (index \in 1..count), SMT
+        <2>write. receipt(index).writes = CopyReplace(keys, receipt(index - 1).writes,
+                      copies[index].target, <<"capture", index>>)
+            BY ONLY (index \in 1..count), <1>routes, SMT DEF receipt, routes, DirectCopyReceiptAtPrefix
+        <2>read. receipt(index).reads = HistoryAppend(receipt(index - 1).reads, index - 1,
+                     receipt(index - 1).writes[copies[index].read])
+            BY ONLY <2>bounds, SMT DEF receipt, DirectCopyReceiptAtPrefix, HistoryAppend
+        <2>. QED BY ONLY <2>write, <2>read, SMT DEF receipt, DirectCopyReceiptAtPrefix, DirectCopySchedulerStep
+    <1>fold. /\ DOMAIN DirectCopySchedulerFold(keys, copies) = 0..Len(copies)
+             /\ DirectCopySchedulerExecution(keys, copies, DirectCopySchedulerFold(keys, copies))
+        BY ONLY (Len(copies) \in Nat), <1>entry, <1>transition, SMT
+            DEF DirectCopySchedulerFold, DirectCopySchedulerExecution, count, receipt
+    <1>plan. CopyPlan(keys, copies, receipt(count).reads, receipt(count).writes, routes)
+        BY <1>routes, SMT DEF CopyPlan, receipt, DirectCopyReceiptAtPrefix, routes, count
+    <1>actual. \A states : DirectCopySchedulerExecution(keys, copies, states) => states[count] = receipt(count)
+        <2>. SUFFICES ASSUME NEW states, DirectCopySchedulerExecution(keys, copies, states)
+                     PROVE states[count] = receipt(count)
+            OBVIOUS
+        <2>. DEFINE agrees(index) == states[index] = receipt(index)
+        <2>initial. agrees(0)
+            BY ONLY <1>entry, DirectCopySchedulerExecution(keys, copies, states), SMT
+                DEF agrees, DirectCopySchedulerExecution
+        <2>advance. ASSUME NEW index \in 1..count, \A prior \in 0..(index - 1) : agrees(prior)
+                     PROVE agrees(index)
+            <3>prior. agrees(index - 1)
+                BY ONLY (index \in 1..count), (\A prior \in 0..(index - 1) : agrees(prior)), SMT
+            <3>step. states[index] = DirectCopySchedulerStep(keys, copies[index], index, states[index - 1])
+                BY ONLY (index \in 1..count), DirectCopySchedulerExecution(keys, copies, states), SMT
+                    DEF count, DirectCopySchedulerExecution
+            <3>receipt. receipt(index) = DirectCopySchedulerStep(keys, copies[index], index, receipt(index - 1))
+                BY ONLY (index \in 1..count), <1>transition, SMT
+            <3>. QED BY ONLY <3>prior, <3>step, <3>receipt, SMT DEF agrees
+        <2>. HIDE DEF agrees
+        <2>all. \A index \in 0..count : agrees(index)
+            BY ONLY (Len(copies) \in Nat), <2>initial, <2>advance, FiniteIndexedPrefixProperty DEF count
+        <2>. QED BY ONLY (Len(copies) \in Nat), <2>all, SMT DEF agrees, count
+    <1>returned. DirectCopyScheduledReceipt(keys, copies) = receipt(count)
+        BY ONLY (Len(copies) \in Nat), SMT DEF DirectCopyScheduledReceipt, DirectCopySchedulerFold, receipt, count
+    <1>. QED BY ONLY <1>fold, <1>plan, <1>actual, <1>returned DEF routes, count
+
+THEOREM CopyCaptureHistoryIsUnique ==
+    ASSUME NEW before, NEW reads, NEW left, NEW right,
+           Len(reads) \in Nat, DOMAIN reads = 1..Len(reads),
+           \A index \in DOMAIN reads :
+               reads[index][1] = "capture" => reads[index][2] \in 1..(index - 1),
+           CopyCaptureHistory(before, reads, left), CopyCaptureHistory(before, reads, right)
+    PROVE \A index \in DOMAIN reads : left[index] = right[index]
+    PROOF
+    <1>. DEFINE count == Len(reads)
+                agrees(index) == index = 0 \/ left[index] = right[index]
+    <1>entry. agrees(0)
+        BY ONLY SMT DEF agrees
+    <1>advance. ASSUME NEW index \in 1..count, \A prior \in 0..(index - 1) : agrees(prior)
+                 PROVE agrees(index)
+        <2>read. /\ left[index] = CopyReferenceValue(before, left, reads[index])
+                  /\ right[index] = CopyReferenceValue(before, right, reads[index])
+            BY (index \in 1..count), SMT DEF CopyCaptureHistory, count
+        <2>operand. reads[index][1] = "capture" => left[reads[index][2]] = right[reads[index][2]]
+            BY (index \in 1..count), (\A prior \in 0..(index - 1) : agrees(prior)), SMT DEF count, agrees
+        <2>. QED BY ONLY <2>read, <2>operand, SMT DEF agrees, CopyReferenceValue
+    <1>. HIDE DEF agrees
+    <1>all. \A index \in 0..count : agrees(index)
+        BY ONLY (Len(reads) \in Nat), <1>entry, <1>advance, FiniteIndexedPrefixProperty DEF count
+    <1>. QED BY <1>all, SMT DEF agrees, count
+
 THEOREM DirectCopyReceiptSuppliesTheCompleteCapturePlan ==
     ASSUME NEW keys, NEW copies, NEW reads, NEW writes,
            Len(copies) \in Nat, DOMAIN copies = 1..Len(copies), DOMAIN reads = DOMAIN copies,

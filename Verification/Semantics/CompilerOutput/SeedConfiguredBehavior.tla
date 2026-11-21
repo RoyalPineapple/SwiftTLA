@@ -1,41 +1,33 @@
 ---- MODULE SeedConfiguredBehavior ----
-EXTENDS SwiftTLANativeActionProof, SwiftTLASequentialControlProof, NormalSeedCFG
+EXTENDS SwiftTLACopyConfiguredBehavior, SwiftTLASequentialControlProof
 
 \* CompilerInputPage1 CompilerInputPage2 CompilerInputPage3
-SourceSteps == SourceStay(Before, After) \/ SourceTerminating(Before, After)
-SelectedBehavior == (ActualCFG = SeedCFG) /\ Spec
+SourceSteps == SwiftTLACopySelectedSourceSteps
+NativeSteps == SwiftTLACopyNativeSteps
+SelectedBehavior == SwiftTLACopySelectedBehavior
 
 THEOREM EmittedBehaviorStepMatchesSourceIncludingStuttering ==
-    [Next]_vars <=> [SourceSteps]_<<pc, first, second, last>>
+    [Next]_vars <=> [SourceSteps]_vars
     PROOF
-    <1>step. Next <=> SourceSteps
-        BY ActualNextComposesTheCompleteLabeledActions, SMT DEF SourceSteps
-    <1>. QED BY <1>step, PTL DEF vars
+    <1>native. [Next]_vars <=> [NativeSteps]_vars
+        BY SwiftTLACopyActualConfiguredCopyDispatchPreservesSteps, PTL DEF NativeSteps
+    <1>. QED BY <1>native, SwiftTLACopyActualConfiguredCopyDispatchPreservesSteps, PTL
+        DEF NativeSteps, SourceSteps
 
 THEOREM NormalConfigurationUsesTheProvedStep ==
-    SelectedBehavior <=> (Init /\ [][SourceSteps]_<<pc, first, second, last>>)
+    SelectedBehavior <=> (Init /\ [][SourceSteps]_vars)
     PROOF
-    <1>always. ([][Next]_vars) <=> ([][SourceSteps]_<<pc, first, second, last>>)
-        BY EmittedBehaviorStepMatchesSourceIncludingStuttering, PTL
-    <1>. QED BY NormalCFGIsTheSpecAndDeadlockSelection, <1>always, PTL
-        DEF SelectedBehavior, Spec, vars
-
-NativeSteps == \E label : NativeLabeled(label, Before, After)
+    <1>always. ([][NativeSteps]_vars) <=> ([][SourceSteps]_vars)
+        BY SwiftTLACopyActualConfiguredCopyDispatchPreservesSteps, PTL DEF NativeSteps, SourceSteps
+    <1>. QED BY <1>always, SwiftTLACopyActualConfiguredCopyDispatchPreservesSteps, PTL
+        DEF NativeSteps, SelectedBehavior
 
 THEOREM NormalConfigurationAndNativeDispatchPreserveSourceSteps ==
-    /\ \A label : NativeLabeled(label, Before, After) <=> SourceLabeled(label, Before, After)
+    /\ \A label : SwiftTLACopyNativeLabeled(label) <=> SwiftTLACopySourceLabeled(label)
     /\ ([NativeSteps]_vars <=> [SourceSteps]_vars)
     /\ (SelectedBehavior <=> (Init /\ [][NativeSteps]_vars))
-    PROOF
-    <1>label. \A label : NativeLabeled(label, Before, After) <=> SourceLabeled(label, Before, After)
-        BY ONLY NativeActionObservationsMatchActualNext, ActualNextComposesTheCompleteLabeledActions, SMT
-    <1>steps. NativeSteps <=> Next
-        BY ONLY NativeActionObservationsMatchActualNext DEF NativeSteps
-    <1>stutter. [NativeSteps]_vars <=> [SourceSteps]_vars
-        BY <1>steps, EmittedBehaviorStepMatchesSourceIncludingStuttering, PTL DEF vars
-    <1>behaviors. ([][NativeSteps]_vars) <=> ([][SourceSteps]_vars)
-        BY <1>stutter, PTL
-    <1>. QED BY <1>label, <1>stutter, <1>behaviors, NormalConfigurationUsesTheProvedStep, PTL DEF vars
+    BY ONLY SwiftTLACopyActualConfiguredCopyDispatchPreservesSteps
+        DEF NativeSteps, SourceSteps, SelectedBehavior
 
 THEOREM NormalConfigurationUsesOnlyAuthoredSequentialControl ==
     /\ (SelectedBehavior => [][AuthoredSequentialStep]_vars)
@@ -46,5 +38,5 @@ PROOF
 <1>stuttering. [Next]_vars => [AuthoredSequentialStep]_vars
     BY <1>step, PTL
 <1>. QED BY <1>stuttering, ActualSequentialStepUsesAuthoredRoutes, PTL
-    DEF SelectedBehavior, Spec
+    DEF SelectedBehavior, SwiftTLACopySelectedBehavior, Spec
 ====

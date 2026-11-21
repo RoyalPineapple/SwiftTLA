@@ -353,7 +353,8 @@ jobs:
           mkdir -p "$proof_inputs"
           proof_sources=(OrderedIntExpressionRule IndexedHistoryRules OrderedIntInitializationComposition
             InitializationComposition InitializationOutcomeRules FiniteSetMembershipRule OrderedScalarCopyRule
-            ActionOutcomeInterface FrameActionRule PendingWriteOutcomeRule NativePendingWriteFold NormalSeedCFG)
+            ActionOutcomeInterface FrameActionRule PendingWriteOutcomeRule NativePendingWriteFold
+            NativeScalarCopyRule ScalarCopyOutputBinding NormalSeedCFG)
           for module in "${proof_sources[@]}"; do
             cp "Verification/Semantics/$module.tla" "$proof_inputs/"
           done
@@ -371,15 +372,40 @@ jobs:
           generated=.build/initial-failure-artifacts/case/generated-tla
           cp Verification/Semantics/CompilerOutput/{SwiftTLAStayActionProof,SwiftTLANativeActionProof,SeedConfiguredBehavior}.tla "$generated/"
           python3 - "$generated" <<'PYCFG'
+          import json
           import sys
           from pathlib import Path
           from runpy import run_path
           output = Path(sys.argv[1])
+          report = json.loads((output.parent / "preparation.json").read_text())
           load_bytes = run_path("scripts/check-initial-proof-step.py")["load_byte_input"]
-          load_bytes(output / "CheckedAdditionPrefixInitialModel.cfg", output, [1, 2, 3])
+          load_bytes(output / (report["module"] + ".cfg"), output, [1, 2, 3])
           PYCFG
-          for source in "$proof_inputs/OrderedScalarCopyRule.tla" "$proof_inputs/NativePendingWriteFold.tla" "$proof_inputs/NormalSeedCFG.tla" \
-            "$generated"/{SwiftTLAStayActionSource,SwiftTLAStayActionProof,SwiftTLANativeActionProof,SwiftTLASequentialControlProof,SeedConfiguredBehavior}.tla; do
+          proof_modules=("$proof_inputs/OrderedScalarCopyRule.tla" "$proof_inputs/NativePendingWriteFold.tla"
+            "$proof_inputs/ScalarCopyOutputBinding.tla" "$proof_inputs/NativeScalarCopyRule.tla"
+            "$proof_inputs/NormalSeedCFG.tla" "$generated/SwiftTLASequentialControlProof.tla")
+          copy_modules="$(python3 - "$generated" <<'PYCOPY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          generated = Path(sys.argv[1])
+          report = json.loads((generated.parent / "preparation.json").read_text())
+          modules = report["scalarCopyProofSHA256"]
+          names = ("SwiftTLACopyAuthored", "SwiftTLACopyActionProof", "SwiftTLACopyConfiguredBehavior")
+          assert modules.keys() == set(names)
+          for name in names:
+              source = generated / (name + ".tla")
+              assert hashlib.sha256(source.read_bytes()).hexdigest() == modules[name]
+              print(source)
+          PYCOPY
+          )"
+          while IFS= read -r source; do
+            if [[ -n "$source" ]]; then proof_modules+=("$source"); fi
+          done <<<"$copy_modules"
+          proof_modules+=("$generated"/{SwiftTLAStayActionSource,SwiftTLAStayActionProof,SwiftTLANativeActionProof,SeedConfiguredBehavior}.tla)
+          for source in "${proof_modules[@]}"; do
             log=".build/initial-failure-artifacts/$(basename "$source" .tla).log"
             "$proof_tool_dir/tlapm/bin/tlapm" --strict --nofp --timing -I "$proof_inputs" -I "$generated" "$source" </dev/null 2>&1 | tee "$log"
             grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' "$log"

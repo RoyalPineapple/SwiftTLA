@@ -190,9 +190,12 @@ package enum InitialFailureEvidence {
         try actionSource.write(to: generated.appendingPathComponent("SwiftTLAStayActionSource.tla"), options: .atomic)
         var scalarCopyProofHashes: [String: String] = [:]
         if let scalarCopyProof {
+            guard resolvedProgram.layout == compilation.layout else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
             var proofModules = [(scalarCopyProof.sourceName, scalarCopyProof.source),
                                 (scalarCopyProof.parentName, scalarCopyProof.parent)]
-            if let configured = scalarCopyProof.configuredBehavior(for: rendered) {
+            if let configured = scalarCopyProof.configuredBehavior(for: rendered, layout: resolvedProgram.layout) {
                 proofModules.append((configured.name, configured.bytes))
             }
             for (module, bytes) in proofModules {

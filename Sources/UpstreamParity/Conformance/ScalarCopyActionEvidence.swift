@@ -111,7 +111,7 @@ package enum ScalarCopyActionEvidence {
         ---- MODULE \#(proofModule) ----
         EXTENDS \#(output.root.name), TLAPS
 
-        LOCAL \#(rules) == INSTANCE OrderedScalarCopyRule
+        LOCAL \#(rules) == INSTANCE ScalarCopyOutputBinding
         LOCAL \#(authoredInstance) == INSTANCE \#(authoredModule)
 
         \#(before) == [\#(key) \in \#(authoredInstance)!WitnessCopyFields |->
@@ -149,24 +149,33 @@ package enum ScalarCopyActionEvidence {
             \/ \#(label) = \#(TLAValue.string(terminating.declaration.name)) /\ \#(terminatingRule)
         \#(emittedLabeled)(\#(label)) == \#(selected.joined(separator: " \\/ "))
 
+        THEOREM \#(prefix)ActualLayoutKeys ==
+            /\ \#(prefix)Keys = \#(TLAValue.set(Set(fields.map(TLAValue.string))))
+            /\ \#(before) = [\#(key) \in \#(prefix)Keys |-> \#(before)[\#(key)]]
+            /\ \#(after) = [\#(key) \in \#(prefix)Keys |-> \#(after)[\#(key)]]
+            BY \#(authoredInstance)!AuthoredCopySyntaxBindsWitnessRows, SMT
+                DEF \#(prefix)Keys, \#(before), \#(after), \#(authoredInstance)!WitnessCopyFields
+
         THEOREM \#(prefix)ActualTerminationRetainsTheCompleteFrame ==
             \#(terminating.renderedName) <=> \#(terminatingRule)
             BY SMT DEF \#(terminating.renderedName), \#(terminatingRule), \#(before), \#(after),
                 \#(authoredInstance)!WitnessCopyFields
 
+        THEOREM \#(prefix)ActualSourceLabelOrder ==
+            /\ DOMAIN \#(prefix)Rows = DOMAIN \#(labelsAt)
+            /\ \A \#(index) \in DOMAIN \#(labelsAt) :
+                \#(prefix)Rows[\#(index)].label = \#(labelsAt)[\#(index)]
+            BY \#(authoredInstance)!AuthoredCopySyntaxBindsWitnessRows, SMT
+                DEF \#(prefix)Rows, \#(authoredInstance)!WitnessCopyActionRows, \#(labelsAt)
+
         THEOREM \#(prefix)ActualLabeledActionsAndNext ==
             /\ \A \#(label) : \#(emittedLabeled)(\#(label)) <=> \#(sourceLabeled)(\#(label))
             /\ (Next <=> (\E \#(label) : \#(sourceLabeled)(\#(label))))
         PROOF
-        <1>labels. /\ DOMAIN \#(authoredInstance)!AuthoredCopyActionRows = DOMAIN \#(labelsAt)
-                   /\ \A \#(index) \in DOMAIN \#(labelsAt) :
-                       \#(authoredInstance)!AuthoredCopyActionRows[\#(index)].label = \#(labelsAt)[\#(index)]
-            BY \#(authoredInstance)!AuthoredCopySyntaxBindsWitnessRows, SMT
-                DEF \#(authoredInstance)!WitnessCopyActionRows, \#(labelsAt)
         <1>selected. \A \#(label) : \#(emittedLabeled)(\#(label)) <=> \#(sourceLabeled)(\#(label))
-            BY <1>labels, \#(prefix)ActualTerminationRetainsTheCompleteFrame,
+            BY \#(prefix)ActualSourceLabelOrder, \#(prefix)ActualTerminationRetainsTheCompleteFrame,
                 \#(labels.indices.map { prefix + "Row" + String($0 + 1) }.joined(separator: ", ")), SMT
-                DEF \#(emittedLabeled), \#(sourceLabeled), \#(labelsAt)
+                DEF \#(emittedLabeled), \#(sourceLabeled), \#(prefix)Rows, \#(labelsAt)
         <1>next. Next <=> (\E \#(label) : \#(emittedLabeled)(\#(label)))
             BY SMT DEF Next, \#(emittedLabeled)
         <1>. QED BY <1>selected, <1>next, SMT
@@ -211,28 +220,6 @@ package enum ScalarCopyActionEvidence {
             "LET \(capture(offset + 1)) == \(try binding(read, at: offset + 1)) IN"
         } + ["<<\((1...count).map(capture).joined(separator: ", "))>>"]
 
-        let stepFacts = (1...count).map { "route\($0)" }
-        let routeProofs = (1...count).map { position in
-            #"""
-            <2>route\#(position). routes[\#(position)] =
-                \#(rules)CopyReplace(fields, routes[\#(position - 1)], copies[\#(position)].target, <<"capture", \#(position)>>)
-                BY <2>shape, \#(rules)DirectCopyRoutesFollowEveryCapture, SMT DEF routes
-            """#
-        }.joined(separator: "\n")
-        let captureFacts = (1...count).map { "capture\($0)" }
-        let captureProofs = (1...count).map { position in
-            let dependency: String
-            if case .capture(let read) = receipt.reads[position - 1] {
-                dependency = "<3>capture\(read), "
-            } else {
-                dependency = ""
-            }
-            return #"""
-            <3>capture\#(position). \#(choice)[\#(position)] = \#(captured)[\#(position)]
-                BY \#(dependency)<3>known, \#(rules)CopyCaptureHistory(\#(before), \#(reads), \#(choice)), SMT
-                    DEF \#(rules)CopyCaptureHistory, \#(rules)CopyReferenceValue, \#(reads)
-            """#
-        }.joined(separator: "\n")
         return #"""
         \#(reads) == \#(fixedRead)
         \#(writes) == [\#(key) \in \#(source)WitnessCopyFields |-> \#(fixedWrite)]
@@ -252,42 +239,42 @@ package enum ScalarCopyActionEvidence {
                     copies == \#(source)WitnessCopyActionRows[\#(number)].copies
                     routes == \#(rules)DirectCopyRoutes(fields, copies)
                     result(\#(choice)) == \#(rules)CopyMaterializedState(fields, \#(before), \#(choice), \#(writes))
+        <1>shape. /\ Len(copies) \in Nat
+                   /\ DOMAIN copies = 1..Len(copies)
+                   /\ \A position \in DOMAIN copies :
+                        copies[position].target \in fields /\ copies[position].read \in fields
+            BY SMT DEF fields, copies, \#(source)WitnessCopyActionRows, \#(source)WitnessCopyFields
+        <1>checked. \#(rules)ReceiptNamesLastWriters(fields, copies, \#(reads), \#(writes))
+            BY SMT DEF \#(rules)ReceiptNamesLastWriters, \#(rules)CopyReceiptNamesWriter, \#(rules)CopyReceiptOrdinal,
+                \#(rules)LastDirectCopy, \#(rules)DirectCopyReference, fields, copies,
+                \#(source)WitnessCopyActionRows, \#(source)WitnessCopyFields, \#(reads), \#(writes)
+        <1>receipt. /\ \#(reads) = \#(rules)DirectCopyScheduledReceipt(fields, copies).reads
+                     /\ \#(writes) = \#(rules)DirectCopyScheduledReceipt(fields, copies).writes
+            BY <1>shape, <1>checked, \#(rules)CheckedReceiptIsTheScheduledReceipt, SMT
         <1>plan. \#(rules)CopyPlan(fields, copies, \#(reads), \#(writes), routes)
-            <2>shape. /\ Len(copies) = \#(count)
-                      /\ DOMAIN copies = 1..\#(count) /\ DOMAIN \#(reads) = 1..\#(count)
-                      /\ \A position \in DOMAIN copies :
-                           copies[position].target \in fields /\ copies[position].read \in fields
-                BY SMT DEF fields, copies, \#(source)WitnessCopyActionRows, \#(source)WitnessCopyFields, \#(reads)
-            <2>seed. routes[0] = \#(rules)CopyEntryRoutes(fields)
-                BY <2>shape, \#(rules)DirectCopyRoutesFollowEveryCapture, SMT DEF routes
-            \#(indent(routeProofs, spaces: 4))
-            <2>capture. \A position \in DOMAIN copies :
-                \#(reads)[position] = routes[position - 1][copies[position].read]
-                BY <2>shape, <2>seed, \#(stepFacts.map { "<2>" + $0 }.joined(separator: ", ")), SMT
-                   DEF fields, copies, \#(source)WitnessCopyActionRows, \#(source)WitnessCopyFields,
-                       \#(reads), \#(rules)CopyEntryRoutes, \#(rules)CopyReplace
-            <2>finish. \#(writes) = routes[\#(count)]
-                BY <2>seed, \#(stepFacts.map { "<2>" + $0 }.joined(separator: ", ")), SMT
-                   DEF fields, copies, \#(source)WitnessCopyActionRows, \#(source)WitnessCopyFields,
-                       \#(writes), \#(rules)CopyEntryRoutes, \#(rules)CopyReplace
-            <2>. QED BY <2>shape, <2>capture, <2>finish, \#(rules)DirectCopyReceiptSuppliesTheCompleteCapturePlan,
-                SMT DEF routes
+            BY <1>shape, <1>receipt, \#(rules)DirectCopySchedulerConstructsTheCompleteCapturePlan, SMT DEF routes
+        <1>earlier.
+            /\ Len(\#(reads)) \in Nat
+            /\ DOMAIN \#(reads) = 1..Len(\#(reads))
+            /\ \A position \in DOMAIN \#(reads) :
+                 \#(reads)[position][1] = "capture" => \#(reads)[position][2] \in 1..(position - 1)
+            BY SMT DEF \#(reads)
         <1>known. \#(rules)CopyCaptureHistory(\#(before), \#(reads), \#(captured))
             BY SMT DEF \#(reads), \#(captured), \#(rules)CopyCaptureHistory, \#(rules)CopyReferenceValue
+        <1>writeReferences. \A key \in fields :
+            \#(writes)[key][1] = "capture" => \#(writes)[key][2] \in DOMAIN \#(reads)
+            BY SMT DEF \#(writes), \#(reads), fields, \#(source)WitnessCopyFields
         <1>materialized. \A \#(choice) :
             \#(rules)CopyCaptureHistory(\#(before), \#(reads), \#(choice)) =>
                 result(\#(choice)) = result(\#(captured))
+            PROOF
             <2>. SUFFICES ASSUME NEW \#(choice), \#(rules)CopyCaptureHistory(\#(before), \#(reads), \#(choice))
                          PROVE result(\#(choice)) = result(\#(captured))
                 OBVIOUS
-            <2>values. \A position \in DOMAIN \#(reads) : \#(choice)[position] = \#(captured)[position]
-                <3>known. \#(rules)CopyCaptureHistory(\#(before), \#(reads), \#(captured))
-                    BY <1>known
-                \#(indent(captureProofs, spaces: 8))
-                <3>. QED BY \#(captureFacts.map { "<3>" + $0 }.joined(separator: ", ")), SMT DEF \#(reads)
-            <2>. QED BY <2>values, SMT
-                DEF result, fields, \#(writes), \#(reads), \#(source)WitnessCopyFields,
-                    \#(rules)CopyMaterializedState, \#(rules)CopyReferenceValue
+            <2>same. \A position \in DOMAIN \#(reads) : \#(choice)[position] = \#(captured)[position]
+                BY <1>earlier, <1>known, \#(rules)CopyCaptureHistoryIsUnique, SMT
+            <2>. QED BY <2>same, <1>writeReferences, SMT
+                DEF result, \#(rules)CopyMaterializedState, \#(rules)CopyReferenceValue
         <1>physical. \#(action) <=>
             (/\ \#(counter) = \#(entry)
              /\ \#(counter)' = \#(next)
@@ -314,10 +301,6 @@ package enum ScalarCopyActionEvidence {
         case .state(let field): .tuple([.string("state"), .string(field)])
         case .capture(let index): .tuple([.string("capture"), .int(index)])
         }
-    }
-
-    private static func indent(_ text: String, spaces: Int) -> String {
-        text.split(separator: "\n", omittingEmptySubsequences: false).joined(separator: "\n" + String(repeating: " ", count: spaces))
     }
 
     struct CopyRow {

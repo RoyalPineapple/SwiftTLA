@@ -601,7 +601,8 @@ def main():
         imports.mkdir()
         names = ["OrderedIntExpressionRule", "IndexedHistoryRules", "InitializationOutcomeRules",
                  "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule", "OrderedScalarCopyRule",
-                 "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "ConditionalOutcomeRules", "NormalSeedCFG"]
+                 "ScalarCopyOutputBinding",
+                 "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "NativeScalarCopyRule", "ConditionalOutcomeRules", "NormalSeedCFG"]
         for name in names:
             shutil.copyfile(root / f"Verification/Semantics/{name}.tla", imports / (name + ".tla"))
         (packet / "proof-inputs.sha256").write_text("".join(
