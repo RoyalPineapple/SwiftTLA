@@ -605,7 +605,8 @@ def main():
         files = arithmetic["files"]
         required = {"authored-arithmetic-source.swift", "native-arithmetic-source.swift",
                     "OrderedOverflow.tla", "OrderedOverflow.cfg", "SwiftTLANativeAssignmentActions.tla",
-                    "SwiftTLAArithmeticAssignmentSource.tla", "native-assignment-failure.json"}
+                    "SwiftTLAArithmeticAssignmentSource.tla", "native-assignment-failure.json",
+                    "SwiftTLAOrderedRHSConfiguredProof.tla", "SwiftTLAOrderedRHSOutputProof.tla"}
         if (arithmetic["sourceSHA"] != head or not required.issubset(files)
                 or arithmetic["authoredSourceSHA256"] != inputs[arithmetic_model]
                 or arithmetic["nativeSourceSHA256"] != digest(retained)
@@ -624,10 +625,19 @@ def main():
                  "CertifiedReadAssignmentObservation", "PhysicalIntAssignmentRhsRule", "NativeIntAssignmentListRule",
                  "RenderedIntAssignmentTerms", "RenderedIntAssignmentActionRule", "OrderedAssignmentOutputRules",
                  "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "NativeScalarCopyRule", "ConditionalOutcomeRules", "NormalSeedCFG"]
+        names += ["CompilerOutput/SeedAndArithmeticConfiguredBehavior", "CompilerOutput/SeedConfiguredBehavior",
+                  "CompilerOutput/SwiftTLACopyCertifiedAssignmentObservation",
+                  "CompilerOutput/SwiftTLAOrderedRHSBackendAgreement", "CompilerOutput/OrderedOverflowInitialDisabled"]
+        proof_hashes = []
         for name in names:
-            shutil.copyfile(root / f"Verification/Semantics/{name}.tla", imports / (name + ".tla"))
-        (packet / "proof-inputs.sha256").write_text("".join(
-            f"{digest(imports / (name + '.tla'))}  proof-inputs/{name}.tla\n" for name in names))
+            source = f"Verification/Semantics/{name}.tla"
+            retained_input = imports / Path(source).name
+            shutil.copyfile(root / source, retained_input)
+            sha = digest(retained_input)
+            if sha != inputs[source]:
+                raise ValueError(f"retained proof input differs from the captured source: {source}")
+            proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
+        (packet / "proof-inputs.sha256").write_text("".join(proof_hashes))
         tool_inputs = packet / "toolchain/build-inputs"
         tool_inputs.mkdir(parents=True)
         for name, directory in [("proof-toolchain.json", "Verification/Semantics"), ("packaging.patch", "Tools/TLAPS")]:
