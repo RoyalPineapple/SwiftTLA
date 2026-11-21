@@ -67,7 +67,7 @@ package enum ArithmeticAssignmentEvidence {
         else { throw invalid }
 
         let live = try observe(program)
-        let nativeDefinitions = try nativeScalarActionDefinitions(native, program: program)
+        let nativeDefinitions = try nativeScalarActionDefinitions(native, program: program, selectedActionOrdinal: live.actionOrdinal)
         let nativeModule = """
         ---- MODULE SwiftTLANativeAssignmentActions ----
         EXTENDS Integers

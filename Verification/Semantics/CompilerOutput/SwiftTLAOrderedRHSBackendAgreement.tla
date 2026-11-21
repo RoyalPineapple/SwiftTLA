@@ -29,8 +29,8 @@ PROOF
         NativeActionOrdinal, RHSOutputActionLabel, "advance")
     BY ONLY <1>ordinal, SMT DEF RHSOutputInput!Rule!NativeAssignmentDispatchMatches,
         NativeActionRows, NativeActionDispatchLabels, RHSOutputActionLabel
-<1>selected. DecodedNativeAction = NativeActionRows[1][2]
-    BY ONLY <1>ordinal, SMT DEF DecodedNativeAction
+<1>selected. DecodedNativeAction = NativeSelectedAction
+    BY ONLY <1>ordinal, SMT DEF DecodedNativeAction, NativeActionRows
 <1>keys. RHSOutputInput!MasterFields = RHSOutputKeys
     BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory
 <1>names.
@@ -40,13 +40,47 @@ PROOF
         RHSOutputInput!Rule!NativeCopyControlSlot
     BY ONLY SMT DEF RHSOutputInput!Rule!NativeCopyKey, NativeFormalNames, RHSOutputKeys, RHSOutputInput!MasterFields
 <1>slots. RHSOutputInput!Rule!NativeCopyKnownRoles(DecodedNativeAction, RHSOutputInput!MasterFields, NativeFormalNames, "pc")
-    BY ONLY <1>selected, <1>keys, SMT DEF RHSOutputInput!Rule!NativeCopyKnownRoles,
-        RHSOutputInput!Rule!NativeCopyPhysicalKeys, NativeActionRows, NativeFormalNames, RHSOutputKeys
-<1>readNames. RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown(DecodedNativeAction, NativeFormalNames)
-    BY ONLY <1>selected, <1>keys, SMT DEF RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown,
-        RHSOutputInput!Rule!NativeAssignmentRhsPlan, NativeActionRows, NativeFormalNames, RHSOutputKeys
+    <2>. DEFINE fields == RHSOutputInput!MasterFields
+                keys == RHSOutputInput!Rule!NativeCopyPhysicalKeys(fields, NativeFormalNames, "pc")
+    <2>map.
+        /\ fields \subseteq STRING /\ DOMAIN NativeFormalNames = fields
+        /\ \A key \in fields : NativeFormalNames[key] = key /\ key # "pc"
+        /\ keys = fields \cup {"pc"}
+        BY ONLY <1>keys, SMT DEF fields, keys, NativeFormalNames, RHSOutputKeys, RHSOutputInput!Rule!NativeCopyPhysicalKeys
+    <2>captures. \A index \in DOMAIN NativeSelectedCaptures :
+        NativeSelectedCaptures[index][1] = "state" => NativeSelectedCaptures[index][2] \in keys
+        BY ONLY <2>map, SMT DEF NativeSelectedCaptures, NativeSelectedCaptureTags, NativeSelectedNodeReads, fields,
+            RHSOutputInput!MasterFields
+    <2>writes. \A index \in DOMAIN NativeSelectedWrites :
+        /\ NativeSelectedWrites[index][1] \in keys
+        /\ (NativeSelectedWrites[index][2][1] = "state" => NativeSelectedWrites[index][2][2] \in keys)
+        BY ONLY <2>map, SMT DEF NativeSelectedWrites, fields, RHSOutputInput!MasterFields
+    <2>. QED BY ONLY <1>selected, <2>map, <2>captures, <2>writes, SMT
+        DEF NativeSelectedAction, fields, keys, RHSOutputInput!Rule!NativeCopyKnownRoles
 <1>rawDomain. DOMAIN DecodedNativeAction.captures = 1..RHSOutputCount
-    BY ONLY <1>selected, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT DEF NativeActionRows
+    BY ONLY <1>selected, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+        DEF NativeSelectedAction, NativeSelectedCaptures, NativeSelectedCaptureTags
+<1>rawPlans. \A index \in 1..RHSOutputCount :
+    RHSOutputInput!Rule!NativeAssignmentRhsPlan(DecodedNativeAction.captures[index]) =
+        [NativeSelectedPlans[index] EXCEPT !.reads =
+            IF NativeSelectedCaptureTags[index] = "literal" THEN <<NativeSelectedCaptures[index]>>
+            ELSE NativeSelectedNodeReads[index]]
+    BY ONLY <1>selected, <1>rawDomain, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+        DEF NativeSelectedAction, NativeSelectedCaptures, NativeSelectedCaptureTags, NativeSelectedPlans,
+            NativeSelectedNodeCounts, RHSOutputInput!Rule!NativeAssignmentRhsPlan
+<1>readNames. RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown(DecodedNativeAction, NativeFormalNames)
+    <2>columns. \A index \in 1..RHSOutputCount : \A node \in 1..NativeSelectedNodeCounts[index] :
+        (NativeSelectedNodeKinds[index][node] = "read" /\ NativeSelectedNodeReads[index][node][1] = "state") =>
+            NativeSelectedNodeReads[index][node][2] \in RHSOutputInput!MasterFields
+        BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+            DEF NativeSelectedNodeCounts, NativeSelectedNodeKinds, NativeSelectedNodeReads, RHSOutputInput!MasterFields
+    <2>literal. \A index \in 1..RHSOutputCount : NativeSelectedCaptureTags[index] = "literal" =>
+        \A node \in 1..NativeSelectedNodeCounts[index] : NativeSelectedNodeKinds[index][node] # "read"
+        BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+            DEF NativeSelectedCaptureTags, NativeSelectedNodeCounts, NativeSelectedNodeKinds
+    <2>. QED BY ONLY <1>keys, <1>selected, <1>rawDomain, <1>rawPlans, <2>columns, <2>literal, SMT
+        DEF NativeSelectedAction, NativeSelectedCaptures, NativeSelectedPlans, NativeFormalNames,
+            RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown
 <1>captureDomain.
     /\ DOMAIN NormalizedNativeAction.captures = DOMAIN DecodedNativeAction.captures
     /\ DOMAIN RHSOutputPlans = DOMAIN RHSOutputRows
@@ -60,31 +94,60 @@ PROOF
     <2>. DEFINE raw == RHSOutputInput!Rule!NativeAssignmentRhsPlan(DecodedNativeAction.captures[index])
                 rendered == RHSOutputPlans[index]
                 physical == NormalizedNativeAction.captures[index]
-    <2>same. raw = rendered
-        BY ONLY <1>selected, <1>captureDomain, (index \in 1..RHSOutputCount),
+    <2>counts. NativeSelectedNodeCounts = RHSOutputNodeCounts
+        BY ONLY SMT DEF NativeSelectedNodeCounts, RHSOutputNodeCounts
+    <2>kinds. NativeSelectedNodeKinds = RHSOutputNodeKinds
+        BY ONLY SMT DEF NativeSelectedNodeKinds, RHSOutputNodeKinds
+    <2>literals. NativeSelectedNodeLiterals = RHSOutputNodeLiterals
+        BY ONLY SMT DEF NativeSelectedNodeLiterals, RHSOutputNodeLiterals
+    <2>readColumns. NativeSelectedNodeReads = RHSOutputNodeReads
+        BY ONLY SMT DEF NativeSelectedNodeReads, RHSOutputNodeReads
+    <2>children. /\ NativeSelectedNodeLeft = RHSOutputNodeLeft /\ NativeSelectedNodeRight = RHSOutputNodeRight
+        BY ONLY SMT DEF NativeSelectedNodeLeft, NativeSelectedNodeRight, RHSOutputNodeLeft, RHSOutputNodeRight
+    <2>same. NativeSelectedPlans[index] = rendered
+        BY ONLY <1>rawDomain, <1>captureDomain, <1>selected, (index \in 1..RHSOutputCount),
+            <2>counts, <2>kinds, <2>literals, <2>readColumns, <2>children, SMT
+            DEF NativeSelectedAction, NativeSelectedCaptures, NativeSelectedPlans, rendered, RHSOutputPlans
+    <2>record. raw = [rendered EXCEPT !.reads =
+        IF NativeSelectedCaptureTags[index] = "literal" THEN <<NativeSelectedCaptures[index]>> ELSE rendered.reads]
+        BY ONLY <1>rawDomain, <1>selected, <1>rawPlans, <2>same, (index \in 1..RHSOutputCount), SMT
+            DEF raw, NativeSelectedAction, NativeSelectedCaptures, NativeSelectedPlans
+    <2>reads.
+        /\ rendered.reads = [node \in 1..rendered.count |-> rendered.reads[node]]
+        /\ \A node \in 1..rendered.count :
+              /\ (raw.kinds[node] = "read" => raw.reads[node] = rendered.reads[node])
+              /\ (raw.kinds[node] # "read" => rendered.reads[node] = <<>>)
+        BY ONLY <2>record, <1>captureDomain, (index \in 1..RHSOutputCount),
             RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-            DEF raw, rendered, NativeActionRows, RHSOutputInput!Rule!NativeAssignmentRhsPlan, RHSOutputPlans,
-                RHSOutputNodeCounts, RHSOutputNodeKinds, RHSOutputNodeLiterals, RHSOutputNodeReads, RHSOutputNodeLeft, RHSOutputNodeRight
-    <2>reads. /\ raw.reads = [node \in 1..raw.count |-> raw.reads[node]]
-              /\ \A node \in 1..raw.count : raw.kinds[node] # "read" => raw.reads[node] = <<>>
-        BY ONLY <2>same, <1>captureDomain, (index \in 1..RHSOutputCount),
-            RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-            DEF rendered, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputNodeKinds, RHSOutputNodeReads
+            DEF rendered, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputNodeKinds, RHSOutputNodeReads, NativeSelectedCaptureTags
     <2>known. \A node \in 1..raw.count :
         (raw.kinds[node] = "read" /\ raw.reads[node][1] = "state") => raw.reads[node][2] \in RHSOutputInput!MasterFields
         BY ONLY <1>readNames, <1>keys, <1>rawDomain, (index \in 1..RHSOutputCount), SMT
             DEF raw, NativeFormalNames, RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown
-    <2>normalized. physical = raw
-        BY ONLY <1>names, <1>rawDomain, (index \in 1..RHSOutputCount), <2>known, <2>reads, SMT
-            DEF physical, raw, NormalizedNativeAction, RHSOutputInput!Rule!NativeAssignmentRekey
-    <2>. QED BY ONLY <2>same, <2>normalized DEF physical, rendered
+    <2>. DEFINE references == [node \in 1..raw.count |->
+        IF raw.kinds[node] = "read" THEN
+            IF raw.reads[node][1] = "state" THEN <<"state",
+                RHSOutputInput!Rule!NativeCopyKey(RHSOutputInput!MasterFields, NativeFormalNames, "pc", raw.reads[node][2])>>
+            ELSE raw.reads[node]
+        ELSE <<>>]
+    <2>update. physical = [raw EXCEPT !.reads = references]
+        BY ONLY <1>rawDomain, (index \in 1..RHSOutputCount), SMT
+            DEF physical, raw, references, NormalizedNativeAction, RHSOutputInput!Rule!NativeAssignmentRekey
+    <2>normalized. references = rendered.reads
+        <3>count. raw.count = rendered.count
+            BY ONLY <2>record, SMT DEF rendered, RHSOutputPlans
+        <3>points. \A node \in 1..rendered.count : references[node] = rendered.reads[node]
+            BY ONLY <3>count, <1>names, <2>known, <2>reads, SMT DEF references
+        <3>. QED BY ONLY <3>count, <3>points, <2>reads, SMT DEF references
+    <2>. QED BY ONLY <2>record, <2>update, <2>normalized, SMT DEF rendered, RHSOutputPlans
+
 <1>operands. \A index \in 1..RHSOutputCount :
     RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters(RHSOutputRows, index, NormalizedNativeAction.captures[index])
     BY ONLY <1>sameCaptures, <1>captureDomain, ActualRenderedRightHandSidesNameTheAuthoredWriters, SMT
 <1>writeDomain.
     /\ Len(DecodedNativeAction.writes) \in Nat
     /\ DOMAIN DecodedNativeAction.writes = 1..Len(DecodedNativeAction.writes)
-    BY ONLY <1>selected, SMT DEF NativeActionRows
+    BY ONLY <1>selected, SMT DEF NativeSelectedAction, NativeSelectedWrites
 <1>writeCount.
     /\ Len(NormalizedNativeAction.writes) = Len(DecodedNativeAction.writes)
     /\ DOMAIN NormalizedNativeAction.writes = DOMAIN DecodedNativeAction.writes
@@ -99,27 +162,37 @@ PROOF
     <2>sequence. writes \in Seq(values)
         BY ONLY <2>function, <1>writeDomain, RHSOutputInput!Rule!SeqDef, SMT
     <2>. QED BY ONLY <2>domain, <2>sequence, <1>writeDomain, RHSOutputInput!Rule!LenProperties, SMT DEF writes
+<1>updates.
+    /\ NormalizedNativeAction.guards = NativeSelectedGuards
+    /\ NormalizedNativeAction.writes = [index \in DOMAIN NativeSelectedWrites |->
+           LET write == NativeSelectedWrites[index]
+           IN <<RHSOutputInput!Rule!NativeCopyKey(RHSOutputInput!MasterFields, NativeFormalNames, "pc", write[1]),
+                IF write[2][1] = "state" THEN <<"state",
+                    RHSOutputInput!Rule!NativeCopyKey(RHSOutputInput!MasterFields, NativeFormalNames, "pc", write[2][2])>>
+                ELSE write[2]>>]
+    BY ONLY <1>selected, SMT DEF NormalizedNativeAction, NativeSelectedAction,
+        RHSOutputInput!Rule!NativeAssignmentRekey, RHSOutputInput!Rule!NativeCopyRekey
 <1>frame.
     /\ RHSOutputInput!MasterFields \subseteq STRING
     /\ RHSOutputInput!Rule!NativeCopyControlSlot \notin RHSOutputInput!MasterFields
     /\ NormalizedNativeAction.guards = <<RHSOutputEntry>>
     /\ \A key \in RHSOutputInput!Rule!NativeCopyFields(RHSOutputInput!MasterFields) :
            \E index \in DOMAIN NormalizedNativeAction.writes : NormalizedNativeAction.writes[index][1] = key
-    BY ONLY <1>selected, <1>keys, <1>names, <1>writeCount, SMT DEF NativeActionRows, NormalizedNativeAction,
-        RHSOutputKeys, RHSOutputEntry, RHSOutputInput!Rule!NativeCopyFields, RHSOutputInput!Rule!NativeCopyControlSlot,
-        RHSOutputInput!Rule!NativeAssignmentRekey, RHSOutputInput!Rule!NativeCopyRekey
+    BY ONLY <1>updates, <1>keys, <1>names, SMT
+        DEF NativeSelectedGuards, NativeSelectedWrites, RHSOutputKeys, RHSOutputEntry,
+            RHSOutputInput!Rule!NativeCopyFields, RHSOutputInput!Rule!NativeCopyControlSlot
 <1>writeRefs. \A index \in DOMAIN NormalizedNativeAction.writes :
     LET key == NormalizedNativeAction.writes[index][1]
     IN /\ key \in RHSOutputInput!Rule!NativeCopyFields(RHSOutputInput!MasterFields)
        /\ NormalizedNativeAction.writes[index][2] =
             IF key = RHSOutputInput!Rule!NativeCopyControlSlot THEN <<"control", RHSOutputExit>> ELSE RHSOutputWriteRoutes[key]
-    BY ONLY <1>selected, <1>keys, <1>names, <1>writeCount, SMT DEF NativeActionRows, NormalizedNativeAction,
-        RHSOutputKeys, RHSOutputExit, RHSOutputWriteRoutes, RHSOutputInput!Rule!NativeCopyFields,
-        RHSOutputInput!Rule!NativeAssignmentRekey, RHSOutputInput!Rule!NativeCopyRekey
+    BY ONLY <1>updates, <1>keys, <1>names, SMT
+        DEF NativeSelectedWrites, RHSOutputKeys, RHSOutputExit, RHSOutputWriteRoutes,
+            RHSOutputInput!Rule!NativeCopyFields, RHSOutputInput!Rule!NativeCopyControlSlot
 <1>writes.
     RHSOutputInput!Rule!NativeAssignmentWritesNameLastTargets(RHSOutputRows, NormalizedNativeAction, RHSOutputEntry, RHSOutputExit)
     BY ONLY <1>keys, <1>writeDomain, <1>writeCount, <1>frame, <1>writeRefs, ActualRenderedWriteRoutesNameTheAuthoredWriters, SMT
-        DEF RHSOutputInput!Rule!NativeAssignmentWritesNameLastTargets, RHSOutputInput!Rule!NativeCopyFields
+        DEF RHSOutputInput!Rule!NativeAssignmentWritesNameLastTargets, RHSOutputInput!Rule!NativeCopyFields, RHSOutputCount
 <1>. QED BY ONLY <1>dispatch, <1>slots, <1>readNames, <1>rawDomain, <1>captureDomain, <1>operands, <1>writes, SMT
     DEF RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites, NormalizedNativeAction, RHSOutputCount
 

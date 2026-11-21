@@ -24,47 +24,118 @@ private struct ActionReference {
     var tla: String { "<<\(TLAValue.string(kind)), \(operand)>>" }
 }
 
+private func actionTuple(_ values: [String]) -> String {
+    "<<\(values.joined(separator: ", "))>>"
+}
+
+private struct ArithmeticCapturePlan {
+    var kinds: [String] = []
+    var literals: [String] = []
+    var reads: [String] = []
+    var left: [String] = []
+    var right: [String] = []
+
+    var tla: String {
+        "[count |-> \(kinds.count), kinds |-> \(actionTuple(kinds)), "
+            + "literals |-> \(actionTuple(literals)), reads |-> \(actionTuple(reads)), "
+            + "left |-> \(actionTuple(left)), right |-> \(actionTuple(right))]"
+    }
+}
+
+private enum ActionCapture {
+    case reference(ActionReference)
+    case expression(ArithmeticCapturePlan)
+
+    var tag: String {
+        switch self {
+        case .reference(let reference): reference.kind
+        case .expression: "expression"
+        }
+    }
+
+    var tla: String {
+        switch self {
+        case .reference(let reference): reference.tla
+        case .expression(let plan): "<<\"expression\", \(plan.tla)>>"
+        }
+    }
+
+    var columns: ArithmeticCapturePlan {
+        switch self {
+        case .reference(let reference):
+            let literal = reference.kind == "literal"
+            return ArithmeticCapturePlan(kinds: [literal ? "\"literal\"" : "\"read\""],
+                literals: [literal ? reference.operand : "0"],
+                reads: [literal ? "<<>>" : reference.tla], left: ["0"], right: ["0"])
+        case .expression(let plan):
+            return plan
+        }
+    }
+}
+
 private struct ActionInstructions {
-    var captures: [String] = []
+    var captures: [ActionCapture] = []
     var guards: [String] = []
     var writes: [String] = []
 
     var tla: String {
-        "[captures |-> <<\(captures.joined(separator: ", "))>>, "
-            + "guards |-> <<\(guards.joined(separator: ", "))>>, "
-            + "writes |-> <<\(writes.joined(separator: ", "))>>]"
+        "[captures |-> \(actionTuple(captures.map(\.tla))), "
+            + "guards |-> \(actionTuple(guards)), writes |-> \(actionTuple(writes))]"
+    }
+
+    var selectedActionDefinitions: String {
+        let plans = captures.map(\.columns)
+        func column(_ path: KeyPath<ArithmeticCapturePlan, [String]>) -> String {
+            actionTuple(plans.map { actionTuple($0[keyPath: path]) })
+        }
+        return #"""
+        NativeSelectedCaptureTags == \#(actionTuple(captures.map { TLAValue.string($0.tag).description }))
+        NativeSelectedNodeCounts == \#(actionTuple(plans.map { String($0.kinds.count) }))
+        NativeSelectedNodeKinds == \#(column(\.kinds))
+        NativeSelectedNodeLiterals == \#(column(\.literals))
+        NativeSelectedNodeReads == \#(column(\.reads))
+        NativeSelectedNodeLeft == \#(column(\.left))
+        NativeSelectedNodeRight == \#(column(\.right))
+        NativeSelectedGuards == \#(actionTuple(guards))
+        NativeSelectedWrites == \#(actionTuple(writes))
+        NativeSelectedPlans == [index \in DOMAIN NativeSelectedCaptureTags |->
+            [count |-> NativeSelectedNodeCounts[index], kinds |-> NativeSelectedNodeKinds[index],
+             literals |-> NativeSelectedNodeLiterals[index], reads |-> NativeSelectedNodeReads[index],
+             left |-> NativeSelectedNodeLeft[index], right |-> NativeSelectedNodeRight[index]]]
+        NativeSelectedCaptures == [index \in DOMAIN NativeSelectedCaptureTags |->
+            IF NativeSelectedCaptureTags[index] = "expression" THEN <<"expression", NativeSelectedPlans[index]>>
+            ELSE IF NativeSelectedCaptureTags[index] = "literal" THEN <<"literal", NativeSelectedNodeLiterals[index][1]>>
+            ELSE NativeSelectedNodeReads[index][1]]
+        NativeSelectedAction == [captures |-> NativeSelectedCaptures, guards |-> NativeSelectedGuards, writes |-> NativeSelectedWrites]
+        """#
     }
 }
 
-private func nativeArithmeticCapture(_ steps: [NativeIntInitialStep]) -> String {
-    var kinds: [String] = [], literals: [String] = [], reads: [String] = []
-    var left: [String] = [], right: [String] = []
+private func nativeArithmeticCapture(_ steps: [NativeIntInitialStep]) -> ArithmeticCapturePlan {
+    var plan = ArithmeticCapturePlan()
     for step in steps {
         switch step {
         case .integer(let value):
-            kinds.append("\"literal\"")
-            literals.append(InitialFailureEvidence.binaryLiteral(value))
-            reads.append("<<>>")
-            left.append("0")
-            right.append("0")
+            plan.kinds.append("\"literal\"")
+            plan.literals.append(InitialFailureEvidence.binaryLiteral(value))
+            plan.reads.append("<<>>")
+            plan.left.append("0")
+            plan.right.append("0")
         case .slot(let reference):
-            kinds.append("\"read\"")
-            literals.append("0")
-            reads.append(reference)
-            left.append("0")
-            right.append("0")
+            plan.kinds.append("\"read\"")
+            plan.literals.append("0")
+            plan.reads.append(reference)
+            plan.left.append("0")
+            plan.right.append("0")
         case .add(let first, let second):
-            kinds.append("\"add\"")
-            literals.append("0")
-            reads.append("<<>>")
-            left.append(String(first + 1))
-            right.append(String(second + 1))
+            plan.kinds.append("\"add\"")
+            plan.literals.append("0")
+            plan.reads.append("<<>>")
+            plan.left.append(String(first + 1))
+            plan.right.append(String(second + 1))
         }
     }
-    func tuple(_ values: [String]) -> String { "<<\(values.joined(separator: ", "))>>" }
-    return "<<\"expression\", [count |-> \(steps.count), kinds |-> \(tuple(kinds)), "
-        + "literals |-> \(tuple(literals)), reads |-> \(tuple(reads)), "
-        + "left |-> \(tuple(left)), right |-> \(tuple(right))]>>"
+    return plan
 }
 
 private func syntaxWords(_ syntax: some SyntaxProtocol) -> [String] {
@@ -97,12 +168,22 @@ package func nativeScalarActionEvidence(_ source: String, program: CompiledProgr
     """.utf8)
 }
 
-func nativeScalarActionDefinitions(_ source: String, program: CompiledProgram) throws -> String {
+func nativeScalarActionDefinitions(_ source: String, program: CompiledProgram, selectedActionOrdinal: Int? = nil) throws -> String {
     let actions = try decodeScalarActions(source, program: program, predicate: nil)
-    let rows = actions.map { "<<\(TLAValue.string($0.label)), \($0.plans[0].tla)>>" }
+    var selectedDefinitions = ""
+    if let selectedActionOrdinal {
+        guard actions.indices.contains(selectedActionOrdinal) else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        selectedDefinitions = actions[selectedActionOrdinal].plans[0].selectedActionDefinitions + "\n"
+    }
+    let rows = actions.enumerated().map { index, action in
+        let plan = selectedActionOrdinal == index ? "NativeSelectedAction" : action.plans[0].tla
+        return "<<\(TLAValue.string(action.label)), \(plan)>>"
+    }
     let dispatch = TLAValue.tuple(actions.map { .string($0.formalLabel) })
     return """
-    NativeActionRows == <<\(rows.joined(separator: ", "))>>
+    \(selectedDefinitions)NativeActionRows == \(actionTuple(rows))
     NativeActionDispatchLabels == \(dispatch)
     """
 }
@@ -448,7 +529,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                           let \(local) = \(rhs.joined(separator: " "))
                           try \(child)(\(argument)\(local), updates, emit)
                           """) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
-                    instructions.captures.append(nativeArithmeticCapture(decoded.steps))
+                    instructions.captures.append(.expression(nativeArithmeticCapture(decoded.steps)))
                     let reference = ActionReference(kind: "capture", operand: String(instructions.captures.count), type: intType)
                     pending.append((child, scope + [(local, reference)]))
                     continue parts
@@ -468,7 +549,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                 }
                 for (spelling, value) in reads where
                     sameWords(core, "let \(local) = \(spelling)\ntry \(child)(\(argument)\(local), updates, emit)") {
-                    instructions.captures.append(value.tla)
+                    instructions.captures.append(.reference(value))
                     let reference = ActionReference(kind: "capture", operand: String(instructions.captures.count), type: value.type)
                     pending.append((child, scope + [(local, reference)]))
                     continue parts
