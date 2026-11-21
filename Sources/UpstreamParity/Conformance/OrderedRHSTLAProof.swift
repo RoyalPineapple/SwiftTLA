@@ -268,14 +268,17 @@ package enum OrderedRHSTLAProof {
             <2>node. node \in 1..RHSOutputInput!MasterNodeCounts[index]
                 BY ONLY <1>shape, (node \in 1..expected.count), SMT
             <2>kind. cell(node).kind = RHSOutputInput!MasterNodeKinds[index][node]
-                BY ONLY <1>sourceDomain, <2>node, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows)
+                BY ONLY <1>sourceDomain, <2>node, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows),
+                    RHSOutputInput!MasterNodes
             <2>payload. cell(node).payload = (IF cell(node).kind = "read"
                                              THEN RHSOutputInput!MasterNodeReadKeys[index][node]
                                              ELSE RHSOutputInput!MasterNodeLiterals[index][node])
-                BY ONLY <1>sourceDomain, <2>node, <2>kind, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows)
+                BY ONLY <1>sourceDomain, <2>node, <2>kind, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows),
+                    RHSOutputInput!MasterNodes
             <2>children. /\ cell(node).left = RHSOutputInput!MasterNodeLeft[index][node]
                          /\ cell(node).right = RHSOutputInput!MasterNodeRight[index][node]
-                BY ONLY <1>sourceDomain, <2>node, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows)
+                BY ONLY <1>sourceDomain, <2>node, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows),
+                    RHSOutputInput!MasterNodes
             <2>. QED BY ONLY <2>kind, <2>payload, <2>children
         <1>expectedCells. \A node \in 1..expected.count :
             /\ expected.kinds[node] = cell(node).kind
@@ -727,6 +730,16 @@ package enum OrderedRHSTLAProof {
                 DEF place, placeAt, payload, terms
         <1>. QED BY <1>advance, <1>aggregate, <1>sites, <1>payloads
 
+        THEOREM RHSOutputStateSuppliesAssignmentBindings ==
+            ASSUME RHSOutputStateType
+            PROVE RHSOutputBefore \in RHSOutputInput!Rule!AssignmentBindings
+        PROOF
+        <1>keys. RHSOutputKeys = RHSOutputInput!\#(sourceFields)
+            BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory
+        <1>. QED BY ONLY <1>keys, RHSOutputStateType, SMT
+            DEF RHSOutputStateType, RHSOutputMin, RHSOutputMax,
+                RHSOutputInput!Rule!AssignmentBindings, RHSOutputInput!Rule!AssignmentIntValues
+
         THEOREM ActualTLAActionObservesTheCertifiedAssignmentHistory ==
             ASSUME RHSOutputStateType, NEW history, RHSOutputSourceHistory(history)
             PROVE RHSOutputHistoryObservation(history)
@@ -737,15 +750,18 @@ package enum OrderedRHSTLAProof {
             BY RHSOutputStateType, ActualRenderedTermsAndGuardsSupplyTheAssignmentInventory
         <1>history. /\ RHSOutputInput!Rule!RenderedAssignmentHistoryAt(RHSOutputRows, RHSOutputBefore, RHSOutputRaw, history, RHSOutputCount)
                     /\ RHSOutputInput!Rule!AssignmentPrefixMeaning(RHSOutputBefore, RHSOutputRows, history, RHSOutputCount)
-            BY RHSOutputStateType, RHSOutputSourceHistory(history), <1>shape, <1>inventory,
+            BY ONLY RHSOutputStateType, RHSOutputStateSuppliesAssignmentBindings, RHSOutputUsesTheMachineIntegerDomain,
+                RHSOutputSourceHistory(history), <1>shape, <1>inventory,
                 RHSOutputInput!Rule!PhysicalGuardedAssignmentTablesDetermineTheCompleteOutcome,
                 RHSOutputInput!Rule!OrderedAssignmentHistoriesRetainTheExactFirstFailurePrefix, SMT
-                DEF RHSOutputSourceHistory, RHSOutputStateType, RHSOutputCount, RHSOutputInput!Rule!AssignmentBindings,
-                    RHSOutputInput!Rule!AssignmentIntValues, RHSOutputInput!Rule!SupportedAssignmentList
+                DEF RHSOutputSourceHistory, RHSOutputCount, RHSOutputInput!Rule!SupportedAssignmentList
+        <1>plans. RHSOutputRaw.plans = RHSOutputPlans
+            BY ONLY SMT DEF RHSOutputRaw
         <1>reached. ~RHSOutputPasses <=>
             (\E index \in 1..RHSOutputCount : \E node \in 1..RHSOutputPlans[index].count : RHSOutputFailsAt(<<index, node>>))
-            BY <1>shape, <1>inventory, RHSOutputInput!Rule!WholeGuardTableHasAnExactFirstFailureSite, SMT
-                DEF RHSOutputPasses, RHSOutputFailsAt, RHSOutputCount, RHSOutputRaw
+            BY ONLY <1>shape, <1>inventory, <1>plans, RHSOutputUsesTheMachineIntegerDomain,
+                RHSOutputInput!Rule!WholeGuardTableHasAnExactFirstFailureSite, SMT
+                DEF RHSOutputPasses, RHSOutputFailsAt, RHSOutputCount
         <1>frame. \#(step.renderedName) <=> RHSOutputHistoryAdvance(history)
             BY <1>history, <1>reached, ActualEmittedActionUsesThePhysicalGuardTable,
                 ActualRenderedWriteRoutesAreTheFinalAuthoredWriters, SMT
@@ -777,10 +793,10 @@ package enum OrderedRHSTLAProof {
                 /\ RHSOutputHistoryObservation(history)
         PROOF
         <1>history. PICK history : RHSOutputSourceHistory(history) /\ RHSOutputGeneratedHistory(history)
-            BY RHSOutputStateType, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
+            BY ONLY RHSOutputStateType, RHSOutputStateSuppliesAssignmentBindings, RHSOutputUsesTheMachineIntegerDomain,
+                RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
                 RHSOutputInput!Rule!CertifiedOrderedAssignmentListConstructsCompleteActionOutcome, SMT
-                DEF RHSOutputStateType, RHSOutputSourceHistory, RHSOutputGeneratedHistory,
-                    RHSOutputInput!Rule!AssignmentBindings, RHSOutputInput!Rule!AssignmentIntValues
+                DEF RHSOutputSourceHistory, RHSOutputGeneratedHistory
         <1>observed. RHSOutputHistoryObservation(history)
             BY RHSOutputStateType, <1>history, ActualTLAActionObservesTheCertifiedAssignmentHistory
         <1>. WITNESS history

@@ -376,16 +376,17 @@ enum AuthoredCopySyntax {
         MasterNodeLeft == \#(leftColumns)
         MasterNodeRight == \#(rightColumns)
         LOCAL MasterRetainedRows == \#(tuple(rows.map(\.retained)))
+        MasterNodes(index) == [node \in 1..MasterNodeCounts[index] |->
+            [kind |-> MasterNodeKinds[index][node],
+             payload |-> IF MasterNodeKinds[index][node] = "read"
+                         THEN MasterNodeReadKeys[index][node] ELSE MasterNodeLiterals[index][node],
+             left |-> MasterNodeLeft[index][node], right |-> MasterNodeRight[index][node]]]
         MasterRows == [index \in DOMAIN MasterNodeCounts |->
             [target |-> MasterTargets[index], view |-> MasterRetainedRows[index].view,
              inverse |-> MasterRetainedRows[index].inverse, fallback |-> \#(formalFallback),
              emitted |-> [count |-> MasterNodeCounts[index], height |-> 1,
                           indices |-> <<MasterNodeCounts[index]>>, origins |-> MasterRetainedRows[index].origins,
-                          nodes |-> [node \in 1..MasterNodeCounts[index] |->
-                            [kind |-> MasterNodeKinds[index][node],
-                             payload |-> IF MasterNodeKinds[index][node] = "read"
-                                         THEN MasterNodeReadKeys[index][node] ELSE MasterNodeLiterals[index][node],
-                             left |-> MasterNodeLeft[index][node], right |-> MasterNodeRight[index][node]]]]]]
+                          nodes |-> MasterNodes(index)]]]
         Rule == INSTANCE OrderedAssignmentOutputRules WITH Keys <- MasterFields,
             SwiftIntMin <- \#(TLAValue.int(Int.min)), SwiftIntMax <- \#(TLAValue.int(Int.max)),
             Vars <- {}, Values <- {}, ActionLabels <- {}, FailureValues <- {}, NoFailure <- <<>>
@@ -412,9 +413,32 @@ enum AuthoredCopySyntax {
                                /\ Rule!AssignmentRhsCertificate(MasterRows[i])
                 OBVIOUS
             <2>. DEFINE row == MasterRows[i]
+                        count == MasterNodeCounts[i]
+                        view == MasterRetainedRows[i].view
+                        origins == MasterRetainedRows[i].origins
+                        nodes == MasterNodes(i)
+            <2>index. i \in DOMAIN MasterNodeCounts
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF MasterRows
+            <2>record. row =
+                [target |-> MasterTargets[i], view |-> view, inverse |-> MasterRetainedRows[i].inverse,
+                 fallback |-> \#(formalFallback), emitted |-> [count |-> count, height |-> 1, indices |-> <<count>>,
+                                                  origins |-> origins, nodes |-> nodes]]
+                BY ONLY <2>index, SMT DEF row, MasterRows, count, view, origins, nodes
+            <2>projection. /\ row.target = MasterTargets[i] /\ row.fallback = \#(formalFallback)
+                           /\ row.view = view
+                           /\ row.emitted.count = count /\ row.emitted.height = 1
+                           /\ row.emitted.indices = <<count>>
+                           /\ row.emitted.origins = origins /\ row.emitted.nodes = nodes
+                BY ONLY <2>record, SMT
             <2>types. /\ row.target \in MasterFields /\ row.fallback \in MasterFields
                       /\ Rule!NodeEmissionArrays(row.emitted) /\ row.emitted.count > 0
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows, MasterTargets, MasterFields, Rule!NodeEmissionArrays
+                <3>names. MasterTargets[i] \in MasterFields /\ \#(formalFallback) \in MasterFields
+                    BY ONLY <2>index, SMT DEF MasterNodeCounts, MasterTargets, MasterFields
+                <3>count. count \in Nat \ {0}
+                    BY ONLY <2>index, SMT DEF count, MasterNodeCounts
+                <3>origins. origins = [j \in 1..count |-> origins[j]]
+                    BY ONLY <2>index, SMT DEF origins, count, MasterNodeCounts, MasterRetainedRows
+                <3>. QED BY ONLY <2>projection, <3>names, <3>count, <3>origins, SMT DEF nodes, MasterNodes, Rule!NodeEmissionArrays
             <2>domains. /\ row.inverse \in [DOMAIN row.view.kinds -> 1..row.emitted.count]
                          /\ row.emitted.origins \in [1..row.emitted.count -> DOMAIN row.view.kinds]
                 BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows
@@ -425,13 +449,47 @@ enum AuthoredCopySyntax {
             <2>root. row.emitted.origins[row.emitted.count] = row.view.root
                 BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows
             <2>payload. Rule!AllNodePayloadsMatchSource(row.view, row.emitted)
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows, MasterNodeKinds, MasterNodeReadKeys,
-                    MasterNodeLiterals, MasterNodeLeft, MasterNodeRight, Rule!AllNodePayloadsMatchSource, Rule!NodePayloadMatchesSource
+                <3>points. \A j \in 1..count : Rule!NodePayloadMatchesSource(row.view, row.emitted, j)
+                    <4>. TAKE j \in 1..count
+                    <4>. DEFINE origin == origins[j]
+                                kind == MasterNodeKinds[i][j]
+                                literal == MasterNodeLiterals[i][j]
+                                read == MasterNodeReadKeys[i][j]
+                                left == MasterNodeLeft[i][j]
+                                right == MasterNodeRight[i][j]
+                    <4>kind. kind \in {"literal", "read", "add"} /\ kind = view.kinds[origin]
+                        BY ONLY <2>index, (j \in 1..count), SMT DEF kind, view, origin, origins, count,
+                            MasterNodeKinds, MasterNodeCounts, MasterRetainedRows
+                    <4>literal. /\ (kind = "literal" => literal = view.literals[origin])
+                                /\ (kind = "add" => literal = 0)
+                        BY ONLY <2>index, (j \in 1..count), SMT DEF kind, literal, view, origin, origins, count,
+                            MasterNodeKinds, MasterNodeLiterals, MasterNodeCounts, MasterRetainedRows
+                    <4>read. kind = "read" => read = view.reads[origin]
+                        BY ONLY <2>index, (j \in 1..count), SMT DEF kind, read, view, origin, origins, count,
+                            MasterNodeKinds, MasterNodeReadKeys, MasterNodeCounts, MasterRetainedRows
+                    <4>left. IF kind = "add" THEN left \in 1..(j - 1) /\ origins[left] = view.left[origin] ELSE left = 0
+                        BY ONLY <2>index, (j \in 1..count), SMT DEF kind, left, view, origin, origins, count,
+                            MasterNodeKinds, MasterNodeLeft, MasterNodeCounts, MasterRetainedRows
+                    <4>right. IF kind = "add" THEN right \in 1..(j - 1) /\ origins[right] = view.right[origin] ELSE right = 0
+                        BY ONLY <2>index, (j \in 1..count), SMT DEF kind, right, view, origin, origins, count,
+                            MasterNodeKinds, MasterNodeRight, MasterNodeCounts, MasterRetainedRows
+                    <4>. QED BY ONLY <2>projection, (j \in 1..count), <4>kind, <4>literal, <4>read, <4>left, <4>right, SMT
+                        DEF Rule!NodePayloadMatchesSource, nodes, MasterNodes, origin, kind, literal, read, left, right
+                <3>. QED BY ONLY <2>projection, <3>points, SMT DEF Rule!AllNodePayloadsMatchSource
             <2>bound. /\ Rule!TypedVisitedSourceInputs(row.view, row.emitted)
                       /\ \A j \in 1..row.emitted.count :
                              row.emitted.nodes[j].kind = "read" => row.emitted.nodes[j].payload \in MasterFields
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows, MasterNodeKinds, MasterNodeReadKeys,
-                    MasterFields, Rule!TypedVisitedSourceInputs, Rule!InRange
+                <3>literals. \A j \in 1..count :
+                    view.kinds[origins[j]] = "literal" => Rule!InRange(view.literals[origins[j]])
+                    BY ONLY <2>index, SMT DEF count, view, origins, MasterNodeCounts, MasterRetainedRows, Rule!InRange
+                <3>reads. \A j \in 1..count :
+                    view.kinds[origins[j]] = "read" => view.reads[origins[j]] \in MasterFields
+                    BY ONLY <2>index, SMT DEF count, view, origins, MasterNodeCounts, MasterRetainedRows, MasterFields
+                <3>emitted. \A j \in 1..count :
+                    MasterNodeKinds[i][j] = "read" => MasterNodeReadKeys[i][j] \in MasterFields
+                    BY ONLY <2>index, SMT DEF count, MasterNodeCounts, MasterNodeKinds, MasterNodeReadKeys, MasterFields
+                <3>. QED BY ONLY <2>projection, <3>literals, <3>reads, <3>emitted, SMT
+                    DEF Rule!TypedVisitedSourceInputs, nodes, MasterNodes
             <2>. QED BY ONLY <2>types, <2>domains, <2>preorder, <2>postorder, <2>root, <2>payload, <2>bound, SMT
                 DEF row, Rule!AssignmentRhsCertificate, Rule!LiteralReadAddCertificate
         <1>. QED BY ONLY <1>shape, <1>rows, SMT DEF Rule!SupportedAssignmentList
