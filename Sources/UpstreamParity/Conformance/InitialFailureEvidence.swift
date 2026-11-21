@@ -121,6 +121,7 @@ package enum InitialFailureEvidence {
               }).first else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
+        let actionSource = try identityActionSource(sourceWitness)
         let sourceInputs = try sourceInitializerInputs(sourceWitness)
         let sourceInitializers = sourceInputs.plans
         let sourceInitialControl = TLAValue.string(sourceControl).description
@@ -152,6 +153,7 @@ package enum InitialFailureEvidence {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let generated = directory.appendingPathComponent("generated-tla")
         try GeneratedTLCOracle.retainGeneratedInputs(check, in: generated)
+        try actionSource.write(to: generated.appendingPathComponent("SwiftTLAStayActionSource.tla"), options: .atomic)
         let nativeURL = directory.appendingPathComponent("native-initial-failure.json")
         let proofURL = generated.appendingPathComponent("\(proofModule).tla")
         let encoder = JSONEncoder()
@@ -189,6 +191,28 @@ package enum InitialFailureEvidence {
         try encoder.encode(report).write(
             to: directory.appendingPathComponent("preparation.json"), options: .atomic)
         return report
+    }
+
+    private static func identityActionSource(_ components: [_OrderedIntSourceComponent]) throws -> Data {
+        let variables = components.dropLast().compactMap { component -> String? in
+            guard case .variable(let name, _) = component else { return nil }
+            return name
+        }
+        guard case .step(let label, let assignments)? = components.last,
+              variables.count == components.count - 1, Set(variables).count == variables.count,
+              assignments.count == 1, let assignment = assignments.first,
+              case .variable(let read) = assignment.value,
+              variables.contains(assignment.root), variables.contains(read) else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        let frame = Set(variables.filter { $0 != assignment.root }.map(TLAValue.string))
+        let descriptor = """
+        ---- MODULE SwiftTLAStayActionSource ----
+        SourceIdentityAction == [label |-> \(TLAValue.string(label)), target |-> \(TLAValue.string(assignment.root)), read |-> \(TLAValue.string(read)), frame |-> \(TLAValue.set(frame))]
+        ====
+
+        """
+        return Data(descriptor.utf8)
     }
 
     // Retain the existing macro witness, independently of the built Algorithm model.
