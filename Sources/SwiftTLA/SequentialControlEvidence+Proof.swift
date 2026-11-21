@@ -163,7 +163,7 @@ extension SequentialControlEvidence {
 
         THEOREM ActualNativeControlTransfersUseSelectedTargets ==
             NativeControlUsesAuthoredRoutes
-            BY ONLY SMT DEF NativeControlUsesAuthoredRoutes, NativeActionRows, SequentialControlEntries, SequentialControlWrites
+            BY ONLY IsaM("simp") DEF NativeControlUsesAuthoredRoutes, NativeActionRows, SequentialControlEntries, SequentialControlWrites
 
         THEOREM ActualSequentialStepUsesAuthoredRoutes ==
             /\ (Next => AuthoredSequentialStep)
