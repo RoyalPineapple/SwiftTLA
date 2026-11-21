@@ -1607,7 +1607,9 @@ import SwiftTLAMacros
         #expect(algorithm.sequentialSteps[1].statements == [.goto(.init(name: "Finish"))])
         let (compilation, evidence) = try parsed.compileRetainingSequentialControl()
         let control = try #require(evidence)
-        #expect(control.scheduled == control.lowered)
+        let scheduled = try #require(control.scheduled.canonicalTraces(sourceWrites: false))
+        let lowered = try #require(control.lowered.canonicalTraces(sourceWrites: false))
+        #expect(scheduled == lowered)
         let rendered = try compilation.render()
         #expect(rendered.actions.map(\.sourceName) == control.authored.actions.map(\.label))
     }

@@ -10,9 +10,11 @@ package enum ConditionalActionEvidence {
         let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
         guard TLCReferencePin.isRevision(sourceSHA) else { throw InitialFailureEvidenceError.invalidSourceSHA }
         guard !nativeSource.contains(0), let native = String(data: nativeSource, encoding: .utf8),
-              let proof = String(data: proofSource, encoding: .utf8) else { throw invalid }
-        let file = Parser.parse(source: native)
-        guard !file.hasError else { throw invalid }
+              let proof = String(data: proofSource, encoding: .utf8),
+              let authored = String(data: authoredSource, encoding: .utf8),
+              let physical = try AuthoredCopySyntax.conditionalProofInput(
+                  source: authored, modelName: String(describing: GeneratedScalarConditionalProofModel.self))
+        else { throw invalid }
         let compilation = try GeneratedScalarConditionalProofModel.spec.compile()
         let inputs = try CompiledTypeInputs(compilation: compilation,
             types: CompiledTypeContext(enums: .init(), formalNames: [:])) {
@@ -28,7 +30,7 @@ package enum ConditionalActionEvidence {
               identity == program.identity, rendered.imports.isEmpty,
               rendered.root.tla.utf8.elementsEqual(try program.renderModule().renderedModuleSource.utf8),
               program.behavior.actions.count == 1, let action = program.behavior.actions.first,
-              case .ifElse(let predicate, let yes, let no) = action.body,
+              case .ifElse(let predicate, _, _) = action.body,
               predicate.resultType == .bool, predicate.operation == .lessThan,
               predicate.children.count == 2 else { throw invalid }
 
@@ -44,65 +46,69 @@ package enum ConditionalActionEvidence {
         let conditionWords = Parser.parse(source: "(state.state.\(left) < state.state.\(right))")
             .tokens(viewMode: .sourceAccurate).filter { $0.tokenKind != .endOfFile }.map(\.text)
 
-        func unique<T>(_ matches: [T]) throws -> T {
-            guard matches.count == 1, let match = matches.first else { throw invalid }
-            return match
-        }
-        let visitor = try unique(file.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }.filter {
-            $0.name.text == "_visitUpdates\(action.id.ordinal)"
-        })
-        let parts = visitor.body?.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) } ?? []
-        func part(_ id: Int) throws -> CodeBlockItemListSyntax {
-            let declaration = try unique(parts.filter { $0.name.text == "_actionPart\(id)" })
-            guard let statements = declaration.body?.statements, statements.count == 1,
-                  let body = statements.first?.item.as(DoStmtSyntax.self)?.body.statements else {
-                throw invalid
-            }
-            return body
-        }
-        let root = try part(0)
-        guard root.count == 1, let item = root.first?.item else { throw invalid }
-        let expression = item.as(TryExprSyntax.self) ?? item.as(ExpressionStmtSyntax.self)?.expression.as(TryExprSyntax.self)
-        guard let expression, let visit = nativeConditionalVisit(Syntax(expression)),
-              visit.predicate == conditionWords,
-              visit.ifTrue.arguments == ["updates", "emit"], visit.ifFalse.arguments == ["updates", "emit"] else {
-            throw invalid
-        }
-
-        func branch(_ id: Int, _ compiled: CompiledActionExpr) throws -> Bool {
-            guard case .define(let binder, let value, _) = compiled,
-                  case .value(.boolean(let expected)) = value.operation,
-                  let name = program.binderNames[binder] else { throw invalid }
-            let statements = try part(id)
-            guard statements.count == 2, let binding = statements.first?.item.as(VariableDeclSyntax.self),
-                  binding.bindingSpecifier.text == "let", binding.bindings.count == 1,
-                  let capture = binding.bindings.first,
-                  let identifier = capture.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                  identifier == "_\(name)_\(binder.ordinal)",
-                  let actual = capture.initializer?.value.as(BooleanLiteralExprSyntax.self)?.literal.text,
-                  actual == String(expected) else { throw invalid }
-            return actual == "true"
-        }
-        let yesValue = try branch(visit.ifTrue.id, yes), noValue = try branch(visit.ifFalse.id, no)
-        let childIDs = "<<\(visit.ifTrue.id), \(visit.ifFalse.id)>>"
-        let values = "[child \\in {\(visit.ifTrue.id), \(visit.ifFalse.id)} |-> "
-            + "IF child = \(visit.ifTrue.id) THEN \(yesValue ? "TRUE" : "FALSE") ELSE \(noValue ? "TRUE" : "FALSE")]"
+        let actual = try nativeConditionalActionPlans(native, program: program, predicate: conditionWords)
         let header = "MODULE GeneratedScalarConditionalProof"
-        let input = "CONSTANT NativeChooseChildren, NativeChooseValues"
+        let input = "CONSTANT NativeChooseChildren, NativeChoosePlans, NativeChooseFields"
         guard proof.components(separatedBy: header).count == 2,
               proof.components(separatedBy: input).count == 2,
               let footer = proof.split(separator: "\n").last, footer.allSatisfy({ $0 == "=" }),
               let terminal = proof.range(of: String(footer), options: .backwards) else { throw invalid }
         let concrete = String(proof[..<terminal.lowerBound])
             .replacingOccurrences(of: header, with: "MODULE GeneratedScalarConditionalNative")
-            .replacingOccurrences(of: input, with: "NativeChooseChildren == \(childIDs)\nNativeChooseValues == \(values)")
+            .replacingOccurrences(of: input, with: """
+                NativeChooseChildren == \(actual.children)
+                NativeChoosePlans == \(actual.plans)
+                NativeChooseFields == \(actual.fields)
+                """)
             + """
+
+        PhysicalConditional == \(physical)
+        PhysicalOperand(term) == CopyReferenceValue(NativeChooseBefore, <<>>, term)
+        PhysicalGuard ==
+            LET term == PhysicalConditional.predicate IN
+            CASE term[1] = "lessThan" -> PhysicalOperand(term[2]) < PhysicalOperand(term[3])
+              [] term[1] = "equal" -> PhysicalOperand(term[2]) = PhysicalOperand(term[3])
+              [] OTHER -> FALSE
+        PhysicalArm(update) ==
+            /\\ NativeChooseAfter[update[1]] = PhysicalOperand(update[2])
+            /\\ \\A field \\in PhysicalConditional.fields \\ {update[1]} :
+                   NativeChooseAfter[field] = NativeChooseBefore[field]
+        PhysicalSourceLabeledStep(label) ==
+            /\\ label = PhysicalConditional.label
+            /\\ SourceConditionalStep(TRUE, PhysicalGuard,
+                    PhysicalArm(PhysicalConditional.ifTrue), PhysicalArm(PhysicalConditional.ifFalse))
+
+        THEOREM PhysicalSourceMatchesTheSourceRule ==
+            ASSUME ModelStateType, NEW label
+            PROVE PhysicalSourceLabeledStep(label) <=> SourceLabeledStep(label)
+        PROOF
+        <1>predicate. PhysicalGuard = (left < right)
+            BY ONLY SMT DEF PhysicalGuard, PhysicalConditional, PhysicalOperand, CopyReferenceValue, NativeChooseBefore
+        <1>yes. PhysicalArm(PhysicalConditional.ifTrue) <=> (UNCHANGED <<left, right>> /\\ selected' = TRUE)
+            BY ONLY SMT DEF PhysicalArm, PhysicalConditional, PhysicalOperand,
+                            CopyReferenceValue, NativeChooseBefore, NativeChooseAfter
+        <1>no. PhysicalArm(PhysicalConditional.ifFalse) <=> (UNCHANGED <<left, right>> /\\ selected' = FALSE)
+            BY ONLY SMT DEF PhysicalArm, PhysicalConditional, PhysicalOperand,
+                            CopyReferenceValue, NativeChooseBefore, NativeChooseAfter
+        <1>label. PhysicalConditional.label = "choose"
+            BY ONLY SMT DEF PhysicalConditional
+        <1>. QED BY <1>predicate, <1>yes, <1>no, <1>label, SMT
+                    DEF PhysicalSourceLabeledStep, SourceLabeledStep, SourceChoose, SourceConditionalStep, ModelStateType
 
         THEOREM ActualConditionalPreservesCompleteLabeledStep ==
             ASSUME ModelStateType, NEW label
-            PROVE /\\ (RenderedLabeledStep(label) <=> SourceLabeledStep(label))
-                  /\\ (NativeChooseLabeledStep(label) <=> SourceLabeledStep(label))
-            BY ConditionalPreservesCompleteLabeledStep, SMT DEF NativeChooseChildren, NativeChooseValues
+            PROVE /\\ (RenderedLabeledStep(label) <=> PhysicalSourceLabeledStep(label))
+                  /\\ (NativeChooseLabeledStep(label) <=> PhysicalSourceLabeledStep(label))
+            PROOF
+            <1>fields. NativeChooseFields = {"left", "right", "selected"}
+                BY SMT DEF NativeChooseFields
+            <1>arms. /\\ ExpectedNativeChoosePlan(NativeChoosePlans[NativeChooseChildren[1]], TRUE)
+                      /\\ ExpectedNativeChoosePlan(NativeChoosePlans[NativeChooseChildren[2]], FALSE)
+                BY SMT DEF ExpectedNativeChoosePlan, NativeChoosePlans, NativeChooseChildren
+            <1>backends. /\\ (RenderedLabeledStep(label) <=> SourceLabeledStep(label))
+                         /\\ (NativeChooseLabeledStep(label) <=> SourceLabeledStep(label))
+                BY <1>fields, <1>arms, ConditionalPreservesCompleteLabeledStep, SMT
+            <1>. QED BY <1>backends, PhysicalSourceMatchesTheSourceRule, SMT
 
         ====
 
@@ -129,7 +135,7 @@ package enum ConditionalActionEvidence {
     }
 }
 
-private struct NativeConditionalVisit {
+struct NativeConditionalVisit {
     struct Continuation {
         let id: Int
         let arguments: [String]
@@ -141,7 +147,7 @@ private struct NativeConditionalVisit {
 }
 
 // Check the labels and closures of the actual call before interpreting their children.
-private func nativeConditionalVisit(_ syntax: Syntax?) -> NativeConditionalVisit? {
+func nativeConditionalVisit(_ syntax: Syntax?) -> NativeConditionalVisit? {
     func words(_ syntax: some SyntaxProtocol) -> [String] {
         syntax.tokens(viewMode: .sourceAccurate).map(\.text)
     }

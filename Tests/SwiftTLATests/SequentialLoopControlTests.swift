@@ -39,7 +39,9 @@ struct SequentialLoopControlTests {
         #expect(graph.deadlockedStates.isEmpty)
         let (_, evidence) = try FinishingLoop.spec.compileRetainingSequentialControl()
         let control = try #require(evidence)
-        #expect(control.scheduled == control.lowered)
+        let scheduled = try #require(control.scheduled.canonicalTraces(sourceWrites: false))
+        let lowered = try #require(control.lowered.canonicalTraces(sourceWrites: false))
+        #expect(scheduled == lowered)
         #expect(try FinishingLoop.render().tlaBundle.tla.contains("VARIABLES pc, value\n"))
     }
 }

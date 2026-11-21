@@ -2,9 +2,22 @@ import SwiftParser
 import SwiftSyntax
 import SwiftTLA
 
-// shortcut: Only model-local String enum labels and direct copies in a scoped Algorithm enter this proof.
+// Read the same scoped Algorithm for copy binding and sequential-control evidence.
 enum AuthoredCopySyntax {
-    static func proofInputs(source: String, modelName: String) throws -> String {
+    struct Selection {
+        fileprivate let members: MemberBlockItemListSyntax
+        fileprivate let algorithm: String
+        fileprivate let scope: String
+        fileprivate let body: CodeBlockItemListSyntax
+    }
+
+    private struct Label: Hashable {
+        let enumName: String
+        let caseName: String
+    }
+
+    private static func specification(source: String, modelName: String) throws
+        -> (MemberBlockItemListSyntax, ClosureExprSyntax) {
         let file = Parser.parse(source: source)
         let models = file.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
             .filter { name($0.name) == modelName }
@@ -20,13 +33,18 @@ enum AuthoredCopySyntax {
               let macro = body.first?.item.as(MacroExpansionExprSyntax.self), macro.macroName.text == "spec",
               let specBody = macro.trailingClosure else { throw unsupported }
 
+        return (members, specBody)
+    }
+
+    static func select(source: String, modelName: String) throws -> Selection {
+        let (members, specBody) = try specification(source: source, modelName: modelName)
         let registered = specBody.statements.compactMap { reference($0.item.as(ExprSyntax.self)) }
-        let algorithms = specBody.statements.compactMap { item -> FunctionCallExprSyntax? in
+        let algorithms = specBody.statements.compactMap { item -> (binding: String, call: FunctionCallExprSyntax)? in
             guard let (binding, value) = letBinding(item), registered.filter({ $0 == binding }).count == 1,
                   let call = value.as(FunctionCallExprSyntax.self), reference(call.calledExpression) == "Algorithm" else { return nil }
-            return call
+            return (binding, call)
         }
-        guard algorithms.count == 1, let algorithm = algorithms.first,
+        guard algorithms.count == 1, let (binding, algorithm) = algorithms.first,
               algorithm.trailingClosure == nil, algorithm.additionalTrailingClosures.isEmpty,
               algorithm.arguments.filter({ $0.label?.text == "scoped" }).count == 1,
               algorithm.arguments.allSatisfy({ ["label", "scoped"].contains($0.label?.text ?? "") }),
@@ -34,30 +52,25 @@ enum AuthoredCopySyntax {
                 .expression.as(ClosureExprSyntax.self),
               let scope = algorithmBody.signature?.parameterClause?.as(ClosureShorthandParameterListSyntax.self),
               scope.count == 1, let parameter = scope.first else { throw unsupported }
-        let scopeName = name(parameter.name)
+        return Selection(members: members, algorithm: binding, scope: name(parameter.name),
+                         body: algorithmBody.statements)
+    }
 
+    static func proofInputs(_ selection: Selection) throws -> String {
         var declarations: [String] = []
         var localBindings: Set<String> = []
         var steps: [String] = []
         var copyCounts: [Int] = []
         var enumNames: Set<String> = []
-        for item in algorithmBody.statements {
-            if let (binding, value) = letBinding(item), steps.isEmpty,
-               let call = value.as(FunctionCallExprSyntax.self),
-               let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-               reference(member.base) == scopeName, name(member.declName.baseName) == "sharedVar",
-               call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
-               call.arguments.filter({ $0.label?.text == "_name" }).count <= 1,
-               call.arguments.allSatisfy({ ["_name", "label", "initial"].contains($0.label?.text ?? "") }),
-               call.arguments.filter({ $0.label?.text == "initial" }).count == 1 {
+        for item in selection.body {
+            if steps.isEmpty, let (binding, explicit) = try rootDeclaration(item, in: selection.scope) {
                 guard localBindings.insert(binding).inserted else { throw unsupported }
-                let explicit = try optionalLiteral(call.arguments.first(where: { $0.label?.text == "_name" })?.expression)
-                declarations.append("[binding |-> \(TLAValue.string(binding)), explicit |-> \(explicit)]")
+                declarations.append("[binding |-> \(TLAValue.string(binding)), explicit |-> \(optionalLiteral(explicit))]")
                 continue
             }
             guard let call = item.item.as(FunctionCallExprSyntax.self), reference(call.calledExpression) == "Do",
                   call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil,
-                  let label = argument.expression.as(MemberAccessExprSyntax.self), let enumName = reference(label.base),
+                  let label = labelReference(argument.expression),
                   call.additionalTrailingClosures.isEmpty,
                   let body = call.trailingClosure, !body.statements.isEmpty else { throw unsupported }
             let copies = try body.statements.map { statement -> String in
@@ -68,26 +81,13 @@ enum AuthoredCopySyntax {
                       let targetName = reference(target.expression), let readName = reference(read.expression) else { throw unsupported }
                 return "[targetBinding |-> \(TLAValue.string(targetName)), readBinding |-> \(TLAValue.string(readName))]"
             }
-            enumNames.insert(enumName)
+            enumNames.insert(label.enumName)
             copyCounts.append(copies.count)
-            steps.append("[enumName |-> \(TLAValue.string(enumName)), caseName |-> \(TLAValue.string(name(label.declName.baseName))), copies |-> \(tuple(copies))]")
+            steps.append("[enumName |-> \(TLAValue.string(label.enumName)), caseName |-> \(TLAValue.string(label.caseName)), copies |-> \(tuple(copies))]")
         }
         guard !declarations.isEmpty, !steps.isEmpty else { throw unsupported }
-        let enums = members.compactMap { $0.decl.as(EnumDeclSyntax.self) }.filter { enumNames.contains(name($0.name)) }
-        guard enums.count == enumNames.count, Set(enums.map { name($0.name) }) == enumNames else { throw unsupported }
-        let enumCases = try enums.flatMap { enumeration in
-            guard enumeration.attributes.isEmpty, enumeration.genericParameterClause == nil,
-                  let type = enumeration.inheritanceClause?.inheritedTypes.first?.type.as(IdentifierTypeSyntax.self),
-                  name(type.name) == "String" else { throw unsupported }
-            var caseNames: Set<String> = []
-            return try enumeration.memberBlock.members.flatMap { member -> [String] in
-                guard let cases = member.decl.as(EnumCaseDeclSyntax.self) else { throw unsupported }
-                return try cases.elements.map { element in
-                    guard element.parameterClause == nil, caseNames.insert(name(element.name)).inserted else { throw unsupported }
-                    let explicit = try optionalLiteral(element.rawValue?.value)
-                    return "[enumName |-> \(TLAValue.string(name(enumeration.name))), caseName |-> \(TLAValue.string(name(element.name))), explicit |-> \(explicit)]"
-                }
-            }
+        let enumCases = try enumBindings(in: selection.members, named: enumNames).map { label, explicit in
+            "[enumName |-> \(TLAValue.string(label.enumName)), caseName |-> \(TLAValue.string(label.caseName)), explicit |-> \(optionalLiteral(explicit))]"
         }
         let rowProofs = copyCounts.enumerated().map { offset, count in
             let row = offset + 1
@@ -209,6 +209,194 @@ enum AuthoredCopySyntax {
         """#
     }
 
+    struct UnsupportedControlSyntax: Error {
+        let reason: String
+    }
+
+    static func controlMachine(_ selection: Selection) throws -> SequentialControlEvidence.Machine {
+        var roots: [String: String] = [:]
+        var steps: [AlgorithmStepModel] = []
+        var labels: [Label: String] = [:]
+        var enumNames: Set<String> = []
+
+        func resolve(_ expression: ExprSyntax?) throws -> String {
+            guard let key = labelReference(expression) else {
+                throw UnsupportedControlSyntax(reason: "The proof requires a model-local String enum case reference for each label.")
+            }
+            if enumNames.insert(key.enumName).inserted {
+                for (item, raw) in try enumBindings(in: selection.members, named: [key.enumName]) {
+                    labels[item] = raw ?? item.caseName
+                }
+            }
+            guard let label = labels[key] else {
+                throw UnsupportedControlSyntax(reason: "The control label \(key.enumName).\(key.caseName) has no declared case.")
+            }
+            return label
+        }
+
+        for item in selection.body {
+            if steps.isEmpty, let (binding, explicit) = try rootDeclaration(item, in: selection.scope) {
+                guard roots.updateValue(explicit ?? binding, forKey: binding) == nil else { throw unsupported }
+                continue
+            }
+            guard let call = item.item.as(FunctionCallExprSyntax.self),
+                  let kind = reference(call.calledExpression), ["Do", "While"].contains(kind),
+                  let label = call.arguments.first, label.label == nil,
+                  let body = call.trailingClosure, body.signature == nil, call.additionalTrailingClosures.isEmpty else {
+                throw UnsupportedControlSyntax(reason: "Expected a shared declaration followed by sequential Do or While blocks.")
+            }
+            let extra = call.arguments.dropFirst()
+            let loop: StateExpr?
+            var statements = try controlStatements(body.statements, roots: roots, resolve: resolve)
+            if kind == "While", extra.count == 1, let predicate = extra.first, predicate.label == nil {
+                loop = try controlExpression(predicate.expression, roots: roots)
+            } else if kind == "Do", extra.count <= 1, extra.allSatisfy({ $0.label?.text == "when" }) {
+                loop = nil
+                if let predicate = extra.first {
+                    statements.insert(.when(try controlExpression(predicate.expression, roots: roots)), at: 0)
+                }
+            } else {
+                throw UnsupportedControlSyntax(reason: "Expected a While condition or one optional Do when: condition.")
+            }
+            steps.append(.init(label: .init(name: try resolve(label.expression)), statements: statements, loopCondition: loop))
+        }
+        guard Set(roots.values).count == roots.count, Set(steps.map(\.label)).count == steps.count,
+              let machine = SequentialControlEvidence.authoredMachine(steps: steps, algorithmName: selection.algorithm) else {
+            throw UnsupportedControlSyntax(reason: "The proof requires distinct roots and a nonempty sequence of distinct control labels.")
+        }
+        return machine
+    }
+
+    static func conditionalProofInput(source: String, modelName: String) throws -> TLAValue? {
+        let (members, specBody) = try specification(source: source, modelName: modelName)
+        guard let parameters = specBody.signature?.parameterClause?.as(ClosureShorthandParameterListSyntax.self),
+              parameters.count == 1, let parameter = parameters.first,
+              let call = specBody.statements.last?.item.as(FunctionCallExprSyntax.self),
+              reference(call.calledExpression) == "Do",
+              call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil,
+              let label = labelReference(argument.expression),
+              let body = call.trailingClosure, body.signature == nil, call.additionalTrailingClosures.isEmpty,
+              let declaredLabel = try enumBindings(in: members, named: [label.enumName]).first(where: { $0.0 == label })
+        else { return nil }
+
+        var roots: [String: String] = [:]
+        for item in specBody.statements.dropLast() {
+            guard let (binding, explicit) = try rootDeclaration(item, in: name(parameter.name)),
+                  roots.updateValue(explicit ?? binding, forKey: binding) == nil else { return nil }
+        }
+        let fields = Set(roots.values.map(TLAValue.string))
+        guard fields.count == roots.count else { return nil }
+        let statements = try controlStatements(body.statements, roots: roots, resolve: { _ in throw unsupported })
+        guard statements.count == 1, case .ifElse(let predicate, let yes, let no)? = statements.first,
+              let guardTerm = scalarComparison(predicate), let yesWrite = conditionalWrite(yes),
+              let noWrite = conditionalWrite(no) else { return nil }
+
+        return .record(["fields": .set(fields), "label": .string(declaredLabel.1 ?? label.caseName),
+                        "predicate": guardTerm, "ifTrue": yesWrite, "ifFalse": noWrite])
+    }
+
+    private static func scalarComparison(_ expression: StateExpr) -> TLAValue? {
+        func isOperand(_ value: StateExpr) -> Bool {
+            switch value {
+            case .variable, .value(.int), .value(.bool): true
+            default: false
+            }
+        }
+        switch expression {
+        case .equal(let lhs, let rhs), .lessThan(let lhs, let rhs):
+            guard isOperand(lhs), isOperand(rhs) else { return nil }
+            return expression.scalarEvidenceTerm
+        default: return nil
+        }
+    }
+
+    private static func conditionalWrite(_ statements: [AlgorithmStatementModel]) -> TLAValue? {
+        guard statements.count == 1,
+              case .set(.root(let target), let value)? = statements.first,
+              case .value(.bool) = value, let term = value.scalarEvidenceTerm else { return nil }
+        return .tuple([.string(target), term])
+    }
+
+    private static func controlStatements(_ statements: CodeBlockItemListSyntax, roots: [String: String],
+                                          resolve: (ExprSyntax?) throws -> String) throws -> [AlgorithmStatementModel] {
+        try statements.map { item in
+            let error = UnsupportedControlSyntax(reason: "Unsupported control statement: \(item.trimmedDescription)")
+            guard let call = item.item.as(FunctionCallExprSyntax.self), let kind = reference(call.calledExpression) else {
+                throw error
+            }
+            if kind == "If" {
+                let extra = call.arguments.dropFirst()
+                guard let predicate = call.arguments.first, predicate.label == nil,
+                      let body = call.trailingClosure, body.signature == nil,
+                      extra.count + call.additionalTrailingClosures.count <= 1,
+                      extra.allSatisfy({ $0.label?.text == "else" }),
+                      call.additionalTrailingClosures.allSatisfy({ $0.label.text == "else" }) else { throw error }
+                let noClosure = call.additionalTrailingClosures.first?.closure ?? extra.first?.expression.as(ClosureExprSyntax.self)
+                guard (extra.isEmpty || noClosure != nil), noClosure?.signature == nil else { throw error }
+                let yes = try controlStatements(body.statements, roots: roots, resolve: resolve)
+                let no = try noClosure.map { try controlStatements($0.statements, roots: roots, resolve: resolve) } ?? []
+                return .ifElse(try controlExpression(predicate.expression, roots: roots), yes, no)
+            }
+            guard call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { throw error }
+            switch kind {
+            case "Stop" where call.arguments.isEmpty: return .stop
+            case "Skip" where call.arguments.isEmpty: return .skip
+            case "When", "Goto":
+                guard call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil else { throw error }
+                if kind == "When" { return .when(try controlExpression(argument.expression, roots: roots)) }
+                return .goto(.init(name: try resolve(argument.expression)))
+            case "Assign":
+                guard call.arguments.count == 2, let target = call.arguments.first, target.label == nil,
+                      let binding = reference(target.expression), let root = roots[binding],
+                      let value = call.arguments.last, value.label?.text == "to" else { throw error }
+                return .set(target: .root(root), value: try controlExpression(value.expression, roots: roots))
+            default: throw error
+            }
+        }
+    }
+
+    // shortcut: The retained source evidence uses scalar reads, literals, and explicitly grouped built-in operations.
+    private static func controlExpression(_ expression: ExprSyntax, roots: [String: String]) throws -> StateExpr {
+        let error = UnsupportedControlSyntax(reason: "Unsupported scalar control expression: \(expression.trimmedDescription)")
+        if let binding = reference(expression), let root = roots[binding] { return .variable(root) }
+        if let member = expression.as(MemberAccessExprSyntax.self), name(member.declName.baseName) == "expr",
+           let binding = reference(member.base), let root = roots[binding] { return .variable(root) }
+        if let literal = expression.as(BooleanLiteralExprSyntax.self) { return .value(.bool(literal.literal.text == "true")) }
+        if let literal = expression.as(IntegerLiteralExprSyntax.self), let value = Int(literal.literal.text.filter({ $0 != "_" })) {
+            return .value(.int(value))
+        }
+        if let group = expression.as(TupleExprSyntax.self), group.elements.count == 1,
+           let part = group.elements.first, part.label == nil {
+            return try controlExpression(part.expression, roots: roots)
+        }
+        if let prefix = expression.as(PrefixOperatorExprSyntax.self), prefix.operator.text == "!" {
+            return .not(try controlExpression(prefix.expression, roots: roots))
+        }
+        let elements: [ExprSyntax]
+        if let sequence = expression.as(SequenceExprSyntax.self) { elements = Array(sequence.elements) }
+        else if let infix = expression.as(InfixOperatorExprSyntax.self) {
+            elements = [infix.leftOperand, infix.operator, infix.rightOperand]
+        } else { throw error }
+        guard elements.count == 3, let operation = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text else {
+            throw error
+        }
+        let lhs = try controlExpression(elements[0], roots: roots)
+        let rhs = try controlExpression(elements[2], roots: roots)
+        switch operation {
+        case "==": return .equal(lhs, rhs)
+        case "!=": return .notEqual(lhs, rhs)
+        case "<": return .lessThan(lhs, rhs)
+        case "<=": return .lessOrEqual(lhs, rhs)
+        case ">": return .greaterThan(lhs, rhs)
+        case ">=": return .greaterOrEqual(lhs, rhs)
+        case "&&": return .and(lhs, rhs)
+        case "||": return .or(lhs, rhs)
+        case "+": return .add(lhs, rhs)
+        case "-": return .subtract(lhs, rhs)
+        default: throw error
+        }
+    }
+
     private static var unsupported: InitialFailureEvidenceError { .unsupportedGeneratedOutput }
 
     private static func name(_ token: TokenSyntax) -> String { token.identifier?.name ?? token.text }
@@ -226,10 +414,51 @@ enum AuthoredCopySyntax {
         return (name(token), value)
     }
 
-    private static func optionalLiteral(_ expression: ExprSyntax?) throws -> String {
-        guard let expression else { return #"[present |-> FALSE, value |-> ""]"# }
+    private static func labelReference(_ expression: ExprSyntax?) -> Label? {
+        guard let access = expression?.as(MemberAccessExprSyntax.self), let enumName = reference(access.base) else { return nil }
+        return .init(enumName: enumName, caseName: name(access.declName.baseName))
+    }
+
+    private static func rootDeclaration(_ item: CodeBlockItemSyntax, in scope: String) throws -> (String, String?)? {
+        guard let (binding, value) = letBinding(item), let call = value.as(FunctionCallExprSyntax.self),
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+              reference(member.base) == scope, name(member.declName.baseName) == "sharedVar",
+              call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+              call.arguments.filter({ $0.label?.text == "_name" }).count <= 1,
+              call.arguments.allSatisfy({ ["_name", "label", "initial", "in"].contains($0.label?.text ?? "") }),
+              call.arguments.filter({ $0.label?.text == "initial" || $0.label?.text == "in" }).count == 1 else { return nil }
+        return (binding, try literal(call.arguments.first(where: { $0.label?.text == "_name" })?.expression))
+    }
+
+    private static func enumBindings(in members: MemberBlockItemListSyntax, named enumNames: Set<String>) throws
+        -> [(Label, String?)] {
+        let enums = members.compactMap { $0.decl.as(EnumDeclSyntax.self) }.filter { enumNames.contains(name($0.name)) }
+        guard enums.count == enumNames.count, Set(enums.map { name($0.name) }) == enumNames else { throw unsupported }
+        return try enums.flatMap { enumeration in
+            guard enumeration.attributes.isEmpty, enumeration.genericParameterClause == nil,
+                  let type = enumeration.inheritanceClause?.inheritedTypes.first?.type.as(IdentifierTypeSyntax.self),
+                  name(type.name) == "String" else { throw unsupported }
+            var caseNames: Set<String> = []
+            return try enumeration.memberBlock.members.flatMap { member -> [(Label, String?)] in
+                guard let cases = member.decl.as(EnumCaseDeclSyntax.self) else { throw unsupported }
+                return try cases.elements.map { element in
+                    guard element.parameterClause == nil, caseNames.insert(name(element.name)).inserted else { throw unsupported }
+                    let explicit = try literal(element.rawValue?.value)
+                    return (Label(enumName: name(enumeration.name), caseName: name(element.name)), explicit)
+                }
+            }
+        }
+    }
+
+    private static func literal(_ expression: ExprSyntax?) throws -> String? {
+        guard let expression else { return nil }
         guard let value = expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else { throw unsupported }
-        return "[present |-> TRUE, value |-> \(TLAValue.string(value))]"
+        return value
+    }
+
+    private static func optionalLiteral(_ literal: String?) -> String {
+        guard let literal else { return #"[present |-> FALSE, value |-> ""]"# }
+        return "[present |-> TRUE, value |-> \(TLAValue.string(literal))]"
     }
 
     private static func set(_ rows: [String]) -> String { "{\(rows.joined(separator: ", "))}" }

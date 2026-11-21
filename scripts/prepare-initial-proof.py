@@ -542,6 +542,12 @@ def main():
                 or preparation["nativeActionSHA256"] != digest(generated / "SwiftTLANativeActions.tla")
                 or preparation["sequentialControlProofSHA256"] != digest(generated / "SwiftTLASequentialControlProof.tla")):
             raise ValueError("normal configuration, native action, or sequential control binding differs")
+        copy_modules = preparation.get("scalarCopyProofSHA256", {})
+        if copy_modules and (len(copy_modules) not in (2, 3)
+                or any(not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", module)
+                       or checksum != digest(generated / f"{module}.tla")
+                       for module, checksum in copy_modules.items())):
+            raise ValueError("generic scalar copy source or parent binding differs")
         if proof.read_bytes() != expected_bytes or preparation["proofSHA256"] != digest(proof):
             raise ValueError("actual compiler did not emit the checked proof bytes exactly")
         conditional_model = "Sources/UpstreamParity/ValidationModels/GeneratedScalarConditionalProofModel.swift"
@@ -595,7 +601,7 @@ def main():
         imports.mkdir()
         names = ["OrderedIntExpressionRule", "IndexedHistoryRules", "InitializationOutcomeRules",
                  "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule", "OrderedScalarCopyRule",
-                 "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "ConditionalOutcomeRules"]
+                 "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "ConditionalOutcomeRules", "NormalSeedCFG"]
         for name in names:
             shutil.copyfile(root / f"Verification/Semantics/{name}.tla", imports / (name + ".tla"))
         (packet / "proof-inputs.sha256").write_text("".join(

@@ -353,7 +353,7 @@ jobs:
           mkdir -p "$proof_inputs"
           proof_sources=(OrderedIntExpressionRule IndexedHistoryRules OrderedIntInitializationComposition
             InitializationComposition InitializationOutcomeRules FiniteSetMembershipRule OrderedScalarCopyRule
-            ActionOutcomeInterface FrameActionRule PendingWriteOutcomeRule NativePendingWriteFold)
+            ActionOutcomeInterface FrameActionRule PendingWriteOutcomeRule NativePendingWriteFold NormalSeedCFG)
           for module in "${proof_sources[@]}"; do
             cp "Verification/Semantics/$module.tla" "$proof_inputs/"
           done
@@ -378,10 +378,10 @@ jobs:
           load_bytes = run_path("scripts/check-initial-proof-step.py")["load_byte_input"]
           load_bytes(output / "CheckedAdditionPrefixInitialModel.cfg", output, [1, 2, 3])
           PYCFG
-          for source in "$proof_inputs/NativePendingWriteFold.tla" \
+          for source in "$proof_inputs/OrderedScalarCopyRule.tla" "$proof_inputs/NativePendingWriteFold.tla" "$proof_inputs/NormalSeedCFG.tla" \
             "$generated"/{SwiftTLAStayActionSource,SwiftTLAStayActionProof,SwiftTLANativeActionProof,SwiftTLASequentialControlProof,SeedConfiguredBehavior}.tla; do
             log=".build/initial-failure-artifacts/$(basename "$source" .tla).log"
-            "$proof_tool_dir/tlapm/bin/tlapm" --strict --nofp --timing -I "$proof_inputs" "$source" </dev/null 2>&1 | tee "$log"
+            "$proof_tool_dir/tlapm/bin/tlapm" --strict --nofp --timing -I "$proof_inputs" -I "$generated" "$source" </dev/null 2>&1 | tee "$log"
             grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' "$log"
           done
           source_proof=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla

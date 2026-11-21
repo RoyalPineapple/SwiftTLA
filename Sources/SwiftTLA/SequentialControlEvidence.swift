@@ -2,6 +2,16 @@ package struct SequentialControlEvidence: Sendable {
     package struct Machine: Sendable, Equatable {
         package let initial: ControlLocationReference
         package let actions: [Action]
+
+        package func canonicalTraces(sourceWrites: Bool) -> Machine? {
+            var observed: [Action] = []
+            for action in actions {
+                let branches = action.branches.compactMap { $0.canonicalTrace(sourceWrites: sourceWrites) }
+                guard branches.count == action.branches.count else { return nil }
+                observed.append(.init(label: action.label, branches: branches))
+            }
+            return .init(initial: initial, actions: observed)
+        }
     }
 
     package struct Action: Sendable, Equatable {
@@ -12,11 +22,49 @@ package struct SequentialControlEvidence: Sendable {
     package struct Branch: Sendable, Equatable {
         package let observations: [Observation]
         package let control: Control
+
+        fileprivate func canonicalTrace(sourceWrites: Bool) -> Branch? {
+            var effects: [Observation] = []
+            var captures: [String: [StateExpr]] = [:]
+            var boundNames: Set<String> = []
+            var writes: [String: StateExpr] = [:]
+
+            func value(_ expression: StateExpr) -> StateExpr? {
+                let lexical = captures.compactMapValues(\.last)
+                let visible = sourceWrites ? writes.merging(lexical) { _, captured in captured } : lexical
+                guard expression.freeVariableNames.isDisjoint(with: boundNames.subtracting(visible.keys)) else { return nil }
+                return StateExpr.substituteVariables(visible, in: expression)
+            }
+
+            for observation in observations {
+                switch observation {
+                case .guardValue(let expression):
+                    guard let evaluated = value(expression) else { return nil }
+                    effects.append(.guardValue(evaluated))
+                case .capture(let name, let expression):
+                    guard let evaluated = value(expression) else { return nil }
+                    boundNames.insert(name)
+                    captures[name, default: []].append(evaluated)
+                    effects.append(.capture("", evaluated))
+                case .endCapture(let name):
+                    guard captures[name]?.popLast() != nil else { return nil }
+                case .write(let name, let expression):
+                    guard let evaluated = value(expression), sourceWrites || writes[name] == nil else { return nil }
+                    if sourceWrites { effects.append(.capture("", evaluated)) }
+                    writes[name] = evaluated
+                }
+            }
+            // Captures are compared by value and visit order. Final writes are simultaneous.
+            effects += writes.sorted(by: { $0.key < $1.key }).map { .write($0.key, $0.value) }
+            return .init(observations: effects, control: control)
+        }
     }
 
     package enum Observation: Sendable, Equatable {
         case guardValue(StateExpr)
         case capture(String, StateExpr)
+        case endCapture(String)
+        case write(String, StateExpr)
     }
 
     package enum Control: Sendable, Equatable {
@@ -37,34 +85,8 @@ package struct SequentialControlEvidence: Sendable {
               let first = algorithm.sequentialSteps.first,
               algorithm.sequentialSteps.count > 1 || first.loopCondition != .value(.bool(true)),
               plan.sequentialSteps.map(\.label) == algorithm.sequentialSteps.map(\.label) else { return nil }
-        let doneLabel = CompilerControlSymbol.done.rawValue
-        let done = ControlLocationReference(owner: .generated(algorithm: algorithm.name, purpose: doneLabel),
-                                            sourceName: doneLabel)
-        let owner = ControlOwner.sequential(algorithm: algorithm.name)
-        let entries = algorithm.sequentialSteps.map { ControlLocationReference(owner: owner, sourceName: $0.label.name) }
-        func actions(for steps: [AlgorithmStepModel]) -> [Action]? {
-            var actions: [Action] = []
-            for (index, step) in steps.enumerated() {
-                let entry = entries[index]
-                let next = index + 1 < entries.count ? entries[index + 1] : done
-                let fallback = step.loopCondition == nil ? next : entry
-                guard let body = sourceBranches(step.statements[...], owner: owner, done: done,
-                                                fallback: fallback) else { return nil }
-                let branches: [Branch]
-                if let condition = step.loopCondition {
-                    branches = guarded(condition, body)
-                        + guarded(.not(condition), [.init(observations: [], control: .transfer(next))])
-                } else {
-                    branches = body
-                }
-                actions.append(.init(label: step.label.name, branches: guarded(entryGuard(entry), branches)))
-            }
-            actions.append(.init(label: CompilerControlSymbol.terminatingAction.rawValue,
-                                 branches: [.init(observations: [.guardValue(entryGuard(done))], control: .unchanged)]))
-            return actions
-        }
-        guard let authoredActions = actions(for: algorithm.sequentialSteps),
-              let scheduledActions = actions(for: plan.sequentialSteps) else { return nil }
+        guard let authored = authoredMachine(steps: algorithm.sequentialSteps, algorithmName: algorithm.name),
+              let scheduled = authoredMachine(steps: plan.sequentialSteps, algorithmName: algorithm.name) else { return nil }
         let counters = lowered.variables.filter { $0.origin == .programCounter }
         guard counters.count == 1, let counter = counters.first,
               case .expression(.controlLocation(let initial)) = counter.initialization else { return nil }
@@ -76,9 +98,36 @@ package struct SequentialControlEvidence: Sendable {
             guard branches.count == paths.count else { return nil }
             loweredActions.append(.init(label: action.name, branches: branches))
         }
-        return .init(authored: .init(initial: entries[0], actions: authoredActions),
-                     scheduled: .init(initial: entries[0], actions: scheduledActions),
+        return .init(authored: authored, scheduled: scheduled,
                      lowered: .init(initial: initial, actions: loweredActions))
+    }
+
+    package static func authoredMachine(steps: [AlgorithmStepModel], algorithmName: String) -> Machine? {
+        guard !steps.isEmpty else { return nil }
+        let doneLabel = CompilerControlSymbol.done.rawValue
+        let done = ControlLocationReference(owner: .generated(algorithm: algorithmName, purpose: doneLabel),
+                                            sourceName: doneLabel)
+        let owner = ControlOwner.sequential(algorithm: algorithmName)
+        let entries = steps.map { ControlLocationReference(owner: owner, sourceName: $0.label.name) }
+        var actions: [Action] = []
+        for (index, step) in steps.enumerated() {
+            let entry = entries[index]
+            let next = index + 1 < entries.count ? entries[index + 1] : done
+            let fallback = step.loopCondition == nil ? next : entry
+            guard let body = sourceBranches(step.statements[...], owner: owner, done: done,
+                                            fallback: fallback) else { return nil }
+            let branches: [Branch]
+            if let condition = step.loopCondition {
+                branches = guarded(condition, body)
+                    + guarded(.not(condition), [.init(observations: [], control: .transfer(next))])
+            } else {
+                branches = body
+            }
+            actions.append(.init(label: step.label.name, branches: guarded(entryGuard(entry), branches)))
+        }
+        actions.append(.init(label: CompilerControlSymbol.terminatingAction.rawValue,
+                             branches: [.init(observations: [.guardValue(entryGuard(done))], control: .unchanged)]))
+        return .init(initial: entries[0], actions: actions)
     }
 
     private static func entryGuard(_ location: ControlLocationReference) -> StateExpr {
@@ -103,7 +152,13 @@ package struct SequentialControlEvidence: Sendable {
             case .when(.value(.bool(false))): return []
             case .when(.value(.bool(true))): continue
             case .when(let condition): observed.append(.guardValue(condition))
-            case .set, .parallel, .assert, .skip: continue
+            case .set(.root(let target), let value): observed.append(.write(target, value))
+            case .parallel(let assignments):
+                for assignment in assignments {
+                    guard case .root(let target) = assignment.target else { return nil }
+                    observed.append(.write(target, assignment.value))
+                }
+            case .assert, .skip: continue
             case .goto(let label):
                 return [.init(observations: observed,
                               control: .transfer(.init(owner: owner, sourceName: label.name)))]
@@ -125,26 +180,37 @@ package struct SequentialControlEvidence: Sendable {
         return [.init(observations: observed, control: .transfer(fallback))]
     }
 
+    private enum LoweredPathMember {
+        case expression(ActionExpr)
+        case endCapture(String)
+    }
+
     private static func loweredBranch(_ branch: ActionExpr, counter: String) -> Branch? {
-        var nodes = [branch]
+        var nodes: [LoweredPathMember] = [.expression(branch)]
         var observations: [Observation] = []
         var transfer: ControlLocationReference?
         var unchanged = false
-        while let node = nodes.popLast() {
+        while let member = nodes.popLast() {
+            guard case .expression(let node) = member else {
+                if case .endCapture(let name) = member { observations.append(.endCapture(name)) }
+                continue
+            }
             switch node {
             case .and(let left, let right):
-                nodes.append(right)
-                nodes.append(left)
+                nodes.append(.expression(right))
+                nodes.append(.expression(left))
             case .guard_(.value(.bool(true))): continue
             case .guard_(let condition): observations.append(.guardValue(condition))
             case .define(let name, let value, let body):
                 observations.append(.capture(name, value))
-                nodes.append(body)
+                nodes.append(.endCapture(name))
+                nodes.append(.expression(body))
             case .assign(.programCounter, .controlLocation(let location)) where transfer == nil && !unchanged:
                 transfer = location
             case .unchanged(.programCounter): unchanged = true
             case .unchanged(.named(let name)) where name == counter: unchanged = true
-            case .assign(.named(let name), _) where name != counter: continue
+            case .assign(.named(let name), let expression) where name != counter:
+                observations.append(.write(name, expression))
             case .unchanged(.named): continue
             default: return nil
             }

@@ -177,9 +177,8 @@ extension TLASpec {
         }
         if algorithm.model.processes.isEmpty, algorithm.model.procedures.isEmpty {
           let verified = try StraightLineAssignmentCheck.verifySequential(
-            algorithm.model, lowered: lowered,
-            enumerateInitialControl: !initialInvariantSelections.isEmpty,
-            retainingScalarCopyRoutes: retainingScalarCopyRoutes)
+            algorithm.model, scheduled: retainingScalarCopyRoutes ? resolved : nil, lowered: lowered,
+            enumerateInitialControl: !initialInvariantSelections.isEmpty)
           orderedIntProofActionNames.formUnion(verified.actionNames)
           scalarCopyRoutes = verified.scalarCopies
         }

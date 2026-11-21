@@ -4,9 +4,12 @@ import SwiftSyntax
 import SwiftTLA
 import SwiftTLACompilerSupport
 
+private let boolType = "SwiftTLA.TLAValue.BooleanLiteralType"
+
 private struct ActionField {
     let name: String
     let slot: String
+    let ordinal: Int
     let member: String?
     let type: String
 
@@ -54,6 +57,32 @@ private func checked<T>(_ matches: [T]) throws -> T {
 
 // Interpret only the total scalar continuation grammar. Its reads come from the retained Swift.
 package func nativeScalarActionEvidence(_ source: String, program: CompiledProgram) throws -> Data {
+    let rows = try decodeScalarActions(source, program: program, predicate: nil).map {
+        "<<\(TLAValue.string($0.label)), \($0.plans[0].tla)>>"
+    }
+    return Data("""
+    ---- MODULE SwiftTLANativeActions ----
+    NativeActionRows == <<\(rows.joined(separator: ", "))>>
+    ====
+
+    """.utf8)
+}
+
+func nativeConditionalActionPlans(_ source: String, program: CompiledProgram, predicate: [String]) throws
+    -> (children: String, plans: String, fields: String) {
+    let row = try checked(decodeScalarActions(source, program: program, predicate: predicate))
+    guard row.label == "choose", let visit = row.visit else {
+        throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+    }
+    let first = visit.ifTrue.id, second = visit.ifFalse.id
+    return ("<<\(first), \(second)>>",
+        "[child \\in {\(first), \(second)} |-> IF child = \(first) THEN \(row.plans[0].tla) ELSE \(row.plans[1].tla)]",
+        TLAValue.set(Set(row.fields.map(TLAValue.string))).description)
+}
+
+private func decodeScalarActions(_ source: String, program: CompiledProgram, predicate: [String]?) throws
+    -> [(label: String, fields: [String], visit: NativeConditionalVisit?, plans: [ActionInstructions])] {
+
     let parsed = Parser.parse(source: source)
     guard !parsed.hasError, !source.utf8.contains(0), program.layout.parameters.isEmpty else {
         throw InitialFailureEvidenceError.unsupportedGeneratedOutput
@@ -68,20 +97,23 @@ package func nativeScalarActionEvidence(_ source: String, program: CompiledProgr
     let fields = try program.layout.variables.map { variable -> ActionField in
         guard let slot = slots[variable.id] else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
         switch (variable.declaration.origin, program.variableTypes[variable.id]) {
-        case (.source, .int):
-            return .init(name: variable.formalName, slot: slot,
-                member: try nativeSourceIdentifier(variable.declaration.name), type: intType)
+        case (.source, .int), (.source, .bool):
+            let type = program.variableTypes[variable.id] == .int ? intType : boolType
+            return .init(name: variable.formalName, slot: slot, ordinal: variable.id.ordinal,
+                member: try nativeSourceIdentifier(variable.declaration.name), type: type)
         case (.programCounter, .controlLocation):
-            return .init(name: variable.formalName, slot: slot, member: nil, type: controlType)
+            return .init(name: variable.formalName, slot: slot, ordinal: variable.id.ordinal, member: nil, type: controlType)
         default: throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
     }
-    let control = try checked(fields.filter { $0.member == nil && $0.name == "pc" })
+    let hidden = fields.filter { $0.member == nil }
+    let control = predicate == nil ? try checked(hidden.filter { $0.name == "pc" }) : nil
     let visible = fields.filter { $0.member != nil }
     let locations = program.layout.controlLocations.map {
         (caseName: "location\($0.id.ordinal)", ordinal: $0.id.ordinal, label: $0.formalName)
     }
-    guard !visible.isEmpty, !locations.isEmpty else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+    guard !visible.isEmpty, hidden.count == (control == nil ? 0 : 1),
+          control == nil || !locations.isEmpty else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
 
     func require(_ declaration: some SyntaxProtocol, _ spelling: String) throws {
         guard sameWords(syntaxWords(declaration), spelling) else {
@@ -98,10 +130,9 @@ package func nativeScalarActionEvidence(_ source: String, program: CompiledProgr
     // Validate the exact fields and constructors through which the update is materialized.
     let state = try checked(structs.filter { $0.name.text == "State" })
     let stateMembers = state.memberBlock.members.map(\.decl)
-    let inputs = visible.enumerated().map { (index: $0.offset + 1, field: $0.element) }
     let stateStorage = visible.map { "public let \($0.member!): \($0.type)" }.joined(separator: "\n")
-    let parameters = inputs.map { "\($0.field.member!) _value\($0.index): \($0.field.type)" }.joined(separator: ", ")
-    let assignments = inputs.map { "self.\($0.field.member!) = _value\($0.index)" }.joined(separator: "\n")
+    let parameters = visible.map { "\($0.member!) _value\($0.ordinal): \($0.type)" }.joined(separator: ", ")
+    let assignments = visible.map { "self.\($0.member!) = _value\($0.ordinal)" }.joined(separator: "\n")
     let metadata = try ["displayNames", "fieldIdentities"].map { name in
         try checked(stateMembers.compactMap { $0.as(VariableDeclSyntax.self) }.filter {
             $0.bindings.count == 1 && $0.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == name
@@ -117,22 +148,38 @@ package func nativeScalarActionEvidence(_ source: String, program: CompiledProgr
         }
     }
     """)
+    let controlStorage = control.map { "let \($0.slot): \(controlType)" } ?? ""
     try require(checked(structs.filter { $0.name.text == "Snapshot" }), """
     public struct Snapshot: Hashable, Sendable {
         public let state: State
-        let \(control.slot): \(controlType)
+        \(controlStorage)
     }
     """)
-    let controlCases = locations.map { "case \($0.caseName) = \($0.ordinal)" }.joined(separator: "\n")
-    try require(checked(enums.filter { $0.name.text == controlType }), """
-    @_documentation(visibility: internal)
-    public enum \(controlType): \(intType), Hashable, Sendable { \(controlCases) }
-    """)
+    if control != nil {
+        let controlCases = locations.map { "case \($0.caseName) = \($0.ordinal)" }.joined(separator: "\n")
+        try require(checked(enums.filter { $0.name.text == controlType }), """
+        @_documentation(visibility: internal)
+        public enum \(controlType): \(intType), Hashable, Sendable { \(controlCases) }
+        """)
+    } else {
+        let table = try checked(declarations.filter {
+            $0.as(VariableDeclSyntax.self)?.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?
+                .identifier.text == "__swifttlaFormalProjectionTokens"
+        })
+        let projection = try checked(functions.filter { $0.name.text == "formalProjection" })
+        try verifyGeneratedFormalProjectionOutput([table, DeclSyntax(projection)], fields: visible.map {
+            let route = "snapshot.state.\($0.member!)"
+            let isInt = $0.type == intType
+            let callee = isInt ? "SwiftTLA._nativeFormalInt" : "SwiftTLA.TLAValue.bool"
+            return (formalName: $0.name, route: route, type: isInt ? .int : .bool, value: "\(callee)(\(route))")
+        })
+    }
     let storage = fields.map { "var \($0.slot): \($0.type)? = nil" }.joined(separator: "\n")
     let merging = fields.map {
         "guard SwiftTLA._NativeMachineOperations.mergeUpdate(&result.\($0.slot), other.\($0.slot)) else { return nil }"
     }.joined(separator: "\n")
     let materialized = visible.map { "\($0.member!): \($0.slot) ?? \($0.before)" }.joined(separator: ", ")
+    let hiddenArguments = hidden.map { ", \($0.slot): \($0.slot) ?? \($0.before)" }.joined()
     try require(checked(structs.filter { $0.name.text == "_Updates" }), """
     private struct _Updates: Sendable {
         \(storage)
@@ -142,7 +189,7 @@ package func nativeScalarActionEvidence(_ source: String, program: CompiledProgr
             return result
         }
         func applying(to state: Snapshot) -> Snapshot {
-            Snapshot(state: State(\(materialized)), \(control.slot): \(control.slot) ?? \(control.before))
+            Snapshot(state: State(\(materialized))\(hiddenArguments))
         }
     }
     """)
@@ -189,25 +236,20 @@ package func nativeScalarActionEvidence(_ source: String, program: CompiledProgr
 
     let rows = try labels.enumerated().map { index, label in
         let visitor = try checked(functions.filter { $0.name.text == "_visitUpdates\(index)" })
-        let plan = try decodeScalarActionVisitor(visitor, index: index, fields: fields, control: control,
-            locations: locations.map { ($0.caseName, $0.label) }, checking: checking)
+        let decoded = try decodeScalarActionVisitor(visitor, index: index, fields: fields, control: control,
+            locations: locations.map { ($0.caseName, $0.label) }, checking: checking, predicate: predicate)
         let successor = try checked(functions.filter { $0.name.text == "_visitSuccessors\(index)" })
         try verifyGeneratedSuccessorOutput(DeclSyntax(successor), actionID: index, parameters: "", arguments: "",
             configurationParameters: "", configurationArguments: "")
-        return "<<\(TLAValue.string(label)), \(plan.tla)>>"
+        return (label: label, fields: fields.map(\.name), visit: decoded.visit, plans: decoded.plans)
     }
     try checkNativeValidationActionRoute(functions)
-    return Data("""
-    ---- MODULE SwiftTLANativeActions ----
-    NativeActionRows == <<\(rows.joined(separator: ", "))>>
-    ====
-
-    """.utf8)
+    return rows
 }
 
 private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int,
-    fields: [ActionField], control: ActionField, locations: [(caseName: String, label: String)],
-    checking: String) throws -> ActionInstructions {
+    fields: [ActionField], control: ActionField?, locations: [(caseName: String, label: String)],
+    checking: String, predicate: [String]?) throws -> (visit: NativeConditionalVisit?, plans: [ActionInstructions]) {
     let parts = visitor.body?.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }.filter {
         $0.name.text.hasPrefix("_actionPart")
     } ?? []
@@ -237,22 +279,25 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
         throw InitialFailureEvidenceError.unsupportedGeneratedOutput
     }
     let byName = Dictionary(uniqueKeysWithValues: zip(names, parts))
-    var instructions = ActionInstructions()
     var visited: Set<String> = []
     let stateReads: [(String, ActionReference)] = fields.map {
         ($0.before, .init(kind: "state", operand: TLAValue.string($0.name).description, type: $0.type))
     }
-    let controlValues: [(String, ActionReference)] = locations.map {
-        ("\(control.type).\($0.caseName)", .init(kind: "control", operand: TLAValue.string($0.label).description, type: control.type))
+    let controlValues = control.map { field in
+        locations.map {
+            ("\(field.type).\($0.caseName)", ActionReference(kind: "control",
+                operand: TLAValue.string($0.label).description, type: field.type))
+        }
+    } ?? []
+    let booleanValues = [("true", "TRUE"), ("false", "FALSE")].map {
+        ($0.0, ActionReference(kind: "literal", operand: $0.1, type: boolType))
     }
 
     typealias Binding = (local: String, value: ActionReference)
-    var pending: [(String, [Binding])] = [("_actionPart0", [])]
-    walk: while let (name, scope) = pending.popLast() {
+    func partCore(_ name: String, scope: [Binding]) throws -> [String] {
         guard let part = byName[name], let body = part.body, visited.insert(name).inserted else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
-        let argument = scope.map { "\($0.local), " }.joined()
         let formal = scope.map { "_ \($0.local): \($0.value.type), " }.joined()
         let tokens = syntaxWords(body)
         let prefix = words("{ do {")
@@ -273,69 +318,100 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
 
-        if sameWords(core, "try emit(updates)") { continue walk }
-        for location in locations where sameWords(core, """
-            guard (\(control.before) == \(control.type).\(location.caseName)) else { return }
-            try emit(updates)
-            """) {
-            instructions.guards.append(TLAValue.string(location.label).description)
-            continue walk
-        }
-        let boundReads = scope.map { ($0.local, $0.value) }
-        if core.count > 2, core[0] == "let",
-           let call = core.firstIndex(of: "try"), call + 1 < core.count, byName[core[call + 1]] != nil {
-            let local = try nativeSourceIdentifier(core[1])
-            let child = core[call + 1]
-            guard !scope.contains(where: { $0.local == local }) else {
-                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-            }
-            guard core[2] == "=", call > 3 else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
-            let rhs = Array(core[3..<call])
-            var reads = stateReads + boundReads
-            let integer: Int?
-            if sameWords(rhs, "SwiftTLA._nativeIntMinimum()") {
-                integer = Int.min
-            } else if let value = Int(rhs.joined()), sameWords(rhs, String(value)) {
-                integer = value
-            } else {
-                integer = nil
-            }
-            if let integer {
-                reads.append((rhs.joined(), .init(kind: "literal", operand: InitialFailureEvidence.binaryLiteral(integer),
-                                                   type: nativeIntTypeTokens.joined())))
-            }
-            for (spelling, value) in reads where value.type == nativeIntTypeTokens.joined() &&
-                sameWords(core, "let \(local) = \(spelling)\ntry \(child)(\(argument)\(local), updates, emit)") {
-                instructions.captures.append(value.tla)
-                let reference = ActionReference(kind: "capture", operand: String(instructions.captures.count), type: value.type)
-                pending.append((child, scope + [(local, reference)]))
-                continue walk
-            }
-        }
-        if core.count > 2, core[0] == "try", byName[core[1]] != nil,
-           let nextCall = core.lastIndex(of: "try"), nextCall > 0, nextCall + 1 < core.count,
-           byName[core[nextCall + 1]] != nil {
-            let first = core[1]
-            let next = core[nextCall + 1]
-            if sameWords(core, "try \(first)(\(argument)updates, { candidate in try \(next)(\(argument)candidate, emit) })") {
-                pending.append((next, scope))
-                pending.append((first, scope))
-                continue walk
-            }
-        }
-        let operands = stateReads + controlValues + boundReads
-        for field in fields {
-            for (spelling, value) in operands where value.type == field.type &&
-                sameWords(core, "if let merged = updates.merging(_Updates(\(field.slot): \(spelling))) { try emit(merged) }") {
-                instructions.writes.append("<<\(TLAValue.string(field.name)), \(value.tla)>>")
-                continue walk
-            }
-        }
-        throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        return core
     }
 
+    func walk(_ entry: String) throws -> ActionInstructions {
+        var instructions = ActionInstructions()
+        var pending: [(String, [Binding])] = [(entry, [])]
+        parts: while let (name, scope) = pending.popLast() {
+            let core = try partCore(name, scope: scope)
+            let argument = scope.map { "\($0.local), " }.joined()
+            if sameWords(core, "try emit(updates)") { continue }
+            if let control {
+                for location in locations where sameWords(core, """
+                    guard (\(control.before) == \(control.type).\(location.caseName)) else { return }
+                    try emit(updates)
+                    """) {
+                    instructions.guards.append(TLAValue.string(location.label).description)
+                    continue parts
+                }
+            }
+            let boundReads = scope.map { ($0.local, $0.value) }
+            if core.count > 2, core[0] == "let",
+               let call = core.firstIndex(of: "try"), call + 1 < core.count, byName[core[call + 1]] != nil {
+                let local = try nativeSourceIdentifier(core[1])
+                let child = core[call + 1]
+                guard !scope.contains(where: { $0.local == local }) else {
+                    throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+                }
+                guard core[2] == "=", call > 3 else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+                let rhs = Array(core[3..<call])
+                var reads = stateReads + boundReads + booleanValues
+                let integer: Int?
+                if sameWords(rhs, "SwiftTLA._nativeIntMinimum()") {
+                    integer = Int.min
+                } else if let value = Int(rhs.joined()), sameWords(rhs, String(value)) {
+                    integer = value
+                } else {
+                    integer = nil
+                }
+                if let integer {
+                    reads.append((rhs.joined(), .init(kind: "literal", operand: InitialFailureEvidence.binaryLiteral(integer),
+                                                       type: nativeIntTypeTokens.joined())))
+                }
+                for (spelling, value) in reads where
+                    sameWords(core, "let \(local) = \(spelling)\ntry \(child)(\(argument)\(local), updates, emit)") {
+                    instructions.captures.append(value.tla)
+                    let reference = ActionReference(kind: "capture", operand: String(instructions.captures.count), type: value.type)
+                    pending.append((child, scope + [(local, reference)]))
+                    continue parts
+                }
+            }
+            if core.count > 2, core[0] == "try", byName[core[1]] != nil,
+               let nextCall = core.lastIndex(of: "try"), nextCall > 0, nextCall + 1 < core.count,
+               byName[core[nextCall + 1]] != nil {
+                let first = core[1]
+                let next = core[nextCall + 1]
+                if sameWords(core, "try \(first)(\(argument)updates, { candidate in try \(next)(\(argument)candidate, emit) })") {
+                    pending.append((next, scope))
+                    pending.append((first, scope))
+                    continue parts
+                }
+            }
+            let operands = stateReads + controlValues + boundReads + booleanValues
+            for field in fields {
+                for (spelling, value) in operands where value.type == field.type &&
+                    sameWords(core, "if let merged = updates.merging(_Updates(\(field.slot): \(spelling))) { try emit(merged) }") {
+                    instructions.writes.append("<<\(TLAValue.string(field.name)), \(value.tla)>>")
+                    continue parts
+                }
+            }
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        return instructions
+    }
+
+    let visit: NativeConditionalVisit?
+    let plans: [ActionInstructions]
+    if let predicate {
+        let root = try partCore("_actionPart0", scope: [])
+        let body = byName["_actionPart0"]?.body?.statements.first?.item.as(DoStmtSyntax.self)?.body.statements
+        guard body?.count == 1, let item = body?.first?.item,
+              let expression = item.as(TryExprSyntax.self) ?? item.as(ExpressionStmtSyntax.self)?.expression.as(TryExprSyntax.self),
+              syntaxWords(expression) == root, let conditional = nativeConditionalVisit(Syntax(expression)),
+              conditional.predicate == predicate, conditional.ifTrue.arguments == ["updates", "emit"],
+              conditional.ifFalse.arguments == ["updates", "emit"] else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        visit = conditional
+        plans = try [walk("_actionPart\(conditional.ifTrue.id)"), walk("_actionPart\(conditional.ifFalse.id)")]
+    } else {
+        visit = nil
+        plans = try [walk("_actionPart0")]
+    }
     guard visited.count == parts.count else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
-    return instructions
+    return (visit, plans)
 }
 
 private func checkNativeValidationActionRoute(_ functions: [FunctionDeclSyntax]) throws {

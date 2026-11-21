@@ -12,7 +12,7 @@ StayDataKeys == AuthoredCopyFields
 StayData(state) == [key \in StayDataKeys |-> state[key]]
 AuthoredStayCopies == AuthoredStayAction.copies
 
-StayRoutes == [index \in 0..(Len(StayRouteSnapshots) - 1) |-> StayRouteSnapshots[index + 1]]
+StayRoutes == DirectCopyRoutes(StayDataKeys, AuthoredStayCopies)
 
 SourceStay(before, after) ==
     /\ before.pc = AuthoredStayAction.label
@@ -39,24 +39,24 @@ THEOREM AuthoredStayDeterminesThePhysicalCaptureAndFrame ==
     PROOF
     <1>. DEFINE count == Len(AuthoredStayCopies)
     <1>shape. /\ StayDataKeys = {"first", "second", "last"}
-              /\ count = Len(StayReads)
+              /\ count = 1
               /\ DOMAIN AuthoredStayCopies = 1..count /\ DOMAIN StayReads = 1..count
+              /\ AuthoredStayCopies[1] = [target |-> "last", read |-> "last"]
         BY AuthoredCopySyntaxBindsWitnessRows, SMT
            DEF StayDataKeys, AuthoredStayCopies, AuthoredStayAction, WitnessCopyActionRows, WitnessCopyFields, StayReads, count
     <1>seed. StayRoutes[0] = CopyEntryRoutes(StayDataKeys)
-        BY <1>shape, SMT DEF StayRoutes, StayRouteSnapshots, CopyEntryRoutes
-    <1>steps. \A index \in 1..count :
-                  /\ AuthoredStayCopies[index].target \in StayDataKeys
-                  /\ AuthoredStayCopies[index].read \in StayDataKeys
-                  /\ StayReads[index] = StayRoutes[index - 1][AuthoredStayCopies[index].read]
-                  /\ StayRoutes[index] = CopyReplace(StayDataKeys, StayRoutes[index - 1],
-                                            AuthoredStayCopies[index].target, <<"capture", index>>)
-        BY <1>shape, AuthoredCopySyntaxBindsWitnessRows, SMT
-           DEF count, AuthoredStayCopies, AuthoredStayAction, WitnessCopyActionRows, WitnessCopyFields, StayReads, StayRoutes,
-               StayRouteSnapshots, CopyReplace
+        BY <1>shape, DirectCopyRoutesFollowEveryCapture, SMT DEF StayRoutes, count
+    <1>capture. \A index \in DOMAIN AuthoredStayCopies :
+                 /\ AuthoredStayCopies[index].target \in StayDataKeys
+                 /\ AuthoredStayCopies[index].read \in StayDataKeys
+                 /\ StayReads[index] = StayRoutes[index - 1][AuthoredStayCopies[index].read]
+        BY <1>shape, <1>seed, SMT DEF StayReads, CopyEntryRoutes, count
+    <1>route. StayRoutes[1] = CopyReplace(StayDataKeys, StayRoutes[0], "last", <<"capture", 1>>)
+        BY <1>shape, DirectCopyRoutesFollowEveryCapture, SMT DEF StayRoutes, count
     <1>finish. StayWrites = StayRoutes[count]
-        BY <1>shape, SMT DEF StayRoutes, StayRouteSnapshots, StayWrites, AuthoredStayCopies, count
-    <1>. QED BY <1>shape, <1>seed, <1>steps, <1>finish, SMT DEF CopyPlan, count
+        BY <1>shape, <1>seed, <1>route, SMT DEF StayWrites, CopyEntryRoutes, CopyReplace, count
+    <1>. QED BY <1>shape, <1>capture, <1>finish, DirectCopyReceiptSuppliesTheCompleteCapturePlan,
+        SMT DEF StayRoutes, count
 
 THEOREM ActualStayRealizesThePhysicalCopyBranch ==
     stay <=>

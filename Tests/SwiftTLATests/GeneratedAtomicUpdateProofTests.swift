@@ -1224,7 +1224,8 @@ struct GeneratedAtomicUpdateProofTests {
         let action = try #require(program.behavior.actions.first)
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "GeneratedScalarConditionalProofModel", program: program))
-        let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
+        let members = try emitter.machineMembers()
+        let visitor = try #require(member(named: "_visitUpdates0", in: members))
         let parts = try emitter.actionFunctions(action.body)
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
@@ -1256,6 +1257,34 @@ struct GeneratedAtomicUpdateProofTests {
             .standardizedFileURL
         #expect(rendered == (try String(contentsOf: proofInput, encoding: .utf8)),
             "Actual generated TLA+: \(rendered)")
+
+        let native = members.map(\.description).joined(separator: "\n")
+        let trueWrite = try #require(parts.writes.first {
+            $0.slot.hasPrefix("_value_selected_") &&
+                ($0.value == "true" || visitor.description.contains("let \($0.value) = true"))
+        })
+        let correctWrite = "_Updates(\(trueWrite.slot): \(trueWrite.value))"
+        try #require(native.components(separatedBy: correctWrite).count == 2)
+        let changedWrite = native.replacingOccurrences(of: correctWrite, with: "_Updates(\(trueWrite.slot): false)")
+        let owner = packageRoot().appendingPathComponent(
+            "Sources/UpstreamParity/ValidationModels/GeneratedScalarConditionalProofModel.swift")
+        let authored = try Data(contentsOf: owner)
+        let proof = try Data(contentsOf: proofInput.deletingLastPathComponent()
+            .appendingPathComponent("GeneratedScalarConditionalProof.tla"))
+        let evidenceRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: evidenceRoot) }
+        for (name, source) in [("positive", native), ("changed-write", changedWrite)] {
+            try ConditionalActionEvidence.prepare(sourceSHA: String(repeating: "a", count: 40),
+                authoredSource: authored, nativeSource: Data(source.utf8), proofSource: proof,
+                to: evidenceRoot.appendingPathComponent(name))
+        }
+        func physicalPlan(_ name: String) throws -> Substring {
+            let input = evidenceRoot.appendingPathComponent(name).appendingPathComponent("GeneratedScalarConditionalNative.tla")
+            let text = try String(contentsOf: input, encoding: .utf8)
+            return try #require(text.split(separator: "\n").first { $0.hasPrefix("NativeChoosePlans == ") })
+        }
+        #expect(try physicalPlan("changed-write") != physicalPlan("positive"))
+        #expect(try physicalPlan("changed-write").contains("<<\"selected\", <<\"literal\", FALSE>>>>"))
 
         let machines = try GeneratedScalarConditionalProofModel.initialMachines()
         #expect(machines.count == 2)

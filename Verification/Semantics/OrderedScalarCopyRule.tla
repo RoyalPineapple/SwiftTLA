@@ -145,4 +145,146 @@ THEOREM OrderedScalarCopyPlanPreservesTheCompleteBranch ==
             <3>. QED BY <2>history, <2>complete
         <2>. QED BY <2>exists DEF CompiledCopyBranch
     <1>. QED BY <1>compiled, <1>authored
+
+LastDirectCopy(copies, prefix, key, writer) ==
+    /\ writer \in 0..prefix
+    /\ (writer = 0 \/ copies[writer].target = key)
+    /\ \A earlier \in 1..prefix : copies[earlier].target = key => earlier <= writer
+
+DirectCopyWriter(copies, prefix, key) ==
+    CHOOSE writer \in 0..prefix : LastDirectCopy(copies, prefix, key, writer)
+
+DirectCopyReference(key, writer) == IF writer = 0 THEN <<"state", key>> ELSE <<"capture", writer>>
+
+DirectCopyRoutes(keys, copies) ==
+    [prefix \in 0..Len(copies) |-> [key \in keys |->
+        DirectCopyReference(key, DirectCopyWriter(copies, prefix, key))]]
+
+THEOREM TwoLastDirectCopiesHaveTheSamePosition ==
+    ASSUME NEW copies, NEW prefix \in Nat, NEW key, NEW left, NEW right,
+           LastDirectCopy(copies, prefix, key, left), LastDirectCopy(copies, prefix, key, right)
+    PROVE left = right
+    BY SMT DEF LastDirectCopy
+
+THEOREM RecordingTheTargetDeterminesTheNextWriter ==
+    ASSUME NEW copies, NEW index \in Nat, index > 0, NEW key, NEW writer,
+           LastDirectCopy(copies, index - 1, key, writer)
+    PROVE LastDirectCopy(copies, index, key,
+              IF copies[index].target = key THEN index ELSE writer)
+    PROOF
+    <1>write. CASE copies[index].target = key
+        BY <1>write, SMT DEF LastDirectCopy
+    <1>keep. CASE copies[index].target # key
+        BY <1>keep, SMT DEF LastDirectCopy
+    <1>. QED BY <1>write, <1>keep
+
+THEOREM EveryFiniteCopyPrefixHasALastWriter ==
+    ASSUME NEW copies, NEW count \in Nat, NEW key
+    PROVE \A prefix \in 0..count : \E writer \in 0..prefix : LastDirectCopy(copies, prefix, key, writer)
+    PROOF
+    <1>. DEFINE found(prefix) == \E writer \in 0..prefix : LastDirectCopy(copies, prefix, key, writer)
+    <1>base. LastDirectCopy(copies, 0, key, 0)
+        BY SMT DEF LastDirectCopy
+    <1>init. found(0)
+        BY ONLY <1>base, SMT DEF found
+    <1>advance. ASSUME NEW prefix \in 1..count,
+                       \A prior \in 0..(prefix - 1) : found(prior)
+                 PROVE found(prefix)
+        <2>positive. /\ prefix \in Nat /\ prefix > 0 /\ prefix - 1 \in 0..(prefix - 1)
+            BY ONLY (count \in Nat), (prefix \in 1..count), SMT
+        <2>previous. found(prefix - 1)
+            BY ONLY <2>positive, (\A prior \in 0..(prefix - 1) : found(prior)), SMT
+        <2>pick. PICK writer \in 0..(prefix - 1) : LastDirectCopy(copies, prefix - 1, key, writer)
+            BY ONLY <2>previous DEF found
+        <2>next. LastDirectCopy(copies, prefix, key,
+                    IF copies[prefix].target = key THEN prefix ELSE writer)
+            BY ONLY <2>positive, <2>pick, RecordingTheTargetDeterminesTheNextWriter, SMT
+        <2>. QED BY ONLY <2>next, SMT DEF found, LastDirectCopy
+    <1>. HIDE DEF found
+    <1>induction. \A prefix \in 1..count :
+        (\A prior \in 0..(prefix - 1) : found(prior)) => found(prefix)
+        BY ONLY <1>advance, SMT
+    <1>. DEFINE flags == [prefix \in 0..count |-> IF found(prefix) THEN TRUE ELSE FALSE]
+    <1>flagType. flags \in [0..count -> BOOLEAN]
+        BY ONLY SMT DEF flags
+    <1>flagValue. \A prefix \in 0..count : flags[prefix] <=> found(prefix)
+        BY ONLY SMT DEF flags
+    <1>flagSeed. flags[0]
+        BY ONLY (count \in Nat), <1>init, <1>flagValue, SMT
+    <1>flagStep. \A prefix \in 1..count :
+        (\A prior \in 0..(prefix - 1) : flags[prior]) => flags[prefix]
+        <2>. SUFFICES ASSUME NEW prefix \in 1..count,
+                             \A prior \in 0..(prefix - 1) : flags[prior]
+                     PROVE flags[prefix]
+            OBVIOUS
+        <2>bounds. 0..(prefix - 1) \subseteq 0..count /\ prefix \in 0..count
+            BY ONLY (count \in Nat), (prefix \in 1..count), SMT
+        <2>found. \A prior \in 0..(prefix - 1) : found(prior)
+            BY ONLY <2>bounds, <1>flagValue, (\A prior \in 0..(prefix - 1) : flags[prior]), SMT
+        <2>. QED BY ONLY <2>bounds, <2>found, <1>induction, <1>flagValue, (prefix \in 1..count), SMT
+    <1>allFlags. \A prefix \in 0..count : flags[prefix]
+        BY ONLY (count \in Nat), <1>flagType, <1>flagSeed, <1>flagStep, FiniteBooleanPrefixProperty
+    <1>all. \A prefix \in 0..count : found(prefix)
+        BY ONLY <1>allFlags, <1>flagValue, SMT
+    <1>. QED BY ONLY <1>all DEF found
+
+THEOREM DirectCopyRoutesFollowEveryCapture ==
+    ASSUME NEW keys, NEW copies, Len(copies) \in Nat
+    PROVE /\ DirectCopyRoutes(keys, copies)[0] = CopyEntryRoutes(keys)
+          /\ \A index \in 1..Len(copies) :
+                 DirectCopyRoutes(keys, copies)[index] =
+                     CopyReplace(keys, DirectCopyRoutes(keys, copies)[index - 1],
+                         copies[index].target, <<"capture", index>>)
+    PROOF
+    <1>. DEFINE count == Len(copies)
+                routes == DirectCopyRoutes(keys, copies)
+    <1>exists. \A key \in keys : \A prefix \in 0..count :
+        \E writer \in 0..prefix : LastDirectCopy(copies, prefix, key, writer)
+        <2>. TAKE key \in keys
+        <2>. QED BY ONLY (Len(copies) \in Nat), EveryFiniteCopyPrefixHasALastWriter, SMT DEF count
+    <1>chosen. \A key \in keys : \A prefix \in 0..count :
+        LastDirectCopy(copies, prefix, key, DirectCopyWriter(copies, prefix, key))
+        BY <1>exists, SMT DEF DirectCopyWriter
+    <1>initial. \A key \in keys : DirectCopyWriter(copies, 0, key) = 0
+        BY <1>chosen, SMT DEF LastDirectCopy, count
+    <1>seed. routes[0] = CopyEntryRoutes(keys)
+        BY <1>initial, SMT DEF routes, DirectCopyRoutes, CopyEntryRoutes, DirectCopyReference, count
+    <1>step. \A index \in 1..count :
+        routes[index] = CopyReplace(keys, routes[index - 1], copies[index].target, <<"capture", index>>)
+        PROOF
+        <2>. SUFFICES ASSUME NEW index \in 1..count
+                     PROVE routes[index] =
+                         CopyReplace(keys, routes[index - 1], copies[index].target, <<"capture", index>>)
+            OBVIOUS
+        <2>bounds. index \in 0..count /\ index - 1 \in 0..count /\ index - 1 \in Nat /\ index # 0
+            BY (index \in 1..count), SMT
+        <2>previous. \A key \in keys :
+            LastDirectCopy(copies, index - 1, key, DirectCopyWriter(copies, index - 1, key))
+            BY <1>chosen, <2>bounds, SMT
+        <2>positive. /\ index \in Nat /\ index > 0
+            BY ONLY (index \in 1..count), SMT
+        <2>recorded. \A key \in keys :
+            LastDirectCopy(copies, index, key,
+                IF copies[index].target = key THEN index ELSE DirectCopyWriter(copies, index - 1, key))
+            <3>. TAKE key \in keys
+            <3>prior. LastDirectCopy(copies, index - 1, key, DirectCopyWriter(copies, index - 1, key))
+                BY ONLY <2>previous, (key \in keys), SMT
+            <3>. QED BY ONLY <3>prior, <2>positive, RecordingTheTargetDeterminesTheNextWriter, SMT
+        <2>writers. \A key \in keys : DirectCopyWriter(copies, index, key) =
+            IF copies[index].target = key THEN index ELSE DirectCopyWriter(copies, index - 1, key)
+            BY <1>chosen, <2>bounds, <2>recorded, TwoLastDirectCopiesHaveTheSamePosition, SMT
+        <2>. QED BY <2>bounds, <2>writers, SMT DEF routes, DirectCopyRoutes, DirectCopyReference, CopyReplace, count
+    <1>. QED BY <1>step, <1>seed DEF routes, count
+
+THEOREM DirectCopyReceiptSuppliesTheCompleteCapturePlan ==
+    ASSUME NEW keys, NEW copies, NEW reads, NEW writes,
+           Len(copies) \in Nat, DOMAIN copies = 1..Len(copies), DOMAIN reads = DOMAIN copies,
+           \A index \in DOMAIN copies :
+               /\ copies[index].target \in keys
+               /\ copies[index].read \in keys
+               /\ reads[index] = DirectCopyRoutes(keys, copies)[index - 1][copies[index].read],
+           writes = DirectCopyRoutes(keys, copies)[Len(copies)]
+    PROVE CopyPlan(keys, copies, reads, writes, DirectCopyRoutes(keys, copies))
+    BY DirectCopyRoutesFollowEveryCapture, SMT DEF CopyPlan
+
 ====

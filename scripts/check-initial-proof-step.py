@@ -147,6 +147,11 @@ def main():
     for field, path in bindings.items():
         if digest(path) != preparation[field]:
             raise ValueError(f"retained packet mismatch: {field}")
+    copy_modules = preparation.get("scalarCopyProofSHA256", {})
+    if any(not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", module)
+           or checksum != digest(packet / "case/generated-tla" / f"{module}.tla")
+           for module, checksum in copy_modules.items()):
+        raise ValueError("retained packet mismatch: scalarCopyProofSHA256")
     if (packet / "source-sha.txt").read_text().strip() != preparation["sourceSHA"]:
         raise ValueError("retained packet source revision mismatch")
     for line in (packet / "proof-inputs.sha256").read_text().splitlines():
