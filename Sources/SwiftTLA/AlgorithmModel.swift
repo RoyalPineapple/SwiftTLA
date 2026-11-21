@@ -132,6 +132,18 @@ package struct AlgorithmModel: Sendable {
         return (resolved, scalarCopies)
     }
 
+    package var directScalarCopyInput: (fields: Set<String>,
+        rows: [(label: String, copies: [(target: String, read: String)])])? {
+        guard let roots = orderedIntCopyRoots, !sequentialSteps.isEmpty,
+              components.count == roots.count + sequentialSteps.count else { return nil }
+        var rows: [(label: String, copies: [(target: String, read: String)])] = []
+        for step in sequentialSteps {
+            guard let copies = directScalarCopyOperands(step.statements, roots: roots) else { return nil }
+            rows.append((step.label.name, copies))
+        }
+        return (roots, rows)
+    }
+
     private var orderedIntCopyRoots: Set<String>? {
         guard processes.isEmpty, procedures.isEmpty, sequentialSteps.allSatisfy({ $0.loopCondition == nil }) else { return nil }
         var roots: Set<String> = []
@@ -700,16 +712,24 @@ package indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case skip
 }
 
-private func scheduleDirectScalarCopies(
-    _ statements: [AlgorithmStatementModel], roots: Set<String>, binding: () -> String
-) -> (statements: [AlgorithmStatementModel], receipt: StraightLineAssignmentCheck.ScalarCopyReceipt)? {
-    typealias Reference = StraightLineAssignmentCheck.ScalarCopyReceipt.Reference
+private func directScalarCopyOperands(
+    _ statements: [AlgorithmStatementModel], roots: Set<String>
+) -> [(target: String, read: String)]? {
     let copies = statements.compactMap { statement -> (target: String, read: String)? in
         guard case .set(.root(let target), .variable(let read)) = statement,
               roots.contains(target), roots.contains(read) else { return nil }
         return (target, read)
     }
     guard !copies.isEmpty, copies.count == statements.count else { return nil }
+    return copies
+
+}
+
+private func scheduleDirectScalarCopies(
+    _ statements: [AlgorithmStatementModel], roots: Set<String>, binding: () -> String
+) -> (statements: [AlgorithmStatementModel], receipt: StraightLineAssignmentCheck.ScalarCopyReceipt)? {
+    typealias Reference = StraightLineAssignmentCheck.ScalarCopyReceipt.Reference
+    guard let copies = directScalarCopyOperands(statements, roots: roots) else { return nil }
 
     var writes = Dictionary(uniqueKeysWithValues: roots.map { ($0, Reference.state($0)) })
     var reads: [Reference] = []

@@ -69,56 +69,69 @@ package func verifyOrderedIntInitialExpression(_ declaration: DeclSyntax?, named
             Array(tokens[index..<(index + binding.count)]) == binding
     }
     guard starts.count == 1, let start = starts.first else { throw invalid() }
-    var cursor = start + binding.count
+    let rhsStart = start + binding.count
+    let reads = Dictionary(uniqueKeysWithValues: slots.values.map { ([$0], $0) })
+    guard let decoded = decodeNativeOrderedIntExpression(tokens[rhsStart...], reads: reads),
+          decoded.steps == expected,
+          let following = tokens.dropFirst(rhsStart + decoded.consumed).first,
+          ["if", "let", "result", "}", "evaluatingInitializerOrdinal"].contains(following) else {
+        throw invalid()
+    }
+    return decoded.steps
+}
+
+/// Decodes the physically emitted Int leaf or ordered postorder closure.
+/// A returned step is an index in the existing checked expression plan.
+package func decodeNativeOrderedIntExpression(
+    _ tokens: ArraySlice<String>, reads: [[String]: String]
+) -> (steps: [NativeIntInitialStep], consumed: Int)? {
+    var cursor = tokens.startIndex
     func take(_ pattern: [String]) -> Bool {
-        guard cursor + pattern.count <= tokens.count,
-              Array(tokens[cursor..<(cursor + pattern.count)]) == pattern else { return false }
+        guard tokens[cursor...].starts(with: pattern, by: { $0.utf8.elementsEqual($1.utf8) }) else { return false }
         cursor += pattern.count
         return true
     }
     func arithmeticIndex() -> Int? {
-        guard cursor < tokens.count, tokens[cursor].hasPrefix("_arithmetic"),
-              let index = Int(tokens[cursor].dropFirst("_arithmetic".count)) else { return nil }
+        guard let name = tokens[cursor...].first, name.hasPrefix("_arithmetic"),
+              let index = Int(name.dropFirst("_arithmetic".count)), index >= 0,
+              name == "_arithmetic\(index)" else { return nil }
         cursor += 1
         return index
     }
-    func readStep(available: Int) -> NativeIntInitialStep? {
-        if take(["try", "SwiftTLA", ".", "_nativeIntAdd", "("]) {
-            guard let left = arithmeticIndex(), take([","]), let right = arithmeticIndex(),
-                  take([")"]), left < available, right < available else { return nil }
-            return .add(left, right)
-        }
-        guard cursor < tokens.count else { return nil }
+    let readPatterns = reads.keys.sorted { $0.count > $1.count }
+    func readLeaf() -> NativeIntInitialStep? {
         if take(["SwiftTLA", ".", "_nativeIntMinimum", "(", ")"]) { return .integer(Int.min) }
         let negative = take(["-"])
-        if cursor < tokens.count, let integer = Int((negative ? "-" : "") + tokens[cursor]) {
+        if let spelling = tokens[cursor...].first, let integer = Int((negative ? "-" : "") + spelling),
+           spelling == String(integer.magnitude), negative == (integer < 0), integer != Int.min {
             cursor += 1
             return .integer(integer)
         }
-        if !negative, cursor < tokens.count, slots.values.contains(tokens[cursor]) {
-            let slot = tokens[cursor]
-            cursor += 1
-            return .slot(slot)
-        }
-        return nil
+        guard !negative, let pattern = readPatterns.first(where: take), let read = reads[pattern] else { return nil }
+        return .slot(read)
     }
-    var decoded: [NativeIntInitialStep] = []
-    if case .add = expression.operation {
-        guard take(["(", "try", "{", "(", ")", "throws", "->"] + nativeIntTypeTokens + ["in"]) else { throw invalid() }
-        for (index, step) in expected.enumerated() {
-            guard take(["let", "_arithmetic\(index)", ":"] + nativeIntTypeTokens + ["="]),
-                  let actual = readStep(available: index), actual == step else { throw invalid() }
-            decoded.append(actual)
-        }
-        guard take(["return", "_arithmetic\(expected.count - 1)", "}", "(", ")", ")"]) else {
-            throw invalid()
-        }
-    } else {
-        guard expected.count == 1, let actual = readStep(available: 0), actual == expected[0] else { throw invalid() }
-        decoded.append(actual)
+    if !take(["(", "try", "{", "(", ")", "throws", "->"] + nativeIntTypeTokens + ["in"]) {
+        guard let leaf = readLeaf() else { return nil }
+        return ([leaf], cursor - tokens.startIndex)
     }
-    guard cursor < tokens.count, ["if", "let", "result", "}", "evaluatingInitializerOrdinal"].contains(tokens[cursor]) else {
-        throw invalid()
+    var steps: [NativeIntInitialStep] = []
+    var stack: [Int] = []
+    while take(["let", "_arithmetic\(steps.count)", ":"] + nativeIntTypeTokens + ["="]) {
+        let step: NativeIntInitialStep
+        if take(["try", "SwiftTLA", ".", "_nativeIntAdd", "("]) {
+            guard let left = arithmeticIndex(), take([","]), let right = arithmeticIndex(), take([")"]),
+                  stack.suffix(2).elementsEqual([left, right]) else { return nil }
+            stack.removeLast(2)
+            step = .add(left, right)
+        } else {
+            guard let leaf = readLeaf() else { return nil }
+            step = leaf
+        }
+        stack.append(steps.count)
+        steps.append(step)
     }
-    return decoded
+    let root = steps.count - 1
+    guard steps.count >= 3, stack == [root],
+          take(["return", "_arithmetic\(root)", "}", "(", ")", ")"]) else { return nil }
+    return (steps, cursor - tokens.startIndex)
 }

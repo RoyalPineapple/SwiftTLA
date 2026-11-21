@@ -1052,11 +1052,12 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    mutating func actionFunctions(_ root: CompiledActionExpr) throws -> (
+    mutating func actionFunctions(_ action: CompiledAction) throws -> (
         source: String, writes: [(id: Int, slot: String, value: String)],
         conditions: [(id: Int, value: String)]
     ) {
-        var pending: [(node: CompiledActionExpr, id: Int, bindings: [BinderID])] = [(root, 0, [])]
+        let observedActionOrdinal = program.requiresOrderedIntOutput(action.id) ? action.id.ordinal : nil
+        var pending: [(node: CompiledActionExpr, id: Int, bindings: [BinderID])] = [(action.body, 0, [])]
         var nextID = 1
         var declarations: [String] = []
         var writes: [(id: Int, slot: String, value: String)] = []
@@ -1126,11 +1127,19 @@ extension NativeSwiftEmitter {
             if case .guard_(let predicate) = node, predicate.booleanConstant == false {
                 checkedBody = body
             } else {
+                let recording: String
+                if let observedActionOrdinal, case .define(_, let value, _) = node,
+                   value.operation == .add, value.resultType == .int {
+                    recording = nativeOrderedIntAssignmentFailureSource(actionOrdinal: observedActionOrdinal,
+                        preceding: bindings.map(binder)) + "\n"
+                } else {
+                    recording = ""
+                }
                 checkedBody = """
                 do {
                     \(body)
                 } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
-                    failures.append(failure)
+                    \(recording)failures.append(failure)
                 }
                 """
             }
@@ -1141,7 +1150,7 @@ extension NativeSwiftEmitter {
             """)
         }
         let failureBinding: String
-        if case .guard_(let predicate) = root, predicate.booleanConstant == false {
+        if case .guard_(let predicate) = action.body, predicate.booleanConstant == false {
             failureBinding = "let"
         } else {
             failureBinding = "var"
@@ -1170,7 +1179,7 @@ extension NativeSwiftEmitter {
         let parameters = try action.bindings.map {
             "\(binder($0.binder)): \(try swiftType(program.bindingTypes[$0.binder]!))"
         }.joined(separator: ", ")
-        let parts = try actionFunctions(action.body)
+        let parts = try actionFunctions(action)
         let declaration = DeclSyntax(stringLiteral: """
         private static func _visitUpdates\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(configurationParameters), checking context: inout CheckingContext<CheckingRegisters>?,
                                                    _ _emit: (_Updates) throws -> Void) throws -> [NativeMachineEvaluationError] {
@@ -2465,7 +2474,11 @@ func verifyGeneratedActionWriteOutput(
         if token == "{" { depth += 1 }
         if token == "}" { depth -= 1 }
     }
+    let observedActionOrdinal = program.layout.actions.first {
+        visitor.name.text == "_visitUpdates\($0.id.ordinal)" && program.requiresOrderedIntOutput($0.id)
+    }?.id.ordinal
     var bodies: [Int: [String]] = [:]
+    var failureRecordings: [Int: [String]] = [:]
     var firstStatements: [Int: Syntax] = [:]
     var infallibleParts: Set<Int> = []
     var parameters: [Int: [String]] = [:]
@@ -2509,20 +2522,23 @@ func verifyGeneratedActionWriteOutput(
         }
         parameters[id] = names
         let wrapped = Array(visitorTokens[(open + 1)..<(close - 1)])
-        let catchSuffix = ["}", "catch", "let", "failure", "as", "NativeMachineEvaluationError",
-                           "where", "failure", ".", "isModelEvaluationFailure",
-                           "{", "failures", ".", "append", "(", "failure", ")", "}"]
+        let catchHeader = ["}", "catch", "let", "failure", "as", "NativeMachineEvaluationError",
+                           "where", "failure", ".", "isModelEvaluationFailure", "{"]
+        let catchEnd = ["failures", ".", "append", "(", "failure", ")", "}"]
         if wrapped == ["return"] {
             infallibleParts.insert(id)
             bodies[id] = wrapped
             firstStatements[id] = syntaxTokens[open + 1].parent
         } else {
-            guard wrapped.starts(with: ["do", "{"]), wrapped.count > catchSuffix.count + 2,
-              wrapped.suffix(catchSuffix.count) == catchSuffix else {
+            guard wrapped.starts(with: ["do", "{"]), wrapped.suffix(catchEnd.count) == catchEnd,
+                  let catchIndex = wrapped.indices.last(where: { wrapped[$0...].starts(with: catchHeader) }),
+                  catchIndex > 2, catchIndex + catchHeader.count <= wrapped.count - catchEnd.count else {
                 throw invalid("native.action.failures.\(id)",
                     "retain every reached model failure after its action part", "missing or changed failure collection")
             }
-            bodies[id] = Array(wrapped.dropFirst(2).dropLast(catchSuffix.count))
+            bodies[id] = Array(wrapped[2..<catchIndex])
+            let recording = wrapped[(catchIndex + catchHeader.count)..<(wrapped.count - catchEnd.count)]
+            if !recording.isEmpty { failureRecordings[id] = Array(recording) }
             firstStatements[id] = syntaxTokens[open + 3].parent
         }
         coveredPartTokens += close - index
@@ -3348,7 +3364,18 @@ func verifyGeneratedActionWriteOutput(
             throw invalid("native.action.binding.\(id)",
                 "current bindings, updates, and emitter parameters", "unexpected parameter list")
         }
-        let arguments = Array(parent.dropLast(2)) + [name, "updates", "emit"]
+        let preceding = Array(parent.dropLast(2))
+        if let observedActionOrdinal, value.operation == .add, value.resultType == .int {
+            let recording = nativeOrderedIntAssignmentFailureSource(actionOrdinal: observedActionOrdinal, preceding: preceding)
+            let expected = Parser.parse(source: recording).tokens(viewMode: .sourceAccurate)
+                .filter { $0.tokenKind != .endOfFile }.map(\.text)
+            guard failureRecordings.removeValue(forKey: id) == expected else {
+                throw invalid("native.action.failures.\(id)",
+                    "record this checked addition and its preceding lexical captures",
+                    "missing or changed assignment failure observation")
+            }
+        }
+        let arguments = preceding + [name, "updates", "emit"]
         guard childParameters == arguments else {
             throw invalid("native.action.binding.\(id)",
                 "the child receives every inherited binding and the captured value", "incorrect child parameters")
@@ -3379,6 +3406,10 @@ func verifyGeneratedActionWriteOutput(
                 firstTokenDifference(canonicalPredicateNames(checkedInitializer.actual),
                     canonicalPredicateNames(checkedInitializer.expected)))
         }
+    }
+    guard failureRecordings.isEmpty else {
+        throw invalid("native.action.failures", "assignment observations only at checked additions",
+            "unexpected assignment observation")
     }
     for id in conjunctions {
         guard let children = expectedChildren[id], children.count == 2,

@@ -1,6 +1,6 @@
 import Foundation
 
-enum StraightLineRenderedActionCheck {
+package enum StraightLineRenderedActionCheck {
     private enum StructureTask {
         case action(CompiledActionExpr)
         case text(String)
@@ -840,7 +840,9 @@ enum StraightLineRenderedActionCheck {
                 case .boundValue(let id):
                     guard let name = binders[id] else { throw mismatch() }
                     expected.append(name)
-                case .value(.integer(let value)): expected.append(String(value))
+                case .value(.integer(let value)):
+                    guard let literal = tokens(checkedIntegerLiteral(value)) else { throw mismatch() }
+                    expected.append(contentsOf: literal)
                 case .value(.boolean(let value)): expected.append(value ? "TRUE" : "FALSE")
                 case .value(let value):
                     guard let literal = tokens(try value.rendered(using: layout).description) else {
@@ -969,7 +971,8 @@ enum StraightLineRenderedActionCheck {
         let index = action.id.ordinal
         let parameterSuffix = parameters.isEmpty ? "" : "(\(parameters.joined(separator: ", ")))"
         let lines = module.components(separatedBy: "\n")
-        func verifyDeclaration(_ base: String, value: String) throws {
+        @discardableResult
+        func verifyDeclaration(_ base: String, value: String) throws -> String {
             // The emitter may append underscores when an authored symbol owns the base name.
             let candidates = failureDeclarations.filter { declaration in
                 guard let header = declaration.components(separatedBy: " == ").first,
@@ -986,6 +989,7 @@ enum StraightLineRenderedActionCheck {
                   lines.filter({ $0.hasPrefix("\(header) == ") }) == [expected] else {
                 throw mismatch(base)
             }
+            return header
         }
         let variables = Dictionary(uniqueKeysWithValues: layout.variables.map {
             ($0.id, $0.formalName)
@@ -1050,9 +1054,14 @@ enum StraightLineRenderedActionCheck {
                             }
                         }
                         let selected = selection.map { "((\($0)) = TRUE /\\ \(predicate))" } ?? predicate
-                        try verifyDeclaration("__SwiftTLAOverflowFailure\(suffix)", value: selected)
+                        let selectedFailure = try verifyDeclaration("__SwiftTLAOverflowFailure\(suffix)", value: selected)
                         try verifyDeclaration("__SwiftTLAOverflowOperands\(suffix)", value: operands)
                         try verifyDeclaration("__SwiftTLAOverflowOperation\(suffix)", value: "\"addition\"")
+                        if required {
+                            let prefix = definitions[..<position].map { (name: $0.name, value: $0.value) }
+                            try verifyDeclaration("__SwiftTLAOverflowBefore\(suffix)",
+                                value: "(IF \(selectedFailure) THEN \(renderRHSBindingPrefix(prefix)) ELSE <<>>)")
+                        }
                         preceding.append(site.guardText)
                         occurrence += 1
                     }
@@ -1600,7 +1609,7 @@ enum StraightLineRenderedActionCheck {
               lines[start..<end].joined(separator: "\n") == expected else { throw mismatch() }
     }
 
-    private static func tokens(_ source: String) -> [String]? {
+    package static func tokens(_ source: String) -> [String]? {
         guard let tokenPattern else { return nil }
         let text = source as NSString
         var offset = 0

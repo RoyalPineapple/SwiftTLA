@@ -72,6 +72,22 @@ struct RenderedEvaluationFailure {
     let predicate: String
     let operands: String?
     let kind: RenderedEvaluationFailureKind
+    let rhsBindingsBefore: [(name: String, value: String)]?
+
+    init(predicate: String, operands: String?, kind: RenderedEvaluationFailureKind,
+         rhsBindingsBefore: [(name: String, value: String)]? = nil) {
+        self.predicate = predicate
+        self.operands = operands
+        self.kind = kind
+        self.rhsBindingsBefore = rhsBindingsBefore
+    }
+}
+
+func renderRHSBindingPrefix(_ prefix: [(name: String, value: String)]) -> String {
+    let values = "<<\(prefix.map(\.name).joined(separator: ", "))>>"
+    return prefix.reversed().reduce(values) { body, binding in
+        "(LET \(binding.name) == \(binding.value) IN \(body))"
+    }
 }
 
 private enum FiniteCandidateMembers {
@@ -339,7 +355,8 @@ struct CompiledTLARenderer {
         return "~(\(defined))"
     }
 
-    func evaluationFailures(_ action: CompiledActionExpr) throws -> [RenderedEvaluationFailure] {
+    func evaluationFailures(_ action: CompiledActionExpr, retainingRHSBindings: Bool = false) throws
+        -> [RenderedEvaluationFailure] {
         switch action {
         case .assign(_, let value):
             return try expressionEvaluationFailures(value)
@@ -371,9 +388,14 @@ struct CompiledTLARenderer {
                     try expressionEvaluationFailures(nestedValue)))
                 remaining = nestedBody
             }
-            var failures = try evaluationFailures(remaining)
+            var failures = try evaluationFailures(remaining, retainingRHSBindings: retainingRHSBindings)
             for (binder, value, defined, originalFailures) in definitions.reversed() {
-                var valueFailures = originalFailures
+                var valueFailures = originalFailures.map { failure in
+                    guard retainingRHSBindings, case .overflow(.addition) = failure.kind else { return failure }
+                    // Failure in this RHS cannot observe its own capture, even at a later addition node.
+                    return .init(predicate: failure.predicate, operands: failure.operands, kind: failure.kind,
+                        rhsBindingsBefore: [])
+                }
                 // shortcut: values without a complete definedness rule still stop later-failure enumeration.
                 guard repeatable(value) || defined != nil else {
                     failures = valueFailures
@@ -385,7 +407,8 @@ struct CompiledTLARenderer {
                     let predicate = "(LET \(name) == \(renderedValue) IN \(failure.predicate))"
                     let operands = failure.operands.map { "(LET \(name) == \(renderedValue) IN \($0))" }
                     valueFailures.append(.init(predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
-                        operands: operands, kind: failure.kind))
+                        operands: operands, kind: failure.kind,
+                        rhsBindingsBefore: failure.rhsBindingsBefore.map { [(name, renderedValue)] + $0 }))
                 }
                 failures = valueFailures
             }
@@ -411,18 +434,19 @@ struct CompiledTLARenderer {
             guard let selection = try selectedCondition(condition) else {
                 return conditionFailures
             }
-            return try conditionFailures + evaluationFailures(body).map {
+            return try conditionFailures + evaluationFailures(body, retainingRHSBindings: retainingRHSBindings).map {
                 let predicate = "((\(selection.predicate)) = TRUE /\\ \($0.predicate))"
                 return .init(predicate: selection.defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
-                    operands: $0.operands, kind: $0.kind)
+                    operands: $0.operands, kind: $0.kind, rhsBindingsBefore: $0.rhsBindingsBefore)
             }
         case .and(let lhs, let rhs):
-            let leftFailures = try evaluationFailures(lhs)
-            let rightFailures = try evaluationFailures(rhs)
+            let leftFailures = try evaluationFailures(lhs, retainingRHSBindings: retainingRHSBindings)
+            let rightFailures = try evaluationFailures(rhs, retainingRHSBindings: retainingRHSBindings)
             guard !rightFailures.isEmpty else { return leftFailures }
             let reachedRight = "(ENABLED (\(try self.action(lhs))))"
             return leftFailures + rightFailures.map {
-                .init(predicate: "(\(reachedRight) /\\ \($0.predicate))", operands: $0.operands, kind: $0.kind)
+                .init(predicate: "(\(reachedRight) /\\ \($0.predicate))", operands: $0.operands, kind: $0.kind,
+                    rhsBindingsBefore: $0.rhsBindingsBefore)
             }
         case .or(let lhs, let rhs):
             let left = try evaluationFailures(lhs)

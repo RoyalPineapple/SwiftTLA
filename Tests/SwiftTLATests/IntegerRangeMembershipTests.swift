@@ -61,7 +61,7 @@ struct IntegerRangeMembershipTests {
         let visitor = try #require(members.first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates\(checkedAction.id.ordinal)"
         })
-        let writes = try emitter.actionFunctions(checkedAction.body).writes
+        let writes = try emitter.actionFunctions(checkedAction).writes
         try verifyGeneratedActionWriteOutput(visitor, action: checkedAction.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let output = try program.renderModule()
@@ -126,7 +126,7 @@ struct IntegerRangeMembershipTests {
         let largeVisitor = try #require(members.first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates\(large.id.ordinal)"
         })
-        let largeWrites = try emitter.actionFunctions(large.body).writes
+        let largeWrites = try emitter.actionFunctions(large).writes
         try verifyGeneratedActionWriteOutput(largeVisitor, action: large.body,
             program: program, stateFields: emitter.stateMemberNames, parts: largeWrites)
         let boundTuple = "let bounds = (0, 9223372036854775807)"
@@ -280,7 +280,7 @@ struct IntegerRangeMembershipTests {
             let visitor = try #require(emittedMembers.first {
                 $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates\(action.id.ordinal)"
             })
-            let writes = try emitter.actionFunctions(action.body).writes
+            let writes = try emitter.actionFunctions(action).writes
             try verifyGeneratedActionWriteOutput(visitor, action: action.body,
                 program: program, stateFields: emitter.stateMemberNames, parts: writes)
             let nativeDivision = "SwiftTLA._NativeMachineOperations.divide(_arithmetic1, _arithmetic0)"

@@ -118,7 +118,7 @@ import Testing
             typeName: "SignedDivisionOutputModel", program: program))
         let native = try emitter.updateFunction(formalAction, configurationParameters: "")
         try #require(!native.hasError)
-        let writes = try emitter.actionFunctions(formalAction.body).writes
+        let writes = try emitter.actionFunctions(formalAction).writes
         try verifyGeneratedActionWriteOutput(native, action: formalAction.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let call = "SwiftTLA._NativeMachineOperations.divide(5, -2)"

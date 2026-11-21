@@ -417,7 +417,7 @@ package enum InitialFailureEvidence {
                 "<<\(occurrenceSizes)>>")
     }
 
-    private static func sourceSyntaxView(_ certificate: StraightLineAssignmentCheck.OrderedIntCertificate) throws
+    static func sourceSyntaxView(_ certificate: StraightLineAssignmentCheck.OrderedIntCertificate) throws
         -> (view: String, rankView: String, origins: String, indices: String, nodes: [String]) {
         var kinds: [String] = [], literals: [String] = [], names: [String] = []
         var left: [Int] = [], right: [Int] = []

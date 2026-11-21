@@ -97,7 +97,7 @@ import SwiftSyntax
             dispatch.description, formalCall.description
         ]).joined(separator: "\n")) != tokens(expected))
         let secondAction = actions[1]
-        let emittedWrites = try emitter.actionFunctions(secondAction.body).writes
+        let emittedWrites = try emitter.actionFunctions(secondAction).writes
         try verifyGeneratedActionWriteOutput(visitors[1], action: secondAction.body,
             program: compiled.program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
         let wrongSecondVisitor = try #require(Parser.parse(source: wrongSecondRead)
@@ -306,9 +306,29 @@ import SwiftSyntax
     @Test("A later checked addition reports the failing operands")
     func laterAdditionFailure() throws {
         let machine = try OrderedOverflowModel.makeMachine()
-        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+        let reason = NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])
+        #expect(throws: reason) {
             try machine.successors(for: .advance)
         }
+
+        var context = CheckingContext(registers: try machine.initialCheckingRegisters())
+        context.startRecordingOrderedIntAssignmentFailures()
+        var failures: [NativeMachineEvaluationError] = []
+        let found = try machine.visitValidationOutcomes(checking: &context, { _, _ in true },
+            onEvaluationFailure: { action, reason in
+                #expect(action == .advance)
+                failures.append(reason)
+                return true
+            })
+        #expect(!found)
+        #expect(failures == [reason])
+        let observations = try #require(context.orderedIntAssignmentFailures)
+        #expect(observations.count == 1)
+        let observation = try #require(observations.first)
+        #expect(observation.actionOrdinal == 0)
+        #expect(observation.assignmentOrdinal == 2)
+        #expect(observation.preceding == [Int.max])
+        #expect(observation.reason == reason)
 
         let rendered = try OrderedOverflowModel.render()
         let lines = rendered.tlaBundle.root.tla.split(separator: "\n")

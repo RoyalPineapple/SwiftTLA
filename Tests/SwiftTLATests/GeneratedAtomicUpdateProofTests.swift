@@ -470,7 +470,7 @@ struct GeneratedAtomicUpdateProofTests {
             typeName: "GeneratedBooleanCaptureProofModel", program: program))
         let members = try emitter.machineMembers()
         let visitor = try #require(member(named: "_visitUpdates0", in: members))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: writes)
         var wrongSource = visitor.description
@@ -505,7 +505,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "GeneratedBooleanEqualityProofModel", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: writes)
         var changedSource = visitor.description
@@ -543,7 +543,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "GeneratedCheckedEqualityProofModel", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: writes)
         var changedSource = visitor.description
@@ -599,7 +599,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "GeneratedPredicateCaptureProofModel", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: writes)
 
@@ -642,7 +642,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "GeneratedScalarGuardProofModel", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: writes)
 
@@ -704,7 +704,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "GeneratedStringGuardProofModel", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: writes)
 
@@ -784,7 +784,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "SetStepMachine", program: program))
         let visitor = try #require(member(named: "_visitUpdates1", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let source = visitor.description
@@ -824,7 +824,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "ArrayStepMachine", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let omitted = visitor.description.replacingOccurrences(
@@ -928,7 +928,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "SequenceExpressionOutput", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let swapped = visitor.description.replacingOccurrences(
@@ -993,7 +993,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "FallibleSequenceConcatenationMachine", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let swapped = visitor.description.replacingOccurrences(
@@ -1032,7 +1032,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "FallibleSequenceAppendMachine", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let wrongLength = visitor.description.replacingOccurrences(
@@ -1058,7 +1058,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "FallibleSequenceLengthMachine", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let wrongLength = visitor.description.replacingOccurrences(
@@ -1084,7 +1084,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "FallibleSequenceHeadMachine", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let wrongLength = visitor.description.replacingOccurrences(
@@ -1111,7 +1111,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "EmptySequenceReadMachine", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let wrongSource = visitor.description.replacingOccurrences(
@@ -1137,7 +1137,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "EmptySequenceReadMachine", program: program))
         let visitor = try #require(member(named: "_visitUpdates1", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let wrongSource = visitor.description.replacingOccurrences(
@@ -1170,7 +1170,7 @@ struct GeneratedAtomicUpdateProofTests {
         ] {
             let action = program.behavior.actions[actionIndex]
             let visitor = try #require(member(named: "_visitUpdates\(actionIndex)", in: members))
-            let writes = try emitter.actionFunctions(action.body).writes
+            let writes = try emitter.actionFunctions(action).writes
             try verifyGeneratedActionWriteOutput(visitor, action: action.body,
                 program: program, stateFields: emitter.stateMemberNames, parts: writes)
             let wrongOperand = visitor.description.replacingOccurrences(
@@ -1196,7 +1196,7 @@ struct GeneratedAtomicUpdateProofTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "ArrayReadOutsideDomainMachine", program: program))
         let visitor = try #require(member(named: "_visitUpdates0", in: emitter.machineMembers()))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         for (original, replacement) in [
@@ -1226,7 +1226,7 @@ struct GeneratedAtomicUpdateProofTests {
             typeName: "GeneratedScalarConditionalProofModel", program: program))
         let members = try emitter.machineMembers()
         let visitor = try #require(member(named: "_visitUpdates0", in: members))
-        let parts = try emitter.actionFunctions(action.body)
+        let parts = try emitter.actionFunctions(action)
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
 

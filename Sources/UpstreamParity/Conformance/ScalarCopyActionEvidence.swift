@@ -17,8 +17,8 @@ package enum ScalarCopyActionEvidence {
     ) throws -> Proof? {
         let layout = compilation.layout
         let output = rendered.tlaBundle
-        guard let components = source.orderedIntSourceComponents,
-              source.sourceAlgorithms.count == 1, let algorithm = source.sourceAlgorithms.first?.model.name,
+        guard source.sourceAlgorithms.count == 1, let model = source.sourceAlgorithms.first?.model,
+              let frontend = model.directScalarCopyInput,
               layout.parameters.isEmpty, layout.checkingRegisters.isEmpty,
               output.imports.isEmpty, case .compiled(let id, _, _) = output.provenance,
               id == compilation.identity else { return nil }
@@ -35,11 +35,11 @@ package enum ScalarCopyActionEvidence {
         guard counters.count == 1, let counter = counters.first?.formalName,
               layout.variables.count == variables.count + 1, !variables.isEmpty,
               fields.count == variables.count, Set(variables.map(\.formalName)).count == variables.count else { return nil }
-        guard let authored = copyRows(components) else { return nil }
-        let labels = authored.rows.map(\.label)
+        let actualRows = frontend.rows.map { copyRow(label: $0.label, copies: $0.copies, fields: frontend.fields) }
+        let labels = actualRows.map(\.label)
         let actions = layout.actions.filter { !$0.isTermination }
         let terminalActions = layout.actions.filter(\.isTermination)
-        guard fields == authored.fields, !labels.isEmpty, Set(labels).count == labels.count,
+        guard fields == frontend.fields, !labels.isEmpty, Set(labels).count == labels.count,
               actions.map({ $0.declaration.name }) == labels, terminalActions.count == 1,
               let terminating = terminalActions.first,
               terminating.declaration.name == CompilerControlSymbol.terminatingAction.rawValue,
@@ -53,9 +53,9 @@ package enum ScalarCopyActionEvidence {
             return try CompiledValue.controlLocation(location.id).rendered(using: layout).description
         }
         let done = CompilerControlSymbol.done.rawValue
-        let entryControls = try labels.compactMap { try control(.sequential(algorithm: algorithm), $0) }
+        let entryControls = try labels.compactMap { try control(.sequential(algorithm: model.name), $0) }
         guard labels.count == entryControls.count,
-              let terminal = try control(.generated(algorithm: algorithm, purpose: done), done),
+              let terminal = try control(.generated(algorithm: model.name, purpose: done), done),
               Set(entryControls + [terminal]).count == labels.count + 1 else { return nil }
 
         // Use a fresh prefix for generated operators and their temporary binders in the imported module's namespace.
@@ -78,12 +78,12 @@ package enum ScalarCopyActionEvidence {
         EXTENDS Sequences, TLAPS
 
         WitnessCopyFields == \(TLAValue.set(Set(fields.map(TLAValue.string))))
-        WitnessCopyActionRows == \(TLAValue.tuple(authored.rows.map(\.value)))
+        WitnessCopyActionRows == \(TLAValue.tuple(actualRows.map(\.value)))
         \(independentProof)
         ====
 
         """
-        let rows = try authored.rows.enumerated().map { offset, row in
+        let rows = try actualRows.enumerated().map { offset, row in
             let number = offset + 1
             guard let receipt = compilation.scalarCopyRoutes[row.label],
                   receipt.reads.count == row.copyCount,
@@ -237,6 +237,8 @@ package enum ScalarCopyActionEvidence {
         PROOF
         <1>. DEFINE fields == \#(source)WitnessCopyFields
                     copies == \#(source)WitnessCopyActionRows[\#(number)].copies
+                    raw == \#(source)AuthoredCopySteps[\#(number)].copies
+                    origins == \#(source)AuthoredCopyOrigins
                     routes == \#(rules)DirectCopyRoutes(fields, copies)
                     result(\#(choice)) == \#(rules)CopyMaterializedState(fields, \#(before), \#(choice), \#(writes))
         <1>shape. /\ Len(copies) \in Nat
@@ -251,8 +253,16 @@ package enum ScalarCopyActionEvidence {
         <1>receipt. /\ \#(reads) = \#(rules)DirectCopyScheduledReceipt(fields, copies).reads
                      /\ \#(writes) = \#(rules)DirectCopyScheduledReceipt(fields, copies).writes
             BY <1>shape, <1>checked, \#(rules)CheckedReceiptIsTheScheduledReceipt, SMT
+        <1>frontend.
+            /\ \#(rules)DirectCopyTypedSyntax(fields, origins, raw)
+            /\ copies = \#(rules)DirectCopyResolvedSyntax(origins, raw)
+            BY ONLY \#(source)AuthoredCopySyntaxSuppliesTypedSchedulerInput,
+                \#(source)AuthoredCopySyntaxBindsWitnessRows, SMT
+                DEF fields, copies, raw, origins, \#(source)AuthoredCopySteps,
+                    \#(rules)DirectCopyTypedSyntax, \#(rules)DirectCopyResolvedSyntax
         <1>plan. \#(rules)CopyPlan(fields, copies, \#(reads), \#(writes), routes)
-            BY <1>shape, <1>receipt, \#(rules)DirectCopySchedulerConstructsTheCompleteCapturePlan, SMT DEF routes
+            BY ONLY <1>frontend, <1>receipt, \#(rules)DirectCopyTypedFrontendConstructsTheCompleteCapturePlan, SMT
+                DEF routes
         <1>earlier.
             /\ Len(\#(reads)) \in Nat
             /\ DOMAIN \#(reads) = 1..Len(\#(reads))
@@ -328,15 +338,19 @@ package enum ScalarCopyActionEvidence {
                       fields.contains(read), fields.contains(assignment.root) else { return nil }
                 copies.append((assignment.root, read))
             }
-            let values = copies.map { copy in
-                TLAValue.record(["target": .string(copy.target), "read": .string(copy.read)])
-            }
-            let frame = fields.subtracting(copies.map(\.target))
-            rows.append(.init(label: label, copyCount: copies.count, value: .record([
-                "label": .string(label), "copies": .tuple(values), "frame": .set(Set(frame.map(TLAValue.string)))
-            ])))
+            rows.append(copyRow(label: label, copies: copies, fields: fields))
         }
         return (fields, rows)
+    }
+
+    private static func copyRow(label: String, copies: [(target: String, read: String)], fields: Set<String>) -> CopyRow {
+        let values = copies.map { copy in
+            TLAValue.record(["target": .string(copy.target), "read": .string(copy.read)])
+        }
+        let frame = fields.subtracting(copies.map(\.target))
+        return .init(label: label, copyCount: copies.count, value: .record([
+            "label": .string(label), "copies": .tuple(values), "frame": .set(Set(frame.map(TLAValue.string)))
+        ]))
     }
 
     private static func cases(_ values: [(String, String)], key: String) -> String {

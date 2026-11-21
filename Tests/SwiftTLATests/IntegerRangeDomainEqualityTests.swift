@@ -112,7 +112,7 @@ struct IntegerRangeDomainEqualityTests {
         let visitor = try #require(try emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates\(checkedAction.id.ordinal)"
         })
-        let writes = try emitter.actionFunctions(checkedAction.body).writes
+        let writes = try emitter.actionFunctions(checkedAction).writes
         try verifyGeneratedActionWriteOutput(visitor, action: checkedAction.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let output = try program.renderModule()

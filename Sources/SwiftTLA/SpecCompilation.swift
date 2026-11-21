@@ -2849,7 +2849,9 @@ private extension CompiledModuleMetadata {
             var sequenceIndexOccurrence = 0
             var emptySequenceOccurrence = 0
             var noMatchingCaseOccurrence = 0
-            for failure in try renderer.evaluationFailures(behavior.actions[index].body) {
+            let failures = try renderer.evaluationFailures(behavior.actions[index].body,
+                retainingRHSBindings: orderedIntProofActionNames.contains(renderedAction.sourceName))
+            for failure in failures {
                 let occurrence: Int
                 let failurePrefix: String
                 let operandsPrefix: String?
@@ -2926,6 +2928,16 @@ private extension CompiledModuleMetadata {
                     lines.append(declaration)
                     evaluationFailureDeclarations.append(declaration)
                     occupied.insert(operationName)
+                }
+                if let prefix = failure.rhsBindingsBefore {
+                    var beforeName = "__SwiftTLAOverflowBefore\(suffix)"
+                    while occupied.contains(beforeName) { beforeName += "_" }
+                    let beforeHeader = parameters.isEmpty ? beforeName : "\(beforeName)(\(parameters))"
+                    let before = renderRHSBindingPrefix(prefix)
+                    let declaration = "\(beforeHeader) == (IF \(failureHeader) THEN \(before) ELSE <<>>)"
+                    lines.append(declaration)
+                    evaluationFailureDeclarations.append(declaration)
+                    occupied.insert(beforeName)
                 }
             }
             for call in renderedAction.calls where call.arguments.isEmpty == false {

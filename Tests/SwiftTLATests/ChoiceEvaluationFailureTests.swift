@@ -291,7 +291,7 @@ struct ChoiceEvaluationFailureTests {
         let expectedTokens = expected.tokens(viewMode: .sourceAccurate).map(\.text)
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expectedTokens)
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(update, action: action.body,
             program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
 
@@ -463,7 +463,7 @@ struct ChoiceEvaluationFailureTests {
                 == expected.tokens(viewMode: .sourceAccurate).map(\.text))
             if name == "BranchwiseConjunctionFailureOrderModel" {
                 let action = try #require(compiled.program.behavior.actions.first)
-                let writes = try emitter.actionFunctions(action.body).writes
+                let writes = try emitter.actionFunctions(action).writes
                 try verifyGeneratedActionWriteOutput(update, action: action.body,
                     program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
                 let wrongSource = update.description.replacingOccurrences(
@@ -642,7 +642,7 @@ struct ChoiceEvaluationFailureTests {
             .tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expectedTokens)
 
-        let parts = try emitter.actionFunctions(action.body)
+        let parts = try emitter.actionFunctions(action)
         try verifyGeneratedActionWriteOutput(update, action: action.body,
             program: compiled.program, stateFields: emitter.stateMemberNames, parts: parts.writes,
             conditions: parts.conditions)
@@ -942,7 +942,7 @@ struct ChoiceEvaluationFailureTests {
             .statements.first?.item.as(FunctionDeclSyntax.self))
         let actualTokens = update.tokens(viewMode: .sourceAccurate).map(\.text)
         #expect(actualTokens == expected.tokens(viewMode: .sourceAccurate).map(\.text))
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(update, action: action.body,
             program: compiled.program, stateFields: emitter.stateMemberNames, parts: writes)
         let rootPart = try #require(update.as(FunctionDeclSyntax.self)?.body?.statements.compactMap {

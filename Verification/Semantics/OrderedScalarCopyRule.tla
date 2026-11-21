@@ -1,5 +1,6 @@
 ---- MODULE OrderedScalarCopyRule ----
 EXTENDS IndexedHistoryRules, Sequences
+LOCAL INSTANCE SequenceTheorems_proofs
 
 CopyReferenceValue(before, captures, reference) ==
     IF reference[1] = "capture" THEN captures[reference[2]]
@@ -361,6 +362,62 @@ THEOREM DirectCopySchedulerConstructsTheCompleteCapturePlan ==
     <1>returned. DirectCopyScheduledReceipt(keys, copies) = receipt(count)
         BY ONLY (Len(copies) \in Nat), SMT DEF DirectCopyScheduledReceipt, DirectCopySchedulerFold, receipt, count
     <1>. QED BY ONLY <1>fold, <1>plan, <1>actual, <1>returned DEF routes, count
+
+\* Input has already been typed at the SwiftSyntax boundary. A binding is its
+\* byte-identified local declaration. Its value is the associated formal state root.
+DirectCopyTypedSyntax(keys, origins, raw) ==
+    /\ origins \in [DOMAIN origins -> keys]
+    /\ Len(raw) \in Nat \ {0}
+    /\ DOMAIN raw = 1..Len(raw)
+    /\ \A position \in DOMAIN raw :
+           /\ raw[position].targetBinding \in DOMAIN origins
+           /\ raw[position].readBinding \in DOMAIN origins
+
+\* The parser resolves both references through its lexical scope. The builder
+\* passes the corresponding SharedVariable values to Assign and flattens Do in order.
+DirectCopyResolvedSyntax(origins, raw) ==
+    [position \in DOMAIN raw |->
+        [target |-> origins[raw[position].targetBinding], read |-> origins[raw[position].readBinding]]]
+
+THEOREM DirectCopyTypedFrontendConstructsTheCompleteCapturePlan ==
+    ASSUME NEW keys, NEW origins, NEW raw, DirectCopyTypedSyntax(keys, origins, raw)
+    PROVE LET copies == DirectCopyResolvedSyntax(origins, raw)
+              receipt == DirectCopyScheduledReceipt(keys, copies)
+          IN /\ Len(copies) = Len(raw)
+             /\ DOMAIN copies = DOMAIN raw
+             /\ \A position \in DOMAIN raw :
+                    /\ copies[position].target = origins[raw[position].targetBinding]
+                    /\ copies[position].read = origins[raw[position].readBinding]
+                    /\ copies[position].target \in keys
+                    /\ copies[position].read \in keys
+             /\ CopyPlan(keys, copies, receipt.reads, receipt.writes, DirectCopyRoutes(keys, copies))
+    PROOF
+    <1>. DEFINE copies == DirectCopyResolvedSyntax(origins, raw)
+                shape == [target: keys, read: keys]
+                receipt == DirectCopyScheduledReceipt(keys, copies)
+    <1>domain. DOMAIN copies = DOMAIN raw
+        BY ONLY SMT DEF copies, DirectCopyResolvedSyntax
+    <1>points. \A position \in DOMAIN raw :
+            /\ copies[position].target = origins[raw[position].targetBinding]
+            /\ copies[position].read = origins[raw[position].readBinding]
+            /\ copies[position].target \in keys
+            /\ copies[position].read \in keys
+        BY ONLY DirectCopyTypedSyntax(keys, origins, raw), SMT
+            DEF copies, DirectCopyResolvedSyntax, DirectCopyTypedSyntax
+    <1>typed. copies \in [1..Len(raw) -> shape]
+        BY ONLY DirectCopyTypedSyntax(keys, origins, raw), <1>domain, <1>points, SMT
+            DEF DirectCopyTypedSyntax, copies, shape, DirectCopyResolvedSyntax
+    <1>sequence. copies \in Seq(shape)
+        BY ONLY DirectCopyTypedSyntax(keys, origins, raw), <1>typed, SeqDef, SMT
+            DEF DirectCopyTypedSyntax
+    <1>length. /\ Len(copies) \in Nat /\ DOMAIN copies = 1..Len(copies)
+        BY ONLY <1>sequence, LenProperties, SMT
+    <1>count. Len(copies) = Len(raw)
+        BY ONLY DirectCopyTypedSyntax(keys, origins, raw), <1>domain, <1>length, SMT
+            DEF DirectCopyTypedSyntax
+    <1>schedule. CopyPlan(keys, copies, receipt.reads, receipt.writes, DirectCopyRoutes(keys, copies))
+        BY ONLY <1>length, <1>domain, <1>points, DirectCopySchedulerConstructsTheCompleteCapturePlan, SMT DEF receipt
+    <1>. QED BY ONLY <1>count, <1>domain, <1>points, <1>schedule
 
 THEOREM CopyCaptureHistoryIsUnique ==
     ASSUME NEW before, NEW reads, NEW left, NEW right,

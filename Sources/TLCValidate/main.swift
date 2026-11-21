@@ -22,6 +22,7 @@ default:
       upstream shiviz-reference --output <directory>
       temporal-symmetry run --output <directory>
       initial-failure prepare --authored-source <swift-file> --native-source <swift-file> --output <directory>
+      initial-failure prepare-arithmetic --authored-source <swift-file> --native-source <swift-file> --output <directory>
       initial-failure prepare-conditional --authored-source <swift-file> --native-source <swift-file> --proof <tla-file> --output <directory>
     """, stderr)
     exit(1)
@@ -145,7 +146,7 @@ private func failTemporalSymmetry(_ error: Error) -> Never {
 
 private func runInitialFailure(arguments: [String]) -> Never {
     if arguments.first == "prepare-conditional" { runConditionalPreparation(arguments: arguments) }
-    guard arguments.count == 7, arguments[0] == "prepare",
+    guard arguments.count == 7, ["prepare", "prepare-arithmetic"].contains(arguments[0]),
           arguments[1] == "--authored-source", !arguments[2].isEmpty,
           arguments[3] == "--native-source", !arguments[4].isEmpty,
           arguments[5] == "--output", !arguments[6].isEmpty else {
@@ -158,7 +159,17 @@ private func runInitialFailure(arguments: [String]) -> Never {
             throw ValidationCLIError.invalidManifest("missing source SHA")
         }
         let authoredSource = try Data(contentsOf: URL(fileURLWithPath: arguments[2]))
-        let nativeSource = try String(contentsOf: URL(fileURLWithPath: arguments[4]), encoding: .utf8)
+        let nativeFile = URL(fileURLWithPath: arguments[4])
+        if arguments[0] == "prepare-arithmetic" {
+            let authoredURL = URL(fileURLWithPath: arguments[2]).standardizedFileURL
+            let bytes = try Data(contentsOf: nativeFile)
+            try checkNativeOrigin(bytes, authored: authoredURL)
+            try ArithmeticAssignmentEvidence.prepare(sourceSHA: sourceSHA, authoredSource: authoredSource,
+                nativeSource: bytes, to: URL(fileURLWithPath: arguments[6]).standardizedFileURL)
+            print("arithmetic: prepared compiler outputs and reached native observations")
+            exit(0)
+        }
+        let nativeSource = try String(contentsOf: nativeFile, encoding: .utf8)
         let report = try InitialFailureEvidence.prepare(sourceSHA: sourceSHA, authoredSource: authoredSource,
             nativeSource: nativeSource, to: URL(fileURLWithPath: arguments[6]).standardizedFileURL)
         print("initial-failure: \(report.result), site \(report.site), no graph")
@@ -182,12 +193,7 @@ private func runConditionalPreparation(arguments: [String]) -> Never {
         }
         let authored = URL(fileURLWithPath: arguments[2]).standardizedFileURL
         let native = try Data(contentsOf: URL(fileURLWithPath: arguments[4]))
-        let origin = "// original-source-range: \(authored.path):"
-        guard let source = String(data: native, encoding: .utf8),
-              source.split(separator: "\n").filter({ $0.hasPrefix("// original-source-range: ") }).count == 1,
-              source.split(separator: "\n").contains(where: { $0.hasPrefix(origin) }) else {
-            throw ValidationCLIError.invalidManifest("conditional expansion has another source origin")
-        }
+        try checkNativeOrigin(native, authored: authored)
         try ConditionalActionEvidence.prepare(sourceSHA: sourceSHA, authoredSource: Data(contentsOf: authored),
             nativeSource: native, proofSource: Data(contentsOf: URL(fileURLWithPath: arguments[6])),
             to: URL(fileURLWithPath: arguments[8]).standardizedFileURL)
@@ -196,5 +202,14 @@ private func runConditionalPreparation(arguments: [String]) -> Never {
     } catch {
         fputs("conditional: \(error)\n", stderr)
         exit(2)
+    }
+}
+
+private func checkNativeOrigin(_ native: Data, authored: URL) throws {
+    let origin = "// original-source-range: \(authored.path):"
+    guard let source = String(data: native, encoding: .utf8),
+          source.split(separator: "\n").filter({ $0.hasPrefix("// original-source-range: ") }).count == 1,
+          source.split(separator: "\n").contains(where: { $0.hasPrefix(origin) }) else {
+        throw ValidationCLIError.invalidManifest("expansion has another source origin")
     }
 }

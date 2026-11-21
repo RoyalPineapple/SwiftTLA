@@ -101,6 +101,8 @@ enum AuthoredCopySyntax {
         LOCAL Single(values) == CHOOSE value \in values : TRUE
 
         AuthoredCopyFields == VariableNames(AuthoredCopyDeclarations)
+        AuthoredCopyOrigins ==
+            [binding \in {row.binding : row \in AuthoredCopyDeclarations} |-> Single(BindingNames(binding))]
         LOCAL CopyTargets(copies) == {copies[index].target : index \in DOMAIN copies}
         LOCAL ResolveCopy(copy) ==
             [target |-> Single(BindingNames(copy.targetBinding)), read |-> Single(BindingNames(copy.readBinding))]
@@ -109,6 +111,54 @@ enum AuthoredCopySyntax {
             [label |-> Single(LabelNames(step)), copies |-> ResolveCopies(step),
              frame |-> AuthoredCopyFields \ CopyTargets(ResolveCopies(step))]
         AuthoredCopyActionRows == [index \in DOMAIN AuthoredCopySteps |-> ResolveStep(AuthoredCopySteps[index])]
+
+        THEOREM AuthoredCopySyntaxSuppliesTypedSchedulerInput ==
+            /\ AuthoredCopyOrigins \in [DOMAIN AuthoredCopyOrigins -> AuthoredCopyFields]
+            /\ \A row \in DOMAIN AuthoredCopySteps :
+                LET raw == AuthoredCopySteps[row].copies
+                    copies == AuthoredCopyActionRows[row].copies
+                IN /\ Len(raw) \in Nat \ {0}
+                   /\ DOMAIN raw = 1..Len(raw)
+                   /\ copies = [position \in DOMAIN raw |-> copies[position]]
+                   /\ \A position \in DOMAIN raw :
+                          /\ raw[position].targetBinding \in DOMAIN AuthoredCopyOrigins
+                          /\ raw[position].readBinding \in DOMAIN AuthoredCopyOrigins
+                          /\ copies[position] =
+                              [target |-> AuthoredCopyOrigins[raw[position].targetBinding],
+                               read |-> AuthoredCopyOrigins[raw[position].readBinding]]
+        PROOF
+        <1>declarations. \A left, right \in AuthoredCopyDeclarations :
+            left.binding = right.binding => left = right
+            BY ONLY SMT DEF AuthoredCopyDeclarations
+        <1>roots. \A binding \in DOMAIN AuthoredCopyOrigins :
+            \E root \in AuthoredCopyFields : BindingNames(binding) = {root}
+            BY ONLY <1>declarations, SetExtensionality, SMT
+                DEF AuthoredCopyOrigins, BindingNames, AuthoredCopyFields, VariableNames
+        <1>bindings. \A binding \in DOMAIN AuthoredCopyOrigins :
+            AuthoredCopyOrigins[binding] \in AuthoredCopyFields
+            BY ONLY <1>roots, SMT DEF AuthoredCopyOrigins, Single
+        <1>typed. AuthoredCopyOrigins \in [DOMAIN AuthoredCopyOrigins -> AuthoredCopyFields]
+            BY ONLY <1>bindings, SMT DEF AuthoredCopyOrigins
+        <1>raw. \A row \in DOMAIN AuthoredCopySteps :
+            LET raw == AuthoredCopySteps[row].copies
+            IN /\ Len(raw) \in Nat \ {0}
+               /\ DOMAIN raw = 1..Len(raw)
+               /\ \A position \in DOMAIN raw :
+                      /\ raw[position].targetBinding \in DOMAIN AuthoredCopyOrigins
+                      /\ raw[position].readBinding \in DOMAIN AuthoredCopyOrigins
+            BY ONLY SMT DEF AuthoredCopySteps, AuthoredCopyOrigins, AuthoredCopyDeclarations
+        <1>rows. \A row \in DOMAIN AuthoredCopySteps :
+            LET raw == AuthoredCopySteps[row].copies
+                copies == AuthoredCopyActionRows[row].copies
+            IN /\ copies = [position \in DOMAIN raw |-> copies[position]]
+               /\ \A position \in DOMAIN raw :
+                    (/\ raw[position].targetBinding \in DOMAIN AuthoredCopyOrigins
+                     /\ raw[position].readBinding \in DOMAIN AuthoredCopyOrigins)
+                    => copies[position] =
+                          [target |-> AuthoredCopyOrigins[raw[position].targetBinding],
+                           read |-> AuthoredCopyOrigins[raw[position].readBinding]]
+            BY ONLY SMT DEF AuthoredCopyActionRows, ResolveStep, ResolveCopies, ResolveCopy, AuthoredCopyOrigins
+        <1>. QED BY ONLY <1>typed, <1>raw, <1>rows, SMT
 
         LOCAL CopyNamesBind(raw, copy) ==
             /\ BindingNames(raw.targetBinding) = {copy.target}
@@ -218,6 +268,13 @@ enum AuthoredCopySyntax {
     }
 
     static func controlMachine(_ selection: Selection) throws -> SequentialControlEvidence.Machine {
+        let body = try authoredSteps(selection)
+        guard let machine = SequentialControlEvidence.authoredMachine(steps: body.steps, algorithmName: selection.algorithm)
+        else { throw unsupported }
+        return machine
+    }
+
+    private static func authoredSteps(_ selection: Selection) throws -> (fields: Set<String>, steps: [AlgorithmStepModel]) {
         var roots: [String: String] = [:]
         var steps: [AlgorithmStepModel] = []
         var labels: [Label: String] = [:]
@@ -264,11 +321,59 @@ enum AuthoredCopySyntax {
             }
             steps.append(.init(label: .init(name: try resolve(label.expression)), statements: statements, loopCondition: loop))
         }
-        guard Set(roots.values).count == roots.count, Set(steps.map(\.label)).count == steps.count,
-              let machine = SequentialControlEvidence.authoredMachine(steps: steps, algorithmName: selection.algorithm) else {
-            throw UnsupportedControlSyntax(reason: "The proof requires distinct roots and a nonempty sequence of distinct control labels.")
+        let fields = Set(roots.values)
+        guard fields.count == roots.count, !steps.isEmpty, Set(steps.map(\.label)).count == steps.count else {
+            throw UnsupportedControlSyntax(reason: "Expected distinct roots and a nonempty sequence of distinct control labels.")
         }
-        return machine
+        return (fields, steps)
+    }
+
+    static func arithmeticProofInput(_ selection: Selection, spec: TLASpec) throws -> (label: String, module: String) {
+        let authored = try authoredSteps(selection)
+        guard authored.steps.count == 1, let step = authored.steps.first, step.loopCondition == nil,
+              let fallback = authored.fields.sorted().first,
+              spec.sourceAlgorithms.count == 1, let built = spec.sourceAlgorithms.first?.model,
+              built.name == selection.algorithm else { throw unsupported }
+        let actual = built.components.compactMap { component -> AlgorithmStepModel? in
+            guard case .step(let result) = component else { return nil }
+            return result
+        }
+        let fields = built.components.compactMap { component -> String? in
+            guard case .shared(let declaration) = component else { return nil }
+            return declaration.root
+        }
+        guard fields.count == authored.fields.count, Set(fields) == authored.fields,
+              actual.count == 1, let action = actual.first, action.label == step.label, action.loopCondition == nil,
+              action.statements.count == step.statements.count else { throw unsupported }
+        let rows = try zip(step.statements, action.statements).map { source, returned -> String in
+            guard case .set(.root(let target), let sourceValue) = source, authored.fields.contains(target),
+                  case .set(.root(let actualTarget), let expression) = returned,
+                  actualTarget == target, expression == sourceValue,
+                  let certificate = StraightLineAssignmentCheck.orderedIntCertificate(expression, reads: authored.fields)
+            else { throw unsupported }
+            let syntax = try InitialFailureEvidence.sourceSyntaxView(certificate)
+            let count = certificate.nodes.count
+            let emitted = "[count |-> \(count), height |-> 1, indices |-> <<\(count)>>, origins |-> \(syntax.origins), nodes |-> \(tuple(syntax.nodes))]"
+            return "[target |-> \(TLAValue.string(target)), view |-> \(syntax.view), emitted |-> \(emitted), inverse |-> \(syntax.indices), fallback |-> \(TLAValue.string(fallback))]"
+        }
+        guard case .set(.root(let firstTarget), _)? = step.statements.first else { throw unsupported }
+        return (step.label.name, #"""
+        ---- MODULE SwiftTLAArithmeticAssignmentSource ----
+        EXTENDS TLAPS, Integers, Sequences
+        MasterFields == \#(TLAValue.set(Set(authored.fields.map(TLAValue.string))))
+        MasterTarget == \#(TLAValue.string(firstTarget))
+        MasterRows == \#(tuple(rows))
+        LOCAL Rule == INSTANCE OrderedIntAssignmentListRule WITH Keys <- MasterFields,
+            SwiftIntMin <- \#(TLAValue.int(Int.min)), SwiftIntMax <- \#(TLAValue.int(Int.max))
+        THEOREM MasterAssignmentsAreSupported ==
+            /\ Rule!SupportedAssignmentList(MasterRows)
+            /\ Len(MasterRows) = \#(rows.count)
+            BY SMT DEF MasterRows, MasterFields, MasterTarget,
+                Rule!SupportedAssignmentList, Rule!AssignmentRhsCertificate,
+                Rule!LiteralReadAddCertificate, Rule!NodeEmissionArrays, Rule!AllNodePayloadsMatchSource,
+                Rule!NodePayloadMatchesSource, Rule!TypedVisitedSourceInputs, Rule!InRange
+        ====
+        """# + "\n")
     }
 
     static func conditionalProofInput(source: String, modelName: String) throws -> TLAValue? {
@@ -366,7 +471,19 @@ enum AuthoredCopySyntax {
         if let member = expression.as(MemberAccessExprSyntax.self), name(member.declName.baseName) == "expr",
            let binding = reference(member.base), let root = roots[binding] { return .variable(root) }
         if let literal = expression.as(BooleanLiteralExprSyntax.self) { return .value(.bool(literal.literal.text == "true")) }
-        if let literal = expression.as(IntegerLiteralExprSyntax.self), let value = Int(literal.literal.text.filter({ $0 != "_" })) {
+        let sign = expression.as(PrefixOperatorExprSyntax.self)
+        if sign == nil || sign?.operator.text == "-" || sign?.operator.text == "+",
+           let literal = (sign?.expression ?? expression).as(IntegerLiteralExprSyntax.self) {
+            let spelling = literal.literal.text.filter { $0 != "_" }
+            let radix: Int
+            switch spelling.prefix(2) {
+            case "0b": radix = 2
+            case "0o": radix = 8
+            case "0x": radix = 16
+            default: radix = 10
+            }
+            let digits = radix == 10 ? spelling[...] : spelling.dropFirst(2)
+            guard let value = Int((sign?.operator.text ?? "") + digits, radix: radix) else { throw error }
             return .value(.int(value))
         }
         if let group = expression.as(TupleExprSyntax.self), group.elements.count == 1,
@@ -381,6 +498,16 @@ enum AuthoredCopySyntax {
         else if let infix = expression.as(InfixOperatorExprSyntax.self) {
             elements = [infix.leftOperand, infix.operator, infix.rightOperand]
         } else { throw error }
+        if elements.count > 3, !elements.count.isMultiple(of: 2),
+           stride(from: 1, to: elements.count, by: 2).allSatisfy({
+               elements[$0].as(BinaryOperatorExprSyntax.self)?.operator.text == "+"
+           }) {
+            var value = try controlExpression(elements[0], roots: roots)
+            for index in stride(from: 2, to: elements.count, by: 2) {
+                value = .add(value, try controlExpression(elements[index], roots: roots))
+            }
+            return value
+        }
         guard elements.count == 3, let operation = elements[1].as(BinaryOperatorExprSyntax.self)?.operator.text else {
             throw error
         }

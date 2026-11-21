@@ -31,6 +31,7 @@ do {
         }())
         try _actionPart3(___atomic_0_0, updates, emit)
     } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
+    SwiftTLA._recordNativeOrderedIntAssignmentFailure(&context, actionOrdinal: 0, assignmentOrdinal: 1, preceding: [], reason: failure)
     failures.append(failure)
 }
 }
@@ -145,6 +146,7 @@ do {
         }())
         try _actionPart3(___atomic_2_2, updates, emit)
     } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
+    SwiftTLA._recordNativeOrderedIntAssignmentFailure(&context, actionOrdinal: 1, assignmentOrdinal: 1, preceding: [], reason: failure)
     failures.append(failure)
 }
 }
@@ -158,6 +160,7 @@ do {
         }())
         try _actionPart4(___atomic_2_2, ___atomic_3_3, updates, emit)
     } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
+    SwiftTLA._recordNativeOrderedIntAssignmentFailure(&context, actionOrdinal: 1, assignmentOrdinal: 2, preceding: [___atomic_2_2], reason: failure)
     failures.append(failure)
 }
 }

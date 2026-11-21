@@ -36,6 +36,37 @@ private struct ActionInstructions {
     }
 }
 
+private func nativeArithmeticCapture(_ steps: [NativeIntInitialStep]) -> String {
+    var kinds: [String] = [], literals: [String] = [], reads: [String] = []
+    var left: [String] = [], right: [String] = []
+    for step in steps {
+        switch step {
+        case .integer(let value):
+            kinds.append("\"literal\"")
+            literals.append(InitialFailureEvidence.binaryLiteral(value))
+            reads.append("<<>>")
+            left.append("0")
+            right.append("0")
+        case .slot(let reference):
+            kinds.append("\"read\"")
+            literals.append("0")
+            reads.append(reference)
+            left.append("0")
+            right.append("0")
+        case .add(let first, let second):
+            kinds.append("\"add\"")
+            literals.append("0")
+            reads.append("<<>>")
+            left.append(String(first + 1))
+            right.append(String(second + 1))
+        }
+    }
+    func tuple(_ values: [String]) -> String { "<<\(values.joined(separator: ", "))>>" }
+    return "<<\"expression\", [count |-> \(steps.count), kinds |-> \(tuple(kinds)), "
+        + "literals |-> \(tuple(literals)), reads |-> \(tuple(reads)), "
+        + "left |-> \(tuple(left)), right |-> \(tuple(right))]>>"
+}
+
 private func syntaxWords(_ syntax: some SyntaxProtocol) -> [String] {
     syntax.tokens(viewMode: .sourceAccurate).filter { $0.tokenKind != .endOfFile }.map(\.text)
 }
@@ -55,18 +86,25 @@ private func checked<T>(_ matches: [T]) throws -> T {
     return match
 }
 
-// Interpret only the total scalar continuation grammar. Its reads come from the retained Swift.
+// Interpret the scalar continuation grammar. Its reads come from the retained Swift.
 package func nativeScalarActionEvidence(_ source: String, program: CompiledProgram) throws -> Data {
-    let actions = try decodeScalarActions(source, program: program, predicate: nil)
-    let rows = actions.map { "<<\(TLAValue.string($0.label)), \($0.plans[0].tla)>>" }
-    let dispatch = TLAValue.tuple(actions.map { .string($0.formalLabel) })
+    let definitions = try nativeScalarActionDefinitions(source, program: program)
     return Data("""
     ---- MODULE SwiftTLANativeActions ----
-    NativeActionRows == <<\(rows.joined(separator: ", "))>>
-    NativeActionDispatchLabels == \(dispatch)
+    \(definitions)
     ====
 
     """.utf8)
+}
+
+func nativeScalarActionDefinitions(_ source: String, program: CompiledProgram) throws -> String {
+    let actions = try decodeScalarActions(source, program: program, predicate: nil)
+    let rows = actions.map { "<<\(TLAValue.string($0.label)), \($0.plans[0].tla)>>" }
+    let dispatch = TLAValue.tuple(actions.map { .string($0.formalLabel) })
+    return """
+    NativeActionRows == <<\(rows.joined(separator: ", "))>>
+    NativeActionDispatchLabels == \(dispatch)
+    """
 }
 
 func nativeConditionalActionPlans(_ source: String, program: CompiledProgram, predicate: [String]) throws
@@ -328,38 +366,50 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
     }
 
     typealias Binding = (local: String, value: ActionReference)
-    func partCore(_ name: String, scope: [Binding]) throws -> [String] {
+    func partCore(_ name: String, scope: [Binding]) throws -> (tokens: [String], recordsFailure: Bool) {
         guard let part = byName[name], let body = part.body, visited.insert(name).inserted else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let formal = scope.map { "_ \($0.local): \($0.value.type), " }.joined()
         let tokens = syntaxWords(body)
         let prefix = words("{ do {")
-        let suffix = words("} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure { failures.append(failure) } }")
+        let handler = "} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {"
+        let append = "failures.append(failure) } }"
+        let observer = nativeOrderedIntAssignmentFailureSource(actionOrdinal: index, preceding: scope.map(\.local))
+        let observed = words("\(handler)\n\(observer)\n\(append)")
+        let recordsFailure = tokens.suffix(observed.count).elementsEqual(observed)
+        let suffix = recordsFailure ? observed : words("\(handler)\n\(append)")
         guard tokens.count > prefix.count + suffix.count else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         let core = Array(tokens.dropFirst(prefix.count).dropLast(suffix.count))
+        let recording = recordsFailure ? "\(observer)\n" : ""
         let signature = "func \(name)(\(formal)_ updates: _Updates, _ emit: (_Updates) throws -> Void) throws"
         guard sameWords(syntaxWords(part), """
             \(signature) {
                 do { \(core.joined(separator: " ")) }
                 catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
-                    failures.append(failure)
+                    \(recording)failures.append(failure)
                 }
             }
             """) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
 
-        return core
+        return (core, recordsFailure)
     }
 
     func walk(_ entry: String) throws -> ActionInstructions {
         var instructions = ActionInstructions()
+        var capturesFollowGuard = true
+        var hasCheckedAddition = false
         var pending: [(String, [Binding])] = [(entry, [])]
         parts: while let (name, scope) = pending.popLast() {
-            let core = try partCore(name, scope: scope)
+            let (core, recordsFailure) = try partCore(name, scope: scope)
+            guard !recordsFailure || (predicate == nil && core.first == "let"
+                && scope.allSatisfy({ $0.value.type == nativeIntTypeTokens.joined() })) else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
             let argument = scope.map { "\($0.local), " }.joined()
             if sameWords(core, "try emit(updates)") { continue }
             if let control {
@@ -373,7 +423,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             }
             let boundReads = scope.map { ($0.local, $0.value) }
             if core.count > 2, core[0] == "let",
-               let call = core.firstIndex(of: "try"), call + 1 < core.count, byName[core[call + 1]] != nil {
+               let call = core.lastIndex(of: "try"), call + 1 < core.count, byName[core[call + 1]] != nil {
                 let local = try nativeSourceIdentifier(core[1])
                 let child = core[call + 1]
                 guard !scope.contains(where: { $0.local == local }) else {
@@ -381,6 +431,28 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                 }
                 guard core[2] == "=", call > 3 else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
                 let rhs = Array(core[3..<call])
+                capturesFollowGuard = capturesFollowGuard
+                    && instructions.guards.count == 1 && instructions.writes.isEmpty
+                    && scope.count == instructions.captures.count
+                    && scope.enumerated().allSatisfy { offset, binding in
+                        binding.value.kind == "capture" && binding.value.operand == String(offset + 1)
+                    }
+                if recordsFailure {
+                    hasCheckedAddition = true
+                    let intType = nativeIntTypeTokens.joined()
+                    let references = Dictionary(uniqueKeysWithValues: (stateReads + boundReads)
+                        .filter { $0.1.type == intType }.map { (words($0.0), $0.1.tla) })
+                    guard let decoded = decodeNativeOrderedIntExpression(rhs[...], reads: references),
+                          decoded.consumed == rhs.count, decoded.steps.count > 1,
+                          sameWords(core, """
+                          let \(local) = \(rhs.joined(separator: " "))
+                          try \(child)(\(argument)\(local), updates, emit)
+                          """) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+                    instructions.captures.append(nativeArithmeticCapture(decoded.steps))
+                    let reference = ActionReference(kind: "capture", operand: String(instructions.captures.count), type: intType)
+                    pending.append((child, scope + [(local, reference)]))
+                    continue parts
+                }
                 var reads = stateReads + boundReads + booleanValues
                 let integer: Int?
                 if sameWords(rhs, "SwiftTLA._nativeIntMinimum()") {
@@ -402,6 +474,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                     continue parts
                 }
             }
+            guard !recordsFailure else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
             if core.count > 2, core[0] == "try", byName[core[1]] != nil,
                let nextCall = core.lastIndex(of: "try"), nextCall > 0, nextCall + 1 < core.count,
                byName[core[nextCall + 1]] != nil {
@@ -423,15 +496,19 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             }
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
+        // The split receipt retains a single entry decision, then captures, then writes.
+        guard !hasCheckedAddition || (capturesFollowGuard && instructions.guards.count == 1) else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
         return instructions
     }
 
     let visit: NativeConditionalVisit?
     let plans: [ActionInstructions]
     if let predicate {
-        let root = try partCore("_actionPart0", scope: [])
+        let (root, recordsFailure) = try partCore("_actionPart0", scope: [])
         let body = byName["_actionPart0"]?.body?.statements.first?.item.as(DoStmtSyntax.self)?.body.statements
-        guard body?.count == 1, let item = body?.first?.item,
+        guard !recordsFailure, body?.count == 1, let item = body?.first?.item,
               let expression = item.as(TryExprSyntax.self) ?? item.as(ExpressionStmtSyntax.self)?.expression.as(TryExprSyntax.self),
               syntaxWords(expression) == root, let conditional = nativeConditionalVisit(Syntax(expression)),
               conditional.predicate == predicate, conditional.ifTrue.arguments == ["updates", "emit"],

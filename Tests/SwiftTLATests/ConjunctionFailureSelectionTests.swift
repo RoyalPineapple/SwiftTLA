@@ -54,7 +54,7 @@ struct ConjunctionFailureSelectionTests {
         let visitor = try #require(try emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames, parts: writes)
         let fallible = try #require(writes.last { $0.value.contains("try ") })

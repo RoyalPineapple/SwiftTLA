@@ -465,7 +465,7 @@ private struct ReachableInvariantFailure {
         let emittedUpdate = try #require(members.first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let emittedWrites = try emitter.actionFunctions(generatedAction.body).writes
+        let emittedWrites = try emitter.actionFunctions(generatedAction).writes
         try verifyGeneratedActionWriteOutput(emittedUpdate, action: generatedAction.body,
             program: program, stateFields: emitter.stateMemberNames, parts: emittedWrites)
         let boundAddition = "SwiftTLA._nativeIntAdd"
@@ -611,7 +611,7 @@ private struct ReachableInvariantFailure {
         let visitor = try #require(members.first {
             $0.description.contains("private static func _visitUpdates0(")
         }?.description)
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         func check(_ source: String) throws {
             let declaration = try #require(Parser.parse(source: source)
                 .statements.first?.item.as(DeclSyntax.self))

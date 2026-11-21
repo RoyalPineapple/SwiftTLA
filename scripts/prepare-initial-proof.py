@@ -550,38 +550,41 @@ def main():
             raise ValueError("generic scalar copy source or parent binding differs")
         if proof.read_bytes() != expected_bytes or preparation["proofSHA256"] != digest(proof):
             raise ValueError("actual compiler did not emit the checked proof bytes exactly")
+        def capture_action(model, task, proof_template=None):
+            owner = Path(model).stem
+            started = time.time_ns()
+            command = pilot_compiler_command[:-2] + [
+                str(compiler_temporary / (task + ".o")), str(root / model)]
+            receipt[task + "CompilerCommand"] = command
+            with (output / (task + "-compiler.log")).open("wb") as log:
+                subprocess.run(command, env=compiler_env, stdout=log, stderr=subprocess.STDOUT, check=True)
+            expansions = list((compiler_temporary / "swift-generated-sources")
+                .glob(f"@__swiftmacro_14UpstreamParity*{owner}*TLAModelfMm_.swift"))
+            if len(expansions) != 1 or expansions[0].is_symlink():
+                raise ValueError(f"expected exactly one fresh {owner} compiler expansion")
+            expansion = expansions[0]
+            before = expansion.stat()
+            captured = expansion.read_bytes()
+            after = expansion.stat()
+            if (before.st_mtime_ns < started or len(captured) != before.st_size
+                    or (before.st_ino, before.st_size, before.st_mtime_ns)
+                    != (after.st_ino, after.st_size, after.st_mtime_ns)):
+                raise ValueError(f"{owner} expansion is stale or changed during capture")
+            receipt[task + "SourceOrigin"] = native_source.source_range(captured, root, model)
+            retained = output / ("native-" + task + "-source.swift")
+            retained.write_bytes(captured)
+            args = [str(binary), "initial-failure", "prepare-" + task, "--authored-source",
+                    str(root / model), "--native-source", str(retained)]
+            if proof_template is not None:
+                args.extend(["--proof", str(root / proof_template)])
+            with (output / (task + "-prepare.log")).open("wb") as log:
+                subprocess.run(args + ["--output", str(generated)], env=env, stdout=log,
+                               stderr=subprocess.STDOUT, check=True)
+            return retained
+
         conditional_model = "Sources/UpstreamParity/ValidationModels/GeneratedScalarConditionalProofModel.swift"
         conditional_template = "Verification/Semantics/GeneratedScalarConditionalProof.tla"
-        conditional_started = time.time_ns()
-        conditional_command = pilot_compiler_command[:-2] + [
-            str(compiler_temporary / "conditional.o"), str(root / conditional_model)]
-        receipt["conditionalCompilerCommand"] = conditional_command
-        with (output / "conditional-compiler.log").open("wb") as log:
-            result = subprocess.run(conditional_command, env=compiler_env, stdout=log, stderr=subprocess.STDOUT)
-        if result.returncode:
-            raise ValueError("existing conditional macro compiler capture failed")
-        conditional_matches = list((compiler_temporary / "swift-generated-sources")
-            .glob("@__swiftmacro_14UpstreamParity*GeneratedScalarConditionalProofModel*TLAModelfMm_.swift"))
-        if len(conditional_matches) != 1 or conditional_matches[0].is_symlink():
-            raise ValueError("expected exactly one fresh conditional compiler expansion")
-        conditional_expansion = conditional_matches[0]
-        snapshot = conditional_expansion.stat()
-        captured = conditional_expansion.read_bytes()
-        current = conditional_expansion.stat()
-        if (snapshot.st_mtime_ns < conditional_started
-                or (snapshot.st_ino, snapshot.st_size, snapshot.st_mtime_ns)
-                != (current.st_ino, current.st_size, current.st_mtime_ns)):
-            raise ValueError("conditional expansion is stale or changed during capture")
-        conditional_origin = native_source.source_range(captured, root, conditional_model)
-        conditional_retained = output / "native-conditional-source.swift"
-        conditional_retained.write_bytes(captured)
-        conditional_prepare = [str(binary), "initial-failure", "prepare-conditional", "--authored-source",
-            str(root / conditional_model), "--native-source", str(conditional_retained), "--proof",
-            str(root / conditional_template), "--output", str(proof.parent)]
-        with (output / "conditional-prepare.log").open("wb") as log:
-            run = subprocess.run(conditional_prepare, env=env, stdout=log, stderr=subprocess.STDOUT)
-        if run.returncode:
-            raise ValueError("actual native conditional preparation failed")
+        conditional_retained = capture_action(conditional_model, "conditional", conditional_template)
         conditional_report = json.loads((proof.parent / "conditional-preparation.json").read_text())
         conditional_files = {
             "authoredSourceSHA256": proof.parent / "authored-conditional-source.swift",
@@ -595,13 +598,31 @@ def main():
                 or conditional_report["proofTemplateSHA256"] != inputs[conditional_template]
                 or any(conditional_report[key] != digest(path) for key, path in conditional_files.items())):
             raise ValueError("actual native conditional evidence binding differs")
-        receipt["conditionalSourceOrigin"] = conditional_origin
         receipt["conditionalPreparation"] = conditional_report
+        arithmetic_model = "Sources/UpstreamParity/ValidationModels/OrderedOverflowModel.swift"
+        retained = capture_action(arithmetic_model, "arithmetic")
+        arithmetic = json.loads((generated / "arithmetic-preparation.json").read_text())
+        files = arithmetic["files"]
+        required = {"authored-arithmetic-source.swift", "native-arithmetic-source.swift",
+                    "OrderedOverflow.tla", "OrderedOverflow.cfg", "SwiftTLANativeAssignmentActions.tla",
+                    "SwiftTLAArithmeticAssignmentSource.tla", "native-assignment-failure.json"}
+        if (arithmetic["sourceSHA"] != head or not required.issubset(files)
+                or arithmetic["authoredSourceSHA256"] != inputs[arithmetic_model]
+                or arithmetic["nativeSourceSHA256"] != digest(retained)
+                or files["authored-arithmetic-source.swift"] != inputs[arithmetic_model]
+                or files["native-arithmetic-source.swift"] != digest(retained)
+                or any(not re.fullmatch(r"[A-Za-z0-9_-]+[.](tla|cfg|json|swift)", name)
+                       or (generated / name).is_symlink()
+                       or checksum != digest(generated / name) for name, checksum in files.items())):
+            raise ValueError("arithmetic action evidence differs from the fresh compiler inputs or outputs")
+        receipt["arithmeticPreparation"] = arithmetic
         imports = packet / "proof-inputs"
         imports.mkdir()
         names = ["OrderedIntExpressionRule", "IndexedHistoryRules", "InitializationOutcomeRules",
                  "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule", "OrderedScalarCopyRule",
-                 "ScalarCopyOutputBinding",
+                 "ScalarCopyOutputBinding", "OrderedIntAssignmentListRule",
+                 "CertifiedReadAssignmentObservation", "PhysicalIntAssignmentRhsRule", "NativeIntAssignmentListRule",
+                 "RenderedIntAssignmentTerms", "RenderedIntAssignmentActionRule",
                  "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "NativeScalarCopyRule", "ConditionalOutcomeRules", "NormalSeedCFG"]
         for name in names:
             shutil.copyfile(root / f"Verification/Semantics/{name}.tla", imports / (name + ".tla"))

@@ -209,7 +209,7 @@ struct ShortCircuitFailureProofTests {
         let visitor = try #require(emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let parts = try emitter.actionFunctions(action.body)
+        let parts = try emitter.actionFunctions(action)
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames,
             parts: parts.writes, conditions: parts.conditions)
@@ -269,7 +269,7 @@ struct ShortCircuitFailureProofTests {
         let visitor = try #require(emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let parts = try emitter.actionFunctions(action.body)
+        let parts = try emitter.actionFunctions(action)
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames,
             parts: parts.writes, conditions: parts.conditions)
@@ -361,7 +361,7 @@ struct ShortCircuitFailureProofTests {
         let visitor = try #require(emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let parts = try emitter.actionFunctions(action.body)
+        let parts = try emitter.actionFunctions(action)
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames,
             parts: parts.writes, conditions: parts.conditions)
@@ -403,7 +403,7 @@ struct ShortCircuitFailureProofTests {
         let visitor = try #require(emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let parts = try emitter.actionFunctions(action.body)
+        let parts = try emitter.actionFunctions(action)
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames,
             parts: parts.writes, conditions: parts.conditions)
@@ -433,7 +433,7 @@ struct ShortCircuitFailureProofTests {
         let visitor = try #require(emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let parts = try emitter.actionFunctions(action.body)
+        let parts = try emitter.actionFunctions(action)
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames,
             parts: parts.writes, conditions: parts.conditions)
@@ -497,7 +497,7 @@ struct ShortCircuitFailureProofTests {
         let visitor = try #require(emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let parts = try emitter.actionFunctions(action.body)
+        let parts = try emitter.actionFunctions(action)
         try verifyGeneratedActionWriteOutput(visitor, action: action.body,
             program: program, stateFields: emitter.stateMemberNames,
             parts: parts.writes, conditions: parts.conditions)
@@ -580,7 +580,7 @@ struct ShortCircuitFailureProofTests {
             #expect(reversed != visitor.description)
             #expect(tokens(reversed) != tokens(witness))
             let action = actions[index]
-            let parts = try emitter.actionFunctions(action.body)
+            let parts = try emitter.actionFunctions(action)
             let wrongVisitor = try #require(Parser.parse(source: reversed)
                 .statements.first?.item.as(DeclSyntax.self))
             do {

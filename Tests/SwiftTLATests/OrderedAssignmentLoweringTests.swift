@@ -1663,7 +1663,7 @@ struct OrderedAssignmentLoweringTests {
         #expect(nativeRows.contains(#"<<"copy", [captures |-> <<<<"state", "second">>, <<"capture", 1>>>>"#))
         #expect(nativeRows.contains(#"<<"finish", [captures |-> <<<<"literal", 1>>, <<"literal", 2>>>>"#))
         let visitor = try #require(members.first { $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0" })
-        let parts = try emitter.actionFunctions(action.body)
+        let parts = try emitter.actionFunctions(action)
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: parts.writes)
         #expect(program.requiresOrderedIntOutput(action.id))
@@ -1713,7 +1713,7 @@ struct OrderedAssignmentLoweringTests {
             $0.as(FunctionDeclSyntax.self)?.name.text
                 == "_visitUpdates\(terminalAction.id.ordinal)"
         })
-        let terminalParts = try emitter.actionFunctions(terminalAction.body)
+        let terminalParts = try emitter.actionFunctions(terminalAction)
         try verifyGeneratedActionWriteOutput(terminalVisitor, action: terminalAction.body,
             program: program, stateFields: emitter.stateMemberNames, parts: terminalParts.writes)
         let wrongTerminalVisitor = terminalVisitor.description.replacingOccurrences(
@@ -2815,7 +2815,7 @@ struct OrderedAssignmentLoweringTests {
         let visitor = try #require(emitter.machineMembers().first {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
-        let writes = try emitter.actionFunctions(action.body).writes
+        let writes = try emitter.actionFunctions(action).writes
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: writes)
 

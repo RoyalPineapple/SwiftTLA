@@ -56,3 +56,8 @@ package func verifyGeneratedSuccessorOutput(
         )
     }
 }
+
+package func nativeOrderedIntAssignmentFailureSource(actionOrdinal: Int, preceding: [String]) -> String {
+    "SwiftTLA._recordNativeOrderedIntAssignmentFailure(&context, actionOrdinal: \(actionOrdinal), "
+        + "assignmentOrdinal: \(preceding.count + 1), preceding: [\(preceding.joined(separator: ", "))], reason: failure)"
+}

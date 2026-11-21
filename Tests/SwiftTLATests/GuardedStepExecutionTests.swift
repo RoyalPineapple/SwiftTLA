@@ -104,7 +104,7 @@ struct GuardedStepExecutionTests {
         let action = try #require(try emitter.machineMembers().first {
             $0.description.contains("private static func _visitUpdates0(")
         })
-        let parts = try emitter.actionFunctions(compiledAction.body)
+        let parts = try emitter.actionFunctions(compiledAction)
         try verifyGeneratedActionWriteOutput(action, action: compiledAction.body, program: program,
             stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
         let swiftWitness = URL(fileURLWithPath: #filePath)

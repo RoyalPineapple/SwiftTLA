@@ -94,7 +94,7 @@ struct TypedActionParameterTests {
             $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
         })
         let emittedAction = try #require(compiled.program.behavior.actions.first)
-        let parts = try emitter.actionFunctions(emittedAction.body)
+        let parts = try emitter.actionFunctions(emittedAction)
         try verifyGeneratedActionWriteOutput(update, action: emittedAction.body, program: compiled.program,
             stateFields: emitter.stateMemberNames, parts: parts.writes,
             conditions: parts.conditions, requireScalarLeaves: true,
