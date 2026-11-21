@@ -11,10 +11,7 @@ package struct CheckedAdditionPrefixInitialModel {
                 let first = scope.sharedVar(initial: 1)
                 let second = scope.sharedVar(initial: first + 2)
                 let last = scope.sharedVar(initial: second + 9223372036854775807)
-                Do(Step.stay) {
-                    Assign(last, to: last)
-                    Assign(first, to: last)
-                }
+                Do(Step.stay) { Assign(last, to: last) }
             })
             algorithm
             let validation = Validation(label: "Initial overflow") {}
