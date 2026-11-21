@@ -23,11 +23,11 @@ THEOREM ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles ==
            NativeFormalNames, "pc", RHSOutputEntry, RHSOutputExit)
 PROOF
 <1>ordinal. NativeActionOrdinal = 0
-    BY ONLY IsaM("simp") DEF NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure
+    BY ONLY SMT DEF NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure
 <1>dispatch.
     RHSOutputInput!Rule!NativeAssignmentDispatchMatches(NativeActionRows, NativeActionDispatchLabels,
         NativeActionOrdinal, RHSOutputActionLabel, "advance")
-    BY ONLY <1>ordinal, IsaM("simp") DEF RHSOutputInput!Rule!NativeAssignmentDispatchMatches,
+    BY ONLY <1>ordinal, SMT DEF RHSOutputInput!Rule!NativeAssignmentDispatchMatches,
         NativeActionRows, NativeActionDispatchLabels, RHSOutputActionLabel
 <1>selected. DecodedNativeAction = NativeActionRows[1][2]
     BY ONLY <1>ordinal, SMT DEF DecodedNativeAction
@@ -84,7 +84,7 @@ PROOF
 <1>writeDomain.
     /\ Len(DecodedNativeAction.writes) \in Nat
     /\ DOMAIN DecodedNativeAction.writes = 1..Len(DecodedNativeAction.writes)
-    BY ONLY <1>selected, IsaM("simp") DEF NativeActionRows
+    BY ONLY <1>selected, SMT DEF NativeActionRows
 <1>writeCount.
     /\ Len(NormalizedNativeAction.writes) = Len(DecodedNativeAction.writes)
     /\ DOMAIN NormalizedNativeAction.writes = DOMAIN DecodedNativeAction.writes
@@ -121,7 +121,7 @@ PROOF
     BY ONLY <1>keys, <1>writeDomain, <1>writeCount, <1>frame, <1>writeRefs, ActualRenderedWriteRoutesNameTheAuthoredWriters, SMT
         DEF RHSOutputInput!Rule!NativeAssignmentWritesNameLastTargets, RHSOutputInput!Rule!NativeCopyFields
 <1>. QED BY ONLY <1>dispatch, <1>slots, <1>readNames, <1>rawDomain, <1>captureDomain, <1>operands, <1>writes, SMT
-    DEF RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites, NormalizedNativeAction
+    DEF RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites, NormalizedNativeAction, RHSOutputCount
 
 THEOREM ActualNativeAndTLAInitialObservationsUseTheCertifiedAssignmentHistory ==
     ASSUME Init
