@@ -1,7 +1,7 @@
 ---- MODULE NativeScalarCopyRule ----
 EXTENDS NativePendingWriteFold, OrderedScalarCopyRule
 
-NativeCopyControlSlot == <<>>
+NativeCopyControlSlot == ""
 
 NativeCopyPhysicalKeys(fields, names, counter) == {names[key] : key \in fields} \cup {counter}
 

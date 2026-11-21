@@ -111,8 +111,8 @@ package enum ScalarCopyActionEvidence {
         ---- MODULE \#(proofModule) ----
         EXTENDS \#(output.root.name), TLAPS
 
-        LOCAL \#(rules) == INSTANCE ScalarCopyOutputBinding
-        LOCAL \#(authoredInstance) == INSTANCE \#(authoredModule)
+        \#(rules) == INSTANCE ScalarCopyOutputBinding
+        \#(authoredInstance) == INSTANCE \#(authoredModule)
 
         \#(before) == [\#(key) \in \#(authoredInstance)!WitnessCopyFields |->
             \#(cases(stateNames, key: key))]
