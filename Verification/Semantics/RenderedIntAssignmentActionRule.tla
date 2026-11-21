@@ -93,7 +93,21 @@ PROOF
                      /\ EveryRenderedGuardPasses(raw.guards[end], plan.count)
             BY RenderedAssignmentsPass(raw, end), (end \in 1..count), SMT DEF RenderedAssignmentsPass, plan
         <3>append. Append(prior.completed, raw.roots[end]) = HistoryPrefix(raw.roots, end)
-            BY <2>previous, <2>reached, <3>earlier, (end \in 1..count), AppendProperties, SMT DEF HistoryPrefix
+            <4>. DEFINE values == AssignmentIntValues \cup {raw.roots[end]}
+                        added == Append(prior.completed, raw.roots[end])
+            <4>input. prior.completed \in Seq(values) /\ raw.roots[end] \in values
+                BY ONLY <2>previous, SeqMonotonic, SMT DEF values
+            <4>prefix. /\ Len(prior.completed) = end - 1
+                       /\ prior.completed = HistoryPrefix(raw.roots, end - 1)
+                BY ONLY <2>reached, <3>earlier, SMT
+            <4>slots. /\ added \in Seq(values) /\ Len(added) = end
+                      /\ added[end] = raw.roots[end]
+                      /\ \A index \in 1..(end - 1) : added[index] = prior.completed[index]
+                BY ONLY <4>input, <4>prefix, AppendProperties, SMT DEF added
+            <4>function. added \in [1..end -> values]
+                BY ONLY <4>slots, LenProperties, SMT
+            <4>. QED BY ONLY <1>shape, (end \in 1..count), <4>prefix, <4>slots, <4>function, SMT
+                DEF HistoryPrefix, added
         <3>. QED BY <2>previous, <2>reached, <2>local, <3>earlier, <3>append, SMT DEF AssignmentListStep, Success
     <2>failed. \A index \in 1..end : \A node \in 1..raw.plans[index].count :
            RenderedAssignmentFailsAt(raw, end, index, node) =>
@@ -107,9 +121,35 @@ PROOF
                   /\ current.completed = HistoryPrefix(raw.roots, index - 1)
             OBVIOUS
         <3>this. CASE index = end
-            BY <3>this, <2>previous, <2>reached, <2>local, RenderedAssignmentFailsAt(raw, end, index, node), SMT
-                DEF RenderedAssignmentFailsAt, RenderedAssignmentFailure, AssignmentListStep,
-                    RenderedTermOverflow, GeneratedOverflow, plan
+            <4>guards. /\ RenderedAssignmentsPass(raw, end - 1)
+                       /\ FirstRejectedRenderedGuard(raw.guards[end], plan.count, node)
+                BY ONLY <3>this, RenderedAssignmentFailsAt(raw, end, index, node), SMT
+                    DEF RenderedAssignmentFailsAt, plan
+            <4>entry. /\ prior.failure = <<>>
+                      /\ prior.completed = HistoryPrefix(raw.roots, end - 1)
+                      /\ prior.bindings = CompletedAssignmentBindings(before, rows, prior.completed)
+                BY ONLY <2>reached, <4>guards, SMT
+            <4>kind. /\ plan.kinds[node] = "add" /\ rhs = RenderedTermOverflow(plan, raw.terms[end], node)
+                BY ONLY <3>this, <4>guards, <2>local, (node \in 1..raw.plans[index].count), SMT DEF plan
+            <4>payload. /\ ~rhs.ok /\ rhs.failure = RenderedTermOverflow(plan, raw.terms[end], node).failure
+                BY ONLY <4>kind, SMT DEF RenderedTermOverflow, GeneratedOverflow
+            <4>transition. /\ current.completed = prior.completed
+                           /\ current.failure = [before |-> prior.bindings, site |-> end, payload |-> rhs.failure]
+                <5>live. prior.failure = <<>> /\ ~rhs.ok
+                    BY ONLY <4>entry, <4>payload
+                <5>step. current = AssignmentListStep(FALSE, prior, rows[end], end)
+                    BY ONLY <2>previous
+                <5>record. AssignmentListStep(FALSE, prior, rows[end], end) =
+                    [bindings |-> prior.bindings, completed |-> prior.completed,
+                     failure |-> [before |-> prior.bindings, site |-> end, payload |-> rhs.failure]]
+                    BY ONLY <5>live, SMT DEF AssignmentListStep, rhs
+                <5>current. current =
+                    [bindings |-> prior.bindings, completed |-> prior.completed,
+                     failure |-> [before |-> prior.bindings, site |-> end, payload |-> rhs.failure]]
+                    BY ONLY <5>step, <5>record, Zenon
+                <5>. QED BY ONLY <5>current, IsaM("simp")
+            <4>. QED BY ONLY <3>this, <4>entry, <4>kind, <4>payload, <4>transition, SMT
+                DEF RenderedAssignmentFailure, plan
         <3>earlier. CASE index < end
             <4>seen. /\ raw.plans[index].kinds[node] = "add"
                      /\ prior.failure = RenderedAssignmentFailure(rows, before, raw, index, node)
@@ -130,24 +170,20 @@ THEOREM EveryFiniteGuardFailureHasAFirstPosition ==
     ASSUME NEW count \in Nat, NEW guards, ~EveryRenderedGuardPasses(guards, count)
     PROVE \E index \in 1..count : FirstRejectedRenderedGuard(guards, count, index)
 PROOF
-<1>. DEFINE prefix(end) ==
-        EveryRenderedGuardPasses(guards, end) \/
-        (\E index \in 1..end : FirstRejectedRenderedGuard(guards, end, index))
-<1>zero. prefix(0)
-    BY SMT DEF prefix, EveryRenderedGuardPasses
-<1>step. ASSUME NEW end \in 1..count, \A earlier \in 0..(end - 1) : prefix(earlier)
-         PROVE prefix(end)
-    <2>prior. prefix(end - 1)
-        BY (end \in 1..count), (\A earlier \in 0..(end - 1) : prefix(earlier)), SMT
-    <2>passed. CASE EveryRenderedGuardPasses(guards, end - 1)
-        BY <2>passed, (end \in 1..count), SMT DEF prefix, EveryRenderedGuardPasses, FirstRejectedRenderedGuard
-    <2>failed. CASE ~EveryRenderedGuardPasses(guards, end - 1)
-        BY <2>failed, <2>prior, (end \in 1..count), SMT DEF prefix, FirstRejectedRenderedGuard
-    <2>. QED BY <2>passed, <2>failed, SMT
-<1>. HIDE DEF prefix
-<1>all. \A end \in 0..count : prefix(end)
-    BY (count \in Nat), <1>zero, <1>step, FiniteIndexedPrefixProperty, Isa
-<1>. QED BY <1>all, (count \in Nat), ~EveryRenderedGuardPasses(guards, count), SMT DEF prefix
+<1>. DEFINE rejected(node) == node \in 1..count /\ ~guards[node]
+<1>some. PICK candidate \in Nat : rejected(candidate)
+    BY ONLY (count \in Nat), ~EveryRenderedGuardPasses(guards, count), SMT DEF rejected, EveryRenderedGuardPasses
+<1>. HIDE DEF rejected
+<1>first. PICK least \in Nat :
+             rejected(least) /\ \A earlier \in 0..(least - 1) : ~rejected(earlier)
+    BY ONLY <1>some, SmallestNatural
+<1>bounds. least \in 1..count /\ ~guards[least]
+    BY ONLY <1>first DEF rejected
+<1>prior. EveryRenderedGuardPasses(guards, least - 1)
+    BY ONLY <1>first, <1>bounds, SMT DEF rejected, EveryRenderedGuardPasses
+<1>site. FirstRejectedRenderedGuard(guards, count, least)
+    BY ONLY <1>bounds, <1>prior DEF FirstRejectedRenderedGuard
+<1>. QED BY ONLY <1>bounds, <1>site, Zenon
 
 THEOREM WholeGuardTableHasAnExactFirstFailureSite ==
     ASSUME NEW rows, SupportedAssignmentList(rows), NEW before, NEW raw,
@@ -178,7 +214,16 @@ PROOF
 <1>some. ASSUME \E index \in 1..count : \E node \in 1..raw.plans[index].count :
                   RenderedAssignmentFailsAt(raw, count, index, node)
          PROVE ~RenderedAssignmentsPass(raw, count)
-    BY SMT DEF RenderedAssignmentsPass, RenderedAssignmentFailsAt, EveryRenderedGuardPasses, FirstRejectedRenderedGuard
+    <2>site. PICK index \in 1..count : \E node \in 1..raw.plans[index].count :
+                 RenderedAssignmentFailsAt(raw, count, index, node)
+        BY ONLY (\E index \in 1..count : \E node \in 1..raw.plans[index].count :
+                     RenderedAssignmentFailsAt(raw, count, index, node))
+    <2>node. PICK node \in 1..raw.plans[index].count : RenderedAssignmentFailsAt(raw, count, index, node)
+        BY ONLY <2>site
+    <2>reject. ~raw.guards[index][node]
+        BY ONLY <2>node DEF RenderedAssignmentFailsAt, FirstRejectedRenderedGuard
+    <2>. QED BY ONLY (index \in 1..count), (node \in 1..raw.plans[index].count), <2>reject, SMT
+        DEF RenderedAssignmentsPass, EveryRenderedGuardPasses
 <1>. QED BY <1>first, <1>some DEF count
 
 ====

@@ -60,14 +60,61 @@ PROOF
 <1>rawDomain. DOMAIN DecodedNativeAction.captures = 1..RHSOutputCount
     BY ONLY <1>selected, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
         DEF NativeSelectedAction, NativeSelectedCaptures, NativeSelectedCaptureTags
+<1>. DEFINE directPlanColumns(index) ==
+    LET tag == NativeSelectedCaptureTags[index]
+        literal == tag = "literal"
+        reference == NativeSelectedNodeReads[index][1]
+    IN /\ NativeSelectedNodeCounts[index] = 1
+       /\ NativeSelectedNodeKinds[index] = <<IF literal THEN "literal" ELSE "read">>
+       /\ NativeSelectedNodeLiterals[index] = <<IF literal THEN NativeSelectedNodeLiterals[index][1] ELSE 0>>
+       /\ NativeSelectedNodeReads[index] = <<IF literal THEN <<>> ELSE reference>>
+       /\ (literal \/ reference = <<tag, reference[2]>>)
+       /\ NativeSelectedNodeLeft[index] = <<0>>
+       /\ NativeSelectedNodeRight[index] = <<0>>
+<1>directColumns. \A index \in DOMAIN NativeSelectedCaptureTags :
+    NativeSelectedCaptureTags[index] # "expression" => directPlanColumns(index)
+    BY ONLY SMT DEF directPlanColumns, NativeSelectedCaptureTags, NativeSelectedNodeCounts, NativeSelectedNodeKinds,
+        NativeSelectedNodeLiterals, NativeSelectedNodeReads, NativeSelectedNodeLeft, NativeSelectedNodeRight
 <1>rawPlans. \A index \in 1..RHSOutputCount :
     RHSOutputInput!Rule!NativeAssignmentRhsPlan(DecodedNativeAction.captures[index]) =
         [NativeSelectedPlans[index] EXCEPT !.reads =
             IF NativeSelectedCaptureTags[index] = "literal" THEN <<NativeSelectedCaptures[index]>>
             ELSE NativeSelectedNodeReads[index]]
-    BY ONLY <1>selected, <1>rawDomain, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-        DEF NativeSelectedAction, NativeSelectedCaptures, NativeSelectedCaptureTags, NativeSelectedPlans,
-            NativeSelectedNodeCounts, RHSOutputInput!Rule!NativeAssignmentRhsPlan
+    <2>. TAKE index \in 1..RHSOutputCount
+    <2>domain. index \in DOMAIN NativeSelectedCaptureTags
+        BY ONLY <1>selected, <1>rawDomain, (index \in 1..RHSOutputCount), SMT
+            DEF NativeSelectedAction, NativeSelectedCaptures
+    <2>selected. DecodedNativeAction.captures[index] = NativeSelectedCaptures[index]
+        BY ONLY <1>selected, SMT DEF NativeSelectedAction
+    <2>expression. CASE NativeSelectedCaptureTags[index] = "expression"
+        <3>capture. NativeSelectedCaptures[index] = <<"expression", NativeSelectedPlans[index]>>
+            BY ONLY <2>domain, <2>expression, SMT DEF NativeSelectedCaptures
+        <3>plan. RHSOutputInput!Rule!NativeAssignmentRhsPlan(DecodedNativeAction.captures[index]) = NativeSelectedPlans[index]
+            BY ONLY <2>selected, <3>capture, SMT DEF RHSOutputInput!Rule!NativeAssignmentRhsPlan
+        <3>reads. [NativeSelectedPlans[index] EXCEPT !.reads = NativeSelectedNodeReads[index]] = NativeSelectedPlans[index]
+            BY ONLY <2>domain, SMT DEF NativeSelectedPlans
+        <3>. QED BY ONLY <2>expression, <3>plan, <3>reads, SMT
+    <2>direct. CASE NativeSelectedCaptureTags[index] # "expression"
+        <3>. DEFINE literal == NativeSelectedCaptureTags[index] = "literal"
+                    value == NativeSelectedNodeLiterals[index][1]
+                    reference == NativeSelectedNodeReads[index][1]
+                    capture == NativeSelectedCaptures[index]
+                    plan(reads) == [count |-> 1, kinds |-> <<IF literal THEN "literal" ELSE "read">>,
+                        literals |-> <<IF literal THEN value ELSE 0>>, reads |-> reads,
+                        left |-> <<0>>, right |-> <<0>>]
+        <3>columns. directPlanColumns(index)
+            BY ONLY <1>directColumns, <2>domain, <2>direct, SMT
+        <3>capture. capture = IF literal THEN <<"literal", value>> ELSE reference
+            BY ONLY <2>domain, <2>direct, SMT DEF capture, literal, value, reference, NativeSelectedCaptures
+        <3>packed. NativeSelectedPlans[index] = plan(NativeSelectedNodeReads[index])
+            BY ONLY <2>domain, <3>columns, SMT DEF directPlanColumns, plan, literal, value, NativeSelectedPlans
+        <3>decoded. RHSOutputInput!Rule!NativeAssignmentRhsPlan(DecodedNativeAction.captures[index]) = plan(<<capture>>)
+            BY ONLY <2>selected, <2>direct, <3>capture, <3>columns, SMT
+                DEF RHSOutputInput!Rule!NativeAssignmentRhsPlan, directPlanColumns, plan, literal, value, reference, capture
+        <3>reads. (IF literal THEN <<capture>> ELSE NativeSelectedNodeReads[index]) = <<capture>>
+            BY ONLY <3>capture, <3>columns, SMT DEF directPlanColumns, literal, reference
+        <3>. QED BY ONLY <3>packed, <3>decoded, <3>reads, SMT DEF plan, literal, capture
+    <2>. QED BY ONLY <2>expression, <2>direct, SMT
 <1>readNames. RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown(DecodedNativeAction, NativeFormalNames)
     <2>columns. \A index \in 1..RHSOutputCount : \A node \in 1..NativeSelectedNodeCounts[index] :
         (NativeSelectedNodeKinds[index][node] = "read" /\ NativeSelectedNodeReads[index][node][1] = "state") =>
@@ -133,13 +180,34 @@ PROOF
     <2>update. physical = [raw EXCEPT !.reads = references]
         BY ONLY <1>rawDomain, (index \in 1..RHSOutputCount), SMT
             DEF physical, raw, references, NormalizedNativeAction, RHSOutputInput!Rule!NativeAssignmentRekey
+    <2>. DEFINE withReads(refs) ==
+        [count |-> rendered.count, kinds |-> rendered.kinds, literals |-> rendered.literals,
+         reads |-> refs, left |-> rendered.left, right |-> rendered.right]
+    <2>renderedDomain. index \in DOMAIN RHSOutputPlans
+        BY ONLY (index \in 1..RHSOutputCount), <1>captureDomain, SMT
+    <2>renderedRecord. rendered = withReads(rendered.reads)
+        BY ONLY <2>renderedDomain, SMT DEF withReads, rendered, RHSOutputPlans
+    <2>rawRecord. raw = withReads(raw.reads)
+        BY ONLY <2>renderedRecord, <2>record, SMT DEF withReads
+    <2>stateReads. \A node \in 1..rendered.count :
+        (rendered.kinds[node] = "read" /\ rendered.reads[node][1] = "state") =>
+            rendered.reads[node] = <<"state", rendered.reads[node][2]>>
+        BY ONLY <2>renderedDomain, (index \in 1..RHSOutputCount), RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+            DEF rendered, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputNodeKinds, RHSOutputNodeReads
     <2>normalized. references = rendered.reads
         <3>count. raw.count = rendered.count
-            BY ONLY <2>record, SMT DEF rendered, RHSOutputPlans
+            BY ONLY <2>rawRecord, SMT DEF withReads
         <3>points. \A node \in 1..rendered.count : references[node] = rendered.reads[node]
-            BY ONLY <3>count, <1>names, <2>known, <2>reads, SMT DEF references
+            <4>. TAKE node \in 1..rendered.count
+            <4>state. (raw.kinds[node] = "read" /\ raw.reads[node][1] = "state") =>
+                raw.reads[node] = <<"state", raw.reads[node][2]>>
+                BY ONLY <2>stateReads, <2>rawRecord, <2>reads, (node \in 1..rendered.count), SMT DEF withReads
+            <4>. QED BY ONLY <4>state, <3>count, <1>names, <2>known, <2>reads, (node \in 1..rendered.count),
+                SMT DEF references
         <3>. QED BY ONLY <3>count, <3>points, <2>reads, SMT DEF references
-    <2>. QED BY ONLY <2>record, <2>update, <2>normalized, SMT DEF rendered, RHSOutputPlans
+    <2>restored. [raw EXCEPT !.reads = rendered.reads] = rendered
+        BY ONLY <2>renderedRecord, <2>rawRecord, SMT DEF withReads
+    <2>. QED BY ONLY <2>restored, <2>update, <2>normalized, SMT DEF physical, rendered
 
 <1>operands. \A index \in 1..RHSOutputCount :
     RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters(RHSOutputRows, index, NormalizedNativeAction.captures[index])
