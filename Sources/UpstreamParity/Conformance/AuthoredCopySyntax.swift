@@ -368,10 +368,42 @@ enum AuthoredCopySyntax {
         THEOREM MasterAssignmentsAreSupported ==
             /\ Rule!SupportedAssignmentList(MasterRows)
             /\ Len(MasterRows) = \#(rows.count)
-            BY SMT DEF MasterRows, MasterFields, MasterTarget,
-                Rule!SupportedAssignmentList, Rule!AssignmentRhsCertificate,
-                Rule!LiteralReadAddCertificate, Rule!NodeEmissionArrays, Rule!AllNodePayloadsMatchSource,
-                Rule!NodePayloadMatchesSource, Rule!TypedVisitedSourceInputs, Rule!InRange
+        PROOF
+        <1>shape. /\ Len(MasterRows) \in Nat
+                  /\ DOMAIN MasterRows = 1..Len(MasterRows)
+                  /\ Len(MasterRows) = \#(rows.count)
+            BY ONLY SMT DEF MasterRows
+        <1>rows. \A i \in DOMAIN MasterRows :
+            /\ MasterRows[i].target \in MasterFields
+            /\ Rule!AssignmentRhsCertificate(MasterRows[i])
+            <2>. SUFFICES ASSUME NEW i \in DOMAIN MasterRows
+                         PROVE /\ MasterRows[i].target \in MasterFields
+                               /\ Rule!AssignmentRhsCertificate(MasterRows[i])
+                OBVIOUS
+            <2>. DEFINE row == MasterRows[i]
+            <2>types. /\ row.target \in MasterFields /\ row.fallback \in MasterFields
+                      /\ Rule!NodeEmissionArrays(row.emitted) /\ row.emitted.count > 0
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterFields, Rule!NodeEmissionArrays
+            <2>domains. /\ row.inverse \in [DOMAIN row.view.kinds -> 1..row.emitted.count]
+                         /\ row.emitted.origins \in [1..row.emitted.count -> DOMAIN row.view.kinds]
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows
+            <2>preorder. \A j \in 1..row.emitted.count : row.inverse[row.emitted.origins[j]] = j
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows
+            <2>postorder. \A node \in DOMAIN row.view.kinds : row.emitted.origins[row.inverse[node]] = node
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows
+            <2>root. row.emitted.origins[row.emitted.count] = row.view.root
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows
+            <2>payload. Rule!AllNodePayloadsMatchSource(row.view, row.emitted)
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows,
+                    Rule!AllNodePayloadsMatchSource, Rule!NodePayloadMatchesSource
+            <2>bound. /\ Rule!TypedVisitedSourceInputs(row.view, row.emitted)
+                      /\ \A j \in 1..row.emitted.count :
+                             row.emitted.nodes[j].kind = "read" => row.emitted.nodes[j].payload \in MasterFields
+                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterFields,
+                    Rule!TypedVisitedSourceInputs, Rule!InRange
+            <2>. QED BY ONLY <2>types, <2>domains, <2>preorder, <2>postorder, <2>root, <2>payload, <2>bound, SMT
+                DEF row, Rule!AssignmentRhsCertificate, Rule!LiteralReadAddCertificate
+        <1>. QED BY ONLY <1>shape, <1>rows, SMT DEF Rule!SupportedAssignmentList
         ====
         """# + "\n")
     }

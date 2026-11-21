@@ -7,11 +7,7 @@ ActualNativeProjection ==
     RHSOutputFailureEvent(ActualNativeFailure.site, ActualNativeFailure.payload[2],
         ActualNativeFailure.payload[3], ActualNativeFailure.completed)
 
----- MODULE NativeAndRenderedAssignmentRules ----
-EXTENDS NativeIntAssignmentListRule, RenderedIntAssignmentActionRule
-====
-
-LOCAL SharedAssignmentRule == INSTANCE NativeAndRenderedAssignmentRules
+LOCAL SharedAssignmentRule == INSTANCE NativeIntAssignmentListRule
     WITH Keys <- RHSOutputKeys, SwiftIntMin <- RHSOutputMin, SwiftIntMax <- RHSOutputMax,
          Vars <- {}, Values <- {}, ActionLabels <- {}, FailureValues <- {}, NoFailure <- <<>>
 

@@ -75,7 +75,7 @@ package enum ScalarCopyActionEvidence {
               let independentProof = try? AuthoredCopySyntax.proofInputs(selection) else { return nil }
         let authoredProof = """
         ---- MODULE \(authoredModule) ----
-        EXTENDS Sequences, TLAPS
+        EXTENDS Naturals, Sequences, TLAPS
 
         WitnessCopyFields == \(TLAValue.set(Set(fields.map(TLAValue.string))))
         WitnessCopyActionRows == \(TLAValue.tuple(actualRows.map(\.value)))
