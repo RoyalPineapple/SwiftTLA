@@ -19,6 +19,39 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def validate_arithmetic_packet(packet, source_sha):
+    generated = packet / "case/generated-tla"
+    manifest = generated / "arithmetic-preparation.json"
+    report = packet.parent / "result.json"
+    required = {
+        "authored-arithmetic-source.swift", "native-arithmetic-source.swift",
+        "OrderedOverflow.tla", "OrderedOverflow.cfg", "SwiftTLANativeAssignmentActions.tla",
+        "SwiftTLAArithmeticAssignmentSource.tla", "native-assignment-failure.json",
+        "SwiftTLAOrderedRHSConfiguredProof.tla", "SwiftTLAOrderedRHSOutputProof.tla",
+    }
+    preparation = json.loads(report.read_text()) if report.is_file() and not report.is_symlink() else {}
+    if ("arithmeticPreparation" not in preparation
+            and not any(path.exists() or path.is_symlink() for path in
+                        [manifest, *(generated / name for name in required)])):
+        return
+    if (preparation.get("status") != "FRESH_ACTUAL_PROOF_BYTES_MATCH_CHECKED_CANDIDATE"
+            or preparation.get("sourceSHA") != source_sha
+            or not manifest.is_file() or manifest.is_symlink()):
+        raise ValueError("arithmetic packet requires matching fresh generation and preparation reports")
+    arithmetic = json.loads(manifest.read_text())
+    files = arithmetic.get("files", {})
+    if (arithmetic != preparation.get("arithmeticPreparation")
+            or arithmetic.get("sourceSHA") != source_sha or not required.issubset(files)
+            or arithmetic.get("authoredSourceSHA256") != files["authored-arithmetic-source.swift"]
+            or arithmetic.get("nativeSourceSHA256") != files["native-arithmetic-source.swift"]):
+        raise ValueError("arithmetic packet manifest differs from fresh generation")
+    for name, checksum in files.items():
+        path = generated / name
+        if (not re.fullmatch(r"[A-Za-z0-9_-]+[.](tla|cfg|json|swift)", name)
+                or path.is_symlink() or not path.is_file() or checksum != digest(path)):
+            raise ValueError(f"retained arithmetic packet mismatch: {name}")
+
+
 def load_byte_input(source, directory, pages, prefix="CompilerInput"):
     """Exact-byte ingress only; no selection, lexing, decoding or interpretation."""
     if prefix not in {"CompilerInput", "CallerInput"}:
@@ -154,6 +187,7 @@ def main():
         raise ValueError("retained packet mismatch: scalarCopyProofSHA256")
     if (packet / "source-sha.txt").read_text().strip() != preparation["sourceSHA"]:
         raise ValueError("retained packet source revision mismatch")
+    validate_arithmetic_packet(packet, preparation["sourceSHA"])
     for line in (packet / "proof-inputs.sha256").read_text().splitlines():
         expected, name = line.split(maxsplit=1)
         path = packet / "proof-inputs" / Path(name).name
