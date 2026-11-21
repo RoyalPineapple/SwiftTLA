@@ -232,7 +232,7 @@ package enum InitialFailureEvidence {
                 origins: syntax.origins, indices: syntax.indices,
                 emission: emission,
                 capturedNodeTuple: "LOCAL SourceCapturedNodeTuple\(offset + 1) == \(capturedTuple)",
-                proof: initializerCertificateProof(row: offset + 1, view: syntax.view,
+                proof: initializerCertificateProof(row: offset + 1, view: syntax.view, rankView: syntax.rankView,
                     emissionPrefix: emissionPrefix, origins: syntax.origins, indices: syntax.indices,
                     scalars: input.scalars, reads: compilerReads.description, term: input.term,
                     sourceDerivation: input.derivation, constructorProof: input.proof, sourceSizes: compilerSizes,
@@ -329,7 +329,7 @@ package enum InitialFailureEvidence {
     }
 
     private static func sourceSyntaxView(_ certificate: StraightLineAssignmentCheck.OrderedIntCertificate) throws
-        -> (view: String, origins: String, indices: String, nodes: [String]) {
+        -> (view: String, rankView: String, origins: String, indices: String, nodes: [String]) {
         var kinds: [String] = [], literals: [String] = [], names: [String] = []
         var left: [Int] = [], right: [Int] = []
         for node in certificate.source {
@@ -352,9 +352,10 @@ package enum InitialFailureEvidence {
         let origins = certificate.origins
         let indices = certificate.indices
         func tuple(_ values: [String]) -> String { "<<\(values.joined(separator: ", "))>>" }
-        let kindTuple = tuple(kinds)
-        let view = "[root |-> 1, kinds |-> \(kindTuple), literals |-> \(tuple(literals)), "
-            + "reads |-> \(tuple(names)), left |-> \(tuple(left.map(String.init))), right |-> \(tuple(right.map(String.init)))]"
+        let tags = "root |-> 1, kinds |-> \(tuple(kinds))"
+        let edges = "left |-> \(tuple(left.map(String.init))), right |-> \(tuple(right.map(String.init)))"
+        let view = "[\(tags), literals |-> \(tuple(literals)), reads |-> \(tuple(names)), \(edges)]"
+        let rankView = "[\(tags), \(edges)]"
         let records = try nodes.map { node -> String in
             let kind: String, payload: String, lhs: Int, rhs: Int
             switch node {
@@ -368,7 +369,7 @@ package enum InitialFailureEvidence {
             }
             return "[kind |-> \(TLAValue.string(kind)), payload |-> \(payload), left |-> \(lhs), right |-> \(rhs)]"
         }
-        return (view, tuple(origins.map(String.init)), tuple(indices.map(String.init)), records)
+        return (view, rankView, tuple(origins.map(String.init)), tuple(indices.map(String.init)), records)
     }
 
     private static func initializerPlans(layout: CompiledLayout,
@@ -571,7 +572,7 @@ package enum InitialFailureEvidence {
                 tuple(seeds), tuple(nativeSeeds), tuple(types))
     }
 
-    private static func initializerCertificateProof(row: Int, view: String, emissionPrefix: String,
+    private static func initializerCertificateProof(row: Int, view: String, rankView: String, emissionPrefix: String,
                                                     origins: String, indices: String, scalars: [String], reads: String,
                                                     term: String, sourceDerivation: String, constructorProof: String,
                                                     sourceSizes: String, sourceCount: Int,
@@ -981,9 +982,10 @@ package enum InitialFailureEvidence {
               <3>certificate. \(expressions)LiteralReadAddCertificate(capturedView, emitted, inverse, fallback, bound)
                 BY ONLY <2>keys, <2>emissionData, <3>records, <3>maps, <3>payload, <3>typed, SMT
                   DEF fallback, bound, \(expressions)LiteralReadAddCertificate
-              <3>sizes. \(expressions)CompilerOccurrenceSizes(capturedView, size)
+              <3>. DEFINE reordered == \(sourceOccurrenceSizes)
+              <3>sizes. /\\ \(expressions)CompilerOccurrenceSizes(capturedView, size)
+                         /\\ size = reordered
                 PROOF
-                <4>. DEFINE reordered == \(sourceOccurrenceSizes)
                 <4>domain. DOMAIN capturedView.kinds = 1..\(sourceCount)
                   BY ONLY <2>candidateWidth
                 <4>input. sizes = \(sourceSizes)
@@ -1010,9 +1012,24 @@ package enum InitialFailureEvidence {
                   /\\ inverse[capturedView.root] = size[capturedView.root]
                   /\\ \\A origin \\in DOMAIN capturedView.kinds : capturedView.kinds[origin] = "add" =>
                          \(expressions)AddEmissionRanks(capturedView, size, captured, origin)
-                BY ONLY <2>constructorData, <2>viewData, <2>emissionData, SMT
-                  DEF inverse, captured, size, termPositions, report, SourceAllocationReport\(row),
-                    \(expressions)AddEmissionRanks
+                PROOF
+                <4>. DEFINE rankView == \(rankView)
+                            rankData == [inverse |-> \(indices)]
+                <4>view. /\\ capturedView.root = rankView.root
+                         /\\ capturedView.kinds = rankView.kinds
+                         /\\ capturedView.left = rankView.left /\\ capturedView.right = rankView.right
+                  BY ONLY <2>viewData DEF rankView
+                <4>arrays. /\\ size = reordered
+                           /\\ captured.inverse = rankData.inverse /\\ inverse = rankData.inverse
+                  BY ONLY <3>sizes, <2>emissionData DEF inverse, rankData
+                <4>root. rankData.inverse[rankView.root] = reordered[rankView.root]
+                  BY ONLY SMT DEF rankView, rankData, reordered
+                <4>children. \\A origin \\in DOMAIN rankView.kinds : rankView.kinds[origin] = "add" =>
+                    \(expressions)AddEmissionRanks(rankView, reordered, rankData, origin)
+                  BY ONLY SMT DEF rankView, rankData, reordered, \(expressions)AddEmissionRanks
+                <4>. HIDE DEF capturedView, captured, inverse, size, rankView, rankData, reordered
+                <4>. QED BY ONLY <4>view, <4>arrays, <4>root, <4>children, SMT
+                  DEF \(expressions)AddEmissionRanks
               <3>. QED BY ONLY <3>sizes, <3>certificate, <3>records, <3>ranks
                 DEF emitted, inverse, \(expressions)CanonicalEmissionData
             <2>packed.
