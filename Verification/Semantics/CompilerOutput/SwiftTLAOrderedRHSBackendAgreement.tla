@@ -22,45 +22,106 @@ THEOREM ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles ==
     /\ RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites(RHSOutputRows, DecodedNativeAction,
            NativeFormalNames, "pc", RHSOutputEntry, RHSOutputExit)
 PROOF
+<1>ordinal. NativeActionOrdinal = 0
+    BY ONLY IsaM("simp") DEF NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure
 <1>dispatch.
     RHSOutputInput!Rule!NativeAssignmentDispatchMatches(NativeActionRows, NativeActionDispatchLabels,
         NativeActionOrdinal, RHSOutputActionLabel, "advance")
-    BY SMT DEF RHSOutputInput!Rule!NativeAssignmentDispatchMatches, NativeActionOrdinal,
-        ActualNativeFailure, NativeAssignmentFailure, NativeActionRows, NativeActionDispatchLabels, RHSOutputActionLabel
-<1>decode.
-    /\ RHSOutputInput!Rule!NativeCopyKnownRoles(DecodedNativeAction, RHSOutputKeys, NativeFormalNames, "pc")
-    /\ RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown(DecodedNativeAction, NativeFormalNames)
-    BY SMT DEF RHSOutputInput!Rule!NativeCopyKnownRoles, RHSOutputInput!Rule!NativeCopyPhysicalKeys,
-        RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown, RHSOutputInput!Rule!NativeAssignmentRhsPlan,
-        DecodedNativeAction, NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure,
-        NativeActionRows, NativeFormalNames, RHSOutputInput!MasterFields, RHSOutputKeys
+    BY ONLY <1>ordinal, IsaM("simp") DEF RHSOutputInput!Rule!NativeAssignmentDispatchMatches,
+        NativeActionRows, NativeActionDispatchLabels, RHSOutputActionLabel
+<1>selected. DecodedNativeAction = NativeActionRows[1][2]
+    BY ONLY <1>ordinal, SMT DEF DecodedNativeAction
+<1>keys. RHSOutputInput!MasterFields = RHSOutputKeys
+    BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory
 <1>names.
-    \A key \in RHSOutputKeys : RHSOutputInput!Rule!NativeCopyKey(RHSOutputKeys, NativeFormalNames, "pc", key) = key
-    BY SMT DEF RHSOutputInput!Rule!NativeCopyKey, NativeFormalNames, RHSOutputKeys
-<1>operands.
-    /\ DOMAIN NormalizedNativeAction.captures = 1..RHSOutputCount
-    /\ \A index \in 1..RHSOutputCount :
-          RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters(RHSOutputRows, index, NormalizedNativeAction.captures[index])
-    BY <1>names, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-        DEF RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters, RHSOutputInput!Rule!PhysicalAssignmentOperandsMatch,
-            RHSOutputInput!Rule!CopyReceiptNamesWriter, RHSOutputInput!Rule!CopyReceiptOrdinal,
-            RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference,
-            RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan,
-            RHSOutputInput!Rule!NativeAssignmentRekey, RHSOutputInput!Rule!NativeAssignmentRhsPlan, NormalizedNativeAction,
-            DecodedNativeAction, NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure, NativeActionRows,
-            RHSOutputRows, RHSOutputCount, RHSOutputInput!MasterFields, RHSOutputKeys
+    /\ \A key \in RHSOutputInput!MasterFields :
+        RHSOutputInput!Rule!NativeCopyKey(RHSOutputInput!MasterFields, NativeFormalNames, "pc", key) = key
+    /\ RHSOutputInput!Rule!NativeCopyKey(RHSOutputInput!MasterFields, NativeFormalNames, "pc", "pc") =
+        RHSOutputInput!Rule!NativeCopyControlSlot
+    BY ONLY SMT DEF RHSOutputInput!Rule!NativeCopyKey, NativeFormalNames, RHSOutputKeys, RHSOutputInput!MasterFields
+<1>slots. RHSOutputInput!Rule!NativeCopyKnownRoles(DecodedNativeAction, RHSOutputInput!MasterFields, NativeFormalNames, "pc")
+    BY ONLY <1>selected, <1>keys, SMT DEF RHSOutputInput!Rule!NativeCopyKnownRoles,
+        RHSOutputInput!Rule!NativeCopyPhysicalKeys, NativeActionRows, NativeFormalNames, RHSOutputKeys
+<1>readNames. RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown(DecodedNativeAction, NativeFormalNames)
+    BY ONLY <1>selected, <1>keys, SMT DEF RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown,
+        RHSOutputInput!Rule!NativeAssignmentRhsPlan, NativeActionRows, NativeFormalNames, RHSOutputKeys
+<1>rawDomain. DOMAIN DecodedNativeAction.captures = 1..RHSOutputCount
+    BY ONLY <1>selected, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT DEF NativeActionRows
+<1>captureDomain.
+    /\ DOMAIN NormalizedNativeAction.captures = DOMAIN DecodedNativeAction.captures
+    /\ DOMAIN RHSOutputPlans = DOMAIN RHSOutputRows
+    /\ DOMAIN RHSOutputRows = 1..RHSOutputCount
+    BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+        DEF NormalizedNativeAction, RHSOutputInput!Rule!NativeAssignmentRekey,
+            RHSOutputInput!Rule!SupportedAssignmentList, RHSOutputCount
+<1>sameCaptures. \A index \in 1..RHSOutputCount :
+    NormalizedNativeAction.captures[index] = RHSOutputPlans[index]
+    <2>. TAKE index \in 1..RHSOutputCount
+    <2>. DEFINE raw == RHSOutputInput!Rule!NativeAssignmentRhsPlan(DecodedNativeAction.captures[index])
+                rendered == RHSOutputPlans[index]
+                physical == NormalizedNativeAction.captures[index]
+    <2>same. raw = rendered
+        BY ONLY <1>selected, <1>captureDomain, (index \in 1..RHSOutputCount),
+            RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+            DEF raw, rendered, NativeActionRows, RHSOutputInput!Rule!NativeAssignmentRhsPlan, RHSOutputPlans,
+                RHSOutputNodeCounts, RHSOutputNodeKinds, RHSOutputNodeLiterals, RHSOutputNodeReads, RHSOutputNodeLeft, RHSOutputNodeRight
+    <2>reads. /\ raw.reads = [node \in 1..raw.count |-> raw.reads[node]]
+              /\ \A node \in 1..raw.count : raw.kinds[node] # "read" => raw.reads[node] = <<>>
+        BY ONLY <2>same, <1>captureDomain, (index \in 1..RHSOutputCount),
+            RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+            DEF rendered, RHSOutputPlans, RHSOutputNodeCounts, RHSOutputNodeKinds, RHSOutputNodeReads
+    <2>known. \A node \in 1..raw.count :
+        (raw.kinds[node] = "read" /\ raw.reads[node][1] = "state") => raw.reads[node][2] \in RHSOutputInput!MasterFields
+        BY ONLY <1>readNames, <1>keys, <1>rawDomain, (index \in 1..RHSOutputCount), SMT
+            DEF raw, NativeFormalNames, RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown
+    <2>normalized. physical = raw
+        BY ONLY <1>names, <1>rawDomain, (index \in 1..RHSOutputCount), <2>known, <2>reads, SMT
+            DEF physical, raw, NormalizedNativeAction, RHSOutputInput!Rule!NativeAssignmentRekey
+    <2>. QED BY ONLY <2>same, <2>normalized DEF physical, rendered
+<1>operands. \A index \in 1..RHSOutputCount :
+    RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters(RHSOutputRows, index, NormalizedNativeAction.captures[index])
+    BY ONLY <1>sameCaptures, <1>captureDomain, ActualRenderedRightHandSidesNameTheAuthoredWriters, SMT
+<1>writeDomain.
+    /\ Len(DecodedNativeAction.writes) \in Nat
+    /\ DOMAIN DecodedNativeAction.writes = 1..Len(DecodedNativeAction.writes)
+    BY ONLY <1>selected, IsaM("simp") DEF NativeActionRows
+<1>writeCount.
+    /\ Len(NormalizedNativeAction.writes) = Len(DecodedNativeAction.writes)
+    /\ DOMAIN NormalizedNativeAction.writes = DOMAIN DecodedNativeAction.writes
+    <2>. DEFINE writes == NormalizedNativeAction.writes
+                values == {writes[index] : index \in DOMAIN writes}
+    <2>domain. DOMAIN writes = DOMAIN DecodedNativeAction.writes
+        BY ONLY SMT DEF writes, NormalizedNativeAction, RHSOutputInput!Rule!NativeAssignmentRekey,
+            RHSOutputInput!Rule!NativeCopyRekey
+    <2>function. writes \in [1..Len(DecodedNativeAction.writes) -> values]
+        BY ONLY <2>domain, <1>writeDomain, SMT DEF writes, values, NormalizedNativeAction,
+            RHSOutputInput!Rule!NativeAssignmentRekey, RHSOutputInput!Rule!NativeCopyRekey
+    <2>sequence. writes \in Seq(values)
+        BY ONLY <2>function, <1>writeDomain, RHSOutputInput!Rule!SeqDef, SMT
+    <2>. QED BY ONLY <2>domain, <2>sequence, <1>writeDomain, RHSOutputInput!Rule!LenProperties, SMT DEF writes
+<1>frame.
+    /\ RHSOutputInput!MasterFields \subseteq STRING
+    /\ RHSOutputInput!Rule!NativeCopyControlSlot \notin RHSOutputInput!MasterFields
+    /\ NormalizedNativeAction.guards = <<RHSOutputEntry>>
+    /\ \A key \in RHSOutputInput!Rule!NativeCopyFields(RHSOutputInput!MasterFields) :
+           \E index \in DOMAIN NormalizedNativeAction.writes : NormalizedNativeAction.writes[index][1] = key
+    BY ONLY <1>selected, <1>keys, <1>names, <1>writeCount, SMT DEF NativeActionRows, NormalizedNativeAction,
+        RHSOutputKeys, RHSOutputEntry, RHSOutputInput!Rule!NativeCopyFields, RHSOutputInput!Rule!NativeCopyControlSlot,
+        RHSOutputInput!Rule!NativeAssignmentRekey, RHSOutputInput!Rule!NativeCopyRekey
+<1>writeRefs. \A index \in DOMAIN NormalizedNativeAction.writes :
+    LET key == NormalizedNativeAction.writes[index][1]
+    IN /\ key \in RHSOutputInput!Rule!NativeCopyFields(RHSOutputInput!MasterFields)
+       /\ NormalizedNativeAction.writes[index][2] =
+            IF key = RHSOutputInput!Rule!NativeCopyControlSlot THEN <<"control", RHSOutputExit>> ELSE RHSOutputWriteRoutes[key]
+    BY ONLY <1>selected, <1>keys, <1>names, <1>writeCount, SMT DEF NativeActionRows, NormalizedNativeAction,
+        RHSOutputKeys, RHSOutputExit, RHSOutputWriteRoutes, RHSOutputInput!Rule!NativeCopyFields,
+        RHSOutputInput!Rule!NativeAssignmentRekey, RHSOutputInput!Rule!NativeCopyRekey
 <1>writes.
     RHSOutputInput!Rule!NativeAssignmentWritesNameLastTargets(RHSOutputRows, NormalizedNativeAction, RHSOutputEntry, RHSOutputExit)
-    BY <1>names, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-        DEF RHSOutputInput!Rule!NativeAssignmentWritesNameLastTargets, RHSOutputInput!Rule!NativeCopyFields,
-            RHSOutputInput!Rule!NativeCopyRekey, RHSOutputInput!Rule!NativeCopyKey, RHSOutputInput!Rule!NativeCopyControlSlot,
-            RHSOutputInput!Rule!CopyReceiptNamesWriter, RHSOutputInput!Rule!CopyReceiptOrdinal,
-            RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference,
-            RHSOutputInput!Rule!NativeAssignmentRekey, NormalizedNativeAction, DecodedNativeAction, NativeActionOrdinal,
-            ActualNativeFailure, NativeAssignmentFailure, NativeActionRows, RHSOutputRows, RHSOutputCount, RHSOutputKeys,
-            RHSOutputInput!MasterFields, RHSOutputEntry, RHSOutputExit
-<1>. QED BY ONLY <1>dispatch, <1>decode, <1>operands, <1>writes
-    DEF RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites, NormalizedNativeAction, RHSOutputCount
+    BY ONLY <1>keys, <1>writeDomain, <1>writeCount, <1>frame, <1>writeRefs, ActualRenderedWriteRoutesNameTheAuthoredWriters, SMT
+        DEF RHSOutputInput!Rule!NativeAssignmentWritesNameLastTargets, RHSOutputInput!Rule!NativeCopyFields
+<1>. QED BY ONLY <1>dispatch, <1>slots, <1>readNames, <1>rawDomain, <1>captureDomain, <1>operands, <1>writes, SMT
+    DEF RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites, NormalizedNativeAction
 
 THEOREM ActualNativeAndTLAInitialObservationsUseTheCertifiedAssignmentHistory ==
     ASSUME Init
@@ -126,8 +187,9 @@ PROOF
     BY <1>entry, <1>failure, SMT DEF RHSOutputInput!Rule!NativeAssignmentCheckedCallback,
         RHSOutputInput!Rule!NativeAssignmentPrefix, NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure
 <1>route. RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, 1, "count", <<"capture", 1>>)
-    BY SMT DEF RHSOutputRows, RHSOutputInput!MasterRows, RHSOutputInput!Rule!CopyReceiptNamesWriter, RHSOutputInput!Rule!CopyReceiptOrdinal,
-       RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference
+    BY ONLY SMT DEF RHSOutputRows, RHSOutputInput!MasterRows, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterTargets,
+        RHSOutputInput!Rule!CopyReceiptNamesWriter, RHSOutputInput!Rule!CopyReceiptOrdinal,
+        RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference
 <1>writer. RHSOutputInput!Rule!DirectCopyRoutes(RHSOutputKeys, RHSOutputRows)[1]["count"] = <<"capture", 1>>
     BY <1>route, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
        RHSOutputInput!Rule!NamedAssignmentReadRouteIsTheScheduledRoute, SMT
@@ -137,6 +199,7 @@ PROOF
      completed |-> <<RHSOutputMax>>, before |-> [count |-> RHSOutputMax]]
     BY <1>writer, SMT DEF ActualNativeProjection, ActualNativeFailure, NativeAssignmentFailure, RHSOutputFailureEvent,
         RHSOutputKeys, RHSOutputRows, RHSOutputMin, RHSOutputMax, RHSOutputInput!MasterFields, RHSOutputInput!MasterRows,
+        RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterTargets,
         RHSOutputInput!Rule!CompletedAssignmentBindings, RHSOutputInput!Rule!CopyMaterializedState, RHSOutputInput!Rule!CopyReferenceValue
 <1>exact. RHSOutputActualFailures =
     {[site |-> 2, target |-> "count", payload |-> <<"integerOverflow", "addition", <<RHSOutputMax, 1>>>>,
@@ -160,5 +223,74 @@ THEOREM ActualInitialEventRecordsTheExactOverflowAndPrecedingBindings ==
           /\ ~RHSOutputSelectedEvaluationCheck
     BY Init, ActualNativeAndTLAInitialObservationsUseTheCertifiedAssignmentHistory, SMT
        DEF ActualNativeFailure, NativeAssignmentFailure
+
+LOCAL NativeCaptureObservation(visited) ==
+    RHSOutputInput!Rule!NativeAssignmentCaptureHistory(RHSOutputBefore, NormalizedNativeAction, RHSOutputCount, visited)
+
+LOCAL NativeCompletedAdvance(completed) ==
+    RHSOutputInput!Rule!NativeCopyVisits(
+        RHSOutputInput!Rule!NativeAssignmentMaterializationPlan(NormalizedNativeAction, completed),
+        RHSOutputInput!MasterFields, RHSOutputBefore, RHSOutputAfter, pc, pc')
+
+ActualNativeAssignmentAdvance ==
+    /\ RHSOutputAfter \in RHSOutputInput!Rule!AssignmentBindings
+    /\ \E visited :
+        /\ NativeCaptureObservation(visited)
+        /\ visited[RHSOutputCount].failure = <<>>
+        /\ NativeCompletedAdvance(visited[RHSOutputCount].completed)
+
+THEOREM ActualNativeAndTLAAdvanceAgreeOnTypedInput ==
+    ASSUME RHSOutputStateType
+    PROVE ActualNativeAssignmentAdvance <=> advance
+PROOF
+<1>actual. PICK history : RHSOutputSourceHistory(history) /\ RHSOutputHistoryObservation(history)
+    BY ONLY RHSOutputStateType, ActualTLAActionHasACertifiedAssignmentHistory
+<1>. DEFINE final == history[RHSOutputCount]
+<1>type. RHSOutputBefore \in RHSOutputInput!Rule!AssignmentBindings
+    BY ONLY RHSOutputStateType, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+        DEF RHSOutputStateType, RHSOutputMin, RHSOutputMax,
+            RHSOutputInput!Rule!AssignmentBindings, RHSOutputInput!Rule!AssignmentIntValues
+<1>source.
+    /\ RHSOutputInput!Rule!SupportedAssignmentList(RHSOutputRows)
+    /\ RHSOutputInput!Rule!AssignmentListHistory(FALSE, RHSOutputBefore, RHSOutputRows, history)
+    BY ONLY <1>actual, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory DEF RHSOutputSourceHistory
+<1>finalIndex. RHSOutputCount \in 0..Len(RHSOutputRows)
+    BY ONLY <1>source, SMT DEF RHSOutputCount, RHSOutputInput!Rule!SupportedAssignmentList
+<1>typedFinal. final.bindings \in RHSOutputInput!Rule!AssignmentBindings
+    BY ONLY <1>source, <1>finalIndex, SMT
+        DEF final, RHSOutputCount, RHSOutputInput!Rule!AssignmentListHistory, RHSOutputInput!Rule!AssignmentPrefixStates
+<1>matching. \A visited : NativeCaptureObservation(visited) =>
+    visited[RHSOutputCount] = RHSOutputInput!Rule!NativeAssignmentPrefix(final)
+    <2>. SUFFICES ASSUME NEW visited, NativeCaptureObservation(visited)
+                 PROVE visited[RHSOutputCount] = RHSOutputInput!Rule!NativeAssignmentPrefix(final)
+        OBVIOUS
+    <2>. QED BY ONLY <1>type, <1>source, <1>finalIndex, NativeCaptureObservation(visited),
+        ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles,
+        RHSOutputInput!Rule!PhysicalNativePrefixAgreesWithTheCertifiedAssignments, SMT
+        DEF NativeCaptureObservation, NormalizedNativeAction, RHSOutputCount, final
+<1>native. ActualNativeAssignmentCaptureHistory(history)
+    BY ONLY <1>type, <1>source, ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles,
+        RHSOutputInput!Rule!PhysicalNativeCapturesUseTheCertifiedAssignmentHistory, SMT
+        DEF ActualNativeAssignmentCaptureHistory, NormalizedNativeAction, RHSOutputCount
+<1>exists. \E visited : NativeCaptureObservation(visited)
+    /\ visited[RHSOutputCount] = RHSOutputInput!Rule!NativeAssignmentPrefix(final)
+    <2>. WITNESS RHSOutputInput!Rule!NativeAssignmentProjectedHistory(history, RHSOutputCount)
+    <2>. QED BY ONLY <1>native, <1>matching, SMT
+        DEF NativeCaptureObservation, ActualNativeAssignmentCaptureHistory
+<1>outcome. ActualNativeAssignmentAdvance <=>
+    /\ RHSOutputAfter \in RHSOutputInput!Rule!AssignmentBindings
+    /\ final.failure = <<>>
+    /\ NativeCompletedAdvance(final.completed)
+    BY ONLY <1>matching, <1>exists, SMT
+        DEF ActualNativeAssignmentAdvance, RHSOutputInput!Rule!NativeAssignmentPrefix
+<1>writes. ASSUME final.failure = <<>>, RHSOutputAfter \in RHSOutputInput!Rule!AssignmentBindings
+    PROVE NativeCompletedAdvance(final.completed) <=>
+        (RHSOutputSelected /\ pc' = RHSOutputExit /\ RHSOutputAfter = final.bindings)
+    BY ONLY <1>type, <1>source, ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles,
+        (final.failure = <<>>), (RHSOutputAfter \in RHSOutputInput!Rule!AssignmentBindings),
+        RHSOutputInput!Rule!SuccessfulNativeAssignmentsUseTheCompleteLastWriteFrame, SMT
+        DEF NativeCompletedAdvance, NormalizedNativeAction, RHSOutputSelected, final, RHSOutputCount
+<1>. QED BY ONLY <1>actual, <1>typedFinal, <1>outcome, <1>writes, SMT
+    DEF RHSOutputHistoryObservation, RHSOutputHistoryAdvance, final
 
 ====

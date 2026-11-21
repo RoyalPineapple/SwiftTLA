@@ -16,6 +16,8 @@ THEOREM ConfiguredNativeAndTLAUseTheCertifiedCopyAndOverflowOutcomes ==
         /\ \A label : SwiftTLACopyEmittedLabeled(label) <=> CertifiedCopyStep(label)
         /\ \A label : SwiftTLACopyNativeLabeled(label) <=> CertifiedCopyStep(label)
         /\ Next <=> (\E label : CertifiedCopyStep(label)))
+    /\ (Arithmetic!RHSOutputStateType =>
+            (Arithmetic!ActualNativeAssignmentAdvance <=> Arithmetic!advance))
     /\ Arithmetic!LocalOrderedRHSActualCFG = Arithmetic!LocalOrderedRHSExpectedCFG
     /\ (Arithmetic!Init =>
         /\ Arithmetic!RHSOutputSelectedSubExpressions = {<<2, 3>>}
@@ -36,6 +38,11 @@ PROOF
                     /\ \A label : SwiftTLACopyNativeLabeled(label) <=> CertifiedCopyStep(label)
                     /\ Next <=> (\E label : CertifiedCopyStep(label))
     BY CopyInputTyped, ActualTLAAndNativeCopyStepsUseTheCertifiedAssignmentHistory
+<1>advance. ASSUME Arithmetic!RHSOutputStateType
+             PROVE Arithmetic!ActualNativeAssignmentAdvance <=> Arithmetic!advance
+    BY ONLY Arithmetic!RHSOutputStateType, CallerInputDomain, CallerInputPageBlock1AtFileOffsets,
+        Arithmetic!ActualNativeAndTLAAdvanceAgreeOnTypedInput, PTL
+        DEF CallerInputSize, Arithmetic!CallerInputSize
 <1>cfg. Arithmetic!LocalOrderedRHSActualCFG = Arithmetic!LocalOrderedRHSExpectedCFG
     BY ONLY CallerInputDomain, CallerInputPageBlock1AtFileOffsets,
         Arithmetic!NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking, SMT
@@ -60,6 +67,6 @@ PROOF
     <2>. QED BY ONLY <2>disabled, PTL
         DEF Arithmetic!Next, Arithmetic!advance, Arithmetic!Terminating,
             OverflowActions!Next, OverflowActions!advance, OverflowActions!Terminating
-<1>. QED BY ONLY <1>copy, <1>certified, <1>cfg, <1>overflow, <1>blocked, PTL
+<1>. QED BY ONLY <1>copy, <1>certified, <1>advance, <1>cfg, <1>overflow, <1>blocked, PTL
 
 ====
