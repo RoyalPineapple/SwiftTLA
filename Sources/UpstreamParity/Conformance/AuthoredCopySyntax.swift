@@ -377,16 +377,15 @@ enum AuthoredCopySyntax {
         MasterNodeRight == \#(rightColumns)
         LOCAL MasterRetainedRows == \#(tuple(rows.map(\.retained)))
         MasterRows == [index \in DOMAIN MasterNodeCounts |->
-            LET row == MasterRetainedRows[index]
-                count == MasterNodeCounts[index]
-                nodes == [node \in 1..count |->
-                    [kind |-> MasterNodeKinds[index][node],
-                     payload |-> IF MasterNodeKinds[index][node] = "read"
-                                 THEN MasterNodeReadKeys[index][node] ELSE MasterNodeLiterals[index][node],
-                     left |-> MasterNodeLeft[index][node], right |-> MasterNodeRight[index][node]]]
-            IN [target |-> MasterTargets[index], view |-> row.view, inverse |-> row.inverse, fallback |-> \#(formalFallback),
-                emitted |-> [count |-> count, height |-> 1, indices |-> <<count>>, origins |-> row.origins, nodes |-> nodes]]]
-
+            [target |-> MasterTargets[index], view |-> MasterRetainedRows[index].view,
+             inverse |-> MasterRetainedRows[index].inverse, fallback |-> \#(formalFallback),
+             emitted |-> [count |-> MasterNodeCounts[index], height |-> 1,
+                          indices |-> <<MasterNodeCounts[index]>>, origins |-> MasterRetainedRows[index].origins,
+                          nodes |-> [node \in 1..MasterNodeCounts[index] |->
+                            [kind |-> MasterNodeKinds[index][node],
+                             payload |-> IF MasterNodeKinds[index][node] = "read"
+                                         THEN MasterNodeReadKeys[index][node] ELSE MasterNodeLiterals[index][node],
+                             left |-> MasterNodeLeft[index][node], right |-> MasterNodeRight[index][node]]]]]]
         Rule == INSTANCE OrderedAssignmentOutputRules WITH Keys <- MasterFields,
             SwiftIntMin <- \#(TLAValue.int(Int.min)), SwiftIntMax <- \#(TLAValue.int(Int.max)),
             Vars <- {}, Values <- {}, ActionLabels <- {}, FailureValues <- {}, NoFailure <- <<>>

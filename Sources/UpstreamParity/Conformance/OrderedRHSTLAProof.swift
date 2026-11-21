@@ -245,18 +245,69 @@ package enum OrderedRHSTLAProof {
             BY ONLY <1>counts, <1>domain, (index \in DOMAIN RHSOutputRows), SMT
                 DEF physical, expected, RHSOutputPlans, RHSOutputRows, RHSOutputInput!\#(sourceRows),
                     RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan
+        <1>physicalDomain. index \in DOMAIN RHSOutputPlans
+            BY ONLY <1>domain, (index \in DOMAIN RHSOutputRows), SMT
+        <1>physicalColumns. /\ physical.kinds = RHSOutputNodeKinds[index]
+                            /\ physical.literals = RHSOutputNodeLiterals[index]
+                            /\ physical.left = RHSOutputNodeLeft[index]
+                            /\ physical.right = RHSOutputNodeRight[index]
+            BY ONLY <1>physicalDomain, SMT DEF physical, RHSOutputPlans
+        <1>sourceDomain. index \in DOMAIN RHSOutputInput!MasterNodeCounts
+            BY ONLY (index \in DOMAIN RHSOutputRows), SMT DEF RHSOutputRows, RHSOutputInput!\#(sourceRows)
+        <1>. DEFINE cell(node) == RHSOutputRows[index].emitted.nodes[node]
+        <1>sourceCells. \A node \in 1..expected.count :
+            /\ cell(node).kind = RHSOutputInput!MasterNodeKinds[index][node]
+            /\ cell(node).payload = (IF cell(node).kind = "read"
+                                    THEN RHSOutputInput!MasterNodeReadKeys[index][node]
+                                    ELSE RHSOutputInput!MasterNodeLiterals[index][node])
+            /\ cell(node).left = RHSOutputInput!MasterNodeLeft[index][node]
+            /\ cell(node).right = RHSOutputInput!MasterNodeRight[index][node]
+            <2>. TAKE node \in 1..expected.count
+            <2>node. node \in 1..RHSOutputInput!MasterNodeCounts[index]
+                BY ONLY <1>shape, (node \in 1..expected.count), SMT
+            <2>kind. cell(node).kind = RHSOutputInput!MasterNodeKinds[index][node]
+                BY ONLY <1>sourceDomain, <2>node, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows)
+            <2>payload. cell(node).payload = (IF cell(node).kind = "read"
+                                             THEN RHSOutputInput!MasterNodeReadKeys[index][node]
+                                             ELSE RHSOutputInput!MasterNodeLiterals[index][node])
+                BY ONLY <1>sourceDomain, <2>node, <2>kind, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows)
+            <2>children. /\ cell(node).left = RHSOutputInput!MasterNodeLeft[index][node]
+                         /\ cell(node).right = RHSOutputInput!MasterNodeRight[index][node]
+                BY ONLY <1>sourceDomain, <2>node, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows)
+            <2>. QED BY ONLY <2>kind, <2>payload, <2>children
+        <1>expectedCells. \A node \in 1..expected.count :
+            /\ expected.kinds[node] = cell(node).kind
+            /\ (expected.kinds[node] = "literal" => expected.literals[node] = cell(node).payload)
+            /\ (expected.kinds[node] = "read" => expected.reads[node] = cell(node).payload)
+            /\ expected.left[node] = cell(node).left
+            /\ expected.right[node] = cell(node).right
+            <2>. TAKE node \in 1..expected.count
+            <2>kind. expected.kinds[node] = cell(node).kind
+                BY ONLY (node \in 1..expected.count), SMT DEF cell, expected,
+                    RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan
+            <2>literals. expected.kinds[node] = "literal" => expected.literals[node] = cell(node).payload
+                BY ONLY <2>kind, (node \in 1..expected.count), SMT DEF cell, expected,
+                    RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan
+            <2>reads. expected.kinds[node] = "read" => expected.reads[node] = cell(node).payload
+                BY ONLY <2>kind, (node \in 1..expected.count), SMT DEF cell, expected,
+                    RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan
+            <2>children. /\ expected.left[node] = cell(node).left
+                         /\ expected.right[node] = cell(node).right
+                BY ONLY (node \in 1..expected.count), SMT DEF cell, expected,
+                    RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan
+            <2>. QED BY ONLY <2>kind, <2>literals, <2>reads, <2>children
         <1>ops. RHSOutputInput!Rule!PhysicalAssignmentOperandsMatch(RHSOutputRows[index], physical)
-            PROOF
             <2>nodes. \A node \in 1..expected.count :
                 /\ physical.kinds[node] = expected.kinds[node]
                 /\ (expected.kinds[node] = "literal" => physical.literals[node] = expected.literals[node])
                 /\ (expected.kinds[node] = "add" =>
                       /\ physical.left[node] = expected.left[node]
                       /\ physical.right[node] = expected.right[node])
-                BY ONLY <1>shape, <1>domain, <1>kinds, <1>literals, <1>children, (index \in DOMAIN RHSOutputRows), SMT
-                    DEF physical, expected, RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputPlans,
-                        RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan
+                BY ONLY <1>physicalColumns, <1>sourceCells, <1>expectedCells, <1>kinds, <1>literals, <1>children, SMT
             <2>. QED BY ONLY <1>shape, <2>nodes DEF RHSOutputInput!Rule!PhysicalAssignmentOperandsMatch, expected
+        <1>targets. \A prior \in DOMAIN RHSOutputRows :
+            RHSOutputRows[prior].target = RHSOutputInput!MasterTargets[prior]
+            BY ONLY SMT DEF RHSOutputRows, RHSOutputInput!\#(sourceRows)
         <1>reads. \A node \in 1..expected.count : expected.kinds[node] = "read" =>
                 /\ expected.reads[node] \in RHSOutputInput!\#(sourceFields)
                 /\ RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, index - 1, expected.reads[node], physical.reads[node])
@@ -268,27 +319,36 @@ package enum OrderedRHSTLAProof {
                         reference == RHSOutputNodeReads[index][node]
                         writer == RHSOutputInput!Rule!CopyReceiptOrdinal(reference)
             <2>projected. /\ key = expected.reads[node] /\ reference = physical.reads[node]
-                BY ONLY <1>domain, <1>shape, (index \in DOMAIN RHSOutputRows), (node \in 1..expected.count),
+                <3>physical. reference = physical.reads[node]
+                    BY ONLY <1>physicalDomain, SMT DEF reference, physical, RHSOutputPlans
+                <3>authored. key = expected.reads[node]
+                    BY ONLY <1>sourceCells, <1>expectedCells, (node \in 1..expected.count),
+                        (expected.kinds[node] = "read"), SMT DEF key
+                <3>. QED BY ONLY <3>physical, <3>authored
+            <2>slot. /\ node \in 1..RHSOutputInput!MasterNodeCounts[index]
+                     /\ RHSOutputInput!MasterNodeKinds[index][node] = "read"
+                BY ONLY <1>shape, <1>sourceCells, <1>expectedCells, (node \in 1..expected.count),
                     (expected.kinds[node] = "read"), SMT
-                    DEF key, reference, expected, physical, RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputPlans,
-                        RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan
             <2>field. key \in RHSOutputInput!\#(sourceFields)
-                BY ONLY <1>domain, <1>shape, (index \in DOMAIN RHSOutputRows), (node \in 1..expected.count), SMT
-                    DEF key, RHSOutputCount, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeReadKeys,
-                        RHSOutputInput!\#(sourceFields), RHSOutputRows, RHSOutputInput!\#(sourceRows)
-            <2>position. RHSOutputInput!Rule!LastDirectCopy(RHSOutputRows, index - 1, key, writer)
-                BY ONLY <1>domain, <1>shape, (index \in DOMAIN RHSOutputRows), (node \in 1..expected.count),
-                    (expected.kinds[node] = "read"), SMT
-                    DEF key, reference, writer, expected, RHSOutputRows, RHSOutputInput!\#(sourceRows),
-                        RHSOutputInput!MasterTargets, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeKinds,
-                        RHSOutputInput!MasterNodeReadKeys, RHSOutputNodeReads, RHSOutputInput!Rule!AssignmentRhsPlan,
-                        RHSOutputInput!Rule!ExtractedNodePlan, RHSOutputInput!Rule!CopyReceiptOrdinal, RHSOutputInput!Rule!LastDirectCopy
-            <2>reference. reference = RHSOutputInput!Rule!DirectCopyReference(key, writer)
-                BY ONLY <1>domain, <1>shape, (index \in DOMAIN RHSOutputRows), (node \in 1..expected.count),
-                    (expected.kinds[node] = "read"), SMT
-                    DEF key, reference, writer, expected, RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputNodeReads,
+                BY ONLY <1>sourceDomain, <2>slot, SMT
+                    DEF key, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeReadKeys, RHSOutputInput!\#(sourceFields)
+            <2>positionColumns. /\ writer \in 0..(index - 1)
+                                /\ (writer = 0 \/ RHSOutputInput!MasterTargets[writer] = key)
+                                /\ \A prior \in 1..(index - 1) :
+                                      RHSOutputInput!MasterTargets[prior] = key => prior <= writer
+                BY ONLY <1>sourceDomain, <2>slot, SMT
+                    DEF key, reference, writer, RHSOutputInput!MasterTargets,
                         RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeKinds, RHSOutputInput!MasterNodeReadKeys,
-                        RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan,
+                        RHSOutputNodeReads, RHSOutputInput!Rule!CopyReceiptOrdinal
+            <2>earlierRows. /\ 1..(index - 1) \subseteq DOMAIN RHSOutputRows
+                            /\ (writer # 0 => writer \in DOMAIN RHSOutputRows)
+                BY ONLY <1>domain, (index \in DOMAIN RHSOutputRows), <2>positionColumns, SMT
+            <2>position. RHSOutputInput!Rule!LastDirectCopy(RHSOutputRows, index - 1, key, writer)
+                BY ONLY <1>targets, <2>positionColumns, <2>earlierRows, SMT DEF RHSOutputInput!Rule!LastDirectCopy
+            <2>reference. reference = RHSOutputInput!Rule!DirectCopyReference(key, writer)
+                BY ONLY <1>sourceDomain, <2>slot, SMT
+                    DEF key, reference, writer, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeKinds,
+                        RHSOutputInput!MasterNodeReadKeys, RHSOutputNodeReads,
                         RHSOutputInput!Rule!CopyReceiptOrdinal, RHSOutputInput!Rule!DirectCopyReference
             <2>. QED BY ONLY <2>projected, <2>field, <2>position, <2>reference, SMT
                 DEF writer, RHSOutputInput!Rule!CopyReceiptNamesWriter
