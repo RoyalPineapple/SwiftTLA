@@ -418,7 +418,7 @@ PROOF
     <2>reached. CASE RHSOutputSelected /\ final.failure # <<>>
         BY ONLY <1>raw, <1>prefix, <1>before, <2>reached, SMT
             DEF ActualNativeAssignmentFailures, NativeAssignmentFailureEvent, RHSOutputHistoryFailures, final
-    <2>. QED BY ONLY <2>inactive, <2>reached, PTL
+    <2>. QED BY ONLY <2>inactive, <2>reached, SMT
 <1>. QED BY ONLY <1>advance, <1>actual, <1>failures DEF RHSOutputHistoryObservation
 
 ====
