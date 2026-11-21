@@ -762,23 +762,152 @@ package enum OrderedRHSTLAProof {
             BY ONLY <1>shape, <1>inventory, <1>plans, RHSOutputUsesTheMachineIntegerDomain,
                 RHSOutputInput!Rule!WholeGuardTableHasAnExactFirstFailureSite, SMT
                 DEF RHSOutputPasses, RHSOutputFailsAt, RHSOutputCount
+        <1>. DEFINE final == history[RHSOutputCount]
+                    placeAt(probe) == RHSOutputProbePositions[probe]
+                    observed(probe) ==
+                        LET payload == RHSOutputPayloads[probe]
+                        IN RHSOutputFailureEvent(placeAt(probe)[1], payload.operation, payload.operands, payload.prefix)
+                    certified ==
+                        [site |-> final.failure.site, target |-> RHSOutputRows[final.failure.site].target,
+                         payload |-> final.failure.payload, completed |-> final.completed, before |-> final.failure.before]
+        <1>failureAt. \A row \in 1..RHSOutputCount : \A node \in 1..RHSOutputPlans[row].count :
+            RHSOutputFailsAt(<<row, node>>) =>
+              /\ final.failure = RHSOutputInput!Rule!RenderedAssignmentFailure(RHSOutputRows, RHSOutputBefore, RHSOutputRaw, row, node)
+              /\ final.completed = RHSOutputInput!Rule!HistoryPrefix(RHSOutputRaw.roots, row - 1)
+              /\ final.failure # <<>>
+            <2>. TAKE row \in 1..RHSOutputCount
+            <2>. TAKE node \in 1..RHSOutputPlans[row].count
+            <2>failing. ASSUME RHSOutputFailsAt(<<row, node>>)
+                 PROVE /\ final.failure = RHSOutputInput!Rule!RenderedAssignmentFailure(RHSOutputRows, RHSOutputBefore, RHSOutputRaw, row, node)
+                       /\ final.completed = RHSOutputInput!Rule!HistoryPrefix(RHSOutputRaw.roots, row - 1)
+                       /\ final.failure # <<>>
+                <3>projection. /\ final.failure = RHSOutputInput!Rule!RenderedAssignmentFailure(RHSOutputRows, RHSOutputBefore, RHSOutputRaw, row, node)
+                               /\ final.completed = RHSOutputInput!Rule!HistoryPrefix(RHSOutputRaw.roots, row - 1)
+                    BY ONLY <1>history, <1>plans, RHSOutputFailsAt(<<row, node>>),
+                        (row \in 1..RHSOutputCount), (node \in 1..RHSOutputPlans[row].count), SMT
+                        DEF final, RHSOutputFailsAt, RHSOutputInput!Rule!RenderedAssignmentHistoryAt
+                <3>. QED BY ONLY <3>projection, SMT DEF RHSOutputInput!Rule!RenderedAssignmentFailure
+            <2>. QED BY ONLY <2>failing, SMT
+        <1>passed. RHSOutputPasses =>
+            /\ final.failure = <<>>
+            /\ final.completed = RHSOutputInput!Rule!HistoryPrefix(RHSOutputRaw.roots, RHSOutputCount)
+            BY ONLY <1>history, SMT DEF final, RHSOutputPasses, RHSOutputInput!Rule!RenderedAssignmentHistoryAt
+        <1>success. RHSOutputPasses <=> final.failure = <<>>
+            BY ONLY <1>passed, <1>reached, <1>failureAt, SMT
+        <1>roots. /\ DOMAIN RHSOutputRaw.roots = 1..RHSOutputCount
+                   /\ Len(RHSOutputRaw.roots) = RHSOutputCount
+            BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT DEF RHSOutputRaw
+        <1>. DEFINE roots == RHSOutputRaw.roots
+                    captureSlots == 1..RHSOutputCount
+                    captureValues == {roots[index] : index \in captureSlots}
+                    completePrefix == RHSOutputInput!Rule!HistoryPrefix(roots, RHSOutputCount)
+        <1>rootsAreAFunction. roots \in [captureSlots -> captureValues]
+            BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+                DEF roots, captureSlots, captureValues, RHSOutputRaw
+        <1>fullPrefix. RHSOutputInput!Rule!HistoryPrefix(RHSOutputRaw.roots, RHSOutputCount) = RHSOutputRaw.roots
+            <2>cells. \A index \in captureSlots : completePrefix[index] = roots[index]
+                BY ONLY SMT DEF completePrefix, captureSlots, RHSOutputInput!Rule!HistoryPrefix
+            <2>prefixIsAFunction. completePrefix \in [captureSlots -> captureValues]
+                BY ONLY <1>rootsAreAFunction, SMT
+                    DEF completePrefix, captureSlots, RHSOutputInput!Rule!HistoryPrefix
+            <2>. QED BY ONLY <1>rootsAreAFunction, <2>prefixIsAFunction, <2>cells, SMT
+                DEF roots, completePrefix
+        <1>writes. RHSOutputPasses =>
+            final.bindings =
+                RHSOutputInput!Rule!CopyMaterializedState(RHSOutputKeys, RHSOutputBefore, RHSOutputRaw.roots, RHSOutputWriteRoutes)
+            <2>. SUFFICES ASSUME RHSOutputPasses
+                 PROVE final.bindings =
+                     RHSOutputInput!Rule!CopyMaterializedState(RHSOutputKeys, RHSOutputBefore, RHSOutputRaw.roots, RHSOutputWriteRoutes)
+                OBVIOUS
+            <2>complete. final.completed = RHSOutputRaw.roots
+                BY ONLY RHSOutputPasses, <1>passed, <1>fullPrefix, SMT
+            <2>bindings. final.bindings = RHSOutputInput!Rule!CompletedAssignmentBindings(RHSOutputBefore, RHSOutputRows, final.completed)
+                BY ONLY <1>history, SMT DEF final, RHSOutputInput!Rule!AssignmentPrefixMeaning
+            <2>keys. RHSOutputKeys = RHSOutputInput!\#(sourceFields)
+                BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory
+            <2>. QED BY ONLY <2>complete, <2>bindings, <2>keys, <1>roots,
+                ActualRenderedWriteRoutesAreTheFinalAuthoredWriters, SMT DEF RHSOutputInput!Rule!CompletedAssignmentBindings
+        <1>actualAdvance. \#(step.renderedName) <=> RHSOutputRawAdvance
+            BY ONLY RHSOutputStateType, ActualEmittedActionUsesThePhysicalGuardTable
         <1>frame. \#(step.renderedName) <=> RHSOutputHistoryAdvance(history)
-            BY <1>history, <1>reached, ActualEmittedActionUsesThePhysicalGuardTable,
-                ActualRenderedWriteRoutesAreTheFinalAuthoredWriters, SMT
-                DEF RHSOutputHistoryAdvance, RHSOutputRawAdvance, RHSOutputCount, RHSOutputPasses, RHSOutputFailsAt,
-                    RHSOutputRaw, RHSOutputInput!Rule!RenderedAssignmentHistoryAt, RHSOutputInput!Rule!RenderedAssignmentFailure,
-                    RHSOutputInput!Rule!AssignmentPrefixMeaning, RHSOutputInput!Rule!CompletedAssignmentBindings,
-                    RHSOutputInput!Rule!HistoryPrefix, RHSOutputInput!Rule!SupportedAssignmentList
+            BY ONLY <1>actualAdvance, <1>success, <1>writes, SMT DEF final, RHSOutputHistoryAdvance, RHSOutputRawAdvance
+
+        <1>places. RHSOutputSelectedSubExpressions =
+            {place \in RHSOutputPhysicalNodeSlots : RHSOutputSelected /\ RHSOutputFailsAt(place)}
+            BY ONLY RHSOutputStateType, ActualEmittedActionUsesThePhysicalGuardTable
+        <1>probeNonempty. (RHSOutputFailureProbeSites # {}) <=> (RHSOutputSelected /\ ~RHSOutputPasses)
+            <2>image. (RHSOutputFailureProbeSites # {}) <=> (RHSOutputSelectedSubExpressions # {})
+                BY ONLY SMT DEF RHSOutputSelectedSubExpressions
+            <2>slots. (\E place \in RHSOutputPhysicalNodeSlots : RHSOutputFailsAt(place)) <=>
+                (\E row \in 1..RHSOutputCount : \E node \in 1..RHSOutputPlans[row].count : RHSOutputFailsAt(<<row, node>>))
+                BY ONLY SMT DEF RHSOutputPhysicalNodeSlots
+            <2>selection. (RHSOutputSelectedSubExpressions # {}) <=>
+                (RHSOutputSelected /\ \E place \in RHSOutputPhysicalNodeSlots : RHSOutputFailsAt(place))
+                BY ONLY <1>places, SMT
+            <2>. QED BY ONLY <2>image, <2>slots, <2>selection, <1>reached, SMT
+        <1>probeValue. \A probe \in RHSOutputFailureProbeSites : observed(probe) = certified
+            <2>. TAKE probe \in RHSOutputFailureProbeSites
+            <2>. DEFINE place == placeAt(probe)
+                        row == place[1]
+                        node == place[2]
+                        plan == RHSOutputPlans[row]
+                        terms == RHSOutputRaw.terms[row]
+                        prefix == RHSOutputInput!Rule!HistoryPrefix(RHSOutputRaw.roots, row - 1)
+                        operands == <<terms[plan.left[node]], terms[plan.right[node]]>>
+            <2>slot. /\ place \in RHSOutputPhysicalNodeSlots /\ RHSOutputFailsAt(place)
+                BY ONLY <1>places, (probe \in RHSOutputFailureProbeSites), SMT
+                    DEF place, placeAt, RHSOutputSelectedSubExpressions
+            <2>coordinate. /\ row \in 1..RHSOutputCount /\ node \in 1..plan.count /\ place = <<row, node>>
+                BY ONLY <2>slot, SMT DEF row, node, plan, RHSOutputPhysicalNodeSlots
+            <2>history. /\ final.failure = RHSOutputInput!Rule!RenderedAssignmentFailure(RHSOutputRows, RHSOutputBefore, RHSOutputRaw, row, node)
+                         /\ final.completed = prefix
+                BY ONLY <2>slot, <2>coordinate, <1>failureAt, SMT DEF prefix, plan
+            <2>physicalPayload. RHSOutputPayloads[probe] =
+                [operation |-> "addition", operands |-> operands, prefix |-> prefix]
+                BY ONLY RHSOutputStateType, ActualEmittedActionUsesThePhysicalGuardTable, (probe \in RHSOutputFailureProbeSites), SMT
+                    DEF place, placeAt, row, node, plan, terms, prefix, operands
+            <2>historyPayload. final.failure =
+                [before |-> RHSOutputInput!Rule!CompletedAssignmentBindings(RHSOutputBefore, RHSOutputRows, prefix),
+                 site |-> row, payload |-> <<"integerOverflow", "addition", operands>>]
+                BY ONLY <2>history, <1>plans, SMT DEF plan, terms, prefix, operands,
+                    RHSOutputInput!Rule!RenderedAssignmentFailure, RHSOutputInput!Rule!RenderedTermOverflow,
+                    RHSOutputInput!Rule!GeneratedOverflow
+            <2>. QED BY ONLY <2>history, <2>historyPayload, <2>physicalPayload, SMT
+                DEF observed, certified, row, place, RHSOutputFailureEvent
+        <1>actualImage. RHSOutputActualFailures = {observed(probe) : probe \in RHSOutputFailureProbeSites}
+            BY ONLY SMT DEF observed, placeAt, RHSOutputActualFailures
         <1>failure. RHSOutputActualFailures = RHSOutputHistoryFailures(history)
-            BY <1>history, <1>reached, ActualEmittedActionUsesThePhysicalGuardTable, SetExtensionality, SMT
-                DEF RHSOutputActualFailures, RHSOutputHistoryFailures, RHSOutputFailureEvent,
-                    RHSOutputSelectedSubExpressions, RHSOutputPhysicalNodeSlots, RHSOutputPasses, RHSOutputFailsAt, RHSOutputCount,
-                    RHSOutputRaw, RHSOutputFailureProbeSites, RHSOutputInput!Rule!RenderedAssignmentHistoryAt,
-                    RHSOutputInput!Rule!RenderedAssignmentFailure, RHSOutputInput!Rule!RenderedTermOverflow, RHSOutputInput!Rule!GeneratedOverflow
+            <2>actual. RHSOutputActualFailures = IF RHSOutputFailureProbeSites # {} THEN {certified} ELSE {}
+                <3>empty. CASE RHSOutputFailureProbeSites = {}
+                    <4>none. \A event : event \notin RHSOutputActualFailures
+                        BY ONLY <3>empty, <1>actualImage, SMT
+                    <4>emptyImage. RHSOutputActualFailures = {}
+                        <5>membership. \A event : (event \in RHSOutputActualFailures) <=> (event \in {})
+                            BY ONLY <4>none, SMT
+                        <5>. QED BY ONLY <5>membership, SetExtensionality, Zenon
+                    <4>. QED BY ONLY <3>empty, <4>emptyImage, IsaM("simp")
+                <3>active. CASE RHSOutputFailureProbeSites # {}
+                    <4>probe. PICK probe \in RHSOutputFailureProbeSites : TRUE
+                        BY ONLY <3>active, SMT
+                    <4>includes. certified \in RHSOutputActualFailures
+                        BY ONLY <4>probe, <1>actualImage, <1>probeValue, SMT
+                    <4>only. \A event \in RHSOutputActualFailures : event = certified
+                        <5>. TAKE event \in RHSOutputActualFailures
+                        <5>origin. PICK other \in RHSOutputFailureProbeSites : event = observed(other)
+                            BY ONLY <1>actualImage, (event \in RHSOutputActualFailures), SMT
+                        <5>. QED BY ONLY <5>origin, <1>probeValue, SMT
+                    <4>. QED BY ONLY <3>active, <4>includes, <4>only, SetExtensionality, SMT
+                <3>. QED BY ONLY <3>empty, <3>active
+            <2>source. RHSOutputHistoryFailures(history) =
+                IF RHSOutputSelected /\ final.failure # <<>> THEN {certified} ELSE {}
+                BY ONLY DEF RHSOutputHistoryFailures, final, certified
+            <2>. QED BY ONLY <2>actual, <2>source, <1>probeNonempty, <1>success, SMT
         <1>aggregate. RHSOutputFailureSelected = (RHSOutputActualFailures # {})
-            BY <1>history, <1>reached, <1>failure, ActualEmittedActionUsesThePhysicalGuardTable, SMT
-                DEF RHSOutputHistoryFailures, RHSOutputPasses, RHSOutputFailsAt,
-                    RHSOutputInput!Rule!RenderedAssignmentHistoryAt, RHSOutputInput!Rule!RenderedAssignmentFailure
+            <2>emitted. RHSOutputFailureSelected = (RHSOutputSelected /\ ~RHSOutputPasses)
+                BY ONLY RHSOutputStateType, ActualEmittedActionUsesThePhysicalGuardTable
+            <2>nonempty. (RHSOutputActualFailures # {}) <=> (RHSOutputFailureProbeSites # {})
+                BY ONLY <1>actualImage, SMT
+            <2>. QED BY ONLY <2>emitted, <2>nonempty, <1>probeNonempty, SMT
         <1>terminal. \#(terminal.renderedName) <=> RHSOutputTermination
             BY SMT DEF \#(terminal.renderedName), RHSOutputTermination, RHSOutputExit, RHSOutputKeys, RHSOutputBefore, RHSOutputAfter
         <1>next. Next <=> (RHSOutputHistoryAdvance(history) \/ RHSOutputTermination)

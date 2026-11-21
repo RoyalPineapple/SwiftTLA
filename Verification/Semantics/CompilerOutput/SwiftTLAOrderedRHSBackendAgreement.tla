@@ -327,21 +327,54 @@ PROOF
         RHSOutputInput!Rule!NativeAssignmentPrefix(history[RHSOutputCount])) = {ActualNativeFailure}
     BY <1>entry, <1>failure, SMT DEF RHSOutputInput!Rule!NativeAssignmentCheckedCallback,
         RHSOutputInput!Rule!NativeAssignmentPrefix, NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure
-<1>route. RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, 1, "count", <<"capture", 1>>)
-    BY ONLY SMT DEF RHSOutputRows, RHSOutputInput!MasterRows, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterTargets,
-        RHSOutputInput!Rule!CopyReceiptNamesWriter, RHSOutputInput!Rule!CopyReceiptOrdinal,
-        RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference
-<1>writer. RHSOutputInput!Rule!DirectCopyRoutes(RHSOutputKeys, RHSOutputRows)[1]["count"] = <<"capture", 1>>
-    BY <1>route, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
-       RHSOutputInput!Rule!NamedAssignmentReadRouteIsTheScheduledRoute, SMT
-       DEF RHSOutputKeys, RHSOutputInput!MasterFields, RHSOutputInput!Rule!SupportedAssignmentList
+<1>rows.
+    /\ RHSOutputKeys = RHSOutputInput!MasterFields
+    /\ Len(RHSOutputRows) = 2
+    /\ DOMAIN RHSOutputRows = 1..2
+    /\ \A index \in DOMAIN RHSOutputRows : RHSOutputRows[index].target \in RHSOutputInput!MasterFields
+    BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+        DEF RHSOutputCount, RHSOutputInput!Rule!SupportedAssignmentList
+<1>targets. \A index \in 1..2 :
+    /\ RHSOutputRows[index].target = RHSOutputInput!MasterTargets[index]
+    /\ RHSOutputInput!MasterTargets[index] = "count"
+    BY ONLY <1>rows, SMT DEF RHSOutputInput!MasterFields, RHSOutputInput!MasterTargets
+<1>receipt.
+    /\ ActualNativeFailure.site = 2
+    /\ ActualNativeFailure.payload = <<"integerOverflow", "addition", <<RHSOutputMax, 1>>>>
+    /\ ActualNativeFailure.completed = <<RHSOutputMax>>
+    BY ONLY SMT DEF ActualNativeFailure, NativeAssignmentFailure, RHSOutputMax
+<1>prefix. Len(ActualNativeFailure.completed) = ActualNativeFailure.site - 1
+    BY ONLY <1>receipt, SMT
+<1>route. RHSOutputInput!Rule!CopyReceiptNamesWriter(
+    RHSOutputRows, ActualNativeFailure.site - 1, "count", <<"capture", 1>>)
+    BY ONLY <1>receipt, <1>targets, SMT DEF RHSOutputInput!Rule!CopyReceiptNamesWriter,
+        RHSOutputInput!Rule!CopyReceiptOrdinal, RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference
+<1>bounds.
+    /\ Len(RHSOutputRows) \in Nat
+    /\ ActualNativeFailure.site - 1 \in 0..Len(RHSOutputRows)
+    /\ "count" \in RHSOutputInput!MasterFields
+    BY ONLY <1>rows, <1>receipt, SMT DEF RHSOutputInput!MasterFields
+<1>writer. RHSOutputInput!Rule!DirectCopyRoutes(RHSOutputInput!MasterFields, RHSOutputRows)[ActualNativeFailure.site - 1]["count"] =
+    <<"capture", 1>>
+    BY ONLY <1>route, <1>bounds, RHSOutputUsesTheMachineIntegerDomain,
+        RHSOutputInput!Rule!NamedAssignmentReadRouteIsTheScheduledRoute, SMT
+<1>. DEFINE nativeBefore == [key \in RHSOutputInput!MasterFields |-> ActualNativeFailure.before[key]]
+            completed == ActualNativeFailure.completed
+            routes == RHSOutputInput!Rule!DirectCopyRoutes(RHSOutputInput!MasterFields, RHSOutputRows)[Len(completed)]
+<1>before. nativeBefore = RHSOutputBefore
+    BY ONLY <1>entry, <1>rows, SMT DEF nativeBefore
+<1>materialized. RHSOutputInput!Rule!CompletedAssignmentBindings(nativeBefore, RHSOutputRows, completed) = [count |-> RHSOutputMax]
+    <2>reference. routes["count"] = <<"capture", 1>>
+        BY ONLY <1>writer, <1>prefix, SMT DEF routes, completed
+    <2>value. RHSOutputInput!Rule!CopyReferenceValue(nativeBefore, completed, routes["count"]) = RHSOutputMax
+        BY ONLY <2>reference, <1>receipt, SMT DEF RHSOutputInput!Rule!CopyReferenceValue, completed
+    <2>. QED BY ONLY <2>value, SMT DEF RHSOutputInput!MasterFields, routes,
+        RHSOutputInput!Rule!CompletedAssignmentBindings, RHSOutputInput!Rule!CopyMaterializedState
 <1>projection. ActualNativeProjection =
     [site |-> 2, target |-> "count", payload |-> <<"integerOverflow", "addition", <<RHSOutputMax, 1>>>>,
      completed |-> <<RHSOutputMax>>, before |-> [count |-> RHSOutputMax]]
-    BY <1>writer, SMT DEF ActualNativeProjection, ActualNativeFailure, NativeAssignmentFailure, RHSOutputFailureEvent,
-        RHSOutputKeys, RHSOutputRows, RHSOutputMin, RHSOutputMax, RHSOutputInput!MasterFields, RHSOutputInput!MasterRows,
-        RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterTargets,
-        RHSOutputInput!Rule!CompletedAssignmentBindings, RHSOutputInput!Rule!CopyMaterializedState, RHSOutputInput!Rule!CopyReferenceValue
+    BY ONLY <1>receipt, <1>targets, <1>before, <1>materialized, SMT
+        DEF ActualNativeProjection, RHSOutputFailureEvent, completed
 <1>exact. RHSOutputActualFailures =
     {[site |-> 2, target |-> "count", payload |-> <<"integerOverflow", "addition", <<RHSOutputMax, 1>>>>,
       completed |-> <<RHSOutputMax>>, before |-> [count |-> RHSOutputMax]]}
