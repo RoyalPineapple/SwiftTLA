@@ -54,15 +54,37 @@ THEOREM ActualSourceBranchUsesTheCertifiedCopyHistory ==
                        CopyAssignments!AssignmentPrefixMeaning(SwiftTLACopyBefore, rows, history, visit)
         BY <1>shape, CopyInputTyped, CopyAssignments!CertifiedOrderedAssignmentListConstructsCompleteActionOutcome,
             SMT DEF CopyInputTyped
+    <1>integers. CopyAssignments!IntegerDomain
+        BY ONLY SMT DEF CopyAssignments!IntegerDomain
+    <1>inputs.
+        /\ SwiftTLACopyBefore \in CopyAssignments!AssignmentBindings
+        /\ Len(rows) \in 0..Len(copies)
+        BY ONLY CopyInputTyped, <1>shape, SMT DEF CopyInputTyped, CopyAssignments!TypedCopyRows
+    <1>sourceBranch.
+        CopyAssignments!SourceCopyBranch(SwiftTLACopyKeys, copies, SwiftTLACopyBefore, SwiftTLACopyAfter)
+            <=> SwiftTLACopyRules!SourceCopyBranch(SwiftTLACopyKeys, copies, SwiftTLACopyBefore, SwiftTLACopyAfter)
+        BY ONLY SMT DEF CopyAssignments!SourceCopyBranch, SwiftTLACopyRules!SourceCopyBranch,
+            CopyAssignments!SourceCopyStateHistory, SwiftTLACopyRules!SourceCopyStateHistory,
+            CopyAssignments!CopyReplace, SwiftTLACopyRules!CopyReplace
     <1>branch. \A history :
         CopyAssignments!AssignmentListHistory(FALSE, SwiftTLACopyBefore, rows, history) =>
            /\ history[Len(rows)].failure = <<>>
            /\ (SwiftTLACopyRules!SourceCopyBranch(SwiftTLACopyKeys, copies, SwiftTLACopyBefore, SwiftTLACopyAfter)
                  <=> SwiftTLACopyAfter = history[Len(rows)].bindings)
-        BY <1>shape, CopyInputTyped, CopyAssignments!CertifiedDirectReadsHaveExactlyTheSourceCopyBranch,
-            SMT DEF CopyInputTyped, rows, CertifiedCopyAssignments,
-                CopyAssignments!SourceCopyBranch, SwiftTLACopyRules!SourceCopyBranch,
-                CopyAssignments!SourceCopyStateHistory, SwiftTLACopyRules!SourceCopyStateHistory
+        <2>. SUFFICES ASSUME NEW seen, CopyAssignments!AssignmentListHistory(FALSE, SwiftTLACopyBefore, rows, seen)
+                     PROVE /\ seen[Len(rows)].failure = <<>>
+                           /\ (SwiftTLACopyRules!SourceCopyBranch(SwiftTLACopyKeys, copies, SwiftTLACopyBefore, SwiftTLACopyAfter)
+                                 <=> SwiftTLACopyAfter = seen[Len(rows)].bindings)
+            OBVIOUS
+        <2>certified.
+            /\ \A visit \in 0..Len(copies) : seen[visit].failure = <<>>
+            /\ (CopyAssignments!SourceCopyBranch(SwiftTLACopyKeys, copies, SwiftTLACopyBefore, SwiftTLACopyAfter)
+                  <=> SwiftTLACopyAfter = seen[Len(copies)].bindings)
+            BY ONLY <1>shape, <1>inputs, <1>integers,
+                CopyAssignments!AssignmentListHistory(FALSE, SwiftTLACopyBefore, rows, seen),
+                CopyAssignments!CertifiedDirectReadsHaveExactlyTheSourceCopyBranch, SMT
+                DEF rows, CertifiedCopyAssignments, copies
+        <2>. QED BY ONLY <2>certified, <1>shape, <1>inputs, <1>sourceBranch, SMT
     <1>exists. SwiftTLACopyRules!SourceCopyBranch(SwiftTLACopyKeys, copies, SwiftTLACopyBefore, SwiftTLACopyAfter)
                  => (\E history : SelectedCopyHistory(index, history))
         PROOF
