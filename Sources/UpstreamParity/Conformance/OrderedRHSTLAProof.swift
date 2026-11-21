@@ -687,11 +687,39 @@ package enum OrderedRHSTLAProof {
             <2>. QED BY ONLY <2>member, SetExtensionality, SMT
         <1>actualAggregate. RHSOutputFailureSelected = (RHSOutputFailureProbeSites # {})
             BY ONLY SMT DEF RHSOutputFailureSelected, RHSOutputFailureProbeSites, RHSOutputGuards\#(aggregateName)\#(predicateNames)
+        <1>reached. ~RHSOutputPasses <=>
+            (\E row \in 1..RHSOutputCount : \E node \in 1..RHSOutputPlans[row].count : RHSOutputFailsAt(<<row, node>>))
+            BY ONLY <1>inventory, <1>plans, RHSOutputUsesTheMachineIntegerDomain,
+                RHSOutputInput!Rule!WholeGuardTableHasAnExactFirstFailureSite, SMT
+                DEF RHSOutputPasses, RHSOutputFailsAt, RHSOutputCount
         <1>firstFailure. ~RHSOutputPasses <=>
             (\E place \in RHSOutputPhysicalNodeSlots : RHSOutputFailsAt(place))
-            BY ONLY <1>plans, <1>inventory, RHSOutputUsesTheMachineIntegerDomain,
-                RHSOutputInput!Rule!WholeGuardTableHasAnExactFirstFailureSite, SMT
-                DEF RHSOutputPasses, RHSOutputFailsAt, RHSOutputPhysicalNodeSlots, RHSOutputCount
+            <2>encode. ASSUME \E row \in 1..RHSOutputCount :
+                                   \E node \in 1..RHSOutputPlans[row].count : RHSOutputFailsAt(<<row, node>>)
+                       PROVE \E place \in RHSOutputPhysicalNodeSlots : RHSOutputFailsAt(place)
+                <3>row. PICK row \in 1..RHSOutputCount :
+                    \E node \in 1..RHSOutputPlans[row].count : RHSOutputFailsAt(<<row, node>>)
+                    BY ONLY (\E index \in 1..RHSOutputCount : \E node \in 1..RHSOutputPlans[index].count :
+                                 RHSOutputFailsAt(<<index, node>>)), SMT
+                <3>node. PICK node \in 1..RHSOutputPlans[row].count : RHSOutputFailsAt(<<row, node>>)
+                    BY ONLY <3>row, SMT
+                <3>slot. <<row, node>> \in RHSOutputPhysicalNodeSlots
+                    BY ONLY <1>slotMember, <3>row, <3>node, SMT
+                <3>. QED BY ONLY <3>slot, <3>node, Zenon
+            <2>decode. ASSUME \E place \in RHSOutputPhysicalNodeSlots : RHSOutputFailsAt(place)
+                       PROVE \E row \in 1..RHSOutputCount :
+                                 \E node \in 1..RHSOutputPlans[row].count : RHSOutputFailsAt(<<row, node>>)
+                <3>slot. PICK place \in RHSOutputPhysicalNodeSlots : RHSOutputFailsAt(place)
+                    BY ONLY (\E site \in RHSOutputPhysicalNodeSlots : RHSOutputFailsAt(site)), SMT
+                <3>bounds. /\ place[1] \in 1..RHSOutputCount
+                           /\ place[2] \in 1..RHSOutputPlans[place[1]].count
+                    BY ONLY <3>slot, <1>slotBounds, SMT
+                <3>same. RHSOutputFailsAt(<<place[1], place[2]>>)
+                    BY ONLY <3>slot, SMT DEF RHSOutputFailsAt
+                <3>nodeExists. \E node \in 1..RHSOutputPlans[place[1]].count : RHSOutputFailsAt(<<place[1], node>>)
+                    BY ONLY <3>bounds, <3>same, Zenon
+                <3>. QED BY ONLY <3>bounds, <3>nodeExists, Zenon
+            <2>. QED BY ONLY <1>reached, <2>encode, <2>decode, SMT
         <1>aggregate. RHSOutputFailureSelected = (RHSOutputSelected /\ ~RHSOutputPasses)
             BY ONLY <1>actualAggregate, <1>firstFailure, <1>sites, SMT DEF RHSOutputSelectedSubExpressions
         <1>payloads. \A probe \in RHSOutputFailureProbeSites :
@@ -896,7 +924,11 @@ package enum OrderedRHSTLAProof {
                         <5>origin. PICK other \in RHSOutputFailureProbeSites : event = observed(other)
                             BY ONLY <1>actualImage, (event \in RHSOutputActualFailures), SMT
                         <5>. QED BY ONLY <5>origin, <1>probeValue, SMT
-                    <4>. QED BY ONLY <3>active, <4>includes, <4>only, SetExtensionality, SMT
+                    <4>singletonImage. RHSOutputActualFailures = {certified}
+                        <5>membership. \A event : (event \in RHSOutputActualFailures) <=> (event \in {certified})
+                            BY ONLY <4>includes, <4>only, SMT
+                        <5>. QED BY ONLY <5>membership, SetExtensionality, Zenon
+                    <4>. QED BY ONLY <3>active, <4>singletonImage, IsaM("simp")
                 <3>. QED BY ONLY <3>empty, <3>active
             <2>source. RHSOutputHistoryFailures(history) =
                 IF RHSOutputSelected /\ final.failure # <<>> THEN {certified} ELSE {}
