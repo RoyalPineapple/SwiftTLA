@@ -67,8 +67,29 @@ THEOREM DirectReadSelectsTheCurrentBinding ==
         BY <1>witness, SMT
     <1>chosen. SourceSyntaxHistory(view, bindings, meaning)
         BY <1>exists, SMT DEF meaning
-    <1>. QED BY <1>chosen, SMT DEF SourceAssignmentRHS, ReadAssignmentRow, view, outcome, meaning,
-        ReadAssignmentView, SourceSyntaxHistory
+    <1>rowView. ReadAssignmentRow(copy).view = view
+        BY ONLY IsaM("simp") DEF ReadAssignmentRow, view
+    <1>columns. /\ view.root = 1 /\ view.kinds = <<"read">> /\ view.reads = <<copy.read>>
+        BY ONLY IsaM("simp") DEF ReadAssignmentView, view
+    <1>node. 1 \in DOMAIN view.kinds /\ view.kinds[1] = "read" /\ view.reads[1] = copy.read
+        BY ONLY <1>columns, SMT
+    <1>shape. /\ ReadAssignmentRow(copy).view = view
+              /\ view.root = 1 /\ 1 \in DOMAIN view.kinds
+              /\ view.kinds[1] = "read" /\ view.reads[1] = copy.read
+        BY ONLY <1>rowView, <1>columns, <1>node
+    <1>evaluates. ASSUME NEW visit, SourceSyntaxHistory(view, bindings, visit)
+                  PROVE visit[1] = outcome
+        <2>root. visit[1] =
+            IF view.kinds[1] = "literal" THEN Success(view.literals[1])
+            ELSE IF view.kinds[1] = "read" THEN Success(bindings[view.reads[1]])
+            ELSE SourceCombine(visit[view.left[1]], visit[view.right[1]])
+            BY ONLY <1>node, SourceSyntaxHistory(view, bindings, visit), SMT DEF SourceSyntaxHistory
+        <2>. QED BY ONLY <1>node, <2>root, SMT DEF outcome
+    <1>value. meaning[1] = outcome
+        BY ONLY <1>chosen, <1>evaluates, SMT
+    <1>selected. SourceAssignmentRHS(ReadAssignmentRow(copy), bindings) = meaning[1]
+        BY ONLY <1>shape, IsaM("simp") DEF SourceAssignmentRHS, meaning
+    <1>. QED BY ONLY <1>selected, <1>value DEF outcome
 
 THEOREM CertifiedDirectReadsHaveExactlyTheSourceCopyBranch ==
     ASSUME NEW copies, TypedCopyRows(copies), NEW before \in AssignmentBindings, NEW after,
@@ -131,8 +152,11 @@ THEOREM CertifiedDirectReadsHaveExactlyTheSourceCopyBranch ==
         <2>. QED BY <2>all, <1>shape, SMT DEF agrees
     <1>source. ASSUME after = history[count].bindings
                 PROVE SourceCopyBranch(Keys, copies, before, after)
-        <2>. WITNESS states
-        <2>. QED BY <1>history, <1>shape, (after = history[count].bindings), SMT DEF states, count
+        <2>exists. \E witness : SourceCopyStateHistory(Keys, copies, before, witness)
+                               /\ after = witness[count]
+            <3>. WITNESS states
+            <3>. QED BY <1>history, <1>shape, (after = history[count].bindings), SMT DEF states, count
+        <2>. QED BY ONLY <2>exists DEF SourceCopyBranch, count
     <1>. QED BY <1>source, <1>unique, <1>shape, <1>success, SMT DEF SourceCopyBranch, states, count, complete
 
 ====
