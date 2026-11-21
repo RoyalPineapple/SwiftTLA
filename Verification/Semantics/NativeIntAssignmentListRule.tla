@@ -150,7 +150,24 @@ THEOREM NativeAssignmentCaptureHistoriesAgree ==
         <2>. QED BY <2>previous, SMT DEF NativeAssignmentCaptureHistory, agrees
     <1>. HIDE DEF agrees
     <1>all. \A index \in 0..count : agrees(index)
-        BY ONLY (count \in Nat), <1>seed, <1>step, FiniteIndexedPrefixProperty, Isa
+        <2>. TAKE index \in 0..count
+        <2>. SUFFICES ASSUME ~agrees(index)
+                     PROVE FALSE
+            BY PTL
+        <2>. DEFINE differs(position) == position \in 0..count /\ ~agrees(position)
+        <2>different. index \in Nat /\ differs(index)
+            BY ONLY (count \in Nat), (index \in 0..count), ~agrees(index), SMT DEF differs
+        <2>. HIDE DEF differs
+        <2>first. PICK first \in Nat :
+            differs(first) /\ \A prior \in 0..(first - 1) : ~differs(prior)
+            BY ONLY <2>different, SmallestNatural, Isa
+        <2>bounds. first \in 1..count /\ ~agrees(first)
+            BY ONLY <2>first, <1>seed, (count \in Nat), SMT DEF differs
+        <2>prior. \A prior \in 0..(first - 1) : agrees(prior)
+            BY ONLY <2>first, <2>bounds, (count \in Nat), SMT DEF differs
+        <2>equal. agrees(first)
+            BY ONLY <1>step, <2>bounds, <2>prior, SMT
+        <2>. QED BY ONLY <2>bounds, <2>equal, PTL
     <1>. QED BY ONLY <1>all DEF agrees
 
 THEOREM PhysicalNativePrefixAgreesWithTheCertifiedAssignments ==
@@ -325,7 +342,20 @@ THEOREM CheckedNativeDispatchConstructsTheSharedPrefixAndCallback ==
         ELSE {}
         BY ONLY <1>prefix, SupportedAssignmentList(rows), SMT
             DEF NativeAssignmentCheckedCallback, NativeAssignmentPrefix, SupportedAssignmentList, count, final
-    <1>. WITNESS shared, native
-    <1>. QED BY ONLY <1>shared, <1>native, <1>prefix, <1>callbacks DEF final
+    <1>joint. \E sourceHistory, nativeHistory :
+        /\ AssignmentListHistory(FALSE, before, rows, sourceHistory)
+        /\ NativeAssignmentCaptureHistory(before, plan, count, nativeHistory)
+        /\ \A index \in 0..count : AssignmentPrefixMeaning(before, rows, sourceHistory, index)
+        /\ \A index \in 0..count : nativeHistory[index] = NativeAssignmentPrefix(sourceHistory[index])
+        /\ LET tail == sourceHistory[count]
+           IN NativeAssignmentCheckedCallback(original, label, actionOrdinal, original[counter] = entry, nativeHistory[count]) =
+               IF original[counter] = entry /\ tail.failure # <<>>
+               THEN {[label |-> label, actionOrdinal |-> actionOrdinal,
+                      site |-> tail.failure.site, completed |-> tail.completed,
+                      payload |-> tail.failure.payload, before |-> original]}
+               ELSE {}
+        <2>. WITNESS shared, native
+        <2>. QED BY ONLY <1>shared, <1>native, <1>prefix, <1>callbacks DEF final
+    <1>. QED BY ONLY <1>joint DEF before, raw, plan, count
 
 ====
