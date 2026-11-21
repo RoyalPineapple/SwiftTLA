@@ -135,6 +135,9 @@ def main():
         "nativeSHA256": packet / "case/native-initial-failure.json",
         "nativeSourceSHA256": packet / "case/native-initial-source.swift",
     }
+    if "authoredSourceSHA256" in preparation or "actionSourceSHA256" in preparation:
+        bindings.update(authoredSourceSHA256=packet / "case/authored-model.swift",
+                        actionSourceSHA256=packet / "case/generated-tla/SwiftTLAStayActionSource.tla")
     for field, path in bindings.items():
         if digest(path) != preparation[field]:
             raise ValueError(f"retained packet mismatch: {field}")

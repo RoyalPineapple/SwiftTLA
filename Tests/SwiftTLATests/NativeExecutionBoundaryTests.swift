@@ -4,6 +4,7 @@ import SwiftParser
 import SwiftSyntax
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
+import SwiftTLACompilerSupport
 import SwiftTLAMacros
 
 @TLAModel

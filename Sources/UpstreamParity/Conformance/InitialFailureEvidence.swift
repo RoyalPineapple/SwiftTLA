@@ -33,6 +33,8 @@ package struct InitialFailureEvidenceReport: Codable, Sendable {
     package let checkModuleSHA256: String
     package let checkConfigurationSHA256: String
     package let proofSHA256: String
+    package let authoredSourceSHA256: String?
+    package let actionSourceSHA256: String?
     package let nativeSHA256: String
     package let sourceCompilationIdentity: String
     package let sourceInitializersSHA256: String
@@ -67,7 +69,8 @@ package enum InitialFailureEvidence {
     private static let proofModule = "SwiftTLAInitialFailureProof"
     private static let failureKind = "integerOverflow.addition"
 
-    package static func prepare(sourceSHA: String, nativeSource: String, to directory: URL) throws -> InitialFailureEvidenceReport {
+    package static func prepare(sourceSHA: String, authoredSource: Data, nativeSource: String,
+                                to directory: URL) throws -> InitialFailureEvidenceReport {
         guard TLCReferencePin.isRevision(sourceSHA) else {
             throw InitialFailureEvidenceError.invalidSourceSHA
         }
@@ -121,7 +124,12 @@ package enum InitialFailureEvidence {
               }).first else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
-        let actionSource = try identityActionSource(sourceWitness)
+        guard let authoredText = String(data: authoredSource, encoding: .utf8) else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        let syntaxProof = try AuthoredCopySyntax.proofInputs(source: authoredText,
+            modelName: String(describing: CheckedAdditionPrefixInitialModel.self))
+        let actionSource = try identityActionSource(sourceWitness, syntaxProof: syntaxProof)
         let sourceInputs = try sourceInitializerInputs(sourceWitness)
         let sourceInitializers = sourceInputs.plans
         let sourceInitialControl = TLAValue.string(sourceControl).description
@@ -130,6 +138,7 @@ package enum InitialFailureEvidence {
         let resolvedInitializers = try initializerPlans(layout: resolvedProgram.layout,
             initializations: resolvedProgram.behavior.initializations, requireTypes: true)
         let nativeInitializers = try nativeInitializerPlans(nativeSource, program: resolvedProgram)
+        let nativeAction = try nativeScalarActionEvidence(nativeSource, program: resolvedProgram)
         let recordInputs = try initialRecordInputs(resolvedProgram, before: failures[0].before)
         guard let check = try rendered.initialEvaluationFailureBundle(capturingRecord: true) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
@@ -153,7 +162,10 @@ package enum InitialFailureEvidence {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let generated = directory.appendingPathComponent("generated-tla")
         try GeneratedTLCOracle.retainGeneratedInputs(check, in: generated)
+        try Data(generatedConfiguration.utf8).write(to: generated.appendingPathComponent("\(module.name).cfg"), options: .atomic)
+        try nativeAction.write(to: generated.appendingPathComponent("SwiftTLANativeActions.tla"), options: .atomic)
         try actionSource.write(to: generated.appendingPathComponent("SwiftTLAStayActionSource.tla"), options: .atomic)
+        try authoredSource.write(to: directory.appendingPathComponent("authored-model.swift"), options: .atomic)
         let nativeURL = directory.appendingPathComponent("native-initial-failure.json")
         let proofURL = generated.appendingPathComponent("\(proofModule).tla")
         let encoder = JSONEncoder()
@@ -170,7 +182,8 @@ package enum InitialFailureEvidence {
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
             checkConfigurationSHA256: SHA256.hex(Data(check.cfg.utf8)),
-            proofSHA256: SHA256.hex(proofBytes), nativeSHA256: SHA256.hex(nativeBytes),
+            proofSHA256: SHA256.hex(proofBytes), authoredSourceSHA256: SHA256.hex(authoredSource),
+            actionSourceSHA256: SHA256.hex(actionSource), nativeSHA256: SHA256.hex(nativeBytes),
             sourceCompilationIdentity: compilation.identity.description,
             sourceInitializersSHA256: SHA256.hex(Data(sourceInitializers.utf8)),
             sourceInitialControlSHA256: SHA256.hex(Data(sourceInitialControl.utf8)),
@@ -193,7 +206,7 @@ package enum InitialFailureEvidence {
         return report
     }
 
-    private static func identityActionSource(_ components: [_OrderedIntSourceComponent]) throws -> Data {
+    private static func identityActionSource(_ components: [_OrderedIntSourceComponent], syntaxProof: String) throws -> Data {
         let variables = components.dropLast().compactMap { component -> String? in
             guard case .variable(let name, _) = component else { return nil }
             return name
@@ -208,7 +221,10 @@ package enum InitialFailureEvidence {
         let frame = Set(variables.filter { $0 != assignment.root }.map(TLAValue.string))
         let descriptor = """
         ---- MODULE SwiftTLAStayActionSource ----
+        EXTENDS Sequences, TLAPS
+
         SourceIdentityAction == [label |-> \(TLAValue.string(label)), target |-> \(TLAValue.string(assignment.root)), read |-> \(TLAValue.string(read)), frame |-> \(TLAValue.set(frame))]
+        \(syntaxProof)
         ====
 
         """

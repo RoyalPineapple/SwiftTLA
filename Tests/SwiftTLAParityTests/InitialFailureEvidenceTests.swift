@@ -12,6 +12,10 @@ struct InitialFailureEvidenceTests {
             .appendingPathComponent("swifttla-initial-failure-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
         let sha = String(repeating: "a", count: 40)
+        let authoredModel = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/UpstreamParity/ValidationModels/CheckedAdditionPrefixInitialModel.swift")
+        let authoredSource = try Data(contentsOf: authoredModel)
         let compilation = try CheckedAdditionPrefixInitialModel.spec.compile()
         let inputs = try CompiledTypeInputs(compilation: compilation,
             types: CompiledTypeContext(enums: .init(), formalNames: [:])) { _ in .int }
@@ -19,7 +23,8 @@ struct InitialFailureEvidenceTests {
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "CheckedAdditionPrefixInitialModel", program: program))
         let nativeSource = try emitter.machineMembers().map(\.description).joined(separator: "\n")
-        let report = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: nativeSource, to: directory)
+        let report = try InitialFailureEvidence.prepare(sourceSHA: sha, authoredSource: authoredSource,
+            nativeSource: nativeSource, to: directory)
         #expect(report.schema == "swifttla.initial-failure-proof-v14")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)
@@ -59,6 +64,8 @@ struct InitialFailureEvidenceTests {
         let checkConfiguration = try Data(contentsOf: generated.appendingPathComponent("\(report.checkModule).cfg"))
         let proof = try Data(contentsOf: generated.appendingPathComponent("SwiftTLAInitialFailureProof.tla"))
         #expect(report.nativeSHA256 == SHA256.hex(native))
+        #expect(try Data(contentsOf: directory.appendingPathComponent("authored-model.swift")) == authoredSource)
+        #expect(report.authoredSourceSHA256 == SHA256.hex(authoredSource))
         #expect(report.moduleSHA256 == SHA256.hex(module))
         #expect(report.checkModuleSHA256 == SHA256.hex(checkModule))
         #expect(report.checkConfigurationSHA256 == SHA256.hex(checkConfiguration))
@@ -145,8 +152,8 @@ struct InitialFailureEvidenceTests {
             with: "SwiftTLA._NativeMachineOperations.add(_arithmetic0, _arithmetic1)")
         try #require(rebound != nativeSource)
         #expect(throws: CompilationDiagnostic.self) {
-            try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: rebound,
-                to: directory.appendingPathComponent("rejected"))
+            try InitialFailureEvidence.prepare(sourceSHA: sha, authoredSource: authoredSource,
+                nativeSource: rebound, to: directory.appendingPathComponent("rejected"))
         }
         let retainedFailures = "SwiftTLA._nativeInitialOutcomes(states: result, failures: failures)"
         try #require(nativeSource.components(separatedBy: retainedFailures).count == 2)
@@ -154,8 +161,8 @@ struct InitialFailureEvidenceTests {
             with: "SwiftTLA._nativeInitialOutcomes(states: result, failures: [])")
         try #require(droppedFailures != nativeSource)
         do {
-            _ = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: droppedFailures,
-                to: directory.appendingPathComponent("dropped-failures"))
+            _ = try InitialFailureEvidence.prepare(sourceSHA: sha, authoredSource: authoredSource,
+                nativeSource: droppedFailures, to: directory.appendingPathComponent("dropped-failures"))
             Issue.record("The native source erased failures but its proof input was accepted")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native._initialStates.completeIntOutput")
@@ -166,8 +173,8 @@ struct InitialFailureEvidenceTests {
             with: "SwiftTLA._mapNativeInitialOutcomes(SwiftTLA.InitialEvaluationOutcomes<Snapshot>(states: [], failures: []))")
         try #require(erasedOutcomes != nativeSource)
         do {
-            _ = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: erasedOutcomes,
-                to: directory.appendingPathComponent("erased-public-outcomes"))
+            _ = try InitialFailureEvidence.prepare(sourceSHA: sha, authoredSource: authoredSource,
+                nativeSource: erasedOutcomes, to: directory.appendingPathComponent("erased-public-outcomes"))
             Issue.record("The public native outcome adapter erased failures but its proof input was accepted")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.initialConstruction")
@@ -181,8 +188,8 @@ struct InitialFailureEvidenceTests {
             .replacingOccurrences(of: "__swappedToken__", with: secondToken)
         try #require(swappedTokens != nativeSource)
         do {
-            _ = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: swappedTokens,
-                to: directory.appendingPathComponent("swapped-tokens"))
+            _ = try InitialFailureEvidence.prepare(sourceSHA: sha, authoredSource: authoredSource,
+                nativeSource: swappedTokens, to: directory.appendingPathComponent("swapped-tokens"))
             Issue.record("A permuted formal token table was accepted as initialization proof input")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path == "native.formalProjection")
@@ -214,8 +221,8 @@ struct InitialFailureEvidenceTests {
             let changedProjection = nativeSource.replacingOccurrences(of: original, with: replacement)
             try #require(changedProjection != nativeSource)
             do {
-                _ = try InitialFailureEvidence.prepare(sourceSHA: sha, nativeSource: changedProjection,
-                    to: directory.appendingPathComponent("changed-projection-\(index)"))
+                _ = try InitialFailureEvidence.prepare(sourceSHA: sha, authoredSource: authoredSource,
+                    nativeSource: changedProjection, to: directory.appendingPathComponent("changed-projection-\(index)"))
                 Issue.record("A changed projection or prefix was accepted as initialization proof input: \(index)")
             } catch let diagnostic as CompilationDiagnostic {
                 #expect(diagnostic.path == path)
@@ -244,7 +251,7 @@ struct InitialFailureEvidenceTests {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("swifttla-invalid-revision-\(UUID().uuidString)")
         #expect(throws: InitialFailureEvidenceError.invalidSourceSHA) {
-            try InitialFailureEvidence.prepare(sourceSHA: "not-a-revision", nativeSource: "", to: directory)
+            try InitialFailureEvidence.prepare(sourceSHA: "not-a-revision", authoredSource: Data(), nativeSource: "", to: directory)
         }
         #expect(!FileManager.default.fileExists(atPath: directory.path))
     }

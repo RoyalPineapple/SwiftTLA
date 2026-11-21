@@ -518,8 +518,9 @@ def main():
         packet = output / "packet"
         packet.mkdir()
         env = dict(os.environ, SWIFT_TLA_SHA=head)
-        command = [str(binary), "initial-failure", "prepare", "--native-source", str(retained),
-                   "--output", str(packet / "case")]
+        authored = root / native_source.MODEL
+        command = [str(binary), "initial-failure", "prepare", "--authored-source", str(authored),
+                   "--native-source", str(retained), "--output", str(packet / "case")]
         receipt["prepareCommand"] = command
         with (output / "prepare.log").open("wb") as log:
             run = subprocess.run(command, env=env, stdout=log, stderr=subprocess.STDOUT)
@@ -530,12 +531,17 @@ def main():
         proof = packet / "case/generated-tla/SwiftTLAInitialFailureProof.tla"
         if preparation["sourceSHA"] != head or preparation["nativeSourceSHA256"] != digest(retained):
             raise ValueError("fresh producer/source capture binding differs")
+        action_source = packet / "case/generated-tla/SwiftTLAStayActionSource.tla"
+        if (preparation["authoredSourceSHA256"] != inputs[native_source.MODEL]
+                or preparation["authoredSourceSHA256"] != digest(packet / "case/authored-model.swift")
+                or preparation["actionSourceSHA256"] != digest(action_source)):
+            raise ValueError("authored model or action source binding differs")
         if proof.read_bytes() != expected_bytes or preparation["proofSHA256"] != digest(proof):
             raise ValueError("actual compiler did not emit the checked proof bytes exactly")
         imports = packet / "proof-inputs"
         imports.mkdir()
         names = ["OrderedIntExpressionRule", "IndexedHistoryRules", "InitializationOutcomeRules",
-                 "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule"]
+                 "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule", "OrderedScalarCopyRule"]
         for name in names:
             shutil.copyfile(root / f"Verification/Semantics/{name}.tla", imports / (name + ".tla"))
         (packet / "proof-inputs.sha256").write_text("".join(

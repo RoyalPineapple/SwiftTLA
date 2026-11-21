@@ -227,6 +227,7 @@ jobs:
           python3 scripts/retain-native-initial-source.py verify
           mkdir -p .build/initial-failure-artifacts
           .build/release/tlc-validate initial-failure prepare \
+            --authored-source Sources/UpstreamParity/ValidationModels/CheckedAdditionPrefixInitialModel.swift \
             --native-source .build/release/native-initial-source.swift \
             --output .build/initial-failure-artifacts/case
           cp .build/release/native-initial-source.json .build/initial-failure-artifacts/case/
@@ -243,6 +244,8 @@ jobs:
           assert compiler["semanticInterpretation"] == "OPEN"
           assert hashlib.sha256((case / "native-initial-source.swift").read_bytes()).hexdigest() == compiler["sourceSHA256"]
           assert report["nativeSourceSHA256"] == compiler["sourceSHA256"]
+          authored = "Sources/UpstreamParity/ValidationModels/CheckedAdditionPrefixInitialModel.swift"
+          assert report["authoredSourceSHA256"] == compiler["inputs"][authored]
           expected = (3, "integerOverflow.addition", [3, 2**63 - 1])
           assert report["schema"] == "swifttla.initial-failure-proof-v14"
           assert report["sourceSHA"] == os.environ["SWIFT_TLA_SHA"]
@@ -265,6 +268,8 @@ jobs:
               "proofSHA256": case / "generated-tla" / "SwiftTLAInitialFailureProof.tla",
               "nativeSHA256": case / "native-initial-failure.json",
               "nativeSourceSHA256": case / "native-initial-source.swift",
+              "authoredSourceSHA256": case / "authored-model.swift",
+              "actionSourceSHA256": case / "generated-tla/SwiftTLAStayActionSource.tla",
           }
           assert all(
               path.is_file() and path.stat().st_size
@@ -360,10 +365,21 @@ jobs:
             .build/initial-failure-artifacts/proof.log
           ! grep -q '^\[ERROR\]' .build/initial-failure-artifacts/proof.log
           generated=.build/initial-failure-artifacts/case/generated-tla
-          cp Verification/Semantics/CompilerOutput/SwiftTLAStayActionProof.tla "$generated/"
-          "$proof_tool_dir/tlapm/bin/tlapm" --strict --nofp --timing "$generated/SwiftTLAStayActionProof.tla" </dev/null \
-            2>&1 | tee .build/initial-failure-artifacts/stay-action-proof.log
-          grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' .build/initial-failure-artifacts/stay-action-proof.log
+          cp Verification/Semantics/OrderedScalarCopyRule.tla "$proof_inputs/"
+          cp Verification/Semantics/CompilerOutput/{SwiftTLAStayActionProof,SwiftTLANativeActionProof,SeedConfiguredBehavior}.tla "$generated/"
+          python3 - "$generated" <<'PYCFG'
+          import sys
+          from pathlib import Path
+          from runpy import run_path
+          output = Path(sys.argv[1])
+          load_bytes = run_path("scripts/check-initial-proof-step.py")["load_byte_input"]
+          load_bytes(output / "CheckedAdditionPrefixInitialModel.cfg", output, [1, 2, 3])
+          PYCFG
+          for module in SwiftTLAStayActionSource SwiftTLAStayActionProof SwiftTLANativeActionProof SeedConfiguredBehavior; do
+            log=".build/initial-failure-artifacts/$module.log"
+            "$proof_tool_dir/tlapm/bin/tlapm" --strict --nofp --timing -I "$proof_inputs" "$generated/$module.tla" </dev/null 2>&1 | tee "$log"
+            grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' "$log"
+          done
           source_proof=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla
           wrong_proof=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureWrongPayload.tla
           test "$(grep -c '^ExpectedOperand1 ==' "$source_proof")" -eq 1
