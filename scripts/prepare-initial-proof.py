@@ -627,7 +627,8 @@ def main():
                  "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "NativeScalarCopyRule", "ConditionalOutcomeRules", "NormalSeedCFG"]
         names += ["CompilerOutput/SeedAndArithmeticConfiguredBehavior", "CompilerOutput/SeedConfiguredBehavior",
                   "CompilerOutput/SwiftTLACopyCertifiedAssignmentObservation",
-                  "CompilerOutput/SwiftTLAOrderedRHSBackendAgreement", "CompilerOutput/OrderedOverflowInitialDisabled"]
+                  "CompilerOutput/SwiftTLAOrderedRHSBackendAgreement", "CompilerOutput/OrderedOverflowInitialDisabled",
+                  "CompilerOutput/OrderedOverflowDirectInitialDisabled"]
         proof_hashes = []
         for name in names:
             source = f"Verification/Semantics/{name}.tla"

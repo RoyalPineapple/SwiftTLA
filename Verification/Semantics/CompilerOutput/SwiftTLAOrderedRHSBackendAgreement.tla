@@ -1,5 +1,6 @@
 ---- MODULE SwiftTLAOrderedRHSBackendAgreement ----
-EXTENDS SwiftTLAOrderedRHSConfiguredProof, SwiftTLANativeAssignmentActions, TLAPS
+EXTENDS SwiftTLAOrderedRHSConfiguredProof, SwiftTLANativeAssignmentActions, TLAPS,
+        OrderedOverflowDirectInitialDisabled
 
 \* The native packet records this failure from the real visitor of the actual initial machine.
 LOCAL ActualNativeFailure == NativeAssignmentFailure
@@ -380,7 +381,7 @@ PROOF
       completed |-> <<RHSOutputMax>>, before |-> [count |-> RHSOutputMax]]}
     BY <1>event, <1>projection, SMT
 <1>blocked. ~ENABLED Next
-    BY Init, ExpandENABLED, SMT DEF Init, Next, advance, Terminating
+    BY ONLY Init, ActualOrderedOverflowInitialHasNoSuccessor, PTL
 <1>rejected. ~RHSOutputSelectedEvaluationCheck
     BY <1>entry, <1>event, ConfiguredEvaluationCheckMatchesTheCompleteSelectedRHSFailure, SMT
 <1>. WITNESS history
