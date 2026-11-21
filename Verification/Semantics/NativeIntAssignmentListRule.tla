@@ -72,19 +72,20 @@ NativeAssignmentPrefix(prefix) ==
      failure |-> IF prefix.failure = <<>> THEN <<>>
                  ELSE [site |-> prefix.failure.site, payload |-> prefix.failure.payload]]
 
+NativeAssignmentProjectedHistory(shared, count) ==
+    [index \in 0..count |-> NativeAssignmentPrefix(shared[index])]
+
 THEOREM PhysicalNativeCapturesUseTheCertifiedAssignmentHistory ==
     ASSUME NEW rows, SupportedAssignmentList(rows), NEW before \in AssignmentBindings,
            NEW raw, NEW names, NEW counter, NEW entry, NEW destination,
            NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination),
            NEW shared, AssignmentListHistory(FALSE, before, rows, shared)
-    PROVE LET count == Len(rows)
-              plan == NativeAssignmentRekey(raw, names, counter)
-              native == [index \in 0..count |-> NativeAssignmentPrefix(shared[index])]
-          IN NativeAssignmentCaptureHistory(before, plan, count, native)
+    PROVE NativeAssignmentCaptureHistory(before, NativeAssignmentRekey(raw, names, counter), Len(rows),
+              NativeAssignmentProjectedHistory(shared, Len(rows)))
     PROOF
     <1>. DEFINE count == Len(rows)
                 plan == NativeAssignmentRekey(raw, names, counter)
-                native == [index \in 0..count |-> NativeAssignmentPrefix(shared[index])]
+                native == NativeAssignmentProjectedHistory(shared, count)
     <1>shape. /\ count \in Nat
               /\ shared \in [0..count -> AssignmentPrefixStates]
               /\ \A index \in 1..count : PhysicalAssignmentReadsNameWriters(rows, index, plan.captures[index])
@@ -96,7 +97,8 @@ THEOREM PhysicalNativeCapturesUseTheCertifiedAssignmentHistory ==
             OrderedAssignmentHistoriesRetainTheExactFirstFailurePrefix DEF count
     <1>seed. /\ DOMAIN native = 0..count /\ native[0] = NativeAssignmentStart
         BY ONLY <1>shape, AssignmentListHistory(FALSE, before, rows, shared), SMT
-            DEF native, AssignmentListHistory, AssignmentListStart, NativeAssignmentStart, NativeAssignmentPrefix, count
+            DEF native, NativeAssignmentProjectedHistory, AssignmentListHistory, AssignmentListStart,
+                NativeAssignmentStart, NativeAssignmentPrefix, count
     <1>step. \A index \in 1..count :
         native[index] = NativeAssignmentStep(before, plan.captures[index], index, native[index - 1])
         <2>. TAKE index \in 1..count
@@ -109,7 +111,7 @@ THEOREM PhysicalNativeCapturesUseTheCertifiedAssignmentHistory ==
         <2>rows. /\ native[index] = NativeAssignmentPrefix(current)
                  /\ native[index - 1] = NativeAssignmentPrefix(previous)
                  /\ previous \in AssignmentPrefixStates
-            BY ONLY <1>shape, (index \in 1..count), SMT DEF native, current, previous
+            BY ONLY <1>shape, (index \in 1..count), SMT DEF native, NativeAssignmentProjectedHistory, current, previous
         <2>first. CASE previous.failure = <<>>
             <3>prior. /\ Len(previous.completed) = index - 1
                        /\ previous.bindings = CompletedAssignmentBindings(before, rows, previous.completed)
@@ -128,7 +130,7 @@ THEOREM PhysicalNativeCapturesUseTheCertifiedAssignmentHistory ==
             BY ONLY <2>stopped, <2>source, <2>rows, SMT
                 DEF NativeAssignmentStep, AssignmentListStep, NativeAssignmentPrefix
         <2>. QED BY ONLY <2>first, <2>stopped, SMT
-    <1>. QED BY ONLY <1>seed, <1>step DEF NativeAssignmentCaptureHistory
+    <1>. QED BY ONLY <1>seed, <1>step DEF NativeAssignmentCaptureHistory, native, plan, count
 
 THEOREM NativeAssignmentCaptureHistoriesAgree ==
     ASSUME NEW before, NEW plan, NEW count \in Nat, NEW left, NEW right,
@@ -160,7 +162,7 @@ THEOREM PhysicalNativePrefixAgreesWithTheCertifiedAssignments ==
                NativeAssignmentRekey(raw, names, counter), Len(rows), visited)
     PROVE \A index \in 0..Len(rows) : visited[index] = NativeAssignmentPrefix(shared[index])
     PROOF
-    <1>. DEFINE expected == [index \in 0..Len(rows) |-> NativeAssignmentPrefix(shared[index])]
+    <1>. DEFINE expected == NativeAssignmentProjectedHistory(shared, Len(rows))
     <1>count. Len(rows) \in Nat
         BY SupportedAssignmentList(rows) DEF SupportedAssignmentList
     <1>history. NativeAssignmentCaptureHistory(before,
@@ -170,7 +172,7 @@ THEOREM PhysicalNativePrefixAgreesWithTheCertifiedAssignments ==
         BY ONLY <1>count, <1>history,
             NativeAssignmentCaptureHistory(before, NativeAssignmentRekey(raw, names, counter), Len(rows), visited),
             NativeAssignmentCaptureHistoriesAgree, SMT
-    <1>. QED BY ONLY <1>same, SMT DEF expected
+    <1>. QED BY ONLY <1>same, SMT DEF expected, NativeAssignmentProjectedHistory
 
 NativeAssignmentCheckedCallback(original, label, actionOrdinal, selected, result) ==
     IF selected /\ result.failure # <<>>
@@ -308,13 +310,13 @@ THEOREM CheckedNativeDispatchConstructsTheSharedPrefixAndCallback ==
          /\ \A index \in 0..count : AssignmentPrefixMeaning(before, rows, shared, index)
         BY CertifiedOrderedAssignmentListConstructsCompleteActionOutcome, SMT DEF before, count
     <1>. DEFINE final == shared[count]
-                native == [index \in 0..count |-> NativeAssignmentPrefix(shared[index])]
+                native == NativeAssignmentProjectedHistory(shared, count)
     <1>native. NativeAssignmentCaptureHistory(before, plan, count, native)
         BY ONLY <1>shared, SupportedAssignmentList(rows), (before \in AssignmentBindings),
             NativeAssignmentsNameTheirOperandsAndWrites(rows, rawRows[actionOrdinal + 1][2], names, counter, entry, destination),
             PhysicalNativeCapturesUseTheCertifiedAssignmentHistory DEF before, raw, plan, count, native
     <1>prefix. \A index \in 0..count : native[index] = NativeAssignmentPrefix(shared[index])
-        BY ONLY SMT DEF native
+        BY ONLY SMT DEF native, NativeAssignmentProjectedHistory
     <1>callbacks. NativeAssignmentCheckedCallback(original, label, actionOrdinal, original[counter] = entry, native[count]) =
         IF original[counter] = entry /\ final.failure # <<>>
         THEN {[label |-> label, actionOrdinal |-> actionOrdinal,

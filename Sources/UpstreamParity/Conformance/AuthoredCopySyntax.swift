@@ -363,7 +363,7 @@ enum AuthoredCopySyntax {
         MasterFields == \#(TLAValue.set(Set(authored.fields.map(TLAValue.string))))
         MasterTarget == \#(TLAValue.string(firstTarget))
         MasterRows == \#(tuple(rows))
-        LOCAL Rule == INSTANCE OrderedIntAssignmentListRule WITH Keys <- MasterFields,
+        Rule == INSTANCE RenderedIntAssignmentActionRule WITH Keys <- MasterFields,
             SwiftIntMin <- \#(TLAValue.int(Int.min)), SwiftIntMax <- \#(TLAValue.int(Int.max))
         THEOREM MasterAssignmentsAreSupported ==
             /\ Rule!SupportedAssignmentList(MasterRows)

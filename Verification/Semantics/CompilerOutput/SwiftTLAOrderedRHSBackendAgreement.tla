@@ -20,7 +20,7 @@ LOCAL NormalizedNativeAction == SharedAssignmentRule!NativeAssignmentRekey(Decod
 
 ActualNativeAssignmentCaptureHistory(history) ==
     SharedAssignmentRule!NativeAssignmentCaptureHistory(RHSOutputBefore, NormalizedNativeAction, RHSOutputCount,
-        [index \in 0..RHSOutputCount |-> SharedAssignmentRule!NativeAssignmentPrefix(history[index])])
+        SharedAssignmentRule!NativeAssignmentProjectedHistory(history, RHSOutputCount))
 
 THEOREM ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles ==
     /\ SharedAssignmentRule!NativeAssignmentDispatchMatches(NativeActionRows, NativeActionDispatchLabels,
