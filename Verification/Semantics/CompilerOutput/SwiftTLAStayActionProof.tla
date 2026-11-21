@@ -50,7 +50,21 @@ THEOREM AuthoredStayDeterminesThePhysicalCaptureAndFrame ==
     <1>capture. StayReads[1] = StayRoutes[0]["last"]
         BY <1>shape, <1>seed, SMT DEF StayReads, CopyEntryRoutes
     <1>write. StayRoutes[1] = CopyReplace(StayDataKeys, StayRoutes[0], "last", <<"capture", 1>>)
-        BY <1>shape, <1>seed, SMT DEF StayRoutes, StayWrites, CopyEntryRoutes, CopyReplace
+        PROOF
+        <2>. DEFINE written == CopyReplace(StayDataKeys, StayRoutes[0], "last", <<"capture", 1>>)
+        <2>output. StayRoutes[1] = StayWrites BY ONLY SMT DEF StayRoutes
+        <2>fields. ASSUME NEW a, NEW b, NEW c
+                    PROVE DOMAIN [first |-> a, second |-> b, last |-> c] = {"first", "second", "last"}
+            BY ONLY SetExtensionality, SMT
+        <2>domain. DOMAIN StayWrites = StayDataKeys /\ DOMAIN written = StayDataKeys
+            BY ONLY <1>shape, <2>fields, SMT DEF StayWrites, written, CopyReplace
+        <2>first. written["first"] = StayWrites["first"]
+            BY ONLY <1>shape, <1>seed, SMT DEF written, CopyReplace, CopyEntryRoutes, StayWrites
+        <2>second. written["second"] = StayWrites["second"]
+            BY ONLY <1>shape, <1>seed, SMT DEF written, CopyReplace, CopyEntryRoutes, StayWrites
+        <2>last. written["last"] = StayWrites["last"]
+            BY ONLY <1>shape, SMT DEF written, CopyReplace, StayWrites
+        <2>. QED BY ONLY <1>shape, <2>first, <2>second, <2>last, <2>domain, <2>output, SetExtensionality, SMT DEF written, StayWrites, CopyReplace
     <1>. QED BY <1>shape, <1>seed, <1>capture, <1>write, SMT DEF CopyPlan, StayReads, StayRoutes, AuthoredStayCopies
 
 THEOREM ActualStayRealizesThePhysicalCopyBranch ==

@@ -1,5 +1,5 @@
 ---- MODULE SeedConfiguredBehavior ----
-EXTENDS SwiftTLAStayActionProof, CompilerInputPageBlock1
+EXTENDS SwiftTLANativeActionProof, CompilerInputPageBlock1
 
 \* CompilerInputPage1 CompilerInputPage2 CompilerInputPage3
 \* The seed's normal TLC configuration selects Spec and requests deadlock checking.
@@ -31,4 +31,21 @@ THEOREM NormalConfigurationUsesTheProvedStep ==
         BY EmittedBehaviorStepMatchesSourceIncludingStuttering, PTL
     <1>. QED BY NormalCFGIsTheSpecAndDeadlockSelection, <1>always, PTL
         DEF SelectedBehavior, Spec, vars
+
+NativeSteps == \E label : NativeLabeled(label, Before, After)
+
+THEOREM NormalConfigurationAndNativeDispatchPreserveSourceSteps ==
+    /\ \A label : NativeLabeled(label, Before, After) <=> SourceLabeled(label, Before, After)
+    /\ ([NativeSteps]_vars <=> [SourceSteps]_vars)
+    /\ (SelectedBehavior <=> (Init /\ [][NativeSteps]_vars))
+    PROOF
+    <1>label. \A label : NativeLabeled(label, Before, After) <=> SourceLabeled(label, Before, After)
+        BY ONLY NativeActionObservationsMatchActualNext, ActualNextComposesTheCompleteLabeledActions, SMT
+    <1>steps. NativeSteps <=> Next
+        BY ONLY NativeActionObservationsMatchActualNext DEF NativeSteps
+    <1>stutter. [NativeSteps]_vars <=> [SourceSteps]_vars
+        BY <1>steps, EmittedBehaviorStepMatchesSourceIncludingStuttering, PTL DEF vars
+    <1>behaviors. ([][NativeSteps]_vars) <=> ([][SourceSteps]_vars)
+        BY <1>stutter, PTL
+    <1>. QED BY <1>label, <1>stutter, <1>behaviors, NormalConfigurationUsesTheProvedStep, PTL DEF vars
 ====

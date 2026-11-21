@@ -87,13 +87,35 @@ THEOREM NativeTerminationRetainsEveryField ==
         BY ONLY SMT DEF plan, NativeActionRows, SourceTerminalControl, Before, ActionState
     <1>knownCapture. CopyCaptureHistory(Before, plan.captures, <<>>)
         BY ONLY <1>bindings, SMT DEF CopyCaptureHistory
+    <1>covered. NativeTargets(plan.writes) = DOMAIN Before
+        BY ONLY <1>bindings, SetExtensionality, SMT DEF NativeTargets
     <1>forward. ASSUME NEW captured, NativeVisits(plan, Before, After, captured)
                 PROVE SourceTerminating(Before, After)
-        BY ONLY <1>bindings, SMT DEF NativeVisits, NativeWriteValue, CopyReferenceValue, SourceTerminating
+        <2>guard. Before.pc = SourceTerminalControl
+            BY ONLY NativeVisits(plan, Before, After, captured), <1>bindings, SMT
+                DEF NativeVisits
+        <2>writes. \A index \in DOMAIN plan.writes :
+            After[plan.writes[index][1]] = NativeWriteValue(Before, captured, plan.writes[index][2])
+            BY ONLY NativeVisits(plan, Before, After, captured) DEF NativeVisits
+        <2>pc. After.pc = Before.pc
+            BY ONLY <1>bindings, <2>writes, SMT DEF NativeWriteValue, CopyReferenceValue
+        <2>first. After.first = Before.first
+            BY ONLY <1>bindings, <2>writes, SMT DEF NativeWriteValue, CopyReferenceValue
+        <2>second. After.second = Before.second
+            BY ONLY <1>bindings, <2>writes, SMT DEF NativeWriteValue, CopyReferenceValue
+        <2>last. After.last = Before.last
+            BY ONLY <1>bindings, <2>writes, SMT DEF NativeWriteValue, CopyReferenceValue
+        <2>. QED BY ONLY <2>guard, <2>pc, <2>first, <2>second, <2>last DEF SourceTerminating
     <1>backward. ASSUME SourceTerminating(Before, After)
                  PROVE NativeVisits(plan, Before, After, <<>>)
-        BY ONLY <1>bindings, <1>knownCapture, SMT
-             DEF NativeVisits, NativeWriteValue, NativeTargets, CopyReferenceValue, SourceTerminating
+        <2>guard. \A index \in DOMAIN plan.guards : Before.pc = plan.guards[index]
+            BY ONLY <1>bindings, SourceTerminating(Before, After), SMT DEF SourceTerminating
+        <2>writes. \A index \in DOMAIN plan.writes :
+            After[plan.writes[index][1]] = NativeWriteValue(Before, <<>>, plan.writes[index][2])
+            BY ONLY <1>bindings, SourceTerminating(Before, After), SMT
+                DEF NativeWriteValue, CopyReferenceValue, SourceTerminating
+        <2>. QED BY ONLY <1>covered, <1>knownCapture, <2>guard, <2>writes, SMT
+            DEF NativeVisits
     <1>. QED BY ONLY <1>forward, <1>backward, SMT DEF plan
 
 THEOREM NativeActionObservationsMatchActualNext ==
