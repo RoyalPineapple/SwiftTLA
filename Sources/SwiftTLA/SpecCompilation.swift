@@ -260,6 +260,7 @@ struct CompiledModuleMetadata: Sendable {
     let formalDefinitionCount: Int
     let recursiveFunctionCount: Int
     let orderedIntProofActionNames: Set<String>
+    let scalarCopyRoutes: [String: StraightLineAssignmentCheck.ScalarCopyReceipt]
     let sourceSpecDefaultDeadlockWitness: Bool
 
     func constantDeclaration(including additionalNames: [String]) -> String? {
@@ -288,6 +289,7 @@ struct CompiledModuleMetadata: Sendable {
         formalDefinitionCount = source.formalOperatorDefinitions.count
         recursiveFunctionCount = source.recursiveFuncs.count
         orderedIntProofActionNames = source.orderedIntProofActionNames
+        scalarCopyRoutes = source.scalarCopyRoutes
         sourceSpecDefaultDeadlockWitness = source.sourceSpecDefaultDeadlockWitness
     }
 }
@@ -394,6 +396,9 @@ public struct CompiledSpecification: Sendable {
     var requiredStandardModules: Set<StandardModule> { module.requiredStandardModules }
     package var layout: CompiledLayout { module.layout }
     package var semantics: CompiledSemantics { module.semantics }
+    package var scalarCopyRoutes: [String: StraightLineAssignmentCheck.ScalarCopyReceipt] {
+        module.metadata.scalarCopyRoutes
+    }
     var bindings: CompiledBindingTable { module.bindings }
     var refinements: [CompiledRefinement] { module.refinements }
     var generatedRefinements: [CompiledGeneratedModelRefinement] { module.generatedRefinements }
@@ -1259,8 +1264,25 @@ public extension TLASpec {
     /// Validates and identifies this specification before it reaches a formal
     /// consumer. Structural module linking is added to this gate by the linker.
     func compile() throws -> CompiledSpecification {
+        try compile(retainingScalarCopyRoutes: false)
+    }
+
+    package func compile(retainingScalarCopyRoutes: Bool) throws -> CompiledSpecification {
+        try compile(retainingScalarCopyRoutes: retainingScalarCopyRoutes, projection: { _ in () }).0
+    }
+
+    package func compileRetainingSequentialControl(retainingScalarCopyRoutes: Bool = false) throws
+        -> (CompiledSpecification, SequentialControlEvidence?) {
+        try compile(retainingScalarCopyRoutes: retainingScalarCopyRoutes, projection: {
+            SequentialControlEvidence.capture(source: self, lowered: $0)
+        })
+    }
+
+    private func compile<Projection>(retainingScalarCopyRoutes: Bool, projection: (TLASpec) -> Projection) throws
+        -> (CompiledSpecification, Projection) {
         try validateSourceDeclarationNames()
-        return try loweredSourceModel().compileLowered()
+        let lowered = try loweredSourceModel(retainingScalarCopyRoutes: retainingScalarCopyRoutes)
+        return (try lowered.compileLowered(), projection(lowered))
     }
 
     private func compileLowered() throws -> CompiledSpecification {

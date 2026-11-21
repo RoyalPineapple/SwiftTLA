@@ -1,5 +1,5 @@
 ---- MODULE SwiftTLANativeActionProof ----
-EXTENDS SwiftTLAStayActionProof, SwiftTLANativeActions, OrderedScalarCopyRule
+EXTENDS SwiftTLAStayActionProof, SwiftTLANativeActions, OrderedScalarCopyRule, NativePendingWriteFold
 
 \* The validated Swift operations read the immutable snapshot and store optional pending writes.
 \* A merge to an existing slot emits only if its value agrees. Materialization takes a pending
@@ -10,12 +10,44 @@ LOCAL NativeWriteValue(before, captures, reference) ==
 
 LOCAL NativeTargets(writes) == {writes[index][1] : index \in DOMAIN writes}
 
+LOCAL NativeEvaluatedWrites(plan, before, captures) ==
+    [index \in DOMAIN plan.writes |->
+        <<plan.writes[index][1], NativeWriteValue(before, captures, plan.writes[index][2])>>]
+
 NativeVisits(plan, before, after, captures) ==
+    /\ CopyCaptureHistory(before, plan.captures, captures)
+    /\ \A index \in DOMAIN plan.guards : before.pc = plan.guards[index]
+    /\ NativePendingMergesEmit(DOMAIN before, before, after, Len(plan.writes),
+           NativeEvaluatedWrites(plan, before, captures))
+
+LOCAL NativeVisitConstraints(plan, before, after, captures) ==
     /\ CopyCaptureHistory(before, plan.captures, captures)
     /\ \A index \in DOMAIN plan.guards : before.pc = plan.guards[index]
     /\ \A index \in DOMAIN plan.writes :
         after[plan.writes[index][1]] = NativeWriteValue(before, captures, plan.writes[index][2])
     /\ \A key \in DOMAIN before \ NativeTargets(plan.writes) : after[key] = before[key]
+
+THEOREM EmittedNativeMergesAgreeWithCompleteFieldConstraints ==
+    ASSUME NEW plan, NEW before, NEW after, NEW captures,
+           Len(plan.writes) \in Nat,
+           DOMAIN plan.writes = 1..Len(plan.writes),
+           \A index \in DOMAIN plan.writes : plan.writes[index][1] \in DOMAIN before
+    PROVE NativeVisits(plan, before, after, captures) <=> NativeVisitConstraints(plan, before, after, captures)
+    PROOF
+    <1>. DEFINE writes == NativeEvaluatedWrites(plan, before, captures)
+    <1>writes. \A index \in DOMAIN plan.writes :
+        /\ writes[index][1] = plan.writes[index][1]
+        /\ writes[index][2] = NativeWriteValue(before, captures, plan.writes[index][2])
+        BY SMT DEF writes, NativeEvaluatedWrites
+    <1>targets. \A index \in 1..Len(plan.writes) : writes[index][1] \in DOMAIN before
+        BY <1>writes, SMT
+    <1>keys. PendingWriteKeys(writes, Len(plan.writes)) = NativeTargets(plan.writes)
+        BY <1>writes, SetExtensionality, SMT DEF PendingWriteKeys, NativeTargets
+    <1>fold. NativePendingMergesEmit(DOMAIN before, before, after, Len(plan.writes), writes)
+               <=> NativePendingWriteConstraints(DOMAIN before, before, after, Len(plan.writes), writes)
+        BY <1>targets, PendingMergeFoldMaterializesExactlyTheCompatibleWrites, SMT
+    <1>. QED BY <1>writes, <1>keys, <1>fold, SMT
+        DEF NativeVisits, NativeVisitConstraints, NativePendingWriteConstraints, writes
 
 NativeLabeled(label, before, after) ==
     \E row \in DOMAIN NativeActionRows :
@@ -29,7 +61,7 @@ THEOREM NativeStayImplementsAuthoredCopyAndCompleteFrame ==
     <1>. DEFINE plan == NativeActionRows[1][2]
                 materialized(captured) == CopyMaterializedState(StayDataKeys, Before, captured, StayWrites)
     <1>bindings.
-        /\ plan.guards = <<AuthoredCopyDescriptor.label>>
+        /\ plan.guards = <<AuthoredStayAction.label>>
         /\ plan.captures = StayReads
         /\ plan.writes = <<<<"last", <<"capture", 1>>>>,
                             <<"pc", <<"control", SourceTerminalControl>>>>,
@@ -37,19 +69,19 @@ THEOREM NativeStayImplementsAuthoredCopyAndCompleteFrame ==
                             <<"second", <<"state", "second">>>>>>
         /\ StayDataKeys = {"first", "second", "last"}
         /\ DOMAIN Before = {"pc", "first", "second", "last"}
-        BY ONLY AuthoredCopySyntaxBindsSourceIdentityAction, SMT
-            DEF plan, NativeActionRows, SourceIdentityAction, StayReads, StayDataKeys,
+        BY ONLY AuthoredCopySyntaxBindsWitnessRows, SMT
+            DEF plan, NativeActionRows, AuthoredStayAction, WitnessCopyActionRows, WitnessCopyFields, StayReads, StayDataKeys,
                 SourceTerminalControl, Before, ActionState
     <1>operations. \A captured :
         NativeVisits(plan, Before, After, captured)
-        <=> /\ Before.pc = AuthoredCopyDescriptor.label
+        <=> /\ Before.pc = AuthoredStayAction.label
             /\ After.pc = SourceTerminalControl
             /\ CopyCaptureHistory(Before, StayReads, captured)
             /\ StayData(After) = materialized(captured)
         PROOF
         <2>. SUFFICES ASSUME NEW captured
             PROVE NativeVisits(plan, Before, After, captured)
-                <=> /\ Before.pc = AuthoredCopyDescriptor.label
+                <=> /\ Before.pc = AuthoredStayAction.label
                     /\ After.pc = SourceTerminalControl
                     /\ CopyCaptureHistory(Before, StayReads, captured)
                     /\ StayData(After) = materialized(captured)
@@ -60,10 +92,12 @@ THEOREM NativeStayImplementsAuthoredCopyAndCompleteFrame ==
                 /\ After.last = captured[1]
             BY ONLY <1>bindings, SMT
                 DEF materialized, CopyMaterializedState, CopyReferenceValue, StayData, StayWrites
-        <2>. QED BY ONLY <1>bindings, <2>frame, SMT
-            DEF NativeVisits, NativeTargets, NativeWriteValue, CopyReferenceValue
+        <2>fold. NativeVisits(plan, Before, After, captured) <=> NativeVisitConstraints(plan, Before, After, captured)
+            BY ONLY <1>bindings, EmittedNativeMergesAgreeWithCompleteFieldConstraints, SMT
+        <2>. QED BY ONLY <1>bindings, <2>frame, <2>fold, SMT
+            DEF NativeVisitConstraints, NativeTargets, NativeWriteValue, CopyReferenceValue
     <1>branch. (\E captured : NativeVisits(plan, Before, After, captured))
-        <=> /\ pc = AuthoredCopyDescriptor.label
+        <=> /\ pc = AuthoredStayAction.label
             /\ pc' = SourceTerminalControl
             /\ CompiledCopyBranch(StayDataKeys, Before, StayReads, StayWrites, StayData(After))
         BY ONLY <1>operations, SMT DEF CompiledCopyBranch, materialized, Before, After, ActionState
@@ -89,14 +123,17 @@ THEOREM NativeTerminationRetainsEveryField ==
         BY ONLY <1>bindings, SMT DEF CopyCaptureHistory
     <1>covered. NativeTargets(plan.writes) = DOMAIN Before
         BY ONLY <1>bindings, SetExtensionality, SMT DEF NativeTargets
-    <1>forward. ASSUME NEW captured, NativeVisits(plan, Before, After, captured)
+    <1>fold. \A captured :
+        NativeVisits(plan, Before, After, captured) <=> NativeVisitConstraints(plan, Before, After, captured)
+        BY ONLY <1>bindings, EmittedNativeMergesAgreeWithCompleteFieldConstraints, SMT
+    <1>forward. ASSUME NEW captured, NativeVisitConstraints(plan, Before, After, captured)
                 PROVE SourceTerminating(Before, After)
         <2>guard. Before.pc = SourceTerminalControl
-            BY ONLY NativeVisits(plan, Before, After, captured), <1>bindings, SMT
-                DEF NativeVisits
+            BY ONLY NativeVisitConstraints(plan, Before, After, captured), <1>bindings, SMT
+                DEF NativeVisitConstraints
         <2>writes. \A index \in DOMAIN plan.writes :
             After[plan.writes[index][1]] = NativeWriteValue(Before, captured, plan.writes[index][2])
-            BY ONLY NativeVisits(plan, Before, After, captured) DEF NativeVisits
+            BY ONLY NativeVisitConstraints(plan, Before, After, captured) DEF NativeVisitConstraints
         <2>pc. After.pc = Before.pc
             BY ONLY <1>bindings, <2>writes, SMT DEF NativeWriteValue, CopyReferenceValue
         <2>first. After.first = Before.first
@@ -107,7 +144,7 @@ THEOREM NativeTerminationRetainsEveryField ==
             BY ONLY <1>bindings, <2>writes, SMT DEF NativeWriteValue, CopyReferenceValue
         <2>. QED BY ONLY <2>guard, <2>pc, <2>first, <2>second, <2>last DEF SourceTerminating
     <1>backward. ASSUME SourceTerminating(Before, After)
-                 PROVE NativeVisits(plan, Before, After, <<>>)
+                 PROVE NativeVisitConstraints(plan, Before, After, <<>>)
         <2>guard. \A index \in DOMAIN plan.guards : Before.pc = plan.guards[index]
             BY ONLY <1>bindings, SourceTerminating(Before, After), SMT DEF SourceTerminating
         <2>writes. \A index \in DOMAIN plan.writes :
@@ -115,8 +152,8 @@ THEOREM NativeTerminationRetainsEveryField ==
             BY ONLY <1>bindings, SourceTerminating(Before, After), SMT
                 DEF NativeWriteValue, CopyReferenceValue, SourceTerminating
         <2>. QED BY ONLY <1>covered, <1>knownCapture, <2>guard, <2>writes, SMT
-            DEF NativeVisits
-    <1>. QED BY ONLY <1>forward, <1>backward, SMT DEF plan
+            DEF NativeVisitConstraints
+    <1>. QED BY ONLY <1>forward, <1>backward, <1>fold, SMT DEF plan
 
 THEOREM NativeActionObservationsMatchActualNext ==
     /\ \A label : NativeLabeled(label, Before, After) <=> EmittedLabeled(label)
@@ -124,16 +161,16 @@ THEOREM NativeActionObservationsMatchActualNext ==
     PROOF
     <1>routes.
         /\ DOMAIN NativeActionRows = 1..2
-        /\ NativeActionRows[1][1] = AuthoredCopyDescriptor.label
+        /\ NativeActionRows[1][1] = AuthoredStayAction.label
         /\ NativeActionRows[2][1] = "Terminating"
-        BY ONLY AuthoredCopySyntaxBindsSourceIdentityAction, SMT DEF NativeActionRows, SourceIdentityAction
+        BY ONLY AuthoredCopySyntaxBindsWitnessRows, SMT DEF NativeActionRows, AuthoredStayAction, WitnessCopyActionRows, WitnessCopyFields
     <1>source. \A label :
         NativeLabeled(label, Before, After) <=> SourceLabeled(label, Before, After)
         BY ONLY <1>routes, NativeStayImplementsAuthoredCopyAndCompleteFrame,
             NativeTerminationRetainsEveryField, SMT DEF NativeLabeled, SourceLabeled
     <1>next. Next <=> (\E label : NativeLabeled(label, Before, After))
         BY ONLY <1>source, ActualNextComposesTheCompleteLabeledActions, SMT
-            DEF SourceLabeled, SourceIdentityAction
+            DEF SourceLabeled, AuthoredStayAction, WitnessCopyActionRows, WitnessCopyFields
     <1>. QED BY ONLY <1>source, <1>next, ActualNextComposesTheCompleteLabeledActions, SMT
 
 ====

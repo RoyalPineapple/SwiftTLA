@@ -22,6 +22,7 @@ default:
       upstream shiviz-reference --output <directory>
       temporal-symmetry run --output <directory>
       initial-failure prepare --authored-source <swift-file> --native-source <swift-file> --output <directory>
+      initial-failure prepare-conditional --authored-source <swift-file> --native-source <swift-file> --proof <tla-file> --output <directory>
     """, stderr)
     exit(1)
 }
@@ -143,6 +144,7 @@ private func failTemporalSymmetry(_ error: Error) -> Never {
 }
 
 private func runInitialFailure(arguments: [String]) -> Never {
+    if arguments.first == "prepare-conditional" { runConditionalPreparation(arguments: arguments) }
     guard arguments.count == 7, arguments[0] == "prepare",
           arguments[1] == "--authored-source", !arguments[2].isEmpty,
           arguments[3] == "--native-source", !arguments[4].isEmpty,
@@ -163,6 +165,36 @@ private func runInitialFailure(arguments: [String]) -> Never {
         exit(0)
     } catch {
         fputs("initial-failure: \(error)\n", stderr)
+        exit(2)
+    }
+}
+
+private func runConditionalPreparation(arguments: [String]) -> Never {
+    guard arguments.count == 9, arguments[1] == "--authored-source", arguments[3] == "--native-source",
+          arguments[5] == "--proof", arguments[7] == "--output",
+          [2, 4, 6, 8].allSatisfy({ !arguments[$0].isEmpty }) else {
+        fputs("initial-failure: expected prepare-conditional --authored-source <swift-file> --native-source <swift-file> --proof <tla-file> --output <directory>\n", stderr)
+        exit(2)
+    }
+    do {
+        guard let sourceSHA = ProcessInfo.processInfo.environment["SWIFT_TLA_SHA"] else {
+            throw ValidationCLIError.invalidManifest("missing source SHA")
+        }
+        let authored = URL(fileURLWithPath: arguments[2]).standardizedFileURL
+        let native = try Data(contentsOf: URL(fileURLWithPath: arguments[4]))
+        let origin = "// original-source-range: \(authored.path):"
+        guard let source = String(data: native, encoding: .utf8),
+              source.split(separator: "\n").filter({ $0.hasPrefix("// original-source-range: ") }).count == 1,
+              source.split(separator: "\n").contains(where: { $0.hasPrefix(origin) }) else {
+            throw ValidationCLIError.invalidManifest("conditional expansion has another source origin")
+        }
+        try ConditionalActionEvidence.prepare(sourceSHA: sourceSHA, authoredSource: Data(contentsOf: authored),
+            nativeSource: native, proofSource: Data(contentsOf: URL(fileURLWithPath: arguments[6])),
+            to: URL(fileURLWithPath: arguments[8]).standardizedFileURL)
+        print("conditional: prepared actual native routing")
+        exit(0)
+    } catch {
+        fputs("conditional: \(error)\n", stderr)
         exit(2)
     }
 }

@@ -29,12 +29,15 @@ package struct InitialFailureEvidenceReport: Codable, Sendable {
     package let sourceSHA: String
     package let module: String
     package let moduleSHA256: String
+    package let configurationSHA256: String?
+    package let nativeActionSHA256: String?
     package let checkModule: String
     package let checkModuleSHA256: String
     package let checkConfigurationSHA256: String
     package let proofSHA256: String
     package let authoredSourceSHA256: String?
     package let actionSourceSHA256: String?
+    package let sequentialControlProofSHA256: String?
     package let nativeSHA256: String
     package let sourceCompilationIdentity: String
     package let sourceInitializersSHA256: String
@@ -91,7 +94,7 @@ package enum InitialFailureEvidence {
         }
         guard failures.count == 1 else { throw InitialFailureEvidenceError.unsupportedNativeOutcome }
         let source = CheckedAdditionPrefixInitialModel.spec
-        let compilation = try source.compile()
+        let (compilation, sequentialControl) = try source.compileRetainingSequentialControl(retainingScalarCopyRoutes: true)
         let typeInputs = try CompiledTypeInputs(compilation: compilation,
             types: CompiledTypeContext(enums: .init(), formalNames: [:])) { spelling in
             guard ["Int", "Swift.Int"].contains(spelling) else {
@@ -129,7 +132,10 @@ package enum InitialFailureEvidence {
         }
         let syntaxProof = try AuthoredCopySyntax.proofInputs(source: authoredText,
             modelName: String(describing: CheckedAdditionPrefixInitialModel.self))
-        let actionSource = try identityActionSource(sourceWitness, syntaxProof: syntaxProof)
+        guard let copyRoutes = compilation.scalarCopyRoutes[sourceControl] else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        let actionSource = try authoredActionSource(sourceWitness, syntaxProof: syntaxProof, copyRoutes: copyRoutes)
         let sourceInputs = try sourceInitializerInputs(sourceWitness)
         let sourceInitializers = sourceInputs.plans
         let sourceInitialControl = TLAValue.string(sourceControl).description
@@ -139,7 +145,11 @@ package enum InitialFailureEvidence {
             initializations: resolvedProgram.behavior.initializations, requireTypes: true)
         let nativeInitializers = try nativeInitializerPlans(nativeSource, program: resolvedProgram)
         let nativeAction = try nativeScalarActionEvidence(nativeSource, program: resolvedProgram)
-        let recordInputs = try initialRecordInputs(resolvedProgram, before: failures[0].before)
+        guard let controlProof = try sequentialControl?.proofSource(for: rendered, layout: resolvedProgram.layout) else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        let controlProofBytes = Data(controlProof.utf8)
+        let recordInputs = try initialRecordInputs(resolvedProgram, nativeSeeds: nativeInitializers.seeds)
         guard let check = try rendered.initialEvaluationFailureBundle(capturingRecord: true) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
@@ -164,6 +174,7 @@ package enum InitialFailureEvidence {
         try GeneratedTLCOracle.retainGeneratedInputs(check, in: generated)
         try Data(generatedConfiguration.utf8).write(to: generated.appendingPathComponent("\(module.name).cfg"), options: .atomic)
         try nativeAction.write(to: generated.appendingPathComponent("SwiftTLANativeActions.tla"), options: .atomic)
+        try controlProofBytes.write(to: generated.appendingPathComponent("SwiftTLASequentialControlProof.tla"), options: .atomic)
         try actionSource.write(to: generated.appendingPathComponent("SwiftTLAStayActionSource.tla"), options: .atomic)
         try authoredSource.write(to: directory.appendingPathComponent("authored-model.swift"), options: .atomic)
         let nativeURL = directory.appendingPathComponent("native-initial-failure.json")
@@ -179,11 +190,13 @@ package enum InitialFailureEvidence {
         let report = InitialFailureEvidenceReport(
             schema: "swifttla.initial-failure-proof-v14", sourceSHA: sourceSHA,
             module: module.name, moduleSHA256: SHA256.hex(Data(module.tla.utf8)),
+            configurationSHA256: SHA256.hex(Data(generatedConfiguration.utf8)), nativeActionSHA256: SHA256.hex(nativeAction),
             checkModule: check.root.name,
             checkModuleSHA256: SHA256.hex(Data(check.root.tla.utf8)),
             checkConfigurationSHA256: SHA256.hex(Data(check.cfg.utf8)),
             proofSHA256: SHA256.hex(proofBytes), authoredSourceSHA256: SHA256.hex(authoredSource),
-            actionSourceSHA256: SHA256.hex(actionSource), nativeSHA256: SHA256.hex(nativeBytes),
+            actionSourceSHA256: SHA256.hex(actionSource), sequentialControlProofSHA256: SHA256.hex(controlProofBytes),
+            nativeSHA256: SHA256.hex(nativeBytes),
             sourceCompilationIdentity: compilation.identity.description,
             sourceInitializersSHA256: SHA256.hex(Data(sourceInitializers.utf8)),
             sourceInitialControlSHA256: SHA256.hex(Data(sourceInitialControl.utf8)),
@@ -206,25 +219,58 @@ package enum InitialFailureEvidence {
         return report
     }
 
-    private static func identityActionSource(_ components: [_OrderedIntSourceComponent], syntaxProof: String) throws -> Data {
-        let variables = components.dropLast().compactMap { component -> String? in
+    private static func authoredActionSource(
+        _ components: [_OrderedIntSourceComponent], syntaxProof: String,
+        copyRoutes: StraightLineAssignmentCheck.ScalarCopyReceipt
+    ) throws -> Data {
+        let declarations = components.prefix { component in
+            if case .variable = component { return true }
+            return false
+        }
+        let fields = Set(declarations.compactMap { component -> String? in
             guard case .variable(let name, _) = component else { return nil }
             return name
-        }
-        guard case .step(let label, let assignments)? = components.last,
-              variables.count == components.count - 1, Set(variables).count == variables.count,
-              assignments.count == 1, let assignment = assignments.first,
-              case .variable(let read) = assignment.value,
-              variables.contains(assignment.root), variables.contains(read) else {
+        })
+        let steps = components.dropFirst(declarations.count)
+        guard fields.count == declarations.count, !fields.isEmpty, !steps.isEmpty else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
-        let frame = Set(variables.filter { $0 != assignment.root }.map(TLAValue.string))
+        let rows = try steps.map { component -> TLAValue in
+            guard case .step(let label, let assignments) = component, !assignments.isEmpty else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            let copies = try assignments.map { assignment -> TLAValue in
+                guard case .variable(let read) = assignment.value,
+                      fields.contains(assignment.root), fields.contains(read) else {
+                    throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+                }
+                return .record(TLARecord([.init("target", .string(assignment.root)), .init("read", .string(read))]))
+            }
+            let frame = fields.subtracting(assignments.map(\.root))
+            return .record(TLARecord([.init("label", .string(label)), .init("copies", .tuple(copies)),
+                .init("frame", .set(Set(frame.map(TLAValue.string))))]))
+        }
+        func reference(_ value: StraightLineAssignmentCheck.ScalarCopyReceipt.Reference) -> TLAValue {
+            switch value {
+            case .state(let key): .tuple([.string("state"), .string(key)])
+            case .capture(let index): .tuple([.string("capture"), .int(index)])
+            }
+        }
+        func routes(_ values: [String: StraightLineAssignmentCheck.ScalarCopyReceipt.Reference]) -> TLAValue {
+            let fields = values.map { TLARecord.Field($0.key, reference($0.value)) }
+            return .record(TLARecord(fields.sorted { $0.name < $1.name }))
+        }
+        let prefixes = TLAValue.tuple(copyRoutes.routes.map(routes))
         let descriptor = """
         ---- MODULE SwiftTLAStayActionSource ----
         EXTENDS Sequences, TLAPS
 
-        SourceIdentityAction == [label |-> \(TLAValue.string(label)), target |-> \(TLAValue.string(assignment.root)), read |-> \(TLAValue.string(read)), frame |-> \(TLAValue.set(frame))]
+        WitnessCopyFields == \(TLAValue.set(Set(fields.map(TLAValue.string))))
+        WitnessCopyActionRows == \(TLAValue.tuple(rows))
         \(syntaxProof)
+        StayReads == \(TLAValue.tuple(copyRoutes.reads.map(reference)))
+        StayWrites == \(routes(copyRoutes.writes))
+        StayRouteSnapshots == \(prefixes)
         ====
 
         """
@@ -436,7 +482,7 @@ package enum InitialFailureEvidence {
 
     // Syntax coverage is required here; semantic interpretation of the full function remains a separate proof obligation.
     private static func nativeInitializerPlans(_ source: String, program: CompiledProgram) throws
-        -> (plans: String, prefixes: String, order: String) {
+        -> (plans: String, prefixes: String, order: String, seeds: String) {
         guard !source.utf8.contains(0) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
         let file = Parser.parse(source: source)
         guard !file.hasError else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
@@ -526,8 +572,23 @@ package enum InitialFailureEvidence {
             }.map { String($0.id.ordinal) }
             return "<<\(ordinals.joined(separator: ", "))>>"
         }
+        let tokens = declaration.tokens(viewMode: .sourceAccurate).map(\.text)
+        let seeds = try decodedPlans.sites.compactMap { id -> String? in
+            guard let variable = variables[id], let slot = slots[id] else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            guard variable.declaration.origin == .programCounter else { return nil }
+            let prefix = ["let", slot, ":", "_ControlLocation", "=", "_ControlLocation", "."]
+            let matches = tokens.indices.filter { tokens[$0] == "let" && tokens[$0...].starts(with: prefix) }
+            guard matches.count == 1, let index = matches.first,
+                  let member = tokens.dropFirst(index + prefix.count).first,
+                  let location = program.layout.controlLocations.first(where: { "location\($0.id.ordinal)" == member })
+            else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+            // The complete projection switch above binds this exact enum case to its formal label.
+            return "[ordinal |-> \(id.ordinal), value |-> \(TLAValue.string(location.formalName))]"
+        }
         let order = decodedPlans.sites.map { String($0.ordinal) }.joined(separator: ", ")
-        return ("<<\(rows.joined(separator: ", "))>>", "<<\(prefixes.joined(separator: ", "))>>", "<<\(order)>>")
+        return ("<<\(rows.joined(separator: ", "))>>", "<<\(prefixes.joined(separator: ", "))>>", "<<\(order)>>", "<<\(seeds.joined(separator: ", "))>>")
     }
 
     private static func initializerPlan(_ nodes: [StraightLineAssignmentCheck.OrderedIntNode],
@@ -551,7 +612,7 @@ package enum InitialFailureEvidence {
             + "reads |-> \(tuple(reads)), left |-> \(tuple(left)), right |-> \(tuple(right))]"
     }
 
-    private static func initialRecordInputs(_ program: CompiledProgram, before: [NativeInitialBindingOutput]) throws
+    private static func initialRecordInputs(_ program: CompiledProgram, nativeSeeds: String) throws
         -> (layout: String, order: String, prefixes: String, seeds: String, nativeSeeds: String, types: String) {
         let variables = program.layout.variables
         let byID = Dictionary(uniqueKeysWithValues: variables.map { ($0.id, $0) })
@@ -593,14 +654,6 @@ package enum InitialFailureEvidence {
             let value = try CompiledValue.controlLocation(location).rendered(using: program.layout)
             return "[ordinal |-> \(variable.id.ordinal), value |-> \(value)]"
         }
-        let nativeSeeds = try ordered.compactMap { variable -> String? in
-            guard variable.declaration.origin == .programCounter else { return nil }
-            let matching = before.filter { $0.name.utf8.elementsEqual(variable.formalName.utf8) }
-            guard matching.count == 1, case .string = matching[0].value else {
-                throw InitialFailureEvidenceError.unsupportedNativeOutcome
-            }
-            return "[ordinal |-> \(variable.id.ordinal), value |-> \(matching[0].value)]"
-        }
         let types = try variables.map { variable in
             let expected: CompiledValueType = variable.declaration.origin == .source ? .int : .controlLocation
             guard let type = program.variableTypes[variable.id], type == expected else {
@@ -609,7 +662,7 @@ package enum InitialFailureEvidence {
             return "[ordinal |-> \(variable.id.ordinal), type |-> \(TLAValue.string(type.swiftType))]"
         }
         return (tuple(layout), tuple(ordered.map { String($0.id.ordinal) }), tuple(prefixes),
-                tuple(seeds), tuple(nativeSeeds), tuple(types))
+                tuple(seeds), nativeSeeds, tuple(types))
     }
 
     private static func initializerCertificateProof(row: Int, view: String, rankView: String, emissionPrefix: String,
@@ -2329,7 +2382,7 @@ package enum InitialFailureEvidence {
         """
     }
 
-    private static func binaryLiteral(_ value: Int) -> String {
+    static func binaryLiteral(_ value: Int) -> String {
         let radix: UInt = 1_073_741_824
         var magnitude = value.magnitude
         var digits: [UInt] = []

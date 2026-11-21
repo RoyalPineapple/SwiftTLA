@@ -472,6 +472,7 @@ def main():
                    "-load-plugin-executable", str(plugin) + "#SwiftTLAPlugin",
                    "-Xfrontend", "-emit-macro-expansion-files", "-Xfrontend", "debug",
                    "-o", str(compiler_temporary / "pilot.o"), str(root / native_source.MODEL)]
+        pilot_compiler_command = command
         receipt["nativeCompilerCommand"] = command
         receipt["macroPluginSHA256"] = digest(plugin)
         with (output / "native-compiler.log").open("wb") as log:
@@ -536,12 +537,65 @@ def main():
                 or preparation["authoredSourceSHA256"] != digest(packet / "case/authored-model.swift")
                 or preparation["actionSourceSHA256"] != digest(action_source)):
             raise ValueError("authored model or action source binding differs")
+        generated = proof.parent
+        if (preparation["configurationSHA256"] != digest(generated / (preparation["module"] + ".cfg"))
+                or preparation["nativeActionSHA256"] != digest(generated / "SwiftTLANativeActions.tla")
+                or preparation["sequentialControlProofSHA256"] != digest(generated / "SwiftTLASequentialControlProof.tla")):
+            raise ValueError("normal configuration, native action, or sequential control binding differs")
         if proof.read_bytes() != expected_bytes or preparation["proofSHA256"] != digest(proof):
             raise ValueError("actual compiler did not emit the checked proof bytes exactly")
+        conditional_model = "Sources/UpstreamParity/ValidationModels/GeneratedScalarConditionalProofModel.swift"
+        conditional_template = "Verification/Semantics/GeneratedScalarConditionalProof.tla"
+        conditional_started = time.time_ns()
+        conditional_command = pilot_compiler_command[:-2] + [
+            str(compiler_temporary / "conditional.o"), str(root / conditional_model)]
+        receipt["conditionalCompilerCommand"] = conditional_command
+        with (output / "conditional-compiler.log").open("wb") as log:
+            result = subprocess.run(conditional_command, env=compiler_env, stdout=log, stderr=subprocess.STDOUT)
+        if result.returncode:
+            raise ValueError("existing conditional macro compiler capture failed")
+        conditional_matches = list((compiler_temporary / "swift-generated-sources")
+            .glob("@__swiftmacro_14UpstreamParity*GeneratedScalarConditionalProofModel*TLAModelfMm_.swift"))
+        if len(conditional_matches) != 1 or conditional_matches[0].is_symlink():
+            raise ValueError("expected exactly one fresh conditional compiler expansion")
+        conditional_expansion = conditional_matches[0]
+        snapshot = conditional_expansion.stat()
+        captured = conditional_expansion.read_bytes()
+        current = conditional_expansion.stat()
+        if (snapshot.st_mtime_ns < conditional_started
+                or (snapshot.st_ino, snapshot.st_size, snapshot.st_mtime_ns)
+                != (current.st_ino, current.st_size, current.st_mtime_ns)):
+            raise ValueError("conditional expansion is stale or changed during capture")
+        conditional_origin = native_source.source_range(captured, root, conditional_model)
+        conditional_retained = output / "native-conditional-source.swift"
+        conditional_retained.write_bytes(captured)
+        conditional_prepare = [str(binary), "initial-failure", "prepare-conditional", "--authored-source",
+            str(root / conditional_model), "--native-source", str(conditional_retained), "--proof",
+            str(root / conditional_template), "--output", str(proof.parent)]
+        with (output / "conditional-prepare.log").open("wb") as log:
+            run = subprocess.run(conditional_prepare, env=env, stdout=log, stderr=subprocess.STDOUT)
+        if run.returncode:
+            raise ValueError("actual native conditional preparation failed")
+        conditional_report = json.loads((proof.parent / "conditional-preparation.json").read_text())
+        conditional_files = {
+            "authoredSourceSHA256": proof.parent / "authored-conditional-source.swift",
+            "nativeSourceSHA256": proof.parent / "native-conditional-source.swift",
+            "modelSHA256": proof.parent / "GeneratedScalarConditionalProofModel.tla",
+            "proofSHA256": proof.parent / "GeneratedScalarConditionalNative.tla",
+        }
+        if (conditional_report["sourceSHA"] != head
+                or conditional_report["authoredSourceSHA256"] != inputs[conditional_model]
+                or conditional_report["nativeSourceSHA256"] != digest(conditional_retained)
+                or conditional_report["proofTemplateSHA256"] != inputs[conditional_template]
+                or any(conditional_report[key] != digest(path) for key, path in conditional_files.items())):
+            raise ValueError("actual native conditional evidence binding differs")
+        receipt["conditionalSourceOrigin"] = conditional_origin
+        receipt["conditionalPreparation"] = conditional_report
         imports = packet / "proof-inputs"
         imports.mkdir()
         names = ["OrderedIntExpressionRule", "IndexedHistoryRules", "InitializationOutcomeRules",
-                 "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule", "OrderedScalarCopyRule"]
+                 "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule", "OrderedScalarCopyRule",
+                 "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "ConditionalOutcomeRules"]
         for name in names:
             shutil.copyfile(root / f"Verification/Semantics/{name}.tla", imports / (name + ".tla"))
         (packet / "proof-inputs.sha256").write_text("".join(

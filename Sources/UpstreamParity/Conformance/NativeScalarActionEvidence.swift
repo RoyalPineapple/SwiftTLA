@@ -246,13 +246,14 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
         ("\(control.type).\($0.caseName)", .init(kind: "control", operand: TLAValue.string($0.label).description, type: control.type))
     }
 
-    // Each part emits at most once. The exact continuation call and the formals bind its local capture.
-    func visit(_ name: String, capture: (local: String, value: ActionReference)?) throws {
+    typealias Binding = (local: String, value: ActionReference)
+    var pending: [(String, [Binding])] = [("_actionPart0", [])]
+    walk: while let (name, scope) = pending.popLast() {
         guard let part = byName[name], let body = part.body, visited.insert(name).inserted else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
-        let argument = capture.map { "\($0.local), " } ?? ""
-        let formal = capture.map { "_ \($0.local): \($0.value.type), " } ?? ""
+        let argument = scope.map { "\($0.local), " }.joined()
+        let formal = scope.map { "_ \($0.local): \($0.value.type), " }.joined()
         let tokens = syntaxWords(body)
         let prefix = words("{ do {")
         let suffix = words("} catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure { failures.append(failure) } }")
@@ -272,24 +273,43 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
 
-        if sameWords(core, "try emit(updates)") { return }
+        if sameWords(core, "try emit(updates)") { continue walk }
         for location in locations where sameWords(core, """
             guard (\(control.before) == \(control.type).\(location.caseName)) else { return }
             try emit(updates)
             """) {
             instructions.guards.append(TLAValue.string(location.label).description)
-            return
+            continue walk
         }
-        if core.count > 2, core[0] == "let", capture == nil,
+        let boundReads = scope.map { ($0.local, $0.value) }
+        if core.count > 2, core[0] == "let",
            let call = core.firstIndex(of: "try"), call + 1 < core.count, byName[core[call + 1]] != nil {
             let local = try nativeSourceIdentifier(core[1])
             let child = core[call + 1]
-            for (spelling, value) in stateReads where value.type == nativeIntTypeTokens.joined() &&
-                sameWords(core, "let \(local) = \(spelling)\ntry \(child)(\(local), updates, emit)") {
+            guard !scope.contains(where: { $0.local == local }) else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            guard core[2] == "=", call > 3 else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+            let rhs = Array(core[3..<call])
+            var reads = stateReads + boundReads
+            let integer: Int?
+            if sameWords(rhs, "SwiftTLA._nativeIntMinimum()") {
+                integer = Int.min
+            } else if let value = Int(rhs.joined()), sameWords(rhs, String(value)) {
+                integer = value
+            } else {
+                integer = nil
+            }
+            if let integer {
+                reads.append((rhs.joined(), .init(kind: "literal", operand: InitialFailureEvidence.binaryLiteral(integer),
+                                                   type: nativeIntTypeTokens.joined())))
+            }
+            for (spelling, value) in reads where value.type == nativeIntTypeTokens.joined() &&
+                sameWords(core, "let \(local) = \(spelling)\ntry \(child)(\(argument)\(local), updates, emit)") {
                 instructions.captures.append(value.tla)
                 let reference = ActionReference(kind: "capture", operand: String(instructions.captures.count), type: value.type)
-                try visit(child, capture: (local, reference))
-                return
+                pending.append((child, scope + [(local, reference)]))
+                continue walk
             }
         }
         if core.count > 2, core[0] == "try", byName[core[1]] != nil,
@@ -298,23 +318,22 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             let first = core[1]
             let next = core[nextCall + 1]
             if sameWords(core, "try \(first)(\(argument)updates, { candidate in try \(next)(\(argument)candidate, emit) })") {
-                try visit(first, capture: capture)
-                try visit(next, capture: capture)
-                return
+                pending.append((next, scope))
+                pending.append((first, scope))
+                continue walk
             }
         }
-        let operands = stateReads + controlValues + (capture.map { [($0.local, $0.value)] } ?? [])
+        let operands = stateReads + controlValues + boundReads
         for field in fields {
             for (spelling, value) in operands where value.type == field.type &&
                 sameWords(core, "if let merged = updates.merging(_Updates(\(field.slot): \(spelling))) { try emit(merged) }") {
                 instructions.writes.append("<<\(TLAValue.string(field.name)), \(value.tla)>>")
-                return
+                continue walk
             }
         }
         throw InitialFailureEvidenceError.unsupportedGeneratedOutput
     }
 
-    try visit("_actionPart0", capture: nil)
     guard visited.count == parts.count else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
     return instructions
 }

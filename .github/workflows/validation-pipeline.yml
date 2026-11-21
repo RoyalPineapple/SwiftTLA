@@ -270,6 +270,9 @@ jobs:
               "nativeSourceSHA256": case / "native-initial-source.swift",
               "authoredSourceSHA256": case / "authored-model.swift",
               "actionSourceSHA256": case / "generated-tla/SwiftTLAStayActionSource.tla",
+              "configurationSHA256": case / "generated-tla" / (report["module"] + ".cfg"),
+              "nativeActionSHA256": case / "generated-tla/SwiftTLANativeActions.tla",
+              "sequentialControlProofSHA256": case / "generated-tla/SwiftTLASequentialControlProof.tla",
           }
           assert all(
               path.is_file() and path.stat().st_size
@@ -349,7 +352,8 @@ jobs:
           proof_inputs=.build/initial-failure-artifacts/proof-inputs
           mkdir -p "$proof_inputs"
           proof_sources=(OrderedIntExpressionRule IndexedHistoryRules OrderedIntInitializationComposition
-            InitializationComposition InitializationOutcomeRules FiniteSetMembershipRule)
+            InitializationComposition InitializationOutcomeRules FiniteSetMembershipRule OrderedScalarCopyRule
+            ActionOutcomeInterface FrameActionRule PendingWriteOutcomeRule NativePendingWriteFold)
           for module in "${proof_sources[@]}"; do
             cp "Verification/Semantics/$module.tla" "$proof_inputs/"
           done
@@ -365,7 +369,6 @@ jobs:
             .build/initial-failure-artifacts/proof.log
           ! grep -q '^\[ERROR\]' .build/initial-failure-artifacts/proof.log
           generated=.build/initial-failure-artifacts/case/generated-tla
-          cp Verification/Semantics/OrderedScalarCopyRule.tla "$proof_inputs/"
           cp Verification/Semantics/CompilerOutput/{SwiftTLAStayActionProof,SwiftTLANativeActionProof,SeedConfiguredBehavior}.tla "$generated/"
           python3 - "$generated" <<'PYCFG'
           import sys
@@ -375,9 +378,10 @@ jobs:
           load_bytes = run_path("scripts/check-initial-proof-step.py")["load_byte_input"]
           load_bytes(output / "CheckedAdditionPrefixInitialModel.cfg", output, [1, 2, 3])
           PYCFG
-          for module in SwiftTLAStayActionSource SwiftTLAStayActionProof SwiftTLANativeActionProof SeedConfiguredBehavior; do
-            log=".build/initial-failure-artifacts/$module.log"
-            "$proof_tool_dir/tlapm/bin/tlapm" --strict --nofp --timing -I "$proof_inputs" "$generated/$module.tla" </dev/null 2>&1 | tee "$log"
+          for source in "$proof_inputs/NativePendingWriteFold.tla" \
+            "$generated"/{SwiftTLAStayActionSource,SwiftTLAStayActionProof,SwiftTLANativeActionProof,SwiftTLASequentialControlProof,SeedConfiguredBehavior}.tla; do
+            log=".build/initial-failure-artifacts/$(basename "$source" .tla).log"
+            "$proof_tool_dir/tlapm/bin/tlapm" --strict --nofp --timing -I "$proof_inputs" "$source" </dev/null 2>&1 | tee "$log"
             grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' "$log"
           done
           source_proof=.build/initial-failure-artifacts/case/generated-tla/SwiftTLAInitialFailureProof.tla

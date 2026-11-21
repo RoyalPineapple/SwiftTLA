@@ -138,6 +138,12 @@ def main():
     if "authoredSourceSHA256" in preparation or "actionSourceSHA256" in preparation:
         bindings.update(authoredSourceSHA256=packet / "case/authored-model.swift",
                         actionSourceSHA256=packet / "case/generated-tla/SwiftTLAStayActionSource.tla")
+    if "configurationSHA256" in preparation or "nativeActionSHA256" in preparation:
+        generated = packet / "case/generated-tla"
+        bindings.update(configurationSHA256=generated / (preparation["module"] + ".cfg"),
+                        nativeActionSHA256=generated / "SwiftTLANativeActions.tla")
+    if "sequentialControlProofSHA256" in preparation:
+        bindings["sequentialControlProofSHA256"] = packet / "case/generated-tla/SwiftTLASequentialControlProof.tla"
     for field, path in bindings.items():
         if digest(path) != preparation[field]:
             raise ValueError(f"retained packet mismatch: {field}")

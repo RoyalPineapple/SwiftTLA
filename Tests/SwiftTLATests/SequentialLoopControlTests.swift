@@ -37,6 +37,9 @@ struct SequentialLoopControlTests {
         let graph = try ReachabilityGraph(initialMachines: FinishingLoop.initialMachines(), maximumStates: 4)
         #expect(graph.transitions.count == 3)
         #expect(graph.deadlockedStates.isEmpty)
+        let (_, evidence) = try FinishingLoop.spec.compileRetainingSequentialControl()
+        let control = try #require(evidence)
+        #expect(control.scheduled == control.lowered)
         #expect(try FinishingLoop.render().tlaBundle.tla.contains("VARIABLES pc, value\n"))
     }
 }

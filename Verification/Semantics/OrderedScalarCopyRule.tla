@@ -2,7 +2,8 @@
 EXTENDS IndexedHistoryRules, Sequences
 
 CopyReferenceValue(before, captures, reference) ==
-    IF reference[1] = "capture" THEN captures[reference[2]] ELSE before[reference[2]]
+    IF reference[1] = "capture" THEN captures[reference[2]]
+    ELSE IF reference[1] = "literal" THEN reference[2] ELSE before[reference[2]]
 
 CopyMaterializedState(keys, before, captures, writes) ==
     [key \in keys |-> CopyReferenceValue(before, captures, writes[key])]

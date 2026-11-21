@@ -42,11 +42,11 @@ def inputs(root):
     return {path: digest(root / path) for path in selected}
 
 
-def source_range(data, root):
+def source_range(data, root, model=MODEL):
     require(b"\0" not in data, "NUL in compiler expansion")
     lines = data.decode("utf-8").splitlines()
     ranges = [line for line in lines if line.startswith("// original-source-range: ")]
-    prefix = "// original-source-range: " + str(root / MODEL) + ":"
+    prefix = "// original-source-range: " + str(root / model) + ":"
     require(len(ranges) == 1 and ranges[0].startswith(prefix),
             "compiler expansion has another source origin")
     require(re.fullmatch(r"[0-9]+:[0-9]+-[0-9]+:[0-9]+", ranges[0][len(prefix):]),

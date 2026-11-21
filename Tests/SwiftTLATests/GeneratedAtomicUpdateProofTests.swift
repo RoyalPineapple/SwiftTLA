@@ -1,6 +1,7 @@
 import SwiftTLACompilerSupport
 import Foundation
 import Testing
+import UpstreamParity
 import SwiftParser
 import SwiftSyntax
 import SwiftTLAMacros

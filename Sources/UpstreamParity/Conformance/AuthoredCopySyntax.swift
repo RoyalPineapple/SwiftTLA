@@ -37,7 +37,9 @@ enum AuthoredCopySyntax {
         let scopeName = name(parameter.name)
 
         var declarations: [String] = []
+        var localBindings: Set<String> = []
         var steps: [String] = []
+        var copyCounts: [Int] = []
         var enumNames: Set<String> = []
         for item in algorithmBody.statements {
             if let (binding, value) = letBinding(item), steps.isEmpty,
@@ -48,6 +50,7 @@ enum AuthoredCopySyntax {
                call.arguments.filter({ $0.label?.text == "_name" }).count <= 1,
                call.arguments.allSatisfy({ ["_name", "label", "initial"].contains($0.label?.text ?? "") }),
                call.arguments.filter({ $0.label?.text == "initial" }).count == 1 {
+                guard localBindings.insert(binding).inserted else { throw unsupported }
                 let explicit = try optionalLiteral(call.arguments.first(where: { $0.label?.text == "_name" })?.expression)
                 declarations.append("[binding |-> \(TLAValue.string(binding)), explicit |-> \(explicit)]")
                 continue
@@ -66,24 +69,62 @@ enum AuthoredCopySyntax {
                 return "[targetBinding |-> \(TLAValue.string(targetName)), readBinding |-> \(TLAValue.string(readName))]"
             }
             enumNames.insert(enumName)
+            copyCounts.append(copies.count)
             steps.append("[enumName |-> \(TLAValue.string(enumName)), caseName |-> \(TLAValue.string(name(label.declName.baseName))), copies |-> \(tuple(copies))]")
         }
         guard !declarations.isEmpty, !steps.isEmpty else { throw unsupported }
         let enums = members.compactMap { $0.decl.as(EnumDeclSyntax.self) }.filter { enumNames.contains(name($0.name)) }
-        guard enums.count == enumNames.count else { throw unsupported }
+        guard enums.count == enumNames.count, Set(enums.map { name($0.name) }) == enumNames else { throw unsupported }
         let enumCases = try enums.flatMap { enumeration in
             guard enumeration.attributes.isEmpty, enumeration.genericParameterClause == nil,
                   let type = enumeration.inheritanceClause?.inheritedTypes.first?.type.as(IdentifierTypeSyntax.self),
                   name(type.name) == "String" else { throw unsupported }
+            var caseNames: Set<String> = []
             return try enumeration.memberBlock.members.flatMap { member -> [String] in
                 guard let cases = member.decl.as(EnumCaseDeclSyntax.self) else { throw unsupported }
                 return try cases.elements.map { element in
-                    guard element.parameterClause == nil else { throw unsupported }
+                    guard element.parameterClause == nil, caseNames.insert(name(element.name)).inserted else { throw unsupported }
                     let explicit = try optionalLiteral(element.rawValue?.value)
                     return "[enumName |-> \(TLAValue.string(name(enumeration.name))), caseName |-> \(TLAValue.string(name(element.name))), explicit |-> \(explicit)]"
                 }
             }
         }
+        let rowProofs = copyCounts.enumerated().map { offset, count in
+            let row = offset + 1
+            let names = (1...count).map { index in
+                #"""
+                <2>copy\#(index). CopyNamesBind(raw.copies[\#(index)], witness.copies[\#(index)])
+                    BY ONLY SMT DEF raw, witness, AuthoredCopySteps, WitnessCopyActionRows, CopyNamesBind,
+                        BindingNames, VariableNames, NameOrSpelling, AuthoredCopyDeclarations
+                """#
+            }.joined(separator: "\n")
+            let copyFacts = (1...count).map { "<2>copy\($0)" }.joined(separator: ", ")
+            return #"""
+            <1>row\#(row). AuthoredCopyActionRows[\#(row)] = WitnessCopyActionRows[\#(row)]
+            PROOF
+            <2>. DEFINE raw == AuthoredCopySteps[\#(row)]
+                        witness == WitnessCopyActionRows[\#(row)]
+            <2>label. LabelNames(raw) = {witness.label}
+                BY ONLY SMT DEF raw, witness, AuthoredCopySteps, WitnessCopyActionRows,
+                    LabelNames, NameOrSpelling, AuthoredCopyEnumCases
+            <2>count. DOMAIN raw.copies = DOMAIN witness.copies
+                BY ONLY SMT DEF raw, witness, AuthoredCopySteps, WitnessCopyActionRows
+            \#(names)
+            <2>all. \A index \in DOMAIN witness.copies : CopyNamesBind(raw.copies[index], witness.copies[index])
+                BY ONLY \#(copyFacts), SMT DEF witness, WitnessCopyActionRows
+            <2>frame. AuthoredCopyFields \ CopyTargets(witness.copies) = witness.frame
+                BY ONLY <1>fields, SMT DEF witness, WitnessCopyActionRows, WitnessCopyFields, CopyTargets
+            <2>bindings. RowBindings(raw, witness)
+                BY ONLY <2>label, <2>count, <2>all, <2>frame, SMT DEF RowBindings
+            <2>resolved. ResolveStep(raw) = FunctionShapedStep(witness)
+                BY ONLY <2>bindings, LexicalBindingsDetermineTheOrderedCopyStep, SMT
+            <2>shape. FunctionShapedStep(witness) = witness
+                BY ONLY SMT DEF FunctionShapedStep, CopyFunction, witness, WitnessCopyActionRows
+            <2>. QED BY ONLY <1>domain, <2>resolved, <2>shape, SMT
+                DEF AuthoredCopyActionRows, AuthoredCopySteps, raw, witness, WitnessCopyActionRows
+            """#
+        }.joined(separator: "\n")
+        let rowFacts = steps.indices.map { "<1>row\($0 + 1)" }.joined(separator: ", ")
         return #"""
         AuthoredCopyDeclarations == \#(set(declarations))
         AuthoredCopyEnumCases == \#(set(enumCases))
@@ -95,51 +136,76 @@ enum AuthoredCopySyntax {
         LOCAL LabelNames(step) ==
             {NameOrSpelling(row.explicit, row.caseName) : row \in
                 {entry \in AuthoredCopyEnumCases : entry.enumName = step.enumName /\ entry.caseName = step.caseName}}
-        LOCAL FirstStep == AuthoredCopySteps[1]
-        LOCAL FirstCopy == FirstStep.copies[1]
-
         LOCAL Single(values) == CHOOSE value \in values : TRUE
 
-        AuthoredCopyDescriptors(step, copy) ==
-            LET labels == LabelNames(step)
-                targets == BindingNames(copy.targetBinding)
-                reads == BindingNames(copy.readBinding)
-                label == Single(labels)
-                target == Single(targets)
-                read == Single(reads)
-            IN IF /\ labels = {label} /\ targets = {target} /\ reads = {read}
-               THEN {[label |-> label, target |-> target, read |-> read,
-                      frame |-> VariableNames(AuthoredCopyDeclarations) \ {target}]}
-               ELSE {}
+        AuthoredCopyFields == VariableNames(AuthoredCopyDeclarations)
+        LOCAL CopyTargets(copies) == {copies[index].target : index \in DOMAIN copies}
+        LOCAL ResolveCopy(copy) ==
+            [target |-> Single(BindingNames(copy.targetBinding)), read |-> Single(BindingNames(copy.readBinding))]
+        LOCAL ResolveCopies(step) == [index \in DOMAIN step.copies |-> ResolveCopy(step.copies[index])]
+        LOCAL ResolveStep(step) ==
+            [label |-> Single(LabelNames(step)), copies |-> ResolveCopies(step),
+             frame |-> AuthoredCopyFields \ CopyTargets(ResolveCopies(step))]
+        AuthoredCopyActionRows == [index \in DOMAIN AuthoredCopySteps |-> ResolveStep(AuthoredCopySteps[index])]
 
-        AuthoredCopyDescriptor == Single(AuthoredCopyDescriptors(FirstStep, FirstCopy))
+        LOCAL CopyNamesBind(raw, copy) ==
+            /\ BindingNames(raw.targetBinding) = {copy.target}
+            /\ BindingNames(raw.readBinding) = {copy.read}
+            /\ copy = [target |-> copy.target, read |-> copy.read]
 
-        THEOREM AuthoredCopySyntaxBindsSourceIdentityAction ==
-            /\ Len(AuthoredCopySteps) = 1
-            /\ Len(AuthoredCopySteps[1].copies) = 1
-            /\ AuthoredCopyDescriptors(AuthoredCopySteps[1], AuthoredCopySteps[1].copies[1]) = {SourceIdentityAction}
-            /\ AuthoredCopyDescriptor = SourceIdentityAction
+        LOCAL RowBindings(raw, witness) ==
+            /\ LabelNames(raw) = {witness.label}
+            /\ DOMAIN raw.copies = DOMAIN witness.copies
+            /\ \A index \in DOMAIN witness.copies : CopyNamesBind(raw.copies[index], witness.copies[index])
+            /\ AuthoredCopyFields \ CopyTargets(witness.copies) = witness.frame
+
+        LOCAL CopyFunction(copies) == [index \in DOMAIN copies |-> copies[index]]
+        LOCAL FunctionShapedStep(witness) ==
+            [label |-> witness.label, copies |-> CopyFunction(witness.copies), frame |-> witness.frame]
+
+        THEOREM LexicalBindingsDetermineTheOrderedCopyStep ==
+            ASSUME NEW raw, NEW witness, RowBindings(raw, witness)
+            PROVE ResolveStep(raw) = FunctionShapedStep(witness)
         PROOF
-        <1>1. /\ Len(AuthoredCopySteps) = 1
-              /\ Len(FirstStep.copies) = 1
-            BY SMT DEF AuthoredCopySteps, FirstStep
-        <1>2. LabelNames(FirstStep) = {SourceIdentityAction.label}
-            BY ONLY SMT DEF LabelNames, NameOrSpelling, FirstStep, AuthoredCopySteps, AuthoredCopyEnumCases, SourceIdentityAction
-        <1>3. BindingNames(FirstCopy.targetBinding) = {SourceIdentityAction.target}
-            BY ONLY SMT DEF BindingNames, VariableNames, NameOrSpelling, FirstCopy, FirstStep,
-                AuthoredCopySteps, AuthoredCopyDeclarations, SourceIdentityAction
-        <1>4. BindingNames(FirstCopy.readBinding) = {SourceIdentityAction.read}
-            BY ONLY SMT DEF BindingNames, VariableNames, NameOrSpelling, FirstCopy, FirstStep,
-                AuthoredCopySteps, AuthoredCopyDeclarations, SourceIdentityAction
-        <1>5. VariableNames(AuthoredCopyDeclarations) \ {SourceIdentityAction.target} = SourceIdentityAction.frame
-            BY ONLY SMT DEF VariableNames, NameOrSpelling, AuthoredCopyDeclarations, SourceIdentityAction
-        <1>6. /\ Single(LabelNames(FirstStep)) = SourceIdentityAction.label
-              /\ Single(BindingNames(FirstCopy.targetBinding)) = SourceIdentityAction.target
-              /\ Single(BindingNames(FirstCopy.readBinding)) = SourceIdentityAction.read
-            BY ONLY <1>2, <1>3, <1>4, SMT DEF Single
-        <1>7. AuthoredCopyDescriptors(FirstStep, FirstCopy) = {SourceIdentityAction}
-            BY ONLY <1>2, <1>3, <1>4, <1>5, <1>6, SMT DEF AuthoredCopyDescriptors, SourceIdentityAction
-        <1>. QED BY ONLY <1>1, <1>7, SMT DEF AuthoredCopyDescriptor, Single, FirstStep, FirstCopy
+        <1>. DEFINE copies == witness.copies
+        <1>label. Single(LabelNames(raw)) = witness.label BY SMT DEF RowBindings, Single
+        <1>domains. DOMAIN ResolveCopies(raw) = DOMAIN copies BY SMT DEF RowBindings, ResolveCopies, copies
+        <1>bindings. \A index \in DOMAIN copies : ResolveCopies(raw)[index] = copies[index]
+            <2>. SUFFICES ASSUME NEW index \in DOMAIN copies
+                         PROVE ResolveCopies(raw)[index] = copies[index]
+                OBVIOUS
+            <2>copy. CopyNamesBind(raw.copies[index], copies[index]) BY SMT DEF RowBindings, copies
+            <2>names. /\ Single(BindingNames(raw.copies[index].targetBinding)) = copies[index].target
+                      /\ Single(BindingNames(raw.copies[index].readBinding)) = copies[index].read
+                BY ONLY <2>copy, SMT DEF CopyNamesBind, Single
+            <2>. QED BY <2>copy, <2>names, SMT DEF RowBindings, CopyNamesBind, ResolveCopies, ResolveCopy, copies
+        <1>rows. ResolveCopies(raw) = CopyFunction(copies)
+            BY ONLY <1>domains, <1>bindings, SMT DEF ResolveCopies, CopyFunction
+        <1>targets. CopyTargets(CopyFunction(copies)) = CopyTargets(copies)
+            BY ONLY SMT DEF CopyFunction, CopyTargets
+        <1>. QED BY <1>label, <1>rows, <1>targets, SMT DEF ResolveStep, FunctionShapedStep, RowBindings, copies
+
+        THEOREM AuthoredCopySyntaxBindsWitnessRows ==
+            /\ AuthoredCopyFields = WitnessCopyFields
+            /\ AuthoredCopyActionRows = WitnessCopyActionRows
+            /\ \A left, right \in DOMAIN AuthoredCopyActionRows :
+                 left # right => AuthoredCopyActionRows[left].label # AuthoredCopyActionRows[right].label
+        PROOF
+        <1>fields. AuthoredCopyFields = WitnessCopyFields
+            BY ONLY SMT DEF AuthoredCopyFields, AuthoredCopyDeclarations, VariableNames, NameOrSpelling, WitnessCopyFields
+        <1>domain. DOMAIN AuthoredCopyActionRows = DOMAIN WitnessCopyActionRows
+            BY ONLY SMT DEF AuthoredCopyActionRows, AuthoredCopySteps, WitnessCopyActionRows
+        \#(rowProofs)
+        <1>points. \A index \in DOMAIN WitnessCopyActionRows : AuthoredCopyActionRows[index] = WitnessCopyActionRows[index]
+            BY ONLY \#(rowFacts), SMT DEF WitnessCopyActionRows
+        <1>functions. AuthoredCopyActionRows = CopyFunction(WitnessCopyActionRows)
+            BY ONLY <1>domain, <1>points, SMT DEF AuthoredCopyActionRows, CopyFunction
+        <1>rows. AuthoredCopyActionRows = WitnessCopyActionRows
+            BY ONLY <1>functions, SMT DEF CopyFunction, WitnessCopyActionRows
+        <1>labels. \A left, right \in DOMAIN WitnessCopyActionRows :
+                     left # right => WitnessCopyActionRows[left].label # WitnessCopyActionRows[right].label
+            BY ONLY SMT DEF WitnessCopyActionRows
+        <1>. QED BY ONLY <1>fields, <1>rows, <1>labels, SMT
         """#
     }
 

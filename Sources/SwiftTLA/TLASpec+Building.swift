@@ -114,7 +114,7 @@ extension TLASpec {
 }
 
 extension TLASpec {
-  func loweredSourceModel() throws -> TLASpec {
+  func loweredSourceModel(retainingScalarCopyRoutes: Bool = false) throws -> TLASpec {
     if let diagnostic = diagnostics.first { throw diagnostic }
     guard sourceAlgorithms.count <= 1 else {
       throw CompilationDiagnostic(
@@ -138,6 +138,7 @@ extension TLASpec {
     var formalOperatorDefinitions = formalOperatorDefinitions
     var authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
     var orderedIntProofActionNames = orderedIntProofActionNames
+    var scalarCopyRoutes = scalarCopyRoutes
 
     for step in sourceAtomicSteps {
       let lowered = try AlgorithmLowerer.lowerAtomicStep(step)
@@ -175,9 +176,12 @@ extension TLASpec {
             lowered: lowered.actions[0].body, stateRoots: Set(lowered.variables.map(\.name)))
         }
         if algorithm.model.processes.isEmpty, algorithm.model.procedures.isEmpty {
-          orderedIntProofActionNames.formUnion(try StraightLineAssignmentCheck.verifySequential(
+          let verified = try StraightLineAssignmentCheck.verifySequential(
             algorithm.model, lowered: lowered,
-            enumerateInitialControl: !initialInvariantSelections.isEmpty))
+            enumerateInitialControl: !initialInvariantSelections.isEmpty,
+            retainingScalarCopyRoutes: retainingScalarCopyRoutes)
+          orderedIntProofActionNames.formUnion(verified.actionNames)
+          scalarCopyRoutes = verified.scalarCopies
         }
         authoredPlusCalAlgorithmPlan = authoredPlusCalPlan
         variables += lowered.variables
@@ -252,6 +256,7 @@ extension TLASpec {
     lowered.initialInvariantSelections = initialInvariantSelections
     lowered.algorithmPhase = .lowered
     lowered.orderedIntProofActionNames = orderedIntProofActionNames
+    lowered.scalarCopyRoutes = scalarCopyRoutes
     lowered.sourceSpecDefaultDeadlockWitness = sourceSpecDefaultDeadlockWitness
     lowered.orderedIntSourceComponents = orderedIntSourceComponents
     return lowered

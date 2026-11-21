@@ -1,5 +1,5 @@
 ---- MODULE SeedConfiguredBehavior ----
-EXTENDS SwiftTLANativeActionProof, CompilerInputPageBlock1
+EXTENDS SwiftTLANativeActionProof, SwiftTLASequentialControlProof, CompilerInputPageBlock1
 
 \* CompilerInputPage1 CompilerInputPage2 CompilerInputPage3
 \* The seed's normal TLC configuration selects Spec and requests deadlock checking.
@@ -48,4 +48,15 @@ THEOREM NormalConfigurationAndNativeDispatchPreserveSourceSteps ==
     <1>behaviors. ([][NativeSteps]_vars) <=> ([][SourceSteps]_vars)
         BY <1>stutter, PTL
     <1>. QED BY <1>label, <1>stutter, <1>behaviors, NormalConfigurationUsesTheProvedStep, PTL DEF vars
+
+THEOREM NormalConfigurationUsesOnlyAuthoredSequentialControl ==
+    /\ (SelectedBehavior => [][AuthoredSequentialStep]_vars)
+    /\ NativeControlUsesAuthoredRoutes
+PROOF
+<1>step. Next => AuthoredSequentialStep
+    BY ActualSequentialStepUsesAuthoredRoutes
+<1>stuttering. [Next]_vars => [AuthoredSequentialStep]_vars
+    BY <1>step, PTL
+<1>. QED BY <1>stuttering, ActualSequentialStepUsesAuthoredRoutes, PTL
+    DEF SelectedBehavior, Spec
 ====

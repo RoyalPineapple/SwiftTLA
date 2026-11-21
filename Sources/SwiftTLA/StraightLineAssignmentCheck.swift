@@ -1,4 +1,19 @@
 package enum StraightLineAssignmentCheck {
+    package struct ScalarCopyReceipt: Sendable {
+        package enum Reference: Equatable, Sendable {
+            case state(String)
+            case capture(Int)
+        }
+
+        package let reads: [Reference]
+        package let writes: [String: Reference]
+        package let routes: [[String: Reference]]
+    }
+
+    private struct VerifiedSequentialIntAction {
+        let scalarCopy: ScalarCopyReceipt?
+    }
+
     package enum OrderedIntNode: Equatable, Sendable {
         case literal(Int)
         case read(String)
@@ -591,8 +606,15 @@ package enum StraightLineAssignmentCheck {
 
     static func verifySequential(_ algorithm: AlgorithmModel, lowered: TLASpec,
                                  enumerateInitialControl: Bool) throws -> Set<String> {
+        try verifySequential(algorithm, lowered: lowered, enumerateInitialControl: enumerateInitialControl,
+            retainingScalarCopyRoutes: false).actionNames
+    }
+
+    static func verifySequential(_ algorithm: AlgorithmModel, lowered: TLASpec,
+                                 enumerateInitialControl: Bool, retainingScalarCopyRoutes: Bool)
+        throws -> (actionNames: Set<String>, scalarCopies: [String: ScalarCopyReceipt]) {
         let steps = algorithm.sequentialSteps
-        guard steps.contains(where: { $0.loopCondition == nil }) else { return [] }
+        guard steps.contains(where: { $0.loopCondition == nil }) else { return ([], [:]) }
         func mismatch() -> CompilationDiagnostic {
             CompilationDiagnostic(
                 code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -632,6 +654,7 @@ package enum StraightLineAssignmentCheck {
         var orderedIntSteps = !enumerateInitialControl
             && steps.allSatisfy { $0.loopCondition == nil }
             && shared.allSatisfy { $0.swiftTypeName == "Int" }
+        var scalarCopies: [String: ScalarCopyReceipt] = [:]
         for (index, step) in steps.enumerated() where step.loopCondition == nil {
             let entry = ControlLocationReference(owner: owner, sourceName: step.label.name)
             let next = steps.indices.contains(index + 1)
@@ -641,8 +664,11 @@ package enum StraightLineAssignmentCheck {
                     sourceName: CompilerControlSymbol.done.rawValue)
             let atomic = AtomicStep(model: step)
             let action = lowered.actions[index].bindings.isEmpty ? lowered.actions[index].body : nil
-            if try verifySequentialIntAssignments(atomic, lowered: action,
-                                                  stateRoots: roots, control: (entry, next)) { continue }
+            if let verified = try verifySequentialIntAssignments(atomic, lowered: action,
+                stateRoots: roots, control: (entry, next), retainingScalarCopyRoutes: retainingScalarCopyRoutes) {
+                scalarCopies[step.label.name] = verified.scalarCopy
+                continue
+            }
             orderedIntSteps = false
             try verify(atomic, lowered: action, stateRoots: roots, control: (entry, next))
         }
@@ -673,14 +699,14 @@ package enum StraightLineAssignmentCheck {
             }
             guard sawDoneGuard, missingFrames.isEmpty else { throw mismatch() }
         }
-        return orderedIntSteps
-            ? Set(steps.map(\.label.name) + [CompilerControlSymbol.terminatingAction.rawValue]) : []
+        guard orderedIntSteps else { return ([], [:]) }
+        return (Set(steps.map(\.label.name) + [CompilerControlSymbol.terminatingAction.rawValue]), scalarCopies)
     }
 
     static func verify(_ step: AtomicStep, lowered: ActionExpr?, stateRoots: Set<String>,
                        control: (entry: ControlLocationReference, next: ControlLocationReference)? = nil) throws {
         if try verifySequentialIntAssignments(step, lowered: lowered, stateRoots: stateRoots,
-                                              control: control) { return }
+                                              control: control) != nil { return }
         let parameterNames = step.bindings.map(\.name)
         let parameters = Set(parameterNames)
         guard parameters.count == parameterNames.count,
@@ -781,14 +807,15 @@ package enum StraightLineAssignmentCheck {
 
     private static func verifySequentialIntAssignments(
         _ step: AtomicStep, lowered: ActionExpr?, stateRoots: Set<String>,
-        control: (entry: ControlLocationReference, next: ControlLocationReference)?
-    ) throws -> Bool {
-        guard control != nil, step.bindings.isEmpty, !step.model.statements.isEmpty else { return false }
+        control: (entry: ControlLocationReference, next: ControlLocationReference)?,
+        retainingScalarCopyRoutes: Bool = false
+    ) throws -> VerifiedSequentialIntAction? {
+        guard control != nil, step.bindings.isEmpty, !step.model.statements.isEmpty else { return nil }
         var source: [(root: String, expression: StateExpr)] = []
         for statement in step.model.statements {
             guard case .set(.root(let root), let expression) = statement,
                   stateRoots.contains(root),
-                  orderedIntPlan(expression, reads: stateRoots) != nil else { return false }
+                  orderedIntPlan(expression, reads: stateRoots) != nil else { return nil }
             source.append((root, expression))
         }
         func mismatch() -> CompilationDiagnostic {
@@ -809,8 +836,10 @@ package enum StraightLineAssignmentCheck {
                                                    renaming: inverse) else { return false }
             return sourcePlan == loweredPlan
         }
+        var copyRoutes = retainingScalarCopyRoutes ? [current] : nil
+        var copyReads: [String] = []
         var captured = 0
-        var captureNames: Set<String> = []
+        var capturePositions: [String: Int] = [:]
         var guardSeen = false
         var controlWriteSeen = false
         var writes: [String: String] = [:]
@@ -826,10 +855,19 @@ package enum StraightLineAssignmentCheck {
             case .guard_(.value(.bool(true))): break
             case .define(let name, let value, let body):
                 guard guardSeen, captured < source.count, writes.isEmpty,
-                      !stateRoots.contains(name), captureNames.insert(name).inserted,
+                      !stateRoots.contains(name),
+                      capturePositions.updateValue(captured + 1, forKey: name) == nil,
                       matches(source[captured].expression, value) else { throw mismatch() }
                 current[source[captured].root] = name
                 captured += 1
+                if copyRoutes != nil {
+                    if case .variable(let read) = value {
+                        copyReads.append(read)
+                        copyRoutes?.append(current)
+                    } else {
+                        copyRoutes = nil
+                    }
+                }
                 pending.append(body)
             case .assign(.programCounter, .controlLocation(let location)):
                 guard captured == source.count, !controlWriteSeen,
@@ -847,7 +885,15 @@ package enum StraightLineAssignmentCheck {
         guard guardSeen, controlWriteSeen, captured == source.count,
               writes.count == stateRoots.count,
               stateRoots.allSatisfy({ writes[$0] == current[$0] }) else { throw mismatch() }
-        return true
+        let receipt = copyRoutes.map { routes in
+            func reference(_ name: String) -> ScalarCopyReceipt.Reference {
+                if let position = capturePositions[name] { return .capture(position) }
+                return .state(name)
+            }
+            return ScalarCopyReceipt(reads: copyReads.map(reference), writes: writes.mapValues(reference),
+                                     routes: routes.map { $0.mapValues(reference) })
+        }
+        return VerifiedSequentialIntAction(scalarCopy: receipt)
     }
 
     private static func verifySingleAssignmentCapture(

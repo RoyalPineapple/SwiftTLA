@@ -1,4 +1,5 @@
 import Foundation
+import UpstreamParity
 import Testing
 import SwiftParser
 import SwiftSyntax
@@ -1608,7 +1609,12 @@ struct OrderedAssignmentLoweringTests {
         #expect(provedActions == Set(["copy", "finish",
             CompilerControlSymbol.terminatingAction.rawValue]))
         #expect(lowered.orderedIntProofActionNames == provedActions)
-        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+        let capturedCompilation = try specification.compile(retainingScalarCopyRoutes: true)
+        let copy = try #require(capturedCompilation.scalarCopyRoutes["copy"])
+        #expect(copy.reads == [.state("second"), .capture(1)])
+        #expect(copy.writes == ["first": .capture(1), "second": .capture(2)])
+        #expect(capturedCompilation.scalarCopyRoutes["finish"] == nil)
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: capturedCompilation))
         let action = try #require(program.behavior.actions.first)
         let module = try program.renderModule().renderedModuleSource
         let header = "copy == "
@@ -1651,9 +1657,12 @@ struct OrderedAssignmentLoweringTests {
 
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(
             typeName: "SequentialCopyProofModel", program: program))
-        let visitor = try #require(try emitter.machineMembers().first {
-            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0"
-        })
+        let members = try emitter.machineMembers()
+        let native = try nativeScalarActionEvidence(members.map(\.description).joined(separator: "\n"), program: program)
+        let nativeRows = String(decoding: native, as: UTF8.self)
+        #expect(nativeRows.contains(#"<<"copy", [captures |-> <<<<"state", "second">>, <<"capture", 1>>>>"#))
+        #expect(nativeRows.contains(#"<<"finish", [captures |-> <<<<"literal", 1>>, <<"literal", 2>>>>"#))
+        let visitor = try #require(members.first { $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates0" })
         let parts = try emitter.actionFunctions(action.body)
         try verifyGeneratedActionWriteOutput(visitor, action: action.body, program: program,
             stateFields: emitter.stateMemberNames, parts: parts.writes)
