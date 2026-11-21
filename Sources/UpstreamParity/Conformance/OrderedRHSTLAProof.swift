@@ -109,7 +109,7 @@ package enum OrderedRHSTLAProof {
         RHSOutputKeys == \#(keys)
         RHSOutputMin == \#(TLAValue.int(Int.min))
         RHSOutputMax == \#(TLAValue.int(Int.max))
-        LOCAL RHSOutputInput == INSTANCE \#(sourceModule)
+        RHSOutputInput == INSTANCE \#(sourceModule)
 
         RHSOutputRows == RHSOutputInput!\#(sourceRows)
         RHSOutputBefore == [key \in RHSOutputKeys |-> \#(lookup(roots, primed: false))]

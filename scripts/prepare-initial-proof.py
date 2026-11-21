@@ -622,7 +622,7 @@ def main():
                  "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule", "OrderedScalarCopyRule",
                  "ScalarCopyOutputBinding", "OrderedIntAssignmentListRule",
                  "CertifiedReadAssignmentObservation", "PhysicalIntAssignmentRhsRule", "NativeIntAssignmentListRule",
-                 "RenderedIntAssignmentTerms", "RenderedIntAssignmentActionRule",
+                 "RenderedIntAssignmentTerms", "RenderedIntAssignmentActionRule", "OrderedAssignmentOutputRules",
                  "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "NativeScalarCopyRule", "ConditionalOutcomeRules", "NormalSeedCFG"]
         for name in names:
             shutil.copyfile(root / f"Verification/Semantics/{name}.tla", imports / (name + ".tla"))

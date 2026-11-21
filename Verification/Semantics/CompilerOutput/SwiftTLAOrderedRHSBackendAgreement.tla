@@ -7,66 +7,60 @@ ActualNativeProjection ==
     RHSOutputFailureEvent(ActualNativeFailure.site, ActualNativeFailure.payload[2],
         ActualNativeFailure.payload[3], ActualNativeFailure.completed)
 
-LOCAL SharedAssignmentRule == INSTANCE NativeIntAssignmentListRule
-    WITH Keys <- RHSOutputKeys, SwiftIntMin <- RHSOutputMin, SwiftIntMax <- RHSOutputMax,
-         Vars <- {}, Values <- {}, ActionLabels <- {}, FailureValues <- {}, NoFailure <- <<>>
-
-LOCAL Source == INSTANCE SwiftTLAArithmeticAssignmentSource
-
 LOCAL NativeFormalNames == [key \in RHSOutputKeys |-> key]
 LOCAL NativeActionOrdinal == ActualNativeFailure.actionOrdinal
 LOCAL DecodedNativeAction == NativeActionRows[NativeActionOrdinal + 1][2]
-LOCAL NormalizedNativeAction == SharedAssignmentRule!NativeAssignmentRekey(DecodedNativeAction, NativeFormalNames, "pc")
+LOCAL NormalizedNativeAction == RHSOutputInput!Rule!NativeAssignmentRekey(DecodedNativeAction, NativeFormalNames, "pc")
 
 ActualNativeAssignmentCaptureHistory(history) ==
-    SharedAssignmentRule!NativeAssignmentCaptureHistory(RHSOutputBefore, NormalizedNativeAction, RHSOutputCount,
-        SharedAssignmentRule!NativeAssignmentProjectedHistory(history, RHSOutputCount))
+    RHSOutputInput!Rule!NativeAssignmentCaptureHistory(RHSOutputBefore, NormalizedNativeAction, RHSOutputCount,
+        RHSOutputInput!Rule!NativeAssignmentProjectedHistory(history, RHSOutputCount))
 
 THEOREM ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles ==
-    /\ SharedAssignmentRule!NativeAssignmentDispatchMatches(NativeActionRows, NativeActionDispatchLabels,
+    /\ RHSOutputInput!Rule!NativeAssignmentDispatchMatches(NativeActionRows, NativeActionDispatchLabels,
            NativeActionOrdinal, RHSOutputActionLabel, "advance")
-    /\ SharedAssignmentRule!NativeAssignmentsNameTheirOperandsAndWrites(RHSOutputRows, DecodedNativeAction,
+    /\ RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites(RHSOutputRows, DecodedNativeAction,
            NativeFormalNames, "pc", RHSOutputEntry, RHSOutputExit)
 PROOF
 <1>dispatch.
-    SharedAssignmentRule!NativeAssignmentDispatchMatches(NativeActionRows, NativeActionDispatchLabels,
+    RHSOutputInput!Rule!NativeAssignmentDispatchMatches(NativeActionRows, NativeActionDispatchLabels,
         NativeActionOrdinal, RHSOutputActionLabel, "advance")
-    BY SMT DEF SharedAssignmentRule!NativeAssignmentDispatchMatches, NativeActionOrdinal,
+    BY SMT DEF RHSOutputInput!Rule!NativeAssignmentDispatchMatches, NativeActionOrdinal,
         ActualNativeFailure, NativeAssignmentFailure, NativeActionRows, NativeActionDispatchLabels, RHSOutputActionLabel
 <1>decode.
-    /\ SharedAssignmentRule!NativeCopyKnownRoles(DecodedNativeAction, RHSOutputKeys, NativeFormalNames, "pc")
-    /\ SharedAssignmentRule!NativeAssignmentReadNamesAreKnown(DecodedNativeAction, NativeFormalNames)
-    BY SMT DEF SharedAssignmentRule!NativeCopyKnownRoles, SharedAssignmentRule!NativeCopyPhysicalKeys,
-        SharedAssignmentRule!NativeAssignmentReadNamesAreKnown, SharedAssignmentRule!NativeAssignmentRhsPlan,
+    /\ RHSOutputInput!Rule!NativeCopyKnownRoles(DecodedNativeAction, RHSOutputKeys, NativeFormalNames, "pc")
+    /\ RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown(DecodedNativeAction, NativeFormalNames)
+    BY SMT DEF RHSOutputInput!Rule!NativeCopyKnownRoles, RHSOutputInput!Rule!NativeCopyPhysicalKeys,
+        RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown, RHSOutputInput!Rule!NativeAssignmentRhsPlan,
         DecodedNativeAction, NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure,
-        NativeActionRows, NativeFormalNames, RHSOutputKeys
+        NativeActionRows, NativeFormalNames, RHSOutputInput!MasterFields, RHSOutputKeys
 <1>names.
-    \A key \in RHSOutputKeys : SharedAssignmentRule!NativeCopyKey(RHSOutputKeys, NativeFormalNames, "pc", key) = key
-    BY SMT DEF SharedAssignmentRule!NativeCopyKey, NativeFormalNames, RHSOutputKeys
+    \A key \in RHSOutputKeys : RHSOutputInput!Rule!NativeCopyKey(RHSOutputKeys, NativeFormalNames, "pc", key) = key
+    BY SMT DEF RHSOutputInput!Rule!NativeCopyKey, NativeFormalNames, RHSOutputKeys
 <1>operands.
     /\ DOMAIN NormalizedNativeAction.captures = 1..RHSOutputCount
     /\ \A index \in 1..RHSOutputCount :
-          SharedAssignmentRule!PhysicalAssignmentReadsNameWriters(RHSOutputRows, index, NormalizedNativeAction.captures[index])
+          RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters(RHSOutputRows, index, NormalizedNativeAction.captures[index])
     BY <1>names, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-        DEF SharedAssignmentRule!PhysicalAssignmentReadsNameWriters, SharedAssignmentRule!PhysicalAssignmentOperandsMatch,
-            SharedAssignmentRule!CopyReceiptNamesWriter, SharedAssignmentRule!CopyReceiptOrdinal,
-            SharedAssignmentRule!LastDirectCopy, SharedAssignmentRule!DirectCopyReference,
-            SharedAssignmentRule!AssignmentRhsPlan, SharedAssignmentRule!ExtractedNodePlan,
-            SharedAssignmentRule!NativeAssignmentRekey, SharedAssignmentRule!NativeAssignmentRhsPlan, NormalizedNativeAction,
+        DEF RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters, RHSOutputInput!Rule!PhysicalAssignmentOperandsMatch,
+            RHSOutputInput!Rule!CopyReceiptNamesWriter, RHSOutputInput!Rule!CopyReceiptOrdinal,
+            RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference,
+            RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan,
+            RHSOutputInput!Rule!NativeAssignmentRekey, RHSOutputInput!Rule!NativeAssignmentRhsPlan, NormalizedNativeAction,
             DecodedNativeAction, NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure, NativeActionRows,
-            RHSOutputRows, RHSOutputCount, RHSOutputKeys
+            RHSOutputRows, RHSOutputCount, RHSOutputInput!MasterFields, RHSOutputKeys
 <1>writes.
-    SharedAssignmentRule!NativeAssignmentWritesNameLastTargets(RHSOutputRows, NormalizedNativeAction, RHSOutputEntry, RHSOutputExit)
+    RHSOutputInput!Rule!NativeAssignmentWritesNameLastTargets(RHSOutputRows, NormalizedNativeAction, RHSOutputEntry, RHSOutputExit)
     BY <1>names, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-        DEF SharedAssignmentRule!NativeAssignmentWritesNameLastTargets, SharedAssignmentRule!NativeCopyFields,
-            SharedAssignmentRule!NativeCopyRekey, SharedAssignmentRule!NativeCopyKey, SharedAssignmentRule!NativeCopyControlSlot,
-            SharedAssignmentRule!CopyReceiptNamesWriter, SharedAssignmentRule!CopyReceiptOrdinal,
-            SharedAssignmentRule!LastDirectCopy, SharedAssignmentRule!DirectCopyReference,
-            SharedAssignmentRule!NativeAssignmentRekey, NormalizedNativeAction, DecodedNativeAction, NativeActionOrdinal,
+        DEF RHSOutputInput!Rule!NativeAssignmentWritesNameLastTargets, RHSOutputInput!Rule!NativeCopyFields,
+            RHSOutputInput!Rule!NativeCopyRekey, RHSOutputInput!Rule!NativeCopyKey, RHSOutputInput!Rule!NativeCopyControlSlot,
+            RHSOutputInput!Rule!CopyReceiptNamesWriter, RHSOutputInput!Rule!CopyReceiptOrdinal,
+            RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference,
+            RHSOutputInput!Rule!NativeAssignmentRekey, NormalizedNativeAction, DecodedNativeAction, NativeActionOrdinal,
             ActualNativeFailure, NativeAssignmentFailure, NativeActionRows, RHSOutputRows, RHSOutputCount, RHSOutputKeys,
-            RHSOutputEntry, RHSOutputExit
+            RHSOutputInput!MasterFields, RHSOutputEntry, RHSOutputExit
 <1>. QED BY ONLY <1>dispatch, <1>decode, <1>operands, <1>writes
-    DEF SharedAssignmentRule!NativeAssignmentsNameTheirOperandsAndWrites, NormalizedNativeAction, RHSOutputCount
+    DEF RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites, NormalizedNativeAction, RHSOutputCount
 
 THEOREM ActualNativeAndTLAInitialObservationsUseTheCertifiedAssignmentHistory ==
     ASSUME Init
@@ -75,9 +69,9 @@ THEOREM ActualNativeAndTLAInitialObservationsUseTheCertifiedAssignmentHistory ==
         /\ RHSOutputGeneratedHistory(history)
         /\ RHSOutputHistoryObservation(history)
         /\ ActualNativeAssignmentCaptureHistory(history)
-        /\ SharedAssignmentRule!NativeAssignmentCheckedCallback(ActualNativeFailure.before,
+        /\ RHSOutputInput!Rule!NativeAssignmentCheckedCallback(ActualNativeFailure.before,
                RHSOutputActionLabel, NativeActionOrdinal, RHSOutputSelected,
-               SharedAssignmentRule!NativeAssignmentPrefix(history[RHSOutputCount])) = {ActualNativeFailure}
+               RHSOutputInput!Rule!NativeAssignmentPrefix(history[RHSOutputCount])) = {ActualNativeFailure}
         /\ RHSOutputSelectedSubExpressions = {<<ActualNativeFailure.site, 3>>}
         /\ RHSOutputActualFailures = {ActualNativeProjection}
         /\ RHSOutputActualFailures =
@@ -100,13 +94,18 @@ PROOF
 <1>actual. PICK history :
     RHSOutputSourceHistory(history) /\ RHSOutputGeneratedHistory(history) /\ RHSOutputHistoryObservation(history)
     BY <1>entry, ActualTLAActionHasACertifiedAssignmentHistory
+<1>type. RHSOutputBefore \in RHSOutputInput!Rule!AssignmentBindings
+    BY ONLY <1>entry, SMT
+        DEF RHSOutputStateType, RHSOutputKeys, RHSOutputMin, RHSOutputMax, RHSOutputInput!MasterFields,
+            RHSOutputInput!Rule!AssignmentBindings, RHSOutputInput!Rule!AssignmentIntValues
+<1>source.
+    /\ RHSOutputInput!Rule!SupportedAssignmentList(RHSOutputRows)
+    /\ RHSOutputInput!Rule!AssignmentListHistory(FALSE, RHSOutputBefore, RHSOutputRows, history)
+    BY ONLY <1>actual, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory DEF RHSOutputSourceHistory
 <1>native. ActualNativeAssignmentCaptureHistory(history)
-    BY <1>entry, <1>actual, ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles,
-        RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
-        SharedAssignmentRule!PhysicalNativeCapturesUseTheCertifiedAssignmentHistory, SMT
-        DEF ActualNativeAssignmentCaptureHistory, NormalizedNativeAction, RHSOutputSourceHistory,
-            SharedAssignmentRule!AssignmentBindings, SharedAssignmentRule!AssignmentIntValues,
-            RHSOutputCount, RHSOutputStateType
+    BY ONLY <1>type, <1>source, ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles,
+        RHSOutputInput!Rule!PhysicalNativeCapturesUseTheCertifiedAssignmentHistory, SMT
+        DEF ActualNativeAssignmentCaptureHistory, NormalizedNativeAction, RHSOutputCount
 <1>event. /\ RHSOutputSelectedSubExpressions = {<<ActualNativeFailure.site, 3>>}
            /\ RHSOutputActualFailures = {ActualNativeProjection}
     BY Init, SMT DEF Init, RHSOutputSelectedSubExpressions, RHSOutputActualFailures, RHSOutputFailureProbeSites,
@@ -121,24 +120,24 @@ PROOF
     BY <1>entry, <1>actual, <1>event, SMT DEF RHSOutputHistoryObservation, RHSOutputHistoryFailures,
         ActualNativeProjection, ActualNativeFailure, NativeAssignmentFailure, RHSOutputFailureEvent
 <1>callback.
-    SharedAssignmentRule!NativeAssignmentCheckedCallback(ActualNativeFailure.before,
+    RHSOutputInput!Rule!NativeAssignmentCheckedCallback(ActualNativeFailure.before,
         RHSOutputActionLabel, NativeActionOrdinal, RHSOutputSelected,
-        SharedAssignmentRule!NativeAssignmentPrefix(history[RHSOutputCount])) = {ActualNativeFailure}
-    BY <1>entry, <1>failure, SMT DEF SharedAssignmentRule!NativeAssignmentCheckedCallback,
-        SharedAssignmentRule!NativeAssignmentPrefix, NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure
-<1>route. SharedAssignmentRule!CopyReceiptNamesWriter(RHSOutputRows, 1, "count", <<"capture", 1>>)
-    BY SMT DEF RHSOutputRows, Source!MasterRows, SharedAssignmentRule!CopyReceiptNamesWriter, SharedAssignmentRule!CopyReceiptOrdinal,
-       SharedAssignmentRule!LastDirectCopy, SharedAssignmentRule!DirectCopyReference
-<1>writer. SharedAssignmentRule!DirectCopyRoutes(RHSOutputKeys, RHSOutputRows)[1]["count"] = <<"capture", 1>>
+        RHSOutputInput!Rule!NativeAssignmentPrefix(history[RHSOutputCount])) = {ActualNativeFailure}
+    BY <1>entry, <1>failure, SMT DEF RHSOutputInput!Rule!NativeAssignmentCheckedCallback,
+        RHSOutputInput!Rule!NativeAssignmentPrefix, NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure
+<1>route. RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, 1, "count", <<"capture", 1>>)
+    BY SMT DEF RHSOutputRows, RHSOutputInput!MasterRows, RHSOutputInput!Rule!CopyReceiptNamesWriter, RHSOutputInput!Rule!CopyReceiptOrdinal,
+       RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference
+<1>writer. RHSOutputInput!Rule!DirectCopyRoutes(RHSOutputKeys, RHSOutputRows)[1]["count"] = <<"capture", 1>>
     BY <1>route, RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
-       SharedAssignmentRule!NamedAssignmentReadRouteIsTheScheduledRoute, SMT
-       DEF RHSOutputKeys, SharedAssignmentRule!SupportedAssignmentList
+       RHSOutputInput!Rule!NamedAssignmentReadRouteIsTheScheduledRoute, SMT
+       DEF RHSOutputKeys, RHSOutputInput!MasterFields, RHSOutputInput!Rule!SupportedAssignmentList
 <1>projection. ActualNativeProjection =
     [site |-> 2, target |-> "count", payload |-> <<"integerOverflow", "addition", <<RHSOutputMax, 1>>>>,
      completed |-> <<RHSOutputMax>>, before |-> [count |-> RHSOutputMax]]
     BY <1>writer, SMT DEF ActualNativeProjection, ActualNativeFailure, NativeAssignmentFailure, RHSOutputFailureEvent,
-        RHSOutputKeys, RHSOutputRows, RHSOutputMin, RHSOutputMax, Source!MasterRows,
-        SharedAssignmentRule!CompletedAssignmentBindings, SharedAssignmentRule!CopyMaterializedState, SharedAssignmentRule!CopyReferenceValue
+        RHSOutputKeys, RHSOutputRows, RHSOutputMin, RHSOutputMax, RHSOutputInput!MasterFields, RHSOutputInput!MasterRows,
+        RHSOutputInput!Rule!CompletedAssignmentBindings, RHSOutputInput!Rule!CopyMaterializedState, RHSOutputInput!Rule!CopyReferenceValue
 <1>exact. RHSOutputActualFailures =
     {[site |-> 2, target |-> "count", payload |-> <<"integerOverflow", "addition", <<RHSOutputMax, 1>>>>,
       completed |-> <<RHSOutputMax>>, before |-> [count |-> RHSOutputMax]]}
