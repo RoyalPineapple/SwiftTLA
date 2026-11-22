@@ -10,12 +10,35 @@ ActualNativeProjection ==
 
 LOCAL NativeFormalNames == [key \in RHSOutputKeys |-> key]
 LOCAL NativeActionOrdinal == ActualNativeFailure.actionOrdinal
-LOCAL DecodedNativeAction == NativeActionRows[NativeActionOrdinal + 1][2]
+LOCAL NativeArithmeticDispatchRule == INSTANCE ActionOutcomeInterface
+    WITH UpdateValues <- {}, FailureValues <- {}, NoFailure <- <<>>
+LOCAL NativeArithmeticVisitorPlans == [visitor \in DOMAIN NativeActionRows |-> NativeActionRows[visitor][2]]
+LOCAL NativeArithmeticDispatch ==
+    NativeArithmeticDispatchRule!NativeDispatchOutcome(
+        NativeActionRoutes, NativeArithmeticVisitorPlans, NativeActionOrdinal + 1)
+LOCAL DecodedNativeAction == NativeArithmeticDispatch.outcome
 LOCAL NormalizedNativeAction == RHSOutputInput!Rule!NativeAssignmentRekey(DecodedNativeAction, NativeFormalNames, "pc")
 
 ActualNativeAssignmentCaptureHistory(history) ==
     RHSOutputInput!Rule!NativeAssignmentCaptureHistory(RHSOutputBefore, NormalizedNativeAction, RHSOutputCount,
         RHSOutputInput!Rule!NativeAssignmentProjectedHistory(history, RHSOutputCount))
+
+THEOREM ActualArithmeticCandidateInvokesTheCheckedNativeVisitor ==
+    /\ NativeArithmeticDispatch.handle = RHSOutputActionLabel
+    /\ NativeArithmeticDispatch.formal = "advance"
+    /\ DecodedNativeAction = NativeSelectedAction
+PROOF
+<1>route.
+    /\ NativeActionOrdinal + 1 \in DOMAIN NativeActionRoutes
+    /\ NativeActionRoutes[NativeActionOrdinal + 1].handle = RHSOutputActionLabel
+    /\ NativeActionRoutes[NativeActionOrdinal + 1].formal = "advance"
+    /\ NativeActionRoutes[NativeActionOrdinal + 1].visitor = 1
+    BY ONLY SMT DEF NativeActionOrdinal, ActualNativeFailure, NativeAssignmentFailure,
+        NativeActionRoutes, RHSOutputActionLabel
+<1>plan. NativeArithmeticVisitorPlans[1] = NativeSelectedAction
+    BY ONLY SMT DEF NativeArithmeticVisitorPlans, NativeActionRows
+<1>. QED BY ONLY <1>route, <1>plan, SMT
+    DEF NativeArithmeticDispatch, DecodedNativeAction, NativeArithmeticDispatchRule!NativeDispatchOutcome
 
 THEOREM ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles ==
     /\ RHSOutputInput!Rule!NativeAssignmentDispatchMatches(NativeActionRows, NativeActionDispatchLabels,
@@ -31,7 +54,7 @@ PROOF
     BY ONLY <1>ordinal, SMT DEF RHSOutputInput!Rule!NativeAssignmentDispatchMatches,
         NativeActionRows, NativeActionDispatchLabels, RHSOutputActionLabel
 <1>selected. DecodedNativeAction = NativeSelectedAction
-    BY ONLY <1>ordinal, SMT DEF DecodedNativeAction, NativeActionRows
+    BY ONLY ActualArithmeticCandidateInvokesTheCheckedNativeVisitor, PTL
 <1>keys. RHSOutputInput!MasterFields = RHSOutputKeys
     BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory
 <1>names.
@@ -288,12 +311,12 @@ PROOF
     /\ RHSOutputSelected
     /\ ActualNativeFailure.label = RHSOutputActionLabel
     /\ ActualNativeFailure.actionOrdinal = 0
-    /\ NativeActionDispatchLabels[ActualNativeFailure.actionOrdinal + 1] = "advance"
+    /\ NativeArithmeticDispatch.formal = "advance"
     /\ ActualNativeFailure.before["pc"] = pc
     /\ [key \in RHSOutputKeys |-> ActualNativeFailure.before[key]] = RHSOutputBefore
-    BY Init, SMT DEF Init, RHSOutputStateType, RHSOutputSelected, RHSOutputEntry, RHSOutputActionLabel,
-        RHSOutputKeys, RHSOutputBefore, ActualNativeFailure, NativeAssignmentFailure, NativeActionDispatchLabels,
-        RHSOutputMin, RHSOutputMax
+    BY Init, ActualArithmeticCandidateInvokesTheCheckedNativeVisitor, SMT
+        DEF Init, RHSOutputStateType, RHSOutputSelected, RHSOutputEntry, RHSOutputActionLabel,
+            RHSOutputKeys, RHSOutputBefore, ActualNativeFailure, NativeAssignmentFailure, RHSOutputMin, RHSOutputMax
 <1>actual. PICK history :
     RHSOutputSourceHistory(history) /\ RHSOutputGeneratedHistory(history) /\ RHSOutputHistoryObservation(history)
     BY <1>entry, ActualTLAActionHasACertifiedAssignmentHistory

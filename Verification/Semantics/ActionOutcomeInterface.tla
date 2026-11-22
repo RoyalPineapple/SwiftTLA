@@ -35,4 +35,85 @@ THEOREM CompleteOutcomeRetainsStateIdentityAndDisabledness ==
                     observed.successors = {} /\ observed.selectedFailure = NoFailure)
     BY LenProperties, ElementOfSeq, SMT DEF CompleteLabeledOutcome, OrderedOutcome
 
+
+\* The decoded enumerator supplies the handle order. Each switch case supplies
+\* the successor visitor ordinal and formal call name. Leaf observations come
+\* from the separately checked visitor bodies.
+NativeDispatchOutcome(routes, outcomes, candidate) ==
+    [handle |-> routes[candidate].handle,
+     formal |-> routes[candidate].formal,
+     outcome |-> outcomes[routes[candidate].visitor]]
+
+NativeDispatchLabeled(routes, nativeBranches, formalLabels, authoredLabels, label) ==
+    \E candidate \in DOMAIN routes : \E action \in DOMAIN formalLabels :
+        LET observation == NativeDispatchOutcome(routes, nativeBranches, candidate)
+        IN /\ observation.formal = formalLabels[action]
+           /\ authoredLabels[action] = label
+           /\ observation.outcome
+
+CatalogLabeledBranches(branches, labels, label) ==
+    \E action \in DOMAIN labels : labels[action] = label /\ branches[action]
+
+THEOREM CatalogLabeledBranchesComposeTheFiniteUnion ==
+    ASSUME NEW branches, NEW labels, DOMAIN branches = DOMAIN labels
+    PROVE (\E action \in DOMAIN branches : branches[action])
+          <=> (\E label : CatalogLabeledBranches(branches, labels, label))
+    BY ONLY (DOMAIN branches = DOMAIN labels), SMT DEF CatalogLabeledBranches
+
+NativeDispatchBindsTheActionCatalog(routes, formalLabels) ==
+    /\ \A first, second \in DOMAIN routes : routes[first].handle = routes[second].handle => first = second
+    /\ \A first, second \in DOMAIN formalLabels : formalLabels[first] = formalLabels[second] => first = second
+    /\ \A candidate \in DOMAIN routes :
+           LET visitor == routes[candidate].visitor
+           IN /\ visitor \in DOMAIN formalLabels
+              /\ routes[candidate].formal = formalLabels[visitor]
+    /\ \A visitor \in DOMAIN formalLabels : \E candidate \in DOMAIN routes : routes[candidate].visitor = visitor
+
+THEOREM CertifiedNativeDispatchUsesTheLabeledCatalog ==
+    ASSUME NEW routes, NEW formalLabels, NativeDispatchBindsTheActionCatalog(routes, formalLabels),
+           NEW authoredLabels, DOMAIN authoredLabels = DOMAIN formalLabels,
+           NEW nativeBranches, NEW sourceBranches,
+           \A action \in DOMAIN formalLabels : nativeBranches[action] <=> sourceBranches[action]
+    PROVE \A label : NativeDispatchLabeled(routes, nativeBranches, formalLabels, authoredLabels, label)
+                     <=> CatalogLabeledBranches(sourceBranches, authoredLabels, label)
+PROOF
+<1>. TAKE label
+<1>forward.
+    ASSUME NativeDispatchLabeled(routes, nativeBranches, formalLabels, authoredLabels, label)
+    PROVE CatalogLabeledBranches(sourceBranches, authoredLabels, label)
+    <2>candidate. PICK candidate \in DOMAIN routes :
+        \E action \in DOMAIN formalLabels :
+            /\ NativeDispatchOutcome(routes, nativeBranches, candidate).formal = formalLabels[action]
+            /\ authoredLabels[action] = label
+            /\ NativeDispatchOutcome(routes, nativeBranches, candidate).outcome
+        BY ONLY NativeDispatchLabeled(routes, nativeBranches, formalLabels, authoredLabels, label)
+            DEF NativeDispatchLabeled
+    <2>row. PICK action \in DOMAIN formalLabels :
+        /\ NativeDispatchOutcome(routes, nativeBranches, candidate).formal = formalLabels[action]
+        /\ authoredLabels[action] = label
+        /\ NativeDispatchOutcome(routes, nativeBranches, candidate).outcome
+        BY ONLY <2>candidate
+    <2>identity. routes[candidate].visitor = action
+        BY ONLY <2>row, (candidate \in DOMAIN routes), (action \in DOMAIN formalLabels),
+            NativeDispatchBindsTheActionCatalog(routes, formalLabels), SMT
+            DEF NativeDispatchBindsTheActionCatalog, NativeDispatchOutcome
+    <2>. QED BY ONLY <2>row, <2>identity, (action \in DOMAIN formalLabels),
+        (DOMAIN authoredLabels = DOMAIN formalLabels),
+        (\A action \in DOMAIN formalLabels : nativeBranches[action] <=> sourceBranches[action]), SMT
+        DEF NativeDispatchOutcome, CatalogLabeledBranches
+<1>backward.
+    ASSUME CatalogLabeledBranches(sourceBranches, authoredLabels, label)
+    PROVE NativeDispatchLabeled(routes, nativeBranches, formalLabels, authoredLabels, label)
+    <2>action. PICK action \in DOMAIN formalLabels : authoredLabels[action] = label /\ sourceBranches[action]
+        BY ONLY CatalogLabeledBranches(sourceBranches, authoredLabels, label),
+            (DOMAIN authoredLabels = DOMAIN formalLabels), SMT DEF CatalogLabeledBranches
+    <2>candidate. PICK candidate \in DOMAIN routes : routes[candidate].visitor = action
+        BY ONLY (action \in DOMAIN formalLabels), NativeDispatchBindsTheActionCatalog(routes, formalLabels), SMT
+            DEF NativeDispatchBindsTheActionCatalog
+    <2>. QED BY ONLY <2>action, <2>candidate, (candidate \in DOMAIN routes), (action \in DOMAIN formalLabels),
+        NativeDispatchBindsTheActionCatalog(routes, formalLabels),
+        (\A action \in DOMAIN formalLabels : nativeBranches[action] <=> sourceBranches[action]), SMT
+        DEF NativeDispatchBindsTheActionCatalog, NativeDispatchOutcome, NativeDispatchLabeled
+<1>. QED BY ONLY <1>forward, <1>backward, SMT
+
 =============================================================================

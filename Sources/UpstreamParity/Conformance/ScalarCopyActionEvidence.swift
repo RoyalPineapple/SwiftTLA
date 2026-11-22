@@ -60,8 +60,8 @@ package enum ScalarCopyActionEvidence {
               let terminating = terminalActions.first,
               terminating.declaration.name == CompilerControlSymbol.terminatingAction.rawValue,
               Set(compilation.scalarCopyRoutes.keys) == Set(labels),
-              rendered.actions.map(\.renderedName) == layout.actions.map(\.renderedName),
-              rendered.actions.allSatisfy({ $0.arguments.isEmpty }) else { return nil }
+              let catalog = StraightLineRenderedActionCheck.unboundActionCatalog(in: rendered, layout: layout)
+        else { return nil }
 
         func control(_ owner: ControlOwner, _ label: String) throws -> String? {
             let matches = layout.controlLocations.filter { $0.owner == owner && $0.sourceName == label }
@@ -123,9 +123,14 @@ package enum ScalarCopyActionEvidence {
         let stateNames = variables.map { ($0.declaration.name, $0.formalName) }
         let entries = "<<\(entryControls.joined(separator: ", "))>>"
         let nextControls = "<<\((Array(entryControls.dropFirst()) + [terminal]).joined(separator: ", "))>>"
-        let selected = zip(labels, actions).map { item in
-            "(\(label) = \(TLAValue.string(item.0)) /\\ \(item.1.renderedName))"
-        } + ["(\(label) = \(TLAValue.string(terminating.declaration.name)) /\\ \(terminating.renderedName))"]
+        let actualInvocations = catalog.invocations.map(\.renderedName)
+        let actualRoutes = catalog.invocations.map {
+            TLAValue.record(TLARecord([.init("formal", .string($0.renderedName)), .init("authored", .string($0.sourceName))]))
+        }
+        let emittedValues = "<<\(actualInvocations.joined(separator: ", "))>>"
+        let emittedBefore = "<<\(catalog.frameFields.joined(separator: ", "))>>"
+        let emittedAfter = "<<\(catalog.frameFields.map { $0 + "'" }.joined(separator: ", "))>>"
+        let dispatch = prefix + "Dispatch"
         let branch = prefix + "SourceBranch"
         let sourceLabeled = prefix + "SourceLabeled"
         let emittedLabeled = prefix + "EmittedLabeled"
@@ -138,6 +143,8 @@ package enum ScalarCopyActionEvidence {
         EXTENDS \#(output.root.name), TLAPS
 
         \#(rules) == INSTANCE ScalarCopyOutputBinding
+        LOCAL \#(dispatch) == INSTANCE ActionOutcomeInterface
+            WITH UpdateValues <- {}, FailureValues <- {}, NoFailure <- <<>>
         \#(authoredInstance) == INSTANCE \#(authoredModule)
 
         \#(before) == [\#(key) \in \#(authoredInstance)!WitnessCopyFields |->
@@ -213,7 +220,41 @@ package enum ScalarCopyActionEvidence {
             \/ \E \#(index) \in DOMAIN \#(authoredInstance)!AuthoredCopyActionRows :
                 \#(authoredInstance)!AuthoredCopyActionRows[\#(index)].label = \#(label) /\ \#(branch)(\#(index))
             \/ \#(label) = \#(TLAValue.string(terminating.declaration.name)) /\ \#(terminatingRule)
-        \#(emittedLabeled)(\#(label)) == \#(selected.joined(separator: " \\/ "))
+        \#(prefix)ActualActionRoutes == \#(TLAValue.tuple(actualRoutes))
+        \#(prefix)ActualFormalLabels ==
+            [\#(index) \in DOMAIN \#(prefix)ActualActionRoutes |-> \#(prefix)ActualActionRoutes[\#(index)].formal]
+        \#(prefix)ActualAuthoredLabels ==
+            [\#(index) \in DOMAIN \#(prefix)ActualActionRoutes |-> \#(prefix)ActualActionRoutes[\#(index)].authored]
+        \#(prefix)ActualActionValues == \#(emittedValues)
+        \#(prefix)ActualFrameFields == \#(TLAValue.tuple(catalog.frameFields.map(TLAValue.string)))
+        \#(prefix)ActualFrameBefore == \#(emittedBefore)
+        \#(prefix)ActualFrameAfter == \#(emittedAfter)
+        \#(emittedLabeled)(\#(label)) ==
+            \#(dispatch)!CatalogLabeledBranches(\#(prefix)ActualActionValues, \#(prefix)ActualAuthoredLabels, \#(label))
+
+        THEOREM \#(prefix)ActualNextUsesTheCompleteLabeledActionCatalog ==
+            /\ DOMAIN \#(prefix)ActualActionValues = DOMAIN \#(prefix)ActualAuthoredLabels
+            /\ DOMAIN \#(prefix)ActualFormalLabels = DOMAIN \#(prefix)ActualAuthoredLabels
+            /\ (Next <=> (\E \#(index) \in DOMAIN \#(prefix)ActualActionValues : \#(prefix)ActualActionValues[\#(index)]))
+            /\ vars = \#(prefix)ActualFrameBefore
+            /\ vars' = \#(prefix)ActualFrameAfter
+            /\ ([Next]_vars <=> ((\E \#(index) \in DOMAIN \#(prefix)ActualActionValues :
+                       \#(prefix)ActualActionValues[\#(index)]) \/ \#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore))
+        PROOF
+        <1>inventory.
+            /\ DOMAIN \#(prefix)ActualActionValues = DOMAIN \#(prefix)ActualAuthoredLabels
+            /\ DOMAIN \#(prefix)ActualFormalLabels = DOMAIN \#(prefix)ActualAuthoredLabels
+            BY ONLY SMT DEF \#(prefix)ActualActionValues, \#(prefix)ActualActionRoutes,
+                \#(prefix)ActualFormalLabels, \#(prefix)ActualAuthoredLabels
+        <1>next. Next <=> (\E \#(index) \in DOMAIN \#(prefix)ActualActionValues : \#(prefix)ActualActionValues[\#(index)])
+            BY ONLY SMT DEF Next, \#(prefix)ActualActionValues
+        <1>frame. /\ vars = \#(prefix)ActualFrameBefore
+                   /\ vars' = \#(prefix)ActualFrameAfter
+            BY ONLY DEF vars, \#(prefix)ActualFrameBefore, \#(prefix)ActualFrameAfter
+        <1>stutter. [Next]_vars <=> ((\E \#(index) \in DOMAIN \#(prefix)ActualActionValues :
+             \#(prefix)ActualActionValues[\#(index)]) \/ \#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore)
+            BY ONLY <1>next, <1>frame, PTL
+        <1>. QED BY ONLY <1>inventory, <1>next, <1>frame, <1>stutter
 
         THEOREM \#(prefix)ActualLayoutKeys ==
             /\ \#(prefix)Keys = \#(TLAValue.set(Set(fields.map(TLAValue.string))))
@@ -234,9 +275,12 @@ package enum ScalarCopyActionEvidence {
         <1>selected. \A \#(label) : \#(emittedLabeled)(\#(label)) <=> \#(sourceLabeled)(\#(label))
             BY \#(prefix)ActualSourceLabelOrder, \#(prefix)ActualTerminationRetainsTheCompleteFrame,
                 \#(labels.indices.map { prefix + "Row" + String($0 + 1) }.joined(separator: ", ")), SMT
-                DEF \#(emittedLabeled), \#(sourceLabeled), \#(prefix)Rows, \#(labelsAt)
+                DEF \#(emittedLabeled), \#(dispatch)!CatalogLabeledBranches,
+                    \#(prefix)ActualActionValues, \#(prefix)ActualAuthoredLabels, \#(prefix)ActualActionRoutes,
+                    \#(sourceLabeled), \#(prefix)Rows, \#(labelsAt)
         <1>next. Next <=> (\E \#(label) : \#(emittedLabeled)(\#(label)))
-            BY SMT DEF Next, \#(emittedLabeled)
+            BY ONLY \#(prefix)ActualNextUsesTheCompleteLabeledActionCatalog,
+                \#(dispatch)!CatalogLabeledBranchesComposeTheFiniteUnion, SMT DEF \#(emittedLabeled)
         <1>. QED BY <1>selected, <1>next, SMT
 
         ====

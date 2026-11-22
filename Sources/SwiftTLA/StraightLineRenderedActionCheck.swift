@@ -1517,11 +1517,8 @@ package enum StraightLineRenderedActionCheck {
             }
             let complete = clauses.count == fairness.count
             let expected = prefix + clauses
-            let starts = lines.indices.filter { lines[$0] == "\(name) ==" || lines[$0].hasPrefix("\(name) == ") }
-            guard starts.count == 1, let start = starts.first, start + 1 < lines.count,
-                  let end = lines[(start + 1)...].firstIndex(of: ""),
-                  lines[start..<end].starts(with: prefix),
-                  !complete || Array(lines[start..<end]) == expected else {
+            guard let definition = definitionBlock(name, in: lines),
+                  definition.starts(with: prefix), !complete || definition == expected else {
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
                     path: "tla.\(name)", expected: "the compiled Init, stuttering Next, complete state frame and checked fairness clauses",
                     actual: "the emitted \(name) changes its behavior or a checked fairness clause",
@@ -1596,17 +1593,50 @@ package enum StraightLineRenderedActionCheck {
             }
         }
         try verifyRenderedActionDeclarations(module, declarations: aliases)
-        if invocations == ["Next"] { return }
-        let expected: String
+        guard hasInvocationDisjunction(invocations, in: lines) else { throw mismatch() }
+    }
+
+    package struct FiniteActionCatalog: Sendable {
+        package let invocations: [RenderedAction]
+        package let frameFields: [String]
+    }
+
+    package static func unboundActionCatalog(in rendered: RenderedSpecification, layout: CompiledLayout) -> FiniteActionCatalog? {
+        let actions = layout.actions.filter { !$0.declaration.name.isEmpty }
+        let invocations = rendered.actions
+        let names = invocations.map(\.renderedName)
+        let fields = layout.variables.map(\.formalName)
+        guard actions.count == invocations.count, !actions.isEmpty, fields.count > 1,
+              actions.map(\.renderedName) == names,
+              zip(actions, invocations).allSatisfy({ $0.0.declaration.name.utf8.elementsEqual($0.1.sourceName.utf8) }),
+              invocations.allSatisfy({ $0.arguments.isEmpty }),
+              Set(names).count == names.count else { return nil }
+
+        let lines = rendered.tlaBundle.root.tla.components(separatedBy: "\n")
+        let frame = "<<\(fields.joined(separator: ", "))>>"
+        let behavior = ["Spec ==", "  /\\ Init", "  /\\ [][Next]_\(frame)"]
+        guard hasInvocationDisjunction(names, in: lines),
+              definitionBlock("vars", in: lines) == ["vars == \(frame)"],
+              definitionBlock("Spec", in: lines)?.starts(with: behavior) == true else { return nil }
+        return .init(invocations: invocations, frameFields: fields)
+    }
+
+    private static func hasInvocationDisjunction(_ invocations: [String], in lines: [String]) -> Bool {
+        if invocations == ["Next"] { return true }
+        let expected: [String]
         switch invocations.count {
-        case 0: expected = "Next == FALSE"
-        case 1: expected = "Next == \(invocations[0])"
-        default: expected = "Next ==\n" + invocations.map { "  \\/ \($0)" }.joined(separator: "\n")
+        case 0: expected = ["Next == FALSE"]
+        case 1: expected = ["Next == \(invocations[0])"]
+        default: expected = ["Next =="] + invocations.map { "  \\/ \($0)" }
         }
-        let starts = lines.indices.filter { lines[$0] == "Next ==" || lines[$0].hasPrefix("Next == ") }
+        return definitionBlock("Next", in: lines) == expected
+    }
+
+    private static func definitionBlock(_ name: String, in lines: [String]) -> [String]? {
+        let starts = lines.indices.filter { lines[$0] == "\(name) ==" || lines[$0].hasPrefix("\(name) == ") }
         guard starts.count == 1, let start = starts.first, start + 1 < lines.count,
-              let end = lines[(start + 1)...].firstIndex(of: ""),
-              lines[start..<end].joined(separator: "\n") == expected else { throw mismatch() }
+              let end = lines[(start + 1)...].firstIndex(of: "") else { return nil }
+        return Array(lines[start..<end])
     }
 
     package static func tokens(_ source: String) -> [String]? {

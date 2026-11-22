@@ -38,7 +38,18 @@ PROOF
 <1>indices. DOMAIN NativeTraversalCells(stack) = 0..(Len(stack) - 1)
     BY ONLY SMT DEF NativeTraversalCells
 <1>size. Cardinality(0..(Len(stack) - 1)) = Len(stack)
-    BY ONLY <1>length, ArraySets!FS_Interval, SMT
+    <2>bounds. 0 \in Int /\ Len(stack) - 1 \in Int
+        BY ONLY <1>length, SMT
+    <2>interval.
+        /\ ArraySets!IsFiniteSet(0..(Len(stack) - 1))
+        /\ ArraySets!Cardinality(0..(Len(stack) - 1)) =
+               (IF 0 > Len(stack) - 1 THEN 0 ELSE (Len(stack) - 1) - 0 + 1)
+        BY ONLY <2>bounds, ArraySets!FS_Interval
+    <2>arithmetic. (IF 0 > Len(stack) - 1 THEN 0 ELSE (Len(stack) - 1) - 0 + 1) = Len(stack)
+        BY ONLY <1>length, SMT
+    <2>cardinality. Cardinality(0..(Len(stack) - 1)) = ArraySets!Cardinality(0..(Len(stack) - 1))
+        BY ONLY DEF Cardinality, ArraySets!Cardinality
+    <2>. QED BY ONLY <2>interval, <2>arithmetic, <2>cardinality, SMT
 <1>. QED BY ONLY <1>indices, <1>size, SMT DEF NativeTraversalCount
 
 THEOREM NativeSeedTraversalAgreesWithSeedReplacement ==

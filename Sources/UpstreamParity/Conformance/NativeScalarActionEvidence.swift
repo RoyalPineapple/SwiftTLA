@@ -184,9 +184,13 @@ func nativeScalarActionDefinitions(_ source: String, program: CompiledProgram, s
         return "<<\(TLAValue.string(action.label)), \(plan)>>"
     }
     let dispatch = TLAValue.tuple(actions.map { .string($0.formalLabel) })
+    let physicalRoutes = actions.map { route in
+        "[handle |-> \(TLAValue.string(route.handle)), visitor |-> \(route.visitor), formal |-> \(TLAValue.string(route.formalLabel))]"
+    }
     return """
     \(selectedDefinitions)NativeActionRows == \(actionTuple(rows))
     NativeActionDispatchLabels == \(dispatch)
+    NativeActionRoutes == \(actionTuple(physicalRoutes))
     """
 }
 
@@ -203,7 +207,8 @@ func nativeConditionalActionPlans(_ source: String, program: CompiledProgram, pr
 }
 
 private func decodeScalarActions(_ source: String, program: CompiledProgram, predicate: [String]?) throws
-    -> [(label: String, formalLabel: String, fields: [String], visit: NativeConditionalVisit?, plans: [ActionInstructions])] {
+    -> [(label: String, formalLabel: String, handle: String, visitor: Int, fields: [String],
+         visit: NativeConditionalVisit?, plans: [ActionInstructions])] {
 
     let parsed = Parser.parse(source: source)
     guard !parsed.hasError, !source.utf8.contains(0), program.layout.parameters.isEmpty else {
@@ -242,11 +247,15 @@ private func decodeScalarActions(_ source: String, program: CompiledProgram, pre
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
     }
-    func checkFunction(_ spelling: String, named name: String, arity: Int, firstLabel: String? = nil) throws {
-        try require(checked(functions.filter {
+    @discardableResult
+    func checkFunction(_ spelling: String, named name: String, arity: Int,
+                       firstLabel: String? = nil) throws -> FunctionDeclSyntax {
+        let declaration = try checked(functions.filter {
             $0.name.text == name && $0.signature.parameterClause.parameters.count == arity
                 && (firstLabel == nil || $0.signature.parameterClause.parameters.first?.firstName.text == firstLabel)
-        }), spelling)
+        })
+        try require(declaration, spelling)
+        return declaration
     }
 
     // Validate the exact fields and constructors through which the update is materialized.
@@ -381,12 +390,30 @@ private func decodeScalarActions(_ source: String, program: CompiledProgram, pre
     let routes = qualifiedLabels.enumerated().map {
         "case .\($0.element): return try Self._visitSuccessors\($0.offset)(from: _execution, checking: &context, visit)"
     }.joined(separator: "\n")
-    try checkFunction("""
+    let dispatch = try checkFunction("""
     private func _visitSuccessors(for action: Action, \(checking),
         _ visit: (Snapshot) throws -> Void) throws -> [NativeMachineEvaluationError] {
         switch action { \(routes) }
     }
     """, named: "_visitSuccessors", arity: 3, firstLabel: "for")
+    guard let dispatchItem = dispatch.body?.statements.first?.item,
+          let dispatchSwitch = (dispatchItem.as(ExprSyntax.self) ?? dispatchItem.as(ExpressionStmtSyntax.self)?.expression)?
+              .as(SwitchExprSyntax.self), dispatchSwitch.cases.count == compiledActions.count else {
+        throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+    }
+    // CheckFunction established the switch and forwarded arguments. Read the
+    // actual callee suffix for each candidate rather than exporting its position.
+    let physicalTargets = try dispatchSwitch.cases.map { item -> Int in
+        guard let branch = item.as(SwitchCaseSyntax.self),
+              let returned = branch.statements.first?.item.as(ReturnStmtSyntax.self),
+              let call = returned.expression?.as(TryExprSyntax.self)?.expression.as(FunctionCallExprSyntax.self),
+              let name = call.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text,
+              let ordinal = Int(name.dropFirst("_visitSuccessors".count)),
+              name == "_visitSuccessors\(ordinal)", compiledActions.indices.contains(ordinal) else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        return ordinal + 1
+    }
 
     let rows = try compiledActions.enumerated().map { index, action in
         let visitor = try checked(functions.filter { $0.name.text == "_visitUpdates\(index)" })
@@ -395,8 +422,8 @@ private func decodeScalarActions(_ source: String, program: CompiledProgram, pre
         let successor = try checked(functions.filter { $0.name.text == "_visitSuccessors\(index)" })
         try verifyGeneratedSuccessorOutput(DeclSyntax(successor), actionID: index, parameters: "", arguments: "",
             configurationParameters: "", configurationArguments: "")
-        return (label: action.declaration.name, formalLabel: formalLabels[index], fields: fields.map(\.name),
-            visit: decoded.visit, plans: decoded.plans)
+        return (label: action.declaration.name, formalLabel: formalLabels[index], handle: labels[index],
+            visitor: physicalTargets[index], fields: fields.map(\.name), visit: decoded.visit, plans: decoded.plans)
     }
     try checkNativeValidationActionRoute(functions)
     return rows

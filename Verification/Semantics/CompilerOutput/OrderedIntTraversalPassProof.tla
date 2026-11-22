@@ -186,7 +186,21 @@ PROOF
           /\ AuthoredStackExpansion.localExpandedPosition = 2
           /\ AuthoredStackExpansion.prefixDrop = 1
           /\ AuthoredStackExpansion.pushes = SeedOperandRows
-    BY ONLY AuthoredStackExpansionMatchesTypedIR, IsaM("simp") DEF TypedStackExpansion, SeedOperandRows
+    <2>names. /\ TypedStackExpansion.label = "expand"
+              /\ TypedStackExpansion.stack = "pending"
+              /\ TypedStackExpansion.write = "pending"
+              /\ TypedStackExpansion.left = "leftChild"
+              /\ TypedStackExpansion.right = "rightChild"
+              /\ TypedStackExpansion.frame = {"leftChild", "rightChild"}
+        BY ONLY SMT DEF TypedStackExpansion
+    <2>control. /\ TypedStackExpansion.lastIndex = "count"
+                /\ TypedStackExpansion.countFloor = 0
+                /\ TypedStackExpansion.localExpandedPosition = 2
+                /\ TypedStackExpansion.prefixDrop = 1
+        BY ONLY SMT DEF TypedStackExpansion
+    <2>pushes. TypedStackExpansion.pushes = SeedOperandRows
+        BY ONLY SMT DEF TypedStackExpansion, SeedOperandRows
+    <2>. QED BY ONLY AuthoredStackExpansionMatchesTypedIR, <2>names, <2>control, <2>pushes, SMT
 <1>guard. \A stack \in Seq(SeedFrames) :
     SeedAuthoredExpansionEnabled(stack) = SeedExpansionEnabled(stack)
     BY ONLY <1>roles, LenProperties, SMT DEF SeedAuthoredExpansionEnabled, SeedExpansionEnabled
@@ -321,7 +335,11 @@ PROOF
                   /\ SeedCheckedPair(frame) = frame
     BY ONLY SeedExpansionInput, Len(pending) > 0, SeedExpansionInputSuppliesTheReachedBoundsAndPairViews
 <1>subtract. SeedRenderedSubtractDefined(Len(pending))
-    BY ONLY <1>reached, Len(pending) > 0, SMT DEF SeedRenderedSubtractDefined, SeedIntValues, SeedIntMin
+    <2>length. Len(pending) \in Int
+        BY ONLY SeedExpansionInput, LenProperties, SMT DEF SeedExpansionInput
+    <2>bound. Len(pending) >= SeedIntMin + 1
+        BY ONLY <2>length, Len(pending) > 0, SMT DEF SeedIntMin
+    <2>. QED BY ONLY <2>bound, SMT DEF SeedRenderedSubtractDefined
 <1>tests. /\ SeedRenderedLastDefined(pending)
           /\ SeedRenderedReplacementDefined(pending, pending[Len(pending)], leftChild, rightChild)
     BY ONLY <1>reached, <1>subtract, SMT DEF SeedRenderedLastDefined, SeedRenderedReplacementDefined

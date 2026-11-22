@@ -20,7 +20,6 @@ extension ScalarCopyActionEvidence.Proof {
                 + "entry |-> \(p)Entries[\(n)], control |-> <<\"control\", \(p)Destinations[\(n)]>>]"
         } + ["[reads |-> <<>>, writes |-> \(p)NativeRules!CopyEntryRoutes(\(p)Keys), "
             + "entry |-> \(p)TerminalControl, control |-> <<\"state\", \(p)NativeRules!NativeCopyControlSlot>>]"]
-        let labels = TLAValue.tuple(layout.actions.map { .string($0.renderedName) })
         let compiled = actions.indices.map { "\(p)CompiledBranch\($0 + 1)" }.joined(separator: ", ")
         let readDefinitions = actions.indices.map { "\(p)Reads\($0 + 1)" }.joined(separator: ", ")
         let writeDefinitions = actions.indices.map { "\(p)Writes\($0 + 1)" }.joined(separator: ", ")
@@ -95,12 +94,14 @@ extension ScalarCopyActionEvidence.Proof {
         LOCAL \#(p)NativeRules == INSTANCE NativeScalarCopyRule
             WITH Vars <- {}, Values <- {}, ActionLabels <- {}, FailureValues <- {}, NoFailure <- <<>>
         LOCAL \#(p)Native == INSTANCE SwiftTLANativeActions
+        LOCAL \#(p)Dispatch == INSTANCE ActionOutcomeInterface
+            WITH UpdateValues <- {}, FailureValues <- {}, NoFailure <- <<>>
 
         \* CompilerInputPage1 CompilerInputPage2 CompilerInputPage3
         LOCAL \#(p)Receipts == <<\#(rows.joined(separator: ",\n    "))>>
         LOCAL \#(p)NativeRows == \#(p)Native!NativeActionRows
-        LOCAL \#(p)RenderedLabels == \#(labels)
-        LOCAL \#(p)AllSourceLabels == Append(\#(p)Labels, \#(p)TerminalLabel)
+        LOCAL \#(p)RenderedLabels == \#(p)ActualFormalLabels
+        LOCAL \#(p)AllSourceLabels == \#(p)ActualAuthoredLabels
         LOCAL \#(p)NativePlan(index) ==
             \#(p)NativeRules!NativeCopyRekey(\#(p)NativeRows[index][2], \#(p)Keys, \#(p)FormalNames, \#(p)ControlKey)
         LOCAL \#(p)NativeBranch(index) ==
@@ -110,12 +111,13 @@ extension ScalarCopyActionEvidence.Proof {
         LOCAL \#(p)SourceBranchAt(index) ==
             IF index \in DOMAIN \#(p)Labels THEN \#(p)SourceBranch(index) ELSE \#(p)SourceTermination
 
+        LOCAL \#(p)PhysicalRoutes == \#(p)Native!NativeActionRoutes
+        LOCAL \#(p)NativeBranchValues == [index \in DOMAIN \#(p)NativeRows |-> \#(p)NativeBranch(index)]
+        LOCAL \#(p)SourceBranchValues == [index \in DOMAIN \#(p)AllSourceLabels |-> \#(p)SourceBranchAt(index)]
+
         \#(p)NativeLabeled(label) ==
-            \E index \in DOMAIN \#(p)NativeRows :
-                /\ \#(p)NativeBranch(index)
-                /\ \E authored \in DOMAIN \#(p)RenderedLabels :
-                    /\ \#(p)Native!NativeActionDispatchLabels[index] = \#(p)RenderedLabels[authored]
-                    /\ \#(p)AllSourceLabels[authored] = label
+            \#(p)Dispatch!NativeDispatchLabeled(\#(p)PhysicalRoutes, \#(p)NativeBranchValues,
+                \#(p)RenderedLabels, \#(p)AllSourceLabels, label)
         \#(p)NativeSteps == \E label : \#(p)NativeLabeled(label)
         \#(p)SelectedSourceSteps == \E label : \#(p)SourceLabeled(label)
         \#(p)SelectedBehavior == (\#(p)CFG!ActualCFG = \#(p)CFG!SeedCFG) /\ Spec
@@ -141,7 +143,8 @@ extension ScalarCopyActionEvidence.Proof {
             /\ \A index \in DOMAIN \#(p)Labels : \#(p)Rows[index].label = \#(p)Labels[index]
             BY \#(p)ActualSourceLabelOrder, SMT
                 DEF \#(p)NativeRows, \#(p)Native!NativeActionRows, \#(p)Native!NativeActionDispatchLabels, \#(p)Labels,
-                    \#(p)TerminalLabel, \#(p)Receipts, \#(p)RenderedLabels, \#(p)AllSourceLabels
+                    \#(p)TerminalLabel, \#(p)Receipts, \#(p)RenderedLabels, \#(p)AllSourceLabels,
+                    \#(p)ActualFormalLabels, \#(p)ActualAuthoredLabels, \#(p)ActualActionRoutes
         <1>rowIndices. \A index \in DOMAIN \#(p)NativeRows : \#(rowCases)
             BY ONLY <1>labels, SMT DEF \#(p)Receipts
         <1>known. \A index \in DOMAIN \#(p)NativeRows :
@@ -354,10 +357,40 @@ extension ScalarCopyActionEvidence.Proof {
             \#(p)CompiledBranches[index] <=> \#(p)SourceBranchAt(index)
             BY <1>labels, \#(routeTheorems), SMT
                 DEF \#(p)CompiledBranches, \#(p)SourceBranchAt, \#(p)Labels, \#(p)Receipts
-        <1>dispatch. \A label : \#(p)NativeLabeled(label) <=> \#(p)SourceLabeled(label)
+        <1>routes. \#(p)Dispatch!NativeDispatchBindsTheActionCatalog(\#(p)PhysicalRoutes, \#(p)RenderedLabels)
+            <2>observed. /\ DOMAIN \#(p)PhysicalRoutes = DOMAIN \#(p)RenderedLabels
+                         /\ \A candidate \in DOMAIN \#(p)PhysicalRoutes :
+                                /\ \#(p)PhysicalRoutes[candidate].visitor = candidate
+                                /\ \#(p)PhysicalRoutes[candidate].formal = \#(p)RenderedLabels[candidate]
+                BY ONLY SMT DEF \#(p)PhysicalRoutes, \#(p)Native!NativeActionRoutes,
+                    \#(p)RenderedLabels, \#(p)ActualFormalLabels, \#(p)ActualActionRoutes
+            <2>handles. \A first, second \in DOMAIN \#(p)PhysicalRoutes :
+                \#(p)PhysicalRoutes[first].handle = \#(p)PhysicalRoutes[second].handle => first = second
+                BY ONLY SMT DEF \#(p)PhysicalRoutes, \#(p)Native!NativeActionRoutes
+            <2>ids. \A first, second \in DOMAIN \#(p)RenderedLabels :
+                \#(p)RenderedLabels[first] = \#(p)RenderedLabels[second] => first = second
+                BY ONLY SMT DEF \#(p)RenderedLabels, \#(p)ActualFormalLabels, \#(p)ActualActionRoutes
+            <2>. QED BY ONLY <2>observed, <2>handles, <2>ids, SMT
+                DEF \#(p)Dispatch!NativeDispatchBindsTheActionCatalog
+        <1>leaves. \A index \in DOMAIN \#(p)RenderedLabels :
+            \#(p)NativeBranchValues[index] <=> \#(p)SourceBranchValues[index]
             BY ONLY <1>labels, <1>compiled, <1>source, SMT
-                DEF \#(p)NativeLabeled, \#(p)SourceBranchAt, \#(p)SourceLabeled, \#(p)Labels, \#(p)Rows,
-                    \#(p)Receipts, \#(p)TerminalLabel, \#(p)AllSourceLabels
+                DEF \#(p)NativeBranchValues, \#(p)SourceBranchValues
+        <1>routed. \A label : \#(p)NativeLabeled(label) <=>
+            \#(p)Dispatch!CatalogLabeledBranches(\#(p)SourceBranchValues, \#(p)AllSourceLabels, label)
+            BY ONLY <1>routes, <1>leaves, <1>labels,
+                \#(p)Dispatch!CertifiedNativeDispatchUsesTheLabeledCatalog, Isa
+                DEF \#(p)NativeLabeled
+        <1>authored. \A label :
+            \#(p)Dispatch!CatalogLabeledBranches(\#(p)SourceBranchValues, \#(p)AllSourceLabels, label) <=>
+                \#(p)SourceLabeled(label)
+            BY ONLY <1>labels, SMT
+                DEF \#(p)Dispatch!CatalogLabeledBranches, \#(p)SourceBranchValues,
+                    \#(p)SourceBranchAt, \#(p)SourceLabeled, \#(p)Labels, \#(p)Rows,
+                    \#(p)Receipts, \#(p)TerminalLabel, \#(p)AllSourceLabels, \#(p)ActualAuthoredLabels,
+                    \#(p)ActualActionRoutes
+        <1>dispatch. \A label : \#(p)NativeLabeled(label) <=> \#(p)SourceLabeled(label)
+            BY ONLY <1>routed, <1>authored, SMT
         <1>emitted.
             /\ \A label : \#(p)NativeLabeled(label) <=> \#(p)EmittedLabeled(label)
             /\ (Next <=> \#(p)NativeSteps)
@@ -365,8 +398,13 @@ extension ScalarCopyActionEvidence.Proof {
             BY <1>dispatch, \#(p)ActualLabeledActionsAndNext, SMT DEF \#(p)NativeSteps, \#(p)SelectedSourceSteps
         <1>stutter. [\#(p)NativeSteps]_vars <=> [\#(p)SelectedSourceSteps]_vars
             BY <1>emitted, PTL
+        <1>physicalUnion. (\E index \in DOMAIN \#(p)ActualActionValues : \#(p)ActualActionValues[index])
+                                   <=> \#(p)NativeSteps
+            BY ONLY <1>emitted, \#(p)ActualNextUsesTheCompleteLabeledActionCatalog, SMT
+        <1>physicalFrame. (vars' = vars) <=> (\#(p)ActualFrameAfter = \#(p)ActualFrameBefore)
+            BY ONLY \#(p)ActualNextUsesTheCompleteLabeledActionCatalog, SMT
         <1>nativeStutter. [Next]_vars <=> [\#(p)NativeSteps]_vars
-            BY <1>emitted, PTL
+            BY ONLY <1>physicalUnion, <1>physicalFrame, \#(p)ActualNextUsesTheCompleteLabeledActionCatalog, PTL
         <1>behavior. ([][Next]_vars) <=> ([][\#(p)NativeSteps]_vars)
             BY <1>nativeStutter, PTL
         <1>configuration. \#(p)CFG!ActualCFG = \#(p)CFG!SeedCFG
