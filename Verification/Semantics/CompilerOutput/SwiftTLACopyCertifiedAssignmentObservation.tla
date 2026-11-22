@@ -1,6 +1,8 @@
 ---- MODULE SwiftTLACopyCertifiedAssignmentObservation ----
 EXTENDS SwiftTLACopyConfiguredBehavior
 
+\* CompilerInputPage1 CompilerInputPage2 CompilerInputPage3
+
 LOCAL CopyAssignments == INSTANCE CertifiedReadAssignmentObservation
     WITH Keys <- SwiftTLACopyKeys, SwiftIntMin <- ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808),
          SwiftIntMax <- ((9 * 1000000000 + 223372036) * 1000000000 + 854775807)

@@ -411,7 +411,7 @@ THEOREM DirectCopyBuilderBodyReturnsEveryResolvedOperandInOrder ==
     PROVE LET body == DirectCopyBuiltBody(origins, raw)
               copies == DirectCopyResolvedSyntax(origins, raw)
               count == Len(raw)
-              history == [prefix \in 0..count |-> HistoryPrefix(copies, prefix)]
+              history == [prefix \in 0..count |-> [position \in 1..prefix |-> copies[position]]]
           IN /\ DirectCopyBuilderBodyExecution(keys, body, count, history)
              /\ history[count] = copies
              /\ \A position \in DOMAIN raw :
@@ -422,7 +422,7 @@ THEOREM DirectCopyBuilderBodyReturnsEveryResolvedOperandInOrder ==
     <1>. DEFINE body == DirectCopyBuiltBody(origins, raw)
                 copies == DirectCopyResolvedSyntax(origins, raw)
                 count == Len(raw)
-                history == [prefix \in 0..count |-> HistoryPrefix(copies, prefix)]
+                history == [prefix \in 0..count |-> [position \in 1..prefix |-> copies[position]]]
     <1>shape. /\ count \in Nat \ {0} /\ DOMAIN raw = 1..count
               /\ DOMAIN body = 1..count
         BY ONLY DirectCopyTypedSyntax(keys, origins, raw), SMT
@@ -450,7 +450,7 @@ THEOREM DirectCopyBuilderBodyReturnsEveryResolvedOperandInOrder ==
         <2>prefix. HistoryPrefix(copies, position) =
                        HistoryAppend(HistoryPrefix(copies, position - 1), position - 1, copies[position])
             BY ONLY <2>bounds, SMT DEF HistoryPrefix, HistoryAppend
-        <2>. QED BY ONLY <2>bounds, <2>prefix, <1>positions, (position \in 1..count), SMT DEF history
+        <2>. QED BY ONLY <2>bounds, <2>prefix, <1>positions, (position \in 1..count), SMT DEF history, HistoryPrefix
     <1>entry. history[0] = <<>>
         BY ONLY <1>shape, SMT DEF history, HistoryPrefix
     <1>result. history[count] = copies
@@ -499,7 +499,7 @@ DirectCopyBuilderInventoryExecution(keys, declarations, origins, steps) ==
         LET step == components[selected[index]]
             copies == DirectCopyResolvedSyntax(origins, steps[index].copies)
             count == Len(steps[index].copies)
-            history == [prefix \in 0..count |-> HistoryPrefix(copies, prefix)]
+            history == [prefix \in 0..count |-> [position \in 1..prefix |-> copies[position]]]
         IN /\ step[2] = steps[index].label /\ ~step[4]
            /\ DirectCopyBuilderBodyExecution(keys, step[3], count, history)
            /\ history[count] = copies
@@ -567,7 +567,7 @@ THEOREM DirectCopyBuilderConstructsEveryWellBoundInventory ==
                     LET step == components[selected[index]]
                         copies == DirectCopyResolvedSyntax(origins, steps[index].copies)
                         count == Len(steps[index].copies)
-                        history == [prefix \in 0..count |-> HistoryPrefix(copies, prefix)]
+                        history == [prefix \in 0..count |-> [position \in 1..prefix |-> copies[position]]]
                     IN /\ step[2] = steps[index].label /\ ~step[4]
                        /\ DirectCopyBuilderBodyExecution(keys, step[3], count, history)
                        /\ history[count] = copies

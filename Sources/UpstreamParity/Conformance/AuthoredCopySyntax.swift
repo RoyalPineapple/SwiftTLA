@@ -223,10 +223,26 @@ enum AuthoredCopySyntax {
         <1>declarations. \A left, right \in AuthoredCopyDeclarations :
             left.binding = right.binding => left = right
             BY ONLY SMT DEF AuthoredCopyDeclarations\#(sourceDeclarationDefinition)
+        <1>. DEFINE schedulerDeclarations == \#(set(comparingParsedRows ? lexicalDeclarations : declarations))
+        <1>declarationSet. AuthoredCopyDeclarations = schedulerDeclarations
+            BY ONLY SMT DEF AuthoredCopyDeclarations, schedulerDeclarations\#(sourceDeclarationDefinition)
+        <1>originDomain. DOMAIN AuthoredCopyOrigins = {row.binding : row \in schedulerDeclarations}
+            BY ONLY <1>declarationSet, SMT DEF AuthoredCopyOrigins
         <1>roots. \A binding \in DOMAIN AuthoredCopyOrigins :
             \E root \in AuthoredCopyFields : BindingNames(binding) = {root}
-            BY ONLY <1>declarations, SetExtensionality, SMT
-                DEF AuthoredCopyOrigins, BindingNames, AuthoredCopyFields, VariableNames
+            <2>. TAKE binding \in DOMAIN AuthoredCopyOrigins
+            <2>origin. PICK declaration \in AuthoredCopyDeclarations : declaration.binding = binding
+                BY ONLY (binding \in DOMAIN AuthoredCopyOrigins), <1>originDomain, <1>declarationSet, SMT
+            <2>. DEFINE root == NameOrSpelling(declaration.explicit, declaration.binding)
+            <2>field. root \in AuthoredCopyFields
+                BY ONLY <2>origin, SMT DEF root, AuthoredCopyFields, VariableNames
+            <2>singleton. BindingNames(binding) = {root}
+                <3>unique. \A other \in AuthoredCopyDeclarations : other.binding = binding => other = declaration
+                    BY ONLY <2>origin, <1>declarations, SMT
+                <3>member. \A value : value \in BindingNames(binding) <=> value \in {root}
+                    BY ONLY <2>origin, <3>unique, SMT DEF BindingNames, VariableNames, root
+                <3>. QED BY ONLY <3>member, SetExtensionality, Zenon
+            <2>. QED BY ONLY <2>field, <2>singleton, Zenon
         <1>bindings. \A binding \in DOMAIN AuthoredCopyOrigins :
             AuthoredCopyOrigins[binding] \in AuthoredCopyFields
             BY ONLY <1>roots, SMT DEF AuthoredCopyOrigins, Single
@@ -239,7 +255,16 @@ enum AuthoredCopySyntax {
                /\ \A position \in DOMAIN raw :
                       /\ raw[position].targetBinding \in DOMAIN AuthoredCopyOrigins
                       /\ raw[position].readBinding \in DOMAIN AuthoredCopyOrigins
-            BY ONLY SMT DEF AuthoredCopySteps, AuthoredCopyOrigins, AuthoredCopyDeclarations
+            <2>size. \A row \in DOMAIN AuthoredCopySteps :
+                LET raw == AuthoredCopySteps[row].copies
+                IN Len(raw) \in Nat \ {0} /\ DOMAIN raw = 1..Len(raw)
+                BY ONLY SMT DEF AuthoredCopySteps
+            <2>references. \A row \in DOMAIN AuthoredCopySteps :
+                \A position \in DOMAIN AuthoredCopySteps[row].copies :
+                    /\ AuthoredCopySteps[row].copies[position].targetBinding \in DOMAIN AuthoredCopyOrigins
+                    /\ AuthoredCopySteps[row].copies[position].readBinding \in DOMAIN AuthoredCopyOrigins
+                BY ONLY <1>originDomain, SMT DEF AuthoredCopySteps, schedulerDeclarations
+            <2>. QED BY ONLY <2>size, <2>references, SMT
         <1>rows. \A row \in DOMAIN AuthoredCopySteps :
             LET raw == AuthoredCopySteps[row].copies
                 copies == AuthoredCopyActionRows[row].copies
@@ -250,7 +275,27 @@ enum AuthoredCopySyntax {
                     => copies[position] =
                           [target |-> AuthoredCopyOrigins[raw[position].targetBinding],
                            read |-> AuthoredCopyOrigins[raw[position].readBinding]]
-            BY ONLY SMT DEF AuthoredCopyActionRows, ResolveStep, ResolveCopies, ResolveCopy, AuthoredCopyOrigins
+            <2>. TAKE row \in DOMAIN AuthoredCopySteps
+            <2>. DEFINE raw == AuthoredCopySteps[row].copies
+                        copies == AuthoredCopyActionRows[row].copies
+            <2>row. AuthoredCopyActionRows[row] = ResolveStep(AuthoredCopySteps[row])
+                BY ONLY (row \in DOMAIN AuthoredCopySteps), SMT DEF AuthoredCopyActionRows
+            <2>function. copies = [position \in DOMAIN raw |-> ResolveCopy(raw[position])]
+                BY ONLY <2>row, SMT DEF copies, raw, ResolveStep, ResolveCopies
+            <2>shape. copies = [position \in DOMAIN raw |-> copies[position]]
+                BY ONLY <2>function, SMT
+            <2>operands. \A position \in DOMAIN raw :
+                ( /\ raw[position].targetBinding \in DOMAIN AuthoredCopyOrigins
+                  /\ raw[position].readBinding \in DOMAIN AuthoredCopyOrigins)
+                => copies[position] =
+                    [target |-> AuthoredCopyOrigins[raw[position].targetBinding],
+                     read |-> AuthoredCopyOrigins[raw[position].readBinding]]
+                <3>. TAKE position \in DOMAIN raw
+                <3>. DEFINE item == raw[position]
+                <3>pair. copies[position] = ResolveCopy(item)
+                    BY ONLY <2>function, (position \in DOMAIN raw), SMT DEF item
+                <3>. QED BY ONLY <3>pair, SMT DEF item, ResolveCopy, AuthoredCopyOrigins
+            <2>. QED BY ONLY <2>shape, <2>operands, SMT DEF raw, copies
         <1>. QED BY ONLY <1>typed, <1>raw, <1>rows, SMT
 
         LOCAL CopyNamesBind(raw, copy) ==
@@ -399,9 +444,9 @@ enum AuthoredCopySyntax {
             <2>. DEFINE op == AuthoredCopyLexicalOperations[index]
             <2>where. index \in DOMAIN AuthoredCopyLexicalOperations
                 BY ONLY (index \in 1..count), <1>shape
-            <2>meaning. /\ op.kind = "shared" => chosen[index] = DirectParser!ParserRoot(op)
-                         /\ op.kind = "alias" =>
-                                chosen[index] = chosen[DirectParser!CopyAliasSource(AuthoredCopyLexicalOperations, index)]
+            <2>meaning. /\ (op.kind = "shared" => chosen[index] = DirectParser!ParserRoot(op))
+                        /\ (op.kind = "alias" =>
+                                chosen[index] = chosen[DirectParser!CopyAliasSource(AuthoredCopyLexicalOperations, index)])
                 BY ONLY <2>where, AuthoredCopyLexicalOperationsAreWellBound,
                     DirectParser!TheAliasHistoryUsesTheActualEarlierRoot, SMT DEF chosen, op
             <2>. SUFFICES ASSUME \A prior \in 1..(index - 1) : CandidateCopyLexicalRoots[prior] = chosen[prior]
@@ -533,9 +578,12 @@ enum AuthoredCopySyntax {
             <2>copies. computed.copies = actual.copies
                 BY ONLY <2>pair, <2>shapes, SMT
             <2>frame. computed.frame = actual.frame
-                BY ONLY (index \in DOMAIN AuthoredCopySteps), <1>domain, <1>fields, <2>semantics, <2>copies, SMT
-                    DEF ConstructedCopyFields, DirectParser!ParserRowUsesAuthoredSyntax, DirectParser!ParserTargets,
-                        ParsedCopyFields, ParsedCopyActionRows, actual
+                <3>constructed. computed.frame = ConstructedCopyFields \ DirectParser!ParserTargets(computed.copies)
+                    BY ONLY <2>semantics DEF DirectParser!ParserRowUsesAuthoredSyntax, ConstructedCopyFields
+                <3>captured. actual.frame = ParsedCopyFields \ DirectParser!ParserTargets(actual.copies)
+                    BY ONLY (index \in DOMAIN AuthoredCopySteps), <1>domain, SetExtensionality, SMT
+                        DEF ParsedCopyFields, ParsedCopyActionRows, DirectParser!ParserTargets, actual
+                <3>. QED BY ONLY <3>constructed, <3>captured, <1>fields, <2>copies, SMT
             <2>. QED BY ONLY (index \in DOMAIN AuthoredCopySteps), <1>domain, <1>inputs, <2>label, <2>copies, <2>frame, SMT
                 DEF ConstructedCopyRows, DirectParser!ParserCopyRows, DirectParser!ParserCopyRow,
                     DirectParser!WellBoundDirectCopySyntax, DirectParser!ParserSequence,
