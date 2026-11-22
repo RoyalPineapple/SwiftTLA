@@ -1,7 +1,7 @@
 ---- MODULE SwiftTLAOrderedRHSBackendAgreement ----
 EXTENDS SwiftTLAOrderedRHSConfiguredProof, SwiftTLANativeAssignmentActions, TLAPS,
         OrderedOverflowDirectInitialDisabled
-
+\* CallerInputPage1 CallerInputPage2 CallerInputPage3 CallerInputPage4 CallerInputPage5
 \* The native packet records this failure from the real visitor of the actual initial machine.
 LOCAL ActualNativeFailure == NativeAssignmentFailure
 ActualNativeProjection ==
@@ -420,10 +420,36 @@ LOCAL NativeAssignmentBefore ==
 LOCAL NativeAssignmentSelected ==
     \A index \in DOMAIN NormalizedNativeAction.guards : pc = NormalizedNativeAction.guards[index]
 
+LOCAL NativeAssignmentFinalPrefix ==
+    (CHOOSE visited : NativeCaptureObservation(visited))[RHSOutputCount]
+
+LOCAL NativeAssignmentCheckedAppendSites ==
+    {NativeSelectedFailureAppendSites[index] : index \in DOMAIN NativeSelectedFailureAppendSites}
+
+LOCAL NativeAssignmentEmptyFailureBuffer ==
+    [count |-> 0, items |-> [index \in {} |-> index]]
+
+LOCAL NativeAssignmentAppendReason(buffer, reason) ==
+    RHSOutputInput!Rule!SwiftArrayAppending(buffer, reason)
+
+\* A caught error is recorded with its lexical context and then appended to the returned buffer.
+\* The accepted straight-line visitor reaches at most one such catch.
+LOCAL NativeAssignmentReturnedFailureBuffer ==
+    IF /\ NativeAssignmentSelected
+       /\ NativeAssignmentFinalPrefix.failure # <<>>
+       /\ NativeAssignmentFinalPrefix.failure.site \in NativeAssignmentCheckedAppendSites
+    THEN NativeAssignmentAppendReason(NativeAssignmentEmptyFailureBuffer, NativeAssignmentFinalPrefix.failure.payload)
+    ELSE NativeAssignmentEmptyFailureBuffer
+
+ActualNativeAssignmentFailureReasons ==
+    LET returned == NativeAssignmentReturnedFailureBuffer
+    IN [index \in 1..returned.count |-> returned.items[index - 1]]
+
 LOCAL NativeAssignmentRawFailures ==
-    RHSOutputInput!Rule!NativeAssignmentCheckedCallback(NativeAssignmentBefore, RHSOutputActionLabel,
-        NativeActionOrdinal, NativeAssignmentSelected,
-        (CHOOSE visited : NativeCaptureObservation(visited))[RHSOutputCount])
+    {event \in RHSOutputInput!Rule!NativeAssignmentCheckedCallback(NativeAssignmentBefore,
+        RHSOutputActionLabel, NativeActionOrdinal, NativeAssignmentSelected, NativeAssignmentFinalPrefix) :
+        event.payload \in {ActualNativeAssignmentFailureReasons[index] :
+                               index \in DOMAIN ActualNativeAssignmentFailureReasons}}
 
 LOCAL NativeAssignmentFailureEvent(event) ==
     [site |-> event.site, target |-> RHSOutputRows[event.site].target, payload |-> event.payload,
@@ -433,6 +459,15 @@ LOCAL NativeAssignmentFailureEvent(event) ==
 
 ActualNativeAssignmentFailures ==
     {NativeAssignmentFailureEvent(event) : event \in NativeAssignmentRawFailures}
+
+THEOREM NativeFailureAppendRetainsEarlierReasonsAndAddsTheCaughtReason ==
+    ASSUME NEW buffer, NEW reason, buffer.count \in Nat
+    PROVE LET appended == NativeAssignmentAppendReason(buffer, reason)
+          IN /\ appended.count = buffer.count + 1
+             /\ appended.items[buffer.count] = reason
+             /\ \A index \in 0..(buffer.count - 1) : appended.items[index] = buffer.items[index]
+    BY ONLY (buffer.count \in Nat), SMT
+        DEF NativeAssignmentAppendReason, RHSOutputInput!Rule!SwiftArrayAppending
 
 THEOREM ActualNativeAndTLAAdvanceAgreeOnTypedInput ==
     ASSUME RHSOutputStateType
@@ -498,21 +533,42 @@ PROOF
 <1>before. [key \in RHSOutputInput!MasterFields |-> NativeAssignmentBefore[NativeFormalNames[key]]] = RHSOutputBefore
     BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
         DEF NativeAssignmentBefore, NativeFormalNames, RHSOutputBefore, RHSOutputKeys, RHSOutputInput!MasterFields
+<1>meaning. RHSOutputInput!Rule!AssignmentPrefixMeaning(RHSOutputBefore, RHSOutputRows, history, RHSOutputCount)
+    BY ONLY <1>type, <1>source, <1>finalIndex, RHSOutputInput!Rule!OrderedAssignmentHistoriesRetainTheExactFirstFailurePrefix,
+        SMT DEF RHSOutputCount
 <1>prefix. final.failure # <<>> =>
-    final.failure.before = RHSOutputInput!Rule!CompletedAssignmentBindings(RHSOutputBefore, RHSOutputRows, final.completed)
-    <2>meaning. RHSOutputInput!Rule!AssignmentPrefixMeaning(RHSOutputBefore, RHSOutputRows, history, RHSOutputCount)
-        BY ONLY <1>type, <1>source, <1>finalIndex, RHSOutputInput!Rule!OrderedAssignmentHistoriesRetainTheExactFirstFailurePrefix,
-            SMT DEF RHSOutputCount
-    <2>. QED BY ONLY <2>meaning, SMT DEF RHSOutputInput!Rule!AssignmentPrefixMeaning, final
-<1>last. (CHOOSE visited : NativeCaptureObservation(visited))[RHSOutputCount] =
-    RHSOutputInput!Rule!NativeAssignmentPrefix(final)
-    BY ONLY <1>exists, <1>matching, SMT
+    /\ final.failure.before =
+           RHSOutputInput!Rule!CompletedAssignmentBindings(RHSOutputBefore, RHSOutputRows, final.completed)
+    /\ final.failure.site \in 1..RHSOutputCount
+    BY ONLY <1>meaning, SMT DEF RHSOutputInput!Rule!AssignmentPrefixMeaning, final
+<1>last. NativeAssignmentFinalPrefix = RHSOutputInput!Rule!NativeAssignmentPrefix(final)
+    BY ONLY <1>exists, <1>matching, SMT DEF NativeAssignmentFinalPrefix
+<1>sites. NativeAssignmentCheckedAppendSites = 1..RHSOutputCount
+    BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
+        DEF NativeAssignmentCheckedAppendSites, NativeSelectedFailureAppendSites
+<1>returned. ActualNativeAssignmentFailureReasons =
+    IF RHSOutputSelected /\ final.failure # <<>> THEN <<final.failure.payload>> ELSE <<>>
+    <2>inactive. CASE ~RHSOutputSelected \/ final.failure = <<>>
+        BY ONLY <2>inactive, <1>last, <1>selected, SMT
+            DEF NativeAssignmentReturnedFailureBuffer, NativeAssignmentEmptyFailureBuffer,
+                ActualNativeAssignmentFailureReasons, RHSOutputInput!Rule!NativeAssignmentPrefix
+    <2>reached. CASE RHSOutputSelected /\ final.failure # <<>>
+        <3>append. NativeAssignmentReturnedFailureBuffer =
+            NativeAssignmentAppendReason(NativeAssignmentEmptyFailureBuffer, final.failure.payload)
+            BY ONLY <2>reached, <1>last, <1>selected, <1>prefix, <1>sites, SMT
+                DEF NativeAssignmentReturnedFailureBuffer, RHSOutputInput!Rule!NativeAssignmentPrefix
+        <3>reason. /\ NativeAssignmentReturnedFailureBuffer.count = 1
+                   /\ NativeAssignmentReturnedFailureBuffer.items[0] = final.failure.payload
+            BY ONLY <3>append, NativeFailureAppendRetainsEarlierReasonsAndAddsTheCaughtReason, SMT
+                DEF NativeAssignmentEmptyFailureBuffer
+        <3>. QED BY ONLY <2>reached, <3>reason, SMT DEF ActualNativeAssignmentFailureReasons
+    <2>. QED BY ONLY <2>inactive, <2>reached, SMT
 <1>raw. NativeAssignmentRawFailures =
     IF RHSOutputSelected /\ final.failure # <<>> THEN
         {[label |-> RHSOutputActionLabel, actionOrdinal |-> NativeActionOrdinal, site |-> final.failure.site,
           completed |-> final.completed, payload |-> final.failure.payload, before |-> NativeAssignmentBefore]}
     ELSE {}
-    BY ONLY <1>last, <1>selected, SMT
+    BY ONLY <1>last, <1>selected, <1>returned, SMT
         DEF NativeAssignmentRawFailures, RHSOutputInput!Rule!NativeAssignmentCheckedCallback, RHSOutputInput!Rule!NativeAssignmentPrefix
 <1>failures. ActualNativeAssignmentFailures = RHSOutputHistoryFailures(history)
     <2>inactive. CASE ~RHSOutputSelected \/ final.failure = <<>>

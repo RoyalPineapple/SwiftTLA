@@ -77,6 +77,7 @@ private struct ActionInstructions {
     var captures: [ActionCapture] = []
     var guards: [String] = []
     var writes: [String] = []
+    var failureAppendSites: [Int] = []
 
     var tla: String {
         "[captures |-> \(actionTuple(captures.map(\.tla))), "
@@ -98,6 +99,7 @@ private struct ActionInstructions {
         NativeSelectedNodeRight == \#(column(\.right))
         NativeSelectedGuards == \#(actionTuple(guards))
         NativeSelectedWrites == \#(actionTuple(writes))
+        NativeSelectedFailureAppendSites == \#(actionTuple(failureAppendSites.map(String.init)))
         NativeSelectedPlans == [index \in DOMAIN NativeSelectedCaptureTags |->
             [count |-> NativeSelectedNodeCounts[index], kinds |-> NativeSelectedNodeKinds[index],
              literals |-> NativeSelectedNodeLiterals[index], reads |-> NativeSelectedNodeReads[index],
@@ -483,7 +485,6 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
     func walk(_ entry: String) throws -> ActionInstructions {
         var instructions = ActionInstructions()
         var capturesFollowGuard = true
-        var hasCheckedAddition = false
         var pending: [(String, [Binding])] = [(entry, [])]
         parts: while let (name, scope) = pending.popLast() {
             let (core, recordsFailure) = try partCore(name, scope: scope)
@@ -519,7 +520,6 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                         binding.value.kind == "capture" && binding.value.operand == String(offset + 1)
                     }
                 if recordsFailure {
-                    hasCheckedAddition = true
                     let intType = nativeIntTypeTokens.joined()
                     let references = Dictionary(uniqueKeysWithValues: (stateReads + boundReads)
                         .filter { $0.1.type == intType }.map { (words($0.0), $0.1.tla) })
@@ -530,6 +530,8 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
                           try \(child)(\(argument)\(local), updates, emit)
                           """) else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
                     instructions.captures.append(.expression(nativeArithmeticCapture(decoded.steps)))
+                    // partCore verified that this lexical catch appends its bound reason to the returned buffer.
+                    instructions.failureAppendSites.append(instructions.captures.count)
                     let reference = ActionReference(kind: "capture", operand: String(instructions.captures.count), type: intType)
                     pending.append((child, scope + [(local, reference)]))
                     continue parts
@@ -578,7 +580,7 @@ private func decodeScalarActionVisitor(_ visitor: FunctionDeclSyntax, index: Int
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         // The split receipt retains a single entry decision, then captures, then writes.
-        guard !hasCheckedAddition || (capturesFollowGuard && instructions.guards.count == 1) else {
+        guard instructions.failureAppendSites.isEmpty || (capturesFollowGuard && instructions.guards.count == 1) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
         return instructions
