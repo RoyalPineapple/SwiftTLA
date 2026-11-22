@@ -555,8 +555,12 @@ def main():
             started = time.time_ns()
             command = pilot_compiler_command[:-2] + [
                 str(compiler_temporary / (task + ".o")), str(root / model)]
+            if include_extension:
+                # Debug expansion files can omit an empty conformance extension.
+                command = command[:2] + ["-Xfrontend", "-dump-macro-expansions"] + command[2:]
             receipt[task + "CompilerCommand"] = command
-            with (output / (task + "-compiler.log")).open("wb") as log:
+            log_file = output / (task + "-compiler.log")
+            with log_file.open("wb") as log:
                 subprocess.run(command, env=compiler_env, stdout=log, stderr=subprocess.STDOUT, check=True)
             folder = compiler_temporary / "swift-generated-sources"
             dumps = {}
@@ -564,10 +568,19 @@ def main():
             roles = {"members": list(folder.glob(prefix + "fMm_.swift"))}
             if include_extension:
                 extension = rb"\s*extension " + re.escape(owner.encode("ascii")) + rb"\s*:"
-                roles["extension"] = [
-                    path for path in folder.glob(prefix + "*.swift")
-                    if not path.is_symlink() and re.match(extension, path.read_bytes())
-                ]
+                files = [path for path in folder.glob(prefix + "*.swift")
+                         if not path.is_symlink() and re.match(extension, path.read_bytes())]
+                if files:
+                    roles["extension"] = files
+                else:
+                    # Bind the extension to its exact symbol in this invocation's dump.
+                    name = f"@__swiftmacro_14UpstreamParity{len(owner)}{owner}8TLAModelfMe_.swift"
+                    delimit = rb"^-{8,}\n"
+                    blocks = re.findall(rb"^" + re.escape(name.encode()) + rb"\n" + delimit
+                                        + rb"(.*?)" + delimit, log_file.read_bytes(), re.MULTILINE | re.DOTALL)
+                    if len(blocks) != 1 or not re.match(extension, blocks[0]):
+                        raise ValueError(f"expected one compiler-dumped conformance for {name}")
+                    dumps["extension"] = (blocks[0], name)
             for part, expansions in roles.items():
                 if len(expansions) != 1 or expansions[0].is_symlink():
                     raise ValueError(f"expected exactly one fresh {owner} {part} expansion")
@@ -649,9 +662,12 @@ def main():
             bodies = {}
             for part, (captured, origin) in dumps.items():
                 suffix = origin.encode("utf-8") + b"\n"
-                if not captured.endswith(suffix):
-                    raise ValueError("unexpected stack pass origin footer")
-                bodies[part] = captured[:-len(suffix)]
+                if part == "extension" and origin.startswith("@__swiftmacro_"):
+                    bodies[part] = captured
+                else:
+                    if not captured.endswith(suffix):
+                        raise ValueError("unexpected stack pass origin footer")
+                    bodies[part] = captured[:-len(suffix)]
                 (stack / f"{part}.swift").write_bytes(captured)
             if not re.fullmatch(rb"\s*extension OrderedIntTraversalPass: SwiftTLA\.StateMachine\s*\{\s*\}\s*",
                                 bodies["extension"]):
