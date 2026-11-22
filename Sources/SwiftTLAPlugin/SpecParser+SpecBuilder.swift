@@ -774,6 +774,16 @@ extension ParserSession {
               let elementType = declaredElementType ?? setExpressionElementTypeName(expression)
                 ?? resolvedElement.flatMap({ $0.resolved ? $0.swiftType : nil })
         else { return nil }
+        // An eager Swift Set<Int> denotes one closed value in the typed builder.
+        if resolvedElement == .int,
+           let constructor = expression.as(FunctionCallExprSyntax.self),
+           isSwiftCollectionConstructor(constructor, named: "Set"),
+           constructor.arguments.count == 1, let argument = constructor.arguments.first,
+           argument.expression.is(ArrayExprSyntax.self),
+           let members = finiteDomain(argument.expression), !members.isEmpty,
+           members.allSatisfy({ if case .int = $0 { return true }; return false }) {
+            return (expression: .value(.set(Set(members))), elementType: elementType)
+        }
         return (expression: decoded, elementType: elementType)
     }
 

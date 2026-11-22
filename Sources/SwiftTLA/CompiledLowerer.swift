@@ -2255,6 +2255,11 @@ struct CompiledLowerer {
         switch initialization {
         case .value(let value): return .value(.value(.init(formal: value)))
         case .expression(let expression): return .value(try lower(expression, at: path, scope: scope))
+        case .memberOf(.value(.set(let values))) where !values.isEmpty
+            && values.allSatisfy({ if case .int = $0 { return true }; return false }):
+            // Keep closed Int domains in the same checked initializer plan as literal members.
+            let members = StateExpr.setLiteral(values.sorted().map(StateExpr.value))
+            return .memberOf(try lower(members, at: path, scope: scope))
         case .memberOf(let set): return .memberOf(try lower(set, at: path, scope: scope))
         }
     }

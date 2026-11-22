@@ -49,14 +49,20 @@ package enum CheckingSelectionEvidence {
         let program = try CompiledProgram(inputs: inputs)
         let compilerRender = try program.renderModule()
         let root = rendered.tlaBundle.root
-        guard case .compiled(let identity, _, _) = rendered.tlaBundle.provenance, identity == program.identity,
-              rendered.tlaBundle.imports.isEmpty, compilerRender.imports.isEmpty,
-              root.name == compilerRender.moduleName,
-              root.tla.utf8.elementsEqual(compilerRender.renderedModuleSource.utf8),
-              rendered.actions == compilerRender.renderedActions,
-              let cfg = root.cfg, scenario.checkingMode == .exhaustive,
-              scenario.behavior == .specification, !scenario.usesView,
-              scenario.postconditionName == nil else { throw invalid("configured render") }
+        guard case .compiled(let identity, _, _) = rendered.tlaBundle.provenance
+        else { throw invalid("configured render provenance") }
+        guard identity == program.identity else { throw invalid("configured render compilation identity") }
+        guard rendered.tlaBundle.imports.isEmpty, compilerRender.imports.isEmpty
+        else { throw invalid("configured render imports") }
+        guard root.name == compilerRender.moduleName else { throw invalid("configured render module name") }
+        guard root.tla.utf8.elementsEqual(compilerRender.renderedModuleSource.utf8)
+        else { throw invalid("configured render TLA bytes") }
+        guard rendered.actions == compilerRender.renderedActions else { throw invalid("configured render action inventory") }
+        guard let cfg = root.cfg else { throw invalid("configured render has no CFG") }
+        guard scenario.checkingMode == .exhaustive else { throw invalid("configured render checking mode") }
+        guard scenario.behavior == .specification else { throw invalid("configured render behavior") }
+        guard !scenario.usesView else { throw invalid("configured render view") }
+        guard scenario.postconditionName == nil else { throw invalid("configured render postcondition") }
         let actionTotality: SelectedActionFailureEvidence.Input?
         if branchwise {
             actionTotality = nil

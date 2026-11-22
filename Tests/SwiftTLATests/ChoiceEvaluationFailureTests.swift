@@ -873,6 +873,17 @@ struct ChoiceEvaluationFailureTests {
         let rendered = try BranchwiseConjunctionFailureOrderModel.render()
         let proofInput = semanticFixture("BranchwiseConjunctionFailureOrderModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
+        let authored = try BranchwiseConjunctionFailureOrderModel.spec.compile()
+        let scenario = try #require(BranchwiseConjunctionFailureOrderModel.validationScenarios().first {
+            $0.name == "Selected"
+        })
+        let configured = try scenario.render()
+        guard case .compiled(let identity, _, _) = configured.tlaBundle.provenance else {
+            Issue.record("The selected render did not retain the native compiler's identity")
+            return
+        }
+        #expect(identity == authored.identity)
+        #expect(configured.tlaBundle.root.tla == rendered.tlaBundle.root.tla)
     }
 
     @Test("A fallible Let value preserves an arithmetic failure in its body")
