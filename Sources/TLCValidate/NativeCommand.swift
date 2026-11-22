@@ -10,7 +10,7 @@ private enum NativeCommandError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "Usage: tlc-validate native list | native run --case <id-or-all> --output <directory> --maximum-states <positive-integer> | native <prepare-selection|prepare-branchwise-selection> --authored-source <swift-file> --output <directory>"
+            return "Usage: tlc-validate native list | native run --case <id-or-all> --output <directory> --maximum-states <positive-integer> | native <prepare-selection|prepare-branchwise-selection> --authored-source <swift-file> --output <directory> | native prepare-compiler-stack-seed --authored-source <swift-file> --native-source <swift-file> --output <directory>"
         case .unknownScenario(let id): return "unknown scenario: \(id)"
         case .outputExists(let path): return "output already exists: \(path)"
         }
@@ -19,6 +19,16 @@ private enum NativeCommandError: Error, CustomStringConvertible {
 
 func runNative(arguments: [String]) -> Never {
     do {
+        if arguments.first == "prepare-compiler-stack-seed" {
+            guard arguments.count == 7, arguments[1] == "--authored-source",
+                  arguments[3] == "--native-source", arguments[5] == "--output"
+            else { throw NativeCommandError.usage }
+            try CompilerStackSeedEvidence.prepare(
+                authoredSource: String(contentsOf: URL(fileURLWithPath: arguments[2]), encoding: .utf8),
+                nativeSource: String(contentsOf: URL(fileURLWithPath: arguments[4]), encoding: .utf8),
+                to: URL(fileURLWithPath: arguments[6]))
+            exit(0)
+        }
         if let command = arguments.first, ["prepare-selection", "prepare-branchwise-selection"].contains(command) {
             guard arguments.count == 5, arguments[1] == "--authored-source",
                   arguments[3] == "--output" else { throw NativeCommandError.usage }

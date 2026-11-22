@@ -1,3 +1,4 @@
+import Foundation
 import SwiftSyntax
 import SwiftTLA
 
@@ -153,11 +154,18 @@ extension NativeSwiftEmitter {
             throw \(exportDiagnostic(diagnostic))
             """
         }
-        let declarations = try nativeDeclarations("""
+        var declarations = try nativeDeclarations("""
         public static func render(\(parameters)) throws -> RenderedSpecification {
             \(body)
         }
         """)
+        if let stackSeed = model.stackSeedSource {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let encoded = try encoder.encode(stackSeed).base64EncodedString()
+            let receipt = Trivia(pieces: [.lineComment("// SwiftTLA.OrderedIntStackSeedSource.v1 " + encoded), .newlines(1)])
+            declarations[0].leadingTrivia = receipt + declarations[0].leadingTrivia
+        }
         try verifyGeneratedExportDefaultDeadlock(declarations.first,
             required: program.requiresSourceDefaultDeadlockOutput)
         return declarations

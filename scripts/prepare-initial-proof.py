@@ -550,7 +550,7 @@ def main():
             raise ValueError("generic scalar copy source or parent binding differs")
         if proof.read_bytes() != expected_bytes or preparation["proofSHA256"] != digest(proof):
             raise ValueError("actual compiler did not emit the checked proof bytes exactly")
-        def capture_action(model, task, proof_template=None):
+        def capture_model_expansion(model, task, include_extension=False):
             owner = Path(model).stem
             started = time.time_ns()
             command = pilot_compiler_command[:-2] + [
@@ -558,19 +558,34 @@ def main():
             receipt[task + "CompilerCommand"] = command
             with (output / (task + "-compiler.log")).open("wb") as log:
                 subprocess.run(command, env=compiler_env, stdout=log, stderr=subprocess.STDOUT, check=True)
-            expansions = list((compiler_temporary / "swift-generated-sources")
-                .glob(f"@__swiftmacro_14UpstreamParity*{owner}*TLAModelfMm_.swift"))
-            if len(expansions) != 1 or expansions[0].is_symlink():
-                raise ValueError(f"expected exactly one fresh {owner} compiler expansion")
-            expansion = expansions[0]
-            before = expansion.stat()
-            captured = expansion.read_bytes()
-            after = expansion.stat()
-            if (before.st_mtime_ns < started or len(captured) != before.st_size
-                    or (before.st_ino, before.st_size, before.st_mtime_ns)
-                    != (after.st_ino, after.st_size, after.st_mtime_ns)):
-                raise ValueError(f"{owner} expansion is stale or changed during capture")
-            receipt[task + "SourceOrigin"] = native_source.source_range(captured, root, model)
+            folder = compiler_temporary / "swift-generated-sources"
+            dumps = {}
+            prefix = f"@__swiftmacro_14UpstreamParity*{owner}*TLAModel"
+            roles = {"members": list(folder.glob(prefix + "fMm_.swift"))}
+            if include_extension:
+                extension = rb"\s*extension " + re.escape(owner.encode("ascii")) + rb"\s*:"
+                roles["extension"] = [
+                    path for path in folder.glob(prefix + "*.swift")
+                    if not path.is_symlink() and re.match(extension, path.read_bytes())
+                ]
+            for part, expansions in roles.items():
+                if len(expansions) != 1 or expansions[0].is_symlink():
+                    raise ValueError(f"expected exactly one fresh {owner} {part} expansion")
+                expansion = expansions[0]
+                before = expansion.stat()
+                captured = expansion.read_bytes()
+                after = expansion.stat()
+                if (before.st_mtime_ns < started or len(captured) != before.st_size
+                        or (before.st_ino, before.st_size, before.st_mtime_ns)
+                        != (after.st_ino, after.st_size, after.st_mtime_ns)):
+                    raise ValueError(f"{owner} {part} expansion is stale or changed during capture")
+                origin = native_source.source_range(captured, root, model)
+                dumps[part] = (captured, origin)
+            return dumps
+
+        def capture_action(model, task, proof_template=None):
+            captured, origin = capture_model_expansion(model, task)["members"]
+            receipt[task + "SourceOrigin"] = origin
             retained = output / ("native-" + task + "-source.swift")
             retained.write_bytes(captured)
             args = [str(binary), "initial-failure", "prepare-" + task, "--authored-source",
@@ -617,6 +632,137 @@ def main():
                        or checksum != digest(generated / name) for name, checksum in files.items())):
             raise ValueError("arithmetic action evidence differs from the fresh compiler inputs or outputs")
         receipt["arithmeticPreparation"] = arithmetic
+        stack_seed = "Sources/UpstreamParity/CompilerPasses/OrderedIntTraversalPass.swift"
+        installed_seed = "Sources/SwiftTLA/Generated/OrderedIntTraversalPass.swift"
+        caller_source = "Sources/SwiftTLA/StraightLineAssignmentCheck.swift"
+        caller_bytes = (root / caller_source).read_bytes()
+        installed = installed_seed in inputs
+        caller_uses_seed = b"OrderedIntTraversalPass._machineForRefinement(" in caller_bytes
+        if installed != caller_uses_seed or (installed and stack_seed not in inputs):
+            raise ValueError("production stack pass requires both authored source and its installed Swift expansion")
+        stack_files = {}
+        if stack_seed in inputs:
+            stack_plugin_sha = digest(plugin)
+            dumps = capture_model_expansion(stack_seed, "compiler-stack-seed", include_extension=True)
+            stack = packet / "compiler-stack-seed"
+            stack.mkdir()
+            bodies = {}
+            for part, (captured, origin) in dumps.items():
+                suffix = origin.encode("utf-8") + b"\n"
+                if not captured.endswith(suffix):
+                    raise ValueError("unexpected stack pass origin footer")
+                bodies[part] = captured[:-len(suffix)]
+                (stack / f"{part}.swift").write_bytes(captured)
+            if not re.fullmatch(rb"\s*extension OrderedIntTraversalPass: SwiftTLA\.StateMachine\s*\{\s*\}\s*",
+                                bodies["extension"]):
+                raise ValueError("expected the generated unconfigured state-machine extension")
+            generated = (b"// Generated from OrderedIntTraversalPass.swift by the SwiftTLA macro.\n"
+                         b"package struct OrderedIntTraversalPass: Sendable {\n"
+                         + bodies["members"] + b"}\n" + bodies["extension"])
+            candidate = stack / "OrderedIntTraversalPass.swift"
+            candidate.write_bytes(generated)
+            if installed and ((root / installed_seed).is_symlink() or (root / installed_seed).read_bytes() != generated):
+                raise ValueError("installed stack pass differs from the fresh macro output")
+            authored = stack / "authored-model.swift"
+            shutil.copyfile(root / stack_seed, authored)
+            caller = stack / "compiler-caller.swift"
+            caller.write_bytes(caller_bytes)
+            if digest(authored) != inputs[stack_seed] or digest(caller) != inputs[caller_source]:
+                raise ValueError("stack pass source or compiler caller changed while being retained")
+            render = stack / "rendered"
+            stack_command = [str(binary), "native", "prepare-compiler-stack-seed",
+                             "--authored-source", str(authored), "--native-source", str(stack / "members.swift"), "--output", str(render)]
+            with (output / "compiler-stack-seed-render.log").open("wb") as log:
+                subprocess.run(stack_command, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
+            render_receipt = json.loads((render / "files.json").read_text())
+            stack_files = render_receipt.get("files", {})
+            if (not re.fullmatch(r"[a-f0-9]{64}", render_receipt.get("compilationIdentity", ""))
+                    or set(stack_files) != {"OrderedIntTraversalPass.tla", "OrderedIntTraversalPass.cfg",
+                                            "OrderedIntTraversalPassSource.tla"}
+                    or any((render / name).is_symlink() or digest(render / name) != value
+                           for name, value in stack_files.items())):
+                raise ValueError("actual stack pass render differs from its receipt")
+            if digest(plugin) != stack_plugin_sha:
+                raise ValueError("macro plugin changed while retaining the stack pass")
+            receipt["compilerStackSeed"] = {
+                "sourceSHA": head, "macroPluginSHA256": stack_plugin_sha,
+                "validatorSHA256": capture["binarySHA256"],
+                "stage": "INSTALLED_REGENERATED" if installed else "BOOTSTRAP_CANDIDATE",
+                "installedBytesMatch": installed, "rendering": render_receipt,
+                "mathematicalProof": False, "hostedAdmission": False,
+                "artifacts": {str(path.relative_to(stack)): digest(path) for path in stack.rglob("*") if path.is_file()},
+                "sourceOrigins": {part: origin for part, (_, origin) in dumps.items()},
+            }
+
+        imports = packet / "proof-inputs"
+        imports.mkdir()
+        names = ["OrderedIntExpressionRule", "IndexedHistoryRules", "InitializationOutcomeRules",
+                 "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule", "OrderedScalarCopyRule", "DirectCopyParserRule", "DirectCopyLexicalRule",
+                 "ScalarCopyOutputBinding", "OrderedIntAssignmentListRule",
+                 "CertifiedReadAssignmentObservation", "PhysicalIntAssignmentRhsRule", "NativeIntAssignmentListRule",
+                 "RenderedIntAssignmentTerms", "RenderedIntAssignmentActionRule", "OrderedAssignmentOutputRules",
+                 "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "NativeScalarCopyRule", "ConditionalOutcomeRules", "NormalSeedCFG"]
+        names += ["CompilerOutput/SeedAndArithmeticConfiguredBehavior", "CompilerOutput/SeedConfiguredBehavior",
+                  "CompilerOutput/SwiftTLACopyCertifiedAssignmentObservation",
+                  "CompilerOutput/SwiftTLAOrderedRHSBackendAgreement", "CompilerOutput/OrderedOverflowInitialDisabled",
+                  "CompilerOutput/OrderedOverflowDirectInitialDisabled"]
+        names += ["CheckingSelectionRule", "CheckingSelectionComposition", "CheckingSelectionCompilerBinding",
+                  "ActionFailureHistoryProjection"]
+        branchwise_rules = ["BranchwiseConjunctionFailureOrderProof", "ActionTreeOutcomeComposition",
+                            "ConditionalActionRule", "AlternativeActionRule", "BranchwiseConjunctionRule",
+                            "GuardActionRule", "AlternativeTraversalRule"]
+        names += branchwise_rules
+        if stack_files:
+            names += ["SequencePrefixRule", "OrderedIntTraversalPassProof", "OrderedIntTraversalNativeRule",
+                      "GeneratedCertificateExpansionRule", "OrderedIntTraversalPassConfiguredProof"]
+        branchwise_imports = {name + ".tla" for name in branchwise_rules}
+        branchwise_imports.update({"BranchwiseConjunctionFailureOrderModel.tla", "SwiftTLABranchwiseCheckingInputs.tla",
+                                   "IndexedHistoryRules.tla", "ActionOutcomeInterface.tla", "ActionFailureHistoryProjection.tla",
+                                   "CheckingSelectionRule.tla", "CheckingSelectionComposition.tla",
+                                   "CheckingSelectionCompilerBinding.tla"})
+        proof_hashes = []
+        branchwise_hashes = {}
+        for name in names:
+            source = f"Verification/Semantics/{name}.tla"
+            retained_input = imports / Path(source).name
+            shutil.copyfile(root / source, retained_input)
+            sha = digest(retained_input)
+            if sha != inputs[source]:
+                raise ValueError(f"retained proof input differs from the captured source: {source}")
+            proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
+            if retained_input.name in branchwise_imports:
+                branchwise_hashes[retained_input.name] = sha
+        if stack_files:
+            for name in ["OrderedIntTraversalPass.tla", "OrderedIntTraversalPassSource.tla"]:
+                retained_input = imports / name
+                shutil.copyfile(render / name, retained_input)
+                sha = digest(retained_input)
+                if sha != stack_files[name]:
+                    raise ValueError(f"retained stack pass module differs from its emitted output: {name}")
+                proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
+        (packet / "proof-inputs.sha256").write_text("".join(proof_hashes))
+        tool_inputs = packet / "toolchain/build-inputs"
+        tool_inputs.mkdir(parents=True)
+        for name, directory in [("proof-toolchain.json", "Verification/Semantics"), ("packaging.patch", "Tools/TLAPS")]:
+            shutil.copyfile(root / directory / name, tool_inputs / name)
+        (packet / "source-sha.txt").write_text(head + "\n")
+        shutil.copyfile(output / "local-native-source.json", packet / "local-native-source.json")
+        if payloads(root) != inputs or subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() != head:
+            raise ValueError("source inputs changed during the guarded compiler check")
+        if stack_files:
+            stack_proof_inputs = {
+                "OrderedIntTraversalPass.tla", "OrderedIntTraversalPassSource.tla", "SequencePrefixRule.tla",
+                "OrderedIntTraversalPassProof.tla",
+                "OrderedIntTraversalNativeRule.tla", "GeneratedCertificateExpansionRule.tla",
+                "OrderedIntTraversalPassConfiguredProof.tla", "OrderedIntExpressionRule.tla", "IndexedHistoryRules.tla",
+            }
+            parent = "Verification/Semantics/CompilerOutput/CompilerExpansionUsesGeneratedPass.tla"
+            seed_receipt = receipt["compilerStackSeed"]
+            seed_receipt["proofInputs"] = {name: digest(imports / name) for name in sorted(stack_proof_inputs)}
+            seed_receipt["parentSourceSHA256"] = inputs[parent]
+            seed_receipt["sourceInputsSHA256"] = digest(output / "inputs.json")
+            (stack / "capture.json").write_text(json.dumps(seed_receipt, indent=2) + "\n")
+
         selection_runs = [
             ("checking-selection", "prepare-selection", "CheckSelectionModels.swift",
              "SelectedChecks", "SwiftTLAActualCheckingSelection", "checkingSelectionPreparation", False),
@@ -667,41 +813,6 @@ def main():
             raise ValueError("retained branchwise Swift witness differs from the committed input")
         branchwise_files = receipt["branchwiseCheckingSelectionPreparation"]
 
-        imports = packet / "proof-inputs"
-        imports.mkdir()
-        names = ["OrderedIntExpressionRule", "IndexedHistoryRules", "InitializationOutcomeRules",
-                 "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule", "OrderedScalarCopyRule", "DirectCopyParserRule", "DirectCopyLexicalRule",
-                 "ScalarCopyOutputBinding", "OrderedIntAssignmentListRule",
-                 "CertifiedReadAssignmentObservation", "PhysicalIntAssignmentRhsRule", "NativeIntAssignmentListRule",
-                 "RenderedIntAssignmentTerms", "RenderedIntAssignmentActionRule", "OrderedAssignmentOutputRules",
-                 "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "NativeScalarCopyRule", "ConditionalOutcomeRules", "NormalSeedCFG"]
-        names += ["CompilerOutput/SeedAndArithmeticConfiguredBehavior", "CompilerOutput/SeedConfiguredBehavior",
-                  "CompilerOutput/SwiftTLACopyCertifiedAssignmentObservation",
-                  "CompilerOutput/SwiftTLAOrderedRHSBackendAgreement", "CompilerOutput/OrderedOverflowInitialDisabled",
-                  "CompilerOutput/OrderedOverflowDirectInitialDisabled"]
-        names += ["CheckingSelectionRule", "CheckingSelectionComposition", "CheckingSelectionCompilerBinding",
-                  "ActionFailureHistoryProjection"]
-        branchwise_rules = ["BranchwiseConjunctionFailureOrderProof", "ActionTreeOutcomeComposition",
-                            "ConditionalActionRule", "AlternativeActionRule", "BranchwiseConjunctionRule",
-                            "GuardActionRule", "AlternativeTraversalRule"]
-        names += branchwise_rules
-        branchwise_imports = {name + ".tla" for name in branchwise_rules}
-        branchwise_imports.update({"BranchwiseConjunctionFailureOrderModel.tla", "SwiftTLABranchwiseCheckingInputs.tla",
-                                   "IndexedHistoryRules.tla", "ActionOutcomeInterface.tla", "ActionFailureHistoryProjection.tla",
-                                   "CheckingSelectionRule.tla", "CheckingSelectionComposition.tla",
-                                   "CheckingSelectionCompilerBinding.tla"})
-        proof_hashes = []
-        branchwise_hashes = {}
-        for name in names:
-            source = f"Verification/Semantics/{name}.tla"
-            retained_input = imports / Path(source).name
-            shutil.copyfile(root / source, retained_input)
-            sha = digest(retained_input)
-            if sha != inputs[source]:
-                raise ValueError(f"retained proof input differs from the captured source: {source}")
-            proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
-            if retained_input.name in branchwise_imports:
-                branchwise_hashes[retained_input.name] = sha
         for branchwise_input in ["BranchwiseConjunctionFailureOrderModel.tla", "SwiftTLABranchwiseCheckingInputs.tla"]:
             retained_input = imports / branchwise_input
             shutil.copyfile(packet / "checking-selection-branchwise" / branchwise_input, retained_input)
@@ -719,12 +830,6 @@ def main():
             "proofInputs": branchwise_hashes,
         }
         (packet / "proof-inputs.sha256").write_text("".join(proof_hashes))
-        tool_inputs = packet / "toolchain/build-inputs"
-        tool_inputs.mkdir(parents=True)
-        for name, directory in [("proof-toolchain.json", "Verification/Semantics"), ("packaging.patch", "Tools/TLAPS")]:
-            shutil.copyfile(root / directory / name, tool_inputs / name)
-        (packet / "source-sha.txt").write_text(head + "\n")
-        shutil.copyfile(output / "local-native-source.json", packet / "local-native-source.json")
         if payloads(root) != inputs or subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() != head:
             raise ValueError("source inputs changed during the guarded compiler check")
         receipt.update(status="FRESH_ACTUAL_PROOF_BYTES_MATCH_CHECKED_CANDIDATE", packet=str(packet),

@@ -16,13 +16,16 @@ struct MacroCompilation {
     let program: CompiledProgram
     let directCopySource: DirectCopySource?
     let directCopyLexicalSource: DirectCopyLexicalSource?
+    let stackSeedSource: OrderedIntStackSeedSource?
 
     init(typeName: String, program: CompiledProgram, directCopySource: DirectCopySource? = nil,
-         directCopyLexicalSource: DirectCopyLexicalSource? = nil) throws {
+         directCopyLexicalSource: DirectCopyLexicalSource? = nil,
+         stackSeedSource: OrderedIntStackSeedSource? = nil) throws {
         self.typeName = typeName
         self.program = program
         self.directCopySource = directCopySource
         self.directCopyLexicalSource = directCopyLexicalSource
+        self.stackSeedSource = stackSeedSource
         api = try GeneratedMachineAPI(layout: program.layout, actions: program.behavior.actions)
     }
 }
@@ -53,11 +56,13 @@ enum TLASpecVerifier {
             }
             let directCopySource = parsed.sourceAlgorithms.count == 1
                 ? parsed.sourceAlgorithms.first?.model.directScalarCopyInput : nil
+            let program = try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation))
+            let stackSeedSource = typeName == "OrderedIntTraversalPass" && source.name == typeName
+                ? OrderedIntStackSeedSource.check(source.closure, program: program) : nil
             return try MacroCompilation(
-                typeName: typeName,
-                program: try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation)),
-                directCopySource: directCopySource,
-                directCopyLexicalSource: directCopySource == nil ? nil : parser.registeredDirectCopyLexicalSource
+                typeName: typeName, program: program, directCopySource: directCopySource,
+                directCopyLexicalSource: directCopySource == nil ? nil : parser.registeredDirectCopyLexicalSource,
+                stackSeedSource: stackSeedSource
             )
         } catch let diagnostic as CompilationDiagnostic {
             var located = diagnostic

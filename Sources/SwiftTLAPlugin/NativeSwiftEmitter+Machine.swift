@@ -2767,6 +2767,8 @@ func verifyGeneratedActionWriteOutput(
               let right = operand(expression.children[1]) else { return nil }
         return "(\(left) \(symbol) \(right))"
     }
+    let stackFrame = CompiledValueType.tuple([.int, .bool])
+    let stackFrameType = "Pair<\(nativeIntType), \(nativeBoolType)>"
     func directScalarTokens(_ expression: CompiledExpression, parameters: [String]) -> [String]? {
         guard expression.resultType == .int || expression.resultType == .bool else { return nil }
         switch expression.operation {
@@ -2778,6 +2780,14 @@ func verifyGeneratedActionWriteOutput(
                   case .stateVariable(let variable) = sequence.operation,
                   let field = stateFields[variable] else { return nil }
             return ["(", "state", ".", "state", ".", field, ".", "count", ")"]
+        case .tupleAccess(let position) where expression.children.count == 1 && (1...2).contains(position):
+            let frame = expression.children[0]
+            guard frame.resultType == stackFrame, frame.children.isEmpty,
+                  case .boundValue(let binding) = frame.operation, program.bindingTypes[binding] == stackFrame,
+                  expression.resultType == (position == 1 ? .int : .bool),
+                  let name = program.binderNames[binding].map({ "_\($0)_\(binding.ordinal)" }),
+                  parameters.contains(name) else { return nil }
+            return [name, ".", position == 1 ? "first" : "second"]
         case .boundValue(let binding) where program.bindingTypes[binding] == expression.resultType:
             if let parameter = program.layout.parameters.first(where: { $0.binder == binding }) {
                 return Parser.parse(source: "configuration.`\(parameter.reference.name)`")
@@ -3215,10 +3225,35 @@ func verifyGeneratedActionWriteOutput(
             let type = element == .int ? nativeIntType : nativeBoolType
             return (tokens("Set<\(type)>([\(values.joined(separator: ", "))])"), actual)
         }
+        func elementTypeName(_ type: CompiledValueType) -> String? {
+            switch type {
+            case .int: nativeIntType
+            case .bool: nativeBoolType
+            default: type == stackFrame ? stackFrameType : nil
+            }
+        }
+        func appendedSource(_ node: CompiledExpression) -> String? {
+            if node.resultType == stackFrame {
+                let pair: CompiledExpression
+                if case .assertView(let shape) = node.operation, shape == .tuple([.integer, .boolean]),
+                   node.children.count == 1, node.children[0].resultType == stackFrame {
+                    pair = node.children[0]
+                } else {
+                    pair = node
+                }
+                guard pair.operation == .tupleLiteral, pair.children.count == 2,
+                      pair.children[0].resultType == .int, pair.children[1].resultType == .bool,
+                      let first = directScalarTokens(pair.children[0], parameters: parameters),
+                      let second = directScalarTokens(pair.children[1], parameters: parameters) else { return nil }
+                return "\(stackFrameType)(first: \(first.joined(separator: " ")), second: \(second.joined(separator: " ")))"
+            }
+            return (directScalarTokens(node, parameters: parameters)
+                ?? arithmeticIntTokens(node, parameters: parameters)
+                ?? scalarPredicateTokens(node, parameters: parameters))?.joined(separator: " ")
+        }
         func checkedSequenceSource(_ node: CompiledExpression) -> String? {
             guard case .array(let element) = node.resultType,
-                  element == .int || element == .bool else { return nil }
-            let typeName = element == .int ? nativeIntType : nativeBoolType
+                  let typeName = elementTypeName(element) else { return nil }
             switch node.operation {
             case .stateVariable(let variable):
                 return stateFields[variable].map { "state.state.\($0)" }
@@ -3273,13 +3308,11 @@ func verifyGeneratedActionWriteOutput(
                       node.children[0].resultType == node.resultType,
                       node.children[1].resultType == element,
                       let sequence = checkedSequenceSource(node.children[0]),
-                      let appended = directScalarTokens(node.children[1], parameters: parameters)
-                        ?? arithmeticIntTokens(node.children[1], parameters: parameters)
-                        ?? scalarPredicateTokens(node.children[1], parameters: parameters) else { return nil }
+                      let appended = appendedSource(node.children[1]) else { return nil }
                 return """
                 (try { () throws -> [\(typeName)] in
                     let _sequenceValue: [\(typeName)] = \(sequence)
-                    let _appendedValue: \(typeName) = \(appended.joined(separator: " "))
+                    let _appendedValue: \(typeName) = \(appended)
                     return SwiftTLA._NativeMachineOperations.sequenceAppend(_sequenceValue, _appendedValue)
                 }())
                 """
@@ -3287,8 +3320,9 @@ func verifyGeneratedActionWriteOutput(
                 return nil
             }
         }
-        if (expression.operation == .tuplePrefix || expression.operation == .tupleRemoving ||
-            expression.operation == .tupleConcatenate || expression.operation == .tupleAppend),
+        if (expression.resultType == .array(stackFrame) || expression.operation == .tuplePrefix ||
+            expression.operation == .tupleRemoving || expression.operation == .tupleConcatenate ||
+            expression.operation == .tupleAppend),
            let source = checkedSequenceSource(expression) {
             return (tokens(source), actual)
         }
@@ -3309,12 +3343,11 @@ func verifyGeneratedActionWriteOutput(
         }
         if expression.operation == .tupleDynamicAccess,
            expression.children.count == 2,
-           (expression.resultType == .int || expression.resultType == .bool),
            expression.children[1].resultType == .int,
+           let typeName = elementTypeName(expression.resultType),
            let sequence = checkedSequenceSource(expression.children[0]),
            let index = directScalarTokens(expression.children[1], parameters: parameters)
                 ?? arithmeticIntTokens(expression.children[1], parameters: parameters) {
-            let typeName = expression.resultType == .int ? nativeIntType : nativeBoolType
             let source = """
             (try { () throws -> \(typeName) in
                 let _sequenceValue = \(sequence)
