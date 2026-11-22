@@ -253,7 +253,11 @@ package enum ScalarCopyActionEvidence {
             BY ONLY DEF vars, \#(prefix)ActualFrameBefore, \#(prefix)ActualFrameAfter
         <1>stutter. [Next]_vars <=> ((\E \#(index) \in DOMAIN \#(prefix)ActualActionValues :
              \#(prefix)ActualActionValues[\#(index)]) \/ \#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore)
-            BY ONLY <1>next, <1>frame, PTL
+            <2>step. [Next]_vars <=> (Next \/ vars' = vars)
+                BY ONLY SMT
+            <2>unchanged. (vars' = vars) <=> (\#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore)
+                BY ONLY <1>frame, SMT
+            <2>. QED BY ONLY <2>step, <2>unchanged, <1>next, PTL
         <1>. QED BY ONLY <1>inventory, <1>next, <1>frame, <1>stutter
 
         THEOREM \#(prefix)ActualLayoutKeys ==

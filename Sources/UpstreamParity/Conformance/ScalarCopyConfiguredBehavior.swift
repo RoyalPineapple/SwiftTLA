@@ -134,17 +134,37 @@ extension ScalarCopyActionEvidence.Proof {
             /\ DOMAIN \#(p)NativeRows = DOMAIN \#(p)Receipts
             /\ DOMAIN \#(p)RenderedLabels = DOMAIN \#(p)NativeRows
             /\ DOMAIN \#(p)AllSourceLabels = DOMAIN \#(p)NativeRows
-            /\ \A index, authored \in DOMAIN \#(p)NativeRows :
-                  (\#(p)Native!NativeActionDispatchLabels[index] = \#(p)RenderedLabels[authored])
-                        <=> (index = authored)
+            /\ DOMAIN \#(p)Native!NativeActionDispatchLabels = DOMAIN \#(p)NativeRows
             /\ \A index \in DOMAIN \#(p)NativeRows :
-                  \#(p)NativeRows[index][1] = \#(p)AllSourceLabels[index]
+                   \#(p)RenderedLabels[index] = \#(p)Native!NativeActionDispatchLabels[index]
+            /\ DOMAIN \#(p)AllSourceLabels = DOMAIN \#(p)Labels \cup {\#(rows.count)}
+            /\ \A index \in DOMAIN \#(p)Labels : \#(p)AllSourceLabels[index] = \#(p)Labels[index]
+            /\ \#(p)AllSourceLabels[\#(rows.count)] = \#(p)TerminalLabel
             /\ DOMAIN \#(p)Rows = DOMAIN \#(p)Labels
             /\ \A index \in DOMAIN \#(p)Labels : \#(p)Rows[index].label = \#(p)Labels[index]
-            BY \#(p)ActualSourceLabelOrder, SMT
-                DEF \#(p)NativeRows, \#(p)Native!NativeActionRows, \#(p)Native!NativeActionDispatchLabels, \#(p)Labels,
-                    \#(p)TerminalLabel, \#(p)Receipts, \#(p)RenderedLabels, \#(p)AllSourceLabels,
+            <2>physicalRows.
+                /\ DOMAIN \#(p)NativeRows = 1..\#(rows.count)
+                /\ DOMAIN \#(p)Receipts = 1..\#(rows.count)
+                BY ONLY IsaM("simp") DEF \#(p)NativeRows, \#(p)Native!NativeActionRows, \#(p)Receipts
+            <2>catalog.
+                /\ DOMAIN \#(p)RenderedLabels = 1..\#(rows.count)
+                /\ DOMAIN \#(p)AllSourceLabels = 1..\#(rows.count)
+                BY ONLY SMT DEF \#(p)RenderedLabels, \#(p)AllSourceLabels,
                     \#(p)ActualFormalLabels, \#(p)ActualAuthoredLabels, \#(p)ActualActionRoutes
+            <2>formal.
+                /\ DOMAIN \#(p)Native!NativeActionDispatchLabels = 1..\#(rows.count)
+                /\ \A index \in 1..\#(rows.count) :
+                    \#(p)RenderedLabels[index] = \#(p)Native!NativeActionDispatchLabels[index]
+                BY ONLY SMT DEF \#(p)RenderedLabels, \#(p)ActualFormalLabels, \#(p)ActualActionRoutes,
+                    \#(p)Native!NativeActionDispatchLabels
+            <2>sourceDomain. DOMAIN \#(p)AllSourceLabels = DOMAIN \#(p)Labels \cup {\#(rows.count)}
+                BY ONLY <2>catalog, SMT DEF \#(p)Labels
+            <2>source. \A index \in DOMAIN \#(p)Labels : \#(p)AllSourceLabels[index] = \#(p)Labels[index]
+                BY ONLY SMT DEF \#(p)Labels, \#(p)AllSourceLabels, \#(p)ActualAuthoredLabels, \#(p)ActualActionRoutes
+            <2>terminal. \#(p)AllSourceLabels[\#(rows.count)] = \#(p)TerminalLabel
+                BY ONLY SMT DEF \#(p)TerminalLabel, \#(p)AllSourceLabels, \#(p)ActualAuthoredLabels, \#(p)ActualActionRoutes
+            <2>. QED BY ONLY <2>physicalRows, <2>catalog, <2>formal, <2>sourceDomain, <2>source, <2>terminal,
+                \#(p)ActualSourceLabelOrder, SMT
         <1>rowIndices. \A index \in DOMAIN \#(p)NativeRows : \#(rowCases)
             BY ONLY <1>labels, SMT DEF \#(p)Receipts
         <1>known. \A index \in DOMAIN \#(p)NativeRows :
@@ -358,12 +378,17 @@ extension ScalarCopyActionEvidence.Proof {
             BY <1>labels, \#(routeTheorems), SMT
                 DEF \#(p)CompiledBranches, \#(p)SourceBranchAt, \#(p)Labels, \#(p)Receipts
         <1>routes. \#(p)Dispatch!NativeDispatchBindsTheActionCatalog(\#(p)PhysicalRoutes, \#(p)RenderedLabels)
+            <2>native.
+                /\ DOMAIN \#(p)PhysicalRoutes = DOMAIN \#(p)Native!NativeActionDispatchLabels
+                /\ \A candidate \in DOMAIN \#(p)PhysicalRoutes :
+                       /\ \#(p)PhysicalRoutes[candidate].visitor = candidate
+                       /\ \#(p)PhysicalRoutes[candidate].formal = \#(p)Native!NativeActionDispatchLabels[candidate]
+                BY ONLY SMT DEF \#(p)PhysicalRoutes, \#(p)Native!NativeActionRoutes, \#(p)Native!NativeActionDispatchLabels
             <2>observed. /\ DOMAIN \#(p)PhysicalRoutes = DOMAIN \#(p)RenderedLabels
                          /\ \A candidate \in DOMAIN \#(p)PhysicalRoutes :
                                 /\ \#(p)PhysicalRoutes[candidate].visitor = candidate
                                 /\ \#(p)PhysicalRoutes[candidate].formal = \#(p)RenderedLabels[candidate]
-                BY ONLY SMT DEF \#(p)PhysicalRoutes, \#(p)Native!NativeActionRoutes,
-                    \#(p)RenderedLabels, \#(p)ActualFormalLabels, \#(p)ActualActionRoutes
+                BY ONLY <1>labels, <2>native, SMT
             <2>handles. \A first, second \in DOMAIN \#(p)PhysicalRoutes :
                 \#(p)PhysicalRoutes[first].handle = \#(p)PhysicalRoutes[second].handle => first = second
                 BY ONLY SMT DEF \#(p)PhysicalRoutes, \#(p)Native!NativeActionRoutes
@@ -378,17 +403,18 @@ extension ScalarCopyActionEvidence.Proof {
                 DEF \#(p)NativeBranchValues, \#(p)SourceBranchValues
         <1>routed. \A label : \#(p)NativeLabeled(label) <=>
             \#(p)Dispatch!CatalogLabeledBranches(\#(p)SourceBranchValues, \#(p)AllSourceLabels, label)
-            BY ONLY <1>routes, <1>leaves, <1>labels,
-                \#(p)Dispatch!CertifiedNativeDispatchUsesTheLabeledCatalog, Isa
+            <2>labelDomain. DOMAIN \#(p)AllSourceLabels = DOMAIN \#(p)RenderedLabels
+                BY ONLY <1>labels, SMT
+            <2>. TAKE label
+            <2>. QED BY ONLY <1>routes, <2>labelDomain, <1>leaves,
+                \#(p)Dispatch!CertifiedNativeDispatchUsesTheLabeledCatalog, SMT
                 DEF \#(p)NativeLabeled
         <1>authored. \A label :
             \#(p)Dispatch!CatalogLabeledBranches(\#(p)SourceBranchValues, \#(p)AllSourceLabels, label) <=>
                 \#(p)SourceLabeled(label)
             BY ONLY <1>labels, SMT
                 DEF \#(p)Dispatch!CatalogLabeledBranches, \#(p)SourceBranchValues,
-                    \#(p)SourceBranchAt, \#(p)SourceLabeled, \#(p)Labels, \#(p)Rows,
-                    \#(p)Receipts, \#(p)TerminalLabel, \#(p)AllSourceLabels, \#(p)ActualAuthoredLabels,
-                    \#(p)ActualActionRoutes
+                    \#(p)SourceBranchAt, \#(p)SourceLabeled, \#(p)Labels, \#(p)Rows, \#(p)TerminalLabel
         <1>dispatch. \A label : \#(p)NativeLabeled(label) <=> \#(p)SourceLabeled(label)
             BY ONLY <1>routed, <1>authored, SMT
         <1>emitted.
@@ -398,13 +424,8 @@ extension ScalarCopyActionEvidence.Proof {
             BY <1>dispatch, \#(p)ActualLabeledActionsAndNext, SMT DEF \#(p)NativeSteps, \#(p)SelectedSourceSteps
         <1>stutter. [\#(p)NativeSteps]_vars <=> [\#(p)SelectedSourceSteps]_vars
             BY <1>emitted, PTL
-        <1>physicalUnion. (\E index \in DOMAIN \#(p)ActualActionValues : \#(p)ActualActionValues[index])
-                                   <=> \#(p)NativeSteps
-            BY ONLY <1>emitted, \#(p)ActualNextUsesTheCompleteLabeledActionCatalog, SMT
-        <1>physicalFrame. (vars' = vars) <=> (\#(p)ActualFrameAfter = \#(p)ActualFrameBefore)
-            BY ONLY \#(p)ActualNextUsesTheCompleteLabeledActionCatalog, SMT
         <1>nativeStutter. [Next]_vars <=> [\#(p)NativeSteps]_vars
-            BY ONLY <1>physicalUnion, <1>physicalFrame, \#(p)ActualNextUsesTheCompleteLabeledActionCatalog, PTL
+            BY ONLY <1>emitted, PTL
         <1>behavior. ([][Next]_vars) <=> ([][\#(p)NativeSteps]_vars)
             BY <1>nativeStutter, PTL
         <1>configuration. \#(p)CFG!ActualCFG = \#(p)CFG!SeedCFG
