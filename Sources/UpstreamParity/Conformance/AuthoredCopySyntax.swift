@@ -10,6 +10,10 @@ enum AuthoredCopySyntax {
         let algorithm: String
         fileprivate let scope: String
         fileprivate let body: CodeBlockItemListSyntax
+        fileprivate let sourceStart: Int
+        fileprivate let declaration: TokenSyntax
+        fileprivate let registration: TokenSyntax
+        fileprivate let hasExplicitCapture: Bool
     }
 
     private struct Label: Hashable {
@@ -32,24 +36,50 @@ enum AuthoredCopySyntax {
 
     static func select(source: String, modelName: String) throws -> Selection {
         let (members, specBody) = try specification(source: source, modelName: modelName)
-        var bindings: [String: FunctionCallExprSyntax] = [:]
-        var selected: (name: String, call: FunctionCallExprSyntax)?
+        var bindings: [String: (declaration: TokenSyntax, call: FunctionCallExprSyntax)] = [:]
+        var selected: (name: String, declaration: TokenSyntax, registration: TokenSyntax, call: FunctionCallExprSyntax)?
         for item in specBody.statements {
-            if let (binding, value) = letBinding(item), let call = value.as(FunctionCallExprSyntax.self),
+            if let (declaration, value) = letBindingTokens(item), let call = value.as(FunctionCallExprSyntax.self),
                reference(call.calledExpression) == "Algorithm" {
-                guard bindings.updateValue(call, forKey: binding) == nil else { throw unsupported }
-            } else if let binding = reference(item.item.as(ExprSyntax.self)), let call = bindings[binding] {
+                guard bindings.updateValue((declaration, call), forKey: name(declaration)) == nil else { throw unsupported }
+            } else if let registration = referenceToken(item.item.as(ExprSyntax.self)),
+                      let (declaration, call) = bindings[name(registration)] {
                 guard selected == nil else { throw unsupported }
-                selected = (binding, call)
+                selected = (name(registration), declaration, registration, call)
             }
         }
         guard let selected, let body = ModelSpecificationSyntax.algorithmBody(selected.call) else { throw unsupported }
         let parameters = ModelSpecificationSyntax.parameterNames(in: body)
         guard parameters.count == 1, let scope = parameters.first else { throw unsupported }
-        return Selection(members: members, algorithm: selected.name, scope: scope, body: body.statements)
+        return Selection(members: members, algorithm: selected.name, scope: scope, body: body.statements,
+            sourceStart: specBody.positionAfterSkippingLeadingTrivia.utf8Offset,
+            declaration: selected.declaration, registration: selected.registration,
+            hasExplicitCapture: specBody.signature?.capture != nil || body.signature?.capture != nil)
     }
 
-    static func proofInputs(_ selection: Selection, comparingParsedRows: Bool = false) throws -> String {
+    static func proofInputs(_ selection: Selection, comparingParsedRows: Bool = false,
+                            lexicalSource: DirectCopyLexicalSource? = nil, authoredBytes: [UInt8] = [],
+                            expectedFields: Set<String>? = nil) throws -> String {
+        guard comparingParsedRows == (lexicalSource != nil),
+              comparingParsedRows == (expectedFields != nil) else { throw unsupported }
+        let events = lexicalSource?.events
+        func matchesSpan(_ span: DirectCopyLexicalSource.Span, _ syntax: some SyntaxProtocol) -> Bool {
+            let start = syntax.positionAfterSkippingLeadingTrivia.utf8Offset
+            let end = syntax.endPositionBeforeTrailingTrivia.utf8Offset
+            return start >= selection.sourceStart && end >= start && end <= authoredBytes.count
+                && span.offset == start - selection.sourceStart && span.length == end - start
+                && authoredBytes[start..<end].elementsEqual(syntax.trimmedDescription.utf8)
+        }
+        func matches(_ observed: DirectCopyLexicalSource.Token, _ token: TokenSyntax) -> Bool {
+            observed.name.utf8.elementsEqual(name(token).utf8) && matchesSpan(observed.span, token)
+        }
+        if let lexicalSource {
+            guard !selection.hasExplicitCapture, events?.count == selection.body.count,
+                  matches(lexicalSource.algorithm, selection.declaration),
+                  matches(lexicalSource.registration, selection.registration),
+                  lexicalSource.algorithm.name.utf8.elementsEqual(lexicalSource.registration.name.utf8)
+            else { throw unsupported }
+        }
         let fields = comparingParsedRows ? "ParsedCopyFields" : "WitnessCopyFields"
         let rows = comparingParsedRows ? "ParsedCopyActionRows" : "WitnessCopyActionRows"
         let lexicalTheorem = comparingParsedRows ? "AuthoredCopySyntaxBindsParsedRows" : "AuthoredCopySyntaxBindsWitnessRows"
@@ -57,10 +87,44 @@ enum AuthoredCopySyntax {
         var localBindings: Set<[UInt8]> = []
         var steps: [String] = []
         var enumNames: Set<String> = []
-        for item in selection.body {
+        var operations: [String] = []
+        var rootsByBinding: [[UInt8]: String] = [:]
+        var sharedRoots: Set<[UInt8]> = []
+        var lexicalDeclarations: [String] = []
+        func appendLexicalRoot(_ binding: String, root: String) {
+            rootsByBinding[Array(binding.utf8)] = root
+            lexicalDeclarations.append("[binding |-> \(TLAValue.string(binding)), explicit |-> \(optionalLiteral(root))]")
+        }
+        for (index, item) in selection.body.enumerated() {
+            let event = events?[index]
             if let (binding, explicit) = try rootDeclaration(item, in: selection.scope) {
                 guard localBindings.insert(Array(binding.utf8)).inserted else { throw unsupported }
+                if let event {
+                    guard case .shared(let observed, let override) = event,
+                          let (token, value) = letBindingTokens(item), matches(observed, token),
+                          let call = value.as(FunctionCallExprSyntax.self) else { throw unsupported }
+                    let explicitSyntax = call.arguments.first(where: { $0.label?.text == "_name" })?.expression
+                    if let override {
+                        guard let explicitSyntax, let explicit, override.value.utf8.elementsEqual(explicit.utf8),
+                              matchesSpan(override.span, explicitSyntax) else { throw unsupported }
+                    } else if explicitSyntax != nil { throw unsupported }
+                    operations.append("[kind |-> \"shared\", binding |-> \(TLAValue.string(binding)), "
+                                      + "explicit |-> \(optionalLiteral(explicit)), readBinding |-> \"\"]")
+                    let root = explicit ?? binding
+                    guard sharedRoots.insert(Array(root.utf8)).inserted else { throw unsupported }
+                    appendLexicalRoot(binding, root: root)
+                }
                 declarations.append("[binding |-> \(TLAValue.string(binding)), explicit |-> \(optionalLiteral(explicit))]")
+                continue
+            }
+            if case .alias(let observed, let read)? = event {
+                guard let (token, value) = letBindingTokens(item), let rhs = referenceToken(value),
+                      matches(observed, token), matches(read, rhs),
+                      let root = rootsByBinding[Array(name(rhs).utf8)],
+                      localBindings.insert(Array(name(token).utf8)).inserted else { throw unsupported }
+                operations.append("[kind |-> \"alias\", binding |-> \(TLAValue.string(name(token))), "
+                                  + "explicit |-> \(optionalLiteral(nil)), readBinding |-> \(TLAValue.string(name(rhs)))]")
+                appendLexicalRoot(name(token), root: root)
                 continue
             }
             guard let call = item.item.as(FunctionCallExprSyntax.self), reference(call.calledExpression) == "Do",
@@ -68,7 +132,19 @@ enum AuthoredCopySyntax {
                   let label = labelReference(argument.expression),
                   call.additionalTrailingClosures.isEmpty,
                   let body = call.trailingClosure, !body.statements.isEmpty else { throw unsupported }
-            let copies = try body.statements.map { statement -> String in
+            let observedCopies: [DirectCopyLexicalSource.Copy]?
+            if let event {
+                guard body.signature?.capture == nil,
+                      case .step(let observed, let copies) = event, copies.count == body.statements.count,
+                      let access = argument.expression.as(MemberAccessExprSyntax.self),
+                      let owner = referenceToken(access.base),
+                      matches(observed.enumName, owner), matches(observed.caseName, access.declName.baseName)
+                else { throw unsupported }
+                observedCopies = copies
+            } else {
+                observedCopies = nil
+            }
+            let copies = try body.statements.enumerated().map { (position, statement) -> String in
                 guard let assign = statement.item.as(FunctionCallExprSyntax.self), reference(assign.calledExpression) == "Assign",
                       assign.trailingClosure == nil, assign.additionalTrailingClosures.isEmpty,
                       assign.arguments.count == 2, let target = assign.arguments.first, target.label == nil,
@@ -76,19 +152,36 @@ enum AuthoredCopySyntax {
                       let targetName = reference(target.expression), let readName = reference(read.expression),
                       localBindings.contains(Array(targetName.utf8)),
                       localBindings.contains(Array(readName.utf8)) else { throw unsupported }
+                if let observed = observedCopies?[position] {
+                    guard let targetToken = referenceToken(target.expression), let readToken = referenceToken(read.expression),
+                          matches(observed.target, targetToken), matches(observed.read, readToken) else { throw unsupported }
+                }
                 return "[targetBinding |-> \(TLAValue.string(targetName)), readBinding |-> \(TLAValue.string(readName))]"
             }
             enumNames.insert(label.enumName)
-            let visibility = comparingParsedRows ? ", visible |-> \(declarations.count)" : ""
+            let visibility = comparingParsedRows ? ", visible |-> \(operations.count)" : ""
             steps.append("[enumName |-> \(TLAValue.string(label.enumName)), caseName |-> \(TLAValue.string(label.caseName)), copies |-> \(tuple(copies))\(visibility)]")
         }
         guard !declarations.isEmpty, !steps.isEmpty else { throw unsupported }
+        if let expectedFields, sharedRoots != Set(expectedFields.map { Array($0.utf8) }) { throw unsupported }
         let enumCases = try enumBindings(in: selection.members, named: enumNames).map { label, explicit in
             "[enumName |-> \(TLAValue.string(label.enumName)), caseName |-> \(TLAValue.string(label.caseName)), explicit |-> \(optionalLiteral(explicit))]"
         }
         let orderedDeclarations = comparingParsedRows ? "\nAuthoredCopyDeclarationOrder == \(tuple(declarations))" : ""
+        let lexicalInput = comparingParsedRows ? """
+            LOCAL DirectParser == INSTANCE DirectCopyLexicalRule
+            LOCAL CopyHistories == INSTANCE IndexedHistoryRules
+            AuthoredCopyLexicalOperations == \(tuple(operations))
+            LOCAL AuthoredCopyLexicalDeclarations == \(tuple(lexicalDeclarations))
+            \(Self.copyLexicalProof)
+
+            """ : ""
+        let sourceDeclarations = comparingParsedRows
+            ? "{AuthoredCopyLexicalDeclarations[index] : index \\in DOMAIN AuthoredCopyLexicalDeclarations}"
+            : set(declarations)
+        let sourceDeclarationDefinition = comparingParsedRows ? ", AuthoredCopyLexicalDeclarations" : ""
         let syntaxProof = #"""
-        AuthoredCopyDeclarations == \#(set(declarations))
+        \#(lexicalInput)AuthoredCopyDeclarations == \#(sourceDeclarations)
         AuthoredCopyEnumCases == \#(set(enumCases))
         AuthoredCopySteps == \#(tuple(steps))\#(orderedDeclarations)
 
@@ -129,7 +222,7 @@ enum AuthoredCopySyntax {
         PROOF
         <1>declarations. \A left, right \in AuthoredCopyDeclarations :
             left.binding = right.binding => left = right
-            BY ONLY SMT DEF AuthoredCopyDeclarations
+            BY ONLY SMT DEF AuthoredCopyDeclarations\#(sourceDeclarationDefinition)
         <1>roots. \A binding \in DOMAIN AuthoredCopyOrigins :
             \E root \in AuthoredCopyFields : BindingNames(binding) = {root}
             BY ONLY <1>declarations, SetExtensionality, SMT
@@ -204,7 +297,7 @@ enum AuthoredCopySyntax {
                  left # right => AuthoredCopyActionRows[left].label # AuthoredCopyActionRows[right].label
         PROOF
         <1>fields. AuthoredCopyFields = \#(fields)
-            BY ONLY SMT DEF AuthoredCopyFields, AuthoredCopyDeclarations, VariableNames, NameOrSpelling, \#(fields)
+            BY ONLY SMT DEF AuthoredCopyFields, AuthoredCopyDeclarations\#(sourceDeclarationDefinition), VariableNames, NameOrSpelling, \#(fields)
         <1>domain. DOMAIN AuthoredCopyActionRows = DOMAIN \#(rows)
             BY ONLY SMT DEF AuthoredCopyActionRows, AuthoredCopySteps, \#(rows)
         <1>points. \A row \in DOMAIN \#(rows) :
@@ -230,11 +323,11 @@ enum AuthoredCopySyntax {
                 <3>target. BindingNames(raw.copies[index].targetBinding) = {witness.copies[index].target}
                     BY ONLY (row \in DOMAIN \#(rows)), (index \in DOMAIN witness.copies), SMT
                         DEF raw, witness, AuthoredCopySteps, \#(rows), BindingNames,
-                            VariableNames, NameOrSpelling, AuthoredCopyDeclarations
+                            VariableNames, NameOrSpelling, AuthoredCopyDeclarations\#(sourceDeclarationDefinition)
                 <3>read. BindingNames(raw.copies[index].readBinding) = {witness.copies[index].read}
                     BY ONLY (row \in DOMAIN \#(rows)), (index \in DOMAIN witness.copies), SMT
                         DEF raw, witness, AuthoredCopySteps, \#(rows), BindingNames,
-                            VariableNames, NameOrSpelling, AuthoredCopyDeclarations
+                            VariableNames, NameOrSpelling, AuthoredCopyDeclarations\#(sourceDeclarationDefinition)
                 <3>shape. witness.copies[index] =
                     [target |-> witness.copies[index].target, read |-> witness.copies[index].read]
                     BY ONLY (row \in DOMAIN \#(rows)), (index \in DOMAIN witness.copies), SMT
@@ -266,37 +359,124 @@ enum AuthoredCopySyntax {
             : syntaxProof
     }
 
-    private static let copyParserProof = #"""
-        LOCAL DirectParser == INSTANCE DirectCopyParserRule
+    private static let copyLexicalProof = #"""
+        LOCAL CandidateCopyLexicalRoots ==
+            [index \in DOMAIN AuthoredCopyLexicalDeclarations |-> AuthoredCopyLexicalDeclarations[index].explicit.value]
+        LOCAL MaterializedCopyLexicalDeclarations ==
+            DirectParser!CopyLexicalDeclarations(AuthoredCopyLexicalOperations)
 
+        THEOREM AuthoredCopyLexicalOperationsAreWellBound ==
+            DirectParser!CopyLexicalOperationsAreWellBound(AuthoredCopyLexicalOperations)
+            BY ONLY SMT DEF DirectParser!CopyLexicalOperationsAreWellBound, DirectParser!ParserSequence,
+                AuthoredCopyLexicalOperations
+
+        THEOREM AuthoredCopyBindingsAreTheMaterializedLexicalDeclarations ==
+            MaterializedCopyLexicalDeclarations = AuthoredCopyLexicalDeclarations
+        PROOF
+        <1>. DEFINE chosen == DirectParser!CopyLexicalRoots(AuthoredCopyLexicalOperations)
+                    fields == DirectParser!CopySharedRoots(AuthoredCopyLexicalOperations)
+                    count == Len(AuthoredCopyLexicalOperations)
+        <1>shape. /\ count \in Nat
+                   /\ DOMAIN AuthoredCopyLexicalOperations = 1..count
+                   /\ DOMAIN AuthoredCopyLexicalDeclarations = 1..count
+            BY ONLY SMT DEF count, AuthoredCopyLexicalOperations, AuthoredCopyLexicalDeclarations
+        <1>types. /\ CandidateCopyLexicalRoots \in [1..count -> fields]
+                   /\ chosen \in [1..count -> fields]
+            <2>observed. CandidateCopyLexicalRoots \in [1..count -> fields]
+                BY ONLY <1>shape, SMT
+                    DEF CandidateCopyLexicalRoots, AuthoredCopyLexicalDeclarations, fields,
+                        AuthoredCopyLexicalOperations, DirectParser!CopySharedRoots,
+                        DirectParser!ParserRoot, DirectParser!ParserName
+            <2>rule. chosen \in [1..count -> fields]
+                BY ONLY AuthoredCopyLexicalOperationsAreWellBound,
+                    DirectParser!EveryWellBoundLexicalListProducesARootHistory, SMT
+                    DEF DirectParser!CopyLexicalRootHistory, chosen, fields, count
+            <2>. QED BY ONLY <2>observed, <2>rule
+        <1>steps. \A index \in 1..count :
+            (\A prior \in 1..(index - 1) : CandidateCopyLexicalRoots[prior] = chosen[prior])
+            => CandidateCopyLexicalRoots[index] = chosen[index]
+            <2>. TAKE index \in 1..count
+            <2>. DEFINE op == AuthoredCopyLexicalOperations[index]
+            <2>where. index \in DOMAIN AuthoredCopyLexicalOperations
+                BY ONLY (index \in 1..count), <1>shape
+            <2>meaning. /\ op.kind = "shared" => chosen[index] = DirectParser!ParserRoot(op)
+                         /\ op.kind = "alias" =>
+                                chosen[index] = chosen[DirectParser!CopyAliasSource(AuthoredCopyLexicalOperations, index)]
+                BY ONLY <2>where, AuthoredCopyLexicalOperationsAreWellBound,
+                    DirectParser!TheAliasHistoryUsesTheActualEarlierRoot, SMT DEF chosen, op
+            <2>. SUFFICES ASSUME \A prior \in 1..(index - 1) : CandidateCopyLexicalRoots[prior] = chosen[prior]
+                         PROVE CandidateCopyLexicalRoots[index] = chosen[index]
+                OBVIOUS
+            <2>shared. CASE op.kind = "shared"
+                <3>root. CandidateCopyLexicalRoots[index] = DirectParser!ParserRoot(op)
+                    BY ONLY <2>where, <2>shared, SMT DEF op, CandidateCopyLexicalRoots, AuthoredCopyLexicalDeclarations,
+                        AuthoredCopyLexicalOperations, DirectParser!ParserRoot, DirectParser!ParserName
+                <3>. QED BY ONLY <2>shared, <2>meaning, <3>root
+            <2>alias. CASE op.kind = "alias"
+                <3>. DEFINE prior == DirectParser!CopyAliasSource(AuthoredCopyLexicalOperations, index)
+                <3>earlier. /\ prior \in 1..(index - 1)
+                             /\ AuthoredCopyLexicalOperations[prior].binding = op.readBinding
+                    BY ONLY <2>where, <2>alias, AuthoredCopyLexicalOperationsAreWellBound,
+                        DirectParser!CopyAliasNamesExactlyOneVisibleSource, SMT DEF prior, op
+                <3>root. CandidateCopyLexicalRoots[index] = CandidateCopyLexicalRoots[prior]
+                    BY ONLY <2>where, <2>alias, <3>earlier, <1>shape, SMT
+                        DEF op, CandidateCopyLexicalRoots, AuthoredCopyLexicalDeclarations,
+                            AuthoredCopyLexicalOperations, count
+                <3>. QED BY ONLY <2>alias, <2>meaning, <3>earlier, <3>root,
+                    (\A earlier \in 1..(index - 1) : CandidateCopyLexicalRoots[earlier] = chosen[earlier]), SMT DEF prior
+            <2>. QED BY ONLY <2>where, AuthoredCopyLexicalOperationsAreWellBound,
+                <2>shared, <2>alias, SMT DEF DirectParser!CopyLexicalOperationsAreWellBound, op
+        <1>roots. CandidateCopyLexicalRoots = chosen
+            BY ONLY <1>shape, <1>types, <1>steps, CopyHistories!FiniteIndexedHistoriesAgree, SMT
+        <1>declarations. \A index \in 1..count :
+            AuthoredCopyLexicalDeclarations[index] =
+                [binding |-> AuthoredCopyLexicalOperations[index].binding,
+                 explicit |-> [present |-> TRUE, value |-> CandidateCopyLexicalRoots[index]]]
+            BY ONLY <1>shape, SMT
+                DEF CandidateCopyLexicalRoots, AuthoredCopyLexicalDeclarations, AuthoredCopyLexicalOperations
+        <1>. QED BY ONLY <1>shape, <1>roots, <1>declarations, SMT
+            DEF MaterializedCopyLexicalDeclarations, DirectParser!CopyLexicalDeclarations, chosen,
+                AuthoredCopyLexicalDeclarations
+        """#
+
+    private static let copyParserProof = #"""
         LOCAL ConstructedCopyRows ==
-            DirectParser!ParserCopyRows(<<>>, AuthoredCopyDeclarationOrder, AuthoredCopyEnumCases, AuthoredCopySteps)
-        LOCAL ConstructedCopyFields == DirectParser!ParserCopyFields(AuthoredCopyDeclarationOrder)
+            DirectParser!ParserCopyRows(<<>>, MaterializedCopyLexicalDeclarations, AuthoredCopyEnumCases, AuthoredCopySteps)
+        LOCAL ConstructedCopyFields == DirectParser!ParserCopyFields(MaterializedCopyLexicalDeclarations)
 
         THEOREM ActualParserRowsHaveAuthoredLexicalConstruction ==
-            /\ DirectParser!WellBoundDirectCopySyntax(AuthoredCopyDeclarationOrder, AuthoredCopyEnumCases, AuthoredCopySteps)
+            /\ DirectParser!WellBoundDirectCopySyntax(MaterializedCopyLexicalDeclarations, AuthoredCopyEnumCases, AuthoredCopySteps)
             /\ ParsedCopyFields = ConstructedCopyFields
             /\ ParsedCopyActionRows = ConstructedCopyRows
             /\ DOMAIN ParsedCopyActionRows = DOMAIN AuthoredCopySteps
         PROOF
-        <1>inputs. DirectParser!WellBoundDirectCopySyntax(
-                AuthoredCopyDeclarationOrder, AuthoredCopyEnumCases, AuthoredCopySteps)
+        <1>rawScope. DirectParser!WellBoundDirectCopySyntax(
+                AuthoredCopyLexicalOperations, AuthoredCopyEnumCases, AuthoredCopySteps)
             BY ONLY SMT DEF DirectParser!WellBoundDirectCopySyntax, DirectParser!ParserSequence,
                 DirectParser!DeclaredCopyBindings, DirectParser!RegisteredParserCases,
-                AuthoredCopyDeclarationOrder, AuthoredCopyEnumCases, AuthoredCopySteps
+                AuthoredCopyLexicalOperations, AuthoredCopyEnumCases, AuthoredCopySteps
         <1>empty. DirectParser!ParserSequence(<<>>)
             BY ONLY SMT DEF DirectParser!ParserSequence
-        <1>construction. /\ DirectParser!ParserRowsAppendInOrder(AuthoredCopySteps, ConstructedCopyRows)
-                          /\ \A index \in DOMAIN AuthoredCopySteps :
-                               LET step == AuthoredCopySteps[index]
-                                   scope == DirectParser!ParserScopeAt(<<>>, AuthoredCopyDeclarationOrder, step.visible)
-                               IN DirectParser!ParserRowUsesAuthoredSyntax(AuthoredCopyDeclarationOrder, scope,
-                                    AuthoredCopyEnumCases, step, ConstructedCopyRows[index])
-            BY ONLY <1>inputs, <1>empty, DirectParser!WellBoundDirectCopySyntaxProducesOrderedRows, SMT
-                DEF ConstructedCopyRows
+        <1>construction.
+            /\ DirectParser!WellBoundDirectCopySyntax(MaterializedCopyLexicalDeclarations,
+                                                      AuthoredCopyEnumCases, AuthoredCopySteps)
+            /\ DirectParser!ParserCopyFields(MaterializedCopyLexicalDeclarations) =
+                   DirectParser!CopySharedRoots(AuthoredCopyLexicalOperations)
+            /\ DirectParser!ParserRowsAppendInOrder(AuthoredCopySteps, ConstructedCopyRows)
+            /\ \A index \in DOMAIN AuthoredCopySteps :
+                   LET step == AuthoredCopySteps[index]
+                       scope == DirectParser!ParserScopeAt(<<>>, MaterializedCopyLexicalDeclarations, step.visible)
+                   IN DirectParser!ParserRowUsesAuthoredSyntax(MaterializedCopyLexicalDeclarations, scope,
+                       AuthoredCopyEnumCases, step, ConstructedCopyRows[index])
+            BY ONLY <1>rawScope, <1>empty, AuthoredCopyLexicalOperationsAreWellBound,
+                DirectParser!WellBoundAliasedCopySyntaxProducesOrderedRows, SMT
+                DEF ConstructedCopyRows, MaterializedCopyLexicalDeclarations
+        <1>inputs. DirectParser!WellBoundDirectCopySyntax(MaterializedCopyLexicalDeclarations,
+                                                        AuthoredCopyEnumCases, AuthoredCopySteps)
+            BY ONLY <1>construction
         <1>fields. ParsedCopyFields = ConstructedCopyFields
-            BY ONLY SMT DEF ConstructedCopyFields, DirectParser!ParserCopyFields,
-                DirectParser!ParserRoot, DirectParser!ParserName, AuthoredCopyDeclarationOrder, ParsedCopyFields
+            BY ONLY <1>construction, SMT DEF ConstructedCopyFields, DirectParser!CopySharedRoots,
+                DirectParser!ParserRoot, DirectParser!ParserName, AuthoredCopyLexicalOperations, ParsedCopyFields
         <1>domain. /\ DOMAIN ConstructedCopyRows = DOMAIN AuthoredCopySteps
                    /\ DOMAIN ParsedCopyActionRows = DOMAIN AuthoredCopySteps
             BY ONLY <1>construction, SMT DEF DirectParser!ParserRowsAppendInOrder,
@@ -307,9 +487,9 @@ enum AuthoredCopySyntax {
             <2>. DEFINE step == AuthoredCopySteps[index]
                         actual == ParsedCopyActionRows[index]
                         computed == ConstructedCopyRows[index]
-                        scope == DirectParser!ParserScopeAt(<<>>, AuthoredCopyDeclarationOrder, step.visible)
+                        scope == DirectParser!ParserScopeAt(<<>>, MaterializedCopyLexicalDeclarations, step.visible)
             <2>semantics. DirectParser!ParserRowUsesAuthoredSyntax(
-                    AuthoredCopyDeclarationOrder, scope, AuthoredCopyEnumCases, step, computed)
+                    MaterializedCopyLexicalDeclarations, scope, AuthoredCopyEnumCases, step, computed)
                 BY ONLY (index \in DOMAIN AuthoredCopySteps), <1>construction, SMT DEF step, computed, scope
             <2>label. computed.label = actual.label
                 <3>enum. \A entry \in DirectParser!RegisteredParserCases(AuthoredCopyEnumCases, step) :
@@ -330,12 +510,13 @@ enum AuthoredCopySyntax {
                 <3>. DEFINE source == step.copies[position]
                             observed == actual.copies[position]
                 <3>visible. \E target, read \in 1..step.visible :
-                    /\ AuthoredCopyDeclarationOrder[target].binding = source.targetBinding
-                    /\ AuthoredCopyDeclarationOrder[read].binding = source.readBinding
-                    /\ DirectParser!ParserRoot(AuthoredCopyDeclarationOrder[target]) = observed.target
-                    /\ DirectParser!ParserRoot(AuthoredCopyDeclarationOrder[read]) = observed.read
+                    /\ MaterializedCopyLexicalDeclarations[target].binding = source.targetBinding
+                    /\ MaterializedCopyLexicalDeclarations[read].binding = source.readBinding
+                    /\ DirectParser!ParserRoot(MaterializedCopyLexicalDeclarations[target]) = observed.target
+                    /\ DirectParser!ParserRoot(MaterializedCopyLexicalDeclarations[read]) = observed.read
                     BY ONLY (index \in DOMAIN AuthoredCopySteps), (position \in DOMAIN step.copies),
-                        <1>domain, <2>length, SMT DEF AuthoredCopyDeclarationOrder, AuthoredCopySteps,
+                        <1>domain, <2>length, AuthoredCopyBindingsAreTheMaterializedLexicalDeclarations, SMT
+                        DEF AuthoredCopyLexicalDeclarations, AuthoredCopySteps,
                             ParsedCopyActionRows, DirectParser!ParserRoot, DirectParser!ParserName,
                             step, actual, source, observed
                 <3>record. observed = [target |-> observed.target, read |-> observed.read]
@@ -385,7 +566,8 @@ enum AuthoredCopySyntax {
         PROOF
         <1>parser. /\ DirectParser!ParserSequence(AuthoredCopyDeclarationOrder)
                    /\ DirectParser!ParserSequence(AuthoredCopySteps)
-            BY ONLY ActualParserRowsHaveAuthoredLexicalConstruction DEF DirectParser!WellBoundDirectCopySyntax
+            BY ONLY ActualParserRowsHaveAuthoredLexicalConstruction, SMT
+                DEF DirectParser!WellBoundDirectCopySyntax, DirectParser!ParserSequence, AuthoredCopyDeclarationOrder
         <1>present. /\ 1 \in DOMAIN AuthoredCopyDeclarationOrder /\ 1 \in DOMAIN AuthoredCopySteps
             BY ONLY SMT DEF AuthoredCopyDeclarationOrder, AuthoredCopySteps
         <1>sourceShape.
@@ -394,8 +576,9 @@ enum AuthoredCopySyntax {
             /\ Len(AuthoredCopySteps) \in Nat \ {0} /\ DOMAIN AuthoredCopySteps = 1..Len(AuthoredCopySteps)
             BY ONLY <1>parser, <1>present, SMT DEF DirectParser!ParserSequence
         <1>roots. {CopyBuilderDeclarations[index] : index \in DOMAIN CopyBuilderDeclarations} = WitnessCopyFields
-            BY ONLY ActualParserRowsHaveAuthoredLexicalConstruction, ParsedDirectCopyRowsMatchTheActualBuilder, SMT
-                DEF ConstructedCopyFields, DirectParser!ParserCopyFields, CopyBuilderDeclarations
+            BY ONLY ParsedDirectCopyRowsMatchTheActualBuilder, SMT
+                DEF CopyBuilderDeclarations, AuthoredCopyDeclarationOrder, ParsedCopyFields,
+                    DirectParser!ParserRoot, DirectParser!ParserName
         <1>declarations.
             /\ Len(CopyBuilderDeclarations) \in Nat \ {0}
             /\ CopyBuilderDeclarations \in [1..Len(CopyBuilderDeclarations) -> WitnessCopyFields]
@@ -890,17 +1073,24 @@ enum AuthoredCopySyntax {
 
     private static func name(_ token: TokenSyntax) -> String { token.identifier?.name ?? token.text }
 
+    private static func referenceToken(_ expression: ExprSyntax?) -> TokenSyntax? {
+        expression?.as(DeclReferenceExprSyntax.self)?.baseName
+    }
+
     private static func reference(_ expression: ExprSyntax?) -> String? {
-        guard let token = expression?.as(DeclReferenceExprSyntax.self)?.baseName else { return nil }
-        return name(token)
+        referenceToken(expression).map(name)
     }
 
     private static func letBinding(_ item: CodeBlockItemSyntax) -> (String, ExprSyntax)? {
+        letBindingTokens(item).map { (name($0.0), $0.1) }
+    }
+
+    private static func letBindingTokens(_ item: CodeBlockItemSyntax) -> (TokenSyntax, ExprSyntax)? {
         guard let declaration = item.item.as(VariableDeclSyntax.self), declaration.bindingSpecifier.text == "let",
               declaration.bindings.count == 1, let binding = declaration.bindings.first,
               let token = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier,
               let value = binding.initializer?.value, binding.accessorBlock == nil else { return nil }
-        return (name(token), value)
+        return (token, value)
     }
 
     private static func labelReference(_ expression: ExprSyntax?) -> Label? {

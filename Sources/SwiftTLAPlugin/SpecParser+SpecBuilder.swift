@@ -23,6 +23,7 @@ extension ParserSession {
         sourceScope = .empty
         let declarationScope = closureParameterNames(in: closure).first
         if let declarationScope { sourceScope = sourceScope.extendingCheckingScope(declarationScope) }
+        var directCopyLexicalSource: DirectCopyLexicalSource?
         for statement in closure.statements {
             if case .expr(let expression) = statement.item,
                let fc = expression.as(FunctionCallExprSyntax.self) {
@@ -57,8 +58,11 @@ extension ParserSession {
                 components.actions.append(action)
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
-                      let algorithm = specBindings.algorithms[reference.baseName.sourceIdentifierName] {
-                components.sourceAlgorithms.append(algorithm)
+                      let bound = specBindings.algorithms[reference.baseName.sourceIdentifierName] {
+                components.sourceAlgorithms.append(bound.algorithm)
+                if closure.signature?.capture == nil {
+                    directCopyLexicalSource = bound.copySyntax?.registered(at: reference.baseName, in: closure)
+                }
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let validation = specBindings.validations[reference.baseName.sourceIdentifierName] {
@@ -98,6 +102,7 @@ extension ParserSession {
         components.symmetrySets = symmetryDeclarations.map { $0.resolved() }
         components.extendsModules = canonicalStandardModules(components.extendsModules)
         components.algorithmPhase = components.sourceAlgorithms.isEmpty ? .lowered : .source
+        registeredDirectCopyLexicalSource = components.sourceAlgorithms.count == 1 ? directCopyLexicalSource : nil
         return components
     }
 
@@ -107,7 +112,7 @@ extension ParserSession {
         declarationScope: String? = nil
     ) {
         for binding in declaration.bindings {
-            guard let sourceName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
+            guard let bindingToken = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier,
                   let initializer = binding.initializer?.value
             else {
                 components.diagnostics.append(.init(
@@ -116,6 +121,7 @@ extension ParserSession {
                 ))
                 continue
             }
+            let sourceName = bindingToken.sourceIdentifierName
             guard let call = initializer.as(FunctionCallExprSyntax.self) else {
                 if let value = decodeTypedFacadeValue(initializer, scope: sourceScope,
                     requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation)) {
@@ -366,8 +372,9 @@ extension ParserSession {
                     ))
                     continue
                 }
-                if let algorithm = parseAlgorithm(call, into: &components, boundName: sourceName) {
-                    specBindings.algorithms[sourceName] = algorithm
+                if let parsed = parseAlgorithm(call, into: &components, boundName: sourceName) {
+                    let copySyntax = parsed.copyEvents.map { DirectCopyParserSyntax(binding: bindingToken, events: $0) }
+                    specBindings.algorithms[sourceName] = (parsed.algorithm, copySyntax)
                 }
             } else if let constructor = resolveVarCall(call, in: declarationScope) {
                 if constructor.name == "SharedVar", declaration.bindingSpecifier.text != "let" {
@@ -1040,8 +1047,8 @@ extension ParserSession {
                 components.sourceAtomicSteps.append(step)
             }
         case "Algorithm":
-            if let algorithm = parseAlgorithm(call, into: &components) {
-                components.sourceAlgorithms.append(algorithm)
+            if let parsed = parseAlgorithm(call, into: &components) {
+                components.sourceAlgorithms.append(parsed.algorithm)
             }
         case "Variable":
             let existingVariable = call.arguments.first.flatMap { parsedVariableName($0.expression) }

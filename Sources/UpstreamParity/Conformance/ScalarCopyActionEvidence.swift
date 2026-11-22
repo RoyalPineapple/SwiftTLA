@@ -17,18 +17,20 @@ package enum ScalarCopyActionEvidence {
         source: TLASpec, compilation: CompiledSpecification, rendered: RenderedSpecification,
         authoredSource: Data, nativeSource: String, modelName: String
     ) throws -> Proof? {
+        guard source.sourceAlgorithms.count == 1, let model = source.sourceAlgorithms.first?.model,
+              let frontend = model.directScalarCopyInput else { return nil }
         guard let inputText = String(data: authoredSource, encoding: .utf8), !inputText.utf8.contains(0),
               let selection = try? AuthoredCopySyntax.select(source: inputText, modelName: modelName),
-              let independentProof = try? AuthoredCopySyntax.proofInputs(selection, comparingParsedRows: true) else { return nil }
+              frontend.algorithm.utf8.elementsEqual(selection.algorithm.utf8),
+              let receipt = try? decodedParserSource(nativeSource),
+              receipt.resolved.algorithm.utf8.elementsEqual(selection.algorithm.utf8),
+              Set(receipt.resolved.fields.map { Array($0.utf8) }) == Set(frontend.fields.map { Array($0.utf8) }),
+              let independentProof = try? AuthoredCopySyntax.proofInputs(selection, comparingParsedRows: true,
+                  lexicalSource: receipt.lexical, authoredBytes: Array(authoredSource), expectedFields: frontend.fields)
+        else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
         let layout = compilation.layout
         let output = rendered.tlaBundle
-        guard source.sourceAlgorithms.count == 1, let model = source.sourceAlgorithms.first?.model,
-              let frontend = model.directScalarCopyInput,
-              frontend.algorithm == selection.algorithm else {
-            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-        }
-        let parsed = try decodedParserSource(nativeSource)
-        guard parsed.algorithm == selection.algorithm else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+        let parsed = receipt.resolved
         guard layout.parameters.isEmpty, layout.checkingRegisters.isEmpty,
               output.imports.isEmpty, case .compiled(let id, _, _) = output.provenance,
               id == compilation.identity else { return nil }
@@ -50,7 +52,10 @@ package enum ScalarCopyActionEvidence {
         let labels = actualRows.map(\.label)
         let actions = layout.actions.filter { !$0.isTermination }
         let terminalActions = layout.actions.filter(\.isTermination)
-        guard fields == frontend.fields, !labels.isEmpty, Set(labels).count == labels.count,
+        guard Set(fields.map { Array($0.utf8) }) == Set(frontend.fields.map { Array($0.utf8) }) else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        guard !labels.isEmpty, Set(labels).count == labels.count,
               actions.map({ $0.declaration.name }) == labels, terminalActions.count == 1,
               let terminating = terminalActions.first,
               terminating.declaration.name == CompilerControlSymbol.terminatingAction.rawValue,
@@ -363,22 +368,31 @@ package enum ScalarCopyActionEvidence {
         }
     }
 
-    private static func decodedParserSource(_ source: String) throws -> DirectCopySource {
+    private static func decodedParserSource(_ source: String) throws
+        -> (resolved: DirectCopySource, lexical: DirectCopyLexicalSource) {
         let syntax = Parser.parse(source: source)
         let entries = syntax.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }
             .filter { $0.name.text == "visitValidationOutcomes" }
         guard !syntax.hasError, entries.count == 1, let entry = entries.first else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
-        let prefix = "// SwiftTLA.DirectCopySource.v1 "
-        let receipts = entry.leadingTrivia.compactMap { piece -> String? in
-            guard case .lineComment(let line) = piece, line.hasPrefix(prefix) else { return nil }
-            return String(line.dropFirst(prefix.count))
+
+        func receipts(marked prefix: String) -> [String] {
+            entry.leadingTrivia.compactMap { piece in
+                guard case .lineComment(let line) = piece, line.hasPrefix(prefix) else { return nil }
+                return String(line.dropFirst(prefix.count))
+            }
         }
-        guard receipts.count == 1, let receipt = receipts.first, let bytes = Data(base64Encoded: receipt) else {
+        let resolved = receipts(marked: "// SwiftTLA.DirectCopySource.v1 ")
+        let lexical = receipts(marked: "// SwiftTLA.DirectCopyLexicalSource.v1 ")
+        guard resolved.count == 1, lexical.count == 1, let resolvedText = resolved.first,
+              let lexicalText = lexical.first, let resolvedBytes = Data(base64Encoded: resolvedText),
+              let lexicalBytes = Data(base64Encoded: lexicalText) else {
             throw InitialFailureEvidenceError.unsupportedGeneratedOutput
         }
-        return try JSONDecoder().decode(DirectCopySource.self, from: bytes)
+        let decoder = JSONDecoder()
+        return (try decoder.decode(DirectCopySource.self, from: resolvedBytes),
+            try decoder.decode(DirectCopyLexicalSource.self, from: lexicalBytes))
     }
 
     private static func copyRows(_ source: DirectCopySource) -> [CopyRow] {

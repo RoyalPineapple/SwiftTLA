@@ -307,13 +307,14 @@ final class ParserSession {
         var atomicSteps: [String: AtomicStep] = [:]
         var instances: [String: FormalModuleInstance] = [:]
         var generatedInstances: [String: ParsedGeneratedModelInstance] = [:]
-        var algorithms: [String: Algorithm] = [:]
+        var algorithms: [String: (algorithm: Algorithm, copySyntax: DirectCopyParserSyntax?)] = [:]
         var validations: [String: ValidationDeclaration] = [:]
         var fairnessProfiles: [String: FairnessProfileDecl] = [:]
         var symmetries: [String: SymmetrySetDecl] = [:]
         var modules: [String: TLASpec] = [:]
     }
     var specBindings = SpecBindings()
+    var registeredDirectCopyLexicalSource: DirectCopyLexicalSource?
     var algorithmParseFailure: String?
     var algorithmSourceDiagnostic: SourceParseDiagnostic?
 

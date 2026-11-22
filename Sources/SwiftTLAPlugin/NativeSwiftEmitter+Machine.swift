@@ -85,9 +85,14 @@ extension NativeSwiftEmitter {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
             let encoded = try encoder.encode(source).base64EncodedString()
-            let receipt = Trivia(pieces: [
+            var pieces: [TriviaPiece] = [
                 .newlines(1), .lineComment("// SwiftTLA.DirectCopySource.v1 " + encoded), .newlines(1)
-            ])
+            ]
+            if let lexical = model.directCopyLexicalSource {
+                let encodedLexical = try encoder.encode(lexical).base64EncodedString()
+                pieces += [.lineComment("// SwiftTLA.DirectCopyLexicalSource.v1 " + encodedLexical), .newlines(1)]
+            }
+            let receipt = Trivia(pieces: pieces)
             machineDeclarations[validationIndex].leadingTrivia =
                 receipt + machineDeclarations[validationIndex].leadingTrivia
         }

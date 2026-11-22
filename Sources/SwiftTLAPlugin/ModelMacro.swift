@@ -15,11 +15,14 @@ struct MacroCompilation {
     let api: GeneratedMachineAPI
     let program: CompiledProgram
     let directCopySource: DirectCopySource?
+    let directCopyLexicalSource: DirectCopyLexicalSource?
 
-    init(typeName: String, program: CompiledProgram, directCopySource: DirectCopySource? = nil) throws {
+    init(typeName: String, program: CompiledProgram, directCopySource: DirectCopySource? = nil,
+         directCopyLexicalSource: DirectCopyLexicalSource? = nil) throws {
         self.typeName = typeName
         self.program = program
         self.directCopySource = directCopySource
+        self.directCopyLexicalSource = directCopyLexicalSource
         api = try GeneratedMachineAPI(layout: program.layout, actions: program.behavior.actions)
     }
 }
@@ -53,7 +56,8 @@ enum TLASpecVerifier {
             return try MacroCompilation(
                 typeName: typeName,
                 program: try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation)),
-                directCopySource: directCopySource
+                directCopySource: directCopySource,
+                directCopyLexicalSource: directCopySource == nil ? nil : parser.registeredDirectCopyLexicalSource
             )
         } catch let diagnostic as CompilationDiagnostic {
             var located = diagnostic

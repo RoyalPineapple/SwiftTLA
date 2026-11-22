@@ -18,12 +18,16 @@ struct InitialFailureEvidenceTests {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/UpstreamParity/ValidationModels/CheckedAdditionPrefixInitialModel.swift")
         let authoredSource = try Data(contentsOf: authoredModel)
-        let file = Parser.parse(source: String(decoding: authoredSource, as: UTF8.self))
-        let declaration = try #require(file.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
-            .first { $0.name.text == "CheckedAdditionPrefixInitialModel" })
-        let macro = try TLASpecVerifier.parseAndVerify(declaration)
-        var emitter = NativeSwiftEmitter(model: macro)
-        let nativeSource = try emitter.machineMembers().map(\.description).joined(separator: "\n")
+        func emitNative(_ source: Data) throws -> String {
+            let file = Parser.parse(source: String(decoding: source, as: UTF8.self))
+            guard let declaration = file.statements.compactMap({ $0.item.as(StructDeclSyntax.self) })
+                .first(where: { $0.name.text == "CheckedAdditionPrefixInitialModel" }) else {
+                throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+            }
+            var emitter = try NativeSwiftEmitter(model: TLASpecVerifier.parseAndVerify(declaration))
+            return try emitter.machineMembers().map(\.description).joined(separator: "\n")
+        }
+        let nativeSource = try emitNative(authoredSource)
         let report = try InitialFailureEvidence.prepare(sourceSHA: sha, authoredSource: authoredSource,
             nativeSource: nativeSource, to: directory)
         let receiptPrefix = "// SwiftTLA.DirectCopySource.v1 "
@@ -33,6 +37,23 @@ struct InitialFailureEvidenceTests {
         #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
             try InitialFailureEvidence.prepare(sourceSHA: sha, authoredSource: authoredSource,
                 nativeSource: withoutParserResult, to: directory.appendingPathComponent("missing-parser-result"))
+        }
+        let authored = String(decoding: authoredSource, as: UTF8.self)
+        let copy = "Do(Step.stay) { Assign(last, to: last) }"
+        try #require(authored.components(separatedBy: copy).count == 2)
+        let aliased = Data(authored.replacingOccurrences(of: copy, with:
+            "let from = last\n                Do(Step.stay) { Assign(last, to: from) }").utf8)
+        let aliasedNative = try emitNative(aliased)
+        let builder = CheckedAdditionPrefixInitialModel.spec
+        let (compiled, _) = try builder.compileRetainingSequentialControl(retainingScalarCopyRoutes: true)
+        let rendered = try compiled.render()
+        func aliasProof(using native: String) throws -> ScalarCopyActionEvidence.Proof? {
+            try ScalarCopyActionEvidence.proof(source: builder, compilation: compiled, rendered: rendered,
+                authoredSource: aliased, nativeSource: native, modelName: "CheckedAdditionPrefixInitialModel")
+        }
+        _ = try #require(try aliasProof(using: aliasedNative))
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try aliasProof(using: nativeSource)
         }
         #expect(report.schema == "swifttla.initial-failure-proof-v14")
         #expect(report.result == "prepared")

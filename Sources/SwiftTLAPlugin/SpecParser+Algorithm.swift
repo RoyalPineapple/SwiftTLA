@@ -271,7 +271,7 @@ extension ParserSession {
         _ call: FunctionCallExprSyntax,
         into components: inout TLASpec,
         boundName: String? = nil
-    ) -> Algorithm? {
+    ) -> (algorithm: Algorithm, copyEvents: [DirectCopyParserSyntax.Event]?)? {
         algorithmParseFailure = nil
         algorithmSourceDiagnostic = nil
         guard let name = boundName,
@@ -316,6 +316,11 @@ extension ParserSession {
         }
 
         var algorithmComponents: [AlgorithmComponentModel] = []
+        var copyEvents: [DirectCopyParserSyntax.Event]? = closure.signature?.capture == nil ? [] : nil
+        func recordCopyEvent(_ event: DirectCopyParserSyntax.Event?) {
+            guard let event else { copyEvents = nil; return }
+            copyEvents?.append(event)
+        }
         var macros = specBindings.statementMacros
         var localMacroNames: Set<String> = []
         let outerConstants = constants
@@ -338,6 +343,7 @@ extension ParserSession {
                     return nil
                 }
                 macros[name] = macro
+                recordCopyEvent(nil)
                 continue
             }
             if case .decl(let declaration) = statement.item,
@@ -350,6 +356,7 @@ extension ParserSession {
                ) {
                 let component = parsedVariable.component
                 algorithmComponents.append(component)
+                recordCopyEvent(parsedVariable.copySyntax)
                 if case .shared(let state) = component {
                     sourceScope = sourceScope.extending(binding: parsedVariable.sourceName,
                         to: .variable(state.root),
@@ -360,6 +367,7 @@ extension ParserSession {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
                let value = parseAlgorithmLexicalValue(variable, scope: sourceScope) {
+                recordCopyEvent(value.copySyntax)
                 sourceScope = sourceScope.extending(binding: value.name,
                     to: value.value,
                     shape: value.shape)
@@ -393,6 +401,7 @@ extension ParserSession {
             }
             if let property = parseBoundAlgorithmProperty(call, scope: sourceScope) {
                 algorithmComponents.append(property)
+                recordCopyEvent(nil)
                 continue
             }
             if let failure = algorithmParseFailure {
@@ -427,13 +436,17 @@ extension ParserSession {
                     return nil
                 }
                 algorithmComponents.append(.formalOperator(definition))
+                recordCopyEvent(nil)
                 continue
             }
+            var copyStep: DirectCopyParserSyntax.Event?
+            let observeStep: ((DirectCopyParserSyntax.Event) -> Void)? = copyEvents == nil ? nil : { copyStep = $0 }
             guard let component = parseAlgorithmComponent(
                 call,
                 construct: construct,
                 macros: macros,
-                scope: sourceScope
+                scope: sourceScope,
+                observeCopyStep: observeStep
             ) else {
                 if let diagnostic = algorithmSourceDiagnostic {
                     components.diagnostics.append(diagnostic)
@@ -459,6 +472,7 @@ extension ParserSession {
                 return nil
             }
             algorithmComponents.append(component)
+            recordCopyEvent(copyStep)
         }
 
         let model = AlgorithmModel(name: name, displayLabel: displayLabel,
@@ -472,14 +486,15 @@ extension ParserSession {
             return nil
         }
 
-        return Algorithm(model: model)
+        return (Algorithm(model: model), copyEvents)
     }
 
     private func parseAlgorithmComponent(
         _ call: FunctionCallExprSyntax,
         construct: AlgorithmSourceConstruct,
         macros: [String: AlgorithmMacroDefinition],
-        scope: TypedFacadeScope
+        scope: TypedFacadeScope,
+        observeCopyStep: ((DirectCopyParserSyntax.Event) -> Void)?
     ) -> AlgorithmComponentModel? {
         if isUnboundPropertyHandle(call) {
             algorithmParseFailure = "Bind the property handle to an immutable let, then register its predicate using that binding."
@@ -503,7 +518,8 @@ extension ParserSession {
                 construct: construct,
                 processParameter: "__pcal_sequential",
                 macros: macros,
-                scope: scope
+                scope: scope,
+                observeCopyStep: observeCopyStep
             )
         case .invariant, .reachable:
             guard let predicate = parseAlgorithmStateProperty(call, scope: scope,
@@ -943,10 +959,11 @@ extension ParserSession {
         kind: AlgorithmStateDeclarationKind,
         scope: TypedFacadeScope = .empty,
         declarationScope: String? = nil
-    ) -> (sourceName: String, component: AlgorithmComponentModel, shape: CompiledValueType?)? {
+    ) -> (sourceName: String, component: AlgorithmComponentModel, shape: CompiledValueType?,
+          copySyntax: DirectCopyParserSyntax.Event?)? {
         guard declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
-              let sourceName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
+              let bindingToken = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier,
               let initializer = binding.initializer?.value.as(FunctionCallExprSyntax.self),
               let construct = AlgorithmSourceConstruct(initializer.calledExpression),
               construct.isState(kind, in: declarationScope)
@@ -956,8 +973,13 @@ extension ParserSession {
             algorithmParseFailure = "A state handle must be an immutable named let binding. Use Assign to update its value."
             return nil
         }
-        let declaredName = initializer.arguments.first(where: { $0.label?.text == "_name" })?
-            .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? sourceName
+        let sourceName = bindingToken.sourceIdentifierName
+        let nameArgument = initializer.arguments.first { $0.label?.text == "_name" }
+        let nameLiteral = nameArgument?.expression.as(StringLiteralExprSyntax.self)
+        let explicit = nameLiteral.flatMap { literal in
+            literal.representedLiteralValue.map { (syntax: literal, value: $0) }
+        }
+        let declaredName = explicit?.value ?? sourceName
         let exposed: Bool
         if let argument = initializer.arguments.first(where: { $0.label?.text == "exposed" }) {
             guard kind == .local,
@@ -1042,7 +1064,9 @@ extension ParserSession {
             resolvedValueType: stateType.resolved, exposed: state.exposed)
         recordStateDeclaration(named: resolvedState.root, at: binding)
         let component: AlgorithmComponentModel = kind == .shared ? .shared(resolvedState) : .local(resolvedState)
-        return (sourceName, component, valueType)
+        let copySyntax: DirectCopyParserSyntax.Event? = kind == .shared && (nameArgument == nil || explicit != nil)
+            ? .shared(binding: bindingToken, explicit: explicit) : nil
+        return (sourceName, component, valueType, copySyntax)
     }
 
     func parseAlgorithmMacroDeclaration(
@@ -1078,10 +1102,10 @@ extension ParserSession {
     private func parseAlgorithmLexicalValue(
         _ declaration: VariableDeclSyntax,
         scope: TypedFacadeScope
-    ) -> (name: String, value: StateExpr, shape: CompiledValueType?)? {
+    ) -> (name: String, value: StateExpr, shape: CompiledValueType?, copySyntax: DirectCopyParserSyntax.Event?)? {
         guard declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
-              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
+              let bindingToken = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier,
               let initializer = binding.initializer?.value
         else { return nil }
 
@@ -1089,6 +1113,7 @@ extension ParserSession {
             algorithmParseFailure = "Algorithm values must be immutable let bindings. Use scope.sharedVar and Assign for mutable state."
             return nil
         }
+        let name = bindingToken.sourceIdentifierName
         guard let expression = decodeTypedFacadeValue(initializer, scope: scope,
                 requiresFormalResult: requiresFormalIntegerResult(binding.typeAnnotation))
             ?? decodeStateExpr(initializer) else {
@@ -1096,7 +1121,13 @@ extension ParserSession {
                 ?? "Algorithm let '\(name)' requires a supported formal expression."
             return nil
         }
-        return (name, expression, typedFacadeValueType(initializer, scope: scope))
+        let copySyntax: DirectCopyParserSyntax.Event?
+        if case .variable = expression, let source = initializer.as(DeclReferenceExprSyntax.self) {
+            copySyntax = .alias(binding: bindingToken, source: source.baseName)
+        } else {
+            copySyntax = nil
+        }
+        return (name, expression, typedFacadeValueType(initializer, scope: scope), copySyntax)
     }
 
     private func parseEachComponent(
@@ -1105,7 +1136,8 @@ extension ParserSession {
         processParameter: String,
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope,
-        actionOwner: String? = nil
+        actionOwner: String? = nil,
+        observeCopyStep: ((DirectCopyParserSyntax.Event) -> Void)? = nil
     ) -> AlgorithmComponentModel? {
         if isUnboundPropertyHandle(call) {
             algorithmParseFailure = "Bind the property handle to an immutable let, then register its predicate using that binding."
@@ -1120,14 +1152,18 @@ extension ParserSession {
                 algorithmParseFailure = "Parameterized Do belongs directly in #spec. Use Each for processes or With for local choices."
                 return nil
             }
-            guard let label = algorithmLabel(call.arguments.first?.expression),
+            var copies: [DirectCopyParserSyntax.Copy] = []
+            let observeCopy: DirectCopyParserSyntax.CopyObserver? = observeCopyStep == nil ? nil : { copies.append($0) }
+            let labelSyntax = call.arguments.first?.expression
+            guard let label = algorithmLabel(labelSyntax),
                   let closure = call.trailingClosure,
                   closureParameterNames(in: closure).isEmpty,
                   var statements = parseAlgorithmStatements(
                     closure.statements,
                     processParameter: processParameter,
                     macros: macros,
-                    scope: scope
+                    scope: scope,
+                    observeCopy: observeCopy
                   )
             else { return nil }
             let loopCondition: StateExpr?
@@ -1149,6 +1185,13 @@ extension ParserSession {
                 loopCondition = nil
             }
             recordActionDeclaration(named: actionOwner.map { "procedure.\($0).\(label)" } ?? label, at: call)
+            if construct == .doStep, call.arguments.count == 1, call.arguments.first?.label == nil,
+               closure.signature?.capture == nil, call.additionalTrailingClosures.isEmpty,
+               let caseAccess = labelSyntax?.as(MemberAccessExprSyntax.self),
+               let enumName = caseAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName,
+               copies.count == closure.statements.count, copies.count == statements.count {
+                observeCopyStep?(.step(enumName: enumName, caseName: caseAccess.declName.baseName, copies: copies))
+            }
             return .step(.init(label: .init(name: label), statements: statements, loopCondition: loopCondition))
         case .invariant, .reachable:
             guard let predicate = parseAlgorithmStateProperty(call, scope: scope,
@@ -1176,7 +1219,8 @@ extension ParserSession {
         processParameter: String,
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope,
-        startingAt: Int = 0
+        startingAt: Int = 0,
+        observeCopy: DirectCopyParserSyntax.CopyObserver? = nil
     ) -> [AlgorithmStatementModel]? {
         var parsedStatements: [AlgorithmStatementModel] = []
         for (index, statement) in statements.enumerated().dropFirst(startingAt) {
@@ -1249,7 +1293,8 @@ extension ParserSession {
                 construct: construct,
                 processParameter: processParameter,
                 macros: macros,
-                scope: scope
+                scope: scope,
+                observeCopy: observeCopy
             ) else {
                 if algorithmParseFailure == nil {
                     algorithmParseFailure = "Statement \(index + 1) could not be decoded: "
@@ -1284,7 +1329,8 @@ extension ParserSession {
         construct: AlgorithmSourceConstruct,
         processParameter: String,
         macros: [String: AlgorithmMacroDefinition],
-        scope: TypedFacadeScope
+        scope: TypedFacadeScope,
+        observeCopy: DirectCopyParserSyntax.CopyObserver?
     ) -> AlgorithmStatementModel? {
         switch construct {
         case .whenCondition:
@@ -1306,6 +1352,7 @@ extension ParserSession {
                let readReference = readArgument.expression.as(DeclReferenceExprSyntax.self),
                case .variable(let target)? = scope.value(for: targetReference),
                case .variable(let read)? = scope.value(for: readReference) {
+                observeCopy?((target: targetReference.baseName, read: readReference.baseName))
                 return .set(target: .root(target), value: .variable(read))
             }
             guard let target = algorithmTarget(call.arguments.first?.expression, scope: scope),
