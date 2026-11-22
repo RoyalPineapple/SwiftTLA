@@ -28,6 +28,29 @@ SeedExpansionInput ==
     /\ leftChild \in SeedIntValues
     /\ rightChild \in SeedIntValues
 
+SeedAuthoredInit ==
+    /\ pending = AuthoredStackInitialization.pending
+    /\ leftChild = AuthoredStackInitialization.leftChild
+    /\ rightChild = AuthoredStackInitialization.rightChild
+
+SeedBootstrapInitialization ==
+    [pending |-> <<>>, leftChild |-> 0, rightChild |-> 0, elementTypes |-> <<"Int", "Bool">>]
+
+THEOREM ActualSeedInitMatchesTheAuthoredInitializers ==
+    /\ AuthoredStackInitialization = SeedBootstrapInitialization
+    /\ (Init <=> SeedAuthoredInit)
+    /\ (SeedAuthoredInit => SeedExpansionInput)
+PROOF
+<1>source. AuthoredStackInitialization = SeedBootstrapInitialization
+    BY ONLY AuthoredStackInitializationMatchesTypedIR, SMT DEF TypedStackInitialization, SeedBootstrapInitialization
+<1>values. SeedAuthoredInit <=> pending = <<>> /\ leftChild = 0 /\ rightChild = 0
+    BY ONLY <1>source, SMT DEF SeedAuthoredInit, SeedBootstrapInitialization
+<1>physical. Init <=> SeedAuthoredInit
+    BY ONLY <1>values, SMT DEF Init
+<1>typed. SeedAuthoredInit => SeedExpansionInput
+    BY ONLY <1>values, SeqDef, SMT DEF SeedExpansionInput, SeedFrames, SeedIntValues, SeedIntMin, SeedIntMax
+<1>. QED BY ONLY <1>source, <1>physical, <1>typed
+
 SeedExpansionEnabled(stack) ==
     IF Len(stack) = 0 THEN FALSE ELSE ~stack[Len(stack)][2]
 
@@ -67,6 +90,70 @@ SeedExpansion ==
          /\ UNCHANGED <<leftChild, rightChild>>
     ELSE FALSE
 
+LOCAL SeedRenderedLastDefined(stack) ==
+    IF Len(stack) \in DOMAIN stack THEN TRUE ELSE FALSE
+
+LOCAL SeedRenderedSubtractDefined(size) ==
+    IF size >= -1000000000 /\ size <= 1000000000 /\ 1 >= -1000000000 /\ 1 <= 1000000000
+    THEN TRUE
+    ELSE IF 1 > 0 THEN size >= SeedIntMin + 1
+         ELSE IF 1 < 0 THEN size <= SeedIntMax + 1 ELSE TRUE
+
+LOCAL SeedRenderedReplacementDefined(stack, frame, left, right) ==
+    IF SeedRenderedSubtractDefined(Len(stack))
+    THEN IF Len(stack) - 1 <= Len(stack)
+         THEN IF SeedPairShape(<<frame[1], TRUE>>)
+              THEN IF SeedPairShape(<<right, FALSE>>)
+                   THEN IF SeedPairShape(<<left, FALSE>>) THEN TRUE ELSE FALSE
+                   ELSE FALSE
+              ELSE FALSE
+         ELSE FALSE
+    ELSE FALSE
+
+LOCAL SeedRenderedReplacement(stack, frame, left, right) ==
+    Append(Append(Append(SubSeq(stack, 1, Len(stack) - 1),
+        SeedCheckedPair(<<frame[1], TRUE>>)),
+        SeedCheckedPair(<<right, FALSE>>)),
+        SeedCheckedPair(<<left, FALSE>>))
+
+LOCAL SeedRenderedExpansion ==
+    /\ ((Len(pending) > 0) = TRUE)
+    /\ IF SeedRenderedLastDefined(pending)
+       THEN LET frame == pending[Len(pending)]
+            IN /\ ((~frame[2]) = TRUE)
+               /\ IF SeedRenderedReplacementDefined(pending, frame, leftChild, rightChild)
+                  THEN LET replacement == SeedRenderedReplacement(pending, frame, leftChild, rightChild)
+                       IN ((TRUE /\ pending' = replacement) /\ (UNCHANGED leftChild /\ UNCHANGED rightChild))
+                  ELSE FALSE
+       ELSE FALSE
+
+LOCAL THEOREM ActualSeedActionUsesTheRenderedChecks == expand <=> SeedRenderedExpansion
+    BY ONLY DEF expand, SeedRenderedExpansion, SeedRenderedLastDefined, SeedRenderedReplacementDefined,
+        SeedRenderedSubtractDefined, SeedRenderedReplacement, SeedCheckedPair, SeedPairShape, SeedIntMin, SeedIntMax
+
+SeedAuthoredExpansionFailures ==
+    IF Len(pending) <= AuthoredStackExpansion.countFloor THEN <<>>
+    ELSE IF Len(pending) \notin DOMAIN pending THEN <<"lastIndex">>
+    ELSE IF pending[Len(pending)][AuthoredStackExpansion.localExpandedPosition] THEN <<>>
+    ELSE LET length == Len(pending) - AuthoredStackExpansion.prefixDrop
+         IN IF length \notin SeedIntValues THEN <<"prefixArithmetic">>
+            ELSE IF length > Len(pending) THEN <<"prefixIndex">> ELSE <<>>
+
+\* These observations classify the reached tests in expand.
+SeedRenderedExpansionFailures ==
+    IF ~(Len(pending) > 0) THEN <<>>
+    ELSE IF ~SeedRenderedLastDefined(pending) THEN <<"lastIndex">>
+    ELSE IF pending[Len(pending)][2] THEN <<>>
+    ELSE IF ~SeedRenderedReplacementDefined(pending, pending[Len(pending)], leftChild, rightChild)
+         THEN <<"replacement">> ELSE <<>>
+
+SeedTraversalHelperCallsAreSafe ==
+    /\ (Len(pending) > 0 => Len(pending) \in 1..Len(pending))
+    /\ (SeedExpansionEnabled(pending) =>
+           /\ Len(pending) - 1 \in 0..Len(pending)
+           /\ Len(pending) - 1 \in SeedIntValues
+           /\ Len(pending) + 2 <= SeedIntMax)
+
 LOCAL SeedOperandRows ==
     <<[source |-> "local", position |-> 1, expanded |-> TRUE],
       [source |-> "rightChild", position |-> 0, expanded |-> FALSE],
@@ -80,6 +167,9 @@ THEOREM SeedAuthoredExpansionUsesTheBoundFieldsAndPushes ==
     /\ AuthoredStackExpansion.right = "rightChild"
     /\ AuthoredStackExpansion.lastIndex = "count"
     /\ AuthoredStackExpansion.frame = {"leftChild", "rightChild"}
+    /\ AuthoredStackExpansion.countFloor = 0
+    /\ AuthoredStackExpansion.prefixDrop = 1
+    /\ AuthoredStackExpansion.localExpandedPosition = 2
     /\ \A stack \in Seq(SeedFrames) :
            /\ SeedAuthoredExpansionEnabled(stack) = SeedExpansionEnabled(stack)
            /\ \A left, right \in SeedIntValues :
@@ -216,14 +306,37 @@ PROOF
     BY ONLY <1>last, SeedExpansionInput, SMT DEF SeedExpansionInput, SeedFrames
 <1>. QED BY ONLY <1>bounds, <1>frames, SeedTypedFrameSuppliesTheCheckedPair, SMT
 
+LOCAL THEOREM SeedReachedRenderedChecksAndReplacementAreDefined ==
+    ASSUME SeedExpansionInput, Len(pending) > 0
+    PROVE /\ SeedRenderedLastDefined(pending)
+          /\ SeedRenderedReplacementDefined(pending, pending[Len(pending)], leftChild, rightChild)
+          /\ SeedRenderedReplacement(pending, pending[Len(pending)], leftChild, rightChild) =
+                SeedPhysicalPendingReplacement(pending, leftChild, rightChild)
+PROOF
+<1>reached. /\ Len(pending) \in DOMAIN pending
+            /\ Len(pending) - 1 \in 0..Len(pending)
+            /\ Len(pending) - 1 \in SeedIntValues
+            /\ \A frame \in {<<pending[Len(pending)][1], TRUE>>, <<rightChild, FALSE>>, <<leftChild, FALSE>>} :
+                  /\ SeedPairShape(frame)
+                  /\ SeedCheckedPair(frame) = frame
+    BY ONLY SeedExpansionInput, Len(pending) > 0, SeedExpansionInputSuppliesTheReachedBoundsAndPairViews
+<1>subtract. SeedRenderedSubtractDefined(Len(pending))
+    BY ONLY <1>reached, Len(pending) > 0, SMT DEF SeedRenderedSubtractDefined, SeedIntValues, SeedIntMin
+<1>tests. /\ SeedRenderedLastDefined(pending)
+          /\ SeedRenderedReplacementDefined(pending, pending[Len(pending)], leftChild, rightChild)
+    BY ONLY <1>reached, <1>subtract, SMT DEF SeedRenderedLastDefined, SeedRenderedReplacementDefined
+<1>value. SeedRenderedReplacement(pending, pending[Len(pending)], leftChild, rightChild) =
+              SeedPhysicalPendingReplacement(pending, leftChild, rightChild)
+    BY ONLY <1>reached, SMT DEF SeedRenderedReplacement, SeedPhysicalPendingReplacement
+<1>. QED BY ONLY <1>tests, <1>value
+
 THEOREM ActualSeedExpansionPreservesThePendingReplacement ==
     ASSUME SeedExpansionInput
     PROVE expand <=> SeedExpansion
 PROOF
 <1>shape. /\ Len(pending) \in Nat
           /\ DOMAIN pending = 1..Len(pending)
-          /\ Len(pending) > 0 => pending[Len(pending)] \in SeedFrames
-    BY ONLY SeedExpansionInput, LenProperties, ElementOfSeq, SMT DEF SeedExpansionInput
+    BY ONLY SeedExpansionInput, LenProperties, SMT DEF SeedExpansionInput
 <1>authored. SeedExpansion <=>
     IF SeedExpansionEnabled(pending)
     THEN /\ pending' = SeedExpandedPending(pending, leftChild, rightChild)
@@ -232,43 +345,48 @@ PROOF
     BY ONLY SeedExpansionInput, SeedAuthoredExpansionUsesTheBoundFieldsAndPushes, SMT
         DEF SeedExpansionInput, SeedExpansion
 <1>empty. CASE Len(pending) = 0
-    BY ONLY <1>empty, <1>authored, SMT DEF expand, SeedExpansionEnabled
+    BY ONLY <1>empty, <1>authored, ActualSeedActionUsesTheRenderedChecks, SMT
+        DEF SeedRenderedExpansion, SeedExpansionEnabled
 <1>nonempty. CASE Len(pending) > 0
-    <2>reached. /\ Len(pending) \in DOMAIN pending
-                /\ Len(pending) - 1 \in 0..Len(pending)
-                /\ Len(pending) - 1 \in SeedIntValues
-                /\ \A frame \in {<<pending[Len(pending)][1], TRUE>>, <<rightChild, FALSE>>, <<leftChild, FALSE>>} :
-                      /\ SeedPairShape(frame)
-                      /\ SeedCheckedPair(frame) = frame
-        BY ONLY SeedExpansionInput, <1>nonempty, SeedExpansionInputSuppliesTheReachedBoundsAndPairViews
-    <2>push. SeedPhysicalPendingReplacement(pending, leftChild, rightChild) =
-              SeedExpandedPending(pending, leftChild, rightChild)
-        BY ONLY SeedExpansionInput, <1>nonempty, SeedPhysicalPendingReplacementMatchesTheSource,
-            SMT DEF SeedExpansionInput
-    <2>. QED BY ONLY SeedExpansionInput, <1>shape, <1>authored, <1>nonempty, <2>reached, <2>push, SMT
-        DEF expand, SeedExpansionInput, SeedExpansionEnabled, SeedPhysicalPendingReplacement,
-            SeedPairShape, SeedCheckedPair, SeedIntValues, SeedIntMin, SeedIntMax
+    <2>reached. /\ SeedRenderedLastDefined(pending)
+                /\ SeedRenderedReplacementDefined(pending, pending[Len(pending)], leftChild, rightChild)
+                /\ SeedRenderedReplacement(pending, pending[Len(pending)], leftChild, rightChild) =
+                      SeedPhysicalPendingReplacement(pending, leftChild, rightChild)
+        BY ONLY SeedExpansionInput, <1>nonempty, SeedReachedRenderedChecksAndReplacementAreDefined
+    <2>replacement. SeedPhysicalPendingReplacement(pending, leftChild, rightChild) =
+                     SeedExpandedPending(pending, leftChild, rightChild)
+        BY ONLY SeedExpansionInput, <1>nonempty, SeedPhysicalPendingReplacementMatchesTheSource, SMT DEF SeedExpansionInput
+    <2>. QED BY ONLY <1>nonempty, <1>authored, <2>reached, <2>replacement,
+        ActualSeedActionUsesTheRenderedChecks, SMT DEF SeedRenderedExpansion, SeedExpansionEnabled
 <1>. QED BY ONLY <1>shape, <1>empty, <1>nonempty, SMT
 
 THEOREM ActualSeedExpansionDoesNotFailOnTypedInput ==
     ASSUME SeedExpansionInput
-    PROVE __SwiftTLAEvaluationOK
+    PROVE /\ SeedAuthoredExpansionFailures = <<>>
+          /\ SeedRenderedExpansionFailures = <<>>
+          /\ SeedTraversalHelperCallsAreSafe
 PROOF
 <1>shape. /\ Len(pending) \in Nat
           /\ DOMAIN pending = 1..Len(pending)
     BY ONLY SeedExpansionInput, LenProperties, SMT DEF SeedExpansionInput
+<1>source. /\ AuthoredStackExpansion.countFloor = 0
+           /\ AuthoredStackExpansion.prefixDrop = 1
+           /\ AuthoredStackExpansion.localExpandedPosition = 2
+    BY ONLY SeedAuthoredExpansionUsesTheBoundFieldsAndPushes
 <1>empty. CASE Len(pending) = 0
-    BY ONLY <1>empty, SMT DEF __SwiftTLAEvaluationOK, __SwiftTLAAnyEvaluationFailure0
+    BY ONLY <1>empty, <1>source, SMT DEF SeedAuthoredExpansionFailures, SeedRenderedExpansionFailures,
+        SeedTraversalHelperCallsAreSafe, SeedExpansionEnabled
 <1>nonempty. CASE Len(pending) > 0
-    <2>reached. /\ Len(pending) \in DOMAIN pending
+    <2>bounds. /\ Len(pending) \in DOMAIN pending
                 /\ Len(pending) - 1 \in 0..Len(pending)
                 /\ Len(pending) - 1 \in SeedIntValues
-                /\ \A frame \in {<<pending[Len(pending)][1], TRUE>>, <<rightChild, FALSE>>, <<leftChild, FALSE>>} :
-                      SeedPairShape(frame)
-        BY ONLY SeedExpansionInput, <1>nonempty, SeedExpansionInputSuppliesTheReachedBoundsAndPairViews, SMT
-    <2>. QED BY ONLY <1>shape, <1>nonempty, <2>reached, SeedExpansionInput, SMT
-        DEF SeedExpansionInput, SeedPairShape, SeedIntValues, SeedIntMax, SeedIntMin,
-            __SwiftTLAEvaluationOK, __SwiftTLAAnyEvaluationFailure0
+        BY ONLY SeedExpansionInput, <1>nonempty, SeedExpansionInputSuppliesTheReachedBoundsAndPairViews
+    <2>physical. /\ SeedRenderedLastDefined(pending)
+                  /\ SeedRenderedReplacementDefined(pending, pending[Len(pending)], leftChild, rightChild)
+        BY ONLY SeedExpansionInput, <1>nonempty, SeedReachedRenderedChecksAndReplacementAreDefined
+    <2>. QED BY ONLY <1>shape, <1>source, <1>nonempty, <2>bounds, <2>physical, SeedExpansionInput, SMT
+        DEF SeedExpansionInput, SeedAuthoredExpansionFailures, SeedRenderedExpansionFailures,
+            SeedTraversalHelperCallsAreSafe, SeedExpansionEnabled
 <1>. QED BY ONLY <1>shape, <1>empty, <1>nonempty, SMT
 
 ====

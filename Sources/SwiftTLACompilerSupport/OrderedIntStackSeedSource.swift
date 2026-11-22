@@ -8,6 +8,12 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
         package let expanded: Bool
     }
 
+    package struct Initializers: Codable, Equatable, Sendable {
+        package let elementTypes: [String]
+        package let leftChild: Int
+        package let rightChild: Int
+    }
+
     package struct Expansion: Codable, Equatable, Sendable {
         package let label: String
         package let stack: String
@@ -21,9 +27,10 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
         package let write: String
         package let frame: [String]
         package let pushes: [Push]
+        package let initializers: Initializers
 
         fileprivate init(label: String, roots: [String], local: String, write: String,
-                         frame: [String], pushes: [Push]) {
+                         frame: [String], pushes: [Push], initializers: Initializers) {
             self.label = label
             stack = roots[0]
             left = roots[1]
@@ -36,6 +43,7 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
             self.write = write
             self.frame = frame.sorted()
             self.pushes = pushes
+            self.initializers = initializers
         }
     }
 
@@ -54,17 +62,23 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
         let items = Array(closure.statements)
         guard items.count == 4, let scope = ModelSpecificationSyntax.parameterNames(in: closure).first,
               ModelSpecificationSyntax.parameterNames(in: closure).count == 1 else { return nil }
-        let roots = items.prefix(3).compactMap { item -> String? in
+        let declarations = items.prefix(3).compactMap { item -> (name: String, initial: ExprSyntax)? in
             guard let declaration = item.item.as(VariableDeclSyntax.self), declaration.bindingSpecifier.text == "let",
                   declaration.bindings.count == 1, let binding = declaration.bindings.first,
                   let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   let call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
                   spelling(call.calledExpression) == [scope, ".", "sharedVar"],
-                  call.arguments.count == 1, call.arguments.first?.label?.text == "initial",
+                  call.arguments.count == 1, let argument = call.arguments.first, argument.label?.text == "initial",
                   call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
-            return name
+            return (name, argument.expression)
         }
+        let roots = declarations.map { $0.name }
         guard roots.count == 3, Set(roots).count == 3, !roots.contains("local"),
+              let initializer = declarations[0].initial.as(FunctionCallExprSyntax.self),
+              initializer.arguments.isEmpty, initializer.trailingClosure == nil, initializer.additionalTrailingClosures.isEmpty,
+              spelling(initializer.calledExpression) == ["TupleExpr", "<", "Pair", "<", "Int", ",", "Bool", ">", ">"],
+              let initialLeft = integerInitializer(declarations[1].initial),
+              let initialRight = integerInitializer(declarations[2].initial),
               let step = items[3].item.as(FunctionCallExprSyntax.self), spelling(step.calledExpression) == ["Do"],
               step.arguments.count == 1, let stepArgument = step.arguments.first, stepArgument.label == nil,
               let label = stepArgument.expression.as(MemberAccessExprSyntax.self),
@@ -95,7 +109,8 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
               let pushes = authoredPushes(rhs.expression, stack: stack, local: local, roots: roots)
         else { return nil }
         return Expansion(label: label.declName.baseName.text, roots: roots, local: local, write: target,
-                         frame: roots.filter { $0 != target }, pushes: pushes)
+                         frame: roots.filter { $0 != target }, pushes: pushes,
+                         initializers: .init(elementTypes: ["Int", "Bool"], leftChild: initialLeft, rightChild: initialRight))
     }
 
     package static func check(_ closure: ClosureExprSyntax, program: CompiledProgram) -> Self? {
@@ -111,22 +126,45 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
         }
         guard fields.count == 3, Set(fields.map(\.id)).count == 3,
               program.variableTypes[fields[0].id] == stackType,
-              fields.dropFirst().allSatisfy({ program.variableTypes[$0.id] == .int })
+              fields.dropFirst().allSatisfy({ program.variableTypes[$0.id] == .int }),
+              let initializers = typedInitializers(in: program, fields: fields)
         else { return nil }
         var collector = CompiledRows(program: program, fields: fields)
         guard collector.visit(program[declaration.id].body, localScope: nil, scope: [:]),
               let capture = collector.local, let write = collector.write, let pushes = collector.pushes,
               collector.operations == ["positive", "last", "unexpanded", "write"],
-              collector.frame == Set(fields.dropFirst().map(\.id)),
-              let local = program.binderNames[capture]
+              collector.frame == Set(fields.dropFirst().map(\.id))
         else { return nil }
         let actual = Expansion(label: declaration.declaration.name, roots: fields.map(\.declaration.name),
-            local: local, write: write, frame: fields.filter { collector.frame.contains($0.id) }.map(\.declaration.name),
-            pushes: pushes)
+            local: authored.local, write: write, frame: fields.filter { collector.frame.contains($0.id) }.map(\.declaration.name),
+            pushes: pushes, initializers: initializers)
         guard actual == authored else { return nil }
         return .init(authored: authored, typed: actual, formalFields: fields.map(\.formalName),
                      fieldOrdinals: fields.map(\.id.ordinal), actionOrdinal: declaration.id.ordinal,
                      formalAction: declaration.renderedName, localOrdinal: capture.ordinal)
+    }
+
+    private static func integerInitializer(_ expression: ExprSyntax) -> Int? {
+        if let literal = expression.as(IntegerLiteralExprSyntax.self) {
+            return Int(literal.literal.text.filter { $0 != "_" })
+        }
+        guard let prefix = expression.as(PrefixOperatorExprSyntax.self), prefix.operator.text == "-",
+              let literal = prefix.expression.as(IntegerLiteralExprSyntax.self) else { return nil }
+        return Int("-" + literal.literal.text.filter { $0 != "_" })
+    }
+
+    private static func typedInitializers(in program: CompiledProgram, fields: [CompiledVariableLayout]) -> Initializers? {
+        let rows = program.behavior.initializations
+        guard rows.map({ $0.variable }) == fields.map(\.id),
+              case .value(let stack) = rows[0].initialization,
+              stack.resultType == stackType, stack.children.isEmpty,
+              case .value(.tuple(let frames)) = stack.operation, frames.isEmpty,
+              case .value(let left) = rows[1].initialization,
+              left.resultType == .int, left.children.isEmpty, case .value(.integer(let leftValue)) = left.operation,
+              case .value(let right) = rows[2].initialization,
+              right.resultType == .int, right.children.isEmpty, case .value(.integer(let rightValue)) = right.operation
+        else { return nil }
+        return .init(elementTypes: ["Int", "Bool"], leftChild: leftValue, rightChild: rightValue)
     }
 
     private static func spelling(_ expression: ExprSyntax?) -> [String] {

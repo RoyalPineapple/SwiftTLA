@@ -1,11 +1,11 @@
 ---------------- MODULE OrderedIntTraversalPassConfiguredProof ----------------
-EXTENDS OrderedIntTraversalPassProof, CallerInputPageBlock1
+EXTENDS OrderedIntTraversalNativeRule, CallerInputPageBlock1
 
-\* CallerInputPage1 CallerInputPage2 CallerInputPage3 CallerInputPage4 CallerInputPage5
-SeedExpansionCFG == <<83, 80, 69, 67, 73, 70, 73, 67, 65, 84, 73, 79, 78, 32, 83, 112, 101, 99, 10, 67, 72, 69, 67, 75, 95, 68, 69, 65, 68, 76, 79, 67, 75, 32, 84, 82, 85, 69, 10, 73, 78, 86, 65, 82, 73, 65, 78, 84, 32, 95, 95, 83, 119, 105, 102, 116, 84, 76, 65, 69, 118, 97, 108, 117, 97, 116, 105, 111, 110, 79, 75, 10>>
+\* CallerInputPage1 CallerInputPage2 CallerInputPage3
+SeedExpansionCFG == <<83, 80, 69, 67, 73, 70, 73, 67, 65, 84, 73, 79, 78, 32, 83, 112, 101, 99, 10, 67, 72, 69, 67, 75, 95, 68, 69, 65, 68, 76, 79, 67, 75, 32, 84, 82, 85, 69, 10>>
 ActualSeedExpansionCFG == [i \in 1..CallerInputSize |-> CallerInputByte[i - 1]]
 
-THEOREM ActualSeedExpansionCFGSelectsSpecAndEvaluationChecking ==
+THEOREM ActualSeedExpansionCFGSelectsSpecAndDeadlockOnly ==
     ActualSeedExpansionCFG = SeedExpansionCFG
 PROOF
 <1>domain. DOMAIN ActualSeedExpansionCFG = DOMAIN SeedExpansionCFG
@@ -19,14 +19,24 @@ THEOREM ConfiguredSeedUsesTheTypedExpansion ==
     ASSUME SeedExpansionInput
     PROVE /\ ActualSeedExpansionCFG = SeedExpansionCFG
           /\ (Next <=> SeedExpansion)
-          /\ __SwiftTLAEvaluationOK
-          /\ (Spec <=> Init /\ [][Next]_vars)
+          /\ SeedAuthoredExpansionFailures = <<>>
+          /\ SeedRenderedExpansionFailures = <<>>
+          /\ SeedTraversalHelperCallsAreSafe
+          /\ (Init <=> SeedAuthoredInit)
+          /\ (NativeSeedInit <=> Init)
+          /\ (Spec <=> SeedAuthoredInit /\ [][Next]_vars)
+          /\ (Spec <=> NativeSeedInit /\ [][Next]_vars)
 PROOF
 <1>transition. Next <=> SeedExpansion
     BY ONLY SeedExpansionInput, ActualSeedExpansionPreservesThePendingReplacement, SMT DEF Next
-<1>behavior. Spec <=> Init /\ [][Next]_vars
+<1>rendered. Spec <=> Init /\ [][Next]_vars
     BY ONLY DEF Spec, vars
-<1>. QED BY ONLY SeedExpansionInput, <1>transition, <1>behavior,
-    ActualSeedExpansionCFGSelectsSpecAndEvaluationChecking, ActualSeedExpansionDoesNotFailOnTypedInput
+<1>behavior. Spec <=> SeedAuthoredInit /\ [][Next]_vars
+    BY ONLY <1>rendered, ActualSeedInitMatchesTheAuthoredInitializers
+<1>nativeBehavior. Spec <=> NativeSeedInit /\ [][Next]_vars
+    BY ONLY <1>rendered, NativeSeedInitializationIsTheConfiguredInitialization
+<1>. QED BY ONLY SeedExpansionInput, <1>transition, <1>behavior, <1>nativeBehavior,
+    ActualSeedInitMatchesTheAuthoredInitializers, NativeSeedInitializationIsTheConfiguredInitialization,
+    ActualSeedExpansionCFGSelectsSpecAndDeadlockOnly, ActualSeedExpansionDoesNotFailOnTypedInput
 
 ====

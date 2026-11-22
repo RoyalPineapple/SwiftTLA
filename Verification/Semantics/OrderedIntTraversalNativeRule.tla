@@ -90,4 +90,23 @@ PROOF
               <=> SeedExpansion
     BY ONLY <1>operands, SMT DEF SeedExpansion, NativeTraversalStep
 <1>. QED BY ONLY SeedExpansionInput, <1>native, ActualSeedExpansionPreservesThePendingReplacement, Isa
+
+NativeSeedInit ==
+    /\ pending = NativeStackInitialization.pending
+    /\ leftChild = NativeStackInitialization.leftChild
+    /\ rightChild = NativeStackInitialization.rightChild
+
+THEOREM NativeSeedInitializationIsTheConfiguredInitialization ==
+    /\ NativeStackInitialization = AuthoredStackInitialization
+    /\ (NativeSeedInit <=> SeedAuthoredInit)
+    /\ (NativeSeedInit <=> Init)
+    /\ (NativeSeedInit => SeedExpansionInput)
+PROOF
+<1>decoded. NativeStackInitialization = SeedBootstrapInitialization
+    BY ONLY SMT DEF NativeStackInitialization, SeedBootstrapInitialization
+<1>record. NativeStackInitialization = AuthoredStackInitialization
+    BY ONLY <1>decoded, ActualSeedInitMatchesTheAuthoredInitializers, SMT
+<1>state. NativeSeedInit <=> SeedAuthoredInit
+    BY ONLY <1>record, SMT DEF NativeSeedInit, SeedAuthoredInit
+<1>. QED BY ONLY <1>record, <1>state, ActualSeedInitMatchesTheAuthoredInitializers, SMT
 ====

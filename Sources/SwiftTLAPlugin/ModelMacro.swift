@@ -57,8 +57,7 @@ enum TLASpecVerifier {
             let directCopySource = parsed.sourceAlgorithms.count == 1
                 ? parsed.sourceAlgorithms.first?.model.directScalarCopyInput : nil
             let program = try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation))
-            let stackSeedSource = typeName == "OrderedIntTraversalPass" && source.name == typeName
-                ? OrderedIntStackSeedSource.check(source.closure, program: program) : nil
+            let stackSeedSource = OrderedIntStackSeedSource.check(source.closure, program: program)
             return try MacroCompilation(
                 typeName: typeName, program: program, directCopySource: directCopySource,
                 directCopyLexicalSource: directCopySource == nil ? nil : parser.registeredDirectCopyLexicalSource,

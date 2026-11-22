@@ -1,7 +1,7 @@
 ---- MODULE CompilerExpansionUsesGeneratedPass ----
 EXTENDS GeneratedCertificateExpansionRule, OrderedIntTraversalNativeRule, OrderedIntTraversalPassConfiguredProof
 
-\* CallerInputPage1 CallerInputPage2 CallerInputPage3 CallerInputPage4 CallerInputPage5
+\* CallerInputPage1 CallerInputPage2 CallerInputPage3
 
 ActualGeneratedSingleton(origin, left, right) ==
     NativeTraversalExpandedPending(<< <<origin, FALSE>> >>, left, right)
@@ -37,7 +37,9 @@ THEOREM GeneratedSingletonAndRenderedExpansionSupplyTheSameFrames ==
                    CompilerGeneratedExpansionSuffix(origin, leftChild, rightChild)
           /\ (Next <=> /\ pending' = ActualGeneratedSingleton(origin, leftChild, rightChild)
                        /\ UNCHANGED <<leftChild, rightChild>>)
-          /\ __SwiftTLAEvaluationOK
+          /\ SeedAuthoredExpansionFailures = <<>>
+          /\ SeedRenderedExpansionFailures = <<>>
+          /\ SeedTraversalHelperCallsAreSafe
           /\ ActualSeedExpansionCFG = SeedExpansionCFG
 PROOF
 <1>type. /\ leftChild \in SeedIntValues /\ rightChild \in SeedIntValues
@@ -53,7 +55,9 @@ PROOF
     BY ONLY <1>enabled, pending = << <<origin, FALSE>> >>, SeedExpansionInput,
         NativeAndRenderedSeedVisitTheSameExpansion, SMT DEF NativeTraversalStep, ActualGeneratedSingleton
 <1>configured. /\ (Next <=> expand)
-                 /\ __SwiftTLAEvaluationOK
+                 /\ SeedAuthoredExpansionFailures = <<>>
+                 /\ SeedRenderedExpansionFailures = <<>>
+                 /\ SeedTraversalHelperCallsAreSafe
                  /\ ActualSeedExpansionCFG = SeedExpansionCFG
     BY ONLY SeedExpansionInput, ConfiguredSeedUsesTheTypedExpansion,
         ActualSeedExpansionPreservesThePendingReplacement, SMT

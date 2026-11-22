@@ -690,6 +690,24 @@ def main():
                              "--authored-source", str(authored), "--native-source", str(stack / "members.swift"), "--output", str(render)]
             with (output / "compiler-stack-seed-render.log").open("wb") as log:
                 subprocess.run(stack_command, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
+            capture_source = (stack / "members.swift").read_bytes()
+            correct_capture = (b"SwiftTLA._appendNativeOutcome(&result, Snapshot(state: State(pending: "
+                               b"_value_pending_0, leftChild: _value_leftChild_1, rightChild: _value_rightChild_2)))")
+            if capture_source.count(correct_capture) != 1:
+                raise ValueError("expected one physical stack initializer snapshot append")
+            wrong_capture = correct_capture.replace(b"leftChild: _value_leftChild_1", b"leftChild: _value_rightChild_2")
+            wrong_native = stack / "members-wrong-initial-capture.swift"
+            wrong_native.write_bytes(capture_source.replace(correct_capture, wrong_capture, 1))
+            wrong_output = stack / "wrong-initial-capture-render"
+            wrong_command = [str(binary), "native", "prepare-compiler-stack-seed",
+                             "--authored-source", str(authored), "--native-source", str(wrong_native),
+                             "--output", str(wrong_output)]
+            wrong_log = stack / "wrong-initial-capture.log"
+            with wrong_log.open("wb") as log:
+                wrong_result = subprocess.run(wrong_command, env=env, stdout=log, stderr=subprocess.STDOUT, check=False)
+            wrong_path = "native.traversal.initial.assembly"
+            if wrong_result.returncode != 2 or wrong_output.exists() or wrong_path.encode() not in wrong_log.read_bytes():
+                raise ValueError("the guarded stack evidence checker did not reject the wrong initializer binding")
             render_receipt = json.loads((render / "files.json").read_text())
             stack_files = render_receipt.get("files", {})
             if (not re.fullmatch(r"[a-f0-9]{64}", render_receipt.get("compilationIdentity", ""))
@@ -705,6 +723,11 @@ def main():
                 "validatorSHA256": capture["binarySHA256"],
                 "stage": "INSTALLED_REGENERATED" if installed else "BOOTSTRAP_CANDIDATE",
                 "installedBytesMatch": installed, "rendering": render_receipt,
+                "wrongInitialCaptureControl": {
+                    "originalSHA256": digest(stack / "members.swift"),
+                    "mutatedSHA256": digest(wrong_native), "logSHA256": digest(wrong_log),
+                    "diagnosticPath": wrong_path, "exitCode": wrong_result.returncode,
+                },
                 "mathematicalProof": False, "hostedAdmission": False,
                 "artifacts": {str(path.relative_to(stack)): digest(path) for path in stack.rglob("*") if path.is_file()},
                 "sourceOrigins": {part: origin for part, (_, origin) in dumps.items()},

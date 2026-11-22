@@ -99,7 +99,7 @@ package func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) th
     let dispatch = try function(named: "_visitSuccessors", arity: 3, firstLabel: "for")
     let collected = try function(named: "_successors", arity: 2)
     let context = try function(named: "_successors", arity: 1)
-    let successors = try function(named: "successors", arity: 1)
+    let successors = try function(named: "successors", arity: 1, firstLabel: "for")
     guard matches(words(dispatch), """
         private func _visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?,
             _ visit: (Snapshot) throws -> Void) throws -> [NativeMachineEvaluationError] {
@@ -179,16 +179,26 @@ package func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) th
         }())
         """
     }
-    func unexpanded(_ frame: String) -> String {
-        """
-        (try { () throws -> \(nativeBoolType) in
-            func _predicate0() throws -> \(nativeBoolType) {
-                return try \(prefix)booleanNot { try _predicate1() }
-            }
-            func _predicate1() throws -> \(nativeBoolType) { return \(frame).second }
-            return try _predicate0()
-        }())
-        """
+    func unexpanded(_ frame: String, _ tokens: [String]) -> Bool {
+        let names = tokens.indices.dropLast().compactMap { index -> String? in
+            guard tokens[index] == "func" else { return nil }
+            let name = tokens[index + 1]
+            guard name.hasPrefix("_predicate"),
+                  Int(name.dropFirst("_predicate".count)).map({ $0 >= 0 }) == true else { return nil }
+            return name
+        }
+        guard names.count == 2, names[0] != names[1] else { return false }
+        let predicate = names[0], operand = names[1]
+        return matches(tokens, """
+            guard (try { () throws -> \(nativeBoolType) in
+                func \(predicate)() throws -> \(nativeBoolType) {
+                    return try \(prefix)booleanNot { try \(operand)() }
+                }
+                func \(operand)() throws -> \(nativeBoolType) { return \(frame).second }
+                return try \(predicate)()
+            }()) else { return }
+            try emit(updates)
+            """)
     }
     var events: [String] = []
     var visited: Set<String> = []
@@ -229,7 +239,7 @@ package func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) th
             continue
         }
         if scope.count == 1, let frame = scope.first?.name,
-           matches(core, "guard \(unexpanded(frame)) else { return }\ntry emit(updates)") {
+           unexpanded(frame, core) {
             events.append("unexpanded")
             continue
         }
@@ -274,4 +284,152 @@ package func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) th
           events == ["nonempty", "last", "unexpanded", "replacement", "write"] else {
         throw fail("order")
     }
+}
+
+package struct NativeTraversalSeedInitialization: Sendable, Equatable {
+    package let leftChild: Int
+    package let rightChild: Int
+}
+
+/// Read the typed literal slots and check how the unselected initial branch returns them.
+package func decodeGeneratedTraversalSeedInitialization(_ declarations: [DeclSyntax]) throws -> NativeTraversalSeedInitialization {
+    func invalid(_ field: String) -> CompilationDiagnostic {
+        CompilationDiagnostic(
+            code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "native.traversal.initial." + field,
+            expected: "the checked typed stack initializer and its exact returned slots",
+            actual: "a different or incomplete compiler seed initializer",
+            nextSafeAction: "Regenerate the compiler stack seed output."
+        )
+    }
+    func words(_ syntax: some SyntaxProtocol) -> [String] {
+        syntax.tokens(viewMode: .sourceAccurate).filter { $0.tokenKind != .endOfFile }.map(\.text)
+    }
+    func matches(_ syntax: some SyntaxProtocol, _ expected: String) -> Bool {
+        words(syntax) == words(Parser.parse(source: expected))
+    }
+
+    let indices = declarations.indices.filter {
+        declarations[$0].as(FunctionDeclSyntax.self)?.name.text == "_initialStates"
+    }
+    guard indices.count == 1, let initialIndex = indices.first,
+          let initial = declarations[initialIndex].as(FunctionDeclSyntax.self), !initial.hasError,
+          let branchItem = initial.body?.statements.dropFirst(4).first?.item,
+          let attempt = branchItem.as(TryExprSyntax.self)
+              ?? branchItem.as(ExpressionStmtSyntax.self)?.expression.as(TryExprSyntax.self),
+          let branch = attempt.expression.as(FunctionCallExprSyntax.self),
+          let original = branch.arguments.first?.expression.as(ClosureExprSyntax.self) else {
+        throw invalid("entry")
+    }
+    try verifyGeneratedInitialConstruction(Array(declarations[initialIndex...]), configured: false)
+
+    let intType = nativeIntTypeTokens.joined()
+    let stackType = "[Pair<\(intType), \(nativeBoolType)>]"
+    let fields = ["pending", "leftChild", "rightChild"]
+    let slots = fields.enumerated().map { "_value_\($0.element)_\($0.offset)" }
+    let types = [stackType, intType, intType]
+    var current = original.statements
+    var literals = [String]()
+    for (index, slot) in slots.enumerated() {
+        guard current.count == 5,
+              let local = current.dropFirst(2).first?.item.as(VariableDeclSyntax.self),
+              local.bindings.count == 1, let binding = local.bindings.first,
+              binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == slot,
+              let value = binding.initializer?.value, let selectionItem = current.last?.item,
+              let selection = selectionItem.as(IfExprSyntax.self)
+                  ?? selectionItem.as(ExpressionStmtSyntax.self)?.expression.as(IfExprSyntax.self) else {
+            throw invalid(fields[index])
+        }
+        let literal = words(value).joined()
+        if index == 0 {
+            guard let array = value.as(ArrayExprSyntax.self), array.elements.isEmpty else {
+                throw invalid(fields[index])
+            }
+        } else {
+            guard let integer = Int(literal), String(integer) == literal else {
+                throw invalid(fields[index])
+            }
+        }
+        literals.append(literal)
+        current = selection.body.statements
+    }
+
+    let arguments = zip(fields, slots).map { field, slot in "\(field): \(slot)" }.joined(separator: ", ")
+    var body = "SwiftTLA._appendNativeOutcome(&result, Snapshot(state: State(\(arguments))))"
+    for index in fields.indices.reversed() {
+        let captures = slots.prefix(index).joined(separator: ", ")
+        let entries = slots.indices.prefix(index).map { ordinal in
+            let slot = slots[ordinal]
+            let value = ordinal == 0
+                ? "SwiftTLA.TLAValue.tuple(try \(slot).map { (element) throws -> SwiftTLA.TLAValue in SwiftTLA.TLAValue.tuple([SwiftTLA._nativeFormalInt(element.first), SwiftTLA.TLAValue.bool(element.second)]) })"
+                : "SwiftTLA._nativeFormalInt(\(slot))"
+            return "SwiftTLA._nativeFormalProjectionEntry(Self.__swifttlaFormalProjectionTokens, at: \(ordinal), value: \(value))"
+        }.joined(separator: ", ")
+        let capture = captures.isEmpty ? "" : "[\(captures)] in "
+        let field = fields[index]
+        let slot = slots[index]
+        let selection = index == 0 ? "_selectedInitial == nil || _selectedInitial!.\(field) == \(slot)"
+            : "SwiftTLA._nativeIntInitialMatches(_selectedInitial?.\(field), \(slot))"
+        body = """
+            evaluatingInitialBindings = { \(capture)try SwiftTLA._nativeFormalProjection([\(entries)]) }
+            evaluatingInitializerOrdinal = \(index)
+            let \(slot): \(types[index]) = \(literals[index])
+            evaluatingInitializerOrdinal = nil
+            if \(selection) { \(body) }
+            """
+    }
+    guard matches(initial, """
+        private static func _initialStates(_selectedInitial: State? = nil) throws -> SwiftTLA.InitialEvaluationOutcomes<Snapshot> {
+            var result: [Snapshot] = []
+            var failures: [SwiftTLA.InitialEvaluationFailure] = []
+            var evaluatingInitializerOrdinal: \(intType)?
+            var evaluatingInitialBindings: @Sendable () throws -> SwiftTLA.TLAStateProjection = {
+                try SwiftTLA._nativeFormalProjection([])
+            }
+            try SwiftTLA._visitNativeInitialBranch({ \(body) }, onEvaluationFailure: { failure in
+                SwiftTLA._appendNativeOutcome(&failures, SwiftTLA._nativeInitialFailure(
+                    evaluatingInitializerOrdinal, failure: failure, projectingBefore: evaluatingInitialBindings))
+            })
+            return SwiftTLA._nativeInitialOutcomes(states: result, failures: failures)
+        }
+        """) else { throw invalid("assembly") }
+
+    let structs = declarations.compactMap { $0.as(StructDeclSyntax.self) }
+    let snapshots = structs.filter { $0.name.text == "Snapshot" }
+    let states = structs.filter { $0.name.text == "State" }
+    guard snapshots.count == 1, let snapshot = snapshots.first, states.count == 1, let state = states.first,
+          matches(snapshot, "public struct Snapshot: Hashable, Sendable { public let state: State }") else {
+        throw invalid("snapshot")
+    }
+    let fieldsAndConstructors = state.memberBlock.members.map(\.decl).filter { declaration in
+        declaration.as(VariableDeclSyntax.self)?.modifiers.contains { $0.name.text == "static" } != true
+    }
+    let storage = fields.indices.map { "public let \(fields[$0]): \(types[$0])" }.joined(separator: "\n")
+    let inputs = fields.indices.map { "\(fields[$0]) _value\($0): \(types[$0])" }.joined(separator: ", ")
+    let assigns = fields.indices.map { "self.\(fields[$0]) = _value\($0)" }.joined(separator: "\n")
+    let syntax = Parser.parse(source: """
+        struct Checked {
+            \(storage)
+            public init(\(inputs)) { \(assigns) }
+        }
+        """).statements.first?.item.as(StructDeclSyntax.self)?.memberBlock.members
+    guard let syntax, fieldsAndConstructors.map({ words($0) }) == syntax.map({ words($0.decl) })
+    else { throw invalid("state") }
+
+    let constructors = declarations.compactMap { $0.as(InitializerDeclSyntax.self) }.filter {
+        $0.signature.parameterClause.parameters.first?.firstName.text == "execution"
+    }
+    let properties = declarations.compactMap { $0.as(VariableDeclSyntax.self) }
+    func property(named name: String, matching expected: String) -> Bool {
+        let found = properties.filter {
+            $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == name }
+        }
+        return found.count == 1 && found.first.map { matches($0, expected) } == true
+    }
+    guard constructors.count == 1, let constructor = constructors.first,
+          matches(constructor, "private init(execution: Snapshot) { _execution = execution }"),
+          property(named: "_execution", matching: "private var _execution: Snapshot"),
+          property(named: "state", matching: "public var state: State { _execution.state }"),
+          let left = Int(literals[1]), let right = Int(literals[2]) else { throw invalid("returnedState") }
+    return .init(leftChild: left, rightChild: right)
 }

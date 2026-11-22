@@ -31,7 +31,8 @@ package enum CompilerStackSeedEvidence {
         let files = [
             root.name + ".tla": Data(root.tla.utf8),
             root.name + ".cfg": Data(configuration.utf8),
-            "OrderedIntTraversalPassSource.tla": Data(sourceProof(authored, binding: captured.binding).utf8),
+            "OrderedIntTraversalPassSource.tla": Data(sourceProof(authored, binding: captured.binding,
+                nativeInitialization: captured.initialization).utf8),
         ]
         let hashes = files.mapValues(SHA256.hex)
         let encoder = JSONEncoder()
@@ -45,14 +46,17 @@ package enum CompilerStackSeedEvidence {
     }
 
     private static func capturedRender(_ nativeSource: String)
-        throws -> (module: String, identity: String, tla: String, binding: OrderedIntStackSeedSource) {
+        throws -> (module: String, identity: String, tla: String, binding: OrderedIntStackSeedSource,
+                   initialization: NativeTraversalSeedInitialization) {
         let expansion = Parser.parse(source: nativeSource)
         let renders = expansion.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }
             .filter { $0.name.text == "render" && $0.modifiers.contains(where: { $0.name.text == "static" }) }
         guard !expansion.hasError, renders.count == 1, let render = renders.first else {
             throw EvidenceFormatError.invalidField(record: "OrderedIntTraversalPass", field: "expanded render method")
         }
-        try verifyGeneratedTraversalSeedOutput(expansion.statements.compactMap { $0.item.as(DeclSyntax.self) })
+        let declarations = expansion.statements.compactMap { $0.item.as(DeclSyntax.self) }
+        try verifyGeneratedTraversalSeedOutput(declarations)
+        let initialization = try decodeGeneratedTraversalSeedInitialization(declarations)
         let marker = "// SwiftTLA.OrderedIntStackSeedSource.v1 "
         let receipts = render.leadingTrivia.compactMap { piece -> Data? in
             guard case .lineComment(let comment) = piece, comment.hasPrefix(marker) else { return nil }
@@ -81,7 +85,7 @@ package enum CompilerStackSeedEvidence {
               let source = literal("source") else {
             throw EvidenceFormatError.invalidField(record: "OrderedIntTraversalPass", field: "expanded render literals")
         }
-        return (module, identity, source, binding)
+        return (module, identity, source, binding, initialization)
     }
 
     private static func authoredExpansion(_ source: String) throws -> OrderedIntStackSeedSource.Expansion {
@@ -100,7 +104,8 @@ package enum CompilerStackSeedEvidence {
     }
 
     private static func sourceProof(_ authored: OrderedIntStackSeedSource.Expansion,
-                                    binding: OrderedIntStackSeedSource) -> String {
+                                    binding: OrderedIntStackSeedSource,
+                                    nativeInitialization: NativeTraversalSeedInitialization) -> String {
         func record(_ fields: [(String, TLAValue)]) -> TLAValue {
             .record(TLARecord(fields.map { .init($0.0, $0.1) }))
         }
@@ -117,6 +122,12 @@ package enum CompilerStackSeedEvidence {
                 ("frame", .set(Set(expansion.frame.map(TLAValue.string)))), ("pushes", .tuple(pushes)),
             ])
         }
+        func initializerRow(_ left: Int, _ right: Int, elementTypes: [String]) -> TLAValue {
+            record([("pending", .tuple([])), ("leftChild", .int(left)), ("rightChild", .int(right)),
+                    ("elementTypes", .tuple(elementTypes.map(TLAValue.string)))])
+        }
+        let authoredInit = authored.initializers
+        let typedInit = binding.typed.initializers
         return #"""
         ---- MODULE OrderedIntTraversalPassSource ----
         EXTENDS Integers, Sequences, TLAPS
@@ -127,9 +138,16 @@ package enum CompilerStackSeedEvidence {
         TypedStackActionOrdinal == \#(binding.actionOrdinal)
         TypedStackFormalAction == \#(TLAValue.string(binding.formalAction))
         TypedStackLocalOrdinal == \#(binding.localOrdinal)
+        AuthoredStackInitialization == \#(initializerRow(authoredInit.leftChild, authoredInit.rightChild, elementTypes: authoredInit.elementTypes))
+        TypedStackInitialization == \#(initializerRow(typedInit.leftChild, typedInit.rightChild, elementTypes: typedInit.elementTypes))
+        NativeStackInitialization == \#(initializerRow(nativeInitialization.leftChild, nativeInitialization.rightChild,
+            elementTypes: ["Int", "Bool"]))
 
         THEOREM AuthoredStackExpansionMatchesTypedIR == AuthoredStackExpansion = TypedStackExpansion
         BY ONLY DEF AuthoredStackExpansion, TypedStackExpansion
+
+        THEOREM AuthoredStackInitializationMatchesTypedIR == AuthoredStackInitialization = TypedStackInitialization
+        BY ONLY DEF AuthoredStackInitialization, TypedStackInitialization
         ====
 
         """#
