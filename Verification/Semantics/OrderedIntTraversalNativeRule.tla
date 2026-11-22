@@ -91,6 +91,42 @@ PROOF
     BY ONLY <1>operands, SMT DEF SeedExpansion, NativeTraversalStep
 <1>. QED BY ONLY SeedExpansionInput, <1>native, ActualSeedExpansionPreservesThePendingReplacement, Isa
 
+\* The checked successor collector calls the visitor with the internal append
+\* callback. Its catch appends exactly a reached model failure. The remaining
+\* reached operations are nonthrowing under the reviewed Swift interpretation.
+NativeTraversalReachedFailures(stack) ==
+    LET count == NativeTraversalCount(stack)
+        prefixCount == count - 1
+    IN IF count <= 0 THEN <<>>
+       ELSE IF count \notin 1..Len(stack)
+            THEN <<<<"indexOutOfBounds", count, Len(stack)>>>>
+       ELSE IF NativeTraversalLast(stack)[2] THEN <<>>
+       ELSE IF prefixCount \notin SeedIntValues
+            THEN <<<<"integerOverflow", "subtraction", <<count, 1>>>>>>
+       ELSE IF prefixCount > Len(stack)
+            THEN <<<<"indexOutOfBounds", prefixCount, Len(stack)>>>>
+       ELSE <<>>
+
+THEOREM NativeSeedTraversalDoesNotReachAModelFailure ==
+    ASSUME SeedExpansionInput
+    PROVE NativeTraversalReachedFailures(pending) = <<>>
+PROOF
+<1>count. /\ NativeTraversalCount(pending) = Len(pending)
+          /\ Len(pending) \in Nat
+    BY ONLY SeedExpansionInput, NativeTraversalCountUsesEveryArrayIndex, LenProperties, SMT DEF SeedExpansionInput
+<1>enabled. NativeTraversalEnabled(pending) <=> SeedExpansionEnabled(pending)
+    BY ONLY SeedExpansionInput, NativeSeedTraversalAgreesWithSeedReplacement, SMT DEF SeedExpansionInput
+<1>safe. SeedTraversalHelperCallsAreSafe
+    BY ONLY SeedExpansionInput, ActualSeedExpansionDoesNotFailOnTypedInput
+<1>access. NativeTraversalCount(pending) > 0 =>
+                  NativeTraversalCount(pending) \in 1..Len(pending)
+    BY ONLY <1>count, <1>safe, SMT DEF SeedTraversalHelperCallsAreSafe
+<1>prefix. NativeTraversalEnabled(pending) =>
+                /\ NativeTraversalCount(pending) - 1 \in SeedIntValues
+                /\ NativeTraversalCount(pending) - 1 <= Len(pending)
+    BY ONLY <1>count, <1>enabled, <1>safe, SMT DEF SeedTraversalHelperCallsAreSafe
+<1>. QED BY ONLY <1>count, <1>access, <1>prefix, SMT DEF NativeTraversalReachedFailures, NativeTraversalEnabled
+
 NativeSeedInit ==
     /\ pending = NativeStackInitialization.pending
     /\ leftChild = NativeStackInitialization.leftChild
