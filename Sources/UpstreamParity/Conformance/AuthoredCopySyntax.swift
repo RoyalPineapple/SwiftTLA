@@ -796,6 +796,50 @@ enum AuthoredCopySyntax {
         return (fields, steps)
     }
 
+    private static func boundArithmeticView(
+        _ authored: StateExpr, source: [StraightLineAssignmentCheck.OrderedIntNode]
+    ) throws -> (view: String, parents: String) {
+        var pending: [(origin: Int, syntax: StateExpr, parent: Int)] = [(1, authored, 0)]
+        var kinds = Array(repeating: "", count: source.count)
+        var literals = Array(repeating: TLAValue.int(0), count: source.count)
+        var reads = literals
+        var left = literals
+        var right = literals
+        var parents = literals
+        var bound = 0
+
+        while let (origin, syntax, parent) = pending.popLast() {
+            guard origin > 0, origin <= source.count, kinds[origin - 1].isEmpty else { throw unsupported }
+            let slot = origin - 1
+            switch (syntax, source[slot]) {
+            case (.value(.int(let authoredValue)), .literal(let returnedValue)) where authoredValue == returnedValue:
+                kinds[slot] = "literal"
+                literals[slot] = .int(authoredValue)
+            case (.variable(let authoredName), .read(let returnedName))
+                where authoredName.utf8.elementsEqual(returnedName.utf8):
+                kinds[slot] = "read"
+                reads[slot] = .string(authoredName)
+            case (.add(let first, let second), .add(let leftOrigin, let rightOrigin)):
+                guard leftOrigin > origin, rightOrigin > origin, leftOrigin != rightOrigin else { throw unsupported }
+                kinds[slot] = "add"
+                left[slot] = .int(leftOrigin)
+                right[slot] = .int(rightOrigin)
+                pending.append((rightOrigin, second, origin))
+                pending.append((leftOrigin, first, origin))
+            default:
+                throw unsupported
+            }
+            parents[slot] = .int(parent)
+            bound += 1
+        }
+        // The returned indices address the proof rows. The tags and leaf values come from authored syntax.
+        guard bound == source.count else { throw unsupported }
+        let view = "[root |-> 1, kinds |-> \(TLAValue.tuple(kinds.map(TLAValue.string))), "
+            + "literals |-> \(TLAValue.tuple(literals)), reads |-> \(TLAValue.tuple(reads)), "
+            + "left |-> \(TLAValue.tuple(left)), right |-> \(TLAValue.tuple(right))]"
+        return (view, TLAValue.tuple(parents).description)
+    }
+
     static func arithmeticProofInput(_ selection: Selection, spec: TLASpec) throws -> (label: String, module: String) {
         let authored = try authoredSteps(selection)
         guard authored.steps.count == 1, let step = authored.steps.first, step.loopCondition == nil,
@@ -816,12 +860,14 @@ enum AuthoredCopySyntax {
         let rows = try zip(step.statements, action.statements).map { source, returned in
             guard case .set(.root(let target), let sourceValue) = source, authored.fields.contains(target),
                   case .set(.root(let actualTarget), let expression) = returned,
-                  actualTarget == target, expression == sourceValue,
+                  actualTarget.utf8.elementsEqual(target.utf8), expression == sourceValue,
                   let certificate = StraightLineAssignmentCheck.orderedIntCertificate(expression, reads: authored.fields)
             else { throw unsupported }
+            let authoredBinding = try boundArithmeticView(sourceValue, source: certificate.source)
             let syntax = try InitialFailureEvidence.sourceSyntaxView(certificate)
             let retained = "[view |-> \(syntax.view), origins |-> \(syntax.origins), inverse |-> \(syntax.indices)]"
-            return (target: TLAValue.string(target).description, retained: retained, nodes: syntax.emitted)
+            return (target: TLAValue.string(target).description, retained: retained,
+                    authoredView: authoredBinding.view, authoredParents: authoredBinding.parents, nodes: syntax.emitted)
         }
         let countColumns = tuple(rows.map { String($0.nodes.count) })
         let kindColumns = tuple(rows.map { tuple($0.nodes.map { TLAValue.string($0.kind).description }) })
@@ -843,6 +889,8 @@ enum AuthoredCopySyntax {
         MasterNodeReadKeys == \#(readColumns)
         MasterNodeLeft == \#(leftColumns)
         MasterNodeRight == \#(rightColumns)
+        LOCAL MasterAuthoredViews == \#(tuple(rows.map(\.authoredView)))
+        LOCAL MasterAuthoredParents == \#(tuple(rows.map(\.authoredParents)))
         LOCAL MasterRetainedRows == \#(tuple(rows.map(\.retained)))
         MasterNodes(index) == [node \in 1..MasterNodeCounts[index] |->
             [kind |-> MasterNodeKinds[index][node],
@@ -850,7 +898,7 @@ enum AuthoredCopySyntax {
                          THEN MasterNodeReadKeys[index][node] ELSE MasterNodeLiterals[index][node],
              left |-> MasterNodeLeft[index][node], right |-> MasterNodeRight[index][node]]]
         MasterRows == [index \in DOMAIN MasterNodeCounts |->
-            [target |-> MasterTargets[index], view |-> MasterRetainedRows[index].view,
+            [target |-> MasterTargets[index], view |-> MasterAuthoredViews[index],
              inverse |-> MasterRetainedRows[index].inverse, fallback |-> \#(formalFallback),
              emitted |-> [count |-> MasterNodeCounts[index], height |-> 1,
                           indices |-> <<MasterNodeCounts[index]>>, origins |-> MasterRetainedRows[index].origins,
@@ -858,6 +906,53 @@ enum AuthoredCopySyntax {
         Rule == INSTANCE OrderedAssignmentOutputRules WITH Keys <- MasterFields,
             SwiftIntMin <- \#(TLAValue.int(Int.min)), SwiftIntMax <- \#(TLAValue.int(Int.max)),
             Vars <- {}, Values <- {}, ActionLabels <- {}, FailureValues <- {}, NoFailure <- <<>>
+        THEOREM ActualAuthoredRHSBindsTheReturnedSourceOccurrences ==
+            /\ DOMAIN MasterAuthoredViews = DOMAIN MasterNodeCounts
+            /\ \A row \in DOMAIN MasterNodeCounts :
+                   /\ MasterAuthoredViews[row] = MasterRetainedRows[row].view
+                   /\ Rule!CompilerOccurrenceTree(MasterAuthoredViews[row], MasterNodeCounts[row])
+        PROOF
+        <1>domain. DOMAIN MasterAuthoredViews = DOMAIN MasterNodeCounts
+            BY ONLY IsaM("simp") DEF MasterAuthoredViews, MasterNodeCounts
+        <1>binding. \A row \in DOMAIN MasterNodeCounts :
+            MasterAuthoredViews[row] = MasterRetainedRows[row].view
+            BY ONLY IsaM("simp") DEF MasterAuthoredViews, MasterRetainedRows, MasterNodeCounts
+        <1>tree. \A row \in DOMAIN MasterNodeCounts :
+            Rule!CompilerOccurrenceTree(MasterAuthoredViews[row], MasterNodeCounts[row])
+            <2>. TAKE row \in DOMAIN MasterNodeCounts
+            <2>. DEFINE view == MasterAuthoredViews[row]
+                        count == MasterNodeCounts[row]
+            <2>shape. /\ count \in Nat \ {0} /\ view.root = 1
+                       /\ DOMAIN view.kinds = 1..count
+                BY ONLY (row \in DOMAIN MasterNodeCounts), SMT DEF view, count, MasterAuthoredViews, MasterNodeCounts
+            <2>children. \A node \in 1..count :
+                /\ view.kinds[node] \in {"literal", "read", "add"}
+                /\ (view.kinds[node] = "add" =>
+                    /\ view.left[node] \in (node + 1)..count
+                    /\ view.right[node] \in (node + 1)..count
+                    /\ view.left[node] # view.right[node])
+                BY ONLY (row \in DOMAIN MasterNodeCounts), SMT DEF view, count, MasterAuthoredViews, MasterNodeCounts
+            <2>unique. \A first, second \in 1..count :
+                (view.kinds[first] = "add" /\ view.kinds[second] = "add" /\
+                 {view.left[first], view.right[first]} \cap {view.left[second], view.right[second]} # {}) => first = second
+                BY ONLY (row \in DOMAIN MasterNodeCounts), SMT DEF view, count, MasterAuthoredViews, MasterNodeCounts
+            <2>coverage. \A child \in 2..count :
+                \E parent \in 1..(child - 1) :
+                    view.kinds[parent] = "add" /\ child \in {view.left[parent], view.right[parent]}
+                <3>. TAKE child \in 2..count
+                <3>. DEFINE parent == MasterAuthoredParents[row][child]
+                <3>index. parent \in 1..(child - 1)
+                    BY ONLY (row \in DOMAIN MasterNodeCounts), (child \in 2..count), SMT
+                        DEF parent, count, MasterAuthoredParents, MasterNodeCounts
+                <3>edge. view.kinds[parent] = "add" /\ child \in {view.left[parent], view.right[parent]}
+                    BY ONLY (row \in DOMAIN MasterNodeCounts), (child \in 2..count), SMT
+                        DEF parent, view, count, MasterAuthoredParents, MasterAuthoredViews, MasterNodeCounts
+                <3>. QED BY ONLY <3>index, <3>edge, Zenon
+            <2>. QED BY ONLY <2>shape, <2>children, <2>unique, <2>coverage, SMT
+                DEF view, count, Rule!CompilerOccurrenceTree
+        <1>. QED BY ONLY <1>domain, <1>binding, <1>tree, SMT
+
+
         THEOREM MasterAssignmentsAreSupported ==
             /\ Rule!SupportedAssignmentList(MasterRows)
             /\ Len(MasterRows) = \#(rows.count)
@@ -887,11 +982,16 @@ enum AuthoredCopySyntax {
                         nodes == MasterNodes(i)
             <2>index. i \in DOMAIN MasterNodeCounts
                 BY ONLY (i \in DOMAIN MasterRows), SMT DEF MasterRows
+            <2>authored. /\ MasterAuthoredViews[i] = view
+                          /\ Rule!CompilerOccurrenceTree(view, count)
+                BY ONLY <2>index, ActualAuthoredRHSBindsTheReturnedSourceOccurrences, SMT DEF view, count
             <2>record. row =
                 [target |-> MasterTargets[i], view |-> view, inverse |-> MasterRetainedRows[i].inverse,
                  fallback |-> \#(formalFallback), emitted |-> [count |-> count, height |-> 1, indices |-> <<count>>,
                                                   origins |-> origins, nodes |-> nodes]]
-                BY ONLY <2>index, SMT DEF row, MasterRows, count, view, origins, nodes
+                BY ONLY <2>index, <2>authored, SMT DEF row, MasterRows, count, origins, nodes
+            <2>sourceDomain. DOMAIN view.kinds = 1..count
+                BY ONLY <2>authored DEF Rule!CompilerOccurrenceTree
             <2>projection. /\ row.target = MasterTargets[i] /\ row.fallback = \#(formalFallback)
                            /\ row.view = view
                            /\ row.emitted.count = count /\ row.emitted.height = 1
@@ -909,13 +1009,15 @@ enum AuthoredCopySyntax {
                 <3>. QED BY ONLY <2>projection, <3>names, <3>count, <3>origins, SMT DEF nodes, MasterNodes, Rule!NodeEmissionArrays
             <2>domains. /\ row.inverse \in [DOMAIN row.view.kinds -> 1..row.emitted.count]
                          /\ row.emitted.origins \in [1..row.emitted.count -> DOMAIN row.view.kinds]
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows
+                BY ONLY <2>index, <2>record, <2>sourceDomain, SMT
+                    DEF view, count, origins, MasterNodeCounts, MasterRetainedRows
             <2>preorder. \A j \in 1..row.emitted.count : row.inverse[row.emitted.origins[j]] = j
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows
+                BY ONLY <2>index, <2>record, SMT DEF count, origins, MasterNodeCounts, MasterRetainedRows
             <2>postorder. \A node \in DOMAIN row.view.kinds : row.emitted.origins[row.inverse[node]] = node
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows
+                BY ONLY <2>index, <2>record, <2>sourceDomain, SMT
+                    DEF view, count, origins, MasterNodeCounts, MasterRetainedRows
             <2>root. row.emitted.origins[row.emitted.count] = row.view.root
-                BY ONLY (i \in DOMAIN MasterRows), SMT DEF row, MasterRows, MasterNodeCounts, MasterRetainedRows
+                BY ONLY <2>index, <2>record, SMT DEF view, count, origins, MasterNodeCounts, MasterRetainedRows
             <2>payload. Rule!AllNodePayloadsMatchSource(row.view, row.emitted)
                 <3>points. \A j \in 1..count : Rule!NodePayloadMatchesSource(row.view, row.emitted, j)
                     <4>. TAKE j \in 1..count
