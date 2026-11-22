@@ -58,6 +58,11 @@ private struct ValidationVisitorFailure: Error {
     let reason: any Error
 }
 
+package struct ValidationActionFailureOccurrence: Equatable, Sendable {
+    package let source: Int
+    package let failure: NativeAlternativeFailure
+}
+
 /// The generated machine is the execution authority for native validation.
 /// This traversal retains only the seen-state index and the pending frontier;
 /// callers persist evidence as events arrive.
@@ -92,6 +97,9 @@ public struct MachineValidationSummary<Property: Hashable & Sendable>: Sendable 
     /// Exhausted traversal only: selected fairness scope, then emitted state ID.
     public let fairnessEnabledness: [[Bool]]?
     public let timing: MachineValidationTiming
+    /// Ordered typed events only when exhaustive visits captured every failure callback.
+    /// An empty sequence is a checked absence of action failures. A nil value is unavailable.
+    package let orderedActionFailureHistory: [ValidationActionFailureOccurrence]?
 }
 
 public struct MachineValidationTiming: Sendable {
@@ -243,6 +251,8 @@ public enum MachineValidator {
         var reached: Set<Machine.Property> = []
         var deadlockFound = false
         var firstEvaluationFailure = initialFailure
+        var orderedActionFailureHistory: [ValidationActionFailureOccurrence]? =
+            !stopOnViolation && !stopOnReachability && initialFailure == nil ? [] : nil
         var successorNanoseconds: UInt64 = 0
         var invariantNanoseconds: UInt64 = 0
         var reachabilityNanoseconds: UInt64 = 0
@@ -277,7 +287,8 @@ public enum MachineValidator {
                     seenInsertNanoseconds: seenInsertNanoseconds,
                     configurationNanoseconds: configurationNanoseconds,
                     eventNanoseconds: eventNanoseconds,
-                    successorCalls: successorCalls))
+                    successorCalls: successorCalls),
+                  orderedActionFailureHistory: orderedActionFailureHistory)
         }
 
         func emitEvent(_ event: MachineValidationEvent<Machine>) throws {
@@ -486,11 +497,34 @@ public enum MachineValidator {
                     }
                     return true
                 }
+                func visitOutcomes(_ visit: (Machine.Action, Machine) throws -> Bool,
+                    onEvaluationFailure: (Machine.Action, NativeMachineEvaluationError) throws -> Bool) throws -> Bool {
+                    guard orderedActionFailureHistory != nil else {
+                        return try machine.visitValidationOutcomes(checking: &context, visit,
+                            onEvaluationFailure: onEvaluationFailure)
+                    }
+                    context.startRecordingActionFailureHistory()
+                    var callbackReasons: [NativeMachineEvaluationError] = []
+                    let found = try machine.visitValidationOutcomes(checking: &context, visit,
+                        onEvaluationFailure: { action, reason in
+                            callbackReasons.append(reason)
+                            return try onEvaluationFailure(action, reason)
+                        })
+                    let retained = context.finishRecordingActionFailureHistory()
+                    if callbackReasons.elementsEqual(retained.lazy.map(\.reason)) {
+                        for failure in retained {
+                            orderedActionFailureHistory?.append(.init(source: source, failure: failure))
+                        }
+                    } else {
+                        orderedActionFailureHistory = nil
+                    }
+                    return found
+                }
                 let hasSuccessor: Bool
                 if Machine.hasActionConstraint {
                     var outcomes: [(action: Machine.Action, result: Result<Machine, NativeMachineEvaluationError>)] = []
                     var foundSuccessor = false
-                    _ = try machine.visitValidationOutcomes(checking: &context, { action, successor in
+                    _ = try visitOutcomes({ action, successor in
                         foundSuccessor = true
                         outcomes.append((action, .success(successor)))
                         return true
@@ -515,7 +549,7 @@ public enum MachineValidator {
                     }
                 } else {
                     do {
-                        hasSuccessor = try machine.visitValidationOutcomes(checking: &context, { action, successor in
+                        hasSuccessor = try visitOutcomes({ action, successor in
                             do { return try inspect(action, successor, permitted: true) }
                             catch { throw ValidationVisitorFailure(reason: error) }
                         }, onEvaluationFailure: evaluationFailure)

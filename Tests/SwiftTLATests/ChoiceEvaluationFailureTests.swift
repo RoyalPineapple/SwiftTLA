@@ -4,6 +4,7 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 import Testing
+import UpstreamParity
 
 @Suite("Choice evaluation failures")
 struct ChoiceEvaluationFailureTests {
@@ -443,12 +444,16 @@ struct ChoiceEvaluationFailureTests {
             .deletingLastPathComponent()
             .appendingPathComponent("ChoiceEvaluationFailureFixtures.swift")
         let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
+        let branchwiseFixture = fixture.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/UpstreamParity/ValidationModels/BranchwiseConjunctionFailureOrderModel.swift")
+        let branchwiseSource = Parser.parse(source: try String(contentsOf: branchwiseFixture, encoding: .utf8))
         for (name, witnessName) in [
             ("EitherDistinctFailuresModel", "EitherDistinctFailuresSwiftWitness.txt"),
             ("EitherChoiceAfterDivisionFailureModel", "EitherChoiceAfterDivisionFailureSwiftWitness.txt"),
             ("BranchwiseConjunctionFailureOrderModel", "BranchwiseConjunctionFailureOrderSwiftWitness.txt")
         ] {
-            let declaration = try #require(source.statements.compactMap {
+            let owner = name == "BranchwiseConjunctionFailureOrderModel" ? branchwiseSource : source
+            let declaration = try #require(owner.statements.compactMap {
                 $0.item.as(StructDeclSyntax.self)
             }.first { $0.name.text == name })
             let compiled = try TLASpecVerifier.parseAndVerify(declaration)
@@ -507,6 +512,7 @@ struct ChoiceEvaluationFailureTests {
         #expect(failures.count == 2 && failures[0].0 == 0 && failures[1].0 == 1)
         #expect(failures.allSatisfy { $0.1 == .noSatisfyingChoice })
         #expect(outcome.completion == .evaluationFailure(.noSatisfyingChoice))
+        #expect(outcome.orderedActionFailureHistory == nil)
 
         let rendered = try CandidateChoiceFailureModel.render()
         let proofInput = semanticFixture("CandidateChoiceFailureModel.tla")
@@ -844,10 +850,23 @@ struct ChoiceEvaluationFailureTests {
                 if modulus < 0 { expectedFailures.append(.negativeModuloDivisor(modulus)) }
                 else if modulus == 0 || divisor == 0 { expectedFailures.append(.divisionByZero) }
                 #expect(failures == expectedFailures)
+                let completeHistory = try #require(outcome.orderedActionFailureHistory)
+                let recordedHistory = completeHistory.filter { $0.source == initialID }.map(\.failure)
+                #expect(recordedHistory.map(\.reason) == failures)
+                if divisor == 0 && modulus <= 0 {
+                    #expect(recordedHistory.map(\.action) == [0, 0])
+                    #expect(recordedHistory.map(\.branch) == [0, 1])
+                    #expect(recordedHistory.map(\.site) == [1, 2])
+                    #expect(recordedHistory.map(\.target) == [3, 2])
+                    #expect(recordedHistory.map { $0.before.map(\.binding) } == [[0], []])
+                    #expect(recordedHistory.map { $0.before.map(\.target) } == [[2], []])
+                    #expect(recordedHistory.map { $0.before.map(\.value) } == [[0], []])
+                }
                 if let expectedFailure {
                     #expect(outcome.completion == .evaluationFailure(expectedFailure))
                 } else {
                     #expect(outcome.completion == .exhausted)
+                    #expect(completeHistory.isEmpty)
                 }
             }
         }

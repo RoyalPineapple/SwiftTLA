@@ -617,6 +617,56 @@ def main():
                        or checksum != digest(generated / name) for name, checksum in files.items())):
             raise ValueError("arithmetic action evidence differs from the fresh compiler inputs or outputs")
         receipt["arithmeticPreparation"] = arithmetic
+        selection_runs = [
+            ("checking-selection", "prepare-selection", "CheckSelectionModels.swift",
+             "SelectedChecks", "SwiftTLAActualCheckingSelection", "checkingSelectionPreparation", False),
+            ("checking-selection-branchwise", "prepare-branchwise-selection", "BranchwiseConjunctionFailureOrderModel.swift",
+             "BranchwiseConjunctionFailureOrderModel", "SwiftTLABranchwiseCheckingInputs",
+             "branchwiseCheckingSelectionPreparation", True),
+        ]
+        for folder, native_command, model_source, module, proof_module, receipt_key, nonempty in selection_runs:
+            selection_model = "Sources/UpstreamParity/ValidationModels/" + model_source
+            selection = packet / folder
+            command = [str(binary), "native", native_command, "--authored-source",
+                       str(root / selection_model), "--output", str(selection)]
+            with (output / f"{folder}-prepare.log").open("wb") as log:
+                subprocess.run(command, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
+            selection_files = json.loads((selection / "files.json").read_text())
+            expected = {"authored-model.swift", f"{module}.tla", f"{module}.cfg",
+                        f"{proof_module}.tla", f"{module}.native.bin", f"{module}.native.profile.json"}
+            if (set(selection_files) != expected
+                    or selection_files["authored-model.swift"] != inputs[selection_model]
+                    or any(path.is_symlink() or checksum != digest(path)
+                           for key, checksum in selection_files.items() for path in [selection / key])):
+                raise ValueError(f"{folder} evidence differs from the captured source or outputs")
+            profile = json.loads((selection / f"{module}.native.profile.json").read_text())
+            history = profile.get("orderedActionFailureHistory")
+            if profile.get("caseID") != "Selected" or not isinstance(history, list) or (nonempty and not history):
+                raise ValueError(f"{folder} packet lacks its required observed ordered native history")
+            receipt[receipt_key] = selection_files
+        branchwise = packet / "checking-selection-branchwise"
+        combined_name = "SwiftTLABranchwiseSelectedChecking.tla"
+        template = f"Verification/Semantics/CompilerOutput/{combined_name}"
+        template_bytes = (root / template).read_bytes()
+        template_sha = hashlib.sha256(template_bytes).hexdigest()
+        marker = b"\\* BranchwisePhysicalPageRequests"
+        page_request = re.escape(rb"\* ") + rb"CallerInputPage[1-9][0-9]*"
+        page_request += rb"(?: (?:CallerInput|CompilerInput)Page[1-9][0-9]*)*"
+        requests = [line for line in (branchwise / "SwiftTLABranchwiseCheckingInputs.tla").read_bytes().splitlines()
+                    if re.fullmatch(page_request, line)]
+        if (template_sha != inputs[template] or template_bytes.count(marker) != 1
+                or marker not in template_bytes.splitlines() or len(requests) != 1):
+            raise ValueError("branchwise proof template or physical byte-page requests differ")
+        combined = branchwise / combined_name
+        combined.write_bytes(template_bytes.replace(marker, requests[0], 1))
+        witness_source = "Verification/Semantics/BranchwiseConjunctionFailureOrderSwiftWitness.txt"
+        witness = branchwise / Path(witness_source).name
+        shutil.copyfile(root / witness_source, witness)
+        witness_sha = digest(witness)
+        if witness_sha != inputs[witness_source]:
+            raise ValueError("retained branchwise Swift witness differs from the committed input")
+        branchwise_files = receipt["branchwiseCheckingSelectionPreparation"]
+
         imports = packet / "proof-inputs"
         imports.mkdir()
         names = ["OrderedIntExpressionRule", "IndexedHistoryRules", "InitializationOutcomeRules",
@@ -629,7 +679,19 @@ def main():
                   "CompilerOutput/SwiftTLACopyCertifiedAssignmentObservation",
                   "CompilerOutput/SwiftTLAOrderedRHSBackendAgreement", "CompilerOutput/OrderedOverflowInitialDisabled",
                   "CompilerOutput/OrderedOverflowDirectInitialDisabled"]
+        names += ["CheckingSelectionRule", "CheckingSelectionComposition", "CheckingSelectionCompilerBinding",
+                  "ActionFailureHistoryProjection"]
+        branchwise_rules = ["BranchwiseConjunctionFailureOrderProof", "ActionTreeOutcomeComposition",
+                            "ConditionalActionRule", "AlternativeActionRule", "BranchwiseConjunctionRule",
+                            "GuardActionRule", "AlternativeTraversalRule"]
+        names += branchwise_rules
+        branchwise_imports = {name + ".tla" for name in branchwise_rules}
+        branchwise_imports.update({"BranchwiseConjunctionFailureOrderModel.tla", "SwiftTLABranchwiseCheckingInputs.tla",
+                                   "IndexedHistoryRules.tla", "ActionOutcomeInterface.tla", "ActionFailureHistoryProjection.tla",
+                                   "CheckingSelectionRule.tla", "CheckingSelectionComposition.tla",
+                                   "CheckingSelectionCompilerBinding.tla"})
         proof_hashes = []
+        branchwise_hashes = {}
         for name in names:
             source = f"Verification/Semantics/{name}.tla"
             retained_input = imports / Path(source).name
@@ -638,6 +700,24 @@ def main():
             if sha != inputs[source]:
                 raise ValueError(f"retained proof input differs from the captured source: {source}")
             proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
+            if retained_input.name in branchwise_imports:
+                branchwise_hashes[retained_input.name] = sha
+        for branchwise_input in ["BranchwiseConjunctionFailureOrderModel.tla", "SwiftTLABranchwiseCheckingInputs.tla"]:
+            retained_input = imports / branchwise_input
+            shutil.copyfile(packet / "checking-selection-branchwise" / branchwise_input, retained_input)
+            sha = digest(retained_input)
+            if sha != branchwise_files[branchwise_input]:
+                raise ValueError(f"retained branchwise input differs from the actual configured output: {branchwise_input}")
+            proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
+            branchwise_hashes[branchwise_input] = sha
+        if branchwise_hashes.keys() != branchwise_imports:
+            raise ValueError("incomplete branchwise proof inputs")
+        receipt["branchwiseCombinedProof"] = {
+            "template": template, "templateSHA256": template_sha,
+            "proof": str(combined.relative_to(packet)),
+            "files": branchwise_files | {combined.name: digest(combined), witness.name: witness_sha},
+            "proofInputs": branchwise_hashes,
+        }
         (packet / "proof-inputs.sha256").write_text("".join(proof_hashes))
         tool_inputs = packet / "toolchain/build-inputs"
         tool_inputs.mkdir(parents=True)

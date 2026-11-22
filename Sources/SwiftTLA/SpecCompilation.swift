@@ -143,7 +143,7 @@ package struct RenderedModule: Sendable, Equatable {
     let moduleNames: [String: String]
     package let renderedModuleSource: String
     package let constantValues: [ConstantDecl]
-    let evaluationFailureDeclarations: [String]
+    package let evaluationFailureDeclarations: [String]
     package let initialEvaluationFailure: String?
     package let initialEvaluationFailureRecord: String?
     package let configuration: TLCConfiguration
@@ -2939,6 +2939,15 @@ private extension CompiledModuleMetadata {
                     evaluationFailureDeclarations.append(declaration)
                     occupied.insert(beforeName)
                 }
+            }
+            if behavior.actions[index].bindings.isEmpty,
+               let history = renderer.fullAlternativeFailureHistory(
+                   behavior.actions[index].body, ordinal: behavior.actions[index].id.ordinal) {
+                var historyName = "__SwiftTLAActionFailureHistory\(index)"
+                while occupied.contains(historyName) { historyName += "_" }
+                let historyHeader = parameters.isEmpty ? historyName : "\(historyName)(\(parameters))"
+                lines.append("\(historyHeader) == \(history)")
+                occupied.insert(historyName)
             }
             for call in renderedAction.calls where call.arguments.isEmpty == false {
                 lines.append("\(call.renderedName) == \(formalActionCall(named: emittedName, arguments: call.arguments))")

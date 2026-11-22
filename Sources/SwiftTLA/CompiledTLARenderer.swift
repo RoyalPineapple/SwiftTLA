@@ -68,23 +68,92 @@ enum RenderedEvaluationFailureKind {
     case emptySequence
 }
 
+// An observation is available only when every lexical binding has one actual
+// frame assignment to that value. This excludes writes optimized out of the frame.
+package struct AlternativeFailureBranch {
+    package let body: CompiledActionExpr
+    package let bindings: [(binder: BinderID, target: VariableID)]
+}
+
+package extension CompiledActionExpr {
+    var orderedAlternativeFailureBranches: [AlternativeFailureBranch] {
+        func isValue(_ value: CompiledExpression) -> Bool {
+            switch value.operation {
+            case .value(.integer), .stateVariable, .boundValue:
+                return value.resultType == .int && value.children.isEmpty
+            default:
+                return false
+            }
+        }
+        func branch(_ body: CompiledActionExpr) -> AlternativeFailureBranch? {
+            var current = body
+            var bindings: [BinderID] = []
+            var hasFailureSite = false
+            while case .define(let binder, let value, let next) = current {
+                if value.isObservedAlternativeIntegerOperation {
+                    guard value.children.count == 2, value.children.allSatisfy(isValue) else { return nil }
+                    hasFailureSite = true
+                } else if !isValue(value) {
+                    return nil
+                }
+                bindings.append(binder)
+                current = next
+            }
+            guard hasFailureSite else { return nil }
+            var pending = [current]
+            var targets: [BinderID: VariableID] = [:]
+            while let part = pending.popLast() {
+                switch part {
+                case .and(let left, let right):
+                    pending.append(right)
+                    pending.append(left)
+                case .assign(let target, let value) where isValue(value):
+                    if case .boundValue(let binder) = value.operation {
+                        guard targets.updateValue(target, forKey: binder) == nil else { return nil }
+                    }
+                case .guard_(let condition) where condition.operation == .value(.boolean(true)) && condition.children.isEmpty:
+                    break
+                case .unchanged:
+                    break
+                default:
+                    return nil
+                }
+            }
+            let mapped = bindings.compactMap { binder in targets[binder].map { (binder, $0) } }
+            guard mapped.count == bindings.count, Set(bindings).count == mapped.count else { return nil }
+            return .init(body: body, bindings: mapped)
+        }
+        guard case .or(let left, let right) = self, let first = branch(left), let second = branch(right),
+              Set(first.bindings.map(\.binder)).isDisjoint(with: second.bindings.map(\.binder)) else { return [] }
+        return [first, second]
+    }
+}
+
+package extension CompiledExpression {
+    var isObservedAlternativeIntegerOperation: Bool {
+        resultType == .int && [.divide, .integerDivide, .modulo].contains(operation)
+    }
+}
+
 struct RenderedEvaluationFailure {
     let predicate: String
     let operands: String?
     let kind: RenderedEvaluationFailureKind
     let rhsBindingsBefore: [(name: String, value: String)]?
+    let observedBinding: BinderID?
 
     init(predicate: String, operands: String?, kind: RenderedEvaluationFailureKind,
-         rhsBindingsBefore: [(name: String, value: String)]? = nil) {
+         rhsBindingsBefore: [(name: String, value: String)]? = nil, observedBinding: BinderID? = nil) {
         self.predicate = predicate
         self.operands = operands
         self.kind = kind
         self.rhsBindingsBefore = rhsBindingsBefore
+        self.observedBinding = observedBinding
     }
 }
 
-func renderRHSBindingPrefix(_ prefix: [(name: String, value: String)]) -> String {
-    let values = "<<\(prefix.map(\.name).joined(separator: ", "))>>"
+func renderRHSBindingPrefix(_ prefix: [(name: String, value: String)], projecting: [String]? = nil) -> String {
+    let values = "<<\((projecting ?? prefix.map(\.name)).joined(separator: ", "))>>"
     return prefix.reversed().reduce(values) { body, binding in
         "(LET \(binding.name) == \(binding.value) IN \(body))"
     }
@@ -355,8 +424,50 @@ struct CompiledTLARenderer {
         return "~(\(defined))"
     }
 
-    func evaluationFailures(_ action: CompiledActionExpr, retainingRHSBindings: Bool = false) throws
-        -> [RenderedEvaluationFailure] {
+    func fullAlternativeFailureHistory(_ action: CompiledActionExpr, ordinal: Int) -> String? {
+        let branches = action.orderedAlternativeFailureBranches
+        guard !branches.isEmpty else { return nil }
+        let source = "<<\(layout.variables.map(\.formalName).joined(separator: ", "))>>"
+
+        // Reached RHS occurrences in branch order. Each branch uses only its own reachability guards.
+        var events: [String] = []
+        for (branchIndex, branch) in branches.enumerated() {
+            guard let failures = try? evaluationFailures(branch.body, retainingAllRHSBindings: true),
+                  !failures.isEmpty else { return nil }
+            for failure in failures {
+                guard let binding = failure.observedBinding, let before = failure.rhsBindingsBefore,
+                      let site = branch.bindings.firstIndex(where: { $0.binder == binding }), before.count == site else {
+                    return nil
+                }
+                let prefix = zip(branch.bindings.prefix(site), before).compactMap { origin, lexical -> String? in
+                    guard (try? binderName(origin.binder)) == lexical.name else { return nil }
+                    return "[binding |-> \(origin.binder.ordinal), target |-> \(origin.target.ordinal), value |-> \(lexical.name)]"
+                }
+                guard prefix.count == before.count else { return nil }
+                let payload: String
+                switch failure.kind {
+                case .divisionByZero:
+                    payload = "<<\"divisionByZero\">>"
+                case .negativeModuloDivisor:
+                    guard let divisor = failure.operands else { return nil }
+                    payload = "<<\"negativeModuloDivisor\", \(divisor)>>"
+                case .overflow(let operation):
+                    guard let operands = failure.operands else { return nil }
+                    payload = "<<\"integerOverflow\", \"\(operation.rawValue)\", \(operands)>>"
+                default:
+                    return nil
+                }
+                let occurrence = "[source |-> \(source), action |-> \(ordinal), branch |-> \(branchIndex), "
+                    + "site |-> \(binding.ordinal), target |-> \(branch.bindings[site].target.ordinal), payload |-> \(payload), "
+                    + "before |-> \(renderRHSBindingPrefix(before, projecting: prefix))]"
+                events.append("(IF \(failure.predicate) THEN <<\(occurrence)>> ELSE <<>>)")
+            }
+        }
+        return events.joined(separator: " \\o ")
+    }
+
+    func evaluationFailures(_ action: CompiledActionExpr, retainingRHSBindings: Bool = false,
+                            retainingAllRHSBindings: Bool = false) throws -> [RenderedEvaluationFailure] {
         switch action {
         case .assign(_, let value):
             return try expressionEvaluationFailures(value)
@@ -388,13 +499,16 @@ struct CompiledTLARenderer {
                     try expressionEvaluationFailures(nestedValue)))
                 remaining = nestedBody
             }
-            var failures = try evaluationFailures(remaining, retainingRHSBindings: retainingRHSBindings)
+            var failures = try evaluationFailures(remaining, retainingRHSBindings: retainingRHSBindings,
+                                                  retainingAllRHSBindings: retainingAllRHSBindings)
             for (binder, value, defined, originalFailures) in definitions.reversed() {
                 var valueFailures = originalFailures.map { failure in
-                    guard retainingRHSBindings, case .overflow(.addition) = failure.kind else { return failure }
+                    if !retainingAllRHSBindings {
+                        guard retainingRHSBindings, case .overflow(.addition) = failure.kind else { return failure }
+                    }
                     // Failure in this RHS cannot observe its own capture, even at a later addition node.
                     return .init(predicate: failure.predicate, operands: failure.operands, kind: failure.kind,
-                        rhsBindingsBefore: [])
+                        rhsBindingsBefore: [], observedBinding: retainingAllRHSBindings ? binder : nil)
                 }
                 // shortcut: values without a complete definedness rule still stop later-failure enumeration.
                 guard repeatable(value) || defined != nil else {
@@ -408,7 +522,8 @@ struct CompiledTLARenderer {
                     let operands = failure.operands.map { "(LET \(name) == \(renderedValue) IN \($0))" }
                     valueFailures.append(.init(predicate: defined.map { "(IF \($0) THEN \(predicate) ELSE FALSE)" } ?? predicate,
                         operands: operands, kind: failure.kind,
-                        rhsBindingsBefore: failure.rhsBindingsBefore.map { [(name, renderedValue)] + $0 }))
+                        rhsBindingsBefore: failure.rhsBindingsBefore.map { [(name, renderedValue)] + $0 },
+                        observedBinding: failure.observedBinding))
                 }
                 failures = valueFailures
             }

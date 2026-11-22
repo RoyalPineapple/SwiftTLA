@@ -34,6 +34,7 @@ let _arithmetic2: Int = try SwiftTLA._NativeMachineOperations.divide(_arithmetic
 }())
 try _actionPart4(___atomic_0_0, ___atomic_1_1, updates, emit)
 } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
+    SwiftTLA._recordNativeAlternativeFailure(&context, action: 0, branch: 0, site: 1, target: 3, before: [(binding: 0, target: 2, value: ___atomic_0_0)], reason: failure)
     failures.append(failure)
 }
 }
@@ -110,6 +111,7 @@ let _arithmetic2: Int = try SwiftTLA._NativeMachineOperations.modulo(_arithmetic
 }())
 try _actionPart13(___atomic_2_2, updates, emit)
 } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
+    SwiftTLA._recordNativeAlternativeFailure(&context, action: 0, branch: 1, site: 2, target: 2, before: [], reason: failure)
     failures.append(failure)
 }
 }
@@ -123,6 +125,7 @@ let _arithmetic2: Int = try SwiftTLA._NativeMachineOperations.divide(_arithmetic
 }())
 try _actionPart14(___atomic_2_2, ___atomic_3_3, updates, emit)
 } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
+    SwiftTLA._recordNativeAlternativeFailure(&context, action: 0, branch: 1, site: 3, target: 3, before: [(binding: 2, target: 2, value: ___atomic_2_2)], reason: failure)
     failures.append(failure)
 }
 }

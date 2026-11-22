@@ -134,6 +134,35 @@ THEOREM DisabledDeadlockDoesNotHideEvaluationFailure ==
               claims, initialFailures, actionFailures, FALSE).decision = "evaluationFailure"
     BY SMT DEF SourceCheckingObservation
 
+THEOREM SelectionConstructorsComposeTheCheckingInputs ==
+    ASSUME NEW declarations, NEW handleValues, NEW compiledIDs,
+           NoPropertyHandle \notin handleValues,
+           NEW catalog \in Seq(declarations),
+           NEW present \in [declarations -> BOOLEAN],
+           NEW handles \in [declarations -> (handleValues \cup {NoPropertyHandle})],
+           NEW references \in [declarations -> (handleValues \cup {NoPropertyHandle})],
+           NEW allocation \in [declarations -> compiledIDs],
+           FaithfulPropertyCatalog(catalog, declarations, present, handles, references, allocation),
+           NEW only \in BOOLEAN, NEW selected \in SUBSET handleValues,
+           NEW default \in BOOLEAN, NEW overrides \in Seq(BOOLEAN), Len(overrides) <= 1,
+           NEW enabled \in BOOLEAN, SourceDeadlockSelection(default, overrides, enabled)
+    PROVE /\ {property \in declarations : allocation[property] \in
+                   LoweredPropertySelection(catalog, references, allocation, only, selected)}
+             = SourcePropertySelection(declarations, present, handles, only, selected)
+          /\ enabled = LoweredDeadlockSelection(default, overrides)
+    PROOF
+    <1>1. \A property \in declarations :
+        allocation[property] \in LoweredPropertySelection(catalog, references, allocation, only, selected)
+        <=> property \in SourcePropertySelection(declarations, present, handles, only, selected)
+        BY CatalogSelectionPreservesIdentity
+    <1>2. {property \in declarations : allocation[property] \in
+              LoweredPropertySelection(catalog, references, allocation, only, selected)}
+          = SourcePropertySelection(declarations, present, handles, only, selected)
+        BY <1>1, SMT DEF SourcePropertySelection
+    <1>3. enabled = LoweredDeadlockSelection(default, overrides)
+        BY DeadlockOverridePreservesTheUniqueSourceChoice
+    <1>. QED BY <1>2, <1>3
+
 THEOREM SelectionConstructorsComposeWithAnObservation ==
     ASSUME NEW declarations, NEW handleValues, NEW compiledIDs,
            NoPropertyHandle \notin handleValues,
@@ -159,15 +188,10 @@ THEOREM SelectionConstructorsComposeWithAnObservation ==
                   LoweredPropertySelection(catalog, references, allocation, only, selected)} \cap reachability,
               LoweredDeadlockSelection(default, overrides))
     PROOF
-    <1>1. \A property \in declarations :
-        allocation[property] \in LoweredPropertySelection(catalog, references, allocation, only, selected)
-        <=> property \in SourcePropertySelection(declarations, present, handles, only, selected)
-        BY CatalogSelectionPreservesIdentity
-    <1>2. {property \in declarations : allocation[property] \in
-              LoweredPropertySelection(catalog, references, allocation, only, selected)}
-          = SourcePropertySelection(declarations, present, handles, only, selected)
-        BY <1>1, SMT DEF SourcePropertySelection
-    <1>3. enabled = LoweredDeadlockSelection(default, overrides)
-        BY DeadlockOverridePreservesTheUniqueSourceChoice
-    <1>. QED BY <1>2, <1>3, SMT
+    <1>inputs. /\ {property \in declarations : allocation[property] \in
+                         LoweredPropertySelection(catalog, references, allocation, only, selected)}
+                   = SourcePropertySelection(declarations, present, handles, only, selected)
+                /\ enabled = LoweredDeadlockSelection(default, overrides)
+        BY SelectionConstructorsComposeTheCheckingInputs
+    <1>. QED BY <1>inputs, SMT
 =============================================================================

@@ -10,7 +10,7 @@ private enum NativeCommandError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "Usage: tlc-validate native list | native run --case <id-or-all> --output <directory> --maximum-states <positive-integer>"
+            return "Usage: tlc-validate native list | native run --case <id-or-all> --output <directory> --maximum-states <positive-integer> | native <prepare-selection|prepare-branchwise-selection> --authored-source <swift-file> --output <directory>"
         case .unknownScenario(let id): return "unknown scenario: \(id)"
         case .outputExists(let path): return "output already exists: \(path)"
         }
@@ -19,6 +19,14 @@ private enum NativeCommandError: Error, CustomStringConvertible {
 
 func runNative(arguments: [String]) -> Never {
     do {
+        if let command = arguments.first, ["prepare-selection", "prepare-branchwise-selection"].contains(command) {
+            guard arguments.count == 5, arguments[1] == "--authored-source",
+                  arguments[3] == "--output" else { throw NativeCommandError.usage }
+            try CheckingSelectionEvidence.prepare(
+                authoredSource: Data(contentsOf: URL(fileURLWithPath: arguments[2])),
+                to: URL(fileURLWithPath: arguments[4]), branchwise: command == "prepare-branchwise-selection")
+            exit(0)
+        }
         let scenarios = try modelValidationScenarios()
         let assumptions = try assumptionValidationScenarios()
         if arguments == ["list"] {

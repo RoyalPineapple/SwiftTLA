@@ -26,6 +26,7 @@ do {
     }())
     try _actionPart3(___atomic_0_0, updates, emit)
   } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
+    SwiftTLA._recordNativeAlternativeFailure(&context, action: 0, branch: 0, site: 0, target: 2, before: [], reason: failure)
     failures.append(failure)
 }
 }
@@ -88,6 +89,7 @@ do {
     }())
     try _actionPart10(___atomic_1_1, updates, emit)
   } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
+    SwiftTLA._recordNativeAlternativeFailure(&context, action: 0, branch: 1, site: 1, target: 2, before: [], reason: failure)
     failures.append(failure)
 }
 }

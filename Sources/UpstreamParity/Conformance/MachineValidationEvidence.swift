@@ -6,6 +6,32 @@ package enum MachineValidationEvidenceError: Error, Equatable {
     case invalidPropertyName
 }
 
+private struct RecordedActionFailure: Encodable {
+    let source: Int
+    struct Binding: Encodable {
+        let binding: Int
+        let target: Int
+        let value: Int
+    }
+
+    let action: Int
+    let branch: Int
+    let site: Int
+    let target: Int
+    let before: [Binding]
+    let payload: BinaryEvaluationFailure
+
+    init(_ occurrence: ValidationActionFailureOccurrence) {
+        source = occurrence.source
+        action = occurrence.failure.action
+        branch = occurrence.failure.branch
+        site = occurrence.failure.site
+        target = occurrence.failure.target
+        before = occurrence.failure.before.map { Binding(binding: $0.binding, target: $0.target, value: $0.value) }
+        payload = BinaryEvaluationFailure(occurrence.failure.reason)
+    }
+}
+
 private struct MachineValidationProfile: Encodable {
     let schema: String
     let caseID: String
@@ -30,6 +56,7 @@ private struct MachineValidationProfile: Encodable {
     let estimatedCanonicalEncodingSeconds: Double
     let estimatedStateWriteSeconds: Double
     let estimatedEdgeWriteSeconds: Double
+    let orderedActionFailureHistory: [RecordedActionFailure]?
 }
 
 /// Append-only evidence from the generated Swift machine. TLC is never read by this checker.
@@ -220,7 +247,8 @@ package enum MachineValidationEvidence {
             estimatedStateWriteSeconds: estimatedSeconds(
                 stateWriteNanoseconds, samples: sampledStates, total: stateEvents),
             estimatedEdgeWriteSeconds: estimatedSeconds(
-                edgeWriteNanoseconds, samples: sampledEdges, total: edgeEvents))
+                edgeWriteNanoseconds, samples: sampledEdges, total: edgeEvents),
+            orderedActionFailureHistory: result.orderedActionFailureHistory?.map(RecordedActionFailure.init))
         try JSONEncoder().encode(profile).write(
             to: output.deletingPathExtension().appendingPathExtension("profile.json"), options: .atomic)
         return result

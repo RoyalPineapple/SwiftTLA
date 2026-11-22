@@ -1,5 +1,6 @@
 # Shared definitions and sequence lemmas, checked before their users.
 ActionOutcomeInterface
+ActionFailureHistoryProjection
 IndexedHistoryRules
 AlternativeTraversalRule
 # Independent constructor rules.

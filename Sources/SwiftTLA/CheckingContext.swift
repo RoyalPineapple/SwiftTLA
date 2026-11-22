@@ -9,23 +9,74 @@ public struct NativeOrderedIntAssignmentFailure: Equatable, Sendable {
     public let reason: NativeMachineEvaluationError
 }
 
+package struct NativeAlternativeFailure: Equatable, Sendable {
+    package struct Binding: Equatable, Sendable {
+        package let binding: Int
+        package let target: Int
+        package let value: Int
+    }
+
+    package let action: Int
+    package let branch: Int
+    package let site: Int
+    package let target: Int
+    package let before: [Binding]
+    package let reason: NativeMachineEvaluationError
+}
+
+private enum AssignmentFailureObservation: Sendable {
+    case addition(NativeOrderedIntAssignmentFailure)
+    case alternative(NativeAlternativeFailure)
+}
+
 /// Run-owned data that does not participate in model-state identity.
 public struct CheckingContext<Registers: Sendable>: Sendable {
     public var registers: Registers
     public private(set) var level: Int = 0
-    /// Reached assignment failures retained during checked execution, if enabled.
-    public private(set) var orderedIntAssignmentFailures: [NativeOrderedIntAssignmentFailure]?
+    private var assignmentFailures: [AssignmentFailureObservation]?
+    fileprivate private(set) var recordsAlternativeFailures = false
+
+    /// Reached addition failures retained during checked execution, if enabled.
+    public var orderedIntAssignmentFailures: [NativeOrderedIntAssignmentFailure]? {
+        guard !recordsAlternativeFailures else { return nil }
+        return assignmentFailures?.compactMap {
+            guard case .addition(let failure) = $0 else { return nil }
+            return failure
+        }
+    }
+
+    fileprivate var recordsOrderedIntAssignmentFailures: Bool {
+        !recordsAlternativeFailures && assignmentFailures != nil
+    }
 
     public init(registers: Registers) {
         self.registers = registers
     }
 
     public mutating func startRecordingOrderedIntAssignmentFailures() {
-        orderedIntAssignmentFailures = []
+        recordsAlternativeFailures = false
+        assignmentFailures = []
     }
 
-    fileprivate mutating func record(_ failure: NativeOrderedIntAssignmentFailure) {
-        orderedIntAssignmentFailures?.append(failure)
+    package mutating func startRecordingActionFailureHistory() {
+        recordsAlternativeFailures = true
+        assignmentFailures = []
+    }
+
+    package mutating func finishRecordingActionFailureHistory() -> [NativeAlternativeFailure] {
+        guard recordsAlternativeFailures else { return [] }
+        defer {
+            assignmentFailures = nil
+            recordsAlternativeFailures = false
+        }
+        return assignmentFailures?.compactMap {
+            guard case .alternative(let failure) = $0 else { return nil }
+            return failure
+        } ?? []
+    }
+
+    fileprivate mutating func record(_ observation: AssignmentFailureObservation) {
+        assignmentFailures?.append(observation)
     }
 
     package mutating func advanceLevel() throws {
@@ -40,8 +91,20 @@ public func _recordNativeOrderedIntAssignmentFailure<Registers>(
     _ context: inout CheckingContext<Registers>?, actionOrdinal: Int, assignmentOrdinal: Int,
     preceding: @autoclosure () -> [Int], reason: NativeMachineEvaluationError
 ) {
-    guard context?.orderedIntAssignmentFailures != nil,
+    guard context?.recordsOrderedIntAssignmentFailures == true,
           case .integerOverflow(.addition, _) = reason else { return }
-    context?.record(.init(actionOrdinal: actionOrdinal, assignmentOrdinal: assignmentOrdinal,
-                          preceding: preceding(), reason: reason))
+    context?.record(.addition(.init(actionOrdinal: actionOrdinal, assignmentOrdinal: assignmentOrdinal,
+                                    preceding: preceding(), reason: reason)))
+}
+
+
+@_documentation(visibility: internal)
+public func _recordNativeAlternativeFailure<Registers>(
+    _ context: inout CheckingContext<Registers>?, action: Int, branch: Int, site: Int, target: Int,
+    before: @autoclosure () -> [(binding: Int, target: Int, value: Int)], reason: NativeMachineEvaluationError
+) {
+    guard context?.recordsAlternativeFailures == true else { return }
+    let bindings = before().map { NativeAlternativeFailure.Binding(binding: $0.binding, target: $0.target, value: $0.value) }
+    context?.record(.alternative(.init(action: action, branch: branch, site: site, target: target,
+                                       before: bindings, reason: reason)))
 }

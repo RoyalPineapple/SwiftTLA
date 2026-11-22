@@ -6,7 +6,7 @@ enum BinaryGraphEvidenceError: Error {
     case invalid(String)
 }
 
-struct BinaryEvaluationFailure {
+struct BinaryEvaluationFailure: Encodable {
     let code: UInt8
     let detail: String
     let integers: [Int]

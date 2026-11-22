@@ -1073,7 +1073,8 @@ extension NativeSwiftEmitter {
         source: String, writes: [(id: Int, slot: String, value: String)],
         conditions: [(id: Int, value: String)]
     ) {
-        let observedActionOrdinal = program.requiresOrderedIntOutput(action.id) ? action.id.ordinal : nil
+        let observesAddition = program.requiresOrderedIntOutput(action.id)
+        let alternativeBranches = action.bindings.isEmpty ? action.body.orderedAlternativeFailureBranches : []
         var pending: [(node: CompiledActionExpr, id: Int, bindings: [BinderID])] = [(action.body, 0, [])]
         var nextID = 1
         var declarations: [String] = []
@@ -1145,9 +1146,13 @@ extension NativeSwiftEmitter {
                 checkedBody = body
             } else {
                 let recording: String
-                if let observedActionOrdinal, case .define(_, let value, _) = node,
-                   value.operation == .add, value.resultType == .int {
-                    recording = nativeOrderedIntAssignmentFailureSource(actionOrdinal: observedActionOrdinal,
+                if case .define(let site, let value, _) = node, value.isObservedAlternativeIntegerOperation,
+                   let alternative = alternativeFailureRecordingSource(branches: alternativeBranches, site: site,
+                       action: action.id.ordinal, lexical: bindings.map(binder), program: program) {
+                    recording = alternative + "\n"
+                } else if case .define(_, let value, _) = node, observesAddition,
+                          value.operation == .add, value.resultType == .int {
+                    recording = nativeOrderedIntAssignmentFailureSource(actionOrdinal: action.id.ordinal,
                         preceding: bindings.map(binder)) + "\n"
                 } else {
                     recording = ""
@@ -2441,6 +2446,25 @@ private func isTotalScalarAssignment(_ root: CompiledActionExpr) -> Bool {
     return true
 }
 
+private func alternativeFailureRecordingSource(branches: [AlternativeFailureBranch], site: BinderID,
+    action: Int, lexical: [String], program: CompiledProgram) -> String? {
+    for (branchIndex, branch) in branches.enumerated() {
+        guard let position = branch.bindings.firstIndex(where: { $0.binder == site }) else { continue }
+        guard lexical.count == position else { return nil }
+        let prefix = zip(branch.bindings.prefix(position), lexical).compactMap { origin, local -> String? in
+            guard let name = program.binderNames[origin.binder], "_\(name)_\(origin.binder.ordinal)" == local else {
+                return nil
+            }
+            return "(binding: \(origin.binder.ordinal), target: \(origin.target.ordinal), value: \(local))"
+        }
+        guard prefix.count == position else { return nil }
+        return "SwiftTLA._recordNativeAlternativeFailure(&context, action: \(action), branch: \(branchIndex), "
+            + "site: \(site.ordinal), target: \(branch.bindings[position].target.ordinal), "
+            + "before: [\(prefix.joined(separator: ", "))], reason: failure)"
+    }
+    return nil
+}
+
 func verifyGeneratedActionWriteOutput(
     _ declaration: DeclSyntax?, action: CompiledActionExpr, program: CompiledProgram,
     stateFields: [VariableID: String],
@@ -2491,9 +2515,12 @@ func verifyGeneratedActionWriteOutput(
         if token == "{" { depth += 1 }
         if token == "}" { depth -= 1 }
     }
-    let observedActionOrdinal = program.layout.actions.first {
-        visitor.name.text == "_visitUpdates\($0.id.ordinal)" && program.requiresOrderedIntOutput($0.id)
-    }?.id.ordinal
+    let observedAction = program.layout.actions.first {
+        visitor.name.text == "_visitUpdates\($0.id.ordinal)"
+    }
+    let observesAddition = observedAction.map { program.requiresOrderedIntOutput($0.id) } ?? false
+    let observesAlternatives = observedAction.map { program[$0.id].bindings.isEmpty } == true
+    let alternativeBranches = observesAlternatives ? action.orderedAlternativeFailureBranches : []
     var bodies: [Int: [String]] = [:]
     var failureRecordings: [Int: [String]] = [:]
     var firstStatements: [Int: Syntax] = [:]
@@ -2609,7 +2636,7 @@ func verifyGeneratedActionWriteOutput(
     var conditionals: [Int] = []
     var conditionalPredicates: [Int: CompiledExpression] = [:]
     var guards: [(id: Int, predicate: CompiledExpression)] = []
-    var definitions: [(id: Int, child: Int, value: CompiledExpression)] = []
+    var definitions: [(id: Int, child: Int, binder: BinderID, value: CompiledExpression)] = []
     var assignments: [Int: (variable: VariableID, value: CompiledExpression)] = [:]
     var frames: [Int: VariableID] = [:]
     var nextID = 1
@@ -2631,9 +2658,9 @@ func verifyGeneratedActionWriteOutput(
             expectedChildren[id] = [nextID]
             pending.append((nextID, body))
             nextID += 1
-        case .define(_, let value, let body):
+        case .define(let binder, let value, let body):
             expectedChildren[id] = [nextID]
-            definitions.append((id, nextID, value))
+            definitions.append((id, nextID, binder, value))
             pending.append((nextID, body))
             nextID += 1
         case .ifElse(let predicate, let yes, let no):
@@ -3369,7 +3396,7 @@ func verifyGeneratedActionWriteOutput(
                 "the compiled predicate gates exactly one unchanged update emission", "guard body \(tokens)")
         }
     }
-    for (id, child, value) in definitions {
+    for (id, child, binding, value) in definitions {
         guard let tokens = bodies[id], tokens.count >= 3,
               tokens[0] == "let", tokens[2] == "=", tokens[1].hasPrefix("_") else {
             throw invalid("native.action.binding.\(id)",
@@ -3382,13 +3409,21 @@ func verifyGeneratedActionWriteOutput(
                 "current bindings, updates, and emitter parameters", "unexpected parameter list")
         }
         let preceding = Array(parent.dropLast(2))
-        if let observedActionOrdinal, value.operation == .add, value.resultType == .int {
-            let recording = nativeOrderedIntAssignmentFailureSource(actionOrdinal: observedActionOrdinal, preceding: preceding)
+        let recording: String?
+        if let observedAction, value.isObservedAlternativeIntegerOperation {
+            recording = alternativeFailureRecordingSource(branches: alternativeBranches, site: binding,
+                action: observedAction.id.ordinal, lexical: preceding, program: program)
+        } else if let observedAction, observesAddition, value.operation == .add, value.resultType == .int {
+            recording = nativeOrderedIntAssignmentFailureSource(actionOrdinal: observedAction.id.ordinal, preceding: preceding)
+        } else {
+            recording = nil
+        }
+        if let recording {
             let expected = Parser.parse(source: recording).tokens(viewMode: .sourceAccurate)
                 .filter { $0.tokenKind != .endOfFile }.map(\.text)
             guard failureRecordings.removeValue(forKey: id) == expected else {
                 throw invalid("native.action.failures.\(id)",
-                    "record this checked addition and its preceding lexical captures",
+                    "record this checked operation and its preceding lexical captures",
                     "missing or changed assignment failure observation")
             }
         }

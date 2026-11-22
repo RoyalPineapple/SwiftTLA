@@ -9,6 +9,7 @@ enum AuthoredCopySyntax {
         fileprivate let members: MemberBlockItemListSyntax
         let algorithm: String
         fileprivate let scope: String
+        fileprivate let capturedRoots: [String: String]
         fileprivate let body: CodeBlockItemListSyntax
         fileprivate let sourceStart: Int
         fileprivate let declaration: TokenSyntax
@@ -35,6 +36,10 @@ enum AuthoredCopySyntax {
     }
 
     static func select(source: String, modelName: String) throws -> Selection {
+        try select(source: source, modelName: modelName, includingCapturedRoots: false)
+    }
+
+    private static func select(source: String, modelName: String, includingCapturedRoots: Bool) throws -> Selection {
         let (members, specBody) = try specification(source: source, modelName: modelName)
         var bindings: [String: (declaration: TokenSyntax, call: FunctionCallExprSyntax)] = [:]
         var selected: (name: String, declaration: TokenSyntax, registration: TokenSyntax, call: FunctionCallExprSyntax)?
@@ -50,8 +55,24 @@ enum AuthoredCopySyntax {
         }
         guard let selected, let body = ModelSpecificationSyntax.algorithmBody(selected.call) else { throw unsupported }
         let parameters = ModelSpecificationSyntax.parameterNames(in: body)
-        guard parameters.count == 1, let scope = parameters.first else { throw unsupported }
-        return Selection(members: members, algorithm: selected.name, scope: scope, body: body.statements,
+        let specParameters = ModelSpecificationSyntax.parameterNames(in: specBody)
+        let scope: String
+        var capturedRoots: [String: String] = [:]
+        if parameters.count == 1, let parameter = parameters.first {
+            scope = parameter
+        } else if includingCapturedRoots, body.signature == nil,
+                  specParameters.count == 1, let specScope = specParameters.first {
+            scope = specScope
+            for item in specBody.statements where item.position.utf8Offset < selected.declaration.position.utf8Offset {
+                if let (binding, explicit) = try rootDeclaration(item, in: specScope) {
+                    guard capturedRoots.updateValue(explicit ?? binding, forKey: binding) == nil else { throw unsupported }
+                }
+            }
+        } else {
+            throw unsupported
+        }
+        return Selection(members: members, algorithm: selected.name, scope: scope, capturedRoots: capturedRoots,
+            body: body.statements,
             sourceStart: specBody.positionAfterSkippingLeadingTrivia.utf8Offset,
             declaration: selected.declaration, registration: selected.registration,
             hasExplicitCapture: specBody.signature?.capture != nil || body.signature?.capture != nil)
@@ -742,8 +763,15 @@ enum AuthoredCopySyntax {
         return machine
     }
 
+    static func capturedSequentialSteps(source: String, modelName: String) throws
+        -> (algorithm: String, fields: Set<String>, steps: [AlgorithmStepModel]) {
+        let selection = try select(source: source, modelName: modelName, includingCapturedRoots: true)
+        let authored = try authoredSteps(selection)
+        return (selection.algorithm, authored.fields, authored.steps)
+    }
+
     private static func authoredSteps(_ selection: Selection) throws -> (fields: Set<String>, steps: [AlgorithmStepModel]) {
-        var roots: [String: String] = [:]
+        var roots = selection.capturedRoots
         var steps: [AlgorithmStepModel] = []
         var labels: [Label: String] = [:]
         var enumNames: Set<String> = []

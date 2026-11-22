@@ -751,7 +751,7 @@ package enum StraightLineRenderedActionCheck {
         }
     }
 
-    static func verify(_ action: CompiledActionExpr, rendered: String,
+    package static func verify(_ action: CompiledActionExpr, rendered: String,
                        layout: CompiledLayout, binders: [BinderID: String],
                        moduleName: String? = nil, reservedNames: Set<String> = [],
                        required: Bool = false) throws {
