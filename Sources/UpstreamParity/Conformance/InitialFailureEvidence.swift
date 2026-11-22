@@ -2004,10 +2004,9 @@ package enum InitialFailureEvidence {
         ProofObservedBefore == ProofInitialization!DecodedRenderedPrefixEntries(ExpectedBefore, ProofNames)
         ProofObservedPrior(position) == ProofInitialization!SourceRestriction(ProofObservedBefore, ProofPrefixKeys(position))
         ProofObservedFailures == ProofInitialization!DecodedNamedRenderedAdditionEvents(ExpectedFailures, ProofNames, ProofOrdinals)
-        ProofObservedResult == [states |-> {}, failures |-> ProofObservedFailures]
-        ProofObservedHistory == [length \\in 0..ProofCount |->
-          IF length = ProofCount THEN ProofObservedResult
-          ELSE [states |-> {ProofObservedPrior(length + 1)}, failures |-> {}]]
+        ProofObservedEvent ==
+          [before |-> ProofObservedBefore, site |-> ProofOrder[ProofCount],
+           payload |-> <<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>>]
 
         THEOREM ActualNativePrefixSuppliesTheSourceInitializerOutcomes ==
           /\\ \\A position \\in 1..ProofCount :
@@ -2230,74 +2229,46 @@ package enum InitialFailureEvidence {
               ProofInitialization!DecodedNamedRenderedAdditionEvents
           <1>. QED BY <1>0, <1>2, <1>4, <1>5, <1>6, <1>7, <1>9, SMT
 
-        THEOREM ActualNativePrefixConstructsTheGeneratedInitializationHistory ==
-          ProofInitialization!InitializationHistory(TRUE, ProofCount, ProofOrder, ProofEvaluate(TRUE), ProofObservedHistory)
-          PROOF
-          <1>. DEFINE failure == <<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>>
-                      constructed == [length \\in 0..ProofCount |->
-                        IF length < ProofCount
-                        THEN [states |-> {ProofInitialization!SourceRestriction(ProofObservedBefore,
-                                           ProofInitialization!PrefixKeys(ProofOrder, length))},
-                              failures |-> {}]
-                        ELSE [states |-> {},
-                              failures |-> {[before |-> ProofObservedBefore,
-                                             site |-> ProofOrder[ProofCount], payload |-> failure]}]]
-          <1>. HIDE DEF failure, constructed
-          <1>0. /\\ ProofCount \\in Nat /\\ ProofCount \\in 1..ProofCount
-                /\\ ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
-                /\\ ProofObservedBefore \\in [ProofInitialization!PrefixKeys(ProofOrder, ProofCount - 1) -> ProofValues]
-            BY ONLY ActualLayoutSuppliesInitializationDecoderInputs,
-              ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SetExtensionality, SMT
-              DEF ProofPrefixKeys, ProofInitialization!PrefixKeys
-          <1>1a. \\A position \\in 1..(ProofCount - 1) :
-                  ProofEvaluate(TRUE)[position][ProofInitialization!SourceRestriction(
-                      ProofObservedBefore, ProofInitialization!PrefixKeys(ProofOrder, position - 1))]
-                    = ProofInitialization!SourceFixed(ProofObservedBefore[ProofOrder[position]])
-            BY ONLY <1>0, ActualNativePrefixSuppliesTheSourceInitializerOutcomes,
-              ActualInitializerEvaluatorsAreTypedAndAgree, SMT
-              DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!PrefixKeys
-          <1>1b. ProofEvaluate(TRUE)[ProofCount][ProofObservedBefore]
-                    = ProofInitialization!SourceFailed(failure)
-            BY ONLY <1>0, ActualNativePrefixSuppliesTheSourceInitializerOutcomes,
-              ActualInitializerEvaluatorsAreTypedAndAgree, SMT DEF failure
-          <1>2. failure \\in ProofFailureValues
-            BY ONLY ProofIntegerBounds, SMT
-              DEF failure, ExpectedOperand0, ExpectedOperand1, ProofIntMax, ProofFailureValues
-          <1>3. ProofInitialization!InitializationHistory(TRUE, ProofCount, ProofOrder,
-                    ProofEvaluate(TRUE), constructed)
-            BY ONLY <1>0, <1>1a, <1>1b, <1>2, ProofInitialSentinels,
-              ProofInitialization!ObservedFailurePrefixConstructsTheGeneratedInitializationHistory, SMT
-              DEF constructed, ProofInitialization!InitialSentinels
-          <1>4a. \\A length \\in 0..ProofCount : constructed[length] = ProofObservedHistory[length]
-            PROOF
-            <2>. SUFFICES ASSUME NEW length \\in 0..ProofCount
-                         PROVE constructed[length] = ProofObservedHistory[length]
-              BY SMT
-            <2>0. /\\ length \\in Int /\\ 0 <= length /\\ length <= ProofCount
-                  /\\ ProofCount \\in Nat
-              BY ONLY <1>0, SMT
-            <2>1. CASE length < ProofCount
-              <3>0. ProofPrefixKeys(length + 1) = ProofInitialization!PrefixKeys(ProofOrder, length)
-                BY ONLY <2>0, SMT DEF ProofPrefixKeys, ProofInitialization!PrefixKeys
-              <3>. QED BY ONLY <2>0, <2>1, <3>0, SMT
-                DEF constructed, ProofObservedHistory, ProofObservedPrior
-            <2>2. CASE length = ProofCount
-              <3>0. ProofObservedFailures = {[before |-> ProofObservedBefore, site |-> ProofOrder[ProofCount],
-                                            payload |-> failure]}
-                BY ONLY ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT DEF failure
-              <3>1. constructed[length] = [states |-> {},
-                  failures |-> {[before |-> ProofObservedBefore, site |-> ProofOrder[ProofCount], payload |-> failure]}]
-                BY ONLY <2>0, <2>2, SMT DEF constructed
-              <3>2. ProofObservedHistory[length] = ProofObservedResult
-                BY ONLY <2>0, <2>2, SMT DEF ProofObservedHistory
-              <3>3. ProofObservedResult = [states |-> {},
-                  failures |-> {[before |-> ProofObservedBefore, site |-> ProofOrder[ProofCount], payload |-> failure]}]
-                BY ONLY <3>0, SMT DEF ProofObservedResult
-              <3>. QED BY ONLY <3>1, <3>2, <3>3, SMT
-            <2>. QED BY ONLY <2>0, <2>1, <2>2, SMT
-          <1>4. constructed = ProofObservedHistory
-            BY ONLY <1>4a, SMT DEF constructed, ProofObservedHistory
-          <1>. QED BY ONLY <1>3, <1>4, SMT
+        THEOREM ActualNativeFailureIsInTheDerivedInitializerFailureSet ==
+          /\\ ProofObservedBefore \\in ProofInitialization!SourceConstraintPrefix(
+                 ProofOrder, ProofCount - 1, ProofEvaluate(FALSE))
+          /\\ ProofObservedFailures = {ProofObservedEvent}
+          /\\ ProofObservedEvent \\in ProofInitialization!SourceFailureConstraintPrefix(
+                 ProofOrder, ProofCount, ProofEvaluate(FALSE))
+        PROOF
+        <1>order. /\\ ProofInitialization!InitializationOrder(ProofCount, ProofOrder)
+                  /\\ ProofCount \\in 1..ProofCount
+            BY ONLY ActualLayoutSuppliesInitializationDecoderInputs, SMT
+        <1>evaluate. ProofInitialization!InitializerEvaluators(ProofCount, ProofEvaluate(FALSE))
+            BY ONLY ActualInitializerEvaluatorsAreTypedAndAgree, SMT
+        <1>domain. ProofObservedBefore \\in [ProofInitialization!PrefixKeys(ProofOrder, ProofCount - 1) -> ProofValues]
+            BY ONLY ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT
+                DEF ProofPrefixKeys, ProofInitialization!PrefixKeys
+        <1>values. \\A index \\in 1..(ProofCount - 1) :
+            ProofObservedBefore[ProofOrder[index]] \\in ProofEvaluate(FALSE)[index][
+                ProofInitialization!SourceRestriction(ProofObservedBefore, ProofInitialization!PrefixKeys(ProofOrder, index - 1))].candidates
+            BY ONLY <1>order, ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT
+                DEF ProofObservedPrior, ProofPrefixKeys, ProofInitialization!PrefixKeys, ProofInitialization!SourceFixed
+        <1>prior. ProofObservedBefore \\in ProofInitialization!SourceConstraintPrefix(
+                ProofOrder, ProofCount - 1, ProofEvaluate(FALSE))
+            BY ONLY <1>domain, <1>values, SMT DEF ProofInitialization!SourceConstraintPrefix
+        <1>payload. /\\ ProofEvaluate(FALSE)[ProofCount][ProofObservedBefore] =
+                        ProofInitialization!SourceFailed(<<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>>)
+                    /\\ <<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>> # ProofNoFailure
+            BY ONLY <1>order, ActualNativePrefixSuppliesTheSourceInitializerOutcomes, ProofInitialSentinels,
+                ProofIntegerBounds, SMT DEF ExpectedOperand0, ExpectedOperand1, ProofFailureValues,
+                    ProofIntMax, ProofInitialization!InitialSentinels
+        <1>at. ProofInitialization!SourceInitializerFailureAt(ProofOrder, ProofCount, ProofEvaluate(FALSE), ProofObservedEvent)
+            BY ONLY <1>prior, <1>payload, SMT
+                DEF ProofInitialization!SourceInitializerFailureAt, ProofObservedEvent, ProofInitialization!SourceFailed
+        <1>member. ProofObservedEvent \\in ProofInitialization!SourceFailureConstraintPrefix(
+                ProofOrder, ProofCount, ProofEvaluate(FALSE))
+            BY ONLY <1>order, <1>evaluate, <1>at, ProofInitialSentinels,
+                ProofInitialization!ReachedInitializerFailuresAreExactlyTheDerivedPrefixEvents, SMT
+                  DEF ProofInitialization!InitialSentinels
+        <1>singleton. ProofObservedFailures = {ProofObservedEvent}
+            BY ONLY ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT DEF ProofObservedEvent
+        <1>. QED BY ONLY <1>prior, <1>member, <1>singleton
 
         THEOREM CompleteInitializationMatchesActualOutputs ==
           \\E source, generated, observations :
@@ -2354,7 +2325,8 @@ package enum InitialFailureEvidence {
                   /\\ \\A index \\in 0..ProofCount : source[index] = generated[index]
                   /\\ ProofInitialization!SingleBranchInitialObservationHistory(ProofCount, ProofOrder, ProofEvaluate(FALSE), observations)
                   /\\ ProofInitialization!SingleBranchInitialObservationHistory(ProofCount, ProofOrder, ProofEvaluate(TRUE), observations)
-                  /\\ ProofInitialization!InitialSetProjection(observations[ProofCount]) = source[ProofCount]
+                  /\\ \\A index \\in 0..ProofCount :
+                         ProofInitialization!InitialSetProjection(observations[index]) = source[index]
                   /\\ ProofInitialization!InitialObservationIsTyped(observations[ProofCount])
                   /\\ observations[ProofCount].stateCount <= 1 /\\ observations[ProofCount].failureCount <= 1
                   /\\ observations[ProofCount].stateCount + observations[ProofCount].failureCount = 1
@@ -2366,22 +2338,101 @@ package enum InitialFailureEvidence {
                                 => ProofEvaluate(FALSE)[position][prior] =
                                      ProofInitialization!SourceIntInitializerOutcome(meaning[ProofSyntaxViews[position].root])
             BY ONLY <1>5, ActualPlansInvokeCompleteInitializationAndObservationParents, SMT
-          <1>2. \\A index \\in 0..ProofCount : source[index] = ProofObservedHistory[index]
+          <1>2. /\\ source[ProofCount - 1].states = {ProofObservedBefore}
+                /\\ source[ProofCount - 1].failures = {}
+                /\\ observations[ProofCount - 1].stateHistory[1] = ProofObservedBefore
             PROOF
-            <2>1. \\A index \\in 0..ProofCount : generated[index] = ProofObservedHistory[index]
-              BY ONLY <1>0, <1>1, ProofInitialSentinels, ActualNativePrefixConstructsTheGeneratedInitializationHistory,
-                ProofInitialization!InitializationHistoryIsUnique, SMT
-            <2>. QED BY ONLY <1>1, <2>1, SMT
+            <2>ordinal. /\\ ProofCount \\in 1..ProofCount /\\ ProofCount - 1 \\in 0..ProofCount
+              BY ONLY ActualLayoutSuppliesInitializationDecoderInputs, SMT
+            <2>evaluate. ProofInitialization!InitializerEvaluators(ProofCount, ProofEvaluate(FALSE))
+              BY ONLY ActualInitializerEvaluatorsAreTypedAndAgree, SMT
+            <2>prefix. source[ProofCount - 1].states =
+                ProofInitialization!SourceConstraintPrefix(ProofOrder, ProofCount - 1, ProofEvaluate(FALSE))
+              BY ONLY <1>0, <1>1, <2>ordinal, <2>evaluate, ProofInitialSentinels,
+                  ProofInitialization!SourceHistoriesMatchEveryInitializerPrefix, SMT
+                    DEF ProofInitialization!InitialSentinels
+            <2>physical. ProofObservedBefore \\in source[ProofCount - 1].states
+              BY ONLY <2>prefix, ActualNativeFailureIsInTheDerivedInitializerFailureSet, SMT
+            <2>bounded. /\\ observations[ProofCount - 1].stateCount <= 1
+                        /\\ observations[ProofCount - 1].stateCount + observations[ProofCount - 1].failureCount = 1
+                        /\\ ProofInitialization!InitialObservationIsTyped(observations[ProofCount - 1])
+              BY ONLY <1>0, <1>1, <2>ordinal, <2>evaluate, ProofInitialSentinels,
+                  ProofInitialization!SingleBranchInitializationDerivesItsObservationBounds, SMT
+                    DEF ProofInitialization!InitialSentinels
+            <2>project. ProofInitialization!InitialSetProjection(observations[ProofCount - 1]) = source[ProofCount - 1]
+              BY ONLY <1>1, <2>ordinal, SMT
+            <2>live. /\\ observations[ProofCount - 1].stateCount = 1
+                     /\\ observations[ProofCount - 1].failureCount = 0
+              BY ONLY <2>physical, <2>bounded, <2>project, SMT
+                    DEF ProofInitialization!InitialObservationIsTyped, ProofInitialization!InitialFailureHistory,
+                        ProofInitialization!InitialSetProjection
+            <2>. QED BY ONLY <2>physical, <2>project, <2>live, SMT
+                DEF ProofInitialization!InitialSetProjection, ProofInitialization!InitialFailureSet
           <1>3. /\\ source[ProofCount].states = {}
                 /\\ source[ProofCount].failures = ProofObservedFailures
                 /\\ ProofObservedFailures # {}
-            BY <1>0, <1>2, ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT
-              DEF ProofObservedHistory, ProofObservedResult, ProofInitialization!InitializationOrder
+            PROOF
+            <2>edge. source[ProofCount] = ProofInitialization!SourceAdvance(
+                  source[ProofCount - 1], ProofOrder[ProofCount], ProofEvaluate(FALSE)[ProofCount])
+              BY ONLY <1>1, ActualLayoutSuppliesInitializationDecoderInputs, SMT
+                  DEF ProofInitialization!InitializationHistory, ProofInitialization!InitializationAdvance
+            <2>outcome. ProofEvaluate(FALSE)[ProofCount][ProofObservedBefore] =
+                ProofInitialization!SourceFailed(<<"integerOverflow", "addition", <<ExpectedOperand0, ExpectedOperand1>>>>)
+              BY ONLY ActualLayoutSuppliesInitializationDecoderInputs, ActualNativePrefixSuppliesTheSourceInitializerOutcomes, SMT
+            <2>leaf. ProofInitialization!SourceInitialLeaf(ProofObservedBefore, ProofOrder[ProofCount],
+                  ProofEvaluate(FALSE)[ProofCount][ProofObservedBefore]) =
+                [states |-> {}, failures |-> ProofObservedFailures]
+              BY ONLY <2>outcome, ActualNativeFailureIsInTheDerivedInitializerFailureSet, ProofInitialSentinels,
+                  ProofIntegerBounds, SetExtensionality, SMT DEF ProofObservedEvent, ExpectedOperand0, ExpectedOperand1,
+                    ProofIntMax, ProofFailureValues, ProofInitialization!InitialSentinels, ProofInitialization!SourceFailed,
+                    ProofInitialization!SourceInitialLeaf, ProofInitialization!SourceInitialStates, ProofInitialization!SourceInitialFailures
+            <2>. DEFINE leaf(prior) == ProofInitialization!SourceInitialLeaf(
+                  prior, ProofOrder[ProofCount], ProofEvaluate(FALSE)[ProofCount][prior])
+            <2>states. {leaf(prior).states : prior \\in source[ProofCount - 1].states} = {{}}
+              BY ONLY <1>2, <2>leaf, SetExtensionality, SMT DEF leaf
+            <2>failures. {leaf(prior).failures : prior \\in source[ProofCount - 1].states} = {ProofObservedFailures}
+              BY ONLY <1>2, <2>leaf, SetExtensionality, SMT DEF leaf
+            <2>unions. \\A values :
+                /\\ UNION {values} = values
+                /\\ {} \\cup values = values
+              BY ONLY SetExtensionality, SMT
+            <2>record. source[ProofCount] =
+                [states |-> UNION {leaf(prior).states : prior \\in source[ProofCount - 1].states},
+                 failures |-> source[ProofCount - 1].failures \\cup
+                     UNION {leaf(prior).failures : prior \\in source[ProofCount - 1].states}]
+              BY ONLY <2>edge DEF ProofInitialization!SourceAdvance, leaf
+            <2>advance. source[ProofCount] = [states |-> {}, failures |-> ProofObservedFailures]
+              BY ONLY <1>2, <2>states, <2>failures, <2>unions, <2>record, SMT
+            <2>nonempty. ProofObservedFailures # {}
+              BY ONLY ActualNativeFailureIsInTheDerivedInitializerFailureSet, SMT
+            <2>. QED BY ONLY <2>advance, <2>nonempty, SMT
           <1>4. /\\ observations[ProofCount].stateCount = 0 /\\ observations[ProofCount].failureCount = 1
                 /\\ {observations[ProofCount].failureHistory[1]} = ProofObservedFailures
-            BY <1>1, <1>3, SMT DEF ProofInitialization!InitialSetProjection,
-              ProofInitialization!InitialFailureSet, ProofInitialization!InitialObservationIsTyped,
-              ProofInitialization!InitialFailureHistory
+            PROOF
+            <2>. DEFINE terminal == observations[ProofCount]
+            <2>projection. ProofInitialization!InitialSetProjection(terminal) = source[ProofCount]
+              BY ONLY <1>1, <1>5, SMT DEF terminal
+            <2>bounded. /\\ terminal.failureCount \\in 0..1
+                        /\\ terminal.stateCount + terminal.failureCount = 1
+              BY ONLY <1>1, SMT DEF terminal, ProofInitialization!InitialObservationIsTyped,
+                  ProofInitialization!InitialFailureHistory
+            <2>failureSet. ProofInitialization!InitialFailureSet(terminal.failureCount, terminal.failureHistory) =
+                ProofObservedFailures
+              BY ONLY <2>projection, <1>3, SMT DEF ProofInitialization!InitialSetProjection
+            <2>reached. terminal.failureCount # 0
+              BY ONLY <2>failureSet, <1>3, SMT DEF ProofInitialization!InitialFailureSet
+            <2>stateType. terminal.stateCount \\in Nat
+              BY ONLY <1>1, SMT DEF terminal, ProofInitialization!InitialObservationIsTyped
+            <2>alternatives. 0..1 = {0, 1}
+              BY ONLY SMT
+            <2>oneFailure. terminal.failureCount = 1
+              BY ONLY <2>bounded, <2>reached, <2>alternatives, Zenon
+            <2>counts. /\\ terminal.stateCount = 0 /\\ terminal.failureCount = 1
+              BY ONLY <2>stateType, <2>bounded, <2>oneFailure, SMT
+            <2>record. ProofInitialization!InitialFailureSet(terminal.failureCount, terminal.failureHistory) =
+                {terminal.failureHistory[1]}
+              BY ONLY <2>counts, SMT DEF ProofInitialization!InitialFailureSet
+            <2>. QED BY ONLY <2>counts, <2>record, <2>failureSet, SMT DEF terminal
           <1>. WITNESS source, generated, observations
           <1>. QED BY ONLY <1>1, <1>3, <1>4, <1>5, CompleteFailureEvents, InitialFailurePrecedesGraph, SMT
             DEF CompleteOutputRelation, ProofObservedFailures

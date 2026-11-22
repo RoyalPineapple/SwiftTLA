@@ -1593,6 +1593,108 @@ THEOREM SourceHistoriesMatchEveryInitialFailurePrefix ==
         BY <1>0, <1>4, FiniteIndexedPrefixProperty
     <1>. QED BY <1>6 DEF P
 
+SourceInitializerFailureAt(order, index, evaluate, event) ==
+    LET prior == event.before
+        outcome == evaluate[index][prior]
+    IN /\ prior \in SourceConstraintPrefix(order, index - 1, evaluate)
+       /\ outcome.firstFailure # NoFailure
+       /\ event = [before |-> prior, site |-> order[index], payload |-> outcome.firstFailure]
+
+THEOREM ReachedInitializerFailuresAreExactlyTheDerivedPrefixEvents ==
+    ASSUME NEW count, NEW order, NEW evaluate, NEW event,
+           InitializationOrder(count, order), InitializerEvaluators(count, evaluate)
+    PROVE /\ (event \in SourceFailureConstraintPrefix(order, count, evaluate)
+               <=> \E index \in 1..count : SourceInitializerFailureAt(order, index, evaluate, event))
+          /\ \A index \in 1..count :
+               SourceInitializerFailureAt(order, index, evaluate, event) =>
+               /\ event.before \in [PrefixKeys(order, index - 1) -> Values]
+               /\ event.site \notin DOMAIN event.before
+               /\ event.payload \in FailureValues
+               /\ \A earlier \in 1..(index - 1) :
+                   LET prior == SourceRestriction(event.before, PrefixKeys(order, earlier - 1))
+                       bound == SourceRestriction(event.before, PrefixKeys(order, earlier))
+                       outcome == evaluate[earlier][prior]
+                   IN /\ outcome.firstFailure = NoFailure
+                      /\ event.before[order[earlier]] \in outcome.candidates
+                      /\ bound = GeneratedExtension(prior, order[earlier], event.before[order[earlier]])
+    PROOF
+    <1>sites. \A index \in 1..count :
+        SourceInitializerFailureAt(order, index, evaluate, event)
+        <=> event \in UNION {SourceInitialFailures(prior, order[index], evaluate[index][prior]) :
+            prior \in SourceConstraintPrefix(order, index - 1, evaluate)}
+        BY ONLY SetExtensionality, SMT DEF SourceInitializerFailureAt, SourceInitialFailures
+    <1>events. (event \in SourceFailureConstraintPrefix(order, count, evaluate)
+                <=> \E index \in 1..count : SourceInitializerFailureAt(order, index, evaluate, event))
+        BY ONLY <1>sites, SetExtensionality, SMT DEF SourceFailureConstraintPrefix
+    <1>prefix. ASSUME NEW index \in 1..count,
+                      SourceInitializerFailureAt(order, index, evaluate, event)
+               PROVE /\ event.before \in [PrefixKeys(order, index - 1) -> Values]
+                     /\ event.site \notin DOMAIN event.before
+                     /\ event.payload \in FailureValues
+                     /\ \A earlier \in 1..(index - 1) :
+                         LET prior == SourceRestriction(event.before, PrefixKeys(order, earlier - 1))
+                             bound == SourceRestriction(event.before, PrefixKeys(order, earlier))
+                             outcome == evaluate[earlier][prior]
+                         IN /\ outcome.firstFailure = NoFailure
+                            /\ event.before[order[earlier]] \in outcome.candidates
+                            /\ bound = GeneratedExtension(prior, order[earlier], event.before[order[earlier]])
+        PROOF
+        <2>. DEFINE before == event.before
+        <2>record. /\ before \in SourceConstraintPrefix(order, index - 1, evaluate)
+                   /\ event.site = order[index]
+                   /\ event.payload = evaluate[index][before].firstFailure
+                   /\ evaluate[index][before].firstFailure # NoFailure
+            BY ONLY SourceInitializerFailureAt(order, index, evaluate, event), SMT
+                DEF SourceInitializerFailureAt, before
+        <2>order. /\ count \in Nat /\ order \in [1..count -> Keys]
+                  /\ index - 1 \in 0..count
+                  /\ order[index] \notin PrefixKeys(order, index - 1)
+            BY ONLY (index \in 1..count), InitializationOrder(count, order), SMT
+                DEF InitializationOrder, PrefixKeys
+        <2>before. /\ before \in [PrefixKeys(order, index - 1) -> Values]
+                   /\ DOMAIN before = PrefixKeys(order, index - 1)
+                   /\ before \in PartialBindings
+            BY ONLY <2>record, <2>order, (index \in 1..count), PrefixKeySetsAreContained,
+                InitializationOrder(count, order), SMT DEF SourceConstraintPrefix, PartialBindings
+        <2>payload. event.payload \in FailureValues
+            BY ONLY <2>before, <2>record, (index \in 1..count), InitializerEvaluators(count, evaluate), SMT
+                DEF InitializerEvaluators, InitializerOutcomes
+        <2>earlier. ASSUME NEW earlier \in 1..(index - 1)
+                    PROVE LET prior == SourceRestriction(before, PrefixKeys(order, earlier - 1))
+                              bound == SourceRestriction(before, PrefixKeys(order, earlier))
+                              outcome == evaluate[earlier][prior]
+                          IN /\ outcome.firstFailure = NoFailure
+                             /\ before[order[earlier]] \in outcome.candidates
+                             /\ bound = GeneratedExtension(prior, order[earlier], before[order[earlier]])
+            PROOF
+            <3>. DEFINE prior == SourceRestriction(before, PrefixKeys(order, earlier - 1))
+                        bound == SourceRestriction(before, PrefixKeys(order, earlier))
+                        outcome == evaluate[earlier][prior]
+            <3>scope. /\ earlier \in 1..count /\ earlier - 1 \in 0..(index - 1)
+                      /\ PrefixKeys(order, earlier - 1) \subseteq DOMAIN before
+                      /\ PrefixKeys(order, earlier - 1) \subseteq Keys
+                      /\ PrefixKeys(order, earlier) = PrefixKeys(order, earlier - 1) \cup {order[earlier]}
+                BY ONLY (earlier \in 1..(index - 1)), (index \in 1..count), <2>order, <2>before,
+                    InitializationOrder(count, order), PrefixKeySetsAreContained, PrefixKeysGrowByOne, SMT
+            <3>function. prior \in [PrefixKeys(order, earlier - 1) -> Values]
+                BY ONLY <3>scope, <2>before, SMT DEF prior, SourceRestriction
+            <3>table. [PrefixKeys(order, earlier - 1) -> Values] \in {[keys -> Values] : keys \in SUBSET Keys}
+                BY ONLY <3>scope, SMT
+            <3>domain. DOMAIN prior = PrefixKeys(order, earlier - 1)
+                BY ONLY SMT DEF prior, SourceRestriction
+            <3>prior. /\ prior \in PartialBindings /\ DOMAIN prior = PrefixKeys(order, earlier - 1)
+                BY ONLY <3>function, <3>table, <3>domain, SMT DEF PartialBindings
+            <3>value. before[order[earlier]] \in outcome.candidates
+                BY ONLY <2>record, (earlier \in 1..(index - 1)), SMT DEF SourceConstraintPrefix, outcome, prior
+            <3>success. outcome.firstFailure = NoFailure
+                BY ONLY <3>scope, <3>prior, <3>value, InitializerEvaluators(count, evaluate), SMT
+                    DEF InitializerEvaluators, InitializerOutcomes, outcome
+            <3>extend. bound = GeneratedExtension(prior, order[earlier], before[order[earlier]])
+                BY ONLY <3>scope, <3>prior, SMT DEF bound, prior, SourceRestriction, GeneratedExtension
+            <3>. QED BY ONLY <3>value, <3>success, <3>extend
+        <2>. QED BY ONLY <2>record, <2>order, <2>before, <2>payload, <2>earlier, SMT DEF before
+    <1>. QED BY ONLY <1>events, <1>prefix
+
 WideInitializerOutcomes(universe) ==
     {outcome \in [candidates: SUBSET universe,
                   firstFailure: FailureValues \cup {NoFailure}] :
