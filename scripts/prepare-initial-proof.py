@@ -713,8 +713,8 @@ def main():
                             "GuardActionRule", "AlternativeTraversalRule"]
         names += branchwise_rules
         if stack_files:
-            names += ["SequencePrefixRule", "OrderedIntTraversalPassProof", "OrderedIntTraversalNativeRule",
-                      "GeneratedCertificateExpansionRule", "OrderedIntTraversalPassConfiguredProof"]
+            names += ["SequencePrefixRule", "CompilerOutput/OrderedIntTraversalPassProof", "OrderedIntTraversalNativeRule",
+                      "GeneratedCertificateExpansionRule", "CompilerOutput/OrderedIntTraversalPassConfiguredProof"]
         branchwise_imports = {name + ".tla" for name in branchwise_rules}
         branchwise_imports.update({"BranchwiseConjunctionFailureOrderModel.tla", "SwiftTLABranchwiseCheckingInputs.tla",
                                    "IndexedHistoryRules.tla", "ActionOutcomeInterface.tla", "ActionFailureHistoryProjection.tla",
