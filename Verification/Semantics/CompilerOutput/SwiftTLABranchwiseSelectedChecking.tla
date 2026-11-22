@@ -1,9 +1,10 @@
 ---------------- MODULE SwiftTLABranchwiseSelectedChecking ----------------
-EXTENDS TLAPS, Integers, SequenceTheorems_proofs, SwiftTLABranchwiseCheckingInputs
+EXTENDS TLAPS, Integers, SequenceTheorems_proofs, SwiftTLABranchwiseProjectedCheckingInputs,
+        BranchwiseFailureStateProjectionProof
 \* BranchwisePhysicalPageRequests
 
 LOCAL Check == INSTANCE CheckingSelectionCompilerBinding WITH NoPropertyHandle <- ""
-LOCAL M8At(visit) == INSTANCE BranchwiseConjunctionFailureOrderProof
+LOCAL M8At(visit) == INSTANCE BranchwiseConjunctionFailureHistories
     WITH divisor <- BranchwiseNativeSnapshots[visit][1],
          modulus <- BranchwiseNativeSnapshots[visit][2],
          selected <- BranchwiseNativeSnapshots[visit][3],
@@ -30,6 +31,54 @@ BranchwiseAuthoredSlices == [visit \in Visits |-> AuthoredAt(visit)]
 BranchwiseEmittedSlices == [visit \in Visits |-> EmittedAt(visit)]
 BranchwiseAuthoredHistory == Assemble(BranchwiseAuthoredSlices)
 BranchwiseEmittedHistory == Assemble(BranchwiseEmittedSlices)
+
+LOCAL FailureFactsAt(visit) ==
+    LET At == INSTANCE BranchwiseConjunctionFailureHistories
+        WITH divisor <- BranchwiseNativeSnapshots[visit][1],
+             modulus <- BranchwiseNativeSnapshots[visit][2],
+             selected <- BranchwiseNativeSnapshots[visit][3],
+             result <- BranchwiseNativeSnapshots[visit][4]
+    IN /\ At!__SwiftTLAActionFailureHistory0 = At!SourceOrderedFailureHistory
+       /\ (At!__SwiftTLAEvaluationOK <=> DOMAIN At!SourceOrderedFailureHistory = {})
+
+LOCAL BadVisit == CHOOSE visit \in Visits : ~FailureFactsAt(visit)
+LOCAL M8Bad == INSTANCE BranchwiseConjunctionFailureHistories
+    WITH divisor <- BranchwiseNativeSnapshots[BadVisit][1],
+         modulus <- BranchwiseNativeSnapshots[BadVisit][2],
+         selected <- BranchwiseNativeSnapshots[BadVisit][3],
+         result <- BranchwiseNativeSnapshots[BadVisit][4]
+
+LOCAL THEOREM TheObservedVisitsHaveTheCheckedM8FailureFacts ==
+    \A visit \in Visits : FailureFactsAt(visit)
+PROOF
+<1>indices. Visits = 1..Len(BranchwiseNativeSnapshots)
+    BY ONLY IsaM("simp") DEF Visits, BranchwiseNativeSnapshots
+<1>states. \A visit \in Visits :
+    /\ BranchwiseNativeSnapshots[visit][1] \in 0..1
+    /\ BranchwiseNativeSnapshots[visit][2] \in {-1, 0, 1, 2}
+    /\ BranchwiseNativeSnapshots[visit][3] \in Int
+    /\ BranchwiseNativeSnapshots[visit][4] \in Int
+    BY ONLY <1>indices, SMT DEF BranchwiseNativeSnapshots
+<1>counterexample. ASSUME \E visit \in Visits : ~FailureFactsAt(visit)
+                   PROVE FALSE
+    <2>chosen. /\ BadVisit \in Visits /\ ~FailureFactsAt(BadVisit)
+        BY ONLY (\E visit \in Visits : ~FailureFactsAt(visit)), SMT DEF BadVisit
+    <2>typed. M8Bad!SourceDomain
+        BY ONLY <1>states, <2>chosen, SMT DEF M8Bad!SourceDomain
+    <2>history. M8Bad!__SwiftTLAActionFailureHistory0 = M8Bad!SourceOrderedFailureHistory
+        BY ONLY <2>typed, M8Bad!ActualBranchwiseHistoryMatchesAuthoredOrder
+    <2>presence. M8Bad!__SwiftTLAEvaluationOK <=> DOMAIN M8Bad!SourceOrderedFailureHistory = {}
+        BY ONLY <2>typed, M8Bad!ActualBranchwiseEvaluationCheckUsesTheOrderedHistory
+    <2>facts. FailureFactsAt(BadVisit)
+        BY ONLY <2>history, <2>presence, SMT
+        DEF FailureFactsAt,
+            M8Bad!__SwiftTLAActionFailureHistory0, M8Bad!__SwiftTLAEvaluationOK,
+            M8Bad!__SwiftTLAAnyEvaluationFailure0, M8Bad!SourceOrderedFailureHistory,
+            M8Bad!SourceLeftFailureHistory, M8Bad!SourceRightFailureHistory,
+            M8Bad!DivisionEvent, M8Bad!NegativeModuloEvent, M8Bad!FailureEvent,
+            M8Bad!LeftBefore, M8Bad!RightBefore, M8Bad!vars
+    <2>. QED BY ONLY <2>chosen, <2>facts
+<1>. QED BY ONLY <1>counterexample, SMT
 
 THEOREM ActualBranchwiseOrderedFailureHistoriesAgree ==
     /\ BranchwiseNativeFields = <<"divisor", "modulus", "selected", "result">>
@@ -59,16 +108,14 @@ PROOF
     /\ position <= Cuts[NativeVisitOf(position) + 1]
     BY ONLY SMT DEF NativeVisitOf, Visits, Native, Cuts,
         BranchwiseNativeSnapshots, BranchwiseNativeHistory, BranchwiseNativeCuts
-<1>states. \A visit \in Visits : M8At(visit)!SourceDomain
-    BY ONLY SMT DEF M8At!SourceDomain, Visits, BranchwiseNativeSnapshots
 <1>slices. \A visit \in Visits :
     /\ DOMAIN AuthoredAt(visit) = 1..(Cuts[visit + 1] - Cuts[visit])
     /\ EmittedAt(visit) = AuthoredAt(visit)
     /\ ReceivedAt(visit) = AuthoredAt(visit)
     <2>. TAKE visit \in Visits
     <2>emitted. EmittedAt(visit) = AuthoredAt(visit)
-        BY ONLY <1>states, (visit \in Visits), M8At(visit)!ActualBranchwiseHistoryMatchesAuthoredOrder,
-            SMT DEF EmittedAt, AuthoredAt
+        BY ONLY (visit \in Visits), TheObservedVisitsHaveTheCheckedM8FailureFacts,
+            SMT DEF EmittedAt, AuthoredAt, FailureFactsAt
     <2>native. /\ DOMAIN AuthoredAt(visit) = 1..(Cuts[visit + 1] - Cuts[visit])
                /\ ReceivedAt(visit) = AuthoredAt(visit)
         BY ONLY (visit \in Visits), SMT
@@ -135,6 +182,7 @@ THEOREM ActualBranchwiseNamedCheckingUsesTheSameOrderedFailures ==
     /\ BranchwiseAuthoredHistory = Native
     /\ BranchwiseEmittedHistory = Native
     /\ BranchwiseCFGEvaluationCheckEnabled
+    /\ BranchwiseStateProjectionMatchesEmission
     /\ \A visit \in Visits :
            BranchwiseActualTLAEvaluationOK(BranchwiseNativeSnapshots[visit])
                <=> DOMAIN ReceivedAt(visit) = {}
@@ -183,10 +231,8 @@ PROOF
     BranchwiseActualTLAEvaluationOK(BranchwiseNativeSnapshots[visit])
         <=> DOMAIN ReceivedAt(visit) = {}
     <2>. TAKE visit \in Visits
-    <2>typed. M8At(visit)!SourceDomain
-        BY ONLY (visit \in Visits), SMT DEF M8At!SourceDomain, Visits, BranchwiseNativeSnapshots
     <2>presence. M8At(visit)!__SwiftTLAEvaluationOK <=> DOMAIN M8At(visit)!SourceOrderedFailureHistory = {}
-        BY ONLY <2>typed, M8At(visit)!ActualBranchwiseEvaluationCheckUsesTheOrderedHistory, SMT
+        BY ONLY (visit \in Visits), TheObservedVisitsHaveTheCheckedM8FailureFacts, SMT DEF FailureFactsAt
     <2>mode. BranchwiseActualTLAEvaluationOK(BranchwiseNativeSnapshots[visit]) <=> M8At(visit)!__SwiftTLAEvaluationOK
         BY ONLY SMT DEF BranchwiseActualTLAEvaluationOK, BranchwisePredicates!__SwiftTLAEvaluationOK,
             M8At!__SwiftTLAEvaluationOK
@@ -251,6 +297,7 @@ PROOF
         <3>. QED BY ONLY <3>entry, <3>position, <1>native, <1>configured, <1>word, ElementOfSeq, SMT
     <2>. QED BY ONLY <2>candidate, <2>length, <2>values, SMT
 <1>. QED BY ONLY <1>native, <1>configured, <1>named, <1>occurrences, <1>evaluation,
-    ActualBranchwiseOrderedFailureHistoriesAgree, ActualBranchwiseCFGContainsTheEvaluationInvariant, SMT
+    ActualBranchwiseOrderedFailureHistoriesAgree, ActualBranchwiseCFGContainsTheEvaluationInvariant,
+    TheProjectionUsesTheActualEmittedStateOperators, SMT
 
 ====

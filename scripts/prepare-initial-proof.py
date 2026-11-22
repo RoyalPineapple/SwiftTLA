@@ -16,6 +16,98 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def branchwise_state_proofs(model, checking_inputs, original_rules):
+    """Specialize only the retained branchwise proof inputs. Keep the actual module intact."""
+    model_name = b"BranchwiseConjunctionFailureOrderModel"
+    data_name = b"SwiftTLABranchwiseCheckingInputs"
+    projected_model = b"BranchwiseFailureStateProjection"
+    projected_data = b"SwiftTLABranchwiseProjectedCheckingInputs"
+    histories_name = b"BranchwiseConjunctionFailureHistories"
+    variables = b"divisor, modulus, selected, result"
+
+    def replace_once(contents, old, new):
+        if contents.count(old) != 1:
+            raise ValueError(f"unexpected branchwise proof input boundary: {old!r}")
+        return contents.replace(old, new, 1)
+
+    physical = model.splitlines()
+    if (physical[:2] != [b"---- MODULE " + model_name + b" ----", b"EXTENDS Integers, FiniteSets, Sequences"]
+            or physical.count(b"VARIABLES " + variables) != 1 or physical.count(b"Init ==") != 1):
+        raise ValueError("unexpected branchwise physical module header")
+    init = physical.index(b"Init ==")
+    state_lines = [line for line in physical[2:init] if line and not line.startswith(
+        (b"VARIABLES ", b"pick == "))]
+    operators = []
+    for line in state_lines:
+        name, separator, expression = line.partition(b" == ")
+        if (not separator or not re.fullmatch(rb"[A-Za-z_][A-Za-z0-9_]*", name)
+                or re.search(rb"'|\b(?:ENABLED|UNCHANGED)\b", expression)):
+            raise ValueError("branchwise projection would include a non-state definition")
+        operators.append(name)
+    if (len(operators) != len(set(operators)) or not {
+            b"vars", b"__SwiftTLAActionFailureHistory0", b"__SwiftTLAAnyEvaluationFailure0",
+            b"__SwiftTLAEvaluationOK", b"SelectionFloor", b"ResultNonnegative", b"DivisorNonnegative",
+    }.issubset(operators)):
+        raise ValueError("incomplete or duplicate branchwise physical state operators")
+    projection = b"\n".join([
+        b"---- MODULE " + projected_model + b" ----", physical[1], b"CONSTANTS " + variables,
+        b"", *state_lines, b"====", b"",
+    ])
+
+    definitions = b"BranchwiseStateProjectionMatchesEmission"
+    bindings = b", ".join(name + b" <- " + name for name in variables.split(b", "))
+    bridge = [
+        b"---- MODULE BranchwiseFailureStateProjectionProof ----",
+        b"EXTENDS TLAPS, " + model_name, b"",
+        b"LOCAL Projected == INSTANCE " + projected_model, b"    WITH " + bindings, b"",
+        definitions + b" ==",
+    ]
+    equalities = [b"Projected!" + name + b" = " + name for name in operators]
+    bridge.extend(b"    /\\ " + equality for equality in equalities)
+    bridge.extend([b"", b"THEOREM TheProjectionUsesTheActualEmittedStateOperators == " + definitions, b"PROOF"])
+    for index, (name, equality, line) in enumerate(zip(operators, equalities, state_lines), 1):
+        bridge.append(f"<1>{index}. ".encode() + equality)
+        refs = [f"<1>{previous}".encode() for previous, dependency in enumerate(operators[:index - 1], 1)
+                if re.search(rb"(?<![A-Za-z0-9_])" + dependency + rb"(?![A-Za-z0-9_])",
+                             line.partition(b" == ")[2])]
+        uses = b", ".join(refs) + b" " if refs else b""
+        bridge.append(b"    BY ONLY " + uses + b"DEF Projected!" + name + b", " + name)
+    steps = b", ".join(f"<1>{i}".encode() for i in range(1, len(operators) + 1))
+    bridge.extend([b"<1>. QED BY ONLY " + steps + b" DEF " + definitions, b"====", b""])
+
+    def without_range(contents, start, stop):
+        if contents.count(start) != 1 or contents.count(stop) != 1:
+            raise ValueError("branchwise source proof split changed")
+        before, middle = contents.split(start)
+        _, after = middle.split(stop)
+        return before + stop + after
+
+    histories = replace_once(original_rules, b"MODULE BranchwiseConjunctionFailureOrderProof ",
+                             b"MODULE " + histories_name + b" ")
+    histories = replace_once(histories, b"EXTENDS TLAPS, " + model_name, b"EXTENDS TLAPS, " + projected_model)
+    histories = without_range(histories, b"\nSourceInit ==\n", b"\nSourceFirstDivisionFailure ==")
+    histories = without_range(histories, b"UngatedLaterModuloFailure ==", b"\nTHEOREM EmittedFirstFailureMatchesSource")
+    histories = without_range(histories, b"\nSourceLabeledStep(label) ==",
+                              b"SourceOrderedFailureHistory ==")
+    histories = replace_once(histories, b"DEF FailureHistory!ActionAlternativeFailureHistory\n"
+                             b"SourceOrderedFailureHistory ==",
+                             b"DEF FailureHistory!ActionAlternativeFailureHistory\n\nSourceOrderedFailureHistory ==")
+    for name in (b"FailureHistory", b"FailureEvent", b"DivisionEvent", b"NegativeModuloEvent",
+                 b"LeftBefore", b"RightBefore"):
+        histories = replace_once(histories, b"\nLOCAL " + name, b"\n" + name)
+    histories = replace_once(histories, b"\n" + b"=" * 77 + b"\n", b"\n" + b"=" * 150 + b"\n")
+
+    checking = replace_once(checking_inputs, b"MODULE " + data_name + b" ", b"MODULE " + projected_data + b" ")
+    checking = replace_once(checking, b"BranchwisePredicates(snapshot) == INSTANCE " + model_name + b" WITH ",
+                            b"BranchwisePredicates(snapshot) == INSTANCE " + projected_model + b" WITH ")
+    return {
+        projected_model.decode() + ".tla": projection,
+        "BranchwiseFailureStateProjectionProof.tla": b"\n".join(bridge),
+        histories_name.decode() + ".tla": histories,
+        projected_data.decode() + ".tla": checking,
+    }
+
+
 def payloads(root):
     names = subprocess.check_output(["git", "ls-files", "-z"], cwd=root).decode().split("\0")[:-1]
     return {name: hashlib.sha256(os.readlink(root / name).encode() if (root / name).is_symlink()
@@ -860,6 +952,19 @@ def main():
                 raise ValueError(f"retained branchwise input differs from the actual configured output: {branchwise_input}")
             proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
             branchwise_hashes[branchwise_input] = sha
+        actual_module = imports / "BranchwiseConjunctionFailureOrderModel.tla"
+        actual_inputs = imports / "SwiftTLABranchwiseCheckingInputs.tla"
+        original_m8 = imports / "BranchwiseConjunctionFailureOrderProof.tla"
+        projected = branchwise_state_proofs(actual_module.read_bytes(), actual_inputs.read_bytes(),
+                                           original_m8.read_bytes())
+        for name, data in projected.items():
+            retained = imports / name
+            with retained.open("xb") as retained_file:
+                retained_file.write(data)
+            sha = digest(retained)
+            proof_hashes.append(f"{sha}  {retained.relative_to(packet)}\n")
+            branchwise_hashes[name] = sha
+        branchwise_imports.update(projected)
         if branchwise_hashes.keys() != branchwise_imports:
             raise ValueError("incomplete branchwise proof inputs")
         receipt["branchwiseCombinedProof"] = {

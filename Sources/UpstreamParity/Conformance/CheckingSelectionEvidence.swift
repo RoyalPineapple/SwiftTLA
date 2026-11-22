@@ -430,9 +430,11 @@ package enum CheckingSelectionEvidence {
         -> (imports: String, pageReferences: String, definitions: String) {
         let cfgRows = configuration.invariants.map { (kind: "INVARIANT", name: $0) }
             + configuration.properties.map { (kind: "PROPERTY", name: $0) }
-        let header = "SPECIFICATION Spec\nCHECK_DEADLOCK \(configuration.deadlock ? "TRUE" : "FALSE")\n"
-        // Build the expected bytes from the grammar. The proof binds every byte to the separate CFG input.
-        let cfgBytes = Array((header + cfgRows.map { "\($0.kind) \($0.name)\n" }.joined()).utf8)
+        let cfgLines = ["SPECIFICATION Spec\n",
+                        "CHECK_DEADLOCK \(configuration.deadlock ? "TRUE" : "FALSE")\n"]
+            + cfgRows.map { "\($0.kind) \($0.name)\n" }
+        let cfgLineBytes = cfgLines.map { Array($0.utf8) }
+        let cfgBytes = cfgLineBytes.flatMap { $0 }
         let directives = cfgRows.map { row in
             record([("kind", .string(row.kind)), ("name", .string(row.name)), ("symbol", byteVector(row.name.utf8))])
         }
@@ -465,7 +467,111 @@ package enum CheckingSelectionEvidence {
         }
         let cfgBlocks = blocks("CallerInput", pages: cfgPages)
         let tlaBlocks = blocks("CompilerInput", pages: tlaPages.sorted())
-        let cfgFacts = cfgBlocks.map { $0 + "AtFileOffsets" }.joined(separator: ", ")
+        var cfgLineDefinitions: [String] = []
+        var cfgCases: [String] = []
+        var cfgProofs: [String] = []
+        var checkedFragments: [String] = []
+        for page in cfgPages {
+            let offset = (page - 1) * 16
+            let end = min(offset + 16, cfgBytes.count)
+            let bytes = "CFGExpectedPage\(page)"
+            cfgLineDefinitions.append("LOCAL \(bytes) == \(byteVector(cfgBytes[offset..<end]))")
+            cfgProofs.append(#"""
+            <1>page\#(page). \A index \in \#(offset + 1)..\#(end) :
+                CallerInputByte[index - 1] = \#(bytes)[index - \#(offset)]
+                <2>offsets. \A j \in 1..\#(end - offset) :
+                    CallerInputByte[\#(offset) + j - 1] = \#(bytes)[j]
+                    BY ONLY CallerInputPageBlock\#((page - 1) / 64 + 1)AtFileOffsets DEF \#(bytes)
+                <2>. QED BY ONLY <2>offsets, SMT
+            """#)
+        }
+        var offset = 0
+        for (index, line) in cfgLineBytes.enumerated() {
+            let ordinal = index + 1
+            let end = offset + line.count
+            let grammar = "CFGGrammarLine\(ordinal)"
+            let bytes = "CFGExpectedLine\(ordinal)"
+            cfgLineDefinitions.append("LOCAL \(grammar) == \(cfgExpressions[index])")
+            cfgLineDefinitions.append("LOCAL \(bytes) == \(byteVector(line))")
+            cfgCases.append("index \\in \(offset + 1)..\(end) -> \(grammar)[index - \(offset)]")
+            if index < 2 {
+                let source = index == 0 ? "CFGSpecificationLine" : "CFGDeadlockLine, CFGDeadlockCode"
+                cfgProofs.append(#"""
+                <1>line\#(ordinal). /\ \#(grammar) = \#(bytes)
+                                  /\ DOMAIN \#(grammar) = 1..\#(line.count)
+                    <2>bytes. \#(grammar) = \#(bytes)
+                        BY ONLY SMT DEF \#(grammar), \#(bytes), \#(source)
+                    <2>extent. DOMAIN \#(bytes) = 1..\#(line.count)
+                        BY ONLY SMT DEF \#(bytes)
+                    <2>. QED BY ONLY <2>bytes, <2>extent, SMT
+                """#)
+            } else {
+                let row = cfgRows[index - 2]
+                let keyword = row.kind == "INVARIANT" ? "CFGInvariantPrefix" : "CFGPropertyPrefix"
+                let keywordWidth = row.kind.utf8.count + 1
+                let nameWidth = row.name.utf8.count
+                let name = TLAValue.string(row.name)
+                let symbol = byteVector(row.name.utf8)
+                cfgProofs.append(#"""
+                <1>line\#(ordinal). /\ \#(grammar) = \#(bytes)
+                                  /\ DOMAIN \#(grammar) = 1..\#(line.count)
+                    <2>. DEFINE row == CFGCheckingRows[\#(index - 1)]
+                                prefix == CFGDirectivePrefix(row)
+                    <2>row. /\ row.kind = "\#(row.kind)"
+                            /\ row.name = \#(name)
+                            /\ row.symbol = \#(symbol)
+                        BY ONLY IsaM("simp") DEF row, CFGCheckingRows
+                    <2>prefix. prefix = \#(keyword)
+                        BY ONLY <2>row, SMT DEF prefix, CFGDirectivePrefix
+                    <2>functions. /\ prefix \in [1..\#(keywordWidth) -> Int]
+                                  /\ row.symbol \in [1..\#(nameWidth) -> Int]
+                                  /\ \#(bytes) \in [1..\#(line.count) -> Int]
+                        BY ONLY <2>prefix, <2>row, SMT DEF \#(keyword), \#(bytes)
+                    <2>widths. /\ prefix \in Seq(Int) /\ Len(prefix) = \#(keywordWidth)
+                               /\ row.symbol \in Seq(Int) /\ Len(row.symbol) = \#(nameWidth)
+                               /\ \#(bytes) \in Seq(Int) /\ Len(\#(bytes)) = \#(line.count)
+                        BY ONLY <2>functions, SeqDef, LenProperties, SMT
+                    <2>keywordBytes. \A index \in 1..Len(prefix) : \#(bytes)[index] = prefix[index]
+                        BY ONLY <2>prefix, <2>widths, SMT DEF \#(keyword), \#(bytes)
+                    <2>nameBytes. \A index \in 1..Len(row.symbol) : \#(bytes)[Len(prefix) + index] = row.symbol[index]
+                        BY ONLY <2>row, <2>widths, SMT DEF \#(bytes)
+                    <2>newline. \#(bytes)[Len(\#(bytes))] = 10
+                        BY ONLY <2>widths, SMT DEF \#(bytes)
+                    <2>extent. Len(\#(bytes)) = Len(prefix) + Len(row.symbol) + 1
+                        BY ONLY <2>widths, SMT
+                    <2>checked. /\ \#(bytes) = (prefix \o row.symbol) \o <<10>>
+                                /\ DOMAIN ((prefix \o row.symbol) \o <<10>>) = 1..Len(\#(bytes))
+                        <3>prefix. prefix \in Seq(Int)
+                            BY ONLY <2>widths
+                        <3>symbol. row.symbol \in Seq(Int)
+                            BY ONLY <2>widths
+                        <3>line. \#(bytes) \in Seq(Int)
+                            BY ONLY <2>widths
+                        <3>. QED BY ONLY <3>prefix, <3>symbol, <3>line, <2>extent,
+                            <2>keywordBytes, <2>nameBytes, <2>newline, CFGLineIsItsCheckedParts
+                    <2>grammar. \#(grammar) = (prefix \o row.symbol) \o <<10>>
+                        BY ONLY DEF \#(grammar), CFGCheckingLine, row, prefix
+                    <2>. QED BY ONLY <2>checked, <2>grammar, <2>widths, SMT
+                """#)
+            }
+            for page in (offset / 16 + 1)...((end - 1) / 16 + 1) {
+                let pageOffset = (page - 1) * 16
+                let first = max(offset, pageOffset) + 1
+                let last = min(end, pageOffset + 16)
+                let label = "fragment\(ordinal)page\(page)"
+                checkedFragments.append("<1>\(label)")
+                cfgProofs.append(#"""
+                <1>\#(label). \A index \in \#(first)..\#(last) :
+                    ActualCFGBytes[index] = CFGGrammarBytes[index]
+                    <2>bytes. \A index \in \#(first)..\#(last) :
+                        CFGExpectedPage\#(page)[index - \#(pageOffset)] = \#(bytes)[index - \#(offset)]
+                        BY ONLY SMT DEF CFGExpectedPage\#(page), \#(bytes)
+                    <2>. QED BY ONLY <1>domain, <1>page\#(page), <1>line\#(ordinal), <2>bytes, SMT
+                        DEF ActualCFGBytes, CFGGrammarBytes
+                """#)
+            }
+            offset = end
+        }
         let tlaFacts = (tlaBlocks.map { $0 + "AtFileOffsets" } + ["SMT"]).joined(separator: ", ")
         let definitions = #"""
         CFGSpecificationLine == \#(byteVector("SPECIFICATION Spec\n".utf8))
@@ -475,23 +581,61 @@ package enum CheckingSelectionEvidence {
         CFGCheckingRows == \#(TLAValue.tuple(directives))
         CFGInvariantPrefix == \#(byteVector("INVARIANT ".utf8))
         CFGPropertyPrefix == \#(byteVector("PROPERTY ".utf8))
-        CFGCheckingLine(row) ==
-            (IF row.kind = "INVARIANT" THEN CFGInvariantPrefix ELSE CFGPropertyPrefix) \o row.symbol \o <<10>>
-        CFGGrammarBytes == \#(cfgExpressions.joined(separator: " \\o "))
-        CFGFlatGrammarBytes == \#(byteVector(cfgBytes))
+        CFGDirectivePrefix(row) == IF row.kind = "INVARIANT" THEN CFGInvariantPrefix ELSE CFGPropertyPrefix
+        CFGCheckingLine(row) == (CFGDirectivePrefix(row) \o row.symbol) \o <<10>>
+        LOCAL THEOREM CFGLineIsItsCheckedParts ==
+            ASSUME NEW prefix \in Seq(Int), NEW symbol \in Seq(Int), NEW line \in Seq(Int),
+                   Len(line) = Len(prefix) + Len(symbol) + 1,
+                   \A index \in 1..Len(prefix) : line[index] = prefix[index],
+                   \A index \in 1..Len(symbol) : line[Len(prefix) + index] = symbol[index],
+                   line[Len(line)] = 10
+            PROVE /\ line = (prefix \o symbol) \o <<10>>
+                  /\ DOMAIN ((prefix \o symbol) \o <<10>>) = 1..Len(line)
+        PROOF
+        <1>parts. /\ Len(prefix) \in Nat /\ Len(symbol) \in Nat
+                  /\ <<10>> \in Seq(Int) /\ Len(<<10>>) = 1
+            BY ONLY (prefix \in Seq(Int)), (symbol \in Seq(Int)), SeqDef, LenProperties, SMT
+        <1>prefixSymbol. /\ prefix \o symbol \in Seq(Int)
+                         /\ Len(prefix \o symbol) = Len(prefix) + Len(symbol)
+                         /\ \A index \in 1..(Len(prefix) + Len(symbol)) :
+                               (prefix \o symbol)[index] =
+                                   IF index <= Len(prefix) THEN prefix[index] ELSE symbol[index - Len(prefix)]
+            BY ONLY (prefix \in Seq(Int)), (symbol \in Seq(Int)), ConcatProperties, SMT
+        <1>complete. /\ (prefix \o symbol) \o <<10>> \in Seq(Int)
+                     /\ Len((prefix \o symbol) \o <<10>>) = Len(line)
+                     /\ \A index \in 1..Len(line) :
+                           ((prefix \o symbol) \o <<10>>)[index] =
+                               IF index <= Len(prefix) + Len(symbol) THEN (prefix \o symbol)[index] ELSE 10
+            BY ONLY <1>parts, <1>prefixSymbol, Len(line) = Len(prefix) + Len(symbol) + 1, ConcatProperties, SMT
+        <1>entries. \A index \in 1..Len(line) : line[index] = ((prefix \o symbol) \o <<10>>)[index]
+            <2>. TAKE index \in 1..Len(line)
+            <2>keyword. CASE index <= Len(prefix)
+                BY ONLY <2>keyword, index \in 1..Len(line), <1>parts, <1>prefixSymbol, <1>complete,
+                    (\A i \in 1..Len(prefix) : line[i] = prefix[i]), SMT
+            <2>name. CASE Len(prefix) < index /\ index <= Len(prefix) + Len(symbol)
+                BY ONLY <2>name, index \in 1..Len(line), <1>prefixSymbol, <1>complete,
+                    (\A i \in 1..Len(symbol) : line[Len(prefix) + i] = symbol[i]), SMT
+            <2>newline. CASE index > Len(prefix) + Len(symbol)
+                BY ONLY <2>newline, index \in 1..Len(line), <1>complete,
+                    Len(line) = Len(prefix) + Len(symbol) + 1, line[Len(line)] = 10, SMT
+            <2>. QED BY ONLY <2>keyword, <2>name, <2>newline, SMT
+        <1>. QED BY ONLY (line \in Seq(Int)), <1>complete, <1>entries, SeqEqual, LenProperties, SMT
+
+        \#(cfgLineDefinitions.joined(separator: "\n"))
+        CFGGrammarBytes ==
+            [index \in 1..\#(cfgBytes.count) |-> CASE \#(cfgCases.joined(separator: "\n        [] "))]
         ActualCFGBytes == [index \in 1..CallerInputSize |-> CallerInputByte[index - 1]]
         CFGBytesMatch == ActualCFGBytes = CFGGrammarBytes
 
         THEOREM ActualCFGBytesHaveExactlyTheCheckingDirectives == CFGBytesMatch
         PROOF
-        <1>grammar. CFGFlatGrammarBytes = CFGGrammarBytes
-            BY ONLY IsaM("simp") DEF CFGFlatGrammarBytes, CFGGrammarBytes, CFGSpecificationLine, CFGDeadlockLine,
-                CFGDeadlockCode, CFGCheckingLine, CFGCheckingRows, CFGInvariantPrefix, CFGPropertyPrefix
-        <1>domain. DOMAIN ActualCFGBytes = DOMAIN CFGFlatGrammarBytes
-            BY ONLY SMT DEF ActualCFGBytes, CFGFlatGrammarBytes, CallerInputSize
-        <1>bytes. \A index \in DOMAIN CFGFlatGrammarBytes : ActualCFGBytes[index] = CFGFlatGrammarBytes[index]
-            BY ONLY \#(cfgFacts), SMT DEF ActualCFGBytes, CFGFlatGrammarBytes, CallerInputSize
-        <1>. QED BY ONLY <1>grammar, <1>domain, <1>bytes, SMT DEF CFGBytesMatch, ActualCFGBytes, CFGFlatGrammarBytes
+        <1>domain. /\ DOMAIN ActualCFGBytes = 1..\#(cfgBytes.count)
+                   /\ DOMAIN CFGGrammarBytes = 1..\#(cfgBytes.count)
+            BY ONLY SMT DEF ActualCFGBytes, CFGGrammarBytes, CallerInputSize
+        \#(cfgProofs.joined(separator: "\n"))
+        <1>entries. \A index \in DOMAIN CFGGrammarBytes : ActualCFGBytes[index] = CFGGrammarBytes[index]
+            BY ONLY <1>domain, \#(checkedFragments.joined(separator: ", ")), SMT
+        <1>. QED BY ONLY <1>domain, <1>entries, SMT DEF CFGBytesMatch, ActualCFGBytes, CFGGrammarBytes
 
         CFGSymbolNames(kind) ==
             {CFGCheckingRows[index].name : index \in {i \in DOMAIN CFGCheckingRows : CFGCheckingRows[i].kind = kind}}
@@ -519,7 +663,7 @@ package enum CheckingSelectionEvidence {
         """#
         let pages = references("CallerInput", pages: cfgPages) + references("CompilerInput", pages: tlaPages.sorted())
         let compilerInputs = tlaBlocks.isEmpty ? ["CompilerInputBytes"] : tlaBlocks
-        return ((cfgBlocks + compilerInputs).joined(separator: ", "), "\\* " + pages.joined(separator: " "), definitions)
+        return ((["SequenceTheorems_proofs"] + cfgBlocks + compilerInputs).joined(separator: ", "), "\\* " + pages.joined(separator: " "), definitions)
     }
 
     private static let selectionProof = #"""
