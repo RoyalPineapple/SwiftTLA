@@ -267,7 +267,7 @@ package enum InitialFailureEvidence {
         }
         let descriptor = """
         ---- MODULE SwiftTLAStayActionSource ----
-        EXTENDS Sequences, TLAPS
+        EXTENDS Naturals, Sequences, TLAPS
 
         WitnessCopyFields == \(TLAValue.set(Set(fields.map(TLAValue.string))))
         WitnessCopyActionRows == \(TLAValue.tuple(rows))
