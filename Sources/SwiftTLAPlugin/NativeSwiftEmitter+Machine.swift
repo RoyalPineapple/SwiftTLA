@@ -1,3 +1,4 @@
+import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftParser
@@ -77,9 +78,20 @@ extension NativeSwiftEmitter {
         machineDeclarations[snapshotIndex] = snapshotDeclarations[0]
         try verifyGeneratedSnapshotOutput(machineDeclarations[snapshotIndex], hiddenFields: hiddenFields,
             structuralIdentity: hiddenVariables.contains { containsSourceNominal(program.variableTypes[$0.id]!) })
-        try verifyGeneratedValidationDelegationOutput(machineDeclarations.first {
+        guard let validationIndex = machineDeclarations.firstIndex(where: {
             $0.as(FunctionDeclSyntax.self)?.name.text == "visitValidationOutcomes"
-        })
+        }) else { throw unsupported("missing visitValidationOutcomes declaration") }
+        if let source = model.directCopySource {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let encoded = try encoder.encode(source).base64EncodedString()
+            let receipt = Trivia(pieces: [
+                .newlines(1), .lineComment("// SwiftTLA.DirectCopySource.v1 " + encoded), .newlines(1)
+            ])
+            machineDeclarations[validationIndex].leadingTrivia =
+                receipt + machineDeclarations[validationIndex].leadingTrivia
+        }
+        try verifyGeneratedValidationDelegationOutput(machineDeclarations[validationIndex])
         declarations += machineDeclarations
         declarations += try nativeDeclarations("""
         private init(execution: Snapshot\(appendedParameters)) {

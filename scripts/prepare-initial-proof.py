@@ -620,7 +620,7 @@ def main():
         imports = packet / "proof-inputs"
         imports.mkdir()
         names = ["OrderedIntExpressionRule", "IndexedHistoryRules", "InitializationOutcomeRules",
-                 "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule", "OrderedScalarCopyRule",
+                 "InitializationComposition", "OrderedIntInitializationComposition", "FiniteSetMembershipRule", "OrderedScalarCopyRule", "DirectCopyParserRule",
                  "ScalarCopyOutputBinding", "OrderedIntAssignmentListRule",
                  "CertifiedReadAssignmentObservation", "PhysicalIntAssignmentRhsRule", "NativeIntAssignmentListRule",
                  "RenderedIntAssignmentTerms", "RenderedIntAssignmentActionRule", "OrderedAssignmentOutputRules",

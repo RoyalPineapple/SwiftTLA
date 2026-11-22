@@ -1,12 +1,13 @@
 import SwiftParser
 import SwiftSyntax
 import SwiftTLA
+import SwiftTLACompilerSupport
 
 // Read the same scoped Algorithm for copy binding and sequential-control evidence.
 enum AuthoredCopySyntax {
     struct Selection {
         fileprivate let members: MemberBlockItemListSyntax
-        fileprivate let algorithm: String
+        let algorithm: String
         fileprivate let scope: String
         fileprivate let body: CodeBlockItemListSyntax
     }
@@ -23,47 +24,42 @@ enum AuthoredCopySyntax {
             .filter { name($0.name) == modelName }
         guard !file.hasError, models.count == 1, let model = models.first else { throw unsupported }
         let members = model.memberBlock.members
-        let specs = members.compactMap { $0.decl.as(VariableDeclSyntax.self) }.filter { declaration in
-            declaration.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "spec" }
+        guard let spec = try ModelSpecificationSyntax.find(in: members, defaultName: modelName) else {
+            throw unsupported
         }
-        guard specs.count == 1, let spec = specs.first,
-              spec.modifiers.contains(where: { $0.name.text == "static" }),
-              spec.bindings.count == 1, let binding = spec.bindings.first, binding.initializer == nil,
-              let body = binding.accessorBlock?.accessors.as(CodeBlockItemListSyntax.self), body.count == 1,
-              let macro = body.first?.item.as(MacroExpansionExprSyntax.self), macro.macroName.text == "spec",
-              let specBody = macro.trailingClosure else { throw unsupported }
-
-        return (members, specBody)
+        return (members, spec.closure)
     }
 
     static func select(source: String, modelName: String) throws -> Selection {
         let (members, specBody) = try specification(source: source, modelName: modelName)
-        let registered = specBody.statements.compactMap { reference($0.item.as(ExprSyntax.self)) }
-        let algorithms = specBody.statements.compactMap { item -> (binding: String, call: FunctionCallExprSyntax)? in
-            guard let (binding, value) = letBinding(item), registered.filter({ $0 == binding }).count == 1,
-                  let call = value.as(FunctionCallExprSyntax.self), reference(call.calledExpression) == "Algorithm" else { return nil }
-            return (binding, call)
+        var bindings: [String: FunctionCallExprSyntax] = [:]
+        var selected: (name: String, call: FunctionCallExprSyntax)?
+        for item in specBody.statements {
+            if let (binding, value) = letBinding(item), let call = value.as(FunctionCallExprSyntax.self),
+               reference(call.calledExpression) == "Algorithm" {
+                guard bindings.updateValue(call, forKey: binding) == nil else { throw unsupported }
+            } else if let binding = reference(item.item.as(ExprSyntax.self)), let call = bindings[binding] {
+                guard selected == nil else { throw unsupported }
+                selected = (binding, call)
+            }
         }
-        guard algorithms.count == 1, let (binding, algorithm) = algorithms.first,
-              algorithm.trailingClosure == nil, algorithm.additionalTrailingClosures.isEmpty,
-              algorithm.arguments.filter({ $0.label?.text == "scoped" }).count == 1,
-              algorithm.arguments.allSatisfy({ ["label", "scoped"].contains($0.label?.text ?? "") }),
-              let algorithmBody = algorithm.arguments.first(where: { $0.label?.text == "scoped" })?
-                .expression.as(ClosureExprSyntax.self),
-              let scope = algorithmBody.signature?.parameterClause?.as(ClosureShorthandParameterListSyntax.self),
-              scope.count == 1, let parameter = scope.first else { throw unsupported }
-        return Selection(members: members, algorithm: binding, scope: name(parameter.name),
-                         body: algorithmBody.statements)
+        guard let selected, let body = ModelSpecificationSyntax.algorithmBody(selected.call) else { throw unsupported }
+        let parameters = ModelSpecificationSyntax.parameterNames(in: body)
+        guard parameters.count == 1, let scope = parameters.first else { throw unsupported }
+        return Selection(members: members, algorithm: selected.name, scope: scope, body: body.statements)
     }
 
-    static func proofInputs(_ selection: Selection) throws -> String {
+    static func proofInputs(_ selection: Selection, comparingParsedRows: Bool = false) throws -> String {
+        let fields = comparingParsedRows ? "ParsedCopyFields" : "WitnessCopyFields"
+        let rows = comparingParsedRows ? "ParsedCopyActionRows" : "WitnessCopyActionRows"
+        let lexicalTheorem = comparingParsedRows ? "AuthoredCopySyntaxBindsParsedRows" : "AuthoredCopySyntaxBindsWitnessRows"
         var declarations: [String] = []
-        var localBindings: Set<String> = []
+        var localBindings: Set<[UInt8]> = []
         var steps: [String] = []
         var enumNames: Set<String> = []
         for item in selection.body {
-            if steps.isEmpty, let (binding, explicit) = try rootDeclaration(item, in: selection.scope) {
-                guard localBindings.insert(binding).inserted else { throw unsupported }
+            if let (binding, explicit) = try rootDeclaration(item, in: selection.scope) {
+                guard localBindings.insert(Array(binding.utf8)).inserted else { throw unsupported }
                 declarations.append("[binding |-> \(TLAValue.string(binding)), explicit |-> \(optionalLiteral(explicit))]")
                 continue
             }
@@ -77,20 +73,24 @@ enum AuthoredCopySyntax {
                       assign.trailingClosure == nil, assign.additionalTrailingClosures.isEmpty,
                       assign.arguments.count == 2, let target = assign.arguments.first, target.label == nil,
                       let read = assign.arguments.last, read.label?.text == "to",
-                      let targetName = reference(target.expression), let readName = reference(read.expression) else { throw unsupported }
+                      let targetName = reference(target.expression), let readName = reference(read.expression),
+                      localBindings.contains(Array(targetName.utf8)),
+                      localBindings.contains(Array(readName.utf8)) else { throw unsupported }
                 return "[targetBinding |-> \(TLAValue.string(targetName)), readBinding |-> \(TLAValue.string(readName))]"
             }
             enumNames.insert(label.enumName)
-            steps.append("[enumName |-> \(TLAValue.string(label.enumName)), caseName |-> \(TLAValue.string(label.caseName)), copies |-> \(tuple(copies))]")
+            let visibility = comparingParsedRows ? ", visible |-> \(declarations.count)" : ""
+            steps.append("[enumName |-> \(TLAValue.string(label.enumName)), caseName |-> \(TLAValue.string(label.caseName)), copies |-> \(tuple(copies))\(visibility)]")
         }
         guard !declarations.isEmpty, !steps.isEmpty else { throw unsupported }
         let enumCases = try enumBindings(in: selection.members, named: enumNames).map { label, explicit in
             "[enumName |-> \(TLAValue.string(label.enumName)), caseName |-> \(TLAValue.string(label.caseName)), explicit |-> \(optionalLiteral(explicit))]"
         }
-        return #"""
+        let orderedDeclarations = comparingParsedRows ? "\nAuthoredCopyDeclarationOrder == \(tuple(declarations))" : ""
+        let syntaxProof = #"""
         AuthoredCopyDeclarations == \#(set(declarations))
         AuthoredCopyEnumCases == \#(set(enumCases))
-        AuthoredCopySteps == \#(tuple(steps))
+        AuthoredCopySteps == \#(tuple(steps))\#(orderedDeclarations)
 
         LOCAL NameOrSpelling(explicit, spelling) == IF explicit.present THEN explicit.value ELSE spelling
         LOCAL VariableNames(rows) == {NameOrSpelling(row.explicit, row.binding) : row \in rows}
@@ -197,71 +197,308 @@ enum AuthoredCopySyntax {
             BY ONLY SMT DEF CopyFunction, CopyTargets
         <1>. QED BY <1>label, <1>rows, <1>targets, SMT DEF ResolveStep, FunctionShapedStep, RowBindings, copies
 
-        THEOREM AuthoredCopySyntaxBindsWitnessRows ==
-            /\ AuthoredCopyFields = WitnessCopyFields
-            /\ AuthoredCopyActionRows = WitnessCopyActionRows
+        THEOREM \#(lexicalTheorem) ==
+            /\ AuthoredCopyFields = \#(fields)
+            /\ AuthoredCopyActionRows = \#(rows)
             /\ \A left, right \in DOMAIN AuthoredCopyActionRows :
                  left # right => AuthoredCopyActionRows[left].label # AuthoredCopyActionRows[right].label
         PROOF
-        <1>fields. AuthoredCopyFields = WitnessCopyFields
-            BY ONLY SMT DEF AuthoredCopyFields, AuthoredCopyDeclarations, VariableNames, NameOrSpelling, WitnessCopyFields
-        <1>domain. DOMAIN AuthoredCopyActionRows = DOMAIN WitnessCopyActionRows
-            BY ONLY SMT DEF AuthoredCopyActionRows, AuthoredCopySteps, WitnessCopyActionRows
-        <1>points. \A row \in DOMAIN WitnessCopyActionRows :
-            AuthoredCopyActionRows[row] = WitnessCopyActionRows[row]
+        <1>fields. AuthoredCopyFields = \#(fields)
+            BY ONLY SMT DEF AuthoredCopyFields, AuthoredCopyDeclarations, VariableNames, NameOrSpelling, \#(fields)
+        <1>domain. DOMAIN AuthoredCopyActionRows = DOMAIN \#(rows)
+            BY ONLY SMT DEF AuthoredCopyActionRows, AuthoredCopySteps, \#(rows)
+        <1>points. \A row \in DOMAIN \#(rows) :
+            AuthoredCopyActionRows[row] = \#(rows)[row]
             PROOF
-            <2>. SUFFICES ASSUME NEW row \in DOMAIN WitnessCopyActionRows
-                         PROVE AuthoredCopyActionRows[row] = WitnessCopyActionRows[row]
+            <2>. SUFFICES ASSUME NEW row \in DOMAIN \#(rows)
+                         PROVE AuthoredCopyActionRows[row] = \#(rows)[row]
                 OBVIOUS
             <2>. DEFINE raw == AuthoredCopySteps[row]
-                        witness == WitnessCopyActionRows[row]
+                        witness == \#(rows)[row]
             <2>label. LabelNames(raw) = {witness.label}
-                BY ONLY (row \in DOMAIN WitnessCopyActionRows), SMT
-                    DEF raw, witness, AuthoredCopySteps, WitnessCopyActionRows,
+                BY ONLY (row \in DOMAIN \#(rows)), SMT
+                    DEF raw, witness, AuthoredCopySteps, \#(rows),
                         LabelNames, NameOrSpelling, AuthoredCopyEnumCases
             <2>count. DOMAIN raw.copies = DOMAIN witness.copies
-                BY ONLY (row \in DOMAIN WitnessCopyActionRows), SMT
-                    DEF raw, witness, AuthoredCopySteps, WitnessCopyActionRows
+                BY ONLY (row \in DOMAIN \#(rows)), SMT
+                    DEF raw, witness, AuthoredCopySteps, \#(rows)
             <2>all. \A index \in DOMAIN witness.copies : CopyNamesBind(raw.copies[index], witness.copies[index])
                 PROOF
                 <3>. SUFFICES ASSUME NEW index \in DOMAIN witness.copies
                              PROVE CopyNamesBind(raw.copies[index], witness.copies[index])
                     OBVIOUS
                 <3>target. BindingNames(raw.copies[index].targetBinding) = {witness.copies[index].target}
-                    BY ONLY (row \in DOMAIN WitnessCopyActionRows), (index \in DOMAIN witness.copies), SMT
-                        DEF raw, witness, AuthoredCopySteps, WitnessCopyActionRows, BindingNames,
+                    BY ONLY (row \in DOMAIN \#(rows)), (index \in DOMAIN witness.copies), SMT
+                        DEF raw, witness, AuthoredCopySteps, \#(rows), BindingNames,
                             VariableNames, NameOrSpelling, AuthoredCopyDeclarations
                 <3>read. BindingNames(raw.copies[index].readBinding) = {witness.copies[index].read}
-                    BY ONLY (row \in DOMAIN WitnessCopyActionRows), (index \in DOMAIN witness.copies), SMT
-                        DEF raw, witness, AuthoredCopySteps, WitnessCopyActionRows, BindingNames,
+                    BY ONLY (row \in DOMAIN \#(rows)), (index \in DOMAIN witness.copies), SMT
+                        DEF raw, witness, AuthoredCopySteps, \#(rows), BindingNames,
                             VariableNames, NameOrSpelling, AuthoredCopyDeclarations
                 <3>shape. witness.copies[index] =
                     [target |-> witness.copies[index].target, read |-> witness.copies[index].read]
-                    BY ONLY (row \in DOMAIN WitnessCopyActionRows), (index \in DOMAIN witness.copies), SMT
-                        DEF witness, WitnessCopyActionRows
+                    BY ONLY (row \in DOMAIN \#(rows)), (index \in DOMAIN witness.copies), SMT
+                        DEF witness, \#(rows)
                 <3>. QED BY ONLY <3>target, <3>read, <3>shape DEF CopyNamesBind
             <2>frame. AuthoredCopyFields \ CopyTargets(witness.copies) = witness.frame
-                BY ONLY (row \in DOMAIN WitnessCopyActionRows), <1>fields, SMT
-                    DEF witness, WitnessCopyActionRows, WitnessCopyFields, CopyTargets
+                BY ONLY (row \in DOMAIN \#(rows)), <1>fields, SMT
+                    DEF witness, \#(rows), \#(fields), CopyTargets
             <2>bindings. RowBindings(raw, witness)
                 BY ONLY <2>label, <2>count, <2>all, <2>frame DEF RowBindings
             <2>resolved. ResolveStep(raw) = FunctionShapedStep(witness)
                 BY ONLY <2>bindings, LexicalBindingsDetermineTheOrderedCopyStep, SMT
             <2>shape. FunctionShapedStep(witness) = witness
-                BY ONLY (row \in DOMAIN WitnessCopyActionRows), SMT
-                    DEF FunctionShapedStep, CopyFunction, witness, WitnessCopyActionRows
-            <2>. QED BY ONLY (row \in DOMAIN WitnessCopyActionRows), <1>domain, <2>resolved, <2>shape, SMT
-                DEF AuthoredCopyActionRows, AuthoredCopySteps, raw, witness, WitnessCopyActionRows
-        <1>functions. AuthoredCopyActionRows = CopyFunction(WitnessCopyActionRows)
+                BY ONLY (row \in DOMAIN \#(rows)), SMT
+                    DEF FunctionShapedStep, CopyFunction, witness, \#(rows)
+            <2>. QED BY ONLY (row \in DOMAIN \#(rows)), <1>domain, <2>resolved, <2>shape, SMT
+                DEF AuthoredCopyActionRows, AuthoredCopySteps, raw, witness, \#(rows)
+        <1>functions. AuthoredCopyActionRows = CopyFunction(\#(rows))
             BY ONLY <1>domain, <1>points, SMT DEF AuthoredCopyActionRows, CopyFunction
-        <1>rows. AuthoredCopyActionRows = WitnessCopyActionRows
-            BY ONLY <1>functions, SMT DEF CopyFunction, WitnessCopyActionRows
-        <1>labels. \A left, right \in DOMAIN WitnessCopyActionRows :
-                     left # right => WitnessCopyActionRows[left].label # WitnessCopyActionRows[right].label
-            BY ONLY SMT DEF WitnessCopyActionRows
+        <1>rows. AuthoredCopyActionRows = \#(rows)
+            BY ONLY <1>functions, SMT DEF CopyFunction, \#(rows)
+        <1>labels. \A left, right \in DOMAIN \#(rows) :
+                     left # right => \#(rows)[left].label # \#(rows)[right].label
+            BY ONLY SMT DEF \#(rows)
         <1>. QED BY ONLY <1>fields, <1>rows, <1>labels, SMT
         """#
+        return comparingParsedRows
+            ? [syntaxProof, copyParserProof, copyBuilderProof, copyFrontendProof].joined(separator: "\n\n")
+            : syntaxProof
     }
+
+    private static let copyParserProof = #"""
+        LOCAL DirectParser == INSTANCE DirectCopyParserRule
+
+        LOCAL ConstructedCopyRows ==
+            DirectParser!ParserCopyRows(<<>>, AuthoredCopyDeclarationOrder, AuthoredCopyEnumCases, AuthoredCopySteps)
+        LOCAL ConstructedCopyFields == DirectParser!ParserCopyFields(AuthoredCopyDeclarationOrder)
+
+        THEOREM ActualParserRowsHaveAuthoredLexicalConstruction ==
+            /\ DirectParser!WellBoundDirectCopySyntax(AuthoredCopyDeclarationOrder, AuthoredCopyEnumCases, AuthoredCopySteps)
+            /\ ParsedCopyFields = ConstructedCopyFields
+            /\ ParsedCopyActionRows = ConstructedCopyRows
+            /\ DOMAIN ParsedCopyActionRows = DOMAIN AuthoredCopySteps
+        PROOF
+        <1>inputs. DirectParser!WellBoundDirectCopySyntax(
+                AuthoredCopyDeclarationOrder, AuthoredCopyEnumCases, AuthoredCopySteps)
+            BY ONLY SMT DEF DirectParser!WellBoundDirectCopySyntax, DirectParser!ParserSequence,
+                DirectParser!DeclaredCopyBindings, DirectParser!RegisteredParserCases,
+                AuthoredCopyDeclarationOrder, AuthoredCopyEnumCases, AuthoredCopySteps
+        <1>empty. DirectParser!ParserSequence(<<>>)
+            BY ONLY SMT DEF DirectParser!ParserSequence
+        <1>construction. /\ DirectParser!ParserRowsAppendInOrder(AuthoredCopySteps, ConstructedCopyRows)
+                          /\ \A index \in DOMAIN AuthoredCopySteps :
+                               LET step == AuthoredCopySteps[index]
+                                   scope == DirectParser!ParserScopeAt(<<>>, AuthoredCopyDeclarationOrder, step.visible)
+                               IN DirectParser!ParserRowUsesAuthoredSyntax(AuthoredCopyDeclarationOrder, scope,
+                                    AuthoredCopyEnumCases, step, ConstructedCopyRows[index])
+            BY ONLY <1>inputs, <1>empty, DirectParser!WellBoundDirectCopySyntaxProducesOrderedRows, SMT
+                DEF ConstructedCopyRows
+        <1>fields. ParsedCopyFields = ConstructedCopyFields
+            BY ONLY SMT DEF ConstructedCopyFields, DirectParser!ParserCopyFields,
+                DirectParser!ParserRoot, DirectParser!ParserName, AuthoredCopyDeclarationOrder, ParsedCopyFields
+        <1>domain. /\ DOMAIN ConstructedCopyRows = DOMAIN AuthoredCopySteps
+                   /\ DOMAIN ParsedCopyActionRows = DOMAIN AuthoredCopySteps
+            BY ONLY <1>construction, SMT DEF DirectParser!ParserRowsAppendInOrder,
+                AuthoredCopySteps, ParsedCopyActionRows
+        <1>point. ASSUME NEW index \in DOMAIN AuthoredCopySteps
+                   PROVE ConstructedCopyRows[index] = ParsedCopyActionRows[index]
+            PROOF
+            <2>. DEFINE step == AuthoredCopySteps[index]
+                        actual == ParsedCopyActionRows[index]
+                        computed == ConstructedCopyRows[index]
+                        scope == DirectParser!ParserScopeAt(<<>>, AuthoredCopyDeclarationOrder, step.visible)
+            <2>semantics. DirectParser!ParserRowUsesAuthoredSyntax(
+                    AuthoredCopyDeclarationOrder, scope, AuthoredCopyEnumCases, step, computed)
+                BY ONLY (index \in DOMAIN AuthoredCopySteps), <1>construction, SMT DEF step, computed, scope
+            <2>label. computed.label = actual.label
+                <3>enum. \A entry \in DirectParser!RegisteredParserCases(AuthoredCopyEnumCases, step) :
+                              DirectParser!RegisteredCaseRaw(entry) = actual.label
+                    BY ONLY (index \in DOMAIN AuthoredCopySteps), <1>domain, SMT
+                        DEF DirectParser!RegisteredParserCases, DirectParser!RegisteredCaseRaw,
+                            DirectParser!ParserName, AuthoredCopyEnumCases, AuthoredCopySteps,
+                            ParsedCopyActionRows, step, actual
+                <3>. QED BY ONLY <2>semantics, <3>enum, SMT DEF DirectParser!ParserRowUsesAuthoredSyntax
+            <2>length. /\ DOMAIN computed.copies = DOMAIN step.copies
+                       /\ DOMAIN actual.copies = DOMAIN step.copies
+                BY ONLY (index \in DOMAIN AuthoredCopySteps), <1>domain, <2>semantics, SMT
+                    DEF DirectParser!ParserRowUsesAuthoredSyntax, DirectParser!ParserRowsAppendInOrder,
+                        AuthoredCopySteps, ParsedCopyActionRows, step, actual
+            <2>pair. ASSUME NEW position \in DOMAIN step.copies
+                      PROVE computed.copies[position] = actual.copies[position]
+                PROOF
+                <3>. DEFINE source == step.copies[position]
+                            observed == actual.copies[position]
+                <3>visible. \E target, read \in 1..step.visible :
+                    /\ AuthoredCopyDeclarationOrder[target].binding = source.targetBinding
+                    /\ AuthoredCopyDeclarationOrder[read].binding = source.readBinding
+                    /\ DirectParser!ParserRoot(AuthoredCopyDeclarationOrder[target]) = observed.target
+                    /\ DirectParser!ParserRoot(AuthoredCopyDeclarationOrder[read]) = observed.read
+                    BY ONLY (index \in DOMAIN AuthoredCopySteps), (position \in DOMAIN step.copies),
+                        <1>domain, <2>length, SMT DEF AuthoredCopyDeclarationOrder, AuthoredCopySteps,
+                            ParsedCopyActionRows, DirectParser!ParserRoot, DirectParser!ParserName,
+                            step, actual, source, observed
+                <3>record. observed = [target |-> observed.target, read |-> observed.read]
+                    BY ONLY (index \in DOMAIN AuthoredCopySteps), (position \in DOMAIN step.copies),
+                        <1>domain, <2>length, SMT DEF ParsedCopyActionRows, actual, observed
+                <3>. QED BY ONLY (position \in DOMAIN step.copies), <2>semantics, <3>visible, <3>record, SMT
+                    DEF DirectParser!ParserRowUsesAuthoredSyntax, DirectParser!ParserCopyUsesBothBindings, source, observed
+            <2>shapes. /\ computed.copies = [position \in DOMAIN step.copies |-> computed.copies[position]]
+                       /\ actual.copies = [position \in DOMAIN step.copies |-> actual.copies[position]]
+                BY ONLY (index \in DOMAIN AuthoredCopySteps), <1>domain, <1>inputs, <2>semantics, <2>length, SMT
+                    DEF DirectParser!ParserRowUsesAuthoredSyntax, DirectParser!ParserRowsAppendInOrder,
+                        DirectParser!WellBoundDirectCopySyntax, DirectParser!ParserSequence, DirectParser!ParserPrefix,
+                        ParsedCopyActionRows, step, actual
+            <2>copies. computed.copies = actual.copies
+                BY ONLY <2>pair, <2>shapes, SMT
+            <2>frame. computed.frame = actual.frame
+                BY ONLY (index \in DOMAIN AuthoredCopySteps), <1>domain, <1>fields, <2>semantics, <2>copies, SMT
+                    DEF ConstructedCopyFields, DirectParser!ParserRowUsesAuthoredSyntax, DirectParser!ParserTargets,
+                        ParsedCopyFields, ParsedCopyActionRows, actual
+            <2>. QED BY ONLY (index \in DOMAIN AuthoredCopySteps), <1>domain, <1>inputs, <2>label, <2>copies, <2>frame, SMT
+                DEF ConstructedCopyRows, DirectParser!ParserCopyRows, DirectParser!ParserCopyRow,
+                    DirectParser!WellBoundDirectCopySyntax, DirectParser!ParserSequence,
+                    ParsedCopyActionRows, actual, computed
+        <1>shapes. /\ ConstructedCopyRows = [index \in DOMAIN AuthoredCopySteps |-> ConstructedCopyRows[index]]
+                   /\ ParsedCopyActionRows = [index \in DOMAIN AuthoredCopySteps |-> ParsedCopyActionRows[index]]
+            BY ONLY <1>domain, <1>construction, <1>inputs, SMT DEF
+                DirectParser!WellBoundDirectCopySyntax, DirectParser!ParserRowsAppendInOrder,
+                DirectParser!ParserPrefix, DirectParser!ParserSequence, ParsedCopyActionRows
+        <1>rows. ParsedCopyActionRows = ConstructedCopyRows
+            BY ONLY <1>point, <1>shapes, SMT
+        <1>. QED BY ONLY <1>inputs, <1>fields, <1>rows, <1>domain
+        """#
+
+    private static let copyBuilderProof = #"""
+        LOCAL CopyBuilder == INSTANCE OrderedScalarCopyRule
+        LOCAL CopyBuilderSequences == INSTANCE SequenceTheorems
+        LOCAL CopyBuilderDeclarations ==
+            [index \in DOMAIN AuthoredCopyDeclarationOrder |->
+                DirectParser!ParserRoot(AuthoredCopyDeclarationOrder[index])]
+        LOCAL CopyBuilderSteps ==
+            [index \in DOMAIN AuthoredCopySteps |->
+                [label |-> ParsedCopyActionRows[index].label, copies |-> AuthoredCopySteps[index].copies]]
+
+        THEOREM AuthoredCopyBuilderConstructsTheCompilerInventory ==
+            CopyBuilder!DirectCopyBuilderInventoryExecution(WitnessCopyFields, CopyBuilderDeclarations,
+                AuthoredCopyOrigins, CopyBuilderSteps)
+        PROOF
+        <1>parser. /\ DirectParser!ParserSequence(AuthoredCopyDeclarationOrder)
+                   /\ DirectParser!ParserSequence(AuthoredCopySteps)
+            BY ONLY ActualParserRowsHaveAuthoredLexicalConstruction DEF DirectParser!WellBoundDirectCopySyntax
+        <1>present. /\ 1 \in DOMAIN AuthoredCopyDeclarationOrder /\ 1 \in DOMAIN AuthoredCopySteps
+            BY ONLY SMT DEF AuthoredCopyDeclarationOrder, AuthoredCopySteps
+        <1>sourceShape.
+            /\ Len(AuthoredCopyDeclarationOrder) \in Nat \ {0}
+            /\ DOMAIN AuthoredCopyDeclarationOrder = 1..Len(AuthoredCopyDeclarationOrder)
+            /\ Len(AuthoredCopySteps) \in Nat \ {0} /\ DOMAIN AuthoredCopySteps = 1..Len(AuthoredCopySteps)
+            BY ONLY <1>parser, <1>present, SMT DEF DirectParser!ParserSequence
+        <1>roots. {CopyBuilderDeclarations[index] : index \in DOMAIN CopyBuilderDeclarations} = WitnessCopyFields
+            BY ONLY ActualParserRowsHaveAuthoredLexicalConstruction, ParsedDirectCopyRowsMatchTheActualBuilder, SMT
+                DEF ConstructedCopyFields, DirectParser!ParserCopyFields, CopyBuilderDeclarations
+        <1>declarations.
+            /\ Len(CopyBuilderDeclarations) \in Nat \ {0}
+            /\ CopyBuilderDeclarations \in [1..Len(CopyBuilderDeclarations) -> WitnessCopyFields]
+            /\ \A key \in WitnessCopyFields : \E index \in 1..Len(CopyBuilderDeclarations) :
+                   CopyBuilderDeclarations[index] = key
+            <2>function. CopyBuilderDeclarations \in [1..Len(AuthoredCopyDeclarationOrder) -> WitnessCopyFields]
+                BY ONLY <1>sourceShape, <1>roots, SMT DEF CopyBuilderDeclarations
+            <2>sequence. CopyBuilderDeclarations \in Seq(WitnessCopyFields)
+                BY ONLY <1>sourceShape, <2>function, CopyBuilderSequences!SeqDef, SMT
+            <2>length. Len(CopyBuilderDeclarations) = Len(AuthoredCopyDeclarationOrder)
+                BY ONLY <1>sourceShape, <2>sequence, CopyBuilderSequences!LenProperties, SMT DEF CopyBuilderDeclarations
+            <2>. QED BY ONLY <1>sourceShape, <1>roots, <2>function, <2>length, SMT DEF CopyBuilderDeclarations
+        <1>distinct. \A left, right \in 1..Len(CopyBuilderDeclarations) :
+                         CopyBuilderDeclarations[left] = CopyBuilderDeclarations[right] => left = right
+            BY ONLY <1>declarations, SMT DEF CopyBuilderDeclarations, AuthoredCopyDeclarationOrder,
+                DirectParser!ParserRoot, DirectParser!ParserName
+        <1>steps.
+            /\ Len(CopyBuilderSteps) \in Nat \ {0}
+            /\ DOMAIN CopyBuilderSteps = 1..Len(CopyBuilderSteps)
+            /\ DOMAIN CopyBuilderSteps = DOMAIN AuthoredCopySteps
+            <2>. DEFINE values == {CopyBuilderSteps[index] : index \in DOMAIN CopyBuilderSteps}
+            <2>function. CopyBuilderSteps \in [1..Len(AuthoredCopySteps) -> values]
+                BY ONLY <1>sourceShape, SMT DEF CopyBuilderSteps, values
+            <2>sequence. CopyBuilderSteps \in Seq(values)
+                BY ONLY <1>sourceShape, <2>function, CopyBuilderSequences!SeqDef, SMT
+            <2>. QED BY ONLY <1>sourceShape, <2>sequence, CopyBuilderSequences!LenProperties, SMT DEF CopyBuilderSteps
+        <1>typed. \A index \in DOMAIN CopyBuilderSteps :
+            /\ CopyBuilderSteps[index].label \in STRING
+            /\ CopyBuilder!DirectCopyTypedSyntax(WitnessCopyFields, AuthoredCopyOrigins, CopyBuilderSteps[index].copies)
+            <2>. TAKE index \in DOMAIN CopyBuilderSteps
+            <2>index. /\ index \in DOMAIN AuthoredCopySteps /\ index \in DOMAIN ParsedCopyActionRows
+                BY ONLY (index \in DOMAIN CopyBuilderSteps), <1>steps, ActualParserRowsHaveAuthoredLexicalConstruction
+            <2>label. CopyBuilderSteps[index].label \in STRING
+                BY ONLY <2>index, SMT DEF CopyBuilderSteps, ParsedCopyActionRows
+            <2>copies. CopyBuilder!DirectCopyTypedSyntax(WitnessCopyFields, AuthoredCopyOrigins, CopyBuilderSteps[index].copies)
+                BY ONLY <2>index, AuthoredCopySyntaxSuppliesTypedSchedulerInput, AuthoredCopySyntaxBindsParsedRows,
+                    ParsedDirectCopyRowsMatchTheActualBuilder, SMT DEF CopyBuilderSteps, CopyBuilder!DirectCopyTypedSyntax
+            <2>. QED BY ONLY <2>label, <2>copies
+        <1>input. CopyBuilder!DirectCopyBuilderInventoryInput(WitnessCopyFields, CopyBuilderDeclarations,
+                       AuthoredCopyOrigins, CopyBuilderSteps)
+            BY ONLY <1>declarations, <1>distinct, <1>steps, <1>typed, SMT DEF CopyBuilder!DirectCopyBuilderInventoryInput
+        <1>. QED BY ONLY <1>input, CopyBuilder!DirectCopyBuilderConstructsEveryWellBoundInventory
+        """#
+
+    private static let copyFrontendProof = #"""
+        THEOREM AuthoredCopyFrontendProducesTheCompilerRows ==
+            /\ AuthoredCopyFields = WitnessCopyFields
+            /\ AuthoredCopyActionRows = WitnessCopyActionRows
+            /\ AuthoredCopyOrigins \in [DOMAIN AuthoredCopyOrigins -> WitnessCopyFields]
+            /\ DOMAIN AuthoredCopySteps = DOMAIN WitnessCopyActionRows
+            /\ \A row \in DOMAIN WitnessCopyActionRows :
+                LET raw == AuthoredCopySteps[row].copies
+                    copies == WitnessCopyActionRows[row].copies
+                IN /\ Len(raw) \in Nat \ {0}
+                   /\ DOMAIN raw = 1..Len(raw)
+                   /\ \A position \in DOMAIN raw :
+                           /\ raw[position].targetBinding \in DOMAIN AuthoredCopyOrigins
+                           /\ raw[position].readBinding \in DOMAIN AuthoredCopyOrigins
+                   /\ copies = [position \in DOMAIN raw |->
+                           [target |-> AuthoredCopyOrigins[raw[position].targetBinding],
+                            read |-> AuthoredCopyOrigins[raw[position].readBinding]]]
+        PROOF
+        <1>ordered. /\ AuthoredCopyFields = WitnessCopyFields
+                    /\ AuthoredCopyActionRows = WitnessCopyActionRows
+            BY ONLY AuthoredCopySyntaxBindsParsedRows, ParsedDirectCopyRowsMatchTheActualBuilder, SMT
+        <1>origins. AuthoredCopyOrigins \in [DOMAIN AuthoredCopyOrigins -> WitnessCopyFields]
+            BY ONLY <1>ordered, AuthoredCopySyntaxSuppliesTypedSchedulerInput, SMT
+        <1>domain. DOMAIN AuthoredCopySteps = DOMAIN WitnessCopyActionRows
+            BY ONLY ActualParserRowsHaveAuthoredLexicalConstruction, ParsedDirectCopyRowsMatchTheActualBuilder, SMT
+        <1>rows. \A row \in DOMAIN WitnessCopyActionRows :
+            LET raw == AuthoredCopySteps[row].copies
+                copies == WitnessCopyActionRows[row].copies
+            IN /\ Len(raw) \in Nat \ {0}
+               /\ DOMAIN raw = 1..Len(raw)
+               /\ \A position \in DOMAIN raw :
+                       /\ raw[position].targetBinding \in DOMAIN AuthoredCopyOrigins
+                       /\ raw[position].readBinding \in DOMAIN AuthoredCopyOrigins
+               /\ copies = [position \in DOMAIN raw |->
+                       [target |-> AuthoredCopyOrigins[raw[position].targetBinding],
+                        read |-> AuthoredCopyOrigins[raw[position].readBinding]]]
+            <2>. TAKE row \in DOMAIN WitnessCopyActionRows
+            <2>. DEFINE raw == AuthoredCopySteps[row].copies
+                        copies == WitnessCopyActionRows[row].copies
+            <2>authored. row \in DOMAIN AuthoredCopySteps
+                BY ONLY (row \in DOMAIN WitnessCopyActionRows), <1>domain
+            <2>built. Len(raw) \in Nat \ {0}
+                BY ONLY <2>authored, AuthoredCopyBuilderConstructsTheCompilerInventory, SMT
+                    DEF CopyBuilder!DirectCopyBuilderInventoryExecution, CopyBuilder!DirectCopyBuilderBodyExecution,
+                        CopyBuilderSteps, raw
+            <2>projection. /\ DOMAIN raw = 1..Len(raw)
+                           /\ \A position \in DOMAIN raw :
+                                /\ raw[position].targetBinding \in DOMAIN AuthoredCopyOrigins
+                                /\ raw[position].readBinding \in DOMAIN AuthoredCopyOrigins
+                           /\ copies = [position \in DOMAIN raw |-> copies[position]]
+                           /\ \A position \in DOMAIN raw :
+                                copies[position] =
+                                    [target |-> AuthoredCopyOrigins[raw[position].targetBinding],
+                                     read |-> AuthoredCopyOrigins[raw[position].readBinding]]
+                BY ONLY <2>authored, <1>ordered, AuthoredCopySyntaxSuppliesTypedSchedulerInput, SMT
+                    DEF raw, copies
+            <2>. QED BY ONLY <2>built, <2>projection, SMT DEF raw, copies
+        <1>. QED BY ONLY <1>ordered, <1>origins, <1>domain, <1>rows
+        """#
 
     struct UnsupportedControlSyntax: Error {
         let reason: String

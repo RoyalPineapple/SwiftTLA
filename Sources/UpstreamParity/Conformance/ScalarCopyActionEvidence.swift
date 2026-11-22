@@ -1,5 +1,7 @@
 import Foundation
 import SwiftTLA
+import SwiftParser
+import SwiftSyntax
 
 // The validator accepts any generated model through its ordinary compile and render outputs.
 package enum ScalarCopyActionEvidence {
@@ -13,13 +15,21 @@ package enum ScalarCopyActionEvidence {
 
     package static func proof(
         source: TLASpec, compilation: CompiledSpecification, rendered: RenderedSpecification,
-        authoredSource: Data, modelName: String
+        authoredSource: Data, nativeSource: String, modelName: String
     ) throws -> Proof? {
+        guard let inputText = String(data: authoredSource, encoding: .utf8), !inputText.utf8.contains(0),
+              let selection = try? AuthoredCopySyntax.select(source: inputText, modelName: modelName),
+              let independentProof = try? AuthoredCopySyntax.proofInputs(selection, comparingParsedRows: true) else { return nil }
         let layout = compilation.layout
         let output = rendered.tlaBundle
         guard source.sourceAlgorithms.count == 1, let model = source.sourceAlgorithms.first?.model,
               let frontend = model.directScalarCopyInput,
-              layout.parameters.isEmpty, layout.checkingRegisters.isEmpty,
+              frontend.algorithm == selection.algorithm else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        let parsed = try decodedParserSource(nativeSource)
+        guard parsed.algorithm == selection.algorithm else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+        guard layout.parameters.isEmpty, layout.checkingRegisters.isEmpty,
               output.imports.isEmpty, case .compiled(let id, _, _) = output.provenance,
               id == compilation.identity else { return nil }
         let checked = try compilation.render()
@@ -35,7 +45,8 @@ package enum ScalarCopyActionEvidence {
         guard counters.count == 1, let counter = counters.first?.formalName,
               layout.variables.count == variables.count + 1, !variables.isEmpty,
               fields.count == variables.count, Set(variables.map(\.formalName)).count == variables.count else { return nil }
-        let actualRows = frontend.rows.map { copyRow(label: $0.label, copies: $0.copies, fields: frontend.fields) }
+        let actualRows = copyRows(frontend)
+        let parsedRows = copyRows(parsed)
         let labels = actualRows.map(\.label)
         let actions = layout.actions.filter { !$0.isTermination }
         let terminalActions = layout.actions.filter(\.isTermination)
@@ -70,15 +81,25 @@ package enum ScalarCopyActionEvidence {
         let authoredModule = prefix + "Authored"
         let authoredInstance = prefix + "Source"
         let proofModule = prefix + "ActionProof"
-        guard let inputText = String(data: authoredSource, encoding: .utf8), !inputText.utf8.contains(0),
-              let selection = try? AuthoredCopySyntax.select(source: inputText, modelName: modelName),
-              let independentProof = try? AuthoredCopySyntax.proofInputs(selection) else { return nil }
         let authoredProof = """
         ---- MODULE \(authoredModule) ----
         EXTENDS Naturals, Sequences, TLAPS
 
         WitnessCopyFields == \(TLAValue.set(Set(fields.map(TLAValue.string))))
         WitnessCopyActionRows == \(TLAValue.tuple(actualRows.map(\.value)))
+        ParsedCopyFields == \(TLAValue.set(Set(parsed.fields.map(TLAValue.string))))
+        ParsedCopyActionRows == \(TLAValue.tuple(parsedRows.map(\.value)))
+
+        THEOREM ParsedDirectCopyRowsMatchTheActualBuilder ==
+            /\\ ParsedCopyFields = WitnessCopyFields
+            /\\ ParsedCopyActionRows = WitnessCopyActionRows
+        PROOF
+        <1>fields. ParsedCopyFields = WitnessCopyFields
+            BY ONLY IsaM("simp") DEF ParsedCopyFields, WitnessCopyFields
+        <1>rows. ParsedCopyActionRows = WitnessCopyActionRows
+            BY ONLY IsaM("simp") DEF ParsedCopyActionRows, WitnessCopyActionRows
+        <1>. QED BY ONLY <1>fields, <1>rows
+
         \(independentProof)
         ====
 
@@ -141,6 +162,46 @@ package enum ScalarCopyActionEvidence {
             /\ UNCHANGED \#(counter)
             /\ \#(before) = \#(after)
 
+        THEOREM \#(prefix)ActualSourceLabelOrder ==
+            /\ DOMAIN \#(prefix)Rows = DOMAIN \#(labelsAt)
+            /\ \A \#(index) \in DOMAIN \#(labelsAt) :
+                \#(prefix)Rows[\#(index)].label = \#(labelsAt)[\#(index)]
+            BY \#(authoredInstance)!AuthoredCopyFrontendProducesTheCompilerRows, SMT
+                DEF \#(prefix)Rows, \#(authoredInstance)!WitnessCopyActionRows, \#(labelsAt)
+
+        THEOREM \#(prefix)ActualFrontendSuppliesTheScheduledCopyRows ==
+            \A \#(index) \in DOMAIN \#(prefix)Rows :
+                LET copies == \#(prefix)Rows[\#(index)].copies
+                    scheduled == \#(rules)!DirectCopyScheduledReceipt(\#(prefix)Keys, copies)
+                IN /\ Len(copies) \in Nat
+                   /\ DOMAIN copies = 1..Len(copies)
+                   /\ \A position \in DOMAIN copies :
+                          copies[position].target \in \#(prefix)Keys /\ copies[position].read \in \#(prefix)Keys
+                   /\ \#(rules)!CopyPlan(\#(prefix)Keys, copies, scheduled.reads, scheduled.writes,
+                          \#(rules)!DirectCopyRoutes(\#(prefix)Keys, copies))
+        PROOF
+        <1>. TAKE \#(index) \in DOMAIN \#(prefix)Rows
+        <1>. DEFINE fields == \#(prefix)Keys
+                    copies == \#(prefix)Rows[\#(index)].copies
+                    raw == \#(authoredInstance)!AuthoredCopySteps[\#(index)].copies
+                    origins == \#(authoredInstance)!AuthoredCopyOrigins
+                    scheduled == \#(rules)!DirectCopyScheduledReceipt(fields, copies)
+        <1>input. \#(rules)!DirectCopyTypedSyntax(fields, origins, raw)
+            BY ONLY (\#(index) \in DOMAIN \#(prefix)Rows), \#(authoredInstance)!AuthoredCopyFrontendProducesTheCompilerRows, SMT
+                DEF fields, raw, origins, \#(prefix)Keys, \#(prefix)Rows, \#(rules)!DirectCopyTypedSyntax
+        <1>resolved. copies = \#(rules)!DirectCopyResolvedSyntax(origins, raw)
+            BY ONLY (\#(index) \in DOMAIN \#(prefix)Rows), \#(authoredInstance)!AuthoredCopyFrontendProducesTheCompilerRows, SMT
+                DEF copies, origins, raw, \#(prefix)Rows, \#(rules)!DirectCopyResolvedSyntax
+        <1>shape. /\ Len(copies) = Len(raw)
+                   /\ DOMAIN copies = DOMAIN raw
+                   /\ \A position \in DOMAIN raw : copies[position].target \in fields /\ copies[position].read \in fields
+            BY ONLY <1>input, <1>resolved, \#(rules)!DirectCopyTypedFrontendConstructsTheCompleteCapturePlan, SMT
+        <1>plan. \#(rules)!CopyPlan(fields, copies, scheduled.reads, scheduled.writes, \#(rules)!DirectCopyRoutes(fields, copies))
+            BY ONLY <1>input, <1>resolved, \#(rules)!DirectCopyTypedFrontendConstructsTheCompleteCapturePlan, SMT
+                DEF scheduled
+        <1>. QED BY ONLY <1>input, <1>shape, <1>plan, SMT
+            DEF fields, copies, scheduled, \#(rules)!DirectCopyTypedSyntax
+
         \#(rows.joined(separator: "\n"))
 
         \#(sourceLabeled)(\#(label)) ==
@@ -153,20 +214,13 @@ package enum ScalarCopyActionEvidence {
             /\ \#(prefix)Keys = \#(TLAValue.set(Set(fields.map(TLAValue.string))))
             /\ \#(before) = [\#(key) \in \#(prefix)Keys |-> \#(before)[\#(key)]]
             /\ \#(after) = [\#(key) \in \#(prefix)Keys |-> \#(after)[\#(key)]]
-            BY \#(authoredInstance)!AuthoredCopySyntaxBindsWitnessRows, SMT
+            BY \#(authoredInstance)!AuthoredCopyFrontendProducesTheCompilerRows, SMT
                 DEF \#(prefix)Keys, \#(before), \#(after), \#(authoredInstance)!WitnessCopyFields
 
         THEOREM \#(prefix)ActualTerminationRetainsTheCompleteFrame ==
             \#(terminating.renderedName) <=> \#(terminatingRule)
             BY SMT DEF \#(terminating.renderedName), \#(terminatingRule), \#(before), \#(after),
                 \#(authoredInstance)!WitnessCopyFields
-
-        THEOREM \#(prefix)ActualSourceLabelOrder ==
-            /\ DOMAIN \#(prefix)Rows = DOMAIN \#(labelsAt)
-            /\ \A \#(index) \in DOMAIN \#(labelsAt) :
-                \#(prefix)Rows[\#(index)].label = \#(labelsAt)[\#(index)]
-            BY \#(authoredInstance)!AuthoredCopySyntaxBindsWitnessRows, SMT
-                DEF \#(prefix)Rows, \#(authoredInstance)!WitnessCopyActionRows, \#(labelsAt)
 
         THEOREM \#(prefix)ActualLabeledActionsAndNext ==
             /\ \A \#(label) : \#(emittedLabeled)(\#(label)) <=> \#(sourceLabeled)(\#(label))
@@ -237,15 +291,17 @@ package enum ScalarCopyActionEvidence {
         PROOF
         <1>. DEFINE fields == \#(source)WitnessCopyFields
                     copies == \#(source)WitnessCopyActionRows[\#(number)].copies
-                    raw == \#(source)AuthoredCopySteps[\#(number)].copies
-                    origins == \#(source)AuthoredCopyOrigins
                     routes == \#(rules)DirectCopyRoutes(fields, copies)
                     result(\#(choice)) == \#(rules)CopyMaterializedState(fields, \#(before), \#(choice), \#(writes))
+        <1>row. \#(number) \in DOMAIN \#(prefix)Rows
+            BY ONLY \#(prefix)ActualSourceLabelOrder, SMT DEF \#(prefix)Labels
         <1>shape. /\ Len(copies) \in Nat
                    /\ DOMAIN copies = 1..Len(copies)
                    /\ \A position \in DOMAIN copies :
                         copies[position].target \in fields /\ copies[position].read \in fields
-            BY SMT DEF fields, copies, \#(source)WitnessCopyActionRows, \#(source)WitnessCopyFields
+            BY ONLY <1>row, \#(prefix)ActualFrontendSuppliesTheScheduledCopyRows,
+                \#(source)AuthoredCopyFrontendProducesTheCompilerRows, SMT
+                DEF fields, copies, \#(prefix)Keys, \#(prefix)Rows
         <1>checked. \#(rules)ReceiptNamesLastWriters(fields, copies, \#(reads), \#(writes))
             BY SMT DEF \#(rules)ReceiptNamesLastWriters, \#(rules)CopyReceiptNamesWriter, \#(rules)CopyReceiptOrdinal,
                 \#(rules)LastDirectCopy, \#(rules)DirectCopyReference, fields, copies,
@@ -253,16 +309,10 @@ package enum ScalarCopyActionEvidence {
         <1>receipt. /\ \#(reads) = \#(rules)DirectCopyScheduledReceipt(fields, copies).reads
                      /\ \#(writes) = \#(rules)DirectCopyScheduledReceipt(fields, copies).writes
             BY <1>shape, <1>checked, \#(rules)CheckedReceiptIsTheScheduledReceipt, SMT
-        <1>frontend.
-            /\ \#(rules)DirectCopyTypedSyntax(fields, origins, raw)
-            /\ copies = \#(rules)DirectCopyResolvedSyntax(origins, raw)
-            BY ONLY \#(source)AuthoredCopySyntaxSuppliesTypedSchedulerInput,
-                \#(source)AuthoredCopySyntaxBindsWitnessRows, SMT
-                DEF fields, copies, raw, origins, \#(source)AuthoredCopySteps,
-                    \#(rules)DirectCopyTypedSyntax, \#(rules)DirectCopyResolvedSyntax
         <1>plan. \#(rules)CopyPlan(fields, copies, \#(reads), \#(writes), routes)
-            BY ONLY <1>frontend, <1>receipt, \#(rules)DirectCopyTypedFrontendConstructsTheCompleteCapturePlan, SMT
-                DEF routes
+            BY ONLY <1>row, <1>receipt, \#(prefix)ActualFrontendSuppliesTheScheduledCopyRows,
+                \#(source)AuthoredCopyFrontendProducesTheCompilerRows, SMT
+                DEF fields, copies, routes, \#(prefix)Keys, \#(prefix)Rows
         <1>earlier.
             /\ Len(\#(reads)) \in Nat
             /\ DOMAIN \#(reads) = 1..Len(\#(reads))
@@ -297,9 +347,9 @@ package enum ScalarCopyActionEvidence {
         <1>authored. \#(rules)CompiledCopyBranch(fields, \#(before), \#(reads), \#(writes), \#(after)) <=>
                      \#(rules)SourceCopyBranch(\#(source)AuthoredCopyFields,
                          \#(source)AuthoredCopyActionRows[\#(number)].copies, \#(before), \#(after))
-            BY <1>plan, \#(source)AuthoredCopySyntaxBindsWitnessRows,
+            BY <1>plan, \#(source)AuthoredCopyFrontendProducesTheCompilerRows,
                 \#(rules)OrderedScalarCopyPlanPreservesTheCompleteBranch, SMT DEF fields, copies
-        <1>. QED BY <1>physical, <1>compiled, <1>authored, \#(source)AuthoredCopySyntaxBindsWitnessRows, SMT
+        <1>. QED BY <1>physical, <1>compiled, <1>authored, \#(source)AuthoredCopyFrontendProducesTheCompilerRows, SMT
             DEF \#(prefix)SourceBranch, \#(prefix)Entries, \#(prefix)Destinations, \#(compiledBranch),
                 \#(prefix)Keys, \#(prefix)ControlBefore, \#(prefix)ControlAfter, fields
 
@@ -310,6 +360,30 @@ package enum ScalarCopyActionEvidence {
         switch value {
         case .state(let field): .tuple([.string("state"), .string(field)])
         case .capture(let index): .tuple([.string("capture"), .int(index)])
+        }
+    }
+
+    private static func decodedParserSource(_ source: String) throws -> DirectCopySource {
+        let syntax = Parser.parse(source: source)
+        let entries = syntax.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }
+            .filter { $0.name.text == "visitValidationOutcomes" }
+        guard !syntax.hasError, entries.count == 1, let entry = entries.first else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        let prefix = "// SwiftTLA.DirectCopySource.v1 "
+        let receipts = entry.leadingTrivia.compactMap { piece -> String? in
+            guard case .lineComment(let line) = piece, line.hasPrefix(prefix) else { return nil }
+            return String(line.dropFirst(prefix.count))
+        }
+        guard receipts.count == 1, let receipt = receipts.first, let bytes = Data(base64Encoded: receipt) else {
+            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
+        }
+        return try JSONDecoder().decode(DirectCopySource.self, from: bytes)
+    }
+
+    private static func copyRows(_ source: DirectCopySource) -> [CopyRow] {
+        source.rows.map { row in
+            copyRow(label: row.label, copies: row.copies.map { ($0.target, $0.read) }, fields: source.fields)
         }
     }
 

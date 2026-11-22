@@ -140,7 +140,7 @@ package enum InitialFailureEvidence {
         }
         let actionSource = try authoredActionSource(sourceWitness, syntaxProof: syntaxProof, copyRoutes: copyRoutes)
         let scalarCopyProof = try ScalarCopyActionEvidence.proof(source: source,
-            compilation: compilation, rendered: rendered, authoredSource: authoredSource,
+            compilation: compilation, rendered: rendered, authoredSource: authoredSource, nativeSource: nativeSource,
             modelName: String(describing: CheckedAdditionPrefixInitialModel.self))
         let sourceInputs = try sourceInitializerInputs(sourceWitness)
         let sourceInitializers = sourceInputs.plans

@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLACompilerSupport
 import SwiftSyntax
 import SwiftParser
 import SwiftBasicFormat
@@ -1873,12 +1874,7 @@ extension ParserSession {
     }
 
     func closureParameterNames(in closure: ClosureExprSyntax) -> [String] {
-        guard let parameters = closure.signature?.parameterClause else { return [] }
-        switch parameters {
-        case .simpleInput(let list): return list.map { $0.name.sourceIdentifierName }
-        case .parameterClause(let clause):
-            return clause.parameters.map { $0.secondName?.sourceIdentifierName ?? $0.firstName.sourceIdentifierName }
-        }
+        ModelSpecificationSyntax.parameterNames(in: closure)
     }
 
     func finiteDomain(_ expression: ExprSyntax) -> [TLAValue]? {

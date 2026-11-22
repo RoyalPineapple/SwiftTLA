@@ -6,6 +6,7 @@ import SwiftSyntaxMacros
 import SwiftDiagnostics
 import SwiftParser
 import SwiftTLA
+import SwiftTLACompilerSupport
 
 // MARK: - Shared parsing and verification
 
@@ -13,10 +14,12 @@ struct MacroCompilation {
     let typeName: String
     let api: GeneratedMachineAPI
     let program: CompiledProgram
+    let directCopySource: DirectCopySource?
 
-    init(typeName: String, program: CompiledProgram) throws {
+    init(typeName: String, program: CompiledProgram, directCopySource: DirectCopySource? = nil) throws {
         self.typeName = typeName
         self.program = program
+        self.directCopySource = directCopySource
         api = try GeneratedMachineAPI(layout: program.layout, actions: program.behavior.actions)
     }
 }
@@ -45,9 +48,12 @@ enum TLASpecVerifier {
             if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty && parsed.assumptions.isEmpty {
                 throw ModelMacroError.emptyState
             }
+            let directCopySource = parsed.sourceAlgorithms.count == 1
+                ? parsed.sourceAlgorithms.first?.model.directScalarCopyInput : nil
             return try MacroCompilation(
                 typeName: typeName,
-                program: try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation))
+                program: try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation)),
+                directCopySource: directCopySource
             )
         } catch let diagnostic as CompilationDiagnostic {
             var located = diagnostic
@@ -65,72 +71,14 @@ enum TLASpecVerifier {
     // MARK: - Helpers
 
     static func findSpec(in members: MemberBlockItemListSyntax, defaultName: String? = nil) throws -> (name: String, closure: ClosureExprSyntax)? {
-        let declarations = members.compactMap { $0.decl.as(VariableDeclSyntax.self) }.filter {
-            $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "spec" }
+        do {
+            return try ModelSpecificationSyntax.find(in: members, defaultName: defaultName)
+        } catch {
+            switch error {
+            case .nonLiteralSpecification: throw ModelMacroError.nonLiteralSpecification
+            case .dynamicModuleName: throw ModelMacroError.dynamicModuleName
+            }
         }
-        guard let declaration = declarations.first else { return nil }
-        guard declarations.count == 1,
-              declaration.modifiers.contains(where: { $0.name.text == "static" }),
-              declaration.bindings.count == 1,
-              let binding = declaration.bindings.first,
-              binding.initializer == nil,
-              let accessors = binding.accessorBlock?.accessors
-        else { throw ModelMacroError.nonLiteralSpecification }
-
-        let statements: CodeBlockItemListSyntax
-        if let body = accessors.as(CodeBlockItemListSyntax.self) {
-            statements = body
-        } else if let getters = accessors.as(AccessorDeclListSyntax.self),
-                  getters.count == 1,
-                  let getter = getters.first,
-                  getter.accessorSpecifier.tokenKind == .keyword(.get),
-                  getter.effectSpecifiers == nil,
-                  let body = getter.body {
-            statements = body.statements
-        } else {
-            throw ModelMacroError.nonLiteralSpecification
-        }
-        guard statements.count == 1, let statement = statements.first else {
-            throw ModelMacroError.nonLiteralSpecification
-        }
-        let expression: ExprSyntax?
-        if case .expr(let value) = statement.item {
-            expression = value
-        } else {
-            expression = statement.item.as(ReturnStmtSyntax.self)?.expression
-        }
-        guard let source = try specMacroSource(from: expression, defaultName: defaultName) else {
-            throw ModelMacroError.nonLiteralSpecification
-        }
-        return source
-    }
-
-    private static func specMacroSource(from expression: ExprSyntax?, defaultName: String?) throws -> (name: String, closure: ClosureExprSyntax)? {
-        guard let macro = expression?.as(MacroExpansionExprSyntax.self),
-              macro.macroName.text == "spec" else { return nil }
-        guard macro.additionalTrailingClosures.isEmpty else {
-            throw ModelMacroError.nonLiteralSpecification
-        }
-        let arguments = macro.arguments
-        let trailingClosure = macro.trailingClosure
-        if arguments.isEmpty, let trailingClosure, let defaultName {
-            return (defaultName, trailingClosure)
-        }
-        guard let first = arguments.first,
-              first.label == nil,
-              let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
-            throw ModelMacroError.dynamicModuleName
-        }
-        if arguments.count == 1, let trailingClosure {
-            return (name, trailingClosure)
-        }
-        if arguments.count == 2, trailingClosure == nil,
-           let last = arguments.last,
-           last.label == nil || last.label?.text == "scoped",
-           let closure = last.expression.as(ClosureExprSyntax.self) {
-            return (name, closure)
-        }
-        throw ModelMacroError.nonLiteralSpecification
     }
 
     /// Qualified spellings must name the module that owns the recognized type.

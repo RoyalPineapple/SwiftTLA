@@ -1,3 +1,30 @@
+package struct DirectCopySource: Codable, Equatable, Sendable {
+    package struct Copy: Codable, Equatable, Sendable {
+        package let target: String
+        package let read: String
+    }
+
+    package struct Row: Codable, Equatable, Sendable {
+        package let label: String
+        package let copies: [Copy]
+    }
+
+    package let algorithm: String
+    package let fields: Set<String>
+    package let rows: [Row]
+
+    private enum CodingKeys: String, CodingKey {
+        case algorithm, fields, rows
+    }
+
+    package func encode(to encoder: any Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(algorithm, forKey: .algorithm)
+        try values.encode(fields.sorted(), forKey: .fields)
+        try values.encode(rows, forKey: .rows)
+    }
+}
+
 package struct AlgorithmModel: Sendable {
     package let name: String
     package let displayLabel: String?
@@ -132,16 +159,16 @@ package struct AlgorithmModel: Sendable {
         return (resolved, scalarCopies)
     }
 
-    package var directScalarCopyInput: (fields: Set<String>,
-        rows: [(label: String, copies: [(target: String, read: String)])])? {
-        guard let roots = orderedIntCopyRoots, !sequentialSteps.isEmpty,
-              components.count == roots.count + sequentialSteps.count else { return nil }
-        var rows: [(label: String, copies: [(target: String, read: String)])] = []
-        for step in sequentialSteps {
+    package var directScalarCopyInput: DirectCopySource? {
+        let steps = sequentialSteps
+        guard let roots = orderedIntCopyRoots, !steps.isEmpty,
+              components.count == roots.count + steps.count else { return nil }
+        var rows: [DirectCopySource.Row] = []
+        for step in steps {
             guard let copies = directScalarCopyOperands(step.statements, roots: roots) else { return nil }
-            rows.append((step.label.name, copies))
+            rows.append(.init(label: step.label.name, copies: copies))
         }
-        return (roots, rows)
+        return DirectCopySource(algorithm: name, fields: roots, rows: rows)
     }
 
     private var orderedIntCopyRoots: Set<String>? {
@@ -714,15 +741,15 @@ package indirect enum AlgorithmStatementModel: Sendable, Equatable {
 
 private func directScalarCopyOperands(
     _ statements: [AlgorithmStatementModel], roots: Set<String>
-) -> [(target: String, read: String)]? {
-    let copies = statements.compactMap { statement -> (target: String, read: String)? in
+) -> [DirectCopySource.Copy]? {
+    guard !statements.isEmpty else { return nil }
+    var copies: [DirectCopySource.Copy] = []
+    for statement in statements {
         guard case .set(.root(let target), .variable(let read)) = statement,
               roots.contains(target), roots.contains(read) else { return nil }
-        return (target, read)
+        copies.append(.init(target: target, read: read))
     }
-    guard !copies.isEmpty, copies.count == statements.count else { return nil }
     return copies
-
 }
 
 private func scheduleDirectScalarCopies(

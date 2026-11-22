@@ -1592,19 +1592,31 @@ import SwiftTLAMacros
             RawLabel
         }
         """
+        enum Step: String, CaseIterable {
+            case start = "Begin"
+            case loop = "Repeat"
+            case finish = "\u{46}inish"
+        }
+        let declaration = try #require(Parser.parse(source: #"""
+        struct RawControlLabels {
+            enum Step: String, CaseIterable {
+                case start = "Begin"
+                case loop = "Repeat"
+                case finish = "\u{46}inish"
+            }
+        }
+        """#).statements.first?.item.as(StructDeclSyntax.self))
+        let enums = try TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members)
         let closure = try parseSpecTestClosure(source)
-        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure,
-            sourceTypes: .init(enums: [parserTestEnum("Step", cases: [
-                "start": .string("Begin"),
-                "loop": .string("Repeat"),
-                "finish": .string("Finish")
-            ])]))
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure, sourceTypes: .init(enums: enums))
 
+        #expect(enums.first?.value(named: "finish") == .string("Finish"))
         #expect(parsed.diagnostics.isEmpty)
         let algorithm = try #require(parsed.sourceAlgorithms.first?.model)
-        #expect(algorithm.sequentialSteps.map(\.label.name) == ["Begin", "Repeat", "Finish"])
-        #expect(algorithm.sequentialSteps[0].statements == [.goto(.init(name: "Finish"))])
-        #expect(algorithm.sequentialSteps[1].statements == [.goto(.init(name: "Finish"))])
+        #expect(algorithm.sequentialSteps.map(\.label.name).map { Array($0.utf8) }
+            == Step.allCases.map { Array($0.rawValue.utf8) })
+        #expect(algorithm.sequentialSteps[0].statements == [.goto(.init(name: Step.finish.rawValue))])
+        #expect(algorithm.sequentialSteps[1].statements == [.goto(.init(name: Step.finish.rawValue))])
         let (compilation, evidence) = try parsed.compileRetainingSequentialControl()
         let control = try #require(evidence)
         let scheduled = try #require(control.scheduled.canonicalTraces(sourceWrites: false))
@@ -1612,6 +1624,14 @@ import SwiftTLAMacros
         #expect(scheduled == lowered)
         let rendered = try compilation.render()
         #expect(rendered.actions.map(\.sourceName) == control.authored.actions.map(\.label))
+        let built = try TLASpec("Parsed") {
+            Algorithm("RawLabel") {
+                Do(Step.start) { Goto(Step.finish) }
+                While(Step.loop, true) { Goto(Step.finish) }
+                Do(Step.finish) { Stop() }
+            }
+        }.compile().render()
+        #expect(rendered.tlaBundle.root.tla.utf8.elementsEqual(built.tlaBundle.root.tla.utf8))
     }
 
     @Test("Do, While, and Goto reject labels outside a registered enum")

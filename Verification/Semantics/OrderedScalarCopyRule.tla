@@ -1,6 +1,7 @@
 ---- MODULE OrderedScalarCopyRule ----
 EXTENDS IndexedHistoryRules, Sequences
 LOCAL INSTANCE SequenceTheorems_proofs
+LOCAL BuilderFinite == INSTANCE FiniteSetTheorems
 
 CopyReferenceValue(before, captures, reference) ==
     IF reference[1] = "capture" THEN captures[reference[2]]
@@ -379,6 +380,211 @@ DirectCopyResolvedSyntax(origins, raw) ==
     [position \in DOMAIN raw |->
         [target |-> origins[raw[position].targetBinding], read |-> origins[raw[position].readBinding]]]
 
+\* Assign builds .set(.root(handle.name), .variable(handle.name)).
+\* Do maps its ordered wrapper array to the underlying statement array.
+DirectCopyBuiltBody(origins, raw) ==
+    [position \in DOMAIN raw |->
+        <<"set", <<"root", origins[raw[position].targetBinding]>>,
+                  <<"variable", origins[raw[position].readBinding]>>>>]
+
+DirectCopyBuilderAccepts(keys, statement) ==
+    /\ statement[1] = "set"
+    /\ statement[2][1] = "root"
+    /\ statement[3][1] = "variable"
+    /\ statement[2][2] \in keys
+    /\ statement[3][2] \in keys
+
+DirectCopyBuilderOperands(statement) ==
+    [target |-> statement[2][2], read |-> statement[3][2]]
+
+DirectCopyBuilderBodyExecution(keys, body, count, history) ==
+    /\ count \in Nat \ {0}
+    /\ DOMAIN body = 1..count
+    /\ history[0] = <<>>
+    /\ \A position \in 1..count :
+           /\ DirectCopyBuilderAccepts(keys, body[position])
+           /\ history[position] = HistoryAppend(history[position - 1], position - 1,
+                                      DirectCopyBuilderOperands(body[position]))
+
+THEOREM DirectCopyBuilderBodyReturnsEveryResolvedOperandInOrder ==
+    ASSUME NEW keys, NEW origins, NEW raw, DirectCopyTypedSyntax(keys, origins, raw)
+    PROVE LET body == DirectCopyBuiltBody(origins, raw)
+              copies == DirectCopyResolvedSyntax(origins, raw)
+              count == Len(raw)
+              history == [prefix \in 0..count |-> HistoryPrefix(copies, prefix)]
+          IN /\ DirectCopyBuilderBodyExecution(keys, body, count, history)
+             /\ history[count] = copies
+             /\ \A position \in DOMAIN raw :
+                    /\ copies[position].target = origins[raw[position].targetBinding]
+                    /\ copies[position].read = origins[raw[position].readBinding]
+                    /\ copies[position].target \in keys /\ copies[position].read \in keys
+    PROOF
+    <1>. DEFINE body == DirectCopyBuiltBody(origins, raw)
+                copies == DirectCopyResolvedSyntax(origins, raw)
+                count == Len(raw)
+                history == [prefix \in 0..count |-> HistoryPrefix(copies, prefix)]
+    <1>shape. /\ count \in Nat \ {0} /\ DOMAIN raw = 1..count
+              /\ DOMAIN body = 1..count
+        BY ONLY DirectCopyTypedSyntax(keys, origins, raw), SMT
+            DEF DirectCopyTypedSyntax, DirectCopyBuiltBody, body, count
+    <1>positions. \A position \in 1..count :
+        /\ DirectCopyBuilderAccepts(keys, body[position])
+        /\ DirectCopyBuilderOperands(body[position]) = copies[position]
+        /\ copies[position].target = origins[raw[position].targetBinding]
+        /\ copies[position].read = origins[raw[position].readBinding]
+        /\ copies[position].target \in keys /\ copies[position].read \in keys
+        <2>. TAKE position \in 1..count
+        <2>roots. /\ origins[raw[position].targetBinding] \in keys
+                  /\ origins[raw[position].readBinding] \in keys
+            BY ONLY DirectCopyTypedSyntax(keys, origins, raw), <1>shape,
+                (position \in 1..count), SMT DEF DirectCopyTypedSyntax
+        <2>. QED BY ONLY <1>shape, <2>roots, (position \in 1..count), SMT
+            DEF body, copies, DirectCopyBuiltBody, DirectCopyResolvedSyntax,
+                DirectCopyBuilderAccepts, DirectCopyBuilderOperands
+    <1>transition. \A position \in 1..count :
+        history[position] = HistoryAppend(history[position - 1], position - 1,
+                                DirectCopyBuilderOperands(body[position]))
+        <2>. TAKE position \in 1..count
+        <2>bounds. /\ position \in Nat \ {0} /\ position \in 0..count /\ position - 1 \in 0..count
+            BY ONLY <1>shape, (position \in 1..count), SMT
+        <2>prefix. HistoryPrefix(copies, position) =
+                       HistoryAppend(HistoryPrefix(copies, position - 1), position - 1, copies[position])
+            BY ONLY <2>bounds, SMT DEF HistoryPrefix, HistoryAppend
+        <2>. QED BY ONLY <2>bounds, <2>prefix, <1>positions, (position \in 1..count), SMT DEF history
+    <1>entry. history[0] = <<>>
+        BY ONLY <1>shape, SMT DEF history, HistoryPrefix
+    <1>result. history[count] = copies
+        BY ONLY <1>shape, SMT DEF history, HistoryPrefix, copies, DirectCopyResolvedSyntax
+    <1>. QED BY ONLY <1>shape, <1>entry, <1>positions, <1>transition, <1>result, SMT
+        DEF DirectCopyBuilderBodyExecution, body, copies, count, history
+
+\* Reviewed scoped Algorithm builder order: declare shared Int handles, then
+\* keep the ordered Do components. Direct-copy evidence rejects other components.
+DirectCopyBuilderComponents(declarations, origins, steps) ==
+    [position \in 1..(Len(declarations) + Len(steps)) |->
+        IF position <= Len(declarations)
+        THEN <<"shared", declarations[position], "Int">>
+        ELSE LET step == steps[position - Len(declarations)]
+             IN <<"step", step.label, DirectCopyBuiltBody(origins, step.copies), FALSE>>]
+
+DirectCopyBuilderFields(components) ==
+    {components[position][2] :
+        position \in {index \in DOMAIN components : components[index][1] = "shared"}}
+
+\* The increasing enumeration of the kept input positions specifies stable compactMap.
+DirectCopyBuilderStepSelection(components, selected) ==
+    /\ {selected[index] : index \in DOMAIN selected} =
+        {position \in DOMAIN components : components[position][1] = "step"}
+    /\ \A left, right \in DOMAIN selected : left < right => selected[left] < selected[right]
+
+DirectCopyBuilderInventoryInput(keys, declarations, origins, steps) ==
+    /\ Len(declarations) \in Nat \ {0}
+    /\ declarations \in [1..Len(declarations) -> keys]
+    /\ \A key \in keys : \E position \in 1..Len(declarations) : declarations[position] = key
+    /\ \A left, right \in 1..Len(declarations) :
+           declarations[left] = declarations[right] => left = right
+    /\ Len(steps) \in Nat \ {0}
+    /\ DOMAIN steps = 1..Len(steps)
+    /\ \A index \in DOMAIN steps :
+           steps[index].label \in STRING /\ DirectCopyTypedSyntax(keys, origins, steps[index].copies)
+
+DirectCopyBuilderInventoryExecution(keys, declarations, origins, steps) ==
+    LET components == DirectCopyBuilderComponents(declarations, origins, steps)
+        selected == [index \in DOMAIN steps |-> Len(declarations) + index]
+    IN /\ DirectCopyBuilderFields(components) = keys
+       /\ keys # {}
+       /\ DirectCopyBuilderStepSelection(components, selected)
+       /\ BuilderFinite!Cardinality(keys) + Len(steps) = Len(components)
+       /\ \A index \in DOMAIN steps :
+        LET step == components[selected[index]]
+            copies == DirectCopyResolvedSyntax(origins, steps[index].copies)
+            count == Len(steps[index].copies)
+            history == [prefix \in 0..count |-> HistoryPrefix(copies, prefix)]
+        IN /\ step[2] = steps[index].label /\ ~step[4]
+           /\ DirectCopyBuilderBodyExecution(keys, step[3], count, history)
+           /\ history[count] = copies
+
+THEOREM DirectCopyBuilderConstructsEveryWellBoundInventory ==
+    ASSUME NEW keys, NEW declarations, NEW origins, NEW steps,
+           DirectCopyBuilderInventoryInput(keys, declarations, origins, steps)
+    PROVE DirectCopyBuilderInventoryExecution(keys, declarations, origins, steps)
+    PROOF
+    <1>. DEFINE components == DirectCopyBuilderComponents(declarations, origins, steps)
+                roots == Len(declarations)
+                size == Len(steps)
+                selected == [index \in DOMAIN steps |-> roots + index]
+    <1>data. /\ roots \in Nat \ {0} /\ size \in Nat \ {0}
+             /\ DOMAIN steps = 1..size
+        BY ONLY DirectCopyBuilderInventoryInput(keys, declarations, origins, steps)
+            DEF roots, size, DirectCopyBuilderInventoryInput
+    <1>partitions. /\ DOMAIN components = 1..(roots + size)
+                   /\ {index \in DOMAIN components : components[index][1] = "shared"} = 1..roots
+                   /\ {index \in DOMAIN components : components[index][1] = "step"} = (roots + 1)..(roots + size)
+        BY ONLY <1>data, SMT DEF components, DirectCopyBuilderComponents, roots, size
+    <1>componentLength. Len(components) = roots + size
+        <2>. DEFINE values == {components[position] : position \in DOMAIN components}
+        <2>function. components \in [1..(roots + size) -> values]
+            BY ONLY <1>partitions, SMT DEF components, DirectCopyBuilderComponents, roots, size, values
+        <2>sequence. components \in Seq(values)
+            BY ONLY <1>data, <2>function, SeqDef, SMT
+        <2>typed. /\ Len(components) \in Nat /\ DOMAIN components = 1..Len(components)
+            BY ONLY <2>sequence, LenProperties, SMT
+        <2>interval. (1..Len(components)) = (1..(roots + size))
+            BY ONLY <1>partitions, <2>typed, Zenon
+        <2>. QED BY ONLY <1>data, <2>typed, <2>interval, SMT
+    <1>nonempty. keys # {}
+        BY ONLY <1>data, DirectCopyBuilderInventoryInput(keys, declarations, origins, steps), SMT
+            DEF DirectCopyBuilderInventoryInput, roots
+    <1>fields. DirectCopyBuilderFields(components) = keys
+        BY ONLY <1>data, <1>partitions, DirectCopyBuilderInventoryInput(keys, declarations, origins, steps), SMT
+            DEF DirectCopyBuilderFields, DirectCopyBuilderInventoryInput, components, DirectCopyBuilderComponents, roots
+    <1>order. DirectCopyBuilderStepSelection(components, selected)
+        <2>domain. DOMAIN selected = 1..size
+            BY ONLY <1>data, SMT DEF selected
+        <2>image. {selected[index] : index \in DOMAIN selected} = (roots + 1)..(roots + size)
+            <3>forward. \A index \in DOMAIN selected : selected[index] \in (roots + 1)..(roots + size)
+                BY ONLY <1>data, <2>domain, SMT DEF selected
+            <3>backward. \A position \in (roots + 1)..(roots + size) :
+                \E index \in DOMAIN selected : selected[index] = position
+                <4>. TAKE position \in (roots + 1)..(roots + size)
+                <4>index. position - roots \in DOMAIN selected
+                    BY ONLY <1>data, <2>domain, (position \in (roots + 1)..(roots + size)), SMT
+                <4>. WITNESS (position - roots) \in DOMAIN selected
+                <4>. QED BY ONLY <1>data, <2>domain, <4>index, SMT DEF selected
+            <3>. QED BY ONLY <3>forward, <3>backward, SMT
+        <2>increasing. \A left, right \in DOMAIN selected : left < right => selected[left] < selected[right]
+            BY ONLY <1>data, <2>domain, SMT DEF selected
+        <2>. QED BY ONLY <1>partitions, <2>image, <2>increasing, SMT DEF DirectCopyBuilderStepSelection
+    <1>count. BuilderFinite!Cardinality(keys) = roots
+        <2>bijection. declarations \in BuilderFinite!Bijection(1..roots, keys)
+            BY ONLY DirectCopyBuilderInventoryInput(keys, declarations, origins, steps), SMT
+                DEF roots, DirectCopyBuilderInventoryInput, BuilderFinite!Bijection,
+                    BuilderFinite!Injection, BuilderFinite!Surjection, BuilderFinite!IsInjective
+        <2>exists. BuilderFinite!ExistsBijection(1..roots, keys)
+            BY ONLY <2>bijection, SMT DEF BuilderFinite!ExistsBijection
+        <2>. QED BY ONLY <1>data, <2>exists, BuilderFinite!FS_CountingElements, SMT
+    <1>steps. \A index \in DOMAIN steps :
+                    LET step == components[selected[index]]
+                        copies == DirectCopyResolvedSyntax(origins, steps[index].copies)
+                        count == Len(steps[index].copies)
+                        history == [prefix \in 0..count |-> HistoryPrefix(copies, prefix)]
+                    IN /\ step[2] = steps[index].label /\ ~step[4]
+                       /\ DirectCopyBuilderBodyExecution(keys, step[3], count, history)
+                       /\ history[count] = copies
+        <2>. TAKE index \in DOMAIN steps
+        <2>position. /\ selected[index] \in (roots + 1)..(roots + size)
+                      /\ selected[index] - roots = index
+            BY ONLY <1>data, (index \in DOMAIN steps), SMT DEF selected
+        <2>model. components[selected[index]] =
+                       <<"step", steps[index].label, DirectCopyBuiltBody(origins, steps[index].copies), FALSE>>
+            BY ONLY <1>data, <2>position, SMT DEF components, DirectCopyBuilderComponents, roots, size
+        <2>typed. DirectCopyTypedSyntax(keys, origins, steps[index].copies)
+            BY ONLY DirectCopyBuilderInventoryInput(keys, declarations, origins, steps),
+                (index \in DOMAIN steps), SMT DEF DirectCopyBuilderInventoryInput
+        <2>. QED BY ONLY <2>model, <2>typed, DirectCopyBuilderBodyReturnsEveryResolvedOperandInOrder, SMT
+    <1>. QED BY ONLY <1>fields, <1>nonempty, <1>order, <1>count, <1>componentLength, <1>steps, SMT
+        DEF DirectCopyBuilderInventoryExecution, roots, size, components, selected
+
 THEOREM DirectCopyTypedFrontendConstructsTheCompleteCapturePlan ==
     ASSUME NEW keys, NEW origins, NEW raw, DirectCopyTypedSyntax(keys, origins, raw)
     PROVE LET copies == DirectCopyResolvedSyntax(origins, raw)
@@ -402,8 +608,8 @@ THEOREM DirectCopyTypedFrontendConstructsTheCompleteCapturePlan ==
             /\ copies[position].read = origins[raw[position].readBinding]
             /\ copies[position].target \in keys
             /\ copies[position].read \in keys
-        BY ONLY DirectCopyTypedSyntax(keys, origins, raw), SMT
-            DEF copies, DirectCopyResolvedSyntax, DirectCopyTypedSyntax
+        BY ONLY DirectCopyTypedSyntax(keys, origins, raw),
+            DirectCopyBuilderBodyReturnsEveryResolvedOperandInOrder DEF copies
     <1>typed. copies \in [1..Len(raw) -> shape]
         BY ONLY DirectCopyTypedSyntax(keys, origins, raw), <1>domain, <1>points, SMT
             DEF DirectCopyTypedSyntax, copies, shape, DirectCopyResolvedSyntax

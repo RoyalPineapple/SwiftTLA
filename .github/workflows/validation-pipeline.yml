@@ -352,7 +352,7 @@ jobs:
           proof_inputs=.build/initial-failure-artifacts/proof-inputs
           mkdir -p "$proof_inputs"
           proof_sources=(OrderedIntExpressionRule IndexedHistoryRules OrderedIntInitializationComposition
-            InitializationComposition InitializationOutcomeRules FiniteSetMembershipRule OrderedScalarCopyRule
+            InitializationComposition InitializationOutcomeRules FiniteSetMembershipRule OrderedScalarCopyRule DirectCopyParserRule
             ActionOutcomeInterface FrameActionRule PendingWriteOutcomeRule NativePendingWriteFold
             NativeScalarCopyRule ScalarCopyOutputBinding NormalSeedCFG)
           for module in "${proof_sources[@]}"; do
@@ -381,7 +381,7 @@ jobs:
           load_bytes = run_path("scripts/check-initial-proof-step.py")["load_byte_input"]
           load_bytes(output / (report["module"] + ".cfg"), output, [1, 2, 3])
           PYCFG
-          proof_modules=("$proof_inputs/OrderedScalarCopyRule.tla" "$proof_inputs/NativePendingWriteFold.tla"
+          proof_modules=("$proof_inputs/DirectCopyParserRule.tla" "$proof_inputs/OrderedScalarCopyRule.tla" "$proof_inputs/NativePendingWriteFold.tla"
             "$proof_inputs/ScalarCopyOutputBinding.tla" "$proof_inputs/NativeScalarCopyRule.tla"
             "$proof_inputs/NormalSeedCFG.tla" "$generated/SwiftTLASequentialControlProof.tla")
           copy_modules="$(python3 - "$generated" <<'PYCOPY'

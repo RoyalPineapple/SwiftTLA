@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLACompilerSupport
 import SwiftSyntax
 
 struct AlgorithmMacroDefinition: Sendable {
@@ -193,11 +194,6 @@ extension ParserSession {
         )
     }
 
-    private func algorithmBuilderClosure(in call: FunctionCallExprSyntax) -> ClosureExprSyntax? {
-        call.trailingClosure
-            ?? call.arguments.first(where: { $0.label?.text == "scoped" })?.expression.as(ClosureExprSyntax.self)
-    }
-
     func parseIndependentStep(_ call: FunctionCallExprSyntax, into components: inout TLASpec) -> AtomicStep? {
         algorithmParseFailure = nil
         algorithmSourceDiagnostic = nil
@@ -281,7 +277,7 @@ extension ParserSession {
         guard let name = boundName,
               call.arguments.allSatisfy({ $0.label != nil }),
               !call.arguments.contains(where: { $0.label?.text == "_name" }),
-              let closure = algorithmBuilderClosure(in: call)
+              let closure = ModelSpecificationSyntax.algorithmBody(call)
         else {
             components.diagnostics.append(.init(
                 message: "Algorithm requires an immutable let binding and a builder body.",
@@ -539,7 +535,7 @@ extension ParserSession {
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
         guard let name = procedureName(call.arguments.first?.expression, construct: "Procedure"),
-              let closure = algorithmBuilderClosure(in: call) else {
+              let closure = ModelSpecificationSyntax.algorithmBody(call) else {
             if algorithmParseFailure == nil {
                 algorithmParseFailure = "Procedure requires a name and a builder body."
             }
@@ -774,7 +770,7 @@ extension ParserSession {
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
         guard let domainSyntax = call.arguments.first?.expression,
-              let closure = algorithmBuilderClosure(in: call)
+              let closure = ModelSpecificationSyntax.algorithmBody(call)
         else {
             let knownDomains = sourceTypes.enums.map(\.typeName).sorted()
             let known = knownDomains.isEmpty ? "none" : knownDomains.joined(separator: ", ")
@@ -1302,6 +1298,16 @@ extension ParserSession {
             else { return nil }
             return .assert(condition)
         case .assign:
+            if call.arguments.count == 2,
+               let targetArgument = call.arguments.first, targetArgument.label == nil,
+               let readArgument = call.arguments.last, readArgument.label?.text == "to",
+               call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+               let targetReference = targetArgument.expression.as(DeclReferenceExprSyntax.self),
+               let readReference = readArgument.expression.as(DeclReferenceExprSyntax.self),
+               case .variable(let target)? = scope.value(for: targetReference),
+               case .variable(let read)? = scope.value(for: readReference) {
+                return .set(target: .root(target), value: .variable(read))
+            }
             guard let target = algorithmTarget(call.arguments.first?.expression, scope: scope),
                   let valueSyntax = call.arguments.first(where: { $0.label?.text == "to" })?.expression,
                   let value = decodeAlgorithmStateExpression(valueSyntax, scope: scope)

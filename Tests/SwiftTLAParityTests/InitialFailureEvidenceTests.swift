@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 import SwiftTLA
+import SwiftSyntax
+import SwiftParser
 @testable import SwiftTLAPlugin
 @testable import UpstreamParity
 
@@ -16,15 +18,22 @@ struct InitialFailureEvidenceTests {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/UpstreamParity/ValidationModels/CheckedAdditionPrefixInitialModel.swift")
         let authoredSource = try Data(contentsOf: authoredModel)
-        let compilation = try CheckedAdditionPrefixInitialModel.spec.compile()
-        let inputs = try CompiledTypeInputs(compilation: compilation,
-            types: CompiledTypeContext(enums: .init(), formalNames: [:])) { _ in .int }
-        let program = try CompiledProgram(inputs: inputs)
-        var emitter = NativeSwiftEmitter(model: try MacroCompilation(
-            typeName: "CheckedAdditionPrefixInitialModel", program: program))
+        let file = Parser.parse(source: String(decoding: authoredSource, as: UTF8.self))
+        let declaration = try #require(file.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "CheckedAdditionPrefixInitialModel" })
+        let macro = try TLASpecVerifier.parseAndVerify(declaration)
+        var emitter = NativeSwiftEmitter(model: macro)
         let nativeSource = try emitter.machineMembers().map(\.description).joined(separator: "\n")
         let report = try InitialFailureEvidence.prepare(sourceSHA: sha, authoredSource: authoredSource,
             nativeSource: nativeSource, to: directory)
+        let receiptPrefix = "// SwiftTLA.DirectCopySource.v1 "
+        let receipt = try #require(nativeSource.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.first { $0.hasPrefix(receiptPrefix) })
+        let withoutParserResult = nativeSource.replacingOccurrences(of: String(receipt), with: "")
+        try #require(withoutParserResult != nativeSource)
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try InitialFailureEvidence.prepare(sourceSHA: sha, authoredSource: authoredSource,
+                nativeSource: withoutParserResult, to: directory.appendingPathComponent("missing-parser-result"))
+        }
         #expect(report.schema == "swifttla.initial-failure-proof-v14")
         #expect(report.result == "prepared")
         #expect(report.sourceSHA == sha)

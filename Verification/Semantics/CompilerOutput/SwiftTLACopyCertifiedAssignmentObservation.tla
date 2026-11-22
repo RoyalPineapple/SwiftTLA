@@ -29,9 +29,8 @@ CertifiedCopyStep(label) ==
 
 THEOREM ActualAuthoredCopyRowsAreTyped ==
     \A index \in DOMAIN SwiftTLACopyRows : CopyAssignments!TypedCopyRows(CopyRows(index))
-    BY SwiftTLACopySource!AuthoredCopySyntaxBindsWitnessRows, SMT
-       DEF CopyAssignments!TypedCopyRows, CopyRows, SwiftTLACopyKeys, SwiftTLACopyRows,
-           SwiftTLACopySource!WitnessCopyFields, SwiftTLACopySource!WitnessCopyActionRows
+    BY ONLY SwiftTLACopyActualFrontendSuppliesTheScheduledCopyRows, SMT
+        DEF CopyAssignments!TypedCopyRows, CopyRows
 
 THEOREM ActualSourceBranchUsesTheCertifiedCopyHistory ==
     ASSUME NEW index \in DOMAIN SwiftTLACopyRows, CopyInputTyped
