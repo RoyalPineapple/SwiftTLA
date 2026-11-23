@@ -286,6 +286,34 @@ import SwiftSyntax
         #expect(terminatingEdges.first?.target == afterRepeat)
     }
 
+    @Test("Each authored ordered action supplies proof for its own control transfer")
+    func orderedActionsSupplySelectedProofs() throws {
+        let fixture = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().appendingPathComponent("OrderedStepFixtures.swift")
+        let authored = try Data(contentsOf: fixture)
+        let spec = OrderedCopyModel.spec
+        let rendered = try OrderedCopyModel.render()
+        let proofs = try OrderedCopyModel.Step.allCases.map { step in
+            try ArithmeticAssignmentEvidence.translation(authoredSource: authored,
+                modelName: String(describing: OrderedCopyModel.self), spec: spec, rendered: rendered,
+                sourceAction: step.rawValue)
+        }
+
+        #expect(proofs.map(\.actionOrdinal) == [0, 1])
+        #expect(proofs.map(\.sourceContinuation) == ["repeatWrites", nil])
+        #expect(Set(proofs.map { $0.source.name }).count == proofs.count)
+        #expect(Set(proofs.map { $0.output.name }).count == proofs.count)
+#if compiler(>=6.2)
+        let actual = rendered.tlaBundle.root
+        Attachment.record(Array(authored), named: fixture.lastPathComponent)
+        Attachment.record(Array(actual.tla.utf8), named: "\(actual.name).tla")
+        for proof in proofs {
+            Attachment.record(Array(proof.source.bytes), named: "\(proof.source.name).tla")
+            Attachment.record(Array(proof.output.bytes), named: "\(proof.output.name).tla")
+        }
+#endif
+    }
+
     @Test("The checked repeated-write module matches normalized generated TLA")
     func renderedRepeatedWriteProofInput() throws {
         let rendered = try OrderedCopyModel.render().tlaBundle.root.tla

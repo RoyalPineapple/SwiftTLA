@@ -868,22 +868,53 @@ enum AuthoredCopySyntax {
         return (view, TLAValue.tuple(parents).description)
     }
 
-    static func arithmeticProofInput(_ selection: Selection, spec: TLASpec) throws -> (label: String, module: String) {
+    struct ArithmeticProofInput {
+        let algorithm: String
+        let labels: [String]
+        let ordinal: Int
+        let name: String
+        let module: String
+
+        var label: String { labels[ordinal] }
+        var continuation: String? { labels.dropFirst(ordinal + 1).first }
+    }
+
+    static func arithmeticRoute(algorithm: String, label: String, ordinal: Int, continuation: String?) -> TLAValue {
+        .record(TLARecord([
+            .init("algorithm", .string(algorithm)), .init("label", .string(label)), .init("ordinal", .int(ordinal)),
+            .init("continuation", .tuple(continuation.map { [.string($0)] } ?? [])),
+        ]))
+    }
+
+    static func arithmeticProofInput(
+        _ selection: Selection, spec: TLASpec, renderedModule: String, sourceAction: String?
+    ) throws -> ArithmeticProofInput {
         let authored = try authoredSteps(selection)
-        guard authored.steps.count == 1, let step = authored.steps.first, step.loopCondition == nil,
-              let fallback = authored.fields.sorted().first,
+        guard let fallback = authored.fields.sorted().first,
               spec.sourceAlgorithms.count == 1, let built = spec.sourceAlgorithms.first?.model,
-              built.name == selection.algorithm else { throw unsupported }
+              built.name.utf8.elementsEqual(selection.algorithm.utf8) else { throw unsupported }
         let actual = built.components.compactMap { component -> AlgorithmStepModel? in
-            guard case .step(let result) = component else { return nil }
-            return result
+            guard case .step(let step) = component else { return nil }
+            return step
         }
+        let labels = authored.steps.map(\.label.name)
+        guard actual.count == labels.count,
+              zip(actual, authored.steps).allSatisfy({
+                  $0.0.label.name.utf8.elementsEqual($0.1.label.name.utf8)
+                      && $0.0.loopCondition == nil && $0.1.loopCondition == nil
+              }) else { throw unsupported }
+        let matching = labels.indices.filter { index in
+            if let sourceAction { return labels[index].utf8.elementsEqual(sourceAction.utf8) }
+            return labels.count == 1
+        }
+        guard matching.count == 1, let ordinal = matching.first else { throw unsupported }
+        let step = authored.steps[ordinal]
+        let action = actual[ordinal]
         let fields = built.components.compactMap { component -> String? in
             guard case .shared(let declaration) = component else { return nil }
             return declaration.root
         }
         guard fields.count == authored.fields.count, Set(fields) == authored.fields,
-              actual.count == 1, let action = actual.first, action.label == step.label, action.loopCondition == nil,
               action.statements.count == step.statements.count else { throw unsupported }
         let rows = try zip(step.statements, action.statements).map { source, returned in
             guard case .set(.root(let target), let sourceValue) = source, authored.fields.contains(target),
@@ -905,11 +936,16 @@ enum AuthoredCopySyntax {
         let leftColumns = tuple(rows.map { tuple($0.nodes.map { String($0.left) }) })
         let rightColumns = tuple(rows.map { tuple($0.nodes.map { String($0.right) }) })
         guard case .set(.root(let firstTarget), _)? = step.statements.first else { throw unsupported }
-        return (step.label.name, #"""
-        ---- MODULE SwiftTLAArithmeticAssignmentSource ----
+        let suffix = labels.count == 1 ? "" : "\(renderedModule)Action\(ordinal + 1)"
+        let moduleName = "SwiftTLAArithmeticAssignmentSource" + suffix
+        let route = arithmeticRoute(algorithm: selection.algorithm, label: step.label.name, ordinal: ordinal,
+                                    continuation: labels.dropFirst(ordinal + 1).first)
+        let routeDeclaration = suffix.isEmpty ? "" : "\nMasterSelectedRoute == \(route)"
+        let module = #"""
+        ---- MODULE \#(moduleName) ----
         EXTENDS TLAPS, Integers, Sequences
         MasterFields == \#(TLAValue.set(Set(authored.fields.map(TLAValue.string))))
-        MasterTarget == \#(TLAValue.string(firstTarget))
+        MasterTarget == \#(TLAValue.string(firstTarget))\#(routeDeclaration)
         MasterTargets == \#(tuple(rows.map(\.target)))
         MasterNodeCounts == \#(countColumns)
         MasterNodeKinds == \#(kindColumns)
@@ -1092,7 +1128,8 @@ enum AuthoredCopySyntax {
                 DEF row, Rule!AssignmentRhsCertificate, Rule!LiteralReadAddCertificate
         <1>. QED BY ONLY <1>shape, <1>rows, SMT DEF Rule!SupportedAssignmentList
         ====
-        """# + "\n")
+        """# + "\n"
+        return .init(algorithm: selection.algorithm, labels: labels, ordinal: ordinal, name: moduleName, module: module)
     }
 
     static func conditionalProofInput(source: String, modelName: String) throws -> TLAValue? {

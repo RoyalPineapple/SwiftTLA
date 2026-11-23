@@ -41,14 +41,26 @@ private struct ArithmeticAssignmentPreparation: Codable {
 }
 
 package enum ArithmeticAssignmentEvidence {
-    package static func prepare(sourceSHA: String, authoredSource: Data, nativeSource: Data,
-                                to directory: URL) throws {
-        let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
-        guard TLCReferencePin.isRevision(sourceSHA) else { throw InitialFailureEvidenceError.invalidSourceSHA }
-        guard !authoredSource.contains(0), let authored = String(data: authoredSource, encoding: .utf8),
-              !nativeSource.contains(0), let native = String(data: nativeSource, encoding: .utf8) else { throw invalid }
+    package struct Translation {
+        package let sourceAction: String
+        package let actionOrdinal: Int
+        package let sourceContinuation: String?
+        package let source: (name: String, bytes: Data)
+        package let output: (name: String, bytes: Data)
+        fileprivate let program: CompiledProgram
+        fileprivate let catalog: StraightLineRenderedActionCheck.FiniteActionCatalog
+        fileprivate let configuration: String
+    }
 
-        let spec = OrderedOverflowModel.spec
+    /// Binds the authored assignment list to the checked program and its actual rendered action.
+    /// Preparation of this proof does not depend on an observed successor or a reached failure.
+    package static func translation(
+        authoredSource: Data, modelName: String, spec: TLASpec, rendered: RenderedSpecification,
+        sourceAction: String? = nil
+    ) throws -> Translation {
+        let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
+        guard !authoredSource.contains(0), let authored = String(data: authoredSource, encoding: .utf8)
+        else { throw invalid }
         let compilation = try spec.compile()
         let inputs = try CompiledTypeInputs(compilation: compilation,
             types: CompiledTypeContext(enums: .init(), formalNames: [:])) { spelling in
@@ -56,7 +68,6 @@ package enum ArithmeticAssignmentEvidence {
                 return .int
             }
         let program = try CompiledProgram(inputs: inputs)
-        let rendered = try OrderedOverflowModel.render()
         let bundle = rendered.tlaBundle
         let direct = try program.renderModule()
         guard case .compiled(let identity, _, _) = bundle.provenance, identity == program.identity,
@@ -68,8 +79,33 @@ package enum ArithmeticAssignmentEvidence {
               config.utf8.elementsEqual(try direct.configuration.render(usesSymmetryReduction: false).utf8)
         else { throw invalid }
 
-        let live = try observe(program)
-        let nativeDefinitions = try nativeScalarActionDefinitions(native, program: program, selectedActionOrdinal: live.actionOrdinal)
+        let selection = try AuthoredCopySyntax.select(source: authored, modelName: modelName)
+        let source = try AuthoredCopySyntax.arithmeticProofInput(selection, spec: spec,
+            renderedModule: bundle.root.name, sourceAction: sourceAction)
+        guard let output = try OrderedRHSTLAProof.render(rendered, program: program, source: source)
+        else { throw invalid }
+
+        return .init(sourceAction: source.label, actionOrdinal: source.ordinal, sourceContinuation: source.continuation,
+            source: (source.name, Data(source.module.utf8)), output: output, program: program, catalog: catalog,
+            configuration: config)
+    }
+
+    package static func prepare(sourceSHA: String, authoredSource: Data, nativeSource: Data,
+                                to directory: URL) throws {
+        let invalid = InitialFailureEvidenceError.unsupportedGeneratedOutput
+        guard TLCReferencePin.isRevision(sourceSHA) else { throw InitialFailureEvidenceError.invalidSourceSHA }
+        guard !nativeSource.contains(0), let native = String(data: nativeSource, encoding: .utf8) else { throw invalid }
+
+        let rendered = try OrderedOverflowModel.render()
+        let translation = try Self.translation(authoredSource: authoredSource,
+            modelName: String(describing: OrderedOverflowModel.self), spec: OrderedOverflowModel.spec, rendered: rendered)
+        let live = try observe(translation.program)
+        guard translation.actionOrdinal == live.actionOrdinal,
+              translation.sourceAction.utf8.elementsEqual(live.label.utf8),
+              let configured = OrderedRHSCFGProof.render(for: rendered, catalog: translation.catalog,
+                actionProofModule: translation.output.name) else { throw invalid }
+        let nativeDefinitions = try nativeScalarActionDefinitions(native,
+            program: translation.program, selectedActionOrdinal: live.actionOrdinal)
         let nativeModule = """
         ---- MODULE SwiftTLANativeAssignmentActions ----
         EXTENDS Integers
@@ -79,31 +115,22 @@ package enum ArithmeticAssignmentEvidence {
         ====
 
         """
-        let sourceModule = "SwiftTLAArithmeticAssignmentSource"
-        let selection = try AuthoredCopySyntax.select(
-            source: authored, modelName: String(describing: OrderedOverflowModel.self))
-        let source = try AuthoredCopySyntax.arithmeticProofInput(selection, spec: spec)
-        guard source.label == live.label,
-              let outputProof = try OrderedRHSTLAProof.render(rendered, program: program, sourceAction: source.label,
-                sourceModule: sourceModule, sourceRows: "MasterRows", supportTheorem: "MasterAssignmentsAreSupported"),
-              let configured = OrderedRHSCFGProof.render(for: rendered, catalog: catalog, actionProofModule: outputProof.name)
-        else { throw invalid }
-
+        let bundle = rendered.tlaBundle
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let outputs = [
             ("authored-arithmetic-source.swift", authoredSource),
             ("native-arithmetic-source.swift", nativeSource),
             ("\(bundle.root.name).tla", Data(bundle.root.tla.utf8)),
-            ("\(bundle.root.name).cfg", Data(config.utf8)),
-            ("\(sourceModule).tla", Data(source.module.utf8)),
+            ("\(bundle.root.name).cfg", Data(translation.configuration.utf8)),
+            ("\(translation.source.name).tla", translation.source.bytes),
             ("SwiftTLANativeAssignmentActions.tla", Data(nativeModule.utf8)),
             ("native-assignment-failure.json", try encoder.encode(live)),
-            ("\(outputProof.name).tla", outputProof.bytes),
+            ("\(translation.output.name).tla", translation.output.bytes),
             ("\(configured.name).tla", configured.bytes),
         ]
         let manifest = ArithmeticAssignmentPreparation(sourceSHA: sourceSHA,
-            sourceCompilationIdentity: identity.description, authoredSourceSHA256: SHA256.hex(authoredSource),
+            sourceCompilationIdentity: translation.program.identity.description, authoredSourceSHA256: SHA256.hex(authoredSource),
             nativeSourceSHA256: SHA256.hex(nativeSource),
             files: Dictionary(uniqueKeysWithValues: outputs.map { ($0.0, SHA256.hex($0.1)) }))
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

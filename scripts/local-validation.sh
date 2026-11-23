@@ -17,7 +17,7 @@ usage: scripts/local-validation.sh static
        scripts/local-validation.sh xcode-test <test-identifier>
        scripts/local-validation.sh proof-step <retained-packet> <first-line> <last-line> [candidate-proof [byte-input [caller-byte-input]]]
        scripts/local-validation.sh proof-tools
-       scripts/local-validation.sh proof-prepare <output-directory> <checked-proof>
+       scripts/local-validation.sh proof-prepare <output-directory> <checked-proof> [ordered-copy-actions]
        scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion
        scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion-sil
        scripts/local-validation.sh proof-prepare <output-directory> compiler-expansion-function
@@ -56,7 +56,7 @@ case "$mode" in
         proof_arguments=("${@:2}")
         ;;
     proof-prepare)
-        [[ $# -eq 3 ]] || usage
+        [[ $# -eq 3 || ( $# -eq 4 && "${4:-}" == ordered-copy-actions ) ]] || usage
         proof_arguments=("${@:2}")
         ;;
     *)

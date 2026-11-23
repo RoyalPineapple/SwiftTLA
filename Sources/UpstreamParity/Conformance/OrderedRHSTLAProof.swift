@@ -3,9 +3,8 @@ import SwiftTLA
 
 package enum OrderedRHSTLAProof {
     /// The source module owns independently selected authored rows and their certificate support.
-    package static func render(
-        _ rendered: RenderedSpecification, program: CompiledProgram, sourceAction: String,
-        sourceModule: String, sourceRows: String, sourceFields: String = "MasterFields", supportTheorem: String
+    static func render(
+        _ rendered: RenderedSpecification, program: CompiledProgram, source: AuthoredCopySyntax.ArithmeticProofInput
     ) throws -> (name: String, bytes: Data)? {
         let bundle = rendered.tlaBundle
         let layout = program.layout
@@ -13,16 +12,19 @@ package enum OrderedRHSTLAProof {
         let roots = layout.variables.filter { $0.declaration.origin == .source }
         let live = layout.actions.filter { !$0.isTermination }
         let terminals = layout.actions.filter(\.isTermination)
+        let sourceAction = source.label
         guard bundle.imports.isEmpty, layout.parameters.isEmpty,
               case .compiled(let identity, _, _) = bundle.provenance, identity == program.identity,
               controls.count == 1, let counter = controls.first, !roots.isEmpty,
               roots.count + 1 == layout.variables.count,
               roots.allSatisfy({ program.variableTypes[$0.id] == .int }),
-              live.count == 1, let step = live.first, step.declaration.name == sourceAction,
-              terminals.count == 1, let terminal = terminals.first,
-              program.requiresOrderedIntOutput(step.id),
-              rendered.actions.map(\.renderedName) == [step.renderedName, terminal.renderedName],
+              live.count == source.labels.count, live.indices.contains(source.ordinal),
+              zip(live, source.labels).allSatisfy({ $0.0.declaration.name.utf8.elementsEqual($0.1.utf8) }),
+              terminals.count == 1, let terminal = terminals.first, layout.actions.last == terminal,
+              rendered.actions.map(\.renderedName) == layout.actions.map(\.renderedName),
               rendered.actions.allSatisfy({ $0.arguments.isEmpty }) else { return nil }
+        let step = live[source.ordinal]
+        guard step.id.ordinal == source.ordinal, program.requiresOrderedIntOutput(step.id) else { return nil }
         let direct = try program.renderModule()
         guard direct.renderedModuleSource.utf8.elementsEqual(bundle.root.tla.utf8),
               let normalCFG = bundle.root.cfg,
@@ -30,26 +32,35 @@ package enum OrderedRHSTLAProof {
         else { return nil }
 
         let action = program[step.id]
+        let owner = ControlOwner.sequential(algorithm: source.algorithm)
         guard action.bindings.isEmpty,
               case .and(.guard_(let gate), let body) = action.body,
               case .equal = gate.operation, gate.children.count == 2,
               gate.children[0].operation == .stateVariable(counter.id),
               case .controlLocation(let entryID) = gate.children[1].operation,
               let entry = layout.controlLocations.first(where: { $0.id == entryID }),
-              entry.sourceName == sourceAction else { return nil }
-
+              entry.owner == owner, entry.sourceName.utf8.elementsEqual(sourceAction.utf8),
+              let destinationID = controlDestination(in: body, for: counter.id),
+              let destination = layout.controlLocations.first(where: { $0.id == destinationID }) else { return nil }
         let doneName = CompilerControlSymbol.done.rawValue
-        let destinations = layout.controlLocations.filter { $0.sourceName == doneName && $0.id != entryID }
-        guard destinations.count == 1, let destination = destinations.first else { return nil }
+        let expectedOwner = source.continuation == nil
+            ? ControlOwner.generated(algorithm: source.algorithm, purpose: doneName) : owner
+        guard destination.owner == expectedOwner, destination.id != entry.id,
+              destination.sourceName.utf8.elementsEqual((source.continuation ?? doneName).utf8) else { return nil }
         let entryControl = try CompiledValue.controlLocation(entry.id).rendered(using: layout)
         let endControl = try CompiledValue.controlLocation(destination.id).rendered(using: layout)
         guard let physical = OrderedRHSPhysicalAction.decode(in: bundle.root.tla, action: step.renderedName,
             body: body, fields: roots, counter: counter, destination: endControl.description) else { return nil }
-        let name = "SwiftTLAOrderedRHSOutputProof"
-        let identifiers = [bundle.root.name, sourceModule, sourceRows, sourceFields, supportTheorem,
-                           counter.formalName, step.renderedName, terminal.renderedName] + roots.map(\.formalName)
+
+        // Preserve the original one-action packet. In a larger machine the selected action proof
+        // has no conclusion about the other actions or the disjunction in Next.
+        let wholeModule = live.count == 1
+        let suffix = wholeModule ? "" : "\(bundle.root.name)Action\(step.id.ordinal + 1)"
+        let name = "SwiftTLAOrderedRHSOutputProof" + suffix
+        let identifiers = [bundle.root.name, name, source.name, counter.formalName, step.renderedName,
+                           terminal.renderedName] + roots.map(\.formalName)
         guard identifiers.allSatisfy(formalIdentifier), !bundle.root.tla.contains("RHSOutput"),
-              ![bundle.root.name, sourceModule].contains(name) else { return nil }
+              ![bundle.root.name, source.name].contains(name) else { return nil }
 
         let settings = bundle.root.tla.split(separator: "\n").compactMap { line -> String? in
             guard let split = line.range(of: " == ") else { return nil }
@@ -112,6 +123,32 @@ package enum OrderedRHSTLAProof {
         }.joined(separator: ",\n    ")
         let keys = TLAValue.set(Set(roots.map { .string($0.declaration.name) }))
         let pc = counter.formalName
+        let compiledContinuation: String?
+        if case .sequential = destination.owner { compiledContinuation = destination.sourceName }
+        else { compiledContinuation = nil }
+        guard case .sequential(let compiledAlgorithm) = entry.owner else { return nil }
+        let compiledRoute = AuthoredCopySyntax.arithmeticRoute(algorithm: compiledAlgorithm,
+            label: step.declaration.name, ordinal: step.id.ordinal, continuation: compiledContinuation)
+        let routeDefinition = wholeModule ? #"""
+        RHSOutputTermination ==
+            /\ \#(pc) = RHSOutputExit /\ UNCHANGED \#(pc)
+            /\ RHSOutputBefore = RHSOutputAfter
+        """# : "RHSOutputCompiledRoute == \(compiledRoute)"
+        let routeObservation = wholeModule ? #"""
+            /\ (Next <=> (RHSOutputHistoryAdvance(history) \/ RHSOutputTermination))
+        """# : #"""
+            /\ RHSOutputCompiledRoute = RHSOutputInput!MasterSelectedRoute
+        """#
+        let routeProof = wholeModule ? #"""
+        <1>terminal. \#(terminal.renderedName) <=> RHSOutputTermination
+            BY SMT DEF \#(terminal.renderedName), RHSOutputTermination, RHSOutputExit, RHSOutputKeys, RHSOutputBefore, RHSOutputAfter
+        <1>next. Next <=> (RHSOutputHistoryAdvance(history) \/ RHSOutputTermination)
+            BY ONLY <1>terminal, <1>frame DEF Next
+        """# : #"""
+        <1>route. RHSOutputCompiledRoute = RHSOutputInput!MasterSelectedRoute
+            BY ONLY DEF RHSOutputCompiledRoute, RHSOutputInput!MasterSelectedRoute
+        """#
+        let routeFact = wholeModule ? "<1>next" : "<1>route"
         let proof = #"""
         ---- MODULE \#(name) ----
         EXTENDS \#(bundle.root.name), TLAPS
@@ -119,9 +156,9 @@ package enum OrderedRHSTLAProof {
         RHSOutputKeys == \#(keys)
         RHSOutputMin == \#(TLAValue.int(Int.min))
         RHSOutputMax == \#(TLAValue.int(Int.max))
-        RHSOutputInput == INSTANCE \#(sourceModule)
+        RHSOutputInput == INSTANCE \#(source.name)
 
-        RHSOutputRows == RHSOutputInput!\#(sourceRows)
+        RHSOutputRows == RHSOutputInput!MasterRows
         RHSOutputBefore == [key \in RHSOutputKeys |-> \#(lookup(roots, primed: false))]
         RHSOutputAfter == [key \in RHSOutputKeys |-> \#(lookup(roots, primed: true))]
         RHSOutputStateType == RHSOutputBefore \in [RHSOutputKeys -> RHSOutputMin..RHSOutputMax]
@@ -187,9 +224,7 @@ package enum OrderedRHSTLAProof {
             IN /\ RHSOutputSelected /\ final.failure = <<>>
                /\ \#(pc)' = RHSOutputExit /\ RHSOutputAfter = final.bindings
 
-        RHSOutputTermination ==
-            /\ \#(pc) = RHSOutputExit /\ UNCHANGED \#(pc)
-            /\ RHSOutputBefore = RHSOutputAfter
+        \#(routeDefinition)
 
         RHSOutputSourceHistory(history) ==
             RHSOutputInput!Rule!AssignmentListHistory(FALSE, RHSOutputBefore, RHSOutputRows, history)
@@ -199,21 +234,21 @@ package enum OrderedRHSTLAProof {
             /\ (\#(step.renderedName) <=> RHSOutputHistoryAdvance(history))
             /\ RHSOutputActualFailures = RHSOutputHistoryFailures(history)
             /\ RHSOutputFailureSelected = (RHSOutputActualFailures # {})
-            /\ (Next <=> (RHSOutputHistoryAdvance(history) \/ RHSOutputTermination))
+        \#(routeObservation)
 
         THEOREM RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory ==
-            /\ RHSOutputKeys = RHSOutputInput!\#(sourceFields)
+            /\ RHSOutputKeys = RHSOutputInput!MasterFields
             /\ RHSOutputInput!Rule!SupportedAssignmentList(RHSOutputRows)
             /\ RHSOutputCount = \#(physical.captures.count)
             /\ DOMAIN RHSOutputRows = DOMAIN RHSOutputPlans
         PROOF
-        <1>fields. RHSOutputKeys = RHSOutputInput!\#(sourceFields)
-            BY ONLY SMT DEF RHSOutputKeys, RHSOutputInput!\#(sourceFields)
+        <1>fields. RHSOutputKeys = RHSOutputInput!MasterFields
+            BY ONLY SMT DEF RHSOutputKeys, RHSOutputInput!MasterFields
         <1>authored. /\ RHSOutputInput!Rule!SupportedAssignmentList(RHSOutputRows)
                      /\ RHSOutputCount = \#(physical.captures.count)
-            BY ONLY RHSOutputInput!\#(supportTheorem), SMT DEF RHSOutputRows, RHSOutputCount
+            BY ONLY RHSOutputInput!MasterAssignmentsAreSupported, SMT DEF RHSOutputRows, RHSOutputCount
         <1>domain. DOMAIN RHSOutputRows = DOMAIN RHSOutputPlans
-            BY ONLY SMT DEF RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputInput!MasterNodeCounts, RHSOutputPlans, RHSOutputNodeCounts
+            BY ONLY SMT DEF RHSOutputRows, RHSOutputInput!MasterRows, RHSOutputInput!MasterNodeCounts, RHSOutputPlans, RHSOutputNodeCounts
         <1>. QED BY ONLY <1>fields, <1>authored, <1>domain
 
         THEOREM RHSOutputUsesTheMachineIntegerDomain ==
@@ -245,7 +280,7 @@ package enum OrderedRHSTLAProof {
         <1>shape. /\ physical.count = expected.count
                   /\ expected.count = RHSOutputInput!MasterNodeCounts[index]
             BY ONLY <1>counts, <1>domain, (index \in DOMAIN RHSOutputRows), SMT
-                DEF physical, expected, RHSOutputPlans, RHSOutputRows, RHSOutputInput!\#(sourceRows),
+                DEF physical, expected, RHSOutputPlans, RHSOutputRows, RHSOutputInput!MasterRows,
                     RHSOutputInput!Rule!AssignmentRhsPlan, RHSOutputInput!Rule!ExtractedNodePlan
         <1>physicalDomain. index \in DOMAIN RHSOutputPlans
             BY ONLY <1>domain, (index \in DOMAIN RHSOutputRows), SMT
@@ -255,7 +290,7 @@ package enum OrderedRHSTLAProof {
                             /\ physical.right = RHSOutputNodeRight[index]
             BY ONLY <1>physicalDomain, SMT DEF physical, RHSOutputPlans
         <1>sourceDomain. index \in DOMAIN RHSOutputInput!MasterNodeCounts
-            BY ONLY (index \in DOMAIN RHSOutputRows), SMT DEF RHSOutputRows, RHSOutputInput!\#(sourceRows)
+            BY ONLY (index \in DOMAIN RHSOutputRows), SMT DEF RHSOutputRows, RHSOutputInput!MasterRows
         <1>. DEFINE cell(node) == RHSOutputRows[index].emitted.nodes[node]
         <1>sourceCells. \A node \in 1..expected.count :
             /\ cell(node).kind = RHSOutputInput!MasterNodeKinds[index][node]
@@ -268,16 +303,16 @@ package enum OrderedRHSTLAProof {
             <2>node. node \in 1..RHSOutputInput!MasterNodeCounts[index]
                 BY ONLY <1>shape, (node \in 1..expected.count), SMT
             <2>kind. cell(node).kind = RHSOutputInput!MasterNodeKinds[index][node]
-                BY ONLY <1>sourceDomain, <2>node, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows),
+                BY ONLY <1>sourceDomain, <2>node, SMT DEF cell, RHSOutputRows, RHSOutputInput!MasterRows,
                     RHSOutputInput!MasterNodes
             <2>payload. cell(node).payload = (IF cell(node).kind = "read"
                                              THEN RHSOutputInput!MasterNodeReadKeys[index][node]
                                              ELSE RHSOutputInput!MasterNodeLiterals[index][node])
-                BY ONLY <1>sourceDomain, <2>node, <2>kind, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows),
+                BY ONLY <1>sourceDomain, <2>node, <2>kind, SMT DEF cell, RHSOutputRows, RHSOutputInput!MasterRows,
                     RHSOutputInput!MasterNodes
             <2>children. /\ cell(node).left = RHSOutputInput!MasterNodeLeft[index][node]
                          /\ cell(node).right = RHSOutputInput!MasterNodeRight[index][node]
-                BY ONLY <1>sourceDomain, <2>node, SMT DEF cell, RHSOutputRows, RHSOutputInput!\#(sourceRows),
+                BY ONLY <1>sourceDomain, <2>node, SMT DEF cell, RHSOutputRows, RHSOutputInput!MasterRows,
                     RHSOutputInput!MasterNodes
             <2>. QED BY ONLY <2>kind, <2>payload, <2>children
         <1>expectedCells. \A node \in 1..expected.count :
@@ -312,12 +347,12 @@ package enum OrderedRHSTLAProof {
             <2>. QED BY ONLY <1>shape, <2>nodes DEF RHSOutputInput!Rule!PhysicalAssignmentOperandsMatch, expected
         <1>targets. \A prior \in DOMAIN RHSOutputRows :
             RHSOutputRows[prior].target = RHSOutputInput!MasterTargets[prior]
-            BY ONLY SMT DEF RHSOutputRows, RHSOutputInput!\#(sourceRows)
+            BY ONLY SMT DEF RHSOutputRows, RHSOutputInput!MasterRows
         <1>reads. \A node \in 1..expected.count : expected.kinds[node] = "read" =>
-                /\ expected.reads[node] \in RHSOutputInput!\#(sourceFields)
+                /\ expected.reads[node] \in RHSOutputInput!MasterFields
                 /\ RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, index - 1, expected.reads[node], physical.reads[node])
             <2>. SUFFICES ASSUME NEW node \in 1..expected.count, expected.kinds[node] = "read"
-                PROVE /\ expected.reads[node] \in RHSOutputInput!\#(sourceFields)
+                PROVE /\ expected.reads[node] \in RHSOutputInput!MasterFields
                       /\ RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, index - 1, expected.reads[node], physical.reads[node])
                 OBVIOUS
             <2>. DEFINE key == RHSOutputInput!MasterNodeReadKeys[index][node]
@@ -334,9 +369,9 @@ package enum OrderedRHSTLAProof {
                      /\ RHSOutputInput!MasterNodeKinds[index][node] = "read"
                 BY ONLY <1>shape, <1>sourceCells, <1>expectedCells, (node \in 1..expected.count),
                     (expected.kinds[node] = "read"), SMT
-            <2>field. key \in RHSOutputInput!\#(sourceFields)
+            <2>field. key \in RHSOutputInput!MasterFields
                 BY ONLY <1>sourceDomain, <2>slot, SMT
-                    DEF key, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeReadKeys, RHSOutputInput!\#(sourceFields)
+                    DEF key, RHSOutputInput!MasterNodeCounts, RHSOutputInput!MasterNodeReadKeys, RHSOutputInput!MasterFields
             <2>positionColumns. /\ writer \in 0..(index - 1)
                                 /\ (writer = 0 \/ RHSOutputInput!MasterTargets[writer] = key)
                                 /\ \A prior \in 1..(index - 1) :
@@ -380,7 +415,7 @@ package enum OrderedRHSTLAProof {
             \A key \in RHSOutputKeys :
                 RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, RHSOutputCount, key, RHSOutputWriteRoutes[key])
         BY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-           DEF RHSOutputRows, RHSOutputInput!\#(sourceRows), RHSOutputInput!MasterNodeCounts,
+           DEF RHSOutputRows, RHSOutputInput!MasterRows, RHSOutputInput!MasterNodeCounts,
                RHSOutputInput!MasterTargets, RHSOutputWriteRoutes, RHSOutputKeys, RHSOutputCount,
                RHSOutputInput!Rule!CopyReceiptNamesWriter, RHSOutputInput!Rule!CopyReceiptOrdinal,
                RHSOutputInput!Rule!LastDirectCopy, RHSOutputInput!Rule!DirectCopyReference
@@ -392,11 +427,11 @@ package enum OrderedRHSTLAProof {
         <1>bounds. /\ Len(RHSOutputRows) \in Nat /\ RHSOutputCount \in 0..Len(RHSOutputRows)
             BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
                 DEF RHSOutputCount, RHSOutputInput!Rule!SupportedAssignmentList
-        <1>fields. RHSOutputKeys = RHSOutputInput!\#(sourceFields)
+        <1>fields. RHSOutputKeys = RHSOutputInput!MasterFields
             BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory
         <1>points. \A key \in RHSOutputKeys : RHSOutputWriteRoutes[key] = scheduled[key]
             <2>. TAKE key \in RHSOutputKeys
-            <2>field. key \in RHSOutputInput!\#(sourceFields)
+            <2>field. key \in RHSOutputInput!MasterFields
                 BY ONLY <1>fields, (key \in RHSOutputKeys)
             <2>named. RHSOutputInput!Rule!CopyReceiptNamesWriter(RHSOutputRows, RHSOutputCount, key, RHSOutputWriteRoutes[key])
                 BY ONLY (key \in RHSOutputKeys), ActualRenderedWriteRoutesNameTheAuthoredWriters, SMT
@@ -762,7 +797,7 @@ package enum OrderedRHSTLAProof {
             ASSUME RHSOutputStateType
             PROVE RHSOutputBefore \in RHSOutputInput!Rule!AssignmentBindings
         PROOF
-        <1>keys. RHSOutputKeys = RHSOutputInput!\#(sourceFields)
+        <1>keys. RHSOutputKeys = RHSOutputInput!MasterFields
             BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory
         <1>. QED BY ONLY <1>keys, RHSOutputStateType, SMT
             DEF RHSOutputStateType, RHSOutputMin, RHSOutputMax,
@@ -851,7 +886,7 @@ package enum OrderedRHSTLAProof {
                 BY ONLY RHSOutputPasses, <1>passed, <1>fullPrefix, SMT
             <2>bindings. final.bindings = RHSOutputInput!Rule!CompletedAssignmentBindings(RHSOutputBefore, RHSOutputRows, final.completed)
                 BY ONLY <1>history, SMT DEF final, RHSOutputInput!Rule!AssignmentPrefixMeaning
-            <2>keys. RHSOutputKeys = RHSOutputInput!\#(sourceFields)
+            <2>keys. RHSOutputKeys = RHSOutputInput!MasterFields
                 BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory
             <2>. QED BY ONLY <2>complete, <2>bindings, <2>keys, <1>roots,
                 ActualRenderedWriteRoutesAreTheFinalAuthoredWriters, SMT DEF RHSOutputInput!Rule!CompletedAssignmentBindings
@@ -940,11 +975,8 @@ package enum OrderedRHSTLAProof {
             <2>nonempty. (RHSOutputActualFailures # {}) <=> (RHSOutputFailureProbeSites # {})
                 BY ONLY <1>actualImage, SMT
             <2>. QED BY ONLY <2>emitted, <2>nonempty, <1>probeNonempty, SMT
-        <1>terminal. \#(terminal.renderedName) <=> RHSOutputTermination
-            BY SMT DEF \#(terminal.renderedName), RHSOutputTermination, RHSOutputExit, RHSOutputKeys, RHSOutputBefore, RHSOutputAfter
-        <1>next. Next <=> (RHSOutputHistoryAdvance(history) \/ RHSOutputTermination)
-            BY ONLY <1>terminal, <1>frame DEF Next
-        <1>. QED BY ONLY <1>frame, <1>failure, <1>aggregate, <1>next DEF RHSOutputHistoryObservation
+        \#(routeProof)
+        <1>. QED BY ONLY <1>frame, <1>failure, <1>aggregate, \#(routeFact) DEF RHSOutputHistoryObservation
 
         THEOREM ActualTLAActionHasACertifiedAssignmentHistory ==
             ASSUME RHSOutputStateType
@@ -967,6 +999,31 @@ package enum OrderedRHSTLAProof {
 
         """#
         return (name, Data(proof.utf8))
+    }
+
+    private static func controlDestination(in body: CompiledActionExpr, for counter: VariableID) -> ControlLocationID? {
+        var pending = [body]
+        var destination: ControlLocationID?
+        while let action = pending.popLast() {
+            switch action {
+            case .and(let left, let right):
+                pending.append(right)
+                pending.append(left)
+            case .define(_, _, let continuation):
+                pending.append(continuation)
+            case .assign(let id, let value) where id == counter:
+                guard destination == nil, value.resultType == .controlLocation, value.children.isEmpty,
+                      case .controlLocation(let label) = value.operation else { return nil }
+                destination = label
+            case .unchanged(let id) where id == counter:
+                return nil
+            case .existsAction, .ifElse, .or:
+                return nil
+            default:
+                break
+            }
+        }
+        return destination
     }
 
     private static func lookup(_ roots: [CompiledVariableLayout], primed: Bool) -> String {

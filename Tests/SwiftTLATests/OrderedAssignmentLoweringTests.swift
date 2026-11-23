@@ -2164,6 +2164,25 @@ struct OrderedAssignmentLoweringTests {
         }
     }
 
+    @Test("Successful ordered Int action supplies authored and physical assignment proof")
+    func successfulIntActionSuppliesAssignmentProof() throws {
+        let sourceFile = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("OrderedStepFixtures.swift")
+        let authored = try Data(contentsOf: sourceFile)
+        let proof = try ArithmeticAssignmentEvidence.translation(authoredSource: authored,
+            modelName: String(describing: SequentialDependentIntInitialProofModel.self),
+            spec: SequentialDependentIntInitialProofModel.spec,
+            rendered: SequentialDependentIntInitialProofModel.render())
+
+        let initial = try SequentialDependentIntInitialProofModel.makeMachine()
+        let successors = try initial.successors()
+        try #require(successors.count == 1)
+        let successor = try #require(successors.first)
+        #expect(try initial.formalCall(for: successor.action).name == proof.sourceAction)
+        #expect(successor.machine.state.first == 5)
+        #expect(successor.machine.state.second == 4)
+    }
+
     @Test("Dependent Int initialization retains its ordered source expression through compilation")
     func dependentIntInitializerRetainsExpression() throws {
         let source = StateExpr.add(.add(.variable("first"), .value(.int(2))), .value(.int(1)))

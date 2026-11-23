@@ -525,6 +525,9 @@ def main():
     output = Path(sys.argv[3]).resolve()
     if not output.is_relative_to(common / "swifttla-proof-evidence") or output.exists():
         raise ValueError("output must be a new proof-evidence directory")
+    selection = sys.argv[5:]
+    if selection and (selection != ["ordered-copy-actions"] or sys.argv[4].startswith("compiler-expansion")):
+        raise ValueError("ordered-copy-actions requires a checked proof input")
     if sys.argv[4] in ["compiler-expansion", "compiler-expansion-sil", "compiler-expansion-function", "compiler-expansion-helper"]:
         capture_compiler_expansion(root, scratch, output,
                                    sil=sys.argv[4] != "compiler-expansion",
@@ -586,9 +589,16 @@ def main():
         retained = output / "native-initial-source.swift"
         retained.write_bytes(data)
         print("Fresh existing-pilot compiler output retained; running focused consumer.", flush=True)
+        test_filter = "InitialFailureEvidenceTests"
+        ordered_copy_attachments = scratch / "ordered-copy-attachments" if selection else None
+        if ordered_copy_attachments is not None:
+            ordered_copy_attachments.mkdir()
+            test_filter += "|OrderedStepTests/orderedActionsSupplySelectedProofs"
         command = ["swift", "test", "-Xswiftc", "-warnings-as-errors",
-                   "--disable-automatic-resolution", "--filter", "InitialFailureEvidenceTests", "-j", "1",
+                   "--disable-automatic-resolution", "--filter", test_filter, "-j", "1",
                    "--scratch-path", str(build)]
+        if ordered_copy_attachments is not None:
+            command += ["--attachments-path", str(ordered_copy_attachments)]
         receipt["consumerCommand"] = command
         with (output / "consumer.log").open("wb") as log:
             run = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT)
@@ -863,6 +873,33 @@ def main():
             proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
             if retained_input.name in branchwise_imports:
                 branchwise_hashes[retained_input.name] = sha
+        if ordered_copy_attachments is not None:
+            swift_source = "Tests/SwiftTLATests/OrderedStepFixtures.swift"
+            attached_source = Path(swift_source).name
+            expected = {"OrderedCopy.tla", attached_source}
+            expected.update(f"SwiftTLA{kind}OrderedCopyAction{row}.tla"
+                            for kind in ("ArithmeticAssignmentSource", "OrderedRHSOutputProof") for row in (1, 2))
+            attached = {path.name: path for path in ordered_copy_attachments.iterdir()}
+            if (set(attached) != expected
+                    or any(path.is_symlink() or not path.is_file() for path in attached.values())
+                    or digest(attached[attached_source]) != inputs[swift_source]):
+                raise ValueError("selected OrderedCopy test did not attach its authored source and both actual proofs")
+            proof_files = {}
+            for name, path in sorted(attached.items()):
+                retained_input = imports / name
+                data = path.read_bytes()
+                if name.endswith(".tla") and data.split(b"\n", 1)[0] != f"---- MODULE {path.stem} ----".encode():
+                    raise ValueError(f"unexpected attached module header: {name}")
+                with retained_input.open("xb") as retained_file:
+                    retained_file.write(data)
+                sha = digest(retained_input)
+                proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
+                proof_files[name] = sha
+            receipt["orderedCopyActionProofs"] = {
+                "sourceSHA": head, "authoredSource": swift_source,
+                "test": "OrderedStepTests/orderedActionsSupplySelectedProofs",
+                "files": proof_files,
+            }
         if stack_files:
             for name in ["OrderedIntTraversalPass.tla", "OrderedIntTraversalPassSource.tla"]:
                 retained_input = imports / name
