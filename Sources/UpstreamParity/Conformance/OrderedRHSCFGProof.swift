@@ -7,36 +7,15 @@ package enum OrderedRHSCFGProof {
         actionProofModule: String
     ) -> (name: String, bytes: Data)? {
         guard actionProofModule.range(of: "^[A-Za-z_][A-Za-z_0-9]*$", options: .regularExpression) != nil,
-              let cfg = rendered.tlaBundle.root.cfg else { return nil }
-        let lines = cfg.split(separator: "\n")
-        let invariant = "INVARIANT __SwiftTLAEvaluationOK"
-        guard lines.count == 3, lines[0] == "SPECIFICATION Spec", lines[1] == "CHECK_DEADLOCK TRUE",
-              lines[2].hasPrefix(invariant), lines[2].dropFirst(invariant.count).allSatisfy({ $0 == "_" }),
-              cfg.utf8.elementsEqual((lines.joined(separator: "\n") + "\n").utf8) else { return nil }
-        let checking = lines[2].dropFirst("INVARIANT ".count)
-        guard rendered.intrinsicInvariantNames == [String(checking)] else { return nil }
+              let selection = normalSelection(for: rendered) else { return nil }
+        let checking = selection.checking
         let catalogProof = catalog.proofSource(prefix: "SwiftTLAOrderedRHS")
-        let expected = "<<\(cfg.utf8.map(String.init).joined(separator: ", "))>>"
-        let pages = (1...((cfg.utf8.count + 15) / 16)).map { "CallerInputPage\($0)" }.joined(separator: " ")
         let name = "SwiftTLAOrderedRHSConfiguredProof"
         let proof = #"""
         ---- MODULE \#(name) ----
         EXTENDS \#(actionProofModule), CallerInputPageBlock1
 
-        \* \#(pages)
-        LocalOrderedRHSActualCFG == [byte \in 1..CallerInputSize |-> CallerInputByte[byte - 1]]
-        LocalOrderedRHSExpectedCFG == \#(expected)
-
-        THEOREM NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking ==
-            LocalOrderedRHSActualCFG = LocalOrderedRHSExpectedCFG
-        PROOF
-        <1>domain. DOMAIN LocalOrderedRHSActualCFG = DOMAIN LocalOrderedRHSExpectedCFG
-            BY SMT DEF LocalOrderedRHSActualCFG, LocalOrderedRHSExpectedCFG, CallerInputSize
-        <1>bytes. \A byte \in DOMAIN LocalOrderedRHSExpectedCFG :
-            LocalOrderedRHSActualCFG[byte] = LocalOrderedRHSExpectedCFG[byte]
-            BY ONLY CallerInputPageBlock1AtFileOffsets, SMT
-                DEF LocalOrderedRHSActualCFG, LocalOrderedRHSExpectedCFG, CallerInputSize
-        <1>. QED BY <1>domain, <1>bytes, SMT DEF LocalOrderedRHSActualCFG, LocalOrderedRHSExpectedCFG
+        \#(selection.proof)
 
         RHSOutputSelectedEvaluationCheck == \#(checking)
 
@@ -87,5 +66,144 @@ package enum OrderedRHSCFGProof {
 
         """#
         return (name, Data(proof.utf8))
+    }
+
+    /// Uses the same emitted CFG grammar and caller-byte proof as the single-action case.
+    static func renderCatalog(
+        for rendered: RenderedSpecification, catalogModule: String, prefix: String, actionInstances: [String]
+    ) -> (name: String, bytes: Data)? {
+        guard let selection = normalSelection(for: rendered), !actionInstances.isEmpty else { return nil }
+        let name = catalogModule + "ConfiguredProof"
+        let checking = selection.checking
+        let failureSelectors = actionInstances.map { "\($0)!RHSOutputFailureSelected" }
+        let observedFailures = actionInstances.map { "\($0)!RHSOutputActualFailures" }
+        let localSelectors = failureSelectors.joined(separator: ", ")
+        let failureDisjunction = failureSelectors.joined(separator: #" \/ "#)
+        let selectorFacts = zip(failureSelectors, observedFailures).map {
+            #"/\ \#($0.0) = (\#($0.1) # {})"#
+        }.joined(separator: "\n        ")
+        let noFailures = observedFailures.map { "\($0) = {}" }.joined(separator: #" /\ "#)
+        let observations = actionInstances.map { "\($0)!RHSOutputHistoryObservation" }.joined(separator: ", ")
+        let proof = #"""
+        ---- MODULE \#(name) ----
+        EXTENDS \#(catalogModule), CallerInputPageBlock1
+
+        \#(selection.proof)
+
+        \#(prefix)ConfiguredSteps == \E label : \#(prefix)EmittedLabeled(label)
+        \#(prefix)ConfiguredBehavior == Init /\ [][\#(prefix)ConfiguredSteps]_vars
+        \#(prefix)SelectedEvaluationCheck == \#(checking)
+
+        LOCAL AuthoredSlots == DOMAIN \#(prefix)NativeSelectedSteps
+        LOCAL AuthoredRoutes == [slot \in AuthoredSlots |-> NativeActionRoutes[slot]]
+        LOCAL AuthoredFormal == [slot \in AuthoredSlots |-> \#(prefix)ActualFormalLabels[slot]]
+        LOCAL AuthoredLabels == [slot \in AuthoredSlots |-> \#(prefix)ActualAuthoredLabels[slot]]
+        LOCAL NoAuthoredFailures(failures) == \A slot \in DOMAIN failures : failures[slot] = {}
+
+        \#(prefix)NativeAuthoredLabeled(label) ==
+            \#(prefix)Dispatch!NativeDispatchLabeled(AuthoredRoutes, \#(prefix)NativeSelectedSteps,
+                AuthoredFormal, AuthoredLabels, label)
+        \#(prefix)CertifiedAuthoredLabeled(histories, label) ==
+            \#(prefix)Dispatch!CatalogLabeledBranches(\#(prefix)CertifiedActions(histories), AuthoredLabels, label)
+
+        THEOREM ConfiguredAssignmentCatalogUsesTheCertifiedHistories ==
+            /\ LocalOrderedRHSActualCFG = LocalOrderedRHSExpectedCFG
+            /\ (Next <=> \#(prefix)ConfiguredSteps)
+            /\ (Spec <=> \#(prefix)ConfiguredBehavior)
+            /\ (\#(prefix)InputType => \E histories :
+                /\ \#(prefix)HistoriesHold(histories)
+                /\ (Next <=> \#(prefix)CertifiedNext(histories))
+                /\ \A label : \#(prefix)NativeAuthoredLabeled(label) <=> \#(prefix)CertifiedAuthoredLabeled(histories, label)
+                /\ (\#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)CertifiedFailures(histories)))
+                /\ (\#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)NativeSelectedFailures)))
+        PROOF
+        <1>union. (\E \#(prefix)Index \in DOMAIN \#(prefix)ActualActionValues : \#(prefix)ActualActionValues[\#(prefix)Index])
+                      <=> \#(prefix)ConfiguredSteps
+            BY ONLY \#(prefix)ActualNextUsesTheCompleteLabeledActionCatalog,
+                \#(prefix)Dispatch!CatalogLabeledBranchesComposeTheFiniteUnion, SMT
+                DEF \#(prefix)ConfiguredSteps, \#(prefix)EmittedLabeled
+        <1>next. Next <=> \#(prefix)ConfiguredSteps
+            BY ONLY <1>union, \#(prefix)ActualNextUsesTheCompleteLabeledActionCatalog, PTL
+        <1>always. ([][Next]_vars) <=> ([][\#(prefix)ConfiguredSteps]_vars)
+            BY ONLY <1>next, PTL
+        <1>behavior. Spec <=> \#(prefix)ConfiguredBehavior
+            BY ONLY <1>always, PTL DEF \#(prefix)ConfiguredBehavior, Spec, vars
+        <1>selector. \#(prefix)SelectedEvaluationCheck <=> ~(\#(failureDisjunction))
+            BY ONLY DEF \#(prefix)SelectedEvaluationCheck, \#(checking), \#(localSelectors)
+        <1>routes. \#(prefix)Dispatch!NativeDispatchBindsTheActionCatalog(AuthoredRoutes, AuthoredFormal)
+            BY ONLY SMT DEF AuthoredSlots, AuthoredRoutes, AuthoredFormal, NativeActionRoutes,
+                \#(prefix)NativeSelectedSteps, \#(prefix)ActualFormalLabels, \#(prefix)ActualActionRoutes,
+                \#(prefix)Dispatch!NativeDispatchBindsTheActionCatalog
+        <1>labelDomain. DOMAIN AuthoredLabels = DOMAIN AuthoredFormal
+            BY ONLY SMT DEF AuthoredLabels, AuthoredFormal
+        <1>typed. ASSUME \#(prefix)InputType
+            PROVE \E histories :
+                /\ \#(prefix)HistoriesHold(histories)
+                /\ (Next <=> \#(prefix)CertifiedNext(histories))
+                /\ \A label : \#(prefix)NativeAuthoredLabeled(label) <=> \#(prefix)CertifiedAuthoredLabeled(histories, label)
+                /\ (\#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)CertifiedFailures(histories)))
+                /\ (\#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)NativeSelectedFailures))
+            <2>histories. PICK histories :
+                /\ \#(prefix)HistoriesHold(histories)
+                /\ (Next <=> \#(prefix)CertifiedNext(histories))
+                /\ \A slot \in AuthoredSlots :
+                    \#(prefix)NativeSelectedSteps[slot] <=> \#(prefix)CertifiedActions(histories)[slot]
+                /\ \#(prefix)NativeSelectedFailures = \#(prefix)ActualFailures
+                /\ \#(prefix)ActualFailures = \#(prefix)CertifiedFailures(histories)
+                BY ONLY \#(prefix)InputType, ActualNextAndFailuresUseTheCertifiedAssignmentHistories,
+                    SMT DEF AuthoredSlots
+            <2>points. \A slot \in DOMAIN AuthoredFormal :
+                \#(prefix)NativeSelectedSteps[slot] <=> \#(prefix)CertifiedActions(histories)[slot]
+                BY ONLY <2>histories, SMT DEF AuthoredFormal
+            <2>labels. \A label : \#(prefix)NativeAuthoredLabeled(label) <=>
+                                  \#(prefix)CertifiedAuthoredLabeled(histories, label)
+                BY ONLY <1>routes, <1>labelDomain, <2>points,
+                    \#(prefix)Dispatch!CertifiedNativeDispatchUsesTheLabeledCatalog, SMT
+                    DEF \#(prefix)NativeAuthoredLabeled, \#(prefix)CertifiedAuthoredLabeled
+            <2>predicates.
+                \#(selectorFacts)
+                BY ONLY <2>histories DEF \#(prefix)HistoriesHold, \#(observations)
+            <2>physical. NoAuthoredFailures(\#(prefix)ActualFailures) <=> (\#(noFailures))
+                BY ONLY IsaM("simp"), SMT DEF NoAuthoredFailures, \#(prefix)ActualFailures
+            <2>checking. \#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)ActualFailures)
+                BY ONLY <1>selector, <2>predicates, <2>physical, PTL
+            <2>. WITNESS histories
+            <2>. QED BY ONLY <2>histories, <2>labels, <2>checking, SMT
+        <1>. QED BY ONLY NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking, <1>next, <1>behavior, <1>typed, Zenon
+
+        ====
+
+        """#
+        return (name, Data(proof.utf8))
+    }
+
+    private static func normalSelection(for rendered: RenderedSpecification) -> (checking: String, proof: String)? {
+        guard let cfg = rendered.tlaBundle.root.cfg else { return nil }
+        let lines = cfg.split(separator: "\n")
+        let invariant = "INVARIANT __SwiftTLAEvaluationOK"
+        guard lines.count == 3, lines[0] == "SPECIFICATION Spec", lines[1] == "CHECK_DEADLOCK TRUE",
+              lines[2].hasPrefix(invariant), lines[2].dropFirst(invariant.count).allSatisfy({ $0 == "_" }),
+              cfg.utf8.elementsEqual((lines.joined(separator: "\n") + "\n").utf8) else { return nil }
+        let checking = lines[2].dropFirst("INVARIANT ".count)
+        guard rendered.intrinsicInvariantNames == [String(checking)] else { return nil }
+        let expected = "<<\(cfg.utf8.map(String.init).joined(separator: ", "))>>"
+        let pages = (1...((cfg.utf8.count + 15) / 16)).map { "CallerInputPage\($0)" }.joined(separator: " ")
+        let proof = #"""
+        \* \#(pages)
+        LocalOrderedRHSActualCFG == [byte \in 1..CallerInputSize |-> CallerInputByte[byte - 1]]
+        LocalOrderedRHSExpectedCFG == \#(expected)
+
+        THEOREM NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking ==
+            LocalOrderedRHSActualCFG = LocalOrderedRHSExpectedCFG
+        PROOF
+        <1>domain. DOMAIN LocalOrderedRHSActualCFG = DOMAIN LocalOrderedRHSExpectedCFG
+            BY SMT DEF LocalOrderedRHSActualCFG, LocalOrderedRHSExpectedCFG, CallerInputSize
+        <1>bytes. \A byte \in DOMAIN LocalOrderedRHSExpectedCFG :
+            LocalOrderedRHSActualCFG[byte] = LocalOrderedRHSExpectedCFG[byte]
+            BY ONLY CallerInputPageBlock1AtFileOffsets, SMT
+                DEF LocalOrderedRHSActualCFG, LocalOrderedRHSExpectedCFG, CallerInputSize
+        <1>. QED BY <1>domain, <1>bytes, SMT DEF LocalOrderedRHSActualCFG, LocalOrderedRHSExpectedCFG
+        """#
+        return (String(checking), proof)
     }
 }

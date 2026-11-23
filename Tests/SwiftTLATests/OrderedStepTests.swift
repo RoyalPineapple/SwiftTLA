@@ -315,8 +315,12 @@ import SwiftSyntax
 #if compiler(>=6.2)
         let actual = rendered.tlaBundle.root
         Attachment.record(Array(authored), named: fixture.lastPathComponent)
+        let cfg = try #require(actual.cfg)
+        let configured = try #require(catalog.configured)
         Attachment.record(Array(actual.tla.utf8), named: "\(actual.name).tla")
+        Attachment.record(Array(cfg.utf8), named: "\(actual.name).cfg")
         Attachment.record(Array(catalog.bytes), named: "\(catalog.name).tla")
+        Attachment.record(Array(configured.bytes), named: "\(configured.name).tla")
         for dependency in catalog.dependencies {
             Attachment.record(Array(dependency.bytes), named: "\(dependency.name).tla")
         }

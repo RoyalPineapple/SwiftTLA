@@ -95,6 +95,7 @@ package enum ArithmeticAssignmentEvidence {
         package let name: String
         package let bytes: Data
         package let dependencies: [(name: String, bytes: Data)]
+        package let configured: (name: String, bytes: Data)?
     }
 
     /// Composes the selected action certificates for one checked render in compiler action order.
@@ -560,7 +561,9 @@ package enum ArithmeticAssignmentEvidence {
         ====
 
         """#
-        return .init(name: name, bytes: Data(proof.utf8), dependencies: dependencies)
+        let configured = nativeSource == nil ? nil : OrderedRHSCFGProof.renderCatalog(
+            for: rendered, catalogModule: name, prefix: prefix, actionInstances: modules.map(\.instance))
+        return .init(name: name, bytes: Data(proof.utf8), dependencies: dependencies, configured: configured)
     }
 
     package static func prepare(sourceSHA: String, authoredSource: Data, nativeSource: Data,
