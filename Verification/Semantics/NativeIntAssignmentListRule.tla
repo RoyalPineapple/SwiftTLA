@@ -28,6 +28,160 @@ NativeAssignmentRekey(raw, names, counter) ==
                 IF physical.kinds[node] = "read" THEN rekey(physical.reads[node]) ELSE <<>>]]],
         guards |-> entry.guards, writes |-> entry.writes]
 
+NativeAssignmentPackedCapture(tag, column) ==
+    IF tag = "expression" THEN <<"expression", column>>
+    ELSE IF tag = "literal" THEN <<"literal", column.literals[1]>>
+    ELSE column.reads[1]
+
+NativeAssignmentColumnRecord(column) ==
+    column = [count |-> column.count, kinds |-> column.kinds, literals |-> column.literals,
+              reads |-> column.reads, left |-> column.left, right |-> column.right]
+
+NativeAssignmentDirectColumn(tag, column) ==
+    tag = "expression" \/
+        LET literal == tag = "literal"
+        IN /\ column = [count |-> 1, kinds |-> <<IF literal THEN "literal" ELSE "read">>,
+                         literals |-> <<IF literal THEN column.literals[1] ELSE 0>>,
+                         reads |-> column.reads, left |-> <<0>>, right |-> <<0>>]
+           /\ (~literal => /\ column.reads = <<column.reads[1]>>
+                            /\ column.reads[1][1] = tag)
+
+NativeAssignmentReadColumnsMatch(column, rendered, names) ==
+    /\ rendered.reads = [node \in 1..rendered.count |-> rendered.reads[node]]
+    /\ \A node \in 1..rendered.count :
+           LET read == column.reads[node]
+               target == rendered.reads[node]
+           IN IF column.kinds[node] # "read" THEN target = <<>>
+              ELSE IF read[1] = "state" THEN
+                   /\ target = <<"state", target[2]>>
+                   /\ target[2] \in Keys
+                   /\ read[2] = names[target[2]]
+              ELSE read = target
+
+THEOREM NativeAssignmentColumnsDetermineRekeyedCaptures ==
+    ASSUME NEW raw, NEW names, NEW counter, NEW tags, NEW columns, NEW rendered,
+           NativeCopyKnownRoles(raw, Keys, names, counter),
+           raw.captures = [index \in DOMAIN tags |-> NativeAssignmentPackedCapture(tags[index], columns[index])],
+           rendered = [index \in DOMAIN tags |-> rendered[index]],
+           \A index \in DOMAIN tags :
+               /\ NativeAssignmentDirectColumn(tags[index], columns[index])
+               /\ NativeAssignmentColumnRecord(rendered[index])
+               /\ columns[index] = [rendered[index] EXCEPT !.reads = columns[index].reads]
+               /\ NativeAssignmentReadColumnsMatch(columns[index], rendered[index], names)
+    PROVE /\ NativeAssignmentReadNamesAreKnown(raw, names)
+          /\ NativeAssignmentRekey(raw, names, counter).captures = rendered
+    PROOF
+    <1>. DEFINE actual == NativeAssignmentRekey(raw, names, counter).captures
+    <1>inverse. \A key \in Keys : NativeCopyKey(Keys, names, counter, names[key]) = key
+        BY ONLY NativeCopyKnownRoles(raw, Keys, names, counter), SMT DEF NativeCopyKnownRoles, NativeCopyKey
+    <1>domain. /\ DOMAIN raw.captures = DOMAIN tags /\ DOMAIN actual = DOMAIN tags
+        BY SMT DEF actual, NativeAssignmentRekey
+    <1>rows. \A index \in DOMAIN tags :
+        /\ actual[index] = rendered[index]
+        /\ LET rhs == NativeAssignmentRhsPlan(raw.captures[index])
+           IN \A node \in 1..rhs.count :
+                  (rhs.kinds[node] = "read" /\ rhs.reads[node][1] = "state") =>
+                      rhs.reads[node][2] \in {names[key] : key \in Keys}
+        <2>. TAKE index \in DOMAIN tags
+        <2>. DEFINE tag == tags[index]
+                    capture == raw.captures[index]
+                    column == columns[index]
+                    expected == rendered[index]
+                    rhs == NativeAssignmentRhsPlan(capture)
+                    reads == [node \in 1..rhs.count |->
+                        IF rhs.kinds[node] = "read" THEN
+                            IF rhs.reads[node][1] = "state"
+                            THEN <<"state", NativeCopyKey(Keys, names, counter, rhs.reads[node][2])>>
+                            ELSE rhs.reads[node]
+                        ELSE <<>>]
+        <2>input. /\ capture = NativeAssignmentPackedCapture(tag, column)
+                  /\ NativeAssignmentDirectColumn(tag, column)
+                  /\ NativeAssignmentColumnRecord(expected)
+                  /\ column = [expected EXCEPT !.reads = column.reads]
+                  /\ NativeAssignmentReadColumnsMatch(column, expected, names)
+            BY SMT DEF capture, tag, column, expected
+        <2>decoded. /\ rhs = [column EXCEPT !.reads = IF tag = "literal" THEN <<capture>> ELSE column.reads]
+                    /\ (tag = "literal" => rhs.kinds = <<"literal">> /\ rhs.count = 1)
+            <3>expression. CASE tag = "expression"
+                BY ONLY <2>input, <3>expression, SMT
+                    DEF rhs, NativeAssignmentRhsPlan, NativeAssignmentPackedCapture
+            <3>direct. CASE tag # "expression"
+                BY ONLY <2>input, <3>direct, SMT
+                    DEF rhs, NativeAssignmentRhsPlan, NativeAssignmentPackedCapture, NativeAssignmentDirectColumn
+            <3>. QED BY ONLY <3>expression, <3>direct, SMT
+        <2>fields.
+            LET required == {"count", "kinds", "reads"}
+            IN /\ required \subseteq DOMAIN expected
+               /\ required \subseteq DOMAIN column
+               /\ required \subseteq DOMAIN rhs
+            BY ONLY <2>input, <2>decoded, SMT DEF NativeAssignmentColumnRecord
+        <2>shape. /\ rhs.count = expected.count /\ rhs.kinds = column.kinds
+                  /\ expected.reads = [node \in 1..rhs.count |-> expected.reads[node]]
+            <3>projections. /\ rhs.count = column.count
+                            /\ column.count = expected.count
+                            /\ rhs.kinds = column.kinds
+                BY ONLY <2>input, <2>fields, <2>decoded, SMT
+            <3>. QED BY ONLY <3>projections, <2>input, SMT DEF NativeAssignmentReadColumnsMatch
+        <2>nodes. \A node \in 1..rhs.count :
+            /\ reads[node] = expected.reads[node]
+            /\ ((rhs.kinds[node] = "read" /\ rhs.reads[node][1] = "state") =>
+                    rhs.reads[node][2] \in {names[key] : key \in Keys})
+            <3>. TAKE node \in 1..rhs.count
+            <3>match.
+                LET read == column.reads[node]
+                    target == expected.reads[node]
+                IN IF rhs.kinds[node] # "read" THEN target = <<>>
+                   ELSE IF read[1] = "state" THEN
+                        /\ target = <<"state", target[2]>>
+                        /\ target[2] \in Keys
+                        /\ read[2] = names[target[2]]
+                   ELSE read = target
+                BY ONLY <2>input, <2>shape, (node \in 1..rhs.count), SMT DEF NativeAssignmentReadColumnsMatch
+            <3>nonread. CASE rhs.kinds[node] # "read"
+                BY ONLY <3>nonread, <3>match, (node \in 1..rhs.count), SMT DEF reads
+            <3>read. CASE rhs.kinds[node] = "read"
+                <4>nonliteral. tag # "literal"
+                    <5>one. tag = "literal" => node = 1
+                        BY ONLY <2>decoded, (node \in 1..rhs.count), SMT
+                    <5>. QED BY ONLY <5>one, <2>decoded, <3>read, SMT
+                <4>operand. rhs.reads[node] = column.reads[node]
+                    BY ONLY <4>nonliteral, <2>decoded, <2>fields, SMT
+                <4>state. CASE rhs.reads[node][1] = "state"
+                    <5>. DEFINE key == expected.reads[node][2]
+                    <5>name. /\ key \in Keys
+                             /\ rhs.reads[node][2] = names[key]
+                             /\ expected.reads[node] = <<"state", key>>
+                        BY ONLY <4>state, <4>operand, <3>read, <3>match, SMT DEF key
+                    <5>lookup. NativeCopyKey(Keys, names, counter, names[key]) = key
+                        BY ONLY <5>name, <1>inverse, SMT
+                    <5>known. \E witness \in Keys : rhs.reads[node][2] = names[witness]
+                        BY ONLY <5>name, SMT
+                    <5>. QED BY ONLY <5>name, <5>lookup, <5>known, <4>state, <3>read,
+                        (node \in 1..rhs.count), SMT DEF reads
+                <4>other. CASE rhs.reads[node][1] # "state"
+                    BY ONLY <4>other, <4>operand, <3>read, <3>match, (node \in 1..rhs.count), SMT DEF reads
+                <4>. QED BY ONLY <4>state, <4>other, SMT
+            <3>. QED BY ONLY <3>nonread, <3>read, SMT
+        <2>reads. reads = expected.reads
+            BY ONLY <2>shape, <2>nodes, SMT DEF reads
+        <2>rekey. actual[index] = [rhs EXCEPT !.reads = reads]
+            BY ONLY <1>domain, (index \in DOMAIN tags), SMT
+                DEF actual, NativeAssignmentRekey, rhs, capture, reads
+        <2>restore. [rhs EXCEPT !.reads = expected.reads] = expected
+            <3>replace. [rhs EXCEPT !.reads = expected.reads] = [column EXCEPT !.reads = expected.reads]
+                BY ONLY <2>decoded, <2>fields, SMT
+            <3>restore. [column EXCEPT !.reads = expected.reads] = expected
+                BY ONLY <2>input, <2>fields, SMT DEF NativeAssignmentColumnRecord
+            <3>. QED BY ONLY <3>replace, <3>restore
+        <2>. QED BY ONLY <2>rekey, <2>reads, <2>restore, <2>nodes, SMT DEF expected, rhs, capture
+    <1>equality. actual = rendered
+        <2>function. actual = [index \in DOMAIN tags |-> actual[index]]
+            BY ONLY <1>domain, SMT DEF actual, NativeAssignmentRekey
+        <2>pointwise. \A index \in DOMAIN tags : actual[index] = rendered[index]
+            BY ONLY <1>rows, SMT
+        <2>. QED BY ONLY <2>function, <2>pointwise, (rendered = [index \in DOMAIN tags |-> rendered[index]]), SMT
+    <1>. QED BY ONLY <1>equality, <1>domain, <1>rows, SMT DEF actual, NativeAssignmentReadNamesAreKnown
+
 NativeAssignmentFinalRoutes(rows) == DirectCopyRoutes(Keys, rows)[Len(rows)]
 
 NativeAssignmentWritesNameLastTargets(rows, plan, entry, destination) ==

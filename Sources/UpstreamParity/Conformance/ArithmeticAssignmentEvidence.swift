@@ -261,54 +261,16 @@ package enum ArithmeticAssignmentEvidence {
                             tags == NativeVisitor\#(row.slot)CaptureTags
                             captures == NativeVisitor\#(row.slot)Captures
                             columns == NativeVisitor\#(row.slot)Plans
-                            rhs(index) == \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentRhsPlan(captures[index])
-                            directReads(index) ==
-                                IF tags[index] = "literal" THEN <<captures[index]>>
-                                ELSE NativeVisitor\#(row.slot)NodeReads[index]
+                            rendered == \#(row.instance)!RHSOutputPlans
                 <2>physicalPlan. raw = visitorPlan
                     <3>ordinal. \#(row.slot) \in DOMAIN NativeActionRows
                         BY ONLY IsaM("simp") DEF NativeActionRows
                     <3>. QED BY ONLY <2>routing, <3>ordinal, IsaM("simp"), SMT
                         DEF raw, NativePlan\#(row.slot), visitorPlan, NativeActionAt, NativeVisitorPlans,
                             \#(prefix)Dispatch!NativeDispatchOutcome, NativeActionRoutes, NativeActionRows
-                <2>rhsRecords. \A index \in DOMAIN tags :
-                    /\ rhs(index) = [columns[index] EXCEPT !.reads = directReads(index)]
-                    /\ (tags[index] = "literal" => columns[index].kinds = <<"literal">>)
-                    <3>. TAKE index \in DOMAIN tags
-                    <3>expression. CASE tags[index] = "expression"
-                        BY ONLY <3>expression, (index \in DOMAIN tags), SMT
-                            DEF rhs, tags, captures, columns, directReads,
-                                NativeVisitor\#(row.slot)Captures, NativeVisitor\#(row.slot)Plans,
-                                \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentRhsPlan
-                    <3>leaf. CASE tags[index] # "expression"
-                        <4>. DEFINE literal == tags[index] = "literal"
-                                    leaf(reads) == [count |-> 1, kinds |-> <<IF literal THEN "literal" ELSE "read">>,
-                                        literals |-> <<IF literal THEN NativeVisitor\#(row.slot)NodeLiterals[index][1] ELSE 0>>,
-                                        reads |-> reads, left |-> <<0>>, right |-> <<0>>]
-                        <4>packed. columns[index] = leaf(NativeVisitor\#(row.slot)NodeReads[index])
-                            BY ONLY <3>leaf, (index \in DOMAIN tags), SMT
-                                DEF columns, leaf, literal, tags, NativeVisitor\#(row.slot)Plans,
-                                    NativeVisitor\#(row.slot)CaptureTags, NativeVisitor\#(row.slot)NodeCounts,
-                                    NativeVisitor\#(row.slot)NodeKinds, NativeVisitor\#(row.slot)NodeLiterals,
-                                    NativeVisitor\#(row.slot)NodeLeft, NativeVisitor\#(row.slot)NodeRight
-                        <4>tag.
-                            /\ NativeVisitor\#(row.slot)NodeReads[index] = <<NativeVisitor\#(row.slot)NodeReads[index][1]>>
-                            /\ (~literal => NativeVisitor\#(row.slot)NodeReads[index][1] =
-                                    <<tags[index], NativeVisitor\#(row.slot)NodeReads[index][1][2]>>)
-                            BY ONLY <3>leaf, (index \in DOMAIN tags), SMT
-                                DEF literal, tags, NativeVisitor\#(row.slot)CaptureTags, NativeVisitor\#(row.slot)NodeReads
-                        <4>record. rhs(index) = leaf(directReads(index))
-                            BY ONLY <3>leaf, <4>tag, (index \in DOMAIN tags), SMT
-                              DEF rhs, leaf, literal, tags, captures, directReads, NativeVisitor\#(row.slot)Captures,
-                                  \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentRhsPlan
-                        <4>. QED BY ONLY <4>packed, <4>record, SMT DEF leaf, literal
-                    <3>. QED BY ONLY <3>expression, <3>leaf, PTL
-                <2>roles.
-                    /\ \#(row.instance)!RHSOutputInput!Rule!NativeCopyKnownRoles(raw, keys, NativeFormalNames, NativeCounter)
-                    /\ \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown(raw, NativeFormalNames)
+                <2>physicalRoles. \#(row.instance)!RHSOutputInput!Rule!NativeCopyKnownRoles(raw, keys, NativeFormalNames, NativeCounter)
                     <3>. DEFINE physical == \#(row.instance)!RHSOutputInput!Rule!NativeCopyPhysicalKeys(
                                     keys, NativeFormalNames, NativeCounter)
-                                sourceNames == {NativeFormalNames[key] : key \in \#(row.instance)!RHSOutputInput!MasterFields}
                     <3>layout.
                         /\ keys \subseteq STRING
                         /\ DOMAIN NativeFormalNames = keys
@@ -327,38 +289,25 @@ package enum ArithmeticAssignmentEvidence {
                             NativeVisitor\#(row.slot)Writes[index][2][2] \in physical)
                         BY ONLY SMT DEF physical, \#(row.instance)!RHSOutputInput!Rule!NativeCopyPhysicalKeys,
                             keys, \#(row.instance)!RHSOutputKeys, NativeFormalNames, NativeCounter, NativeVisitor\#(row.slot)Writes
-                    <3>readColumns. \A index \in DOMAIN tags : \A node \in 1..NativeVisitor\#(row.slot)NodeCounts[index] :
-                        (NativeVisitor\#(row.slot)NodeKinds[index][node] = "read" /\
-                         NativeVisitor\#(row.slot)NodeReads[index][node][1] = "state") =>
-                            NativeVisitor\#(row.slot)NodeReads[index][node][2] \in sourceNames
-                        BY ONLY SMT DEF tags, NativeVisitor\#(row.slot)CaptureTags, sourceNames,
-                            \#(row.instance)!RHSOutputInput!MasterFields, NativeFormalNames, NativeVisitor\#(row.slot)NodeCounts,
-                            NativeVisitor\#(row.slot)NodeKinds, NativeVisitor\#(row.slot)NodeReads
-                    <3>readNames. \A index \in DOMAIN captures : \A node \in 1..rhs(index).count :
-                        (rhs(index).kinds[node] = "read" /\ rhs(index).reads[node][1] = "state") =>
-                            rhs(index).reads[node][2] \in sourceNames
-                        BY ONLY <2>rhsRecords, <3>readColumns, SMT DEF captures, tags, columns, directReads,
-                            NativeVisitor\#(row.slot)Captures, NativeVisitor\#(row.slot)Plans
-                    <3>. QED BY ONLY <2>physicalPlan, <3>layout, <3>captureTags, <3>writeNames, <3>readNames, SMT
-                        DEF visitorPlan, captures, physical, sourceNames, rhs, NativeVisitor\#(row.slot)Action,
-                            \#(row.instance)!RHSOutputInput!Rule!NativeCopyKnownRoles,
-                            \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown
-                <2>captures.
-                    /\ DOMAIN plan.captures = 1..count
-                    /\ \A index \in 1..count : plan.captures[index] = \#(row.instance)!RHSOutputPlans[index]
-                    <3>domains. /\ DOMAIN tags = 1..count /\ DOMAIN \#(row.instance)!RHSOutputPlans = 1..count
-                        BY ONLY \#(row.instance)!RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
-                            IsaM("simp"), SMT DEF tags, NativeVisitor\#(row.slot)CaptureTags, count, \#(row.instance)!RHSOutputCount,
-                                \#(row.instance)!RHSOutputInput!Rule!SupportedAssignmentList
-                    <3>domain. DOMAIN plan.captures = 1..count
-                        BY ONLY <2>physicalPlan, <3>domains, SMT
-                            DEF plan, visitorPlan, tags, NativeVisitor\#(row.slot)Action, NativeVisitor\#(row.slot)Captures,
-                                \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentRekey
-                    <3>inverse. \A key \in keys :
-                        \#(row.instance)!RHSOutputInput!Rule!NativeCopyKey(keys, NativeFormalNames,
-                            NativeCounter, NativeFormalNames[key]) = key
-                        BY ONLY <2>roles, SMT DEF \#(row.instance)!RHSOutputInput!Rule!NativeCopyKnownRoles,
-                            \#(row.instance)!RHSOutputInput!Rule!NativeCopyKey
+                    <3>. QED BY ONLY <2>physicalPlan, <3>layout, <3>captureTags, <3>writeNames, SMT
+                        DEF visitorPlan, captures, physical, NativeVisitor\#(row.slot)Action,
+                            \#(row.instance)!RHSOutputInput!Rule!NativeCopyKnownRoles
+                <2>packed. raw.captures = [index \in DOMAIN tags |->
+                        \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPackedCapture(tags[index], columns[index])]
+                    BY ONLY <2>physicalPlan, SMT DEF visitorPlan, tags, columns, NativeVisitor\#(row.slot)Action,
+                        NativeVisitor\#(row.slot)Captures, NativeVisitor\#(row.slot)Plans,
+                        \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPackedCapture
+                <2>domains. /\ DOMAIN tags = 1..count /\ DOMAIN rendered = 1..count
+                    BY ONLY \#(row.instance)!RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
+                        IsaM("simp"), SMT DEF tags, NativeVisitor\#(row.slot)CaptureTags, count, \#(row.instance)!RHSOutputCount,
+                            \#(row.instance)!RHSOutputInput!Rule!SupportedAssignmentList
+                <2>keys. keys = \#(row.instance)!RHSOutputInput!MasterFields
+                    BY ONLY \#(row.instance)!RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory DEF keys
+                <2>columnFacts. \A index \in DOMAIN tags :
+                    /\ \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentDirectColumn(tags[index], columns[index])
+                    /\ \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentColumnRecord(rendered[index])
+                    /\ columns[index] = [rendered[index] EXCEPT !.reads = columns[index].reads]
+                    /\ \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentReadColumnsMatch(columns[index], rendered[index], NativeFormalNames)
                     <3>columns.
                         /\ NativeVisitor\#(row.slot)NodeCounts = \#(row.instance)!RHSOutputNodeCounts
                         /\ NativeVisitor\#(row.slot)NodeKinds = \#(row.instance)!RHSOutputNodeKinds
@@ -369,51 +318,53 @@ package enum ArithmeticAssignmentEvidence {
                             NativeVisitor\#(row.slot)NodeLiterals, NativeVisitor\#(row.slot)NodeLeft, NativeVisitor\#(row.slot)NodeRight,
                             \#(row.instance)!RHSOutputNodeCounts, \#(row.instance)!RHSOutputNodeKinds, \#(row.instance)!RHSOutputNodeLiterals,
                             \#(row.instance)!RHSOutputNodeLeft, \#(row.instance)!RHSOutputNodeRight
-                    <3>rows. \A index \in 1..count : plan.captures[index] = \#(row.instance)!RHSOutputPlans[index]
-                        <4>. TAKE index \in 1..count
-                        <4>. DEFINE physical == rhs(index)
-                                    rendered == \#(row.instance)!RHSOutputPlans[index]
-                                    references == [node \in 1..physical.count |->
-                                        IF physical.kinds[node] = "read" THEN
-                                            IF physical.reads[node][1] = "state" THEN <<"state",
-                                                \#(row.instance)!RHSOutputInput!Rule!NativeCopyKey(
-                                                    keys, NativeFormalNames, NativeCounter, physical.reads[node][2])>>
-                                            ELSE physical.reads[node]
-                                        ELSE <<>>]
-                        <4>shape. (index \in DOMAIN tags) /\ physical.count = rendered.count
-                            BY ONLY <2>rhsRecords, <3>domains, <3>columns, (index \in 1..count), SMT
-                                DEF physical, rendered, columns, NativeVisitor\#(row.slot)Plans, \#(row.instance)!RHSOutputPlans
-                        <4>readColumns.
-                            /\ rendered.reads = [node \in 1..rendered.count |-> rendered.reads[node]]
-                            /\ \A node \in 1..rendered.count :
-                                LET read == NativeVisitor\#(row.slot)NodeReads[index][node]
-                                IN IF NativeVisitor\#(row.slot)NodeKinds[index][node] # "read" THEN rendered.reads[node] = <<>>
-                                   ELSE IF read[1] = "state" THEN
-                                        /\ rendered.reads[node] = <<"state", rendered.reads[node][2]>>
-                                        /\ rendered.reads[node][2] \in keys
-                                        /\ read[2] = NativeFormalNames[rendered.reads[node][2]]
-                                   ELSE read = rendered.reads[node]
-                            BY ONLY <3>domains, <3>columns, (index \in 1..count), SMT
-                                DEF rendered, keys, NativeFormalNames, count, \#(row.instance)!RHSOutputCount,
-                                    \#(row.instance)!RHSOutputKeys, \#(row.instance)!RHSOutputPlans,
-                                    \#(row.instance)!RHSOutputNodeCounts, \#(row.instance)!RHSOutputNodeReads,
-                                    NativeVisitor\#(row.slot)NodeKinds, NativeVisitor\#(row.slot)NodeReads
-                        <4>normalized. references = rendered.reads
-                            <5>points. \A node \in 1..rendered.count : references[node] = rendered.reads[node]
-                                BY ONLY <3>inverse, <4>shape, <2>rhsRecords, <4>readColumns, SMT
-                                    DEF physical, columns, directReads, NativeVisitor\#(row.slot)Plans, references
-                            <5>. QED BY ONLY <4>shape, <4>readColumns, <5>points, SMT DEF references
-                        <4>rekey. plan.captures[index] = [physical EXCEPT !.reads = references]
-                            BY ONLY <2>physicalPlan, <3>domains, (index \in 1..count),
-                                \#(row.instance)!RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
-                                DEF plan, visitorPlan, keys, physical, rhs, references,
-                                    NativeVisitor\#(row.slot)Action, NativeVisitor\#(row.slot)Captures,
-                                    \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentRekey
-                        <4>restore. [physical EXCEPT !.reads = rendered.reads] = rendered
-                            BY ONLY <2>rhsRecords, <3>domains, <3>columns, (index \in 1..count), SMT
-                                DEF physical, rendered, columns, NativeVisitor\#(row.slot)Plans, \#(row.instance)!RHSOutputPlans
-                        <4>. QED BY ONLY <4>rekey, <4>normalized, <4>restore, SMT
-                    <3>. QED BY ONLY <3>domain, <3>rows
+                    <3>. TAKE index \in DOMAIN tags
+                    <3>direct. \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentDirectColumn(tags[index], columns[index])
+                        <4>shape. tags[index] = "expression" \/
+                            LET literal == tags[index] = "literal"
+                            IN columns[index] = [count |-> 1, kinds |-> <<IF literal THEN "literal" ELSE "read">>,
+                                literals |-> <<IF literal THEN columns[index].literals[1] ELSE 0>>,
+                                reads |-> columns[index].reads, left |-> <<0>>, right |-> <<0>>]
+                            BY ONLY (index \in DOMAIN tags), SMT DEF tags, columns, NativeVisitor\#(row.slot)CaptureTags,
+                                NativeVisitor\#(row.slot)Plans, NativeVisitor\#(row.slot)NodeCounts, NativeVisitor\#(row.slot)NodeKinds,
+                                NativeVisitor\#(row.slot)NodeLiterals, NativeVisitor\#(row.slot)NodeLeft, NativeVisitor\#(row.slot)NodeRight
+                        <4>reference. tags[index] \notin {"expression", "literal"} =>
+                            /\ columns[index].reads = <<columns[index].reads[1]>>
+                            /\ columns[index].reads[1][1] = tags[index]
+                            BY ONLY (index \in DOMAIN tags), SMT DEF tags, columns, NativeVisitor\#(row.slot)CaptureTags,
+                                NativeVisitor\#(row.slot)Plans, NativeVisitor\#(row.slot)NodeReads
+                        <4>. QED BY ONLY <4>shape, <4>reference, SMT
+                            DEF \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentDirectColumn
+                    <3>fields. \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentColumnRecord(rendered[index])
+                        BY ONLY <2>domains, (index \in DOMAIN tags), SMT DEF rendered, \#(row.instance)!RHSOutputPlans,
+                            \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentColumnRecord
+                    <3>nonReads. columns[index] = [rendered[index] EXCEPT !.reads = columns[index].reads]
+                        BY ONLY <3>columns, <2>domains, (index \in DOMAIN tags), SMT
+                            DEF tags, columns, rendered, NativeVisitor\#(row.slot)Plans, \#(row.instance)!RHSOutputPlans
+                    <3>readColumns.
+                        \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentReadColumnsMatch(columns[index], rendered[index], NativeFormalNames)
+                        BY ONLY <3>columns, <2>domains, <2>keys, (index \in DOMAIN tags), SMT
+                            DEF columns, rendered, keys, NativeFormalNames, \#(row.instance)!RHSOutputCount,
+                                \#(row.instance)!RHSOutputKeys, \#(row.instance)!RHSOutputPlans, \#(row.instance)!RHSOutputNodeCounts,
+                                \#(row.instance)!RHSOutputNodeReads, \#(row.instance)!RHSOutputInput!MasterFields,
+                                NativeVisitor\#(row.slot)Plans, NativeVisitor\#(row.slot)NodeKinds, NativeVisitor\#(row.slot)NodeReads,
+                                \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentReadColumnsMatch
+                    <3>. QED BY ONLY <3>direct, <3>fields, <3>nonReads, <3>readColumns
+                <2>renderedVector. rendered = [index \in DOMAIN tags |-> rendered[index]]
+                    BY ONLY <2>domains, SMT DEF rendered, \#(row.instance)!RHSOutputPlans
+                <2>normalized.
+                    /\ \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown(raw, NativeFormalNames)
+                    /\ plan.captures = rendered
+                    BY ONLY <2>physicalRoles, <2>packed, <2>renderedVector, <2>keys, <2>columnFacts,
+                        \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentColumnsDetermineRekeyedCaptures, SMT DEF plan
+                <2>roles.
+                    /\ \#(row.instance)!RHSOutputInput!Rule!NativeCopyKnownRoles(raw, keys, NativeFormalNames, NativeCounter)
+                    /\ \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown(raw, NativeFormalNames)
+                    BY ONLY <2>physicalRoles, <2>normalized
+                <2>captures.
+                    /\ DOMAIN plan.captures = 1..count
+                    /\ \A index \in 1..count : plan.captures[index] = \#(row.instance)!RHSOutputPlans[index]
+                    BY ONLY <2>normalized, <2>domains, SMT DEF rendered
                 <2>rawWrites. /\ Len(raw.writes) \in Nat /\ DOMAIN raw.writes = 1..Len(raw.writes)
                     BY ONLY <2>physicalPlan, IsaM("simp") DEF visitorPlan,
                         NativeVisitor\#(row.slot)Action, NativeVisitor\#(row.slot)Writes
