@@ -46,7 +46,7 @@ package enum ArithmeticAssignmentEvidence {
         package let actionOrdinal: Int
         package let sourceContinuation: String?
         package let source: (name: String, bytes: Data)
-        package let output: (name: String, bytes: Data)
+        package let output: (name: String, bytes: Data, failureOperator: String?)
         fileprivate let program: CompiledProgram
         fileprivate let authoredSourceSHA256: String
         fileprivate let catalog: StraightLineRenderedActionCheck.FiniteActionCatalog
@@ -562,7 +562,9 @@ package enum ArithmeticAssignmentEvidence {
 
         """#
         let configured = nativeSource == nil ? nil : OrderedRHSCFGProof.renderCatalog(
-            for: rendered, catalogModule: name, prefix: prefix, actionInstances: modules.map(\.instance))
+            for: rendered, catalogModule: name, prefix: prefix, actions: zip(modules, ordered).map {
+                (instance: $0.0.instance, failureOperator: $0.1.output.failureOperator)
+            })
         return .init(name: name, bytes: Data(proof.utf8), dependencies: dependencies, configured: configured)
     }
 

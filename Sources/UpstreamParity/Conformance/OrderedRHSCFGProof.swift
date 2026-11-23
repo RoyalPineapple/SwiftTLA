@@ -70,20 +70,33 @@ package enum OrderedRHSCFGProof {
 
     /// Uses the same emitted CFG grammar and caller-byte proof as the single-action case.
     static func renderCatalog(
-        for rendered: RenderedSpecification, catalogModule: String, prefix: String, actionInstances: [String]
+        for rendered: RenderedSpecification, catalogModule: String, prefix: String,
+        actions: [(instance: String, failureOperator: String?)]
     ) -> (name: String, bytes: Data)? {
-        guard let selection = normalSelection(for: rendered), !actionInstances.isEmpty else { return nil }
+        guard let selection = normalSelection(for: rendered), !actions.isEmpty else { return nil }
         let name = catalogModule + "ConfiguredProof"
         let checking = selection.checking
-        let failureSelectors = actionInstances.map { "\($0)!RHSOutputFailureSelected" }
-        let observedFailures = actionInstances.map { "\($0)!RHSOutputActualFailures" }
+        let failureSelectors = actions.map { "\($0.instance)!RHSOutputFailureSelected" }
+        let observedFailures = actions.map { "\($0.instance)!RHSOutputActualFailures" }
         let localSelectors = failureSelectors.joined(separator: ", ")
         let failureDisjunction = failureSelectors.joined(separator: #" \/ "#)
         let selectorFacts = zip(failureSelectors, observedFailures).map {
             #"/\ \#($0.0) = (\#($0.1) # {})"#
         }.joined(separator: "\n        ")
         let noFailures = observedFailures.map { "\($0) = {}" }.joined(separator: #" /\ "#)
-        let observations = actionInstances.map { "\($0)!RHSOutputHistoryObservation" }.joined(separator: ", ")
+        let observations = actions.map { "\($0.instance)!RHSOutputHistoryObservation" }.joined(separator: ", ")
+        let failureBindings = actions.enumerated().compactMap { index, action -> (fact: String, proof: String)? in
+            guard let operatorName = action.failureOperator else { return nil }
+            let fact = "<1>failureOperator\(index + 1)"
+            let qualified = "\(action.instance)!\(operatorName)"
+            let proof = #"""
+            \#(fact). \#(operatorName) <=> \#(qualified)
+                BY ONLY DEF \#(operatorName), \#(qualified)
+            """#
+            return (fact, proof)
+        }
+        let bindings = failureBindings.map(\.proof).joined(separator: "\n")
+        let selectorSupport = (failureBindings.map(\.fact) + ["PTL"]).joined(separator: ", ")
         let proof = #"""
         ---- MODULE \#(name) ----
         EXTENDS \#(catalogModule), CallerInputPageBlock1
@@ -128,8 +141,9 @@ package enum OrderedRHSCFGProof {
             BY ONLY <1>next, PTL
         <1>behavior. Spec <=> \#(prefix)ConfiguredBehavior
             BY ONLY <1>always, PTL DEF \#(prefix)ConfiguredBehavior, Spec, vars
+        \#(bindings)
         <1>selector. \#(prefix)SelectedEvaluationCheck <=> ~(\#(failureDisjunction))
-            BY ONLY DEF \#(prefix)SelectedEvaluationCheck, \#(checking), \#(localSelectors)
+            BY ONLY \#(selectorSupport) DEF \#(prefix)SelectedEvaluationCheck, \#(checking), \#(localSelectors)
         <1>routes. \#(prefix)Dispatch!NativeDispatchBindsTheActionCatalog(AuthoredRoutes, AuthoredFormal)
             BY ONLY SMT DEF AuthoredSlots, AuthoredRoutes, AuthoredFormal, NativeActionRoutes,
                 \#(prefix)NativeSelectedSteps, \#(prefix)ActualFormalLabels, \#(prefix)ActualActionRoutes,
@@ -166,7 +180,7 @@ package enum OrderedRHSCFGProof {
             <2>physical. NoAuthoredFailures(\#(prefix)ActualFailures) <=> (\#(noFailures))
                 BY ONLY IsaM("simp"), SMT DEF NoAuthoredFailures, \#(prefix)ActualFailures
             <2>checking. \#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)ActualFailures)
-                BY ONLY <1>selector, <2>predicates, <2>physical, PTL
+                BY ONLY <1>selector, <2>predicates, <2>physical, SMT
             <2>. WITNESS histories
             <2>. QED BY ONLY <2>histories, <2>labels, <2>checking, SMT
         <1>. QED BY ONLY NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking, <1>next, <1>behavior, <1>typed, Zenon

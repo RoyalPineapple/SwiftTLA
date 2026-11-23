@@ -5,7 +5,7 @@ package enum OrderedRHSTLAProof {
     /// The source module owns independently selected authored rows and their certificate support.
     static func render(
         _ rendered: RenderedSpecification, program: CompiledProgram, source: AuthoredCopySyntax.ArithmeticProofInput
-    ) throws -> (name: String, bytes: Data)? {
+    ) throws -> (name: String, bytes: Data, failureOperator: String?)? {
         let bundle = rendered.tlaBundle
         let layout = program.layout
         let controls = layout.variables.filter { $0.declaration.origin == .programCounter }
@@ -998,7 +998,7 @@ package enum OrderedRHSTLAProof {
         ====
 
         """#
-        return (name, Data(proof.utf8))
+        return (name, Data(proof.utf8), aggregate)
     }
 
     private static func controlDestination(in body: CompiledActionExpr, for counter: VariableID) -> ControlLocationID? {
