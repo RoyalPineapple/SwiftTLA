@@ -108,9 +108,13 @@ PROOF
                   ArithmeticPublicSend.current = <<arithmeticPC', Arithmetic!RHSOutputAfter>>)
     BY ONLY <1>visit, <1>off, <1>overflow, <1>commit, SMT
         DEF sent, final, Arithmetic!RHSOutputHistoryObservation, Arithmetic!RHSOutputHistoryAdvance
-<1>commitsCallback. ArithmeticPublicSend.kind = "success" =>
-    ArithmeticSendVisits = <<ArithmeticPublicSend.current>>
-    BY ONLY <1>visit, <1>off, <1>overflow, <1>commit, SMT DEF ArithmeticSendVisits, sent, final
+<1>commitsCallback. ASSUME ArithmeticPublicSend.kind = "success"
+    PROVE ArithmeticSendVisits = <<ArithmeticPublicSend.current>>
+    <2>reached. Arithmetic!RHSOutputSelected /\ final.failure = <<>>
+        BY ONLY ArithmeticPublicSend.kind = "success", <1>off, <1>overflow, IsaM("auto") DEF sent
+    <2>callback. ArithmeticSendVisits = << <<Arithmetic!RHSOutputExit, final.bindings>> >>
+        BY ONLY <1>visit, <2>reached, IsaM("auto") DEF ArithmeticSendVisits, final
+    <2>. QED BY ONLY <2>callback, <1>commit, <2>reached, IsaM("auto") DEF sent
 <1>result. \E witness :
     /\ Arithmetic!RHSOutputSourceHistory(witness)
     /\ Arithmetic!RHSOutputHistoryObservation(witness)
