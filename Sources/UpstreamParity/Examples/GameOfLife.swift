@@ -20,7 +20,7 @@ package struct GameOfLifeModel: Sendable {
             }
             let grids = Functions(from: positions, to: SetExpr<Bool>.literal(false, true))
 
-            let grid: SharedVariable<[Position: Bool]> = scope.sharedVar(in: grids)
+            let grid: SharedVariable<[Position: Bool]> = scope.sharedVar(initiallyIn: grids)
 
             Do(Step.Next) {
                 Assign(grid, to: Dictionary<Position, Bool>.mapping(over: positions) { cell in

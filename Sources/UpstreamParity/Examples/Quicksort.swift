@@ -16,7 +16,7 @@ package struct QuicksortModel: Sendable {
             let Inv = Invariant()
             let Termination = Temporal()
             let Quicksort = Algorithm(fairness: .weak, scoped: { scope in
-                let seq = scope.sharedVar(in: Sequences(
+                let seq = scope.sharedVar(initiallyIn: Sequences(
                     of: Values, lengths: IntRange(1, through: MaxSeqLen)))
                 let seq0 = scope.sharedVar(initial: seq)
                 let U = scope.sharedVar(initial:

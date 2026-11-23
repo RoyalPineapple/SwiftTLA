@@ -8,7 +8,7 @@ struct RandomizedInitialReplay {
     static var spec: TLASpec {
         #spec("RandomizedInitialReplay") { scope in
             Extends(.randomization)
-            let x = scope.sharedVar(in: RandomSubset(upTo: 1, from: SetExpr<Int>.literal(0, 1)))
+            let x = scope.sharedVar(initiallyIn: RandomSubset(upTo: 1, from: SetExpr<Int>.literal(0, 1)))
             Do(Step.stay) { Assign(x, to: x) }
         }
     }

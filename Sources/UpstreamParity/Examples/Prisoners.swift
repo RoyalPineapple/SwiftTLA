@@ -22,8 +22,8 @@ package struct PrisonersModel: Sendable {
             let Counter = scope.parameter(as: PrisonerID.self, in: PrisonerID.all)
             Assume(Prisoner.contains(Counter) && Prisoner.cardinality > 1)
             let OtherPrisoner = Prisoner.removing(Counter)
-            let switchAUp = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
-            let switchBUp = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
+            let switchAUp = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let switchBUp = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
             let timesSwitched = scope.sharedVar(initial:
                 Dictionary<PrisonerID, Int>.mapping(over: OtherPrisoner) { _ in 0 })
             let count = scope.sharedVar(initial: 0)

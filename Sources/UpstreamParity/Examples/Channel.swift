@@ -31,7 +31,7 @@ package struct ChannelModel: Sendable {
             let Data = scope.parameter(as: Set<Datum>.self, in: Set<Set<Datum>>([
                 Set<Datum>([Datum.d1, Datum.d2, Datum.d3]), Set<Datum>([Datum.ap1, Datum.ap2])
             ]))
-            let chan = scope.sharedVar(in: Data.flatMapping { value in
+            let chan = scope.sharedVar(initiallyIn: Data.flatMapping { value in
                 Set<Int>([0, 1]).mapping { bit in
                     Channel.expression(ack: bit, rdy: bit, val: value)
                 }

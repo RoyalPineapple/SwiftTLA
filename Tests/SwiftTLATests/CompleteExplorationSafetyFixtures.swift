@@ -7,7 +7,7 @@ struct CompleteExplorationSafetyModel {
 
     static var spec: TLASpec {
         #spec("CompleteSafety") { scope in
-            let value = scope.sharedVar(in: Set<Int>([0, 10]))
+            let value = scope.sharedVar(initiallyIn: Set<Int>([0, 10]))
             Do(Step.advance, when: value >= 10 && value < 13) {
                 Assign(value, to: value + 1)
             }

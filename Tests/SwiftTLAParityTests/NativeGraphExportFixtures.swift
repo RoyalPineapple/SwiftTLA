@@ -35,7 +35,7 @@ struct ReachabilityExportModel {
 struct FailingExportModel {
     static var spec: TLASpec {
         #spec("FailingExport") { scope in
-            let value = scope.sharedVar(_name: "value", in: 0...1)
+            let value = scope.sharedVar(_name: "value", initiallyIn: 0...1)
             SwiftTLA.Action("advance") { value == 1 && value.becomes(2) }
             Invariant("BelowTwo") { value < 2 }
             Invariant("BelowThree") { value < 3 }

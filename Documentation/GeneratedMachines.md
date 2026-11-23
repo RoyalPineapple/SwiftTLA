@@ -6,7 +6,7 @@ an immutable `State`. It accepts typed `Action` values; each successful action
 returns a `Transition` with the visible state before and after it.
 
 ```swift
-var machine = try Counter.makeMachine()
+var machine = try BoundedCounter.makeMachine()
 let transition = try machine.send(.advance)
 let state = transition.after
 ```
@@ -55,6 +55,18 @@ struct BoundedCounter {
     }
 }
 ```
+
+This counter advances once. `when:` decides whether the step can start.
+`Stop()` finishes the process after that step. Raising the guard to
+`value < 5` still permits just one increment.
+
+Choose the form that matches the rule you want to write.
+
+- **Run once.** Put `Do` and `Stop()` directly inside a sequential algorithm.
+  See the [first counter](../README.md#write-and-run-your-first-action).
+- **Run whenever the guard holds.** Put `Do` directly inside `#spec`.
+  A counter starting at zero with guard `value < 5` can advance five times.
+  See [independent atomic steps](DSLDesign.md#independent-atomic-steps).
 
 ## State, actions, and transitions
 
@@ -309,6 +321,27 @@ not a deadlock. `trace(to:)` reconstructs a
 shortest native execution from the discovery predecessors. False assumptions and
 evaluation errors throw. Temporal checking and independent equivalence validation
 remain separate; empty safety results do not establish liveness or equivalence.
+
+For a worked safety check, see [check and replay a midnight tick](../README.md#check-and-replay-a-midnight-tick).
+Use `ReachabilityGraph.check(initialMachines:maximumStates:checking:)` when you
+want to select a particular start and property. If the model already declares
+a safety scenario, `scenario.check(maximumStates:)` uses that scenario's
+initial machines and selected checks.
+
+| What happened? | What can the caller conclude? |
+|---|---|
+| Sending an action found zero successors | The action was disabled at this snapshot. The machine kept its previous state. |
+| Sending an action found several distinct successors | The action was ambiguous. For a graph witness, enumerate `successors(for:)` and look for the recorded full snapshot. The public state alone can omit relevant control. |
+| Evaluating an action threw a model error | Report the operation and its available error detail. A partial assignment inside the action is not a committed transition. |
+| A selected invariant failed | The witness includes a reached snapshot that violates that property. An initial violation can have zero actions. |
+| The search exhausted its frontier | The safety check covered the reachable graph for its supplied starts, configuration, constraints and selection. |
+| Exploration threw `stateLimitExceeded` | The state budget stopped the search. A passing verdict for the unexplored states is unavailable. |
+| Simulation ended without a violation | Report the sampled scope and the stop reason. Other choices may lead to other outcomes. |
+
+When presenting a result, keep the start, selected checks, bounds and
+completion reason alongside it. Keep any captured failure history in order.
+A first-error report or an early witness cannot tell you how many later
+branches would fail.
 
 For independent validation, `machine.formalProjection(of: snapshot)` converts the
 complete native snapshot to a validated `TLAStateProjection`. The macro emits

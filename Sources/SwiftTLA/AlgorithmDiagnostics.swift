@@ -138,7 +138,7 @@ internal enum AlgorithmPlacementValidator {
                 actual: component.actualPlacement,
                 nextSafeAction: component.nextSafeAction
             )
-        case .parameterizedStep:
+        case .parameterizedStep, .unknownStateField:
             .init(
                 code: .invalidAlgorithm,
                 stage: .validation,

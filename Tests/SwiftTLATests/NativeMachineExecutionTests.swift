@@ -86,7 +86,7 @@ private struct AmbiguousExecutionChoice {
         #spec {
             let BelowTwo = Invariant()
             let ambiguousExecutionChoice = Algorithm(label: "AmbiguousExecutionChoice", scoped: { scope in
-                let selected = scope.sharedVar(in: 0...1)
+                let selected = scope.sharedVar(initiallyIn: 0...1)
                 While(Step.select, true) {
                     When(selected < 2)
                     Choose(1...3) { choice in

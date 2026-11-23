@@ -23,9 +23,9 @@ package struct EWD840Model: Sendable {
             let Node = IntRange(0, through: N - 1)
             let colors = SetExpr<Color>.literal(.white, .black)
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
-                in: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
-            let color: SharedVariable<[Int: Color]> = scope.sharedVar(in: Functions(from: Node, to: colors))
-            let tpos = scope.sharedVar(in: Node)
+                initiallyIn: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
+            let color: SharedVariable<[Int: Color]> = scope.sharedVar(initiallyIn: Functions(from: Node, to: colors))
+            let tpos = scope.sharedVar(initiallyIn: Node)
             let tcolor = scope.sharedVar(initial: Color.black)
 
             let initiate = Do(Step.InitiateProbe, when: tpos == 0

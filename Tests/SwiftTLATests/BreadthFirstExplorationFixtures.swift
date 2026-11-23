@@ -8,7 +8,7 @@ struct ConvergingFrontiers {
     static var spec: TLASpec {
         #spec("ConvergingFrontiers") {
             let convergingFrontiers = Algorithm(label: "ConvergingFrontiers", scoped: { scope in
-                let node = scope.sharedVar(_name: "node", in: SetExpr<Int>.literal(1, 3))
+                let node = scope.sharedVar(_name: "node", initiallyIn: SetExpr<Int>.literal(1, 3))
                 While(Step.advance, true) {
                     When(node <= 128)
                     If(node == 3 || node == 128) {

@@ -19,9 +19,9 @@ package struct MajorityModel: Sendable {
                 in: Set<Set<Element>>([Set<Element>([Element.A, Element.B, Element.C])]))
             let bound = scope.parameter(as: Int.self, in: 0...5)
             Assume(Value.cardinality > 0 && bound >= 0)
-            let seq = scope.sharedVar(in: Sequences(of: Value, lengths: IntRange(0, through: bound)))
+            let seq = scope.sharedVar(initiallyIn: Sequences(of: Value, lengths: IntRange(0, through: bound)))
             let i = scope.sharedVar(initial: 1)
-            let cand = scope.sharedVar(in: Value)
+            let cand = scope.sharedVar(initiallyIn: Value)
             let cnt = scope.sharedVar(initial: 0)
 
             let TypeOK = Invariant()

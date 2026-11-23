@@ -10,7 +10,7 @@ package struct ConditionalTemporalClaims {
             let startsHere = Temporal()
             let missesOtherInitial = Temporal()
             let Converge = Algorithm(fairness: .weak, scoped: { algorithm in
-                let value = algorithm.sharedVar(in: 0...1)
+                let value = algorithm.sharedVar(initiallyIn: 0...1)
                 Do(Step.converge) {
                     Assign(value, to: 2)
                     Goto(Step.converge)

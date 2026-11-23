@@ -625,7 +625,7 @@ struct AlgorithmBuilderTests {
             }
         }
         let algorithm = Algorithm("ReachableGraph", scoped: { scope in
-            let _ = scope.sharedVar(_name: "successors", in: choices)
+            let _ = scope.sharedVar(_name: "successors", initiallyIn: choices)
             Do(TestControlLabel.done) { Stop() }
         })
 
@@ -1574,7 +1574,7 @@ struct AlgorithmBuilderTests {
     @Test("SharedVar closed ranges supply every declared initial state")
     func lowersNondeterministicSharedInitialization() throws {
         let algorithm = Algorithm("NondeterministicSharedInitialization", scoped: { scope in
-            let value = scope.sharedVar(_name: "value", in: 1...3)
+            let value = scope.sharedVar(_name: "value", initiallyIn: 1...3)
             Each(Node.all) { _ in
                 Do(TestControlLabel.tick, when: value < 3) {
                     Assign(value, to: value + 1)
@@ -1596,7 +1596,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("DependentInitialDomain", scoped: { scope in
             let maximum = scope.sharedVar(_name: "maximum", initial: 2)
             let _ = scope.sharedVar(_name: "candidate",
-                in: Expr<SetExpr<Int>>(.integerRange(.int(0), maximum.stateExpr))
+                initiallyIn: Expr<SetExpr<Int>>(.integerRange(.int(0), maximum.stateExpr))
             )
             Do(TestControlLabel.stop) { Stop() }
         })
@@ -1714,7 +1714,7 @@ struct AlgorithmBuilderTests {
     @Test("dependent typed function initialization is evaluated after earlier initial state choices")
     func lowersDependentFunctionInitialization() throws {
         let algorithm = Algorithm("DependentInitial", scoped: { scope in
-            let seed = scope.sharedVar(_name: "seed", in: SetExpr<Bool>.literal(false, true))
+            let seed = scope.sharedVar(_name: "seed", initiallyIn: SetExpr<Bool>.literal(false, true))
             let _ = scope.sharedVar(_name: "mirrors", initial: Function<Node, Bool>.mapping { _ in seed.expr })
             Each(Node.all) { _ in
                 Do(TestControlLabel.stop) { Stop() }
@@ -1891,7 +1891,7 @@ private struct FunctionDomainGeneratedModel {
     static var spec: TLASpec {
         #spec("FunctionDomainGenerated") {
             let FunctionDomainGenerated = Algorithm(scoped: { scope in
-                let successors = scope.sharedVar(_name: "successors", in: Where(
+                let successors = scope.sharedVar(_name: "successors", initiallyIn: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
                     ForAll(Node.all) { node in

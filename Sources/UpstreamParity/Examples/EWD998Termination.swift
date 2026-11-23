@@ -15,10 +15,10 @@ package struct EWD998TerminationModel: Sendable {
             Assume(N > 0)
             let Node = IntRange(0, through: N - 1)
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
-                in: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
+                initiallyIn: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
             let pending = scope.sharedVar(initial: Dictionary<Int, Int>.mapping(over: Node) { _ in 0 })
             let terminated = ForAll(in: Node) { node in !active[node] && pending[node] == 0 }
-            let terminationDetected = scope.sharedVar(in: SetExpr<Bool>.literal(false, terminated))
+            let terminationDetected = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, terminated))
 
             let TypeOK = Invariant()
             let Safe = Invariant()

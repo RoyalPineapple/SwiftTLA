@@ -17,7 +17,7 @@ package struct FindHighestModel: Sendable {
             let DoneIndexValue = Invariant()
             let Correctness = Invariant()
             let Highest = Algorithm(scoped: { scope in
-                let f = scope.sharedVar(in: Sequences(
+                let f = scope.sharedVar(initiallyIn: Sequences(
                     of: IntRange(0, through: MaxNat),
                     lengths: IntRange(0, through: MaxNat)
                 ))

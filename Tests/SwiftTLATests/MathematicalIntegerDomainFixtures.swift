@@ -9,8 +9,8 @@ struct MathematicalIntegerDomainModel: Sendable {
         #spec("MathematicalIntegerDomain") { model in
             let Values = model.parameter(as: Set<Int>.self, in: Subsets(of: Int.all))
             let mathematicalIntegerDomain = Algorithm(label: "MathematicalIntegerDomain", scoped: { scope in
-                let value = scope.sharedVar(in: Int.all)
-                let sequence = scope.sharedVar(in: Sequences(of: Values))
+                let value = scope.sharedVar(initiallyIn: Int.all)
+                let sequence = scope.sharedVar(initiallyIn: Sequences(of: Values))
                 Invariant("TypeOK") {
                     Values.isSubset(of: Int.all)
                         && Int.all.contains(value)

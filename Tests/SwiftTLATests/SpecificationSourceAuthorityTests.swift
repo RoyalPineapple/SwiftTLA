@@ -156,7 +156,7 @@ struct SpecificationSourceAuthorityTests {
     func initialDomainsUseDeclarationContext(_ inAlgorithm: Bool) throws {
         let declarations = #"""
             let options = SetExpr<Int>.literal(1, 2)
-            let selected: SharedVariable<Int> = scope.sharedVar(_name: "stored", in: options)
+            let selected: SharedVariable<Int> = scope.sharedVar(_name: "stored", initiallyIn: options)
         """#
         let body = inAlgorithm
             ? "let scopedDomain = Algorithm(label: \"ScopedDomain\", scoped: { scope in \(declarations)\n Do(Label.stay) { Skip() } }); scopedDomain"

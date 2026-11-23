@@ -24,8 +24,8 @@ package struct BakeryModel: Sendable {
             let MutualExclusion = Invariant()
 
             let Bakery = Algorithm(scoped: { scope in
-                let num: SharedVariable<[Int: Int]> = scope.sharedVar(in: Functions(from: Procs, to: Nat))
-                let flag: SharedVariable<[Int: Bool]> = scope.sharedVar(in: Functions(from: Procs, to: Set<Bool>([false, true])))
+                let num: SharedVariable<[Int: Int]> = scope.sharedVar(initiallyIn: Functions(from: Procs, to: Nat))
+                let flag: SharedVariable<[Int: Bool]> = scope.sharedVar(initiallyIn: Functions(from: Procs, to: Set<Bool>([false, true])))
 
                 Each(Procs, fairness: .weak(excluding: [Label.ncs]), scoped: { (selfID: ProcessIdentifier<Int>, scope: ProcessScope) in
                     let unchecked: LocalVariable<Set<Int>> = scope.localVar(in: Subsets(of: Procs))

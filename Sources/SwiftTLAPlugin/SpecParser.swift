@@ -167,9 +167,10 @@ final class ParserSession {
         }
 
         private struct Binding: Sendable {
-            let sourceName: String
+            let sourceName: String?
             let meaning: Meaning
             let shape: CompiledValueType?
+            var declaredField: String? = nil
         }
 
         static let empty = Self(bindings: [])
@@ -201,6 +202,16 @@ final class ParserSession {
                   case .value(let value) = binding.meaning
             else { return nil }
             return value
+        }
+
+        func declaringField(_ name: String?, root: String, shape: CompiledValueType?) -> Self {
+            Self(bindings: bindings + [Binding(sourceName: name, meaning: .value(.variable(root)), shape: shape, declaredField: root)])
+        }
+
+        func hasField(_ name: String) -> Bool {
+            bindings.contains {
+                $0.declaredField?.utf8.elementsEqual(name.utf8) == true
+            }
         }
 
         func recursiveOperator(for reference: DeclReferenceExprSyntax) -> String? {
@@ -832,6 +843,16 @@ final class ParserSession {
         return predicate
     }
 
+    func decodeTypedInfix(
+        _ elements: [ExprSyntax], scope: TypedFacadeScope, expectedEnumType: String? = nil
+    ) -> StateExpr? {
+        decodeInfixExpr(elements, expectedEnumType: expectedEnumType,
+            enumType: { self.typedFacadeValueType($0, scope: scope)?.enumerationType }
+        ) { operand, type in
+            decodeTypedFacadeValue(operand, scope: scope, expectedEnumType: type)
+        }
+    }
+
     func decodeTypedFacadeExpr(
         _ expression: ExprSyntax,
         scope: TypedFacadeScope,
@@ -855,17 +876,7 @@ final class ParserSession {
             return decodeTypedFacadeValue(value, scope: scope, expectedEnumType: expectedEnumType)
         }
         if let sequence = expression.as(SequenceExprSyntax.self) {
-            return decodeInfixExpr(
-                Array(sequence.elements),
-                expectedEnumType: expectedEnumType,
-                enumType: { self.typedFacadeValueType($0, scope: scope)?.enumerationType }
-            ) { expression, expectedEnumType in
-                decodeTypedFacadeValue(
-                    expression,
-                    scope: scope,
-                    expectedEnumType: expectedEnumType
-                )
-            }
+            return decodeTypedInfix(Array(sequence.elements), scope: scope, expectedEnumType: expectedEnumType)
         }
         if let infix = expression.as(InfixOperatorExprSyntax.self),
            let operation = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text,

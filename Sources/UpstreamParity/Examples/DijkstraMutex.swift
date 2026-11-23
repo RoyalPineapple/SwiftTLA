@@ -62,7 +62,7 @@ package struct DijkstraMutexModel: Sendable {
             let Mutex = Algorithm(scoped: { scope in
                 let b = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
                 let c = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
-                let k = scope.sharedVar(in: Proc)
+                let k = scope.sharedVar(initiallyIn: Proc)
 
                 Each(Proc, fairness: .weak, scoped: { selfID, scope in
                     let temp = scope.localVar(initial: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.first(.notAssigned)

@@ -47,7 +47,7 @@ package struct ChameneosModel: Sendable {
                 Pair.literal(Color.first(Hue.red), 0),
                 Pair.literal(Color.first(Hue.yellow), 0)
             )
-            let chameneoses: SharedVariable<[Int: CreatureState]> = scope.sharedVar(in: Functions(from: creatureIDs, to: initialStates))
+            let chameneoses: SharedVariable<[Int: CreatureState]> = scope.sharedVar(initiallyIn: Functions(from: creatureIDs, to: initialStates))
             let fadedColor = Color.second(Faded)
             let empty = WaitingPlace.second(MeetingPlaceEmpty)
             let meetingPlace: SharedVariable<WaitingPlace> = scope.sharedVar(initial: empty)

@@ -9,7 +9,7 @@ struct RandomSubsetFunctionModel {
         #spec {
             Extends(.randomization)
             let randomSubsetFunctionModel = Algorithm(label: "RandomSubsetFunctionModel", scoped: { scope in
-                let samples = scope.sharedVar(in: RandomSubset(
+                let samples = scope.sharedVar(initiallyIn: RandomSubset(
                     upTo: 100,
                     from: Functions(from: IntRange(1, through: 30), to: SetExpr<Bool>.literal(false, true))
                 ))

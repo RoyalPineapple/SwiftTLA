@@ -17,7 +17,7 @@ struct EncodedEnumDomain {
     enum Step: String, CaseIterable { case select }
     static var spec: TLASpec {
         #spec("EncodedEnumDomain") { scope in
-            let value = scope.sharedVar(in: Datum.all)
+            let value = scope.sharedVar(initiallyIn: Datum.all)
             Do(Step.select, over: Datum.all) { next in Assign(value, to: next) }
             let all = Validation(label: "All") {}
             all

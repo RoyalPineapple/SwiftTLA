@@ -42,7 +42,7 @@ struct FiniteInitialStepMachine {
 
     static var spec: TLASpec {
         #spec("FiniteInitialStepMachine") { scope in
-            let phase = scope.sharedVar(in: Set<Int>([1, 2]))
+            let phase = scope.sharedVar(initiallyIn: Set<Int>([1, 2]))
             Do(Step.prepare) {
                 When(phase == 1)
                 Assign(phase, to: 2)

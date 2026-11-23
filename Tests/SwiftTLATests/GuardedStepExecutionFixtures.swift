@@ -8,7 +8,7 @@ struct GuardedAlgorithm {
     static var spec: TLASpec {
         #spec("GuardedAlgorithm") {
             let guardedAlgorithm = Algorithm(label: "GuardedAlgorithm", scoped: { scope in
-                let ready = scope.sharedVar(in: 0...1)
+                let ready = scope.sharedVar(initiallyIn: 0...1)
                 let value = scope.sharedVar(initial: 0)
                 Do(Step.choose, when: ready == 1) {
                     Assign(value, to: 1 / ready)
@@ -31,8 +31,8 @@ struct GuardedProcesses {
     static var spec: TLASpec {
         #spec("GuardedProcesses") {
             let guardedProcesses = Algorithm(label: "GuardedProcesses", scoped: { scope in
-                let entryReady = scope.sharedVar(in: 0...1)
-                let bodyReady = scope.sharedVar(in: 0...1)
+                let entryReady = scope.sharedVar(initiallyIn: 0...1)
+                let bodyReady = scope.sharedVar(initiallyIn: 0...1)
                 let value = scope.sharedVar(initial: 0)
                 Procedure(Routine.choose, parameters: Int.self) { divisor in
                     Do(Step.body, when: divisor > 0) {

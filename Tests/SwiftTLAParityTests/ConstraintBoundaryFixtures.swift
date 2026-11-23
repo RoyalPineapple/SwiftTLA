@@ -49,7 +49,7 @@ struct ConstraintInitialCounter {
 
     static var spec: TLASpec {
         #spec("ConstraintInitialCounter") { scope in
-            let count = scope.sharedVar(_name: "count", in: 0...2)
+            let count = scope.sharedVar(_name: "count", initiallyIn: 0...2)
             let counter = Algorithm(label: "Counter") {
                 Do(Step.stay) {
                     Skip()
