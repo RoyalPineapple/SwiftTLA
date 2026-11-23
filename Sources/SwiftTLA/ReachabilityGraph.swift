@@ -38,6 +38,8 @@ public protocol StateMachine: Sendable {
     func refinementFailures(in graph: inout ReachabilityGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>]
     func validationRefinementFailures(in graph: inout MachineValidationGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>]
     func successors() throws -> [(action: Action, machine: Self)]
+    /// Finds a successor of an application action by its complete execution snapshot.
+    func successor(for action: Action, matching target: Snapshot) throws -> Self?
     /// Grounded action invocations, including disabled ones, in generated order.
     func actionCandidates() throws -> [Action]
     func initialCheckingRegisters() throws -> CheckingRegisters
@@ -92,6 +94,35 @@ public protocol ConfiguredGeneratedModel: StateMachine {
 }
 
 extension StateMachine {
+    public func successor(for action: Action, matching target: Snapshot) throws -> Self? {
+        try successors().first { $0.action == action && $0.machine.snapshot == target }?.machine
+    }
+
+    /// Replays the recorded actions from this snapshot and configuration using application transitions.
+    public func replay(_ witness: SafetyCounterexample<Self>) throws -> Self {
+        guard let start = witness.trace.first, start.action == nil, start.state == snapshot,
+              hasSameConfiguration(as: witness.configurationSource) else {
+            throw ExplorationError.replayMismatch(step: 0)
+        }
+        var current = self
+        for index in witness.trace.indices.dropFirst() {
+            let step = witness.trace[index]
+            guard let action = step.action,
+                  let next = try current.successor(for: action, matching: step.state) else {
+                throw ExplorationError.replayMismatch(step: index)
+            }
+            current = next
+        }
+        return current
+    }
+
+    /// Checks the selected properties and optional deadlocks from this machine's current snapshot.
+    /// Exceeding the state budget throws `ExplorationError.stateLimitExceeded`.
+    public func check(properties: Set<Property>, checkDeadlock: Bool, maximumStates: Int) throws -> NativeCheckResult<Self> {
+        try ReachabilityGraph.check(initialMachines: [self], maximumStates: maximumStates,
+            checking: ModelChecks(properties: properties, checkDeadlock: checkDeadlock))
+    }
+
     public func selectedInitialMachine(from formalJSON: TLAJSONStateProjection) throws -> Self? { nil }
 
     public static var hasActionConstraint: Bool { false }
@@ -158,6 +189,8 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case assumptionViolated
     case configurationMismatch
     case traceTargetNotReachable
+    /// Zero identifies the starting snapshot. Subsequent indices identify action destinations.
+    case replayMismatch(step: Int)
     case unsupportedRefinement(String)
     case undeclaredReachabilityProperty(String)
     case unsupportedValidationProperty(String)
@@ -180,6 +213,7 @@ public struct SafetyCounterexample<Machine: StateMachine>: Sendable {
     public let violations: [SafetyViolation<Machine.Property>]
     public let trace: [(action: Machine.Action?, state: Machine.Snapshot)]
     public let checking: ModelChecks<Machine.Property>
+    let configurationSource: Machine
 
     public var unevaluatedProperties: Set<Machine.Property> {
         checking.properties.subtracting(violations.compactMap {
@@ -321,7 +355,8 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
                   from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             guard stopOnViolation, !failures.isEmpty else { return }
             throw NativeCheckStopped(counterexample: SafetyCounterexample<Machine>(
-                violations: failures, trace: path(to: snapshot, from: predecessor), checking: checking))
+                violations: failures, trace: path(to: snapshot, from: predecessor), checking: checking,
+                configurationSource: initialMachine))
         }
         func checkDiscoveredState(_ machine: Machine, atLevel level: Int,
                                   from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {

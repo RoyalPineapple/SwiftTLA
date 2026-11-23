@@ -371,6 +371,9 @@ import SwiftSyntax
             try machine.successors(for: .advance)
         }
         #expect(throws: reason) {
+            try machine.successor(for: .advance, matching: before)
+        }
+        #expect(throws: reason) {
             try machine.send(.advance)
         }
         #expect(machine.snapshot == before)

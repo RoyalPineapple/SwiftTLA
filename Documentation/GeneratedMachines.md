@@ -323,15 +323,24 @@ evaluation errors throw. Temporal checking and independent equivalence validatio
 remain separate; empty safety results do not establish liveness or equivalence.
 
 For a worked safety check, see [check and replay a midnight tick](../README.md#check-and-replay-a-midnight-tick).
-Use `ReachabilityGraph.check(initialMachines:maximumStates:checking:)` when you
-want to select a particular start and property. If the model already declares
+Use `machine.check(properties:checkDeadlock:maximumStates:)` to explore from the
+machine's current snapshot, including its control state. To explore from several
+starts together, pass them to `ReachabilityGraph.check(initialMachines:maximumStates:checking:)`.
+If the model already declares
 a safety scenario, `scenario.check(maximumStates:)` uses that scenario's
 initial machines and selected checks.
+
+`start.replay(witness)` returns the generated machine at the last recorded
+snapshot. Step zero checks the starting snapshot and configuration. Each later
+step follows the recorded action to its recorded snapshot. A mismatch throws
+`ExplorationError.replayMismatch(step:)` with the first differing index.
+Errors evaluating an action propagate. Replay checks that the machine can
+follow the path. The original check supplies the property verdict.
 
 | What happened? | What can the caller conclude? |
 |---|---|
 | Sending an action found zero successors | The action was disabled at this snapshot. The machine kept its previous state. |
-| Sending an action found several distinct successors | The action was ambiguous. For a graph witness, enumerate `successors(for:)` and look for the recorded full snapshot. The public state alone can omit relevant control. |
+| Sending an action found several distinct successors | The action was ambiguous. Use `start.replay(witness)` to follow the recorded action and full snapshot at each step, including hidden control. |
 | Evaluating an action threw a model error | Report the operation and its available error detail. A partial assignment inside the action is not a committed transition. |
 | A selected invariant failed | The witness includes a reached snapshot that violates that property. An initial violation can have zero actions. |
 | The search exhausted its frontier | The safety check covered the reachable graph for its supplied starts, configuration, constraints and selection. |
