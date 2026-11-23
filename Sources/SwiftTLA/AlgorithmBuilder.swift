@@ -968,13 +968,36 @@ public func Do<Name: CaseIterable & RawRepresentable & Sendable>(
     }
 }
 
-/// A typed notation for declaring copies. Each assignment appends one modeled statement.
+/// Records field assignments in source order within one atomic step.
 @dynamicMemberLookup
 public struct StepCopyFields<Fields: GeneratedModelFields>: Sendable {
     fileprivate var statements: [StepStatement] = []
 
     fileprivate init(_ copies: (inout Self) -> Void) {
         copies(&self)
+    }
+
+    public struct IntegerValue: ExpressibleByIntegerLiteral, Sendable {
+        fileprivate let expression: StateExpr?
+
+        public init(integerLiteral value: Int) {
+            expression = .value(.int(value))
+        }
+
+        fileprivate init(field: KeyPath<Fields, Int>) {
+            expression = Fields.fieldIdentities[field].map { .variable($0.formalName) }
+        }
+    }
+
+    public subscript(dynamicMember field: KeyPath<Fields, Int>) -> IntegerValue {
+        get { IntegerValue(field: field) }
+        set {
+            guard let target = Fields.fieldIdentities[field], let value = newValue.expression else {
+                statements.append(StepStatement(model: .rejected(.invalidTarget)))
+                return
+            }
+            statements.append(StepStatement(model: .set(target: .root(target.formalName), value: value)))
+        }
     }
 
     public subscript<Value>(dynamicMember field: KeyPath<Fields, Value>) -> KeyPath<Fields, Value> {
@@ -990,7 +1013,7 @@ public struct StepCopyFields<Fields: GeneratedModelFields>: Sendable {
     }
 }
 
-/// Records whole-field copies in source order using the generated state's typed field names.
+/// Writes whole fields from another field of the same type or from an integer literal.
 public func Do<Name: CaseIterable & RawRepresentable & Sendable, Fields: GeneratedModelFields>(
     _ label: Name, in _: Fields.Type, _ copies: (inout StepCopyFields<Fields>) -> Void
 ) -> AtomicStep where Name.RawValue == String {

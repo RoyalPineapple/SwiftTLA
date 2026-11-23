@@ -9,6 +9,8 @@ struct GeneratedMachineDocumentationTests {
         var machine = try OrderedFieldCopyModel.makeMachine()
         let after = try machine.send(.copy).after
         #expect(after == .init(x: 4, y: 2, z: 2))
+        #expect(try machine.send(.copyThenReset).after == .init(x: 0, y: 7, z: 2))
+        #expect(try machine.send(.resetThenCopy).after == .init(x: 0, y: 0, z: 2))
         let reference = #spec("OrderedFieldCopyModel") {
             let copies = Algorithm { scope in
                 let x = scope.sharedVar(initial: 2)
@@ -19,6 +21,16 @@ struct GeneratedMachineDocumentationTests {
                     Assign(x, to: z)
                     Assign(z, to: y)
                 }
+                Do(OrderedFieldCopyModel.Step.copyThenReset) {
+                    Assign(x, to: 7)
+                    Assign(y, to: x)
+                    Assign(x, to: 0)
+                }
+                Do(OrderedFieldCopyModel.Step.resetThenCopy) {
+                    Assign(x, to: 7)
+                    Assign(x, to: 0)
+                    Assign(y, to: x)
+                }
             }
             copies
         }
@@ -27,6 +39,7 @@ struct GeneratedMachineDocumentationTests {
         let emitted = try OrderedFieldCopyModel.render().tlaBundle
         #expect(built.tla == expected.tla)
         #expect(emitted.tla == expected.tla)
+        #expect(built.cfg == expected.cfg)
         #expect(emitted.cfg == expected.cfg)
     }
 

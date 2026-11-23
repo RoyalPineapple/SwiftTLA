@@ -338,22 +338,20 @@ Use `second.set(0)` to replace a value or `y.set(x)` to copy the current value
 of another field. Keep the variable handle declared with `let`.
 
 Within a scoped `Algorithm`, declare a shared field by key path when you only
-need its state member. Pass `State.self` to a copy step. Swift checks that both
-sides of each copy have the same type.
+need its state member. In a `Do` with `in: State.self`, copy another field of
+the same type or assign an integer literal to an `Int` field.
 
 ```swift
-scope.sharedVar(\State.x, initial: 2)
-scope.sharedVar(\State.y, initial: 3)
-scope.sharedVar(\State.z, initial: 4)
-Do(Step.copy, in: State.self) { state in
-    state.y = state.x
-    state.x = state.z
-    state.z = state.y
+scope.sharedVar(\State.count, initial: 7)
+scope.sharedVar(\State.previous, initial: 0)
+Do(Step.reset, in: State.self) { state in
+    state.previous = state.count
+    state.count = 0
 }
 ```
 
-Starting from `(x: 2, y: 3, z: 4)`, this step produces `(x: 4, y: 2, z: 2)`.
-The last line reads the value written on the first line. The closure declares
+After the reset, `previous` is 7 and `count` is 0. Reverse the two assignments
+and both fields become 0. The closure declares
 one atomic action. Use the ordinary `Do` body for calculations, choices, and
 control statements.
 

@@ -1166,14 +1166,28 @@ extension ParserSession {
             let copyBlock = StateCopySyntax.matches(call)
             if copyBlock {
                 do {
-                    let copies = try StateCopySyntax.fields(in: call)
                     statements = []
-                    for copy in copies {
-                        for field in [copy.target, copy.source] where !scope.hasField(field.sourceIdentifierName) {
-                            algorithmSourceDiagnostic = .init(message: "Declare the state field '\(field.sourceIdentifierName)' before this copy.", source: field)
+                    for write in try StateCopySyntax.fields(in: call) {
+                        let target = write.target.sourceIdentifierName
+                        guard scope.hasField(target) else {
+                            algorithmSourceDiagnostic = .init(message: "Declare the state field '\(target)' before this assignment.", source: write.target)
                             return nil
                         }
-                        statements.append(.copyField(target: copy.target.sourceIdentifierName, source: copy.source.sourceIdentifierName))
+                        switch write.source {
+                        case .field(let field):
+                            let source = field.sourceIdentifierName
+                            guard scope.hasField(source) else {
+                                algorithmSourceDiagnostic = .init(message: "Declare the state field '\(source)' before this assignment.", source: field)
+                                return nil
+                            }
+                            statements.append(.copyField(target: target, source: source))
+                        case .integer(let value):
+                            guard scope.hasField(target, ofType: .int) else {
+                                algorithmSourceDiagnostic = .init(message: "An integer literal requires an Int state field.", source: write.target)
+                                return nil
+                            }
+                            statements.append(.set(target: .root(target), value: .value(.int(value))))
+                        }
                     }
                 } catch {
                     algorithmSourceDiagnostic = .init(message: error.message, source: error.node)

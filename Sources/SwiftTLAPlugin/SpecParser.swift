@@ -208,9 +208,9 @@ final class ParserSession {
             Self(bindings: bindings + [Binding(sourceName: name, meaning: .value(.variable(root)), shape: shape, declaredField: root)])
         }
 
-        func hasField(_ name: String) -> Bool {
+        func hasField(_ name: String, ofType type: CompiledValueType? = nil) -> Bool {
             bindings.contains {
-                $0.declaredField?.utf8.elementsEqual(name.utf8) == true
+                $0.declaredField?.utf8.elementsEqual(name.utf8) == true && (type == nil || type == $0.shape)
             }
         }
 

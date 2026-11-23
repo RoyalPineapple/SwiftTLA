@@ -2,9 +2,14 @@ import SwiftDiagnostics
 import SwiftSyntax
 
 struct StateCopySyntax {
-    struct FieldCopy {
+    enum Source {
+        case field(TokenSyntax)
+        case integer(Int)
+    }
+
+    struct FieldAssignment {
         let target: TokenSyntax
-        let source: TokenSyntax
+        let source: Source
     }
 
     struct Problem: Error, DiagnosticMessage {
@@ -19,7 +24,7 @@ struct StateCopySyntax {
             && call.arguments.contains { $0.label?.text == "in" }
     }
 
-    static func fields(in call: FunctionCallExprSyntax) throws(Problem) -> [FieldCopy] {
+    static func fields(in call: FunctionCallExprSyntax) throws(Problem) -> [FieldAssignment] {
         let labels = call.arguments.map { $0.label?.text }
         guard labels == [nil, "in"] || labels == [nil, "when", "in"],
               let metatype = call.arguments.last?.expression.as(MemberAccessExprSyntax.self),
@@ -37,15 +42,21 @@ struct StateCopySyntax {
                   member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == binder else { return nil }
             return member.declName.baseName
         }
-        var copies: [FieldCopy] = []
+        var writes: [FieldAssignment] = []
         for item in closure.statements {
-            guard case .expr(let expression) = item.item, let operands = assignment(expression),
-                  let target = field(operands.0), let source = field(operands.1) else {
-                throw Problem(node: Syntax(item), message: "A state copy must read and write whole fields of \(binder), for example \(binder).y = \(binder).x.")
+            guard case .expr(let expression) = item.item, let (lhs, rhs) = assignment(expression),
+                  let target = field(lhs) else {
+                throw Problem(node: Syntax(item), message: "Assign to whole fields of \(binder), for example \(binder).y = \(binder).x.")
             }
-            copies.append(FieldCopy(target: target, source: source))
+            if let source = field(rhs) {
+                writes.append(.init(target: target, source: .field(source)))
+            } else if let value = SourceIntegerLiteral.value(rhs) {
+                writes.append(.init(target: target, source: .integer(value)))
+            } else {
+                throw Problem(node: Syntax(rhs), message: "Use whole fields of \(binder) or an Int literal on the right side of this assignment.")
+            }
         }
-        return copies
+        return writes
     }
 
     private static func assignment(_ expression: ExprSyntax) -> (ExprSyntax, ExprSyntax)? {

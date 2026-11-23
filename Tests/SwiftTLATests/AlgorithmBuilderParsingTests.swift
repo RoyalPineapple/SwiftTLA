@@ -56,6 +56,7 @@ import SwiftTLAMacros
                 let counter = Algorithm { scope in
                     let x = scope.sharedVar(initial: 2)
                     let named = scope.sharedVar(_name: "second", initial: 3)
+                    let enabled = scope.sharedVar(initial: true)
                     let alias = x
                     Do(TestControlLabel.advance, in: State.self) { work in \(body) }
                 }
@@ -64,7 +65,11 @@ import SwiftTLAMacros
             """))
         }
         #expect(try parseCopy("work.second = work.x").diagnostics.isEmpty)
+        #expect(try parseCopy("work.second = -0x10").diagnostics.isEmpty)
         for (body, detail) in [
+            ("work.enabled = 0", "requires an Int state field"),
+            ("work.alias = 0", "Declare the state field 'alias'"),
+            ("work.x = x", "whole fields of work"),
             ("work.named = work.x", "Declare the state field 'named'"),
             ("work.x = work.alias", "Declare the state field 'alias'"),
             ("work.second = other.x", "whole fields of work"),
