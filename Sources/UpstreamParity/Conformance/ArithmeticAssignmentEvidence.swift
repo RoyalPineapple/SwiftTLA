@@ -294,9 +294,19 @@ package enum ArithmeticAssignmentEvidence {
                             \#(row.instance)!RHSOutputInput!Rule!NativeCopyKnownRoles
                 <2>packed. raw.captures = [index \in DOMAIN tags |->
                         \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPackedCapture(tags[index], columns[index])]
-                    BY ONLY <2>physicalPlan, SMT DEF visitorPlan, tags, columns, NativeVisitor\#(row.slot)Action,
-                        NativeVisitor\#(row.slot)Captures, NativeVisitor\#(row.slot)Plans,
-                        \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPackedCapture
+                    <3>physical. raw.captures = captures
+                        BY ONLY <2>physicalPlan DEF visitorPlan, captures, NativeVisitor\#(row.slot)Action
+                    <3>values. \A index \in DOMAIN tags :
+                        /\ columns[index].literals = NativeVisitor\#(row.slot)NodeLiterals[index]
+                        /\ columns[index].reads = NativeVisitor\#(row.slot)NodeReads[index]
+                        BY ONLY SMT DEF tags, columns, NativeVisitor\#(row.slot)Plans
+                    <3>entries. \A index \in DOMAIN tags :
+                        captures[index] = \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPackedCapture(tags[index], columns[index])
+                        BY ONLY <3>values, SMT DEF tags, columns, captures, NativeVisitor\#(row.slot)Captures,
+                            \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPackedCapture
+                    <3>shape. captures = [index \in DOMAIN tags |-> captures[index]]
+                        BY ONLY SMT DEF tags, captures, NativeVisitor\#(row.slot)Captures
+                    <3>. QED BY ONLY <3>physical, <3>entries, <3>shape, SMT
                 <2>domains. /\ DOMAIN tags = 1..count /\ DOMAIN rendered = 1..count
                     BY ONLY \#(row.instance)!RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
                         IsaM("simp"), SMT DEF tags, NativeVisitor\#(row.slot)CaptureTags, count, \#(row.instance)!RHSOutputCount,
