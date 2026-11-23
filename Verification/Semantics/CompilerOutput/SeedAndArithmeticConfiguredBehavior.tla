@@ -20,6 +20,10 @@ THEOREM ConfiguredNativeAndTLAUseTheCertifiedCopyAndOverflowOutcomes ==
             /\ (Arithmetic!ActualNativeAssignmentAdvance <=> Arithmetic!advance)
             /\ Arithmetic!ActualNativeAssignmentFailures = Arithmetic!RHSOutputActualFailures)
     /\ Arithmetic!LocalOrderedRHSActualCFG = Arithmetic!LocalOrderedRHSExpectedCFG
+    /\ (Arithmetic!Next <=> Arithmetic!RHSConfiguredCatalogSteps)
+    /\ (Arithmetic!Spec <=> Arithmetic!RHSConfiguredCatalogBehavior)
+    /\ (Arithmetic!RHSOutputStateType =>
+        (Arithmetic!RHSOutputSelectedEvaluationCheck <=> Arithmetic!RHSOutputActualFailures = {}))
     /\ (Arithmetic!Init =>
         /\ Arithmetic!RHSOutputSelectedSubExpressions = {<<2, 3>>}
         /\ Arithmetic!RHSOutputActualFailures = {Arithmetic!ActualNativeProjection}
@@ -45,9 +49,13 @@ PROOF
     BY ONLY Arithmetic!RHSOutputStateType, CallerInputDomain, CallerInputPageBlock1AtFileOffsets,
         Arithmetic!ActualNativeAndTLAAdvanceAgreeOnTypedInput, PTL
         DEF CallerInputSize, Arithmetic!CallerInputSize
-<1>cfg. Arithmetic!LocalOrderedRHSActualCFG = Arithmetic!LocalOrderedRHSExpectedCFG
+<1>cfg. /\ Arithmetic!LocalOrderedRHSActualCFG = Arithmetic!LocalOrderedRHSExpectedCFG
+        /\ (Arithmetic!Next <=> Arithmetic!RHSConfiguredCatalogSteps)
+        /\ (Arithmetic!Spec <=> Arithmetic!RHSConfiguredCatalogBehavior)
+        /\ (Arithmetic!RHSOutputStateType =>
+             (Arithmetic!RHSOutputSelectedEvaluationCheck <=> Arithmetic!RHSOutputActualFailures = {}))
     BY ONLY CallerInputDomain, CallerInputPageBlock1AtFileOffsets,
-        Arithmetic!NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking, SMT
+        Arithmetic!ConfiguredArithmeticUsesTheCompleteLabeledActionCatalog, PTL
         DEF CallerInputSize, Arithmetic!CallerInputSize
 <1>overflow. ASSUME Arithmetic!Init
     PROVE /\ Arithmetic!RHSOutputSelectedSubExpressions = {<<2, 3>>}

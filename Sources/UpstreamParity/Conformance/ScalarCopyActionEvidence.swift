@@ -123,13 +123,7 @@ package enum ScalarCopyActionEvidence {
         let stateNames = variables.map { ($0.declaration.name, $0.formalName) }
         let entries = "<<\(entryControls.joined(separator: ", "))>>"
         let nextControls = "<<\((Array(entryControls.dropFirst()) + [terminal]).joined(separator: ", "))>>"
-        let actualInvocations = catalog.invocations.map(\.renderedName)
-        let actualRoutes = catalog.invocations.map {
-            TLAValue.record(TLARecord([.init("formal", .string($0.renderedName)), .init("authored", .string($0.sourceName))]))
-        }
-        let emittedValues = "<<\(actualInvocations.joined(separator: ", "))>>"
-        let emittedBefore = "<<\(catalog.frameFields.joined(separator: ", "))>>"
-        let emittedAfter = "<<\(catalog.frameFields.map { $0 + "'" }.joined(separator: ", "))>>"
+        let catalogProof = catalog.proofSource(prefix: prefix)
         let dispatch = prefix + "Dispatch"
         let branch = prefix + "SourceBranch"
         let sourceLabeled = prefix + "SourceLabeled"
@@ -143,8 +137,7 @@ package enum ScalarCopyActionEvidence {
         EXTENDS \#(output.root.name), TLAPS
 
         \#(rules) == INSTANCE ScalarCopyOutputBinding
-        LOCAL \#(dispatch) == INSTANCE ActionOutcomeInterface
-            WITH UpdateValues <- {}, FailureValues <- {}, NoFailure <- <<>>
+        \#(catalogProof.dispatch)
         \#(authoredInstance) == INSTANCE \#(authoredModule)
 
         \#(before) == [\#(key) \in \#(authoredInstance)!WitnessCopyFields |->
@@ -220,45 +213,7 @@ package enum ScalarCopyActionEvidence {
             \/ \E \#(index) \in DOMAIN \#(authoredInstance)!AuthoredCopyActionRows :
                 \#(authoredInstance)!AuthoredCopyActionRows[\#(index)].label = \#(label) /\ \#(branch)(\#(index))
             \/ \#(label) = \#(TLAValue.string(terminating.declaration.name)) /\ \#(terminatingRule)
-        \#(prefix)ActualActionRoutes == \#(TLAValue.tuple(actualRoutes))
-        \#(prefix)ActualFormalLabels ==
-            [\#(index) \in DOMAIN \#(prefix)ActualActionRoutes |-> \#(prefix)ActualActionRoutes[\#(index)].formal]
-        \#(prefix)ActualAuthoredLabels ==
-            [\#(index) \in DOMAIN \#(prefix)ActualActionRoutes |-> \#(prefix)ActualActionRoutes[\#(index)].authored]
-        \#(prefix)ActualActionValues == \#(emittedValues)
-        \#(prefix)ActualFrameFields == \#(TLAValue.tuple(catalog.frameFields.map(TLAValue.string)))
-        \#(prefix)ActualFrameBefore == \#(emittedBefore)
-        \#(prefix)ActualFrameAfter == \#(emittedAfter)
-        \#(emittedLabeled)(\#(label)) ==
-            \#(dispatch)!CatalogLabeledBranches(\#(prefix)ActualActionValues, \#(prefix)ActualAuthoredLabels, \#(label))
-
-        THEOREM \#(prefix)ActualNextUsesTheCompleteLabeledActionCatalog ==
-            /\ DOMAIN \#(prefix)ActualActionValues = DOMAIN \#(prefix)ActualAuthoredLabels
-            /\ DOMAIN \#(prefix)ActualFormalLabels = DOMAIN \#(prefix)ActualAuthoredLabels
-            /\ (Next <=> (\E \#(index) \in DOMAIN \#(prefix)ActualActionValues : \#(prefix)ActualActionValues[\#(index)]))
-            /\ vars = \#(prefix)ActualFrameBefore
-            /\ vars' = \#(prefix)ActualFrameAfter
-            /\ ([Next]_vars <=> ((\E \#(index) \in DOMAIN \#(prefix)ActualActionValues :
-                       \#(prefix)ActualActionValues[\#(index)]) \/ \#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore))
-        PROOF
-        <1>inventory.
-            /\ DOMAIN \#(prefix)ActualActionValues = DOMAIN \#(prefix)ActualAuthoredLabels
-            /\ DOMAIN \#(prefix)ActualFormalLabels = DOMAIN \#(prefix)ActualAuthoredLabels
-            BY ONLY SMT DEF \#(prefix)ActualActionValues, \#(prefix)ActualActionRoutes,
-                \#(prefix)ActualFormalLabels, \#(prefix)ActualAuthoredLabels
-        <1>next. Next <=> (\E \#(index) \in DOMAIN \#(prefix)ActualActionValues : \#(prefix)ActualActionValues[\#(index)])
-            BY ONLY SMT DEF Next, \#(prefix)ActualActionValues
-        <1>frame. /\ vars = \#(prefix)ActualFrameBefore
-                   /\ vars' = \#(prefix)ActualFrameAfter
-            BY ONLY DEF vars, \#(prefix)ActualFrameBefore, \#(prefix)ActualFrameAfter
-        <1>stutter. [Next]_vars <=> ((\E \#(index) \in DOMAIN \#(prefix)ActualActionValues :
-             \#(prefix)ActualActionValues[\#(index)]) \/ \#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore)
-            <2>step. [Next]_vars <=> (Next \/ vars' = vars)
-                BY ONLY SMT
-            <2>unchanged. (vars' = vars) <=> (\#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore)
-                BY ONLY <1>frame, SMT
-            <2>. QED BY ONLY <2>step, <2>unchanged, <1>next, PTL
-        <1>. QED BY ONLY <1>inventory, <1>next, <1>frame, <1>stutter
+        \#(catalogProof.body)
 
         THEOREM \#(prefix)ActualLayoutKeys ==
             /\ \#(prefix)Keys = \#(TLAValue.set(Set(fields.map(TLAValue.string))))
@@ -494,5 +449,68 @@ package enum ScalarCopyActionEvidence {
         guard values.count > 1 else { return fallback.1 }
         let arms = values.dropLast().map { key + " = " + TLAValue.string($0.0).description + " -> " + $0.1 }
         return "CASE " + arms.joined(separator: " [] ") + " [] OTHER -> " + fallback.1
+    }
+}
+
+extension StraightLineRenderedActionCheck.FiniteActionCatalog {
+    func proofSource(prefix: String) -> (dispatch: String, body: String) {
+        let index = prefix + "Index"
+        let label = prefix + "Label"
+        let emittedLabeled = prefix + "EmittedLabeled"
+        let actualInvocations = invocations.map(\.renderedName)
+        let actualRoutes = invocations.map {
+            TLAValue.record(TLARecord([.init("formal", .string($0.renderedName)), .init("authored", .string($0.sourceName))]))
+        }
+        let emittedValues = "<<\(actualInvocations.joined(separator: ", "))>>"
+        let emittedBefore = "<<\(frameFields.joined(separator: ", "))>>"
+        let emittedAfter = "<<\(frameFields.map { $0 + "'" }.joined(separator: ", "))>>"
+        let dispatch = prefix + "Dispatch"
+
+        let dispatchSource = #"""
+        LOCAL \#(dispatch) == INSTANCE ActionOutcomeInterface
+            WITH UpdateValues <- {}, FailureValues <- {}, NoFailure <- <<>>
+        """#
+        let body = #"""
+        \#(prefix)ActualActionRoutes == \#(TLAValue.tuple(actualRoutes))
+        \#(prefix)ActualFormalLabels ==
+            [\#(index) \in DOMAIN \#(prefix)ActualActionRoutes |-> \#(prefix)ActualActionRoutes[\#(index)].formal]
+        \#(prefix)ActualAuthoredLabels ==
+            [\#(index) \in DOMAIN \#(prefix)ActualActionRoutes |-> \#(prefix)ActualActionRoutes[\#(index)].authored]
+        \#(prefix)ActualActionValues == \#(emittedValues)
+        \#(prefix)ActualFrameFields == \#(TLAValue.tuple(frameFields.map(TLAValue.string)))
+        \#(prefix)ActualFrameBefore == \#(emittedBefore)
+        \#(prefix)ActualFrameAfter == \#(emittedAfter)
+        \#(emittedLabeled)(\#(label)) ==
+            \#(dispatch)!CatalogLabeledBranches(\#(prefix)ActualActionValues, \#(prefix)ActualAuthoredLabels, \#(label))
+
+        THEOREM \#(prefix)ActualNextUsesTheCompleteLabeledActionCatalog ==
+            /\ DOMAIN \#(prefix)ActualActionValues = DOMAIN \#(prefix)ActualAuthoredLabels
+            /\ DOMAIN \#(prefix)ActualFormalLabels = DOMAIN \#(prefix)ActualAuthoredLabels
+            /\ (Next <=> (\E \#(index) \in DOMAIN \#(prefix)ActualActionValues : \#(prefix)ActualActionValues[\#(index)]))
+            /\ vars = \#(prefix)ActualFrameBefore
+            /\ vars' = \#(prefix)ActualFrameAfter
+            /\ ([Next]_vars <=> ((\E \#(index) \in DOMAIN \#(prefix)ActualActionValues :
+                       \#(prefix)ActualActionValues[\#(index)]) \/ \#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore))
+        PROOF
+        <1>inventory.
+            /\ DOMAIN \#(prefix)ActualActionValues = DOMAIN \#(prefix)ActualAuthoredLabels
+            /\ DOMAIN \#(prefix)ActualFormalLabels = DOMAIN \#(prefix)ActualAuthoredLabels
+            BY ONLY SMT DEF \#(prefix)ActualActionValues, \#(prefix)ActualActionRoutes,
+                \#(prefix)ActualFormalLabels, \#(prefix)ActualAuthoredLabels
+        <1>next. Next <=> (\E \#(index) \in DOMAIN \#(prefix)ActualActionValues : \#(prefix)ActualActionValues[\#(index)])
+            BY ONLY SMT DEF Next, \#(prefix)ActualActionValues
+        <1>frame. /\ vars = \#(prefix)ActualFrameBefore
+                   /\ vars' = \#(prefix)ActualFrameAfter
+            BY ONLY DEF vars, \#(prefix)ActualFrameBefore, \#(prefix)ActualFrameAfter
+        <1>stutter. [Next]_vars <=> ((\E \#(index) \in DOMAIN \#(prefix)ActualActionValues :
+             \#(prefix)ActualActionValues[\#(index)]) \/ \#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore)
+            <2>step. [Next]_vars <=> (Next \/ vars' = vars)
+                BY ONLY SMT
+            <2>unchanged. (vars' = vars) <=> (\#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore)
+                BY ONLY <1>frame, SMT
+            <2>. QED BY ONLY <2>step, <2>unchanged, <1>next, PTL
+        <1>. QED BY ONLY <1>inventory, <1>next, <1>frame, <1>stutter
+        """#
+        return (dispatchSource, body)
     }
 }

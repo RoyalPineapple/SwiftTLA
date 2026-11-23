@@ -61,6 +61,8 @@ package enum ArithmeticAssignmentEvidence {
         let direct = try program.renderModule()
         guard case .compiled(let identity, _, _) = bundle.provenance, identity == program.identity,
               bundle.imports.isEmpty, direct.imports.isEmpty,
+              rendered.actions == direct.renderedActions,
+              let catalog = StraightLineRenderedActionCheck.unboundActionCatalog(in: rendered, layout: program.layout),
               let config = bundle.root.cfg,
               bundle.root.tla.utf8.elementsEqual(direct.renderedModuleSource.utf8),
               config.utf8.elementsEqual(try direct.configuration.render(usesSymmetryReduction: false).utf8)
@@ -84,7 +86,7 @@ package enum ArithmeticAssignmentEvidence {
         guard source.label == live.label,
               let outputProof = try OrderedRHSTLAProof.render(rendered, program: program, sourceAction: source.label,
                 sourceModule: sourceModule, sourceRows: "MasterRows", supportTheorem: "MasterAssignmentsAreSupported"),
-              let configured = OrderedRHSCFGProof.render(for: rendered)
+              let configured = OrderedRHSCFGProof.render(for: rendered, catalog: catalog, actionProofModule: outputProof.name)
         else { throw invalid }
 
         let encoder = JSONEncoder()
