@@ -58,9 +58,26 @@ NativeAssignmentReadColumnsMatch(column, rendered, names) ==
                    /\ read[2] = names[target[2]]
               ELSE read = target
 
+NativeAssignmentPhysicalColumns(raw, names, counter, tags, columns, rendered) ==
+    /\ NativeCopyKnownRoles(raw, Keys, names, counter)
+    /\ raw.captures = [index \in DOMAIN tags |-> NativeAssignmentPackedCapture(tags[index], columns[index])]
+    /\ rendered = [index \in DOMAIN tags |-> rendered[index]]
+    /\ \A index \in DOMAIN tags :
+               /\ NativeAssignmentDirectColumn(tags[index], columns[index])
+               /\ NativeAssignmentColumnRecord(rendered[index])
+               /\ columns[index] = [rendered[index] EXCEPT !.reads = columns[index].reads]
+               /\ NativeAssignmentReadColumnsMatch(columns[index], rendered[index], names)
+
+NativeAssignmentNormalizedCaptures(raw, names, counter, rendered) ==
+    /\ NativeAssignmentReadNamesAreKnown(raw, names)
+    /\ NativeAssignmentRekey(raw, names, counter).captures = rendered
+
 THEOREM NativeAssignmentColumnsDetermineRekeyedCaptures ==
     ASSUME NEW raw, NEW names, NEW counter, NEW tags, NEW columns, NEW rendered,
-           NativeCopyKnownRoles(raw, Keys, names, counter),
+           NativeAssignmentPhysicalColumns(raw, names, counter, tags, columns, rendered)
+    PROVE NativeAssignmentNormalizedCaptures(raw, names, counter, rendered)
+    PROOF
+    <1>. SUFFICES ASSUME NativeCopyKnownRoles(raw, Keys, names, counter),
            raw.captures = [index \in DOMAIN tags |-> NativeAssignmentPackedCapture(tags[index], columns[index])],
            rendered = [index \in DOMAIN tags |-> rendered[index]],
            \A index \in DOMAIN tags :
@@ -68,9 +85,10 @@ THEOREM NativeAssignmentColumnsDetermineRekeyedCaptures ==
                /\ NativeAssignmentColumnRecord(rendered[index])
                /\ columns[index] = [rendered[index] EXCEPT !.reads = columns[index].reads]
                /\ NativeAssignmentReadColumnsMatch(columns[index], rendered[index], names)
-    PROVE /\ NativeAssignmentReadNamesAreKnown(raw, names)
-          /\ NativeAssignmentRekey(raw, names, counter).captures = rendered
-    PROOF
+                  PROVE
+                      /\ NativeAssignmentReadNamesAreKnown(raw, names)
+                      /\ NativeAssignmentRekey(raw, names, counter).captures = rendered
+        BY SMT DEF NativeAssignmentPhysicalColumns, NativeAssignmentNormalizedCaptures
     <1>. DEFINE actual == NativeAssignmentRekey(raw, names, counter).captures
     <1>inverse. \A key \in Keys : NativeCopyKey(Keys, names, counter, names[key]) = key
         BY ONLY NativeCopyKnownRoles(raw, Keys, names, counter), SMT DEF NativeCopyKnownRoles, NativeCopyKey
@@ -530,6 +548,115 @@ PROOF
 <1>. QED BY ONLY <1>domain, <1>sequence, LenProperties, SMT
 
 
+NativeAssignmentPhysicalWriteRow(names, counter, destination, routes, key) ==
+    IF key = NativeCopyControlSlot THEN <<counter, <<"control", destination>>>>
+    ELSE <<names[key], IF routes[key][1] = "state" THEN <<"state", names[key]>> ELSE routes[key]>>
+
+NativeAssignmentPhysicalNamingInputs(rows, raw, names, counter, entry, destination, rendered, routes) ==
+    /\ NativeCopyKnownRoles(raw, Keys, names, counter)
+    /\ NativeAssignmentReadNamesAreKnown(raw, names)
+    /\ NativeAssignmentRekey(raw, names, counter).captures = rendered
+    /\ DOMAIN rendered = DOMAIN rows
+    /\ DOMAIN rows = 1..Len(rows)
+    /\ \A index \in DOMAIN rows : PhysicalAssignmentReadsNameWriters(rows, index, rendered[index])
+    /\ \A key \in Keys : CopyReceiptNamesWriter(rows, Len(rows), key, routes[key])
+    /\ NativeCopyControlSlot \notin Keys
+    /\ raw.guards = <<entry>>
+    /\ Len(raw.writes) \in Nat
+    /\ DOMAIN raw.writes = 1..Len(raw.writes)
+    /\ {raw.writes[index] : index \in DOMAIN raw.writes} =
+        {NativeAssignmentPhysicalWriteRow(names, counter, destination, routes, key) :
+            key \in NativeCopyFields(Keys)}
+
+THEOREM NativeAssignmentPhysicalRowsNameTheAuthoredWriters ==
+    ASSUME NEW rows, NEW raw, NEW names, NEW counter, NEW entry, NEW destination, NEW rendered, NEW routes,
+           NativeAssignmentPhysicalNamingInputs(rows, raw, names, counter, entry, destination, rendered, routes)
+    PROVE NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination)
+PROOF
+<1>. DEFINE plan == NativeAssignmentRekey(raw, names, counter)
+            fields == NativeCopyFields(Keys)
+            slot == NativeCopyControlSlot
+            physical(key) == NativeAssignmentPhysicalWriteRow(names, counter, destination, routes, key)
+            keyOf(value) == NativeCopyKey(Keys, names, counter, value)
+            reference(value) == IF value[1] = "state" THEN <<"state", keyOf(value[2])>> ELSE value
+            result(key) == IF key = slot THEN <<"control", destination>> ELSE routes[key]
+<1>roles. NativeCopyKnownRoles(raw, Keys, names, counter)
+    BY ONLY NativeAssignmentPhysicalNamingInputs(rows, raw, names, counter, entry, destination, rendered, routes)
+        DEF NativeAssignmentPhysicalNamingInputs
+<1>inverse. \A key \in Keys : keyOf(names[key]) = key
+    BY ONLY <1>roles, SMT DEF keyOf, NativeCopyKnownRoles, NativeCopyKey
+<1>shape. /\ Len(plan.writes) \in Nat /\ DOMAIN plan.writes = 1..Len(plan.writes)
+           /\ DOMAIN plan.writes = DOMAIN raw.writes
+    <2>raw. Len(raw.writes) \in Nat /\ DOMAIN raw.writes = 1..Len(raw.writes)
+        BY ONLY NativeAssignmentPhysicalNamingInputs(rows, raw, names, counter, entry, destination, rendered, routes)
+            DEF NativeAssignmentPhysicalNamingInputs
+    <2>. QED BY ONLY <2>raw, NativeAssignmentRekeyPreservesTheWriteCount, SMT DEF plan
+<1>columns. {raw.writes[index] : index \in DOMAIN raw.writes} = {physical(key) : key \in fields}
+    BY ONLY NativeAssignmentPhysicalNamingInputs(rows, raw, names, counter, entry, destination, rendered, routes)
+        DEF NativeAssignmentPhysicalNamingInputs, physical, fields
+<1>project. \A index \in DOMAIN raw.writes :
+               plan.writes[index] = <<keyOf(raw.writes[index][1]), reference(raw.writes[index][2])>>
+    BY ONLY SMT DEF plan, keyOf, reference, NativeAssignmentRekey, NativeCopyRekey
+<1>writers. \A key \in Keys : CopyReceiptNamesWriter(rows, Len(rows), key, routes[key])
+    BY ONLY NativeAssignmentPhysicalNamingInputs(rows, raw, names, counter, entry, destination, rendered, routes)
+        DEF NativeAssignmentPhysicalNamingInputs
+<1>identity. \A key \in Keys : routes[key][1] = "state" => routes[key] = <<"state", key>>
+    BY ONLY <1>writers, SMT DEF CopyReceiptNamesWriter, DirectCopyReference
+<1>rekeyed. \A key \in fields :
+    /\ keyOf(physical(key)[1]) = key
+    /\ reference(physical(key)[2]) = result(key)
+    <2>. TAKE key \in fields
+    <2>control. CASE key = slot
+        BY ONLY <2>control, SMT DEF physical, keyOf, reference, result, slot,
+            NativeAssignmentPhysicalWriteRow, NativeCopyKey
+    <2>field. CASE key # slot
+        <3>member. key \in Keys
+            BY ONLY (key \in fields), <2>field, SMT DEF fields, slot, NativeCopyFields
+        <3>key. keyOf(names[key]) = key
+            BY ONLY <3>member, <1>inverse, SMT
+        <3>. QED BY ONLY <2>field, <3>member, <3>key, <1>identity, SMT
+            DEF physical, reference, result, slot, NativeAssignmentPhysicalWriteRow
+    <2>. QED BY ONLY <2>control, <2>field
+<1>coverage. \A key \in fields : \E index \in DOMAIN plan.writes : plan.writes[index][1] = key
+    <2>. TAKE key \in fields
+    <2>physical. PICK index \in DOMAIN raw.writes : raw.writes[index] = physical(key)
+        BY ONLY (key \in fields), <1>columns, SMT
+    <2>domain. index \in DOMAIN plan.writes
+        BY ONLY <2>physical, <1>shape
+    <2>key. plan.writes[index][1] = key
+        BY ONLY (key \in fields), <2>physical, <1>project, <1>rekeyed, SMT
+    <2>. QED BY ONLY <2>domain, <2>key
+<1>routes. \A index \in DOMAIN plan.writes :
+    LET key == plan.writes[index][1]
+        ref == plan.writes[index][2]
+    IN /\ key \in fields
+       /\ IF key = slot THEN ref = <<"control", destination>>
+          ELSE CopyReceiptNamesWriter(rows, Len(rows), key, ref)
+    <2>. TAKE index \in DOMAIN plan.writes
+    <2>domain. index \in DOMAIN raw.writes
+        BY ONLY (index \in DOMAIN plan.writes), <1>shape
+    <2>physical. PICK key \in fields : raw.writes[index] = physical(key)
+        BY ONLY <2>domain, <1>columns, SMT
+    <2>write. plan.writes[index] = <<key, result(key)>>
+        BY ONLY <2>domain, <2>physical, <1>project, <1>rekeyed, SMT
+    <2>ref. key = slot \/ CopyReceiptNamesWriter(rows, Len(rows), key, routes[key])
+        BY ONLY <2>physical, <1>writers, SMT DEF fields, slot, NativeCopyFields
+    <2>. QED BY ONLY <2>physical, <2>write, <2>ref, SMT DEF result
+<1>writes. NativeAssignmentWritesNameLastTargets(rows, plan, entry, destination)
+    <2>guard. plan.guards = <<entry>>
+        BY ONLY NativeAssignmentPhysicalNamingInputs(rows, raw, names, counter, entry, destination, rendered, routes)
+            DEF NativeAssignmentPhysicalNamingInputs, plan, NativeAssignmentRekey, NativeCopyRekey
+    <2>. QED BY ONLY <1>roles, <1>shape, <2>guard, <1>coverage, <1>routes,
+        NativeAssignmentPhysicalNamingInputs(rows, raw, names, counter, entry, destination, rendered, routes), SMT
+        DEF NativeAssignmentWritesNameLastTargets, NativeAssignmentPhysicalNamingInputs, NativeCopyKnownRoles, fields, slot
+<1>reads. /\ NativeAssignmentReadNamesAreKnown(raw, names)
+          /\ DOMAIN plan.captures = 1..Len(rows)
+          /\ \A index \in 1..Len(rows) : PhysicalAssignmentReadsNameWriters(rows, index, plan.captures[index])
+    BY ONLY NativeAssignmentPhysicalNamingInputs(rows, raw, names, counter, entry, destination, rendered, routes), SMT
+        DEF NativeAssignmentPhysicalNamingInputs, plan
+<1>. QED BY ONLY <1>roles, <1>reads, <1>writes DEF NativeAssignmentsNameTheirOperandsAndWrites, plan
+
+
 \* Artifact input: the SwiftSyntax decoder supplies the routed visitor's capture
 \* records, final writes and lexical model-error append sites. The history is the
 \* existing interpretation of the decoded sequential capture instructions.
@@ -556,23 +683,43 @@ DecodedNativeAssignmentFailures(rows, raw, names, counter, before, pcBefore, app
               completed |-> result.completed, before |-> CompletedAssignmentBindings(before, rows, result.completed)]}
        ELSE {}
 
+NativeAssignmentObservationInputs(rows, raw, names, counter, entry, destination, before, pcBefore, appendSites, shared) ==
+    /\ SupportedAssignmentList(rows)
+    /\ before \in AssignmentBindings
+    /\ NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination)
+    /\ AssignmentListHistory(FALSE, before, rows, shared)
+    /\ (pcBefore = entry /\ shared[Len(rows)].failure # <<>> => shared[Len(rows)].failure.site \in appendSites)
+
+NativeAssignmentObservationMatches(rows, raw, names, counter, entry, destination, before, after, pcBefore, pcAfter, appendSites, shared) ==
+    LET final == shared[Len(rows)]
+    IN /\ (DecodedNativeAssignmentStep(rows, raw, names, counter, before, after, pcBefore, pcAfter)
+           <=> (pcBefore = entry /\ final.failure = <<>> /\ pcAfter = destination /\ after = final.bindings))
+       /\ DecodedNativeAssignmentFailures(rows, raw, names, counter, before, pcBefore, appendSites) =
+          IF pcBefore = entry /\ final.failure # <<>>
+          THEN {[site |-> final.failure.site, target |-> rows[final.failure.site].target,
+                 payload |-> final.failure.payload, completed |-> final.completed, before |-> final.failure.before]}
+          ELSE {}
+
 THEOREM DecodedNativeAssignmentsUseTheCertifiedActionObservation ==
-    ASSUME NEW rows, SupportedAssignmentList(rows), NEW raw, NEW names, NEW counter,
-           NEW entry, NEW destination, NEW before \in AssignmentBindings, NEW after,
-           NEW pcBefore, NEW pcAfter, NEW appendSites, NEW shared,
-           NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination),
-           AssignmentListHistory(FALSE, before, rows, shared),
-           (pcBefore = entry /\ shared[Len(rows)].failure # <<>> =>
-               shared[Len(rows)].failure.site \in appendSites)
-    PROVE LET final == shared[Len(rows)]
-          IN /\ (DecodedNativeAssignmentStep(rows, raw, names, counter, before, after, pcBefore, pcAfter)
-                 <=> (pcBefore = entry /\ final.failure = <<>> /\ pcAfter = destination /\ after = final.bindings))
-             /\ DecodedNativeAssignmentFailures(rows, raw, names, counter, before, pcBefore, appendSites) =
-                IF pcBefore = entry /\ final.failure # <<>>
-                THEN {[site |-> final.failure.site, target |-> rows[final.failure.site].target,
-                       payload |-> final.failure.payload, completed |-> final.completed, before |-> final.failure.before]}
-                ELSE {}
+    ASSUME NEW rows, NEW raw, NEW names, NEW counter, NEW entry, NEW destination, NEW before, NEW after, NEW pcBefore, NEW pcAfter, NEW appendSites, NEW shared,
+           NativeAssignmentObservationInputs(rows, raw, names, counter, entry, destination, before, pcBefore, appendSites, shared)
+    PROVE NativeAssignmentObservationMatches(rows, raw, names, counter, entry, destination, before, after, pcBefore, pcAfter, appendSites, shared)
 PROOF
+<1>. SUFFICES ASSUME SupportedAssignmentList(rows),
+                    before \in AssignmentBindings,
+                    NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination),
+                    AssignmentListHistory(FALSE, before, rows, shared),
+                    (pcBefore = entry /\ shared[Len(rows)].failure # <<>> => shared[Len(rows)].failure.site \in appendSites)
+             PROVE
+                 LET final == shared[Len(rows)]
+                 IN /\ (DecodedNativeAssignmentStep(rows, raw, names, counter, before, after, pcBefore, pcAfter)
+                        <=> (pcBefore = entry /\ final.failure = <<>> /\ pcAfter = destination /\ after = final.bindings))
+                    /\ DecodedNativeAssignmentFailures(rows, raw, names, counter, before, pcBefore, appendSites) =
+                       IF pcBefore = entry /\ final.failure # <<>>
+                       THEN {[site |-> final.failure.site, target |-> rows[final.failure.site].target,
+                              payload |-> final.failure.payload, completed |-> final.completed, before |-> final.failure.before]}
+                       ELSE {}
+    BY SMT DEF NativeAssignmentObservationInputs, NativeAssignmentObservationMatches
 <1>. DEFINE count == Len(rows)
             instruction == NativeAssignmentRekey(raw, names, counter)
             final == shared[count]
@@ -635,5 +782,4 @@ PROOF
         (pcBefore = entry /\ shared[Len(rows)].failure # <<>> => shared[Len(rows)].failure.site \in appendSites), SMT
         DEF DecodedNativeAssignmentFailures, result, NativeAssignmentPrefix, final, count
 <1>. QED BY ONLY <1>success, <1>failures DEF final, count
-
 ====

@@ -352,57 +352,53 @@ package enum ArithmeticAssignmentEvidence {
                     <3>. QED BY ONLY <3>direct, <3>fields, <3>nonReads, <3>readColumns
                 <2>renderedVector. rendered = [index \in DOMAIN tags |-> rendered[index]]
                     BY ONLY <2>domains, SMT DEF rendered, \#(row.instance)!RHSOutputPlans
+                <2>physicalInputs. \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPhysicalColumns(raw, NativeFormalNames, NativeCounter, tags, columns, rendered)
+                    BY ONLY <2>physicalRoles, <2>packed, <2>renderedVector, <2>keys, <2>columnFacts, SMT
+                        DEF \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPhysicalColumns
+                <2>normalizedResult. \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentNormalizedCaptures(raw, NativeFormalNames, NativeCounter, rendered)
+                    BY ONLY <2>physicalInputs, \#(row.instance)!RHSOutputUsesTheMachineIntegerDomain, \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentColumnsDetermineRekeyedCaptures, SMT
                 <2>normalized.
                     /\ \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown(raw, NativeFormalNames)
                     /\ plan.captures = rendered
-                    BY ONLY <2>physicalRoles, <2>packed, <2>renderedVector, <2>keys, <2>columnFacts,
-                        \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentColumnsDetermineRekeyedCaptures, SMT DEF plan
+                    BY ONLY <2>normalizedResult DEF \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentNormalizedCaptures, plan
                 <2>roles.
                     /\ \#(row.instance)!RHSOutputInput!Rule!NativeCopyKnownRoles(raw, keys, NativeFormalNames, NativeCounter)
                     /\ \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentReadNamesAreKnown(raw, NativeFormalNames)
                     BY ONLY <2>physicalRoles, <2>normalized
-                <2>captures.
-                    /\ DOMAIN plan.captures = 1..count
-                    /\ \A index \in 1..count : plan.captures[index] = \#(row.instance)!RHSOutputPlans[index]
-                    BY ONLY <2>normalized, <2>domains, SMT DEF rendered
                 <2>rawWrites. /\ Len(raw.writes) \in Nat /\ DOMAIN raw.writes = 1..Len(raw.writes)
                     BY ONLY <2>physicalPlan, IsaM("simp") DEF visitorPlan,
                         NativeVisitor\#(row.slot)Action, NativeVisitor\#(row.slot)Writes
-                <2>writeCount. /\ Len(plan.writes) \in Nat /\ DOMAIN plan.writes = 1..Len(plan.writes)
-                    BY ONLY <2>rawWrites, \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentRekeyPreservesTheWriteCount,
-                        SMT DEF plan
-                <2>writes.
-                    /\ keys \subseteq STRING
-                    /\ \#(row.instance)!RHSOutputInput!Rule!NativeCopyControlSlot \notin keys
-                    /\ plan.guards = <<entry>>
-                    /\ \A key \in \#(row.instance)!RHSOutputInput!Rule!NativeCopyFields(keys) :
-                        \E index \in DOMAIN plan.writes : plan.writes[index][1] = key
-                    /\ \A index \in DOMAIN plan.writes :
-                        LET key == plan.writes[index][1] IN
-                        /\ key \in \#(row.instance)!RHSOutputInput!Rule!NativeCopyFields(keys)
-                        /\ plan.writes[index][2] =
-                            IF key = \#(row.instance)!RHSOutputInput!Rule!NativeCopyControlSlot
-                            THEN <<"control", destination>> ELSE \#(row.instance)!RHSOutputWriteRoutes[key]
-                    BY ONLY <2>physicalPlan, \#(row.instance)!RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
-                        SMT DEF visitorPlan, NativeVisitor\#(row.slot)Action, NativeVisitor\#(row.slot)Guards,
-                            NativeVisitor\#(row.slot)Writes, plan, keys, entry, destination,
-                            NativeActionAt, NativeVisitorPlans, \#(prefix)Dispatch!NativeDispatchOutcome,
-                            NativeActionRoutes, NativeActionRows, NativeFormalNames, NativeCounter,
-                            \#(row.instance)!RHSOutputKeys, \#(row.instance)!RHSOutputInput!MasterFields,
-                            \#(row.instance)!RHSOutputEntry, \#(row.instance)!RHSOutputExit, \#(row.instance)!RHSOutputWriteRoutes,
-                            \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentRekey,
-                            \#(row.instance)!RHSOutputInput!Rule!NativeCopyRekey,
-                            \#(row.instance)!RHSOutputInput!Rule!NativeCopyKey,
-                            \#(row.instance)!RHSOutputInput!Rule!NativeCopyFields,
-                            \#(row.instance)!RHSOutputInput!Rule!NativeCopyControlSlot
+                <2>. DEFINE writes == NativeVisitor\#(row.slot)Writes
+                            finalRoutes == \#(row.instance)!RHSOutputWriteRoutes
+                <2>physicalWrites. raw.writes = writes /\ raw.guards = <<entry>>
+                    BY ONLY <2>physicalPlan, SMT DEF visitorPlan, writes, entry, NativeVisitor\#(row.slot)Action,
+                        NativeVisitor\#(row.slot)Guards, \#(row.instance)!RHSOutputEntry
+                <2>writeSet.
+                    {writes[index] : index \in DOMAIN writes} =
+                        {\#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPhysicalWriteRow(NativeFormalNames, NativeCounter, destination, finalRoutes, key) :
+                            key \in \#(row.instance)!RHSOutputInput!Rule!NativeCopyFields(keys)}
+                    BY ONLY SMT DEF writes, finalRoutes, keys, destination, NativeVisitor\#(row.slot)Writes, NativeFormalNames, NativeCounter,
+                        \#(row.instance)!RHSOutputKeys, \#(row.instance)!RHSOutputExit, \#(row.instance)!RHSOutputWriteRoutes,
+                        \#(row.instance)!RHSOutputInput!Rule!NativeCopyFields, \#(row.instance)!RHSOutputInput!Rule!NativeCopyControlSlot, \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPhysicalWriteRow
+                <2>namingInputs.
+                    \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPhysicalNamingInputs(
+                        authored, raw, NativeFormalNames, NativeCounter, entry, destination, rendered, finalRoutes)
+                    <3>bounds. count = Len(authored) /\ DOMAIN authored = 1..count
+                        BY ONLY \#(row.instance)!RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
+                            SMT DEF authored, count, \#(row.instance)!RHSOutputCount, \#(row.instance)!RHSOutputInput!Rule!SupportedAssignmentList
+                    <3>captureWriters. \A index \in DOMAIN authored :
+                        \#(row.instance)!RHSOutputInput!Rule!PhysicalAssignmentReadsNameWriters(authored, index, rendered[index])
+                        BY ONLY \#(row.instance)!ActualRenderedRightHandSidesNameTheAuthoredWriters DEF authored, rendered
+                    <3>finalWriters. \A key \in keys : \#(row.instance)!RHSOutputInput!Rule!CopyReceiptNamesWriter(authored, count, key, finalRoutes[key])
+                        BY ONLY \#(row.instance)!ActualRenderedWriteRoutesNameTheAuthoredWriters DEF authored, count, keys, finalRoutes
+                    <3>control. \#(row.instance)!RHSOutputInput!Rule!NativeCopyControlSlot \notin keys
+                        BY ONLY SMT DEF keys, \#(row.instance)!RHSOutputKeys, \#(row.instance)!RHSOutputInput!Rule!NativeCopyControlSlot
+                    <3>. QED BY ONLY <2>keys, <2>roles, <2>normalized, <2>domains, <2>rawWrites, <2>physicalWrites, <2>writeSet,
+                        <3>bounds, <3>captureWriters, <3>finalWriters, <3>control, SMT DEF \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPhysicalNamingInputs, plan
                 <2>named.
-                    \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites(
-                        authored, raw, NativeFormalNames, NativeCounter, entry, destination)
-                    BY ONLY <2>roles, <2>captures, <2>writeCount, <2>writes, \#(row.instance)!RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
-                        \#(row.instance)!ActualRenderedRightHandSidesNameTheAuthoredWriters,
-                        \#(row.instance)!ActualRenderedWriteRoutesNameTheAuthoredWriters, SMT
-                        DEF authored, keys, plan, count, \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites,
-                            \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentWritesNameLastTargets
+                    \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites(authored, raw, NativeFormalNames, NativeCounter, entry, destination)
+                    BY ONLY <2>namingInputs, \#(row.instance)!RHSOutputUsesTheMachineIntegerDomain,
+                        \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentPhysicalRowsNameTheAuthoredWriters, SMT
                 <2>append. \A probe \in DOMAIN \#(row.instance)!RHSOutputProbePositions :
                     \#(row.instance)!RHSOutputProbePositions[probe][1] \in appendSites
                     BY ONLY <2>routing, SMT
@@ -419,21 +415,19 @@ package enum ArithmeticAssignmentEvidence {
                             DEF relevant, \#(row.instance)!RHSOutputActualFailures, \#(row.instance)!RHSOutputFailureEvent
                     <3>. QED BY ONLY <3>events, <1>failureObservation, SMT DEF relevant, selected, final, count,
                         \#(row.instance)!RHSOutputHistoryFailures
+                <2>observationInputs. \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentObservationInputs(authored, raw, NativeFormalNames, NativeCounter, entry, destination, \#(row.instance)!RHSOutputBefore, pc, appendSites, \#(row.history))
+                    BY ONLY <2>named, <2>selectedFailure, \#(row.instance)!RHSOutputSourceHistory(\#(row.history)),
+                        \#(row.instance)!RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
+                        \#(row.instance)!RHSOutputStateType, \#(row.instance)!RHSOutputStateSuppliesAssignmentBindings, SMT
+                        DEF \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentObservationInputs, \#(row.instance)!RHSOutputSourceHistory, \#(row.instance)!RHSOutputSelected, \#(row.instance)!RHSOutputCount,
+                            authored, entry, destination, count, selected, final
+                <2>observationResult. \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentObservationMatches(authored, raw, NativeFormalNames, NativeCounter, entry, destination, \#(row.instance)!RHSOutputBefore, \#(row.instance)!RHSOutputAfter, pc, pc', appendSites, \#(row.history))
+                    BY ONLY <2>observationInputs, \#(row.instance)!RHSOutputUsesTheMachineIntegerDomain, \#(row.instance)!RHSOutputInput!Rule!DecodedNativeAssignmentsUseTheCertifiedActionObservation, SMT
                 <2>math. /\ (NativeStep\#(row.slot) <=> \#(row.instance)!RHSOutputHistoryAdvance(\#(row.history)))
                          /\ NativeFailures\#(row.slot) = \#(row.instance)!RHSOutputHistoryFailures(\#(row.history))
-                    BY ONLY <2>named, <2>selectedFailure, \#(row.instance)!RHSOutputSourceHistory(\#(row.history)),
-                        \#(row.instance)!RHSOutputInput!Rule!DecodedNativeAssignmentsUseTheCertifiedActionObservation,
-                        \#(row.instance)!RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory,
-                        \#(row.instance)!RHSOutputUsesTheMachineIntegerDomain,
-                        \#(row.instance)!RHSOutputStateType, SMT DEF \#(row.instance)!RHSOutputStateType,
-                            \#(row.instance)!RHSOutputInput!Rule!AssignmentBindings,
-                            \#(row.instance)!RHSOutputInput!Rule!AssignmentIntValues,
-                            \#(row.instance)!RHSOutputInput!MasterFields, \#(row.instance)!RHSOutputKeys,
-                            \#(row.instance)!RHSOutputActionLabel, \#(row.instance)!RHSOutputMin,
-                            \#(row.instance)!RHSOutputMax, \#(row.instance)!RHSOutputSourceHistory,
-                            \#(row.instance)!RHSOutputSelected, \#(row.instance)!RHSOutputHistoryAdvance,
-                            \#(row.instance)!RHSOutputHistoryFailures, NativeStep\#(row.slot), NativeFailures\#(row.slot),
-                            authored, entry, destination, count, selected
+                    BY ONLY <2>observationResult, SMT DEF \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentObservationMatches, NativeStep\#(row.slot), NativeFailures\#(row.slot),
+                        \#(row.instance)!RHSOutputHistoryAdvance, \#(row.instance)!RHSOutputHistoryFailures, \#(row.instance)!RHSOutputSelected, \#(row.instance)!RHSOutputCount,
+                        authored, raw, appendSites, entry, destination
                 <2>. QED BY ONLY <2>math, <1>failureObservation
             <1>. QED BY ONLY <1>native\#(row.slot)
 
