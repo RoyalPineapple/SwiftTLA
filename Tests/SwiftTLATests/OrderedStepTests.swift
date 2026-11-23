@@ -303,7 +303,12 @@ import SwiftSyntax
         #expect(proofs.map(\.sourceContinuation) == ["repeatWrites", nil])
         #expect(Set(proofs.map { $0.source.name }).count == proofs.count)
         #expect(Set(proofs.map { $0.output.name }).count == proofs.count)
-        let catalog = try ArithmeticAssignmentEvidence.catalogProof(for: rendered, translations: proofs)
+        let syntax = Parser.parse(source: String(decoding: authored, as: UTF8.self))
+        let model = try #require(syntax.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == String(describing: OrderedCopyModel.self) })
+        var emitter = NativeSwiftEmitter(model: try TLASpecVerifier.parseAndVerify(model))
+        let native = try emitter.machineMembers().map(\.description).joined(separator: "\n")
+        let catalog = try ArithmeticAssignmentEvidence.catalogProof(for: rendered, translations: proofs, nativeSource: native)
         #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
             try ArithmeticAssignmentEvidence.catalogProof(for: rendered, translations: Array(proofs.dropLast()))
         }
@@ -312,6 +317,7 @@ import SwiftSyntax
         Attachment.record(Array(authored), named: fixture.lastPathComponent)
         Attachment.record(Array(actual.tla.utf8), named: "\(actual.name).tla")
         Attachment.record(Array(catalog.bytes), named: "\(catalog.name).tla")
+        Attachment.record(Array(native.utf8), named: "OrderedCopyNativeMembers.swift")
         for proof in proofs {
             Attachment.record(Array(proof.source.bytes), named: "\(proof.source.name).tla")
             Attachment.record(Array(proof.output.bytes), named: "\(proof.output.name).tla")

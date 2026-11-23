@@ -159,6 +159,16 @@ private func checked<T>(_ matches: [T]) throws -> T {
     return match
 }
 
+package func verifyNativeMemberTokens(compiled: String, attached: String) throws {
+    let actual = Parser.parse(source: compiled)
+    let candidate = Parser.parse(source: attached)
+    guard !compiled.utf8.contains(0), !attached.utf8.contains(0),
+          !actual.hasError, !candidate.hasError,
+          !actual.statements.isEmpty,
+          syntaxWords(actual).elementsEqual(syntaxWords(candidate), by: { $0.utf8.elementsEqual($1.utf8) })
+    else { throw InitialFailureEvidenceError.unsupportedGeneratedOutput }
+}
+
 // Interpret the scalar continuation grammar. Its reads come from the retained Swift.
 package func nativeScalarActionEvidence(_ source: String, program: CompiledProgram) throws -> Data {
     let definitions = try nativeScalarActionDefinitions(source, program: program)
@@ -170,7 +180,8 @@ package func nativeScalarActionEvidence(_ source: String, program: CompiledProgr
     """.utf8)
 }
 
-func nativeScalarActionDefinitions(_ source: String, program: CompiledProgram, selectedActionOrdinal: Int? = nil) throws -> String {
+func nativeScalarActionDefinitions(_ source: String, program: CompiledProgram,
+                                   selectedActionOrdinal: Int? = nil, retainingFailureSites: Bool = false) throws -> String {
     let actions = try decodeScalarActions(source, program: program, predicate: nil)
     var selectedDefinitions = ""
     if let selectedActionOrdinal {
@@ -186,6 +197,10 @@ func nativeScalarActionDefinitions(_ source: String, program: CompiledProgram, s
     let dispatch = TLAValue.tuple(actions.map { .string($0.formalLabel) })
     let physicalRoutes = actions.map { route in
         "[handle |-> \(TLAValue.string(route.handle)), visitor |-> \(route.visitor), formal |-> \(TLAValue.string(route.formalLabel))]"
+    }
+    if retainingFailureSites {
+        let sites = actions.map { actionTuple($0.plans[0].failureAppendSites.map(String.init)) }
+        selectedDefinitions += "NativeActionFailureAppendSites == \(actionTuple(sites))\n"
     }
     return """
     \(selectedDefinitions)NativeActionRows == \(actionTuple(rows))

@@ -19,6 +19,14 @@ private enum NativeCommandError: Error, CustomStringConvertible {
 
 func runNative(arguments: [String]) -> Never {
     do {
+        if arguments.first == "verify-member-tokens" {
+            guard arguments.count == 5, arguments[1] == "--compiled-members", arguments[3] == "--attached-members"
+            else { throw NativeCommandError.usage }
+            try verifyNativeMemberTokens(
+                compiled: String(contentsOf: URL(fileURLWithPath: arguments[2]), encoding: .utf8),
+                attached: String(contentsOf: URL(fileURLWithPath: arguments[4]), encoding: .utf8))
+            exit(0)
+        }
         if arguments.first == "prepare-compiler-stack-seed" {
             guard arguments.count == 7, arguments[1] == "--authored-source",
                   arguments[3] == "--native-source", arguments[5] == "--output"

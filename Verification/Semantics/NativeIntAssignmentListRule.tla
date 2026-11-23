@@ -358,4 +358,128 @@ THEOREM CheckedNativeDispatchConstructsTheSharedPrefixAndCallback ==
         <2>. QED BY ONLY <1>shared, <1>native, <1>prefix, <1>callbacks DEF final
     <1>. QED BY ONLY <1>joint DEF before, raw, plan, count
 
+
+THEOREM NativeAssignmentRekeyPreservesTheWriteCount ==
+    ASSUME NEW raw, NEW names, NEW counter,
+           Len(raw.writes) \in Nat, DOMAIN raw.writes = 1..Len(raw.writes)
+    PROVE LET writes == NativeAssignmentRekey(raw, names, counter).writes
+          IN /\ Len(writes) = Len(raw.writes) /\ DOMAIN writes = DOMAIN raw.writes
+PROOF
+<1>. DEFINE writes == NativeAssignmentRekey(raw, names, counter).writes
+            values == {writes[index] : index \in DOMAIN writes}
+<1>domain. DOMAIN writes = DOMAIN raw.writes
+    BY ONLY SMT DEF writes, NativeAssignmentRekey, NativeCopyRekey
+<1>function. writes \in [1..Len(raw.writes) -> values]
+    BY ONLY <1>domain, (DOMAIN raw.writes = 1..Len(raw.writes)), SMT DEF values, writes, NativeAssignmentRekey, NativeCopyRekey
+<1>sequence. writes \in Seq(values)
+    BY ONLY <1>function, (Len(raw.writes) \in Nat), SeqDef, SMT
+<1>. QED BY ONLY <1>domain, <1>sequence, LenProperties, SMT
+
+
+\* Artifact input: the SwiftSyntax decoder supplies the routed visitor's capture
+\* records, final writes and lexical model-error append sites. The history is the
+\* existing interpretation of the decoded sequential capture instructions.
+DecodedNativeAssignmentFinal(rows, raw, names, counter, before) ==
+    LET instruction == NativeAssignmentRekey(raw, names, counter)
+        history == CHOOSE history : NativeAssignmentCaptureHistory(before, instruction, Len(rows), history)
+    IN history[Len(rows)]
+
+DecodedNativeAssignmentStep(rows, raw, names, counter, before, after, pcBefore, pcAfter) ==
+    LET result == DecodedNativeAssignmentFinal(rows, raw, names, counter, before)
+        instruction == NativeAssignmentRekey(raw, names, counter)
+    IN /\ result.failure = <<>>
+       /\ after \in AssignmentBindings
+       /\ NativeCopyVisits(NativeAssignmentMaterializationPlan(instruction, result.completed),
+                              Keys, before, after, pcBefore, pcAfter)
+
+DecodedNativeAssignmentFailures(rows, raw, names, counter, before, pcBefore, appendSites) ==
+    LET result == DecodedNativeAssignmentFinal(rows, raw, names, counter, before)
+        site == result.failure.site
+    IN IF /\ \A guard \in DOMAIN raw.guards : raw.guards[guard] = pcBefore
+          /\ result.failure # <<>>
+          /\ site \in appendSites
+       THEN {[site |-> site, target |-> rows[site].target, payload |-> result.failure.payload,
+              completed |-> result.completed, before |-> CompletedAssignmentBindings(before, rows, result.completed)]}
+       ELSE {}
+
+THEOREM DecodedNativeAssignmentsUseTheCertifiedActionObservation ==
+    ASSUME NEW rows, SupportedAssignmentList(rows), NEW raw, NEW names, NEW counter,
+           NEW entry, NEW destination, NEW before \in AssignmentBindings, NEW after,
+           NEW pcBefore, NEW pcAfter, NEW appendSites, NEW shared,
+           NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination),
+           AssignmentListHistory(FALSE, before, rows, shared),
+           (pcBefore = entry /\ shared[Len(rows)].failure # <<>> =>
+               shared[Len(rows)].failure.site \in appendSites)
+    PROVE LET final == shared[Len(rows)]
+          IN /\ (DecodedNativeAssignmentStep(rows, raw, names, counter, before, after, pcBefore, pcAfter)
+                 <=> (pcBefore = entry /\ final.failure = <<>> /\ pcAfter = destination /\ after = final.bindings))
+             /\ DecodedNativeAssignmentFailures(rows, raw, names, counter, before, pcBefore, appendSites) =
+                IF pcBefore = entry /\ final.failure # <<>>
+                THEN {[site |-> final.failure.site, target |-> rows[final.failure.site].target,
+                       payload |-> final.failure.payload, completed |-> final.completed, before |-> final.failure.before]}
+                ELSE {}
+PROOF
+<1>. DEFINE count == Len(rows)
+            instruction == NativeAssignmentRekey(raw, names, counter)
+            final == shared[count]
+            result == DecodedNativeAssignmentFinal(rows, raw, names, counter, before)
+            history == CHOOSE visited : NativeAssignmentCaptureHistory(before, instruction, count, visited)
+<1>history. NativeAssignmentCaptureHistory(before, instruction, count, history)
+    <2>exists. \E visited : NativeAssignmentCaptureHistory(before, instruction, count, visited)
+        BY ONLY PhysicalNativeCapturesUseTheCertifiedAssignmentHistory,
+            SupportedAssignmentList(rows), (before \in AssignmentBindings),
+            NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination),
+            AssignmentListHistory(FALSE, before, rows, shared) DEF instruction, count
+    <2>. QED BY ONLY <2>exists, SMT DEF history
+<1>record. result = NativeAssignmentPrefix(final)
+    <2>prefix. \A index \in 0..count : history[index] = NativeAssignmentPrefix(shared[index])
+        BY ONLY <1>history, PhysicalNativePrefixAgreesWithTheCertifiedAssignments,
+            SupportedAssignmentList(rows), (before \in AssignmentBindings),
+            NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination),
+            AssignmentListHistory(FALSE, before, rows, shared)
+            DEF instruction, count
+    <2>index. count \in 0..count
+        BY ONLY SupportedAssignmentList(rows), SMT DEF SupportedAssignmentList, count
+    <2>last. history[count] = NativeAssignmentPrefix(final)
+        BY ONLY <2>prefix, <2>index, SMT DEF final
+    <2>decoded. result = history[count]
+        BY ONLY DEF result, DecodedNativeAssignmentFinal, history, instruction, count
+    <2>. QED BY ONLY <2>last, <2>decoded, SMT
+<1>meaning. /\ final.bindings \in AssignmentBindings
+           /\ (final.failure # <<>> =>
+                final.failure.before = CompletedAssignmentBindings(before, rows, final.completed))
+    <2>domain. /\ count \in Nat /\ final \in AssignmentPrefixStates
+        BY ONLY SupportedAssignmentList(rows), AssignmentListHistory(FALSE, before, rows, shared), SMT
+            DEF SupportedAssignmentList, AssignmentListHistory, count, final
+    <2>prefix. AssignmentPrefixMeaning(before, rows, shared, count)
+        BY ONLY <2>domain, SupportedAssignmentList(rows), (before \in AssignmentBindings),
+            AssignmentListHistory(FALSE, before, rows, shared), OrderedAssignmentHistoriesRetainTheExactFirstFailurePrefix
+            DEF count
+    <2>. QED BY ONLY <2>domain, <2>prefix, SMT DEF AssignmentPrefixStates, AssignmentPrefixMeaning, count, final
+<1>success. DecodedNativeAssignmentStep(rows, raw, names, counter, before, after, pcBefore, pcAfter)
+          <=> (pcBefore = entry /\ final.failure = <<>> /\ pcAfter = destination /\ after = final.bindings)
+    <2>frame. final.failure = <<>> /\ after \in AssignmentBindings =>
+        (NativeCopyVisits(NativeAssignmentMaterializationPlan(instruction, final.completed),
+               Keys, before, after, pcBefore, pcAfter)
+          <=> (pcBefore = entry /\ pcAfter = destination /\ after = final.bindings))
+        BY ONLY SuccessfulNativeAssignmentsUseTheCompleteLastWriteFrame,
+            SupportedAssignmentList(rows), (before \in AssignmentBindings),
+            NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination),
+            AssignmentListHistory(FALSE, before, rows, shared), SMT DEF instruction, final, count
+    <2>. QED BY ONLY <1>record, <1>meaning, <2>frame, SMT
+        DEF DecodedNativeAssignmentStep, result, NativeAssignmentPrefix, instruction
+<1>failures. DecodedNativeAssignmentFailures(rows, raw, names, counter, before, pcBefore, appendSites) =
+    IF pcBefore = entry /\ final.failure # <<>>
+    THEN {[site |-> final.failure.site, target |-> rows[final.failure.site].target,
+           payload |-> final.failure.payload, completed |-> final.completed, before |-> final.failure.before]}
+    ELSE {}
+    <2>guard. raw.guards = <<entry>>
+        BY ONLY NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination), SMT
+           DEF NativeAssignmentsNameTheirOperandsAndWrites, NativeAssignmentWritesNameLastTargets,
+               NativeAssignmentRekey, NativeCopyRekey
+    <2>. QED BY ONLY <2>guard, <1>record, <1>meaning,
+        (pcBefore = entry /\ shared[Len(rows)].failure # <<>> => shared[Len(rows)].failure.site \in appendSites), SMT
+        DEF DecodedNativeAssignmentFailures, result, NativeAssignmentPrefix, final, count
+<1>. QED BY ONLY <1>success, <1>failures DEF final, count
+
 ====

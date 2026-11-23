@@ -652,11 +652,13 @@ def main():
             raise ValueError("generic scalar copy source or parent binding differs")
         if proof.read_bytes() != expected_bytes or preparation["proofSHA256"] != digest(proof):
             raise ValueError("actual compiler did not emit the checked proof bytes exactly")
-        def capture_model_expansion(model, task, include_extension=False):
-            owner = Path(model).stem
+        def capture_model_expansion(model, task, include_extension=False, owner=None, compiler_module="UpstreamParity"):
+            owner = owner or Path(model).stem
+            module_stem = f"{len(compiler_module)}{compiler_module}"
             started = time.time_ns()
             command = pilot_compiler_command[:-2] + [
                 str(compiler_temporary / (task + ".o")), str(root / model)]
+            command[command.index("-module-name") + 1] = compiler_module
             if include_extension:
                 # Debug expansion files can omit an empty conformance extension.
                 command = command[:2] + ["-Xfrontend", "-dump-macro-expansions"] + command[2:]
@@ -666,7 +668,9 @@ def main():
                 subprocess.run(command, env=compiler_env, stdout=log, stderr=subprocess.STDOUT, check=True)
             folder = compiler_temporary / "swift-generated-sources"
             dumps = {}
-            prefix = f"@__swiftmacro_14UpstreamParity*{owner}*TLAModel"
+            prefix = f"@__swiftmacro_{module_stem}*{owner}*TLAModel"
+            if compiler_module == "SwiftTLATests":
+                prefix = f"@__swiftmacro_{module_stem}*{len(owner)}{owner}*TLAModel"
             roles = {"members": list(folder.glob(prefix + "fMm_.swift"))}
             if include_extension:
                 extension = rb"\s*extension " + re.escape(owner.encode("ascii")) + rb"\s*:"
@@ -676,7 +680,7 @@ def main():
                     roles["extension"] = files
                 else:
                     # Bind the extension to its exact symbol in this invocation's dump.
-                    name = f"@__swiftmacro_14UpstreamParity{len(owner)}{owner}8TLAModelfMe_.swift"
+                    name = f"@__swiftmacro_{module_stem}{len(owner)}{owner}8TLAModelfMe_.swift"
                     delimit = rb"^-{8,}\n"
                     blocks = re.findall(rb"^" + re.escape(name.encode()) + rb"\n" + delimit
                                         + rb"(.*?)" + delimit, log_file.read_bytes(), re.MULTILINE | re.DOTALL)
@@ -875,8 +879,9 @@ def main():
                 branchwise_hashes[retained_input.name] = sha
         if ordered_copy_attachments is not None:
             swift_source = "Tests/SwiftTLATests/OrderedStepFixtures.swift"
+            native_attachment = "OrderedCopyNativeMembers.swift"
             attached_source = Path(swift_source).name
-            expected = {"OrderedCopy.tla", "SwiftTLAOrderedAssignmentCatalogOrderedCopy.tla", attached_source}
+            expected = {"OrderedCopy.tla", "SwiftTLAOrderedAssignmentCatalogOrderedCopy.tla", attached_source, native_attachment}
             expected.update(f"SwiftTLA{kind}OrderedCopyAction{row}.tla"
                             for kind in ("ArithmeticAssignmentSource", "OrderedRHSOutputProof") for row in (1, 2))
             attached = {path.name: path for path in ordered_copy_attachments.iterdir()}
@@ -884,6 +889,34 @@ def main():
                     or any(path.is_symlink() or not path.is_file() for path in attached.values())
                     or digest(attached[attached_source]) != inputs[swift_source]):
                 raise ValueError("selected OrderedCopy test did not attach its authored source and both actual proofs")
+            plugin_before = digest(plugin)
+            compiled, origin = capture_model_expansion(swift_source, "ordered-copy",
+                owner="OrderedCopyModel", compiler_module="SwiftTLATests")["members"]
+            modeled_source = (root / swift_source).read_text().splitlines()
+            owner_lines = [line for line, text in enumerate(modeled_source, 1) if text == "struct OrderedCopyModel {"]
+            if len(owner_lines) != 1:
+                raise ValueError("expected one OrderedCopyModel declaration in the existing fixture")
+            owner_end = next(line for line in range(owner_lines[0] + 1, len(modeled_source) + 1)
+                             if modeled_source[line - 1] == "}")
+            location = origin.removeprefix(f"// original-source-range: {root / swift_source}:")
+            if location != f"{owner_end}:1-{owner_end}:1" or digest(plugin) != plugin_before:
+                raise ValueError("OrderedCopy members were emitted for a different Swift declaration or plug-in")
+            retained_ordered_copy = packet / "native-ordered-copy-source.swift"
+            retained_ordered_copy.write_bytes(compiled)
+            token_check = [str(binary), "native", "verify-member-tokens",
+                           "--compiled-members", str(retained_ordered_copy),
+                           "--attached-members", str(attached[native_attachment])]
+            with (output / "ordered-copy-compare-members.log").open("wb") as log:
+                subprocess.run(token_check, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
+            receipt["orderedCopyNativeOutput"] = {
+                "compiledSHA256": digest(retained_ordered_copy),
+                "attachedSHA256": digest(attached[native_attachment]),
+                "matchingSourceAccurateTokens": True,
+                "sourceOrigin": origin,
+                "compilerModule": "SwiftTLATests",
+                "macroPluginSHA256": plugin_before,
+                "validatorSHA256": digest(binary),
+            }
             proof_files = {}
             for name, path in sorted(attached.items()):
                 retained_input = imports / name
