@@ -316,25 +316,25 @@ enum AlgorithmLowerer {
                         owner: .generated(algorithm: algorithm.name, purpose: CompilerControlSymbol.done.rawValue),
                         sourceName: CompilerControlSymbol.done.rawValue
                     ))
+                let continuation = atomic.loopCondition == nil ? nextLabel : control.location(atomic.label.name)
                 let loweredStatements = lower(
                     atomic.statements,
                     processLocalRoots: localRoots,
                     procedures: procedures,
                     owner: nil,
                     nextLabel: nextLabel,
-                    control: control
+                    control: control,
+                    completion: requiresProgramCounter ? transfer(to: continuation) : nil
                 )
                 let body: ActionExpr
-                if !requiresProgramCounter {
-                    body = loweredStatements.action
-                } else if let loopCondition = atomic.loopCondition {
+                if requiresProgramCounter, let loopCondition = atomic.loopCondition {
                     body = .ifElse(
                         rewrite(loopCondition, localRoots: localRoots),
-                        completingControl(loweredStatements.action, fallthrough: control.location(atomic.label.name)),
+                        loweredStatements.action,
                         transfer(to: nextLabel)
                     )
                 } else {
-                    body = completingControl(loweredStatements.action, fallthrough: nextLabel)
+                    body = loweredStatements.action
                 }
                 let generatedAction = NamedAction(
                     name: requiresProgramCounter ? atomic.label.name : processNames[processIndex],
@@ -403,14 +403,14 @@ enum AlgorithmLowerer {
                     procedures: procedures,
                     owner: procedure,
                     nextLabel: nextLabel,
-                    control: control
+                    control: control,
+                    completion: transfer(to: nextLabel)
                 )
-                let body = completingControl(loweredStatements.action, fallthrough: nextLabel)
                 generatedAssertionInvariants += assertionInvariants(loweredStatements.assertions,
                     enabled: guardExpression, domain: controlDomain(processes))
                 return NamedAction(
                     name: label,
-                    body: try ActionNormalization.checkedComplete(.and(.guard_(guardExpression), body),
+                    body: try ActionNormalization.checkedComplete(.and(.guard_(guardExpression), loweredStatements.action),
                         variables: variables, at: "actions.\(label).normalization"),
                     bindings: [ActionBinding(
                         name: processBinding.rawValue,
@@ -674,25 +674,21 @@ enum AlgorithmLowerer {
                     sourceName: CompilerControlSymbol.done.rawValue
                 ))
             let label = emittedLabel(atomic.label.name, owner: owner)
+            let continuation = atomic.loopCondition == nil ? nextLabel : control.location(atomic.label.name)
             let statements = lower(
                 atomic.statements,
                 processLocalRoots: nil,
                 procedures: procedures,
                 owner: owner,
                 nextLabel: nextLabel,
-                control: control
+                control: control,
+                completion: needsProgramCounter ? sequentialTransfer(to: continuation) : nil
             )
             let body: ActionExpr
-            if !needsProgramCounter {
-                body = statements.action
-            } else if let condition = atomic.loopCondition {
-                body = .ifElse(
-                    condition,
-                    completingSequentialControl(statements.action, fallthrough: control.location(atomic.label.name)),
-                    sequentialTransfer(to: nextLabel)
-                )
+            if needsProgramCounter, let condition = atomic.loopCondition {
+                body = .ifElse(condition, statements.action, sequentialTransfer(to: nextLabel))
             } else {
-                body = completingSequentialControl(statements.action, fallthrough: nextLabel)
+                body = statements.action
             }
             actions.append(NamedAction(
                 name: label,
@@ -776,16 +772,6 @@ enum AlgorithmLowerer {
     private static func emittedLabel(_ label: String, owner: AlgorithmProcedureModel?) -> String {
         guard let owner else { return label }
         return "procedure.\(owner.name).\(label)"
-    }
-
-    private static func completingSequentialControl(_ action: ActionExpr, fallthrough location: StateExpr) -> ActionExpr {
-        let branches = ActionNormalization.branches(of: action)
-        let completed = branches.map { branch in
-            assignedVars(branch).contains(.programCounter)
-                ? branch
-                : .and(branch, sequentialTransfer(to: location))
-        }
-        return completed.dropFirst().reduce(completed.first ?? sequentialTransfer(to: location), ActionExpr.or)
     }
 
     private static func callAction(
@@ -937,7 +923,8 @@ enum AlgorithmLowerer {
         procedures: [AlgorithmProcedureModel],
         owner: AlgorithmProcedureModel?,
         nextLabel: StateExpr?,
-        control: ControlFlow?
+        control: ControlFlow?,
+        completion: ActionExpr? = nil
     ) -> (action: ActionExpr, assertions: [StateExpr]) {
         typealias Result = (action: ActionExpr, assertions: [StateExpr])
         func scoped(_ value: StateExpr) -> StateExpr {
@@ -960,7 +947,11 @@ enum AlgorithmLowerer {
             (.and(.guard_(condition), body.action), body.assertions.map { .or(.not(condition), $0) })
         }
         func run(_ remaining: ArraySlice<AlgorithmStatementModel>, _ values: [String: StateExpr]) -> Result {
-            guard let statement = remaining.first else { return (assignments(values), []) }
+            guard let statement = remaining.first else {
+                let writes = assignments(values)
+                // Add the default transfer at the ordinary exit, preserving reached guards and bindings.
+                return (completion.map { .and(writes, $0) } ?? writes, [])
+            }
             let rest = remaining.dropFirst()
             func continueWith(_ body: [AlgorithmStatementModel], _ values: [String: StateExpr]) -> Result {
                 run((body + rest)[...], values)
@@ -1044,18 +1035,6 @@ enum AlgorithmLowerer {
                 .programCounter,
                 .variable(processBinding.rawValue),
                 label))
-    }
-
-    /// An `Each` machine falls through to its next `Do`; its final `Do` reaches
-    /// the builder-owned `Done` state.
-    private static func completingControl(_ action: ActionExpr, fallthrough location: StateExpr) -> ActionExpr {
-        let branches = ActionNormalization.branches(of: action)
-        let completed = branches.map { branch in
-            assignedVars(branch).contains(.programCounter)
-                ? branch
-                : .and(branch, transfer(to: location))
-        }
-        return completed.dropFirst().reduce(completed.first ?? transfer(to: location), ActionExpr.or)
     }
 
     private static func lower(

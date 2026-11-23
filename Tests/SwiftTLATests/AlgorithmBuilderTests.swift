@@ -41,15 +41,20 @@ struct AlgorithmBuilderTests {
         #expect(try value(named: "ready", in: next, compilation: compilation) == .bool(false))
     }
 
-    @Test("A step guard protects every branch and update", arguments: [false, true])
-    func wholeStepGuard(enabled: Bool) throws {
+    @Test("A step guard protects every branch and retains reached failures", arguments: [false, true], [false, true])
+    func wholeStepGuard(enabled: Bool, disabledAlternative: Bool) throws {
         let algorithm = Algorithm("GuardedBranches", scoped: { scope in
             let ready = scope.sharedVar(_name: "ready", initial: enabled)
             let value = scope.sharedVar(_name: "value", initial: 0)
             let changed = scope.sharedVar(_name: "changed", initial: false)
+            let divisor = scope.sharedVar(_name: "divisor", initial: 0)
             Do(TestControlLabel.advance, when: ready) {
                 Assign(changed, to: true)
                 Either {
+                    if disabledAlternative {
+                        When(1.expr / divisor > 0)
+                        When(false.expr)
+                    }
                     Assign(value, to: 1)
                 } or: {
                     Assign(value, to: 2)
@@ -57,8 +62,23 @@ struct AlgorithmBuilderTests {
             }
         })
         let (compilation, initial) = try initialState(of: loweredSourceSpecification(algorithm))
-        let next = try successors(named: "advance", in: compilation, from: initial)
-        #expect(next.count == (enabled ? 2 : 0))
+        let from: CompiledState
+        if enabled && disabledAlternative {
+            #expect(throws: EvalError.divisionByZero) {
+                try successors(named: "advance", in: compilation, from: initial)
+            }
+            #expect(try !compilation.render().intrinsicInvariantNames.isEmpty)
+            let divisor = try #require(compilation.layout.testVariableID(named: "divisor"))
+            from = try initial.updating(divisor, to: .integer(1))
+        } else {
+            from = initial
+        }
+        let next = try successors(named: "advance", in: compilation, from: from)
+        #expect(next.count == (enabled ? (disabledAlternative ? 1 : 2) : 0))
+        if enabled && disabledAlternative {
+            let sibling = try #require(next.first)
+            #expect(try value(named: "value", in: sibling, compilation: compilation) == .int(2))
+        }
         for state in next {
             #expect(try value(named: "changed", in: state, compilation: compilation) == .bool(true))
         }
@@ -982,17 +1002,24 @@ struct AlgorithmBuilderTests {
         }
     }
 
-    @Test("A later guard reads the updated value before committing the step")
-    func laterGuardReadsUpdatedValue() throws {
+    @Test("A later guard reads the updated value before committing the step", arguments: [true, false])
+    func laterGuardReadsUpdatedValue(_ mayComplete: Bool) throws {
         let algorithm = Algorithm("ReadAfterWrite", scoped: { scope in
             let value = scope.sharedVar(_name: "value", initial: 0)
             Do(TestControlLabel.advance) {
                 Assign(value, to: value + 1)
                 When(value > 0)
+                if !mayComplete { When(false.expr) }
             }
         })
 
         let compilation = try TLASpec("ReadAfterWrite") { algorithm }.compile()
+        let initial = try firstCompiledState(in: compilation)
+        let successors = try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial)
+        guard mayComplete else {
+            #expect(successors.isEmpty)
+            return
+        }
         let rendered = try compilation
             .render().plusCalBundle()
             .root.tla
@@ -1000,9 +1027,7 @@ struct AlgorithmBuilderTests {
         let assignmentRange = try #require(rendered.range(of: "value := __atomic_0;"))
         #expect(guardRange.lowerBound < assignmentRange.lowerBound)
 
-        let initial = try firstCompiledState(in: compilation)
-        let next = try #require(try compiledSuccessors(
-            named: "advance", arguments: [], in: compilation, from: initial).first)
+        let next = try #require(successors.first)
         #expect(try renderedValue(named: "value", in: next, compilation: compilation) == .int(1))
     }
 
