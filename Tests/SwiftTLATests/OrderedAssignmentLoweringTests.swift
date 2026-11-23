@@ -144,8 +144,8 @@ struct OrderedAssignmentLoweringTests {
             enum SwiftTLA {}
             return #spec("OrderedAssignment") {
                 let algorithm = Algorithm(scoped: { scope in
-                    let first = scope.sharedVar(in: 0...1)
-                    let second = scope.sharedVar(in: If(first == 0,
+                    let first = scope.sharedVar(initiallyIn: 0...1)
+                    let second = scope.sharedVar(initiallyIn: If(first == 0,
                         then: SetExpr<Int>.literal(0), else: SetExpr<Int>.literal(0, 1)))
                     Do(OrderedAssignmentStep.`switch`) {
                         Assign(first, to: second + 1)
@@ -160,8 +160,8 @@ struct OrderedAssignmentLoweringTests {
             .map { $0.declaration.name }) == ["first", "second"])
         let fallibleDomainSpec = #spec("OrderedAssignment") {
             let algorithm = Algorithm(scoped: { scope in
-                let first = scope.sharedVar(in: 0...1)
-                let second = scope.sharedVar(in: If(first == 0,
+                let first = scope.sharedVar(initiallyIn: 0...1)
+                let second = scope.sharedVar(initiallyIn: If(first == 0,
                     then: SetExpr<Int>.literal(0),
                     else: SetExpr<Int>.literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)))
                 Do(OrderedAssignmentStep.`switch`) {
@@ -173,8 +173,8 @@ struct OrderedAssignmentLoweringTests {
         }
         let constantDomainSpec = #spec("OrderedAssignment") {
             let algorithm = Algorithm(scoped: { scope in
-                let first = scope.sharedVar(in: 0...3)
-                let second = scope.sharedVar(in: If(first == 0,
+                let first = scope.sharedVar(initiallyIn: 0...3)
+                let second = scope.sharedVar(initiallyIn: If(first == 0,
                     then: SetExpr<Int>.literal(0, 1 + 2, 10 - 3 - 2, 2 + 3 * 4),
                     else: If(first == 1, then: SetExpr<Int>.literal((-3) / 2),
                         else: If(first == 2, then: SetExpr<Int>.literal((-3) % 2),
@@ -189,8 +189,8 @@ struct OrderedAssignmentLoweringTests {
         let formalArithmeticDomainSpec = #spec("OrderedAssignment") {
             let formalConstant: Expr<Int> = (-3) / 2
             let algorithm = Algorithm(scoped: { scope in
-                let first = scope.sharedVar(in: 0...3)
-                let second = scope.sharedVar(in: If(first == 0,
+                let first = scope.sharedVar(initiallyIn: 0...3)
+                let second = scope.sharedVar(initiallyIn: If(first == 0,
                     then: SetExpr<Int>.literal((first + (-3)) / 2, (first + (-3)) % 2,
                         (first + (-3)) / ((-3) / 2)),
                     else: If(first == 1, then: SetExpr<Int>.literal(formalConstant, Expr<Int>(-3) / 2),
@@ -205,7 +205,7 @@ struct OrderedAssignmentLoweringTests {
         }
         let constantInitialSpec = #spec("OrderedAssignment") {
             let algorithm = Algorithm(scoped: { scope in
-                let first = scope.sharedVar(in: 0...3)
+                let first = scope.sharedVar(initiallyIn: 0...3)
                 let second = scope.sharedVar(initial: +(-(-(1 + 2))))
                 Do(OrderedAssignmentStep.`switch`) {
                     Assign(first, to: second + 1)
@@ -216,7 +216,7 @@ struct OrderedAssignmentLoweringTests {
         }
         let boundaryInitialSpec = #spec("OrderedAssignment") {
             let algorithm = Algorithm(scoped: { scope in
-                let first = scope.sharedVar(in: 0...3)
+                let first = scope.sharedVar(initiallyIn: 0...3)
                 let second = scope.sharedVar(initial: Int.min)
                 Do(OrderedAssignmentStep.`switch`) {
                     Assign(first, to: second + 1)
@@ -265,7 +265,7 @@ struct OrderedAssignmentLoweringTests {
                 {
                     \(sourceDomain.prefix)
                     let algorithm = Algorithm(scoped: { scope in
-                        let first = scope.sharedVar(in: 0...3)
+                        let first = scope.sharedVar(initiallyIn: 0...3)
                         let second = scope.sharedVar(\(sourceDomain.initializer))
                         Do(OrderedAssignmentStep.`switch`) {
                             Assign(first, to: second + 1)
@@ -356,7 +356,7 @@ struct OrderedAssignmentLoweringTests {
 
         let domainSpec = #spec("ChangedBuilder") {
             let algorithm = Algorithm(scoped: { scope in
-                let value = scope.sharedVar(in: 0...1)
+                let value = scope.sharedVar(initiallyIn: 0...1)
                 Do(OrderedAssignmentStep.`switch`) { Assign(value, to: value + 1) }
             })
             algorithm
@@ -370,8 +370,8 @@ struct OrderedAssignmentLoweringTests {
         }
         let fallibleDomainSpec = #spec("ChangedBuilder") {
             let algorithm = Algorithm(scoped: { scope in
-                let first = scope.sharedVar(in: 0...1)
-                let second = scope.sharedVar(in: If(first == 0,
+                let first = scope.sharedVar(initiallyIn: 0...1)
+                let second = scope.sharedVar(initiallyIn: If(first == 0,
                     then: SetExpr<Int>.literal(0),
                     else: SetExpr<Int>.literal(first + 9_223_372_036_854_775_807, 9_223_372_036_854_775_807 + first)))
                 Do(OrderedAssignmentStep.`switch`) { Assign(first, to: second + 1) }
@@ -512,8 +512,8 @@ struct OrderedAssignmentLoweringTests {
         let domainOriginal = try parseSpecTestClosure(domainSource)
         let domainExpanded = domainSource
             .replacingOccurrences(of: "Algorithm(scoped:", with: "Algorithm(_name: \"algorithm\", scoped:")
-            .replacingOccurrences(of: "scope.sharedVar(in: 0...1)",
-                with: "scope.sharedVar(_name: \"first\", in: 0...1)")
+            .replacingOccurrences(of: "scope.sharedVar(initiallyIn: 0...1)",
+                with: "scope.sharedVar(_name: \"first\", initiallyIn: 0...1)")
         try OrderedIntSourceSyntaxCheck.verifyRewrite(domainOriginal,
             rewritten: try parseSpecTestClosure(domainExpanded))
         let mutations = [

@@ -92,7 +92,7 @@ private struct CompilerPipelineInitializationModel {
             let compilerPipelineInitializationModel = Algorithm(label: "CompilerPipelineInitializationModel", scoped: { scope in
                 let seed = scope.sharedVar(_name: "seed", initial: 0)
                 let computed: SharedVariable<Int> = scope.sharedVar(_name: "computed", initial: seed + 1)
-                let choice = scope.sharedVar(_name: "choice", in: SetExpr<Int>.literal(1, 2))
+                let choice = scope.sharedVar(_name: "choice", initiallyIn: SetExpr<Int>.literal(1, 2))
                 Do(Step.done) {
                     Assign(computed, to: computed)
                     Assign(choice, to: choice)

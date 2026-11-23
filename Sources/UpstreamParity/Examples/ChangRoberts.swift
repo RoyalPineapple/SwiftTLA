@@ -31,7 +31,7 @@ package struct ChangRobertsModel: Sendable {
 
             let ChangRoberts = Algorithm(scoped: { scope in
                 let msgs = scope.sharedVar(initial: Dictionary<Int, Set<Int>>.mapping(over: Node) { _ in Set<Int>() })
-                let initiator: SharedVariable<[Int: Bool]> = scope.sharedVar(in:
+                let initiator: SharedVariable<[Int: Bool]> = scope.sharedVar(initiallyIn:
                     Functions(from: Node, to: Set<Bool>([false, true])))
                 let state = scope.sharedVar(initial: Dictionary<Int, ProcessState>.mapping(over: Node) { node in
                     If(initiator[node], then: ProcessState.candidate, else: ProcessState.lost)

@@ -54,7 +54,7 @@ package struct CigaretteSmokersModel: Sendable {
             let smokers = scope.sharedVar(initial: Dictionary<Ingredient, Smoker>.mapping(over: Ingredients) { _ in
                 Smoker.expression(smoking: false)
             })
-            let dealer = scope.sharedVar(in: Offers)
+            let dealer = scope.sharedVar(initiallyIn: Offers)
             let TypeOK = Invariant()
             let AtMostOne = Invariant()
 

@@ -17,7 +17,7 @@ package struct SumSequenceModel: Sendable {
             let PCorrect = Invariant()
             let Termination = Eventually()
             let SumSequence = Algorithm(fairness: .weak, scoped: { scope in
-                let seq = scope.sharedVar(in: Sequences(of: Values))
+                let seq = scope.sharedVar(initiallyIn: Sequences(of: Values))
                 let sum = scope.sharedVar(initial: 0)
                 let n = scope.sharedVar(initial: 1)
 

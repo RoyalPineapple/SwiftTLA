@@ -75,7 +75,7 @@ struct GeneratedCheckedEqualityProofModel {
 
     static var spec: TLASpec {
         #spec("GeneratedCheckedEqualityProofModel") { scope in
-            let left = scope.sharedVar(in: SetExpr<Int>.literal(2, 9_223_372_036_854_775_807))
+            let left = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(2, 9_223_372_036_854_775_807))
             let right = scope.sharedVar(initial: 3)
             let matched = scope.sharedVar(initial: false)
             Do(Step.compare) {
@@ -111,7 +111,7 @@ struct GeneratedScalarGuardProofModel {
 
     static var spec: TLASpec {
         #spec("GeneratedScalarGuardProofModel") { scope in
-            let left = scope.sharedVar(in: SetExpr<Int>.literal(2, 4))
+            let left = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(2, 4))
             let right = scope.sharedVar(initial: 3)
             let advanced = scope.sharedVar(initial: false)
             Do(Step.advance) {
@@ -128,7 +128,7 @@ struct GeneratedStringGuardProofModel {
 
     static var spec: TLASpec {
         #spec("GeneratedStringGuardProofModel") { scope in
-            let left = scope.sharedVar(in: SetExpr<String>.literal("alpha", "beta"))
+            let left = scope.sharedVar(initiallyIn: SetExpr<String>.literal("alpha", "beta"))
             let right = scope.sharedVar(initial: "alpha")
             let advanced = scope.sharedVar(initial: false)
             Do(Step.advance) {

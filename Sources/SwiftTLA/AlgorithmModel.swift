@@ -528,9 +528,11 @@ package enum InvalidAlgorithmComponent: String, Sendable {
     case genericFairness
     case assumption
     case parameterizedStep
+    case unknownStateField
 
     package var expectedPlacement: String {
         switch self {
+        case .unknownStateField: "a whole generated State field"
         case .genericFairness:
             "Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness"
         case .assumption:
@@ -542,6 +544,7 @@ package enum InvalidAlgorithmComponent: String, Sendable {
 
     package var actualPlacement: String {
         switch self {
+        case .unknownStateField: "unregistered state key path"
         case .genericFairness: "generic fairness declaration inside Algorithm"
         case .assumption: "Assume declaration inside Algorithm"
         case .parameterizedStep: "parameterized Do inside Algorithm"
@@ -550,6 +553,7 @@ package enum InvalidAlgorithmComponent: String, Sendable {
 
     package var nextSafeAction: String {
         switch self {
+        case .unknownStateField: "Use a direct key path to a generated state field."
         case .genericFairness: "Move the fairness requirement to Algorithm or Each."
         case .assumption: "Move the assumption outside Algorithm."
         case .parameterizedStep: "Declare independent actions outside Algorithm, or use Each for processes and With for local choices."
@@ -694,7 +698,7 @@ package indirect enum AlgorithmLValueModel: Sendable, Equatable {
         }
     }
 
-    var expression: StateExpr {
+    package var expression: StateExpr {
         switch self {
         case .root(let root): .variable(root)
         case .function(let base, let key): .functionApply(base.expression, key)
@@ -722,6 +726,22 @@ package struct AlgorithmAssignmentModel: Sendable, Equatable {
 }
 
 package indirect enum AlgorithmStatementModel: Sendable, Equatable {
+    package static func guardedChoice(
+        _ first: [Self], _ second: [Self], remaining: [[Self]]
+    ) -> Self {
+        var branches = [first, second] + remaining
+        let right = branches.removeLast()
+        var choice = Self.either(branches.removeLast(), right)
+        for branch in branches.reversed() {
+            choice = .either(branch, [choice])
+        }
+        return choice
+    }
+
+    package static func copyField(target: String, source: String) -> Self {
+        .set(target: .root(target), value: .variable(source))
+    }
+
     case rejected(AlgorithmDiagnosticCode)
     case when(StateExpr)
     case assert(StateExpr)

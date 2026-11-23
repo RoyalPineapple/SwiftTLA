@@ -9,7 +9,7 @@ package struct TransitionPropertyClaims {
     package static var spec: TLASpec {
         #spec { scope in
             let limit = scope.parameter(as: Int.self, in: 2...3)
-            let value = scope.sharedVar(in: IntRange(0, through: 1).mapping { count in
+            let value = scope.sharedVar(initiallyIn: IntRange(0, through: 1).mapping { count in
                 Value.expression(count: count, marker: 7)
             })
             let increases = Temporal()

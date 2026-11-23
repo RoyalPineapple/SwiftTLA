@@ -21,7 +21,7 @@ package struct CoffeeCanModel: Sendable {
                     Can.expression(black: black, white: white)
                 }
             }
-            let can = scope.sharedVar(in: cans.filtering { value in
+            let can = scope.sharedVar(initiallyIn: cans.filtering { value in
                 IntRange(1, through: MaxBeanCount).contains(value.black + value.white)
             })
             let beanCount = can.black + can.white

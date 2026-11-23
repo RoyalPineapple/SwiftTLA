@@ -9,11 +9,11 @@ struct SetConfigurationTests {
     func acceptsSharedVariableDomains() throws {
         for values: Set<Int> in [[], [1], [1, 2]] {
             let specification = SpecificationScope()
-            let variable: SharedVariable<Int> = specification.sharedVar(_name: "member", in: values)
+            let variable: SharedVariable<Int> = specification.sharedVar(_name: "member", initiallyIn: values)
             #expect(variable.stateExpr == .variable("member"))
             #expect(specification.declarations[0].initialization == .memberOf(values.stateExpr))
             let algorithm = AlgorithmScope()
-            let shared: SharedVariable<Int> = algorithm.sharedVar(_name: "member", in: values)
+            let shared: SharedVariable<Int> = algorithm.sharedVar(_name: "member", initiallyIn: values)
             #expect(shared.stateExpr == variable.stateExpr)
         }
     }

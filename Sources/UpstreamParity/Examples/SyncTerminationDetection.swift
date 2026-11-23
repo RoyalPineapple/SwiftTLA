@@ -14,9 +14,9 @@ package struct SyncTerminationDetectionModel: Sendable {
             let N = scope.parameter(as: Int.self, in: Int.all)
             Assume(N > 0)
             let Node = IntRange(0, through: N - 1)
-            let active = scope.sharedVar(in: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
+            let active = scope.sharedVar(initiallyIn: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
             let terminated = ForAll(in: Node) { node in !active[node] }
-            let terminationDetected = scope.sharedVar(in: SetExpr<Bool>.literal(false, terminated))
+            let terminationDetected = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, terminated))
 
             let TypeOK = Invariant()
             let TDCorrect = Invariant()

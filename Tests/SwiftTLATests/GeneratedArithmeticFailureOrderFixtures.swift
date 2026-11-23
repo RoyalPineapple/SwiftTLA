@@ -74,8 +74,8 @@ struct GeneratedConditionalArithmeticFailureModel: Sendable {
 
     static var spec: TLASpec {
         #spec("GeneratedConditionalArithmeticFailureModel") { scope in
-            let attempt = scope.sharedVar(in: SetExpr<Bool>.literal(false, true))
-            let divisor = scope.sharedVar(in: SetExpr<Int>.literal(-1, 0))
+            let attempt = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
+            let divisor = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(-1, 0))
             let result = scope.sharedVar(initial: 0)
             Do(Step.compute) {
                 If(attempt) {
@@ -94,7 +94,7 @@ struct GeneratedFallibleConditionModel: Sendable {
 
     static var spec: TLASpec {
         #spec("GeneratedFallibleConditionModel") { scope in
-            let divisor = scope.sharedVar(in: SetExpr<Int>.literal(9_223_372_036_854_775_807, -3, -2, 0))
+            let divisor = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(9_223_372_036_854_775_807, -3, -2, 0))
             let result = scope.sharedVar(initial: 0)
             Do(Step.compute) {
                 If(divisor + 1 > 0) {
@@ -113,7 +113,7 @@ struct GeneratedMembershipConditionalFailureModel: Sendable {
 
     static var spec: TLASpec {
         #spec("GeneratedMembershipConditionalFailureModel") { scope in
-            let member = scope.sharedVar(in: SetExpr<Int>.literal(1, 2))
+            let member = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(1, 2))
             let divisor = scope.sharedVar(initial: 0)
             let result = scope.sharedVar(initial: 0)
             Do(Step.compute) {

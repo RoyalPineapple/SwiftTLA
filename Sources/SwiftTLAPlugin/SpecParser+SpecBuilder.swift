@@ -516,12 +516,12 @@ extension ParserSession {
         into components: inout TLASpec
     ) {
         guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName else { return }
+        let domain = fc.arguments.first { $0.label?.text == (constructor.name == "SharedVar" ? "initiallyIn" : "in") }
         let existingVariableCount = components.variables.count
         defer {
             if components.variables.count > existingVariableCount,
                let variable = components.variables.last {
                 recordStateDeclaration(named: variable.name, at: binding)
-                let domain = fc.arguments.first { $0.label?.text == "in" }
                 let initial = domain ?? fc.arguments.first { $0.label?.text == "initial" }
                     ?? fc.arguments.dropFirst().first
                 let valueType: CompiledValueType?
@@ -549,9 +549,7 @@ extension ParserSession {
                     generatedSwiftType: stateType.spelling,
                     resolvedValueType: stateType.resolved,
                     origin: variable.origin)
-                sourceScope = sourceScope.extending(binding: patternName,
-                    to: .variable(variable.name),
-                    shape: valueType)
+                sourceScope = sourceScope.declaringField(patternName, root: variable.name, shape: valueType)
             }
         }
 
@@ -593,7 +591,7 @@ extension ParserSession {
                 ))
                 return
             }
-            if let range = args.first(where: { $0.label?.text == "in" })?.expression,
+            if let range = domain?.expression,
                let domain = finiteStateVariableDomain(range, declaredElementType: varTypeName, scope: sourceScope) {
                 components.variables.append(.init(name: name, initialization: .memberOf(domain.expression),
                     displayLabel: displayLabel, generatedSwiftType: varTypeName ?? domain.elementType, origin: .source))
@@ -602,8 +600,8 @@ extension ParserSession {
                 components.variables.append(.init(name: name, initialization: .expression(initial),
                     displayLabel: displayLabel, generatedSwiftType: varTypeName ?? initialValueTypeName(from: value), origin: .source))
             } else {
-                if let input = args.first(where: { $0.label?.text == "initial" || $0.label?.text == "in" }) {
-                    let kind = input.label?.text == "in" ? "domain" : "initializer"
+                if let input = domain ?? args.first(where: { $0.label?.text == "initial" }) {
+                    let kind = domain == nil ? "initializer" : "domain"
                     components.diagnostics.append(.init(
                         message: "State '\(patternName)' has an unsupported \(kind) expression.",
                         source: input.expression,

@@ -46,7 +46,7 @@ package struct TLCMCModel: Sendable {
                     (.three, SetExpr<Node>.literal(.four)),
                     (.four, SetExpr<Node>.literal(.three))
                 )
-                let frontier = scope.sharedVar(in: SetExpr<TupleExpr<Node>>.literal(
+                let frontier = scope.sharedVar(initiallyIn: SetExpr<TupleExpr<Node>>.literal(
                         TupleExpr<Node>.literal(Node.one, Node.two),
                         TupleExpr<Node>.literal(Node.two, Node.one)
                     )

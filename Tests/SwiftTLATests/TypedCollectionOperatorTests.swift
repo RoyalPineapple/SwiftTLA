@@ -121,7 +121,7 @@ private struct ZeroBasedSequenceGeneratedModel {
     static var spec: TLASpec {
         #spec("ZeroBasedSequenceGeneratedModel") {
             let zeroBasedSequenceGeneratedModel = Algorithm(label: "ZeroBasedSequenceGeneratedModel", scoped: { scope in
-                let input = scope.sharedVar(_name: "input", in: ZeroBasedSequences(
+                let input = scope.sharedVar(_name: "input", initiallyIn: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(0, 1),
                     lengths: 1...2
                 ))

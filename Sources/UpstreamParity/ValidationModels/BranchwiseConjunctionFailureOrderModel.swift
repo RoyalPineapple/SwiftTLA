@@ -7,8 +7,8 @@ package struct BranchwiseConjunctionFailureOrderModel: Sendable {
 
     package static var spec: TLASpec {
         #spec("BranchwiseConjunctionFailureOrderModel") { scope in
-            let divisor = scope.sharedVar(in: 0...1)
-            let modulus = scope.sharedVar(in: Set<Int>([-1, 0, 1, 2]))
+            let divisor = scope.sharedVar(initiallyIn: 0...1)
+            let modulus = scope.sharedVar(initiallyIn: Set<Int>([-1, 0, 1, 2]))
             let selected = scope.sharedVar(initial: -1)
             let result = scope.sharedVar(initial: 0)
             Do(Step.pick) {

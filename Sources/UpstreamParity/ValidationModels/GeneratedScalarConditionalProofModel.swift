@@ -7,7 +7,7 @@ package struct GeneratedScalarConditionalProofModel {
 
     package static var spec: TLASpec {
         #spec("GeneratedScalarConditionalProofModel") { scope in
-            let left = scope.sharedVar(in: SetExpr<Int>.literal(2, 4))
+            let left = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(2, 4))
             let right = scope.sharedVar(initial: 3)
             let selected = scope.sharedVar(initial: false)
             Do(Step.choose) {

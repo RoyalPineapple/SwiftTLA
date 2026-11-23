@@ -131,7 +131,7 @@ private struct SymmetryScenarioModel {
 
     static var spec: TLASpec {
         #spec("SymmetryScenario") { scope in
-            let value = scope.sharedVar(in: Member.all)
+            let value = scope.sharedVar(initiallyIn: Member.all)
             let members = Symmetry(Set(Member.all))
             members
             Do(Step.choose, over: Member.all) { member in Assign(value, to: member) }

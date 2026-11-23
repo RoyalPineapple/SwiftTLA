@@ -25,7 +25,7 @@ struct InitialBranchFailureTests {
 
         let closure = try parseSpecTestClosure("""
         { scope in
-            let first = scope.sharedVar(in: 0...2)
+            let first = scope.sharedVar(initiallyIn: 0...2)
             let second = scope.sharedVar(initial: first + 9223372036854775807)
         }
         """)

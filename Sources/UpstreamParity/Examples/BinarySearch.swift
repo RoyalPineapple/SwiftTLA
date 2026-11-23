@@ -23,11 +23,11 @@ package struct BinarySearchModel: Sendable {
             let Inv = Invariant()
             let Termination = Temporal()
             let BinarySearch = Algorithm(fairness: .weak, scoped: { scope in
-                let seq = scope.sharedVar(in: SortedSequences(
+                let seq = scope.sharedVar(initiallyIn: SortedSequences(
                     of: Values,
                     lengths: IntRange(1, through: MaxSeqLen)
                 ))
-                let val = scope.sharedVar(in: Values)
+                let val = scope.sharedVar(initiallyIn: Values)
                 let low = scope.sharedVar(initial: 1)
                 let high: SharedVariable<Int> = scope.sharedVar(initial: seq.count)
                 let result = scope.sharedVar(initial: 0)

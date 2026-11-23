@@ -100,8 +100,8 @@ struct DependentInitializationOutputProofTests {
 
         let fallible = #spec("DependentInitializationOutputProofModel") {
             let proof = Algorithm(label: "DependentInitializationOutputProofModel", scoped: { scope in
-                let seed = scope.sharedVar(in: 0...1)
-                let choice = scope.sharedVar(in: If(seed == 0,
+                let seed = scope.sharedVar(initiallyIn: 0...1)
+                let choice = scope.sharedVar(initiallyIn: If(seed == 0,
                     then: SetExpr<Int>.literal(0),
                     else: SetExpr<Int>.literal(seed, seed + 9_223_372_036_854_775_807)))
                 Do(DependentInitializationOutputProofModel.Step.finish) {
@@ -312,8 +312,8 @@ struct DependentInitializationOutputProofTests {
 
         let plainSet = #spec("DependentInitializationOutputProofModel") {
             let proof = Algorithm(label: "DependentInitializationOutputProofModel", scoped: { scope in
-                let seed = scope.sharedVar(in: 0...1)
-                let choice = scope.sharedVar(in: SetExpr<Int>.literal(seed, seed + 9_223_372_036_854_775_807))
+                let seed = scope.sharedVar(initiallyIn: 0...1)
+                let choice = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(seed, seed + 9_223_372_036_854_775_807))
                 Do(DependentInitializationOutputProofModel.Step.finish) {
                     Assign(choice, to: choice)
                     Stop()
@@ -323,7 +323,7 @@ struct DependentInitializationOutputProofTests {
         }
         let afterRange = #spec("DependentInitializationOutputProofModel") {
             let proof = Algorithm(label: "DependentInitializationOutputProofModel", scoped: { scope in
-                let seed = scope.sharedVar(in: 0...1)
+                let seed = scope.sharedVar(initiallyIn: 0...1)
                 let choice = scope.sharedVar(initial: seed + 9_223_372_036_854_775_807)
                 Do(DependentInitializationOutputProofModel.Step.finish) {
                     Assign(choice, to: choice)
@@ -568,8 +568,8 @@ struct DependentInitializationOutputProofTests {
         let namedSource = try String(contentsOf: fixture, encoding: .utf8)
             .replacingOccurrences(of: "enum Step: String, CaseIterable { case finish }",
                 with: "enum Seed: Int, CaseIterable { case zero = 0, one = 1 }\n    enum Step: String, CaseIterable { case finish }")
-            .replacingOccurrences(of: "let seed = scope.sharedVar(in: 0...1)",
-                with: "let seed = scope.sharedVar(in: SetExpr<Seed>.literal(.zero, .one))")
+            .replacingOccurrences(of: "let seed = scope.sharedVar(initiallyIn: 0...1)",
+                with: "let seed = scope.sharedVar(initiallyIn: SetExpr<Seed>.literal(.zero, .one))")
             .replacingOccurrences(of: "If(seed == 0,", with: "If(seed == Seed.zero,")
         let namedDeclaration = try #require(Parser.parse(source: namedSource).statements.compactMap {
             $0.item.as(StructDeclSyntax.self)
@@ -584,8 +584,8 @@ struct DependentInitializationOutputProofTests {
         _ = try namedEmitter.machineMembers()
 
         let mathematicalSource = try String(contentsOf: fixture, encoding: .utf8)
-            .replacingOccurrences(of: "let seed = scope.sharedVar(in: 0...1)",
-                with: "let seed = scope.sharedVar(in: Int.all)")
+            .replacingOccurrences(of: "let seed = scope.sharedVar(initiallyIn: 0...1)",
+                with: "let seed = scope.sharedVar(initiallyIn: Int.all)")
         let mathematicalDeclaration = try #require(Parser.parse(source: mathematicalSource)
             .statements.compactMap { $0.item.as(StructDeclSyntax.self) }
             .first { $0.name.text == "DependentInitializationOutputProofModel" })

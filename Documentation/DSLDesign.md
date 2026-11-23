@@ -131,10 +131,13 @@ and `displayName` uses the label or falls back to that name. Compiled algorithm
 descriptions expose the same `name`/`displayName` distinction. Named state,
 parameter, property, and refinement declarations follow their binding and
 registration rules below. Inline control constructs such as `Each`, `Do`,
-`While`, `If`, and `With` are structural statements, not declarations that
-need an additional Swift binding or compiler-invented identity. `Do` and
+`Loop`, `While`, `If`, and `With` are structural statements, not declarations that
+need an additional Swift binding or compiler-invented identity. `Do`, `Loop`, and
 `While` use their typed control labels; `Procedure` uses its typed enum case
 as its formal name. Those names affect behavior and are not display labels.
+Use `Loop(Step.tick) { … }` for an unconditional loop. It has the same labeled
+transition as `While(Step.tick, true) { … }`. Use `While` when control should
+advance to the following step once a condition becomes false.
 An anonymous declaration that requires a binding fails at its source location;
 an inline structural statement remains valid without one.
 
@@ -142,7 +145,7 @@ Inside `#spec`, scoped state declarations derive their names from immutable Swif
 
 ```swift
 let count = scope.sharedVar(initial: 0)
-let hour = scope.sharedVar(in: 1...12)
+let hour = scope.sharedVar(initiallyIn: 1...12)
 let visited = process.localVar(initial: false)
 let publicCount = process.localVar(initial: 0, exposed: true)
 let readable = scope.sharedVar(label: "Current value", initial: 0)
@@ -323,7 +326,7 @@ Later calls observe assignments from earlier calls in the same step.
 Parameterized independent steps and nested algorithms can use these macros.
 An algorithm can declare a local macro with the same name.
 An `Each` body can also declare a bound macro after its local state and use it
-inside its `Do` or `While` steps. Such a macro can capture that process's typed
+inside its `Do`, `Loop`, or `While` steps. Such a macro can capture that process's typed
 state; expansion remains inside the caller's atomic step.
 Specification macros require unique immutable bindings.
 Control transfers inside a macro still require an enclosing algorithm.
@@ -340,14 +343,46 @@ transition: other processes cannot observe or act on intermediate values.
 ```swift
 // With x initially 1, the resulting state has x == 2 and y == 2.
 Do(Step.copy) {
-    Assign(x, to: x + 1)
-    Assign(y, to: x)
+    x += 1
+    y.set(x)
 }
 ```
+
+`x += amount` inside a step adds to a writable integer location. It has the
+same ordered reads and overflow behavior as `Assign(x, to: x + amount)`.
+Use `second.set(0)` to replace a value or `y.set(x)` to copy the current value
+of another field. Keep the variable handle declared with `let`.
+
+Within a scoped `Algorithm`, declare a shared field by key path when you only
+need its state member. In a `Do` with `in: State.self`, copy another field of
+the same type or assign an integer literal to an `Int` field.
+
+```swift
+scope.sharedVar(\State.count, initial: 7)
+scope.sharedVar(\State.previous, initial: 0)
+Do(Step.reset, in: State.self) { state in
+    state.previous = state.count
+    state.count = 0
+}
+```
+
+After the reset, `previous` is 7 and `count` is 0. Reverse the two assignments
+and both fields become 0. You can also write `state.count += 1` or
+`state.count += state.batch` when both fields are integers. The addition reads
+their values at that line. If it overflows, the step reports the operands and
+commits none of its writes. Use the ordinary `Do` body for compound right-hand
+expressions, choices, and control statements.
 
 Repeated assignments are allowed and execute in order. Conditions, nested
 `When` guards, and choice domains read the values available at their position in
 the block. The `when:` condition on `Do` reads the entry state.
+
+Inside `Either`, write each guarded alternative as a sibling `When` block.
+For example, the clock uses `When(second == 59, minute < 59)` for a minute
+rollover. The guards run from left to right. A false guard skips the remaining
+guards and updates in that alternative. If two alternatives are enabled, both
+can produce successors. If they produce different snapshots, `send` reports
+an ambiguous action. Use `If` when the rule should choose one branch by priority.
 
 A failed nested guard disables that candidate transition entirely. Earlier
 assignments in that candidate must not leak into the machine state. Evaluation
@@ -1142,9 +1177,9 @@ The bounded sequence builders accept typed set expressions for their elements an
 Both domains can depend on parameters:
 
 ```swift
-let row = scope.sharedVar(in: Sequences(of: members, lengths: IntRange(0, through: limit)))
-let sorted = scope.sharedVar(in: SortedSequences(of: members, lengths: lengths))
-let zeroBased = scope.sharedVar(in: ZeroBasedSequences(of: members, lengths: lengths))
+let row = scope.sharedVar(initiallyIn: Sequences(of: members, lengths: IntRange(0, through: limit)))
+let sorted = scope.sharedVar(initiallyIn: SortedSequences(of: members, lengths: lengths))
+let zeroBased = scope.sharedVar(initiallyIn: ZeroBasedSequences(of: members, lengths: lengths))
 ```
 
 `SortedSequences` requires integer elements and retains only nondecreasing sequences.
@@ -1173,7 +1208,7 @@ Generated Swift stores these values as typed dictionaries.
 Function-space membership rejects missing keys, extra keys, and values outside the supplied range.
 
 ```swift
-let values = algorithm.sharedVar(in: Functions(
+let values = algorithm.sharedVar(initiallyIn: Functions(
     from: IntRange(0, through: size - 1), to: Set<Int>([0, 1])))
 ```
 
@@ -1754,7 +1789,7 @@ and `let exhaustive = Validation {}; exhaustive` are positive examples.
 `Algorithm { Do(Step.start) { Stop() } }` without a binding, and
 `var exhaustive = Validation {}` with a mutable binding, fail at their source
 locations. A named property handle likewise needs its declared binding and
-predicate registration. `Each`, `Do`, and `While` remain inline statements;
+predicate registration. `Each`, `Do`, `Loop`, and `While` remain inline statements;
 `Procedure(ProcedureName.scan) { ... }` uses a typed enum case, not another
 required Swift `let`. Existing formal-core constructors with explicit names
 are not a parallel application-authoring style.

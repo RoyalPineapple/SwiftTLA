@@ -26,8 +26,8 @@ package struct AsynchInterfaceModel: Sendable {
             let Data = scope.parameter(as: Set<Datum>.self, in: Set<Set<Datum>>([
                 Set<Datum>([Datum.d1, Datum.d2, Datum.d3]), Set<Datum>([Datum.ap1, Datum.ap2])
             ]))
-            let val = scope.sharedVar(in: Data)
-            let rdy = scope.sharedVar(in: 0...1)
+            let val = scope.sharedVar(initiallyIn: Data)
+            let rdy = scope.sharedVar(initiallyIn: 0...1)
             let ack = scope.sharedVar(initial: rdy)
             let TypeInvariant = Invariant()
 

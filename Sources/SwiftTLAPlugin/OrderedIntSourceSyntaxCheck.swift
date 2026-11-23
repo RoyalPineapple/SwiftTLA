@@ -335,18 +335,18 @@ enum OrderedIntSourceSyntaxCheck {
                member.declName.baseName.sourceIdentifierName == "sharedVar",
                initializer.arguments.allSatisfy({
                    $0.label?.text == "_name" || $0.label?.text == "label"
-                       || $0.label?.text == "initial" || $0.label?.text == "in"
+                       || $0.label?.text == "initial" || $0.label?.text == "initiallyIn"
                }),
                let initial = initializer.arguments.first(where: {
-                   $0.label?.text == "initial" || $0.label?.text == "in"
+                   $0.label?.text == "initial" || $0.label?.text == "initiallyIn"
                }),
                let initialValue = value(initial.expression, roots: roots,
-                   type: initial.label?.text == "in" ? .set(.int) : .int) {
+                   type: initial.label?.text == "initiallyIn" ? .set(.int) : .int) {
                 let root = initializer.arguments.first(where: { $0.label?.text == "_name" })?
                     .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? sourceName
                 guard roots.updateValue(root, forKey: Array(sourceName.utf8)) == nil else { return nil }
                 let initialization: VariableInitialization
-                if initial.label?.text == "in" {
+                if initial.label?.text == "initiallyIn" {
                     initialization = .memberOf(initialValue)
                 } else if case .value(.int(let number)) = initialValue {
                     initialization = .value(.int(number))
@@ -359,7 +359,7 @@ enum OrderedIntSourceSyntaxCheck {
             guard case .expr(let expression) = item.item,
                   let step = expression.as(FunctionCallExprSyntax.self),
                   step.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Do",
-                  step.arguments.count == 1, step.arguments.first?.label == nil,
+                  (step.arguments.count == 1 || step.arguments.map({ $0.label?.text }) == [nil, "in"]), step.arguments.first?.label == nil,
                   let labelExpression = step.arguments.first?.expression,
                   let labelAccess = labelExpression.as(MemberAccessExprSyntax.self),
                   let enumName = labelAccess.base?.as(DeclReferenceExprSyntax.self)?
@@ -374,6 +374,25 @@ enum OrderedIntSourceSyntaxCheck {
                 label = "\(enumName).\(labelAccess.declName.baseName.sourceIdentifierName)"
             }
             var assignments: [(root: String, value: StateExpr)] = []
+            if StateCopySyntax.matches(step) {
+                guard let writes = try? StateCopySyntax.fields(in: step) else { return nil }
+                let fields = Set(roots.values.map { Array($0.utf8) })
+                for write in writes {
+                    let target = write.target.sourceIdentifierName
+                    guard fields.contains(Array(target.utf8)) else { return nil }
+                    let rhs: StateExpr
+                    switch write.source {
+                    case .integer(let value): rhs = .value(.int(value))
+                    case .field(let token):
+                        let read = token.sourceIdentifierName
+                        guard fields.contains(Array(read.utf8)) else { return nil }
+                        rhs = .variable(read)
+                    }
+                    assignments.append((target, write.adds ? .add(.variable(target), rhs) : rhs))
+                }
+                result.append(.step(label: label, assignments: assignments))
+                continue
+            }
             for statement in body.statements {
                 guard case .expr(let expression) = statement.item,
                       let assignment = expression.as(FunctionCallExprSyntax.self),

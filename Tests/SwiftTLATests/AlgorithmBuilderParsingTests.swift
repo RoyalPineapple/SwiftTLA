@@ -48,6 +48,41 @@ import SwiftTLAMacros
         return try specification.loweredSourceModel()
     }
 
+    @Test("copy blocks bind both members to declared state fields of their own receiver")
+    func copyBlocksRequireDeclaredFields() throws {
+        func parseCopy(_ body: String) throws -> TLASpec {
+            parseAlgorithm(try parseSpecTestClosure("""
+            {
+                let counter = Algorithm { scope in
+                    let x = scope.sharedVar(initial: 2)
+                    let named = scope.sharedVar(_name: "second", initial: 3)
+                    let enabled = scope.sharedVar(initial: true)
+                    let alias = x
+                    Do(TestControlLabel.advance, in: State.self) { work in \(body) }
+                }
+                counter
+            }
+            """))
+        }
+        #expect(try parseCopy("work.second = work.x").diagnostics.isEmpty)
+        #expect(try parseCopy("work.second = -0x10").diagnostics.isEmpty)
+        for (body, detail) in [
+            ("work.enabled += 1", "target of += must be an Int"),
+            ("work.x += work.enabled", "amount added by += must be an Int"),
+            ("work.x += other.second", "whole fields of work"),
+            ("work.enabled = 0", "requires an Int state field"),
+            ("work.alias = 0", "Declare the state field 'alias'"),
+            ("work.x = x", "whole fields of work"),
+            ("work.named = work.x", "Declare the state field 'named'"),
+            ("work.x = work.alias", "Declare the state field 'alias'"),
+            ("work.second = other.x", "whole fields of work"),
+            ("work.x = work.second + 1", "whole fields of work"),
+        ] {
+            let parsed = try parseCopy(body)
+            #expect(parsed.diagnostics.contains { $0.message.contains(detail) })
+        }
+    }
+
     @Test("process steps reject separate fairness declarations inside Each")
     func processStepFairnessRequiresEachPolicy() throws {
         let parsed = parseAlgorithm(try parseSpecTestClosure("""
@@ -372,7 +407,7 @@ import SwiftTLAMacros
         let source = """
         {
             let ZeroBasedCount = Algorithm(scoped: { scope in
-                let input = scope.sharedVar(_name: "input", in: ZeroBasedSequences(
+                let input = scope.sharedVar(_name: "input", initiallyIn: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(1, 2),
                     lengths: 1...2
                 ))
@@ -447,7 +482,7 @@ import SwiftTLAMacros
                     TupleExpr<Node>.literal(Node.two, Node.one)
                 )
                 let frontier = scope.sharedVar(_name: "frontier",
-                    in: SetExpr<TupleExpr<Node>>.literal(
+                    initiallyIn: SetExpr<TupleExpr<Node>>.literal(
                         TupleExpr<Node>.literal(Node.one, Node.two),
                         TupleExpr<Node>.literal(Node.two, Node.one)
                     )
@@ -1351,7 +1386,7 @@ import SwiftTLAMacros
         let source = """
         {
             let FunctionDomain = Algorithm { scope in
-                let successors = scope.sharedVar(_name: "successors", in: Where(
+                let successors = scope.sharedVar(_name: "successors", initiallyIn: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
                     ForAll(Node.all) { node in
@@ -1892,8 +1927,8 @@ import SwiftTLAMacros
     func parsedInitialDomainsRetainStateDependencies() throws {
         let closure = try parseSpecTestClosure("""
         { scope in
-            let limit = scope.sharedVar(_name: "limit", in: 1...2)
-            let choice = scope.sharedVar(_name: "choice", in: Where(SetExpr<Int>.literal(1, 2, 3)) { value in
+            let limit = scope.sharedVar(_name: "limit", initiallyIn: 1...2)
+            let choice = scope.sharedVar(_name: "choice", initiallyIn: Where(SetExpr<Int>.literal(1, 2, 3)) { value in
                 value <= limit
             })
         }

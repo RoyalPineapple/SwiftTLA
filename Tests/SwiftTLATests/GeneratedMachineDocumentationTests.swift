@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 struct GeneratedMachineDocumentationTests {
-    @Test("README clock examples compile from their exact fixture sources")
+    @Test("README examples match the sources in the documentation package")
     func readmeClockExamplesMatchCompilingFixtures() throws {
         let root = packageRoot()
         let readme = try String(
@@ -125,6 +125,8 @@ struct GeneratedMachineDocumentationTests {
 
     private var readmeExampleSources: [String: String] {
         [
+            "readme-sequential-counter":
+                "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/SequentialCounter.swift",
             "readme-clock-model":
                 "Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/READMEClockModel.swift",
             "readme-clock-swiftui":

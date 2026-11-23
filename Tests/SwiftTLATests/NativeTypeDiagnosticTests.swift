@@ -471,7 +471,7 @@ import Testing
             enum Step: String, CaseIterable { case stay }
             static var spec: TLASpec {
                 #spec("AliasInitialStates") { scope in
-                    let outer: SharedVariable<Count> = scope.sharedVar(in: Int.all)
+                    let outer: SharedVariable<Count> = scope.sharedVar(initiallyIn: Int.all)
                     let aliasInitialStates = Algorithm(label: "AliasInitialStates", scoped: { algorithm in
                         let inner: SharedVariable<Count> = algorithm.sharedVar(initial: outer + 1)
                         Do(Step.stay) {
@@ -501,7 +501,7 @@ import Testing
         enum Step: String, CaseIterable { case stay }
         typealias Count = Int
         let built = try TLASpec("AliasInitialStates") { scope in
-            let outer: SharedVariable<Count> = scope.sharedVar(_name: "outer", in: Int.all)
+            let outer: SharedVariable<Count> = scope.sharedVar(_name: "outer", initiallyIn: Int.all)
             let aliasInitialStates = Algorithm("aliasInitialStates", label: "AliasInitialStates", scoped: { algorithm in
                 let inner: SharedVariable<Count> = algorithm.sharedVar(_name: "inner", initial: outer + 1)
                 Do(Step.stay) {

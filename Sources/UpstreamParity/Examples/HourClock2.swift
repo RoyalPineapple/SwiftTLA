@@ -9,7 +9,7 @@ package struct HourClock2Model: Sendable {
         #spec("HourClock2") {
             let HCini = Invariant()
             let Clock = Algorithm(scoped: { scope in
-                let hr = scope.sharedVar(in: 1...12)
+                let hr = scope.sharedVar(initiallyIn: 1...12)
                 While(Step.HCnxt2, true) {
                     Assign(hr, to: hr % 12 + 1)
                 }

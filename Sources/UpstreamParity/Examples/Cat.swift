@@ -20,9 +20,9 @@ package struct CatModel: Sendable {
             Assume(Number_Of_Boxes >= 2)
             let Boxes = IntRange(1, through: Number_Of_Boxes)
             let Observed_Boxes = IntRange(2, through: Number_Of_Boxes - 1)
-            let cat_box = scope.sharedVar(in: Boxes)
-            let observed_box = scope.sharedVar(in: Observed_Boxes)
-            let direction = scope.sharedVar(in: SetExpr<Direction>.literal(.left, .right))
+            let cat_box = scope.sharedVar(initiallyIn: Boxes)
+            let observed_box = scope.sharedVar(initiallyIn: Observed_Boxes)
+            let direction = scope.sharedVar(initiallyIn: SetExpr<Direction>.literal(.left, .right))
 
             Do(Step.Next) {
                 With(Boxes) { next in

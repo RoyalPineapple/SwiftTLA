@@ -21,8 +21,8 @@ struct EncodedEnumDomain {
         #spec("EncodedEnumDomain") { scope in
             Extends(.randomization)
             let nominal = scope.parameter(as: Datum.self, in: SetExpr<Datum>.literal(Datum.first, Datum.second))
-            let chosen = scope.sharedVar(in: RandomSubset(upTo: 1, from: SetExpr<Int>.literal(7)))
-            let value = scope.sharedVar(in: Datum.all)
+            let chosen = scope.sharedVar(initiallyIn: RandomSubset(upTo: 1, from: SetExpr<Int>.literal(7)))
+            let value = scope.sharedVar(initiallyIn: Datum.all)
             let rawText = scope.sharedVar(initial: Expr(Datum.text).assuming(String.self))
             let texts = scope.sharedVar(initial: SetExpr<String>.literal(
                 Expr(Datum.text).assuming(String.self), Expr("é")))

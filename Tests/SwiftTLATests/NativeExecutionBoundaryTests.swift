@@ -13,8 +13,8 @@ private struct CartesianInitialSelection {
     static var spec: TLASpec {
         #spec("CartesianInitialSelection") {
             let cartesianInitialSelection = Algorithm(label: "CartesianInitialSelection", scoped: { scope in
-                let left = scope.sharedVar(_name: "left", in: Where(Set<Int>([0, 1, 2])) { value in value > 0 })
-                let right = scope.sharedVar(_name: "right", in: 3...4)
+                let left = scope.sharedVar(_name: "left", initiallyIn: Where(Set<Int>([0, 1, 2])) { value in value > 0 })
+                let right = scope.sharedVar(_name: "right", initiallyIn: 3...4)
                 Do(Step.advance) { Assign(left, to: left + right) }
             })
             cartesianInitialSelection
@@ -28,7 +28,7 @@ private struct EmptyInitialSelection {
     static var spec: TLASpec {
         #spec("EmptyInitialSelection") {
             let emptyInitialSelection = Algorithm(label: "EmptyInitialSelection", scoped: { scope in
-                let count = scope.sharedVar(_name: "count", in: Where(Set<Int>([1])) { value in value < 0 })
+                let count = scope.sharedVar(_name: "count", initiallyIn: Where(Set<Int>([1])) { value in value < 0 })
                 Do(Step.advance) { Assign(count, to: count + 1) }
             })
             emptyInitialSelection
@@ -112,7 +112,7 @@ private struct CheckedSubtractionOverflow {
     static var spec: TLASpec {
         #spec("CheckedSubtractionOverflow") {
             let algorithm = Algorithm(label: "CheckedSubtractionOverflow", scoped: { scope in
-                let count = scope.sharedVar(_name: "count", in: Set<Int>([3, 9_223_372_036_854_775_807]))
+                let count = scope.sharedVar(_name: "count", initiallyIn: Set<Int>([3, 9_223_372_036_854_775_807]))
                 Do(Step.advance) { Assign(count, to: count - (-1)) }
             })
             algorithm
@@ -140,7 +140,7 @@ private struct CheckedNestedNegation {
     static var spec: TLASpec {
         #spec("CheckedNestedNegation") {
             let algorithm = Algorithm(label: "CheckedNestedNegation", scoped: { scope in
-                let count = scope.sharedVar(_name: "count", in: Set<Int>([3, -9_223_372_036_854_775_807]))
+                let count = scope.sharedVar(_name: "count", initiallyIn: Set<Int>([3, -9_223_372_036_854_775_807]))
                 Do(Step.advance) { Assign(count, to: -(count - 1)) }
             })
             algorithm

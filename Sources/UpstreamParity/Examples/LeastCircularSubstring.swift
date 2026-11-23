@@ -15,7 +15,7 @@ package struct LeastCircularSubstringModel: Sendable {
             let Correctness = Invariant()
             Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: MaxStringLength))
             let LeastCircularSubstring = Algorithm(scoped: { algorithm in
-                let b = algorithm.sharedVar(in: ZSequences.sequences(over: IntRange(0, through: CharSetSize - 1)))
+                let b = algorithm.sharedVar(initiallyIn: ZSequences.sequences(over: IntRange(0, through: CharSetSize - 1)))
                 let n = algorithm.sharedVar(initial: ZSequences.length(of: b))
                 let f = algorithm.sharedVar(initial: Dictionary<Int, Int>.mapping(
                     over: IntRange(0, through: n * 2)) { _ in -1 })

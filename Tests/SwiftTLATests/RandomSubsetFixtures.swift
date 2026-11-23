@@ -9,7 +9,7 @@ struct FiniteRandomSubsetInitialModel {
         #spec {
             Extends(.randomization)
             let finiteRandomSubsetInitialModel = Algorithm(label: "FiniteRandomSubsetInitialModel", scoped: { scope in
-                let chosen = scope.sharedVar(in: RandomSubset(
+                let chosen = scope.sharedVar(initiallyIn: RandomSubset(
                     upTo: 2, from: SetExpr<Int>.literal(1, 2, 3)
                 ))
                 Do(Step.stay) { Assign(chosen, to: chosen) }
@@ -27,7 +27,7 @@ struct RandomSubsetFunctionModel {
         #spec {
             Extends(.randomization)
             let randomSubsetFunctionModel = Algorithm(label: "RandomSubsetFunctionModel", scoped: { scope in
-                let samples = scope.sharedVar(in: RandomSubset(
+                let samples = scope.sharedVar(initiallyIn: RandomSubset(
                     upTo: 100,
                     from: Functions(from: IntRange(1, through: 30), to: SetExpr<Bool>.literal(false, true))
                 ))
@@ -46,8 +46,8 @@ struct RandomSubsetCountModel {
         #spec {
             Extends(.randomization)
             let randomSubsetCountModel = Algorithm(label: "RandomSubsetCountModel", scoped: { scope in
-                let limit = scope.sharedVar(in: SetExpr<Int>.literal(-1, 0))
-                let chosen = scope.sharedVar(in: RandomSubset(
+                let limit = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(-1, 0))
+                let chosen = scope.sharedVar(initiallyIn: RandomSubset(
                     upTo: limit, from: SetExpr<Int>.literal(1)
                 ))
                 Do(Step.stay) {
@@ -68,8 +68,8 @@ struct MixedInitialEvaluationModel {
         #spec {
             Extends(.randomization)
             let mixedInitialEvaluationModel = Algorithm(label: "MixedInitialEvaluationModel", scoped: { scope in
-                let limit = scope.sharedVar(in: SetExpr<Int>.literal(-1, 1))
-                let chosen = scope.sharedVar(in: RandomSubset(
+                let limit = scope.sharedVar(initiallyIn: SetExpr<Int>.literal(-1, 1))
+                let chosen = scope.sharedVar(initiallyIn: RandomSubset(
                     upTo: limit, from: SetExpr<Int>.literal(7)
                 ))
                 Do(Step.stay) {
@@ -94,7 +94,7 @@ struct RandomSubsetFailureOrderModel {
             let randomSubsetFailureOrderModel = Algorithm(label: "RandomSubsetFailureOrderModel", scoped: { scope in
                 let limit = scope.sharedVar(initial: -1)
                 let zero = scope.sharedVar(initial: 0)
-                let chosen = scope.sharedVar(in: RandomSubset(
+                let chosen = scope.sharedVar(initiallyIn: RandomSubset(
                     upTo: limit, from: SetExpr<Int>.literal(1 / zero)
                 ))
                 Do(Step.stay) {

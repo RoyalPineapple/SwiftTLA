@@ -804,9 +804,18 @@ enum AuthoredCopySyntax {
             guard let call = item.item.as(FunctionCallExprSyntax.self),
                   let kind = reference(call.calledExpression), ["Do", "While"].contains(kind),
                   let label = call.arguments.first, label.label == nil,
-                  let body = call.trailingClosure, body.signature == nil, call.additionalTrailingClosures.isEmpty else {
+                  let body = call.trailingClosure, call.additionalTrailingClosures.isEmpty else {
                 throw UnsupportedControlSyntax(reason: "Expected a shared declaration followed by sequential Do or While blocks.")
             }
+            if kind == "Do", call.arguments.map({ $0.label?.text }) == [nil, "in"],
+               let metatype = call.arguments.last?.expression.as(MemberAccessExprSyntax.self),
+               reference(metatype.base) == "State", name(metatype.declName.baseName) == "self",
+               metatype.declName.argumentNames == nil {
+                let writes = try stateFieldWrites(body, fields: Set(roots.values))
+                steps.append(.init(label: .init(name: try resolve(label.expression)), statements: writes))
+                continue
+            }
+            guard body.signature == nil else { throw unsupported }
             let extra = call.arguments.dropFirst()
             let loop: StateExpr?
             var statements = try controlStatements(body.statements, roots: roots, resolve: resolve)
@@ -1236,6 +1245,41 @@ enum AuthoredCopySyntax {
     }
 
     // shortcut: The retained source evidence uses scalar reads, literals, and explicitly grouped built-in operations.
+    private static func stateFieldWrites(_ body: ClosureExprSyntax, fields: Set<String>) throws -> [AlgorithmStatementModel] {
+        guard let signature = body.signature, signature.capture == nil, signature.attributes.isEmpty,
+              signature.effectSpecifiers == nil, signature.returnClause == nil,
+              case .simpleInput(let parameters) = signature.parameterClause,
+              parameters.count == 1, let parameter = parameters.first, name(parameter.name) != "_" else { throw unsupported }
+        func field(_ expression: ExprSyntax) -> String? {
+            guard let member = expression.as(MemberAccessExprSyntax.self), member.declName.argumentNames == nil,
+                  reference(member.base)?.utf8.elementsEqual(name(parameter.name).utf8) == true else { return nil }
+            let key = name(member.declName.baseName)
+            return fields.first { $0.utf8.elementsEqual(key.utf8) }
+        }
+        return try body.statements.map { item in
+            guard let expression = item.item.as(ExprSyntax.self) else { throw unsupported }
+            let parts: [ExprSyntax]
+            if let sequence = expression.as(SequenceExprSyntax.self) { parts = Array(sequence.elements) }
+            else if let infix = expression.as(InfixOperatorExprSyntax.self) {
+                parts = [infix.leftOperand, infix.operator, infix.rightOperand]
+            } else { throw unsupported }
+            guard parts.count == 3, let target = field(parts[0]) else { throw unsupported }
+            let rhs: StateExpr
+            if let read = field(parts[2]) {
+                rhs = .variable(read)
+            } else {
+                guard parts[2].is(IntegerLiteralExprSyntax.self)
+                    || (parts[2].as(PrefixOperatorExprSyntax.self)?.operator.text == "-"
+                        && parts[2].as(PrefixOperatorExprSyntax.self)?.expression.is(IntegerLiteralExprSyntax.self) == true),
+                      case .value(.int(let number)) = try controlExpression(parts[2], roots: [:]) else { throw unsupported }
+                rhs = .value(.int(number))
+            }
+            if parts[1].is(AssignmentExprSyntax.self) { return .set(target: .root(target), value: rhs) }
+            guard parts[1].as(BinaryOperatorExprSyntax.self)?.operator.text == "+=" else { throw unsupported }
+            return .set(target: .root(target), value: .add(.variable(target), rhs))
+        }
+    }
+
     private static func controlExpression(_ expression: ExprSyntax, roots: [String: String]) throws -> StateExpr {
         let error = UnsupportedControlSyntax(reason: "Unsupported scalar control expression: \(expression.trimmedDescription)")
         if let binding = reference(expression), let root = roots[binding] { return .variable(root) }
@@ -1334,8 +1378,8 @@ enum AuthoredCopySyntax {
               reference(member.base) == scope, name(member.declName.baseName) == "sharedVar",
               call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
               call.arguments.filter({ $0.label?.text == "_name" }).count <= 1,
-              call.arguments.allSatisfy({ ["_name", "label", "initial", "in"].contains($0.label?.text ?? "") }),
-              call.arguments.filter({ $0.label?.text == "initial" || $0.label?.text == "in" }).count == 1 else { return nil }
+              call.arguments.allSatisfy({ ["_name", "label", "initial", "initiallyIn"].contains($0.label?.text ?? "") }),
+              call.arguments.filter({ $0.label?.text == "initial" || $0.label?.text == "initiallyIn" }).count == 1 else { return nil }
         return (binding, try literal(call.arguments.first(where: { $0.label?.text == "_name" })?.expression))
     }
 

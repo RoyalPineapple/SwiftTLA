@@ -18,9 +18,9 @@ struct RandomizedFunctionReplay {
     static var spec: TLASpec {
         #spec("RandomizedFunctionReplay") { scope in
             Extends(.randomization)
-            let samples = scope.sharedVar(in: RandomSubset(upTo: 1,
+            let samples = scope.sharedVar(initiallyIn: RandomSubset(upTo: 1,
                 from: Functions(from: IntRange(1, through: 2), to: SetExpr<Bool>.literal(false, true))))
-            let mapping = scope.sharedVar(in: RandomSubset(upTo: 1,
+            let mapping = scope.sharedVar(initiallyIn: RandomSubset(upTo: 1,
                 from: Functions(from: SetExpr<Int>.literal(0, 2), to: SetExpr<Bool>.literal(false, true))))
             let token = scope.sharedVar(initial: Token.expression(pos: 0, color: Color.white))
             Do(Step.stay) {

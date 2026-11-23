@@ -505,7 +505,7 @@ public final class SpecificationScope {
         return variable
     }
 
-    public func sharedVar(_name name: String = "", label: String? = nil, in range: ClosedRange<Int>) -> SharedVariable<Int> {
+    public func sharedVar(_name name: String = "", label: String? = nil, initiallyIn range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
             initialization: .memberOf(.integerRange(.int(range.lowerBound), .int(range.upperBound))),
@@ -518,7 +518,7 @@ public final class SpecificationScope {
     public func sharedVar<Domain: FormalSetValue>(
         _name name: String = "",
         label: String? = nil,
-        in values: some TypedExpression<Domain>
+        initiallyIn values: some TypedExpression<Domain>
     ) -> SharedVariable<Domain.Element> {
         let variable = SharedVariable(name: name, in: values, displayLabel: label)
         declarations.append(variable.specificationDeclaration)
@@ -536,10 +536,27 @@ public final class SpecificationScope {
     }
 }
 
+/// A shared field already registered with its algorithm scope.
+public struct RegisteredSharedField: Sendable {
+    fileprivate init() {}
+}
+
 public final class AlgorithmScope {
     fileprivate var declarations: [AlgorithmElement] = []
 
     init() {}
+
+    /// Declares a field without creating a local variable handle.
+    public func sharedVar<Fields: GeneratedModelFields, Value: TLAValueType>(
+        _ field: KeyPath<Fields, Value>, initial: Value
+    ) -> RegisteredSharedField {
+        if let identity = Fields.fieldIdentities[field] {
+            _ = sharedVar(_name: identity.formalName, initial: initial)
+        } else {
+            declarations.append(.init(model: .invalidPlacement(.unknownStateField)))
+        }
+        return RegisteredSharedField()
+    }
 
     public func sharedVar<Value: TLAValueType>(
         _name name: String = "",
@@ -551,7 +568,7 @@ public final class AlgorithmScope {
         return variable
     }
 
-    public func sharedVar(_name name: String = "", label: String? = nil, in range: ClosedRange<Int>) -> SharedVariable<Int> {
+    public func sharedVar(_name name: String = "", label: String? = nil, initiallyIn range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
             initialization: .memberOf(.integerRange(.int(range.lowerBound), .int(range.upperBound))),
@@ -564,7 +581,7 @@ public final class AlgorithmScope {
     public func sharedVar<Domain: FormalSetValue>(
         _name name: String = "",
         label: String? = nil,
-        in values: some TypedExpression<Domain>
+        initiallyIn values: some TypedExpression<Domain>
     ) -> SharedVariable<Domain.Element> {
         let variable = SharedVariable(name: name, in: values, displayLabel: label)
         declarations.append(variable.algorithmElement)
@@ -684,6 +701,8 @@ public enum AlgorithmBuilder {
     public static func buildArray(_ components: [[AlgorithmElement]]) -> [AlgorithmElement] {
         components.flatMap { $0 }
     }
+
+    public static func buildExpression(_: RegisteredSharedField) -> [AlgorithmElement] { [] }
 
     public static func buildExpression(_ component: AlgorithmElement) -> [AlgorithmElement] {
         [component]
@@ -949,6 +968,73 @@ public func Do<Name: CaseIterable & RawRepresentable & Sendable>(
     }
 }
 
+/// Records field assignments in source order within one atomic step.
+@dynamicMemberLookup
+public struct StepCopyFields<Fields: GeneratedModelFields>: Sendable {
+    fileprivate var statements: [StepStatement] = []
+
+    fileprivate init(_ copies: (inout Self) -> Void) {
+        copies(&self)
+    }
+
+    public struct IntegerValue: ExpressibleByIntegerLiteral, Sendable {
+        fileprivate var expression: StateExpr?
+
+        public init(integerLiteral value: Int) {
+            expression = .value(.int(value))
+        }
+
+        fileprivate init(field: KeyPath<Fields, Int>) {
+            expression = Fields.fieldIdentities[field].map { .variable($0.formalName) }
+        }
+
+        public static func += (lhs: inout Self, rhs: Self) {
+            guard let left = lhs.expression, let right = rhs.expression else {
+                lhs.expression = nil
+                return
+            }
+            lhs.expression = .add(left, right)
+        }
+    }
+
+    public subscript(dynamicMember field: KeyPath<Fields, Int>) -> IntegerValue {
+        get { IntegerValue(field: field) }
+        set {
+            guard let target = Fields.fieldIdentities[field], let value = newValue.expression else {
+                statements.append(StepStatement(model: .rejected(.invalidTarget)))
+                return
+            }
+            statements.append(StepStatement(model: .set(target: .root(target.formalName), value: value)))
+        }
+    }
+
+    public subscript<Value>(dynamicMember field: KeyPath<Fields, Value>) -> KeyPath<Fields, Value> {
+        get { field }
+        set {
+            let identities = Fields.fieldIdentities
+            guard let target = identities[field], let source = identities[newValue] else {
+                statements.append(StepStatement(model: .rejected(.invalidTarget)))
+                return
+            }
+            statements.append(StepStatement(model: .copyField(target: target.formalName, source: source.formalName)))
+        }
+    }
+}
+
+/// Writes whole fields from another field of the same type or from an integer literal.
+public func Do<Name: CaseIterable & RawRepresentable & Sendable, Fields: GeneratedModelFields>(
+    _ label: Name, in _: Fields.Type, _ copies: (inout StepCopyFields<Fields>) -> Void
+) -> AtomicStep where Name.RawValue == String {
+    Do(label) { StepCopyFields<Fields>(copies).statements }
+}
+
+public func Do<Name: CaseIterable & RawRepresentable & Sendable, Fields: GeneratedModelFields>(
+    _ label: Name, when condition: some TypedExpression<Bool>, in _: Fields.Type,
+    _ copies: (inout StepCopyFields<Fields>) -> Void
+) -> AtomicStep where Name.RawValue == String {
+    Do(label, when: condition) { StepCopyFields<Fields>(copies).statements }
+}
+
 /// Defines an independent action with one typed argument from a finite domain.
 public func Do<Name: CaseIterable & RawRepresentable & Sendable, Domain: FormalSetValue>(
     _ label: Name,
@@ -1005,10 +1091,18 @@ public func Do<Name: CaseIterable & RawRepresentable & Sendable, First: FormalSe
         ])
 }
 
-/// Defines a labeled bounded `while` loop.
+/// Repeats a labeled atomic step without a loop condition.
+public func Loop<Name: CaseIterable & RawRepresentable & Sendable>(
+    _ label: Name,
+    @DoBuilder _ body: () -> [StepStatement]
+) -> AlgorithmElement where Name.RawValue == String {
+    While(label, true, body)
+}
+
+/// Defines a labeled conditional loop.
 ///
 /// Each execution of the body is one atomic transition. When `condition` is
-/// false, control advances to the next `Do` or `While` block.
+/// false, control advances to the next labeled step.
 public func While<Name: CaseIterable & RawRepresentable & Sendable>(
     _ label: Name,
     _ condition: some TypedExpression<Bool>,
@@ -1387,6 +1481,13 @@ extension LocalVariable: AssignmentTarget {}
 extension MacroParameter: AssignmentTarget {}
 
 extension AssignmentTarget {
+    /// Writes the new value when the modeled step executes.
+    public func set(_ value: Value) -> StepStatement { Assign(self, to: value) }
+
+    public func set(_ expression: some TypedExpression<Value>) -> StepStatement {
+        Assign(self, to: expression)
+    }
+
     public subscript<Key: TLAValueType & Hashable, Element: TLAValueType>(
         _ index: Key
     ) -> AlgorithmLValue<Element> where Value == Dictionary<Key, Element> {
@@ -1436,6 +1537,12 @@ public func Assign<Target: AssignmentTarget>(_ target: Target, to value: Target.
     Assign(target, to: value.expr)
 }
 
+/// Adds to an integer location when the modeled step executes.
+public func += (target: some AssignmentTarget<Int>, amount: some TypedExpression<Int>) -> StepStatement {
+    let location = target.algorithmLValue
+    return Assign(location, to: location + amount)
+}
+
 public func If(
     _ condition: some TypedExpression<Bool>,
     @DoBuilder _ then: () -> [StepStatement],
@@ -1471,6 +1578,33 @@ public func If<Expression: TypedExpression>(
     _ condition: some TypedExpression<Bool>, then: Expression, else otherwise: Expression.ExpressionValue
 ) -> Expr<Expression.ExpressionValue> {
     If(condition, then: then, else: otherwise.expr)
+}
+
+public struct GuardedAlternative: Sendable {
+    fileprivate let statements: [AlgorithmStatementModel]
+}
+
+@resultBuilder
+public enum GuardedChoiceBuilder {
+    public static func buildBlock(
+        _ first: GuardedAlternative, _ second: GuardedAlternative, _ remaining: GuardedAlternative...
+    ) -> StepStatement {
+        StepStatement(model: .guardedChoice(first.statements, second.statements, remaining: remaining.map(\.statements)))
+    }
+}
+
+/// Every enabled alternative contributes successors, in declaration order.
+public func Either(@GuardedChoiceBuilder _ alternatives: () -> StepStatement) -> StepStatement {
+    alternatives()
+}
+
+/// Guards run from left to right before the branch's first update.
+public func When(
+    _ condition: some TypedExpression<Bool>, _ rest: any TypedExpression<Bool>...,
+    @DoBuilder then body: () -> [StepStatement]
+) -> GuardedAlternative {
+    let guards: [AlgorithmStatementModel] = [.when(condition.stateExpr)] + rest.map { .when($0.stateExpr) }
+    return GuardedAlternative(statements: guards + body().map(\.model))
 }
 
 public func Either(

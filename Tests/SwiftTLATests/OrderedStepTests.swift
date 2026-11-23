@@ -299,6 +299,17 @@ import SwiftSyntax
                 sourceAction: step.rawValue)
         }
 
+        let body = String(decoding: authored, as: UTF8.self)
+        let increment = "state.x += 1"
+        #expect(body.components(separatedBy: increment).count == 3)
+        let replacement = try #require(body.range(of: increment))
+        let wrong = body.replacingCharacters(in: replacement, with: "state.x = 1")
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try ArithmeticAssignmentEvidence.translation(authoredSource: Data(wrong.utf8),
+                modelName: String(describing: OrderedCopyModel.self), spec: spec, rendered: rendered,
+                sourceAction: OrderedCopyModel.Step.repeatWrites.rawValue)
+        }
+
         #expect(proofs.map(\.actionOrdinal) == [0, 1])
         #expect(proofs.map(\.sourceContinuation) == ["repeatWrites", nil])
         #expect(Set(proofs.map { $0.source.name }).count == proofs.count)

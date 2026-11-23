@@ -74,9 +74,9 @@ struct OrderedCopyModel {
                     Assign(x, to: x + 1)
                     Assign(y, to: x)
                 }
-                Do(Step.repeatWrites) {
-                    Assign(x, to: x + 1)
-                    Assign(x, to: x + 1)
+                Do(Step.repeatWrites, in: State.self) { state in
+                    state.x += 1
+                    state.x += 1
                 }
             })
             orderedCopy

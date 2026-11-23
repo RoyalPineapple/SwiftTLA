@@ -29,7 +29,7 @@ package struct PrisonerSingleSwitchModel: Sendable {
             let announced = scope.sharedVar(initial: false)
             let signalled = scope.sharedVar(initial:
                 Dictionary<String, Int>.mapping(over: NormalPrisoner) { _ in 0 })
-            let light = scope.sharedVar(in: If(Light_Unknown,
+            let light = scope.sharedVar(initiallyIn: If(Light_Unknown,
                 then: SetExpr<Light>.literal(.off, .on),
                 else: SetExpr<Light>.literal(.off)))
             let has_visited = scope.sharedVar(initial: Set<String>())

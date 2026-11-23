@@ -33,7 +33,7 @@ struct InvalidNativeRefinement {
                 Variable(value, 0)
                 SwiftTLA.Action("advance") { value.becomes(value + 1).when(value < 2) }
             }
-            let count = scope.sharedVar(_name: "count", in: 0...1)
+            let count = scope.sharedVar(_name: "count", initiallyIn: 0...1)
             Invariant("BelowTwo") { count < 2 }
             Eventually("ReachesFour", count == 4)
             SwiftTLA.Action("advance") { count.becomes(count + 2).when(count < 2) }
