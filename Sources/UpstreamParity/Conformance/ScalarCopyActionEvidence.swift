@@ -462,6 +462,11 @@ extension StraightLineRenderedActionCheck.FiniteActionCatalog {
             TLAValue.record(TLARecord([.init("formal", .string($0.renderedName)), .init("authored", .string($0.sourceName))]))
         }
         let emittedValues = "<<\(actualInvocations.joined(separator: ", "))>>"
+        let emittedDisjunction = actualInvocations.joined(separator: #" \/ "#)
+        let ordinals = actualInvocations.indices.map { String($0 + 1) }.joined(separator: ", ")
+        let projections = actualInvocations.enumerated().map { offset, invocation in
+            #"/\ \#(prefix)ActualActionValues[\#(offset + 1)] = \#(invocation)"#
+        }.joined(separator: "\n        ")
         let emittedBefore = "<<\(frameFields.joined(separator: ", "))>>"
         let emittedAfter = "<<\(frameFields.map { $0 + "'" }.joined(separator: ", "))>>"
         let dispatch = prefix + "Dispatch"
@@ -498,7 +503,19 @@ extension StraightLineRenderedActionCheck.FiniteActionCatalog {
             BY ONLY SMT DEF \#(prefix)ActualActionValues, \#(prefix)ActualActionRoutes,
                 \#(prefix)ActualFormalLabels, \#(prefix)ActualAuthoredLabels
         <1>next. Next <=> (\E \#(index) \in DOMAIN \#(prefix)ActualActionValues : \#(prefix)ActualActionValues[\#(index)])
-            BY ONLY SMT DEF Next, \#(prefix)ActualActionValues
+            <2>physical. Next <=> (\#(emittedDisjunction))
+                BY ONLY DEF Next
+            <2>domain. DOMAIN \#(prefix)ActualActionValues = 1..\#(actualInvocations.count)
+                BY ONLY IsaM("simp") DEF \#(prefix)ActualActionValues
+            <2>indices. 1..\#(actualInvocations.count) = {\#(ordinals)}
+                BY ONLY SMT
+            <2>values.
+                \#(projections)
+                BY ONLY IsaM("simp") DEF \#(prefix)ActualActionValues
+            <2>union. (\E \#(index) \in DOMAIN \#(prefix)ActualActionValues : \#(prefix)ActualActionValues[\#(index)])
+                        <=> (\#(emittedDisjunction))
+                BY ONLY <2>domain, <2>indices, <2>values, SMT
+            <2>. QED BY ONLY <2>physical, <2>union, PTL
         <1>frame. /\ vars = \#(prefix)ActualFrameBefore
                    /\ vars' = \#(prefix)ActualFrameAfter
             BY ONLY DEF vars, \#(prefix)ActualFrameBefore, \#(prefix)ActualFrameAfter

@@ -66,7 +66,7 @@ package enum OrderedRHSCFGProof {
             /\ (Spec <=> RHSConfiguredCatalogBehavior)
             /\ (RHSOutputStateType => (RHSOutputSelectedEvaluationCheck <=> RHSOutputActualFailures = {}))
         PROOF
-        <1>union. (\E index \in DOMAIN SwiftTLAOrderedRHSActualActionValues : SwiftTLAOrderedRHSActualActionValues[index])
+        <1>union. (\E SwiftTLAOrderedRHSIndex \in DOMAIN SwiftTLAOrderedRHSActualActionValues : SwiftTLAOrderedRHSActualActionValues[SwiftTLAOrderedRHSIndex])
                       <=> RHSConfiguredCatalogSteps
             BY ONLY SwiftTLAOrderedRHSActualNextUsesTheCompleteLabeledActionCatalog,
                 SwiftTLAOrderedRHSDispatch!CatalogLabeledBranchesComposeTheFiniteUnion, SMT
