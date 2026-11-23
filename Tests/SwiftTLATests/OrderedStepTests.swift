@@ -317,6 +317,9 @@ import SwiftSyntax
         Attachment.record(Array(authored), named: fixture.lastPathComponent)
         Attachment.record(Array(actual.tla.utf8), named: "\(actual.name).tla")
         Attachment.record(Array(catalog.bytes), named: "\(catalog.name).tla")
+        for dependency in catalog.dependencies {
+            Attachment.record(Array(dependency.bytes), named: "\(dependency.name).tla")
+        }
         Attachment.record(Array(native.utf8), named: "OrderedCopyNativeMembers.swift")
         for proof in proofs {
             Attachment.record(Array(proof.source.bytes), named: "\(proof.source.name).tla")

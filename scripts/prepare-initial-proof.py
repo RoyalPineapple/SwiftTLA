@@ -881,14 +881,26 @@ def main():
             swift_source = "Tests/SwiftTLATests/OrderedStepFixtures.swift"
             native_attachment = "OrderedCopyNativeMembers.swift"
             attached_source = Path(swift_source).name
-            expected = {"OrderedCopy.tla", "SwiftTLAOrderedAssignmentCatalogOrderedCopy.tla", attached_source, native_attachment}
-            expected.update(f"SwiftTLA{kind}OrderedCopyAction{row}.tla"
-                            for kind in ("ArithmeticAssignmentSource", "OrderedRHSOutputProof") for row in (1, 2))
+            catalog_module = "SwiftTLAOrderedAssignmentCatalogOrderedCopy"
             attached = {path.name: path for path in ordered_copy_attachments.iterdir()}
-            if (set(attached) != expected
+            ordinals = sorted(int(match[1]) for name in attached if
+                              (match := re.fullmatch(r"SwiftTLAArithmeticAssignmentSourceOrderedCopyAction([1-9][0-9]*)\.tla", name)))
+            expected = {"OrderedCopy.tla", f"{catalog_module}.tla", f"{catalog_module}NativeData.tla",
+                        attached_source, native_attachment}
+            expected.update(f"SwiftTLA{kind}OrderedCopyAction{row}.tla"
+                            for kind in ("ArithmeticAssignmentSource", "OrderedRHSOutputProof") for row in ordinals)
+            native_row_modules = [f"{catalog_module}NativeAction{row}" for row in ordinals]
+            expected.update(f"{module}.tla" for module in native_row_modules)
+            if (ordinals != [1, 2] or set(attached) != expected
                     or any(path.is_symlink() or not path.is_file() for path in attached.values())
                     or digest(attached[attached_source]) != inputs[swift_source]):
-                raise ValueError("selected OrderedCopy test did not attach its authored source and both actual proofs")
+                raise ValueError("selected OrderedCopy test did not attach its authored source and complete catalog proofs")
+            catalog_extends = "EXTENDS " + ", ".join(native_row_modules)
+            row_extends = f"EXTENDS {catalog_module}NativeData"
+            if (any(attached[f"{module}.tla"].read_text().splitlines()[1:2] != [row_extends]
+                    for module in native_row_modules)
+                    or attached[f"{catalog_module}.tla"].read_text().splitlines()[1:2] != [catalog_extends]):
+                raise ValueError("retained OrderedCopy catalog does not consume every attached native row module")
             plugin_before = digest(plugin)
             compiled, origin = capture_model_expansion(swift_source, "ordered-copy",
                 owner="OrderedCopyModel", compiler_module="SwiftTLATests")["members"]

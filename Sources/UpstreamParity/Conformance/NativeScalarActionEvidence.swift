@@ -84,31 +84,31 @@ private struct ActionInstructions {
             + "guards |-> \(actionTuple(guards)), writes |-> \(actionTuple(writes))]"
     }
 
-    var selectedActionDefinitions: String {
+    func selectedActionDefinitions(prefix: String = "NativeSelected") -> String {
         let plans = captures.map(\.columns)
         func column(_ path: KeyPath<ArithmeticCapturePlan, [String]>) -> String {
             actionTuple(plans.map { actionTuple($0[keyPath: path]) })
         }
         return #"""
-        NativeSelectedCaptureTags == \#(actionTuple(captures.map { TLAValue.string($0.tag).description }))
-        NativeSelectedNodeCounts == \#(actionTuple(plans.map { String($0.kinds.count) }))
-        NativeSelectedNodeKinds == \#(column(\.kinds))
-        NativeSelectedNodeLiterals == \#(column(\.literals))
-        NativeSelectedNodeReads == \#(column(\.reads))
-        NativeSelectedNodeLeft == \#(column(\.left))
-        NativeSelectedNodeRight == \#(column(\.right))
-        NativeSelectedGuards == \#(actionTuple(guards))
-        NativeSelectedWrites == \#(actionTuple(writes))
-        NativeSelectedFailureAppendSites == \#(actionTuple(failureAppendSites.map(String.init)))
-        NativeSelectedPlans == [index \in DOMAIN NativeSelectedCaptureTags |->
-            [count |-> NativeSelectedNodeCounts[index], kinds |-> NativeSelectedNodeKinds[index],
-             literals |-> NativeSelectedNodeLiterals[index], reads |-> NativeSelectedNodeReads[index],
-             left |-> NativeSelectedNodeLeft[index], right |-> NativeSelectedNodeRight[index]]]
-        NativeSelectedCaptures == [index \in DOMAIN NativeSelectedCaptureTags |->
-            IF NativeSelectedCaptureTags[index] = "expression" THEN <<"expression", NativeSelectedPlans[index]>>
-            ELSE IF NativeSelectedCaptureTags[index] = "literal" THEN <<"literal", NativeSelectedNodeLiterals[index][1]>>
-            ELSE NativeSelectedNodeReads[index][1]]
-        NativeSelectedAction == [captures |-> NativeSelectedCaptures, guards |-> NativeSelectedGuards, writes |-> NativeSelectedWrites]
+        \#(prefix)CaptureTags == \#(actionTuple(captures.map { TLAValue.string($0.tag).description }))
+        \#(prefix)NodeCounts == \#(actionTuple(plans.map { String($0.kinds.count) }))
+        \#(prefix)NodeKinds == \#(column(\.kinds))
+        \#(prefix)NodeLiterals == \#(column(\.literals))
+        \#(prefix)NodeReads == \#(column(\.reads))
+        \#(prefix)NodeLeft == \#(column(\.left))
+        \#(prefix)NodeRight == \#(column(\.right))
+        \#(prefix)Guards == \#(actionTuple(guards))
+        \#(prefix)Writes == \#(actionTuple(writes))
+        \#(prefix)FailureAppendSites == \#(actionTuple(failureAppendSites.map(String.init)))
+        \#(prefix)Plans == [index \in DOMAIN \#(prefix)CaptureTags |->
+            [count |-> \#(prefix)NodeCounts[index], kinds |-> \#(prefix)NodeKinds[index],
+             literals |-> \#(prefix)NodeLiterals[index], reads |-> \#(prefix)NodeReads[index],
+             left |-> \#(prefix)NodeLeft[index], right |-> \#(prefix)NodeRight[index]]]
+        \#(prefix)Captures == [index \in DOMAIN \#(prefix)CaptureTags |->
+            IF \#(prefix)CaptureTags[index] = "expression" THEN <<"expression", \#(prefix)Plans[index]>>
+            ELSE IF \#(prefix)CaptureTags[index] = "literal" THEN <<"literal", \#(prefix)NodeLiterals[index][1]>>
+            ELSE \#(prefix)NodeReads[index][1]]
+        \#(prefix)Action == [captures |-> \#(prefix)Captures, guards |-> \#(prefix)Guards, writes |-> \#(prefix)Writes]
         """#
     }
 }
@@ -183,27 +183,36 @@ package func nativeScalarActionEvidence(_ source: String, program: CompiledProgr
 func nativeScalarActionDefinitions(_ source: String, program: CompiledProgram,
                                    selectedActionOrdinal: Int? = nil, retainingFailureSites: Bool = false) throws -> String {
     let actions = try decodeScalarActions(source, program: program, predicate: nil)
-    var selectedDefinitions = ""
-    if let selectedActionOrdinal {
-        guard actions.indices.contains(selectedActionOrdinal) else {
-            throw InitialFailureEvidenceError.unsupportedGeneratedOutput
-        }
-        selectedDefinitions = actions[selectedActionOrdinal].plans[0].selectedActionDefinitions + "\n"
+    if let selectedActionOrdinal, !actions.indices.contains(selectedActionOrdinal) {
+        throw InitialFailureEvidenceError.unsupportedGeneratedOutput
     }
-    let rows = actions.enumerated().map { index, action in
-        let plan = selectedActionOrdinal == index ? "NativeSelectedAction" : action.plans[0].tla
-        return "<<\(TLAValue.string(action.label)), \(plan)>>"
+    var definitions = ""
+    var rows: [String] = []
+    var failureSiteColumns: [String] = []
+    for (index, action) in actions.enumerated() {
+        let plan = action.plans[0]
+        let actionValue: String
+        if selectedActionOrdinal == index || retainingFailureSites {
+            let prefix = retainingFailureSites ? "NativeVisitor\(index + 1)" : "NativeSelected"
+            definitions += plan.selectedActionDefinitions(prefix: prefix) + "\n"
+            actionValue = prefix + "Action"
+            if retainingFailureSites {
+                failureSiteColumns.append(prefix + "FailureAppendSites")
+            }
+        } else {
+            actionValue = plan.tla
+        }
+        rows.append("<<\(TLAValue.string(action.label)), \(actionValue)>>")
     }
     let dispatch = TLAValue.tuple(actions.map { .string($0.formalLabel) })
     let physicalRoutes = actions.map { route in
         "[handle |-> \(TLAValue.string(route.handle)), visitor |-> \(route.visitor), formal |-> \(TLAValue.string(route.formalLabel))]"
     }
     if retainingFailureSites {
-        let sites = actions.map { actionTuple($0.plans[0].failureAppendSites.map(String.init)) }
-        selectedDefinitions += "NativeActionFailureAppendSites == \(actionTuple(sites))\n"
+        definitions += "NativeActionFailureAppendSites == \(actionTuple(failureSiteColumns))\n"
     }
     return """
-    \(selectedDefinitions)NativeActionRows == \(actionTuple(rows))
+    \(definitions)NativeActionRows == \(actionTuple(rows))
     NativeActionDispatchLabels == \(dispatch)
     NativeActionRoutes == \(actionTuple(physicalRoutes))
     """

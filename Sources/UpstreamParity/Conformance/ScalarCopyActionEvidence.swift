@@ -453,7 +453,7 @@ package enum ScalarCopyActionEvidence {
 }
 
 extension StraightLineRenderedActionCheck.FiniteActionCatalog {
-    func proofSource(prefix: String) -> (dispatch: String, body: String) {
+    func proofSource(prefix: String, exportDispatch: Bool = false) -> (dispatch: String, body: String) {
         let index = prefix + "Index"
         let label = prefix + "Label"
         let emittedLabeled = prefix + "EmittedLabeled"
@@ -472,7 +472,7 @@ extension StraightLineRenderedActionCheck.FiniteActionCatalog {
         let dispatch = prefix + "Dispatch"
 
         let dispatchSource = #"""
-        LOCAL \#(dispatch) == INSTANCE ActionOutcomeInterface
+        \#(exportDispatch ? "" : "LOCAL ")\#(dispatch) == INSTANCE ActionOutcomeInterface
             WITH UpdateValues <- {}, FailureValues <- {}, NoFailure <- <<>>
         """#
         let body = #"""
