@@ -912,14 +912,24 @@ def main():
             }
             procedure_names = {Path(source).name for source, _ in procedure_models.values()}
             procedure_names.update(f"{module}.{ext}" for module in procedure_models for ext in ("cfg", "tla"))
-            guarded_proof = "SwiftTLAGuardedProcessesConfiguredProcedureLoopProof.tla"
-            procedure_names.add(guarded_proof)
+            procedure_proofs = {
+                module: f"SwiftTLA{module}Configured{kind}Proof.tla"
+                for module, kind in (("ProcedureFrame", "CallWhile"),
+                                     ("ProcessProcedureFrame", "CallWhile"),
+                                     ("GuardedProcesses", "ProcedureLoop"))
+            }
+            procedure_names.update(procedure_proofs.values())
             if not procedure_names.issubset(attached):
                 raise ValueError("missing physical source, TLA+, or CFG for procedure and loop controls")
             procedure = {name: attached.pop(name) for name in procedure_names}
             if (any(path.is_symlink() or not path.is_file() for path in procedure.values())
                     or any(digest(procedure[Path(source).name]) != inputs[source]
-                           for source, _ in procedure_models.values())):
+                           for source, _ in procedure_models.values())
+                    or any(procedure[proof].read_text().splitlines()[1:2] !=
+                           [f"EXTENDS {module}, TLAPS, " + ", ".join(
+                               f"CallerInputPageBlock{block}"
+                               for block in range(1, (procedure[f"{module}.cfg"].stat().st_size + 1023) // 1024 + 1))]
+                           for module, proof in procedure_proofs.items())):
                 raise ValueError("procedure and loop controls do not bind their tracked source inputs")
             ordinals = sorted(int(match[1]) for name in attached if
                               (match := re.fullmatch(r"SwiftTLAArithmeticAssignmentSourceOrderedCopyAction([1-9][0-9]*)\.tla", name)))
@@ -993,9 +1003,9 @@ def main():
                 module: {
                     "sourceSHA": head, "authoredSource": source, "test": test,
                     "files": {name: proof_files[name] for name in
-                              (Path(source).name, f"{module}.tla", f"{module}.cfg")},
-                    **({"configuredProof": guarded_proof, "configuredProofSHA256": proof_files[guarded_proof]}
-                       if module == "GuardedProcesses" else {}),
+                              (Path(source).name, f"{module}.tla", f"{module}.cfg", procedure_proofs[module])},
+                    "configuredProof": procedure_proofs[module],
+                    "configuredProofSHA256": proof_files[procedure_proofs[module]],
                 } for module, (source, test) in procedure_models.items()
             }
             receipt["sequentialLoopControl"] = {
