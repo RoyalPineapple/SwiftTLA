@@ -210,7 +210,7 @@ extension SequentialControlEvidence {
         let nativeImport = includeNative ? ", SwiftTLANativeActions" : ""
         let declaredProof: String
         if let declared {
-            guard let proof = declared.proof() else { return nil }
+            guard let proof = declared.proof(loweredTrace: loweredTrace) else { return nil }
             declaredProof = proof
         } else {
             declaredProof = ""
@@ -371,7 +371,7 @@ extension SequentialControlEvidence {
             self.steps = steps
         }
 
-        fileprivate func proof() -> String? {
+        fileprivate func proof(loweredTrace: Machine) -> String? {
             func statementKinds(_ statements: [AlgorithmStatementModel]) -> [TLAValue] {
                 statements.flatMap { statement -> [TLAValue] in
                     return switch statement {
@@ -413,6 +413,68 @@ extension SequentialControlEvidence {
                 .string(doneLabel),
             ])
             let terminating = TLAValue.string(CompilerControlSymbol.terminatingAction.rawValue)
+            let rowPositions = rows.indices.map { String($0 + 1) }.joined(separator: ", ")
+            let rowFacts = rows.indices.map { "<2>row\($0 + 1)" }.joined(separator: ", ")
+            let rowProofs = rows.indices.map { index in
+                let slot = index + 1
+                let count = loweredTrace.actions.indices.contains(index) ? loweredTrace.actions[index].branches.count : 0
+                // Branch expansion visits the outer While's false arm after the body.
+                let positions = (0..<count).map { String($0 + 1) }.joined(separator: ", ")
+                let branchFacts = (0..<count).map { ", <4>branch\($0 + 1)" }.joined()
+                let branchProofs = (0..<count).map { offset in
+                    let branch = offset + 1
+                    return #"""
+                    <4>branch\#(branch). DeclaredBranchMatches(constructor, entry, following, exit, branches[\#(branch)])
+                        <5>guards.
+                            /\ branches[\#(branch)][1][1] = DeclaredEntryGuard(entry)
+                            /\ (DeclaredDynamicWhile(constructor) /\ branches[\#(branch)] # exit =>
+                                    branches[\#(branch)][1][2] = <<"guard", constructor.loop>>)
+                            BY ONLY IsaM("simp")
+                                DEF branches, action, constructor, entry, exit, DeclaredDynamicWhile, DeclaredWhileExit,
+                                    DeclaredEntryGuard, DeclaredFollowing, DeclaredEntry, DeclaredOwner, DeclaredDone,
+                                    DeclaredCount, DeclaredSequentialConstructors, LoweredSequentialSemantics
+                        <5>control. ~DeclaredBodyTransfers(constructor) /\ branches[\#(branch)] # exit /\
+                                    (constructor.loop = <<>> \/ DeclaredDynamicWhile(constructor)) =>
+                                branches[\#(branch)][2] = <<"transfer", IF constructor.loop = <<>> THEN following ELSE entry>>
+                            BY ONLY IsaM("simp")
+                                DEF branches, action, constructor, entry, following, exit, DeclaredDynamicWhile, DeclaredBodyTransfers,
+                                    DeclaredWhileExit, DeclaredEntryGuard, DeclaredFollowing, DeclaredEntry, DeclaredOwner,
+                                    DeclaredDone, DeclaredCount, DeclaredSequentialConstructors, LoweredSequentialSemantics
+                        <5>. QED BY ONLY <5>guards, <5>control DEF DeclaredBranchMatches
+                    """#
+                }.joined(separator: "\n        ")
+                return #"""
+                <2>row\#(slot). DeclaredRowMatches(\#(slot), LoweredSequentialSemantics[2][\#(slot)])
+                    <3>. DEFINE action == LoweredSequentialSemantics[2][\#(slot)]
+                                constructor == DeclaredSequentialConstructors[\#(slot)]
+                                branches == action[2]
+                                entry == DeclaredEntry(DeclaredSequentialConstructors, \#(slot))
+                                following == DeclaredFollowing(DeclaredSequentialConstructors, DeclaredCount, \#(slot))
+                                exit == DeclaredWhileExit(DeclaredSequentialConstructors, DeclaredCount, \#(slot))
+                    <3>name. action[1] = constructor.label
+                        BY ONLY IsaM("simp") DEF action, constructor, LoweredSequentialSemantics, DeclaredSequentialConstructors
+                    <3>branchInterval. 1..\#(count) = {\#(positions)}
+                        BY ONLY SMT
+                    <3>branchDomain. DOMAIN branches = {\#(positions)}
+                        BY ONLY <3>branchInterval, IsaM("simp") DEF branches, action, LoweredSequentialSemantics
+                    <3>exit. DeclaredDynamicWhile(constructor) =>
+                            \E branch \in DOMAIN branches : branches[branch] = exit
+                        <4>candidate. DeclaredDynamicWhile(constructor) =>
+                                /\ \#(count) \in DOMAIN branches
+                                /\ branches[\#(count)] = exit
+                            BY ONLY <3>branchDomain, IsaM("simp")
+                                DEF branches, action, constructor, exit, DeclaredDynamicWhile, DeclaredWhileExit, DeclaredCount,
+                                    DeclaredEntryGuard, DeclaredFollowing, DeclaredEntry, DeclaredOwner, DeclaredDone,
+                                    DeclaredSequentialConstructors, LoweredSequentialSemantics
+                        <4>. QED BY ONLY <4>candidate, SMT
+                    <3>branches. \A branch \in DOMAIN branches :
+                            DeclaredBranchMatches(constructor, entry, following, exit, branches[branch])
+                        \#(branchProofs)
+                        <4>. QED BY ONLY <3>branchDomain\#(branchFacts), SMT
+                    <3>. QED BY ONLY <3>name, <3>exit, <3>branches
+                        DEF DeclaredRowMatches, action, constructor, branches, entry, following, exit
+                """#
+            }.joined(separator: "\n    ")
             return #"""
 
 
@@ -436,27 +498,29 @@ extension SequentialControlEvidence {
         LOCAL DeclaredTerminalRow ==
             <<DeclaredTerminalLabel, <<<< <<DeclaredEntryGuard(DeclaredDone)>>, <<"unchanged">> >>>> >>
 
+        LOCAL DeclaredBranchMatches(constructor, entry, following, exit, observed) ==
+            /\ observed[1][1] = DeclaredEntryGuard(entry)
+            /\ (DeclaredDynamicWhile(constructor) /\ observed # exit =>
+                    observed[1][2] = <<"guard", constructor.loop>>)
+            /\ (~DeclaredBodyTransfers(constructor) /\ observed # exit /\
+                    (constructor.loop = <<>> \/ DeclaredDynamicWhile(constructor)) =>
+                    observed[2] = <<"transfer", IF constructor.loop = <<>> THEN following ELSE entry>>)
+
+        LOCAL DeclaredRowMatches(slot, action) ==
+            LET rows == DeclaredSequentialConstructors
+                branches == action[2]
+                constructor == rows[slot]
+                entry == DeclaredEntry(rows, slot)
+                following == DeclaredFollowing(rows, DeclaredCount, slot)
+                exit == DeclaredWhileExit(rows, DeclaredCount, slot)
+            IN /\ action[1] = constructor.label
+               /\ (DeclaredDynamicWhile(constructor) =>
+                    \E branch \in DOMAIN branches : branches[branch] = exit)
+               /\ \A branch \in DOMAIN branches :
+                    DeclaredBranchMatches(constructor, entry, following, exit, branches[branch])
+
         LOCAL DeclaredRowsMatch(trace) ==
-            \A slot \in 1..DeclaredCount :
-                LET rows == DeclaredSequentialConstructors
-                    action == trace[2][slot]
-                    branches == action[2]
-                    constructor == rows[slot]
-                    entry == DeclaredEntry(rows, slot)
-                    exit == DeclaredWhileExit(rows, DeclaredCount, slot)
-                IN /\ action[1] = constructor.label
-                   /\ (DeclaredDynamicWhile(constructor) =>
-                        \E branch \in DOMAIN branches : branches[branch] = exit)
-                   /\ \A branch \in DOMAIN branches :
-                        LET observed == branches[branch]
-                        IN /\ observed[1][1] = DeclaredEntryGuard(entry)
-                           /\ (DeclaredDynamicWhile(constructor) /\ observed # exit =>
-                                observed[1][2] = <<"guard", constructor.loop>>)
-                           /\ (~DeclaredBodyTransfers(constructor) /\ observed # exit /\
-                                (constructor.loop = <<>> \/ DeclaredDynamicWhile(constructor)) =>
-                                observed[2] = <<"transfer",
-                                    IF constructor.loop = <<>> THEN DeclaredFollowing(rows, DeclaredCount, slot)
-                                    ELSE entry>>)
+            \A slot \in 1..DeclaredCount : DeclaredRowMatches(slot, trace[2][slot])
 
         DeclaredSequentialConstructorsMatch(trace) ==
             /\ DeclaredCount \in Nat \ {0}
@@ -478,9 +542,10 @@ extension SequentialControlEvidence {
             BY ONLY SMT DEF DeclaredCount, DeclaredSequentialConstructors, DeclaredEntry, DeclaredOwner,
                 DeclaredTerminalRow, DeclaredTerminalLabel, DeclaredEntryGuard, DeclaredDone, LoweredSequentialSemantics
         <1>branches. DeclaredRowsMatch(LoweredSequentialSemantics)
-            BY ONLY SMT DEF DeclaredRowsMatch, DeclaredCount, DeclaredSequentialConstructors, DeclaredEntry,
-                DeclaredOwner, DeclaredDynamicWhile, DeclaredBodyTransfers, DeclaredWhileExit, DeclaredFollowing, DeclaredEntryGuard,
-                DeclaredDone, LoweredSequentialSemantics
+            <2>slots. 1..DeclaredCount = {\#(rowPositions)}
+                BY ONLY SMT DEF DeclaredCount
+            \#(rowProofs)
+            <2>. QED BY ONLY <2>slots, \#(rowFacts), SMT DEF DeclaredRowsMatch
         <1>. QED BY ONLY <1>layout, <1>branches DEF DeclaredSequentialConstructorsMatch
         """#
         }

@@ -180,7 +180,44 @@ PROOF
                 /\ NativeTraversalCount(pending) - NativeStackExpansion.prefixDrop <= Len(pending)
     BY ONLY <1>count, <1>enabled, <1>safe, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
         DEF SeedTraversalHelperCallsAreSafe
-<1>. QED BY ONLY <1>access, <1>prefix, SMT DEF NativeTraversalReachedFailures, NativeTraversalEnabled
+<1>. DEFINE count == NativeTraversalCount(pending)
+            floor == NativeStackExpansion.countFloor
+            expanded == NativeTraversalLast(pending)[NativeStackExpansion.localExpandedPosition]
+            prefixCount == count - NativeStackExpansion.prefixDrop
+<1>belowFloor. CASE count <= floor
+    BY ONLY <1>belowFloor, SMT DEF count, floor, NativeTraversalReachedFailures
+<1>aboveFloor. CASE count > floor
+    <2>access. NativeTraversalIndex(pending) \in 1..Len(pending)
+        BY ONLY <1>aboveFloor, <1>access, SMT DEF count, floor
+    <2>shape. /\ pending \in Seq(SeedFrames) /\ Len(pending) \in 1..Len(pending)
+        BY ONLY SeedExpansionInput, <1>count, <1>aboveFloor, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
+            DEF SeedExpansionInput, count, floor
+    <2>last. NativeTraversalLast(pending) = pending[Len(pending)]
+        BY ONLY <2>shape, <1>count, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
+            DEF NativeTraversalLast, NativeTraversalIndex, NativeTraversalCells
+    <2>frame. pending[Len(pending)] \in SeedFrames
+        BY ONLY <2>shape, ElementOfSeq, SMT
+    <2>boolean. expanded \in BOOLEAN
+        BY ONLY <2>last, <2>frame, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
+            DEF expanded, SeedFrames
+    <2>expanded. CASE expanded
+        BY ONLY <1>aboveFloor, <2>access, <2>expanded, SMT DEF count, floor, expanded, NativeTraversalReachedFailures
+    <2>unexpanded. CASE ~expanded
+        <3>above. ~(count <= floor)
+            BY ONLY <1>count, <1>aboveFloor, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT DEF count, floor
+        <3>enabled. NativeTraversalEnabled(pending)
+            BY ONLY <3>above, <2>unexpanded, SMT DEF count, floor, expanded, NativeTraversalEnabled
+        <3>prefix. /\ prefixCount \in SeedIntValues /\ prefixCount <= Len(pending)
+            BY ONLY <3>enabled, <1>prefix, SMT DEF prefixCount, count
+        <3>checks. /\ ~(count <= floor) /\ ~(prefixCount > Len(pending))
+            BY ONLY <1>count, <1>aboveFloor, <3>prefix, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
+                DEF count, floor, prefixCount
+        <3>. QED BY ONLY <3>checks, <2>access, <2>unexpanded, <3>prefix, SMT
+            DEF count, floor, expanded, prefixCount, NativeTraversalReachedFailures
+    <2>. QED BY ONLY <2>boolean, <2>expanded, <2>unexpanded, SMT
+<1>bounds. count <= floor \/ count > floor
+    BY ONLY <1>count, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT DEF count, floor
+<1>. QED BY ONLY <1>bounds, <1>belowFloor, <1>aboveFloor, SMT
 
 NativeSeedInit ==
     /\ pending = NativeStackInitialization.pending

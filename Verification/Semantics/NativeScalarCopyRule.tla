@@ -40,6 +40,20 @@ NativeCopyWrites(plan, before, captures) ==
     [index \in DOMAIN plan.writes |->
         <<plan.writes[index][1], NativeCopyValue(before, captures, plan.writes[index][2])>>]
 
+THEOREM NativeCopyWritesOnlyReadBoundCaptures ==
+    ASSUME NEW plan, NEW source, NEW left, NEW right,
+           \A index \in DOMAIN plan.writes :
+               LET reference == plan.writes[index][2]
+               IN reference[1] = "capture" => reference[2] \in DOMAIN plan.captures,
+           \A position \in DOMAIN plan.captures : left[position] = right[position]
+    PROVE NativeCopyWrites(plan, source, left) = NativeCopyWrites(plan, source, right)
+PROOF
+<1>values. \A index \in DOMAIN plan.writes :
+    NativeCopyValue(source, left, plan.writes[index][2]) =
+    NativeCopyValue(source, right, plan.writes[index][2])
+    BY SMT DEF NativeCopyValue, CopyReferenceValue
+<1>. QED BY ONLY <1>values, IsaM("auto") DEF NativeCopyWrites
+
 NativeCopyVisits(plan, keys, before, after, entry, destination) ==
     LET source == NativeCopySnapshot(keys, before, entry)
         target == NativeCopySnapshot(keys, after, destination)
@@ -69,7 +83,9 @@ THEOREM NativeCopyCallbackUsesTheMaterializedWriteHistory ==
            after = [key \in keys |-> after[key]],
            NativeCopyVisits(plan, keys, before, after, pcBefore, pcAfter),
            \A witness : CopyCaptureHistory(NativeCopySnapshot(keys, before, pcBefore),
-                                                plan.captures, witness) => witness = captures
+                                                plan.captures, witness) =>
+               NativeCopyWrites(plan, NativeCopySnapshot(keys, before, pcBefore), witness) =
+               NativeCopyWrites(plan, NativeCopySnapshot(keys, before, pcBefore), captures)
     PROVE NativeCopyCallbackSnapshots(plan, keys, before, pcBefore, captures) = << <<pcAfter, after>> >>
 PROOF
 <1>. DEFINE fields == NativeCopyFields(keys)
@@ -83,7 +99,9 @@ PROOF
     /\ NativePendingMergesEmit(fields, source, expected, count, writes)
     BY ONLY NativeCopyVisits(plan, keys, before, after, pcBefore, pcAfter),
         (\A witness : CopyCaptureHistory(NativeCopySnapshot(keys, before, pcBefore),
-                                          plan.captures, witness) => witness = captures), SMT
+                                          plan.captures, witness) =>
+            NativeCopyWrites(plan, NativeCopySnapshot(keys, before, pcBefore), witness) =
+            NativeCopyWrites(plan, NativeCopySnapshot(keys, before, pcBefore), captures)), SMT
         DEF NativeCopyVisits, fields, source, expected, writes, count
 <1>witness. PICK actual :
     /\ SuccessfulNativeMergeHistory(count, writes, actual)
@@ -98,13 +116,34 @@ PROOF
         merges[count][writes[index][1]] = actual[count][writes[index][1]]
     BY ONLY <1>chosen, <1>witness, (Len(plan.writes) \in Nat), SuccessfulMergesRetainEveryWriteInThePrefix, SMT
         DEF count
-<1>same. merges[count] = actual[count]
-    BY ONLY <1>keys, SMT DEF PendingWriteKeys
+<1>same. NativeMaterializedSlots(fields, source, merges[count]) =
+         NativeMaterializedSlots(fields, source, actual[count])
+    <2>domains. DOMAIN merges[count] = DOMAIN actual[count]
+        BY ONLY <1>keys, SMT
+    <2>pending. \A key \in DOMAIN merges[count] : merges[count][key] = actual[count][key]
+        <3>. TAKE key \in DOMAIN merges[count]
+        <3>index. PICK index \in 1..count : writes[index][1] = key
+            BY ONLY <1>keys, (key \in DOMAIN merges[count]), SMT DEF PendingWriteKeys
+        <3>. QED BY ONLY <1>keys, <3>index, (index \in 1..count), SMT
+    <2>slots. \A key \in fields :
+        (IF key \in DOMAIN merges[count] THEN merges[count][key] ELSE source[key]) =
+        (IF key \in DOMAIN actual[count] THEN actual[count][key] ELSE source[key])
+        BY ONLY <2>domains, <2>pending, SMT
+    <2>. QED BY ONLY <2>slots, IsaM("auto") DEF NativeMaterializedSlots
 <1>target.
     <<NativeMaterializedSlots(fields, source, merges[count])[NativeCopyControlSlot],
         [key \in keys |-> NativeMaterializedSlots(fields, source, merges[count])[key]]>> = <<pcAfter, after>>
-    BY ONLY <1>same, <1>witness, (NativeCopyControlSlot \notin keys),
-        (after = [key \in keys |-> after[key]]), SMT DEF expected, NativeCopySnapshot, NativeCopyFields
+    <2>materialized. NativeMaterializedSlots(fields, source, merges[count]) = expected
+        BY ONLY <1>same, <1>witness, IsaM("simp")
+    <2>control. expected[NativeCopyControlSlot] = pcAfter
+        BY ONLY SMT DEF expected, NativeCopySnapshot, NativeCopyFields
+    <2>visible. \A key \in keys : expected[key] = after[key]
+        BY ONLY (NativeCopyControlSlot \notin keys), SMT DEF expected, NativeCopySnapshot, NativeCopyFields
+    <2>bindings. [key \in keys |-> expected[key]] = after
+        <3>restricted. [key \in keys |-> expected[key]] = [key \in keys |-> after[key]]
+            BY ONLY <2>visible, IsaM("auto")
+        <3>. QED BY ONLY <3>restricted, (after = [key \in keys |-> after[key]]), SMT
+    <2>. QED BY ONLY <2>materialized, <2>control, <2>bindings, IsaM("simp")
 <1>. QED BY ONLY <1>target, <1>chosen, <1>visit, SMT
     DEF NativeCopyCallbackSnapshots, fields, source, writes, count, merges
 

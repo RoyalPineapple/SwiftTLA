@@ -825,18 +825,46 @@ PROOF
         BY ONLY NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination), SMT
             DEF NativeAssignmentsNameTheirOperandsAndWrites, NativeAssignmentWritesNameLastTargets, instruction,
                 emitted, NativeAssignmentMaterializationPlan
-    <2>captures. \A witness :
-        CopyCaptureHistory(NativeCopySnapshot(Keys, before, pcBefore), emitted.captures, witness)
-        => witness = final.completed
-        <3>. TAKE witness
-        <3>shape. CopyCaptureHistory(NativeCopySnapshot(Keys, before, pcBefore), emitted.captures, witness)
-            => /\ DOMAIN witness = DOMAIN final.completed
-               /\ \A index \in DOMAIN witness : witness[index] = final.completed[index]
-            BY ONLY SMT DEF CopyCaptureHistory, CopyReferenceValue, emitted,
-                NativeAssignmentMaterializationPlan, NativeAssignmentLiteralCaptures
-        <3>. QED BY ONLY <3>shape, SMT
     <2>selected. ASSUME pcBefore = entry, final.failure = <<>>
                  PROVE callbacks = << <<destination, final.bindings>> >>
+        <3>prefix.
+            /\ final \in AssignmentPrefixStates
+            /\ count \in 0..Len(rows)
+            BY ONLY SupportedAssignmentList(rows), AssignmentListHistory(FALSE, before, rows, shared), SMT
+                DEF SupportedAssignmentList, AssignmentListHistory, final, count
+        <3>length. Len(final.completed) = count
+            BY ONLY <3>prefix, SupportedAssignmentList(rows), (before \in AssignmentBindings),
+                AssignmentListHistory(FALSE, before, rows, shared), (final.failure = <<>>),
+                OrderedAssignmentHistoriesRetainTheExactFirstFailurePrefix, SMT
+                DEF AssignmentPrefixMeaning, final
+        <3>captureDomain. DOMAIN emitted.captures = 1..count
+            BY ONLY <3>prefix, <3>length, LenProperties, SMT DEF AssignmentPrefixStates, emitted,
+                NativeAssignmentMaterializationPlan, NativeAssignmentLiteralCaptures
+        <3>bounds. \A index \in DOMAIN emitted.writes :
+            LET reference == emitted.writes[index][2]
+            IN reference[1] = "capture" => reference[2] \in DOMAIN emitted.captures
+            <4>. TAKE index \in DOMAIN emitted.writes
+            <4>. DEFINE key == emitted.writes[index][1]
+                        reference == emitted.writes[index][2]
+            <4>writer. reference[1] = "capture" => CopyReceiptNamesWriter(rows, count, key, reference)
+                BY ONLY NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination),
+                    (index \in DOMAIN emitted.writes), SMT DEF NativeAssignmentsNameTheirOperandsAndWrites,
+                    NativeAssignmentWritesNameLastTargets, NativeAssignmentMaterializationPlan, emitted,
+                    key, reference, instruction, count
+            <4>index. reference[1] = "capture" => reference[2] \in 1..count
+                BY ONLY <4>writer, SMT DEF CopyReceiptNamesWriter, CopyReceiptOrdinal, LastDirectCopy, DirectCopyReference
+            <4>. QED BY ONLY <4>index, <3>captureDomain, SMT DEF reference
+        <3>captures. \A witness :
+            CopyCaptureHistory(NativeCopySnapshot(Keys, before, pcBefore), emitted.captures, witness) =>
+                NativeCopyWrites(emitted, NativeCopySnapshot(Keys, before, pcBefore), witness) =
+                NativeCopyWrites(emitted, NativeCopySnapshot(Keys, before, pcBefore), final.completed)
+            <4>. TAKE witness
+            <4>values.
+                CopyCaptureHistory(NativeCopySnapshot(Keys, before, pcBefore), emitted.captures, witness) =>
+                    \A index \in DOMAIN emitted.captures : witness[index] = final.completed[index]
+                BY ONLY SMT DEF CopyCaptureHistory, CopyReferenceValue, emitted,
+                    NativeAssignmentMaterializationPlan, NativeAssignmentLiteralCaptures
+            <4>. QED BY ONLY <4>values, <3>bounds, NativeCopyWritesOnlyReadBoundCaptures, SMT
         <3>visit. NativeCopyVisits(emitted, Keys, before, final.bindings, pcBefore, destination)
             BY ONLY <1>meaning, SupportedAssignmentList(rows), (before \in AssignmentBindings),
                 NativeAssignmentsNameTheirOperandsAndWrites(rows, raw, names, counter, entry, destination),
@@ -844,7 +872,7 @@ PROOF
                 SuccessfulNativeAssignmentsUseTheCompleteLastWriteFrame, SMT DEF emitted, instruction, final, count
         <3>state. final.bindings = [key \in Keys |-> final.bindings[key]]
             BY ONLY <1>meaning, SMT DEF AssignmentBindings
-        <3>. QED BY ONLY <2>shape, <2>captures, <3>visit, <3>state,
+        <3>. QED BY ONLY <2>shape, <3>captures, <3>visit, <3>state,
             NativeCopyCallbackUsesTheMaterializedWriteHistory, SMT DEF callbacks
     <2>disabled. pcBefore # entry => callbacks = <<>>
         BY ONLY <2>shape, SMT DEF callbacks, NativeCopyCallbackSnapshots

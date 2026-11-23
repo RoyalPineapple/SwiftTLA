@@ -548,10 +548,16 @@ package enum ArithmeticAssignmentEvidence {
                 \#(terminalRule)!NativeCopyControlSlot, \#(terminalRule)!CopyEntryRoutes
         <1>state. TerminalBindings = [key \in TerminalKeys |-> TerminalBindings[key]]
             BY ONLY SMT DEF TerminalKeys, TerminalBindings, \#(last.instance)!RHSOutputKeys, \#(last.instance)!RHSOutputBefore
-        <1>captures. \A witness : \#(terminalRule)!CopyCaptureHistory(
-            \#(terminalRule)!NativeCopySnapshot(TerminalKeys, TerminalBindings, \#(pc)), TerminalPlan.captures, witness)
-            => witness = <<>>
-            BY ONLY <1>plan, SMT DEF \#(terminalRule)!NativeCompleteCopyPlan, \#(terminalRule)!CopyCaptureHistory
+        <1>noCaptureReads. \A index \in DOMAIN TerminalPlan.writes :
+            TerminalPlan.writes[index][2][1] # "capture"
+            BY ONLY <1>plan, SMT DEF \#(terminalRule)!NativeCompleteCopyPlan, \#(terminalRule)!CopyEntryRoutes
+        <1>captures. \A witness :
+            \#(terminalRule)!NativeCopyWrites(TerminalPlan,
+                \#(terminalRule)!NativeCopySnapshot(TerminalKeys, TerminalBindings, \#(pc)), witness) =
+            \#(terminalRule)!NativeCopyWrites(TerminalPlan,
+                \#(terminalRule)!NativeCopySnapshot(TerminalKeys, TerminalBindings, \#(pc)), <<>>)
+            BY ONLY <1>plan, <1>noCaptureReads, \#(terminalRule)!NativeCopyWritesOnlyReadBoundCaptures, SMT
+                DEF \#(terminalRule)!NativeCompleteCopyPlan
         <1>visit. \#(pc) = TerminalControl => \#(terminalRule)!NativeCopyVisits(
             TerminalPlan, TerminalKeys, TerminalBindings, TerminalBindings, \#(pc), \#(pc))
             BY ONLY <1>state, <1>plan, \#(terminalRule)!EmptyCopyPlanRetainsTheCompleteState,
