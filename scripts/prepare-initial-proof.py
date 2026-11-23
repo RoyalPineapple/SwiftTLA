@@ -912,6 +912,8 @@ def main():
             }
             procedure_names = {Path(source).name for source, _ in procedure_models.values()}
             procedure_names.update(f"{module}.{ext}" for module in procedure_models for ext in ("cfg", "tla"))
+            guarded_proof = "SwiftTLAGuardedProcessesConfiguredProcedureLoopProof.tla"
+            procedure_names.add(guarded_proof)
             if not procedure_names.issubset(attached):
                 raise ValueError("missing physical source, TLA+, or CFG for procedure and loop controls")
             procedure = {name: attached.pop(name) for name in procedure_names}
@@ -992,6 +994,8 @@ def main():
                     "sourceSHA": head, "authoredSource": source, "test": test,
                     "files": {name: proof_files[name] for name in
                               (Path(source).name, f"{module}.tla", f"{module}.cfg")},
+                    **({"configuredProof": guarded_proof, "configuredProofSHA256": proof_files[guarded_proof]}
+                       if module == "GuardedProcesses" else {}),
                 } for module, (source, test) in procedure_models.items()
             }
             receipt["sequentialLoopControl"] = {

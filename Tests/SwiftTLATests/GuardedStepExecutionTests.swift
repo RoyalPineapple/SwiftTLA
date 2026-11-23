@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UpstreamParity
 import SwiftParser
 import SwiftSyntax
 @testable import SwiftTLA
@@ -60,13 +61,24 @@ struct GuardedStepExecutionTests {
         }
 #if compiler(>=6.2)
         if entryReady == 1 && bodyReady == 1 {
-            let module = try GuardedProcesses.render().tlaBundle.root
+            let rendered = try GuardedProcesses.render()
+            let module = rendered.tlaBundle.root
             let cfg = try #require(module.cfg)
             let source = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
                 .appendingPathComponent("GuardedStepExecutionFixtures.swift")
-            Attachment.record(Array(try Data(contentsOf: source)), named: source.lastPathComponent)
+            let authored = try Data(contentsOf: source)
+            let parsed = Parser.parse(source: String(decoding: authored, as: UTF8.self))
+            let declaration = try #require(parsed.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+                .first { $0.name.text == String(describing: GuardedProcesses.self) })
+            let frontend = try TLASpecVerifier.parseAndVerify(declaration)
+            try #require(frontend.procedureLoopSources.count == 1)
+            let loop = try #require(frontend.procedureLoopSources.first)
+            let proof = try #require(try SequentialControlOutputEvidence.procedureLoopProof(
+                source: loop, program: frontend.program, rendered: rendered))
+            Attachment.record(Array(authored), named: source.lastPathComponent)
             Attachment.record(Array(module.tla.utf8), named: "\(module.name).tla")
             Attachment.record(Array(cfg.utf8), named: "\(module.name).cfg")
+            Attachment.record(Array(proof.bytes), named: "\(proof.name).tla")
         }
 #endif
     }

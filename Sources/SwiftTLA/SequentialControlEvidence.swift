@@ -220,3 +220,72 @@ package struct SequentialControlEvidence: Sendable {
         return nil
     }
 }
+
+
+extension SequentialControlEvidence {
+    /// A registered procedure While observed by the source frontend before scheduling.
+    package struct ProcedureLoopSource: Sendable {
+        package let owner: ControlOwner
+        package let procedure: String
+        package let labels: [String]
+        package let slot: Int
+        package let sourceOffset: Int
+        package let localRoots: Set<String>
+        package let condition: StateExpr
+        package let fallsThrough: Bool
+        package let ownsConfiguredAssertions: Bool
+
+        package var action: String { "procedure.\(procedure).\(labels[slot])" }
+    }
+
+    package static func captureProcedureLoops(
+        source: TLASpec, declarationOffset: (String) -> Int?
+    ) -> [ProcedureLoopSource] {
+        guard source.sourceAlgorithms.count == 1, let algorithm = source.sourceAlgorithms.first?.model,
+              !algorithm.processes.isEmpty else { return [] }
+        func containsOccurrence(
+            _ statements: [AlgorithmStatementModel], matching predicate: (AlgorithmStatementModel) -> Bool
+        ) -> Bool {
+            statements.contains { statement in
+                if predicate(statement) { return true }
+                switch statement {
+                case .letBinding(_, _, let body), .choose(_, _, let body), .with(_, _, let body):
+                    return containsOccurrence(body, matching: predicate)
+                case .ifElse(_, let yes, let no), .either(let yes, let no):
+                    return containsOccurrence(yes, matching: predicate) || containsOccurrence(no, matching: predicate)
+                default: return false
+                }
+            }
+        }
+        func hasAssertion(_ statements: [AlgorithmStatementModel]) -> Bool {
+            containsOccurrence(statements) { statement in
+                if case .assert = statement { return true }
+                return false
+            }
+        }
+        func hasExplicitTransfer(_ statements: [AlgorithmStatementModel]) -> Bool {
+            containsOccurrence(statements) { statement in
+                switch statement {
+                case .goto, .call, .return, .stop: return true
+                default: return false
+                }
+            }
+        }
+        let assertionOwners = (algorithm.sequentialSteps + algorithm.processes.flatMap(\.steps)
+                               + algorithm.procedures.flatMap(\.steps)).filter { hasAssertion($0.statements) }.count
+        return algorithm.procedures.flatMap { procedure in
+            let labels = procedure.steps.map(\.label.name)
+            let roots = Set(procedure.parameters.map(\.root) + procedure.locals.map(\.root))
+            return procedure.steps.enumerated().compactMap { index, step -> ProcedureLoopSource? in
+                guard let condition = step.loopCondition, index + 1 < labels.count,
+                      let offset = declarationOffset("procedure.\(procedure.name).\(step.label.name)")
+                else { return nil }
+                return .init(owner: .procedure(algorithm: algorithm.name, name: procedure.name),
+                    procedure: procedure.name, labels: labels, slot: index, sourceOffset: offset,
+                    localRoots: roots, condition: condition,
+                    fallsThrough: !hasExplicitTransfer(step.statements),
+                    ownsConfiguredAssertions: assertionOwners == 1 && hasAssertion(step.statements))
+            }
+        }
+    }
+}

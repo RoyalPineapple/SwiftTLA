@@ -17,15 +17,18 @@ struct MacroCompilation {
     let directCopySource: DirectCopySource?
     let directCopyLexicalSource: DirectCopyLexicalSource?
     let stackSeedSource: OrderedIntStackSeedSource?
+    let procedureLoopSources: [SequentialControlEvidence.ProcedureLoopSource]
 
     init(typeName: String, program: CompiledProgram, directCopySource: DirectCopySource? = nil,
          directCopyLexicalSource: DirectCopyLexicalSource? = nil,
-         stackSeedSource: OrderedIntStackSeedSource? = nil) throws {
+         stackSeedSource: OrderedIntStackSeedSource? = nil,
+         procedureLoopSources: [SequentialControlEvidence.ProcedureLoopSource] = []) throws {
         self.typeName = typeName
         self.program = program
         self.directCopySource = directCopySource
         self.directCopyLexicalSource = directCopyLexicalSource
         self.stackSeedSource = stackSeedSource
+        self.procedureLoopSources = procedureLoopSources
         api = try GeneratedMachineAPI(layout: program.layout, actions: program.behavior.actions)
     }
 }
@@ -47,6 +50,9 @@ enum TLASpecVerifier {
         let parser = ParserSession(sourceTypes: sourceMetadata)
         parser.sourceModelTypeName = typeName
         let parsed = parser.parseSpecClosure(named: source.name, source.closure)
+        let procedureLoopSources = SequentialControlEvidence.captureProcedureLoops(source: parsed) {
+            parser.actionDeclarationOffset(for: "actions.\($0)")
+        }
         do {
             let compilation = try parsed.compile()
             try OrderedIntSourceSyntaxCheck.verify(source.closure, parsed: parsed, enums: enumInfos,
@@ -61,7 +67,7 @@ enum TLASpecVerifier {
             return try MacroCompilation(
                 typeName: typeName, program: program, directCopySource: directCopySource,
                 directCopyLexicalSource: directCopySource == nil ? nil : parser.registeredDirectCopyLexicalSource,
-                stackSeedSource: stackSeedSource
+                stackSeedSource: stackSeedSource, procedureLoopSources: procedureLoopSources
             )
         } catch let diagnostic as CompilationDiagnostic {
             var located = diagnostic
