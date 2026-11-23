@@ -76,6 +76,12 @@ package enum OrderedRHSCFGProof {
         guard let selection = normalSelection(for: rendered), let last = actions.last else { return nil }
         let name = catalogModule + "ConfiguredProof"
         let checking = selection.checking
+        let continuations = actions.map {
+            #"/\ \#($0.instance)!RHSOutputExit = \#($0.instance)!RHSOutputAuthoredExit"#
+        }.joined(separator: "\n    ")
+        let continuationTheorems = actions.map {
+            "\($0.instance)!ActualSelectedActionUsesTheAuthoredContinuation"
+        }.joined(separator: ", ")
         let failureSelectors = actions.map { "\($0.instance)!RHSOutputFailureSelected" }
         let observedFailures = actions.map { "\($0.instance)!RHSOutputActualFailures" }
         let localSelectors = failureSelectors.joined(separator: ", ")
@@ -141,6 +147,8 @@ package enum OrderedRHSCFGProof {
         \#(prefix)ConfiguredSteps == \E label : \#(prefix)EmittedLabeled(label)
         \#(prefix)ConfiguredBehavior == Init /\ [][\#(prefix)ConfiguredSteps]_vars
         \#(prefix)SelectedEvaluationCheck == \#(checking)
+        \#(prefix)ConfiguredContinuations ==
+            \#(continuations)
 
         LOCAL AuthoredSlots == DOMAIN \#(prefix)NativeSelectedSteps
         LOCAL AuthoredRoutes == [slot \in AuthoredSlots |-> NativeActionRoutes[slot]]
@@ -175,6 +183,7 @@ package enum OrderedRHSCFGProof {
             /\ LocalOrderedRHSActualCFG = LocalOrderedRHSExpectedCFG
             /\ (Next <=> \#(prefix)ConfiguredSteps)
             /\ (Spec <=> \#(prefix)ConfiguredBehavior)
+            /\ \#(prefix)ConfiguredContinuations
             /\ (\#(prefix)InputType => \E histories :
                 /\ \#(prefix)HistoriesHold(histories)
                 /\ (Next <=> \#(prefix)CertifiedNext(histories))
@@ -272,7 +281,10 @@ package enum OrderedRHSCFGProof {
                 BY ONLY <2>sendSlots, \#(sendFacts), SMT
             <2>. WITNESS histories
             <2>. QED BY ONLY <2>histories, <2>labels, <2>checking, <1>sendDomain, <2>send, SMT
-        <1>. QED BY ONLY NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking, <1>next, <1>behavior, <1>typed, Zenon
+        <1>continuations. \#(prefix)ConfiguredContinuations
+            BY ONLY \#(continuationTheorems) DEF \#(prefix)ConfiguredContinuations
+        <1>. QED BY ONLY NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking,
+            <1>next, <1>behavior, <1>continuations, <1>typed, Zenon
 
         ====
 

@@ -943,9 +943,19 @@ enum AuthoredCopySyntax {
         guard case .set(.root(let firstTarget), _)? = step.statements.first else { throw unsupported }
         let suffix = labels.count == 1 ? "" : "\(renderedModule)Action\(ordinal + 1)"
         let moduleName = "SwiftTLAArithmeticAssignmentSource" + suffix
-        let route = arithmeticRoute(algorithm: selection.algorithm, label: step.label.name, ordinal: ordinal,
-                                    continuation: labels.dropFirst(ordinal + 1).first)
-        let routeDeclaration = suffix.isEmpty ? "" : "\nMasterSelectedRoute == \(route)"
+        let entries = TLAValue.tuple(labels.map { .tuple([.string($0)]) })
+        let routeDeclaration = suffix.isEmpty ? "" : #"""
+
+        MasterRouteRules == INSTANCE ActionOutcomeInterface
+            WITH UpdateValues <- {}, FailureValues <- {}, NoFailure <- <<>>
+        MasterAuthoredEntries == \#(entries)
+        MasterSelectedSlot == \#(ordinal + 1)
+        MasterSelectedRoute ==
+            [algorithm |-> \#(TLAValue.string(selection.algorithm)),
+             label |-> MasterAuthoredEntries[MasterSelectedSlot][1],
+             ordinal |-> MasterSelectedSlot - 1,
+             continuation |-> MasterRouteRules!FollowingSequentialEntry(MasterAuthoredEntries, MasterSelectedSlot, <<>>)]
+        """#
         let module = #"""
         ---- MODULE \#(moduleName) ----
         EXTENDS TLAPS, Integers, Sequences

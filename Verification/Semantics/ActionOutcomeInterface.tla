@@ -78,6 +78,17 @@ PROOF
     BY ONLY (width \in Nat), SMT
 <1>. QED BY ONLY <1>positions, SMT DEF ActionCatalogPrefix
 
+FollowingSequentialEntry(entries, slot, done) ==
+    IF slot + 1 \in DOMAIN entries THEN entries[slot + 1] ELSE done
+
+THEOREM FollowingSequentialEntryUsesTheRegisteredOrder ==
+    ASSUME NEW entries, NEW count \in Nat, DOMAIN entries = 1..count,
+           NEW slot \in DOMAIN entries, NEW done
+    PROVE FollowingSequentialEntry(entries, slot, done) =
+          IF slot < count THEN entries[slot + 1] ELSE done
+    BY ONLY (count \in Nat), (DOMAIN entries = 1..count), (slot \in DOMAIN entries), SMT
+        DEF FollowingSequentialEntry
+
 NativeDispatchBindsTheActionCatalog(routes, formalLabels) ==
     /\ \A first, second \in DOMAIN routes : routes[first].handle = routes[second].handle => first = second
     /\ \A first, second \in DOMAIN formalLabels : formalLabels[first] = formalLabels[second] => first = second

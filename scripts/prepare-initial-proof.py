@@ -593,7 +593,11 @@ def main():
         ordered_copy_attachments = scratch / "ordered-copy-attachments" if selection else None
         if ordered_copy_attachments is not None:
             ordered_copy_attachments.mkdir()
-            test_filter += "|OrderedStepTests/orderedActionsSupplySelectedProofs|SequentialLoopControlTests/preservesCompletion"
+            test_filter += ("|OrderedStepTests/orderedActionsSupplySelectedProofs"
+                            "|SequentialLoopControlTests/preservesCompletion"
+                            "|ProcedureLoweringTests/callReturnRestoresFrame"
+                            "|ProcedureLoweringTests/eachProcessesIsolateProcedureFrames"
+                            "|GuardedStepExecutionTests/guardsProcessAndProcedure")
         command = ["swift", "test", "-Xswiftc", "-warnings-as-errors",
                    "--disable-automatic-resolution", "--filter", test_filter, "-j", "1",
                    "--scratch-path", str(build)]
@@ -898,6 +902,23 @@ def main():
                     or loop[f"{loop_parent}.tla"].read_text().splitlines()[1:2] !=
                         [f"EXTENDS {loop_module}, CallerInputPageBlock1"]):
                 raise ValueError("FinishingLoop attachments do not bind the fixture and control proof")
+            procedure_models = {
+                "ProcedureFrame": ("Tests/SwiftTLATests/ProcedureLoweringTests.swift",
+                                   "ProcedureLoweringTests/callReturnRestoresFrame"),
+                "ProcessProcedureFrame": ("Tests/SwiftTLATests/ProcedureLoweringTests.swift",
+                                          "ProcedureLoweringTests/eachProcessesIsolateProcedureFrames"),
+                "GuardedProcesses": ("Tests/SwiftTLATests/GuardedStepExecutionFixtures.swift",
+                                     "GuardedStepExecutionTests/guardsProcessAndProcedure"),
+            }
+            procedure_names = {Path(source).name for source, _ in procedure_models.values()}
+            procedure_names.update(f"{module}.{ext}" for module in procedure_models for ext in ("cfg", "tla"))
+            if not procedure_names.issubset(attached):
+                raise ValueError("missing physical source, TLA+, or CFG for procedure and loop controls")
+            procedure = {name: attached.pop(name) for name in procedure_names}
+            if (any(path.is_symlink() or not path.is_file() for path in procedure.values())
+                    or any(digest(procedure[Path(source).name]) != inputs[source]
+                           for source, _ in procedure_models.values())):
+                raise ValueError("procedure and loop controls do not bind their tracked source inputs")
             ordinals = sorted(int(match[1]) for name in attached if
                               (match := re.fullmatch(r"SwiftTLAArithmeticAssignmentSourceOrderedCopyAction([1-9][0-9]*)\.tla", name)))
             configuration = "OrderedCopy.cfg"
@@ -949,7 +970,7 @@ def main():
                 "validatorSHA256": digest(binary),
             }
             proof_files = {}
-            for name, path in sorted({**attached, **loop}.items()):
+            for name, path in sorted({**attached, **loop, **procedure}.items()):
                 retained_input = imports / name
                 data = path.read_bytes()
                 if name.endswith(".tla") and data.split(b"\n", 1)[0] != f"---- MODULE {path.stem} ----".encode():
@@ -965,6 +986,13 @@ def main():
                 "configuration": configuration,
                 "configuredProof": configured,
                 "files": {name: proof_files[name] for name in sorted(attached)},
+            }
+            receipt["procedureLoopControlInputs"] = {
+                module: {
+                    "sourceSHA": head, "authoredSource": source, "test": test,
+                    "files": {name: proof_files[name] for name in
+                              (Path(source).name, f"{module}.tla", f"{module}.cfg")},
+                } for module, (source, test) in procedure_models.items()
             }
             receipt["sequentialLoopControl"] = {
                 "sourceSHA": head, "authoredSource": loop_source, "configuration": "FinishingLoop.cfg",

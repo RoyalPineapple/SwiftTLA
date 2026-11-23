@@ -43,8 +43,8 @@ package enum OrderedRHSTLAProof {
               let destinationID = controlDestination(in: body, for: counter.id),
               let destination = layout.controlLocations.first(where: { $0.id == destinationID }) else { return nil }
         let doneName = CompilerControlSymbol.done.rawValue
-        let expectedOwner = source.continuation == nil
-            ? ControlOwner.generated(algorithm: source.algorithm, purpose: doneName) : owner
+        let doneOwner = ControlOwner.generated(algorithm: source.algorithm, purpose: doneName)
+        let expectedOwner = source.continuation == nil ? doneOwner : owner
         guard destination.owner == expectedOwner, destination.id != entry.id,
               destination.sourceName.utf8.elementsEqual((source.continuation ?? doneName).utf8) else { return nil }
         let entryControl = try CompiledValue.controlLocation(entry.id).rendered(using: layout)
@@ -129,11 +129,55 @@ package enum OrderedRHSTLAProof {
         guard case .sequential(let compiledAlgorithm) = entry.owner else { return nil }
         let compiledRoute = AuthoredCopySyntax.arithmeticRoute(algorithm: compiledAlgorithm,
             label: step.declaration.name, ordinal: step.id.ordinal, continuation: compiledContinuation)
-        let routeDefinition = wholeModule ? #"""
-        RHSOutputTermination ==
-            /\ \#(pc) = RHSOutputExit /\ UNCHANGED \#(pc)
-            /\ RHSOutputBefore = RHSOutputAfter
-        """# : "RHSOutputCompiledRoute == \(compiledRoute)"
+        let routeDefinition: String
+        if wholeModule {
+            routeDefinition = #"""
+            RHSOutputTermination ==
+                /\ \#(pc) = RHSOutputExit /\ UNCHANGED \#(pc)
+                /\ RHSOutputBefore = RHSOutputAfter
+            """#
+        } else {
+            func formalControl(_ sourceName: String, owner: ControlOwner) throws -> TLAValue? {
+                let locations = layout.controlLocations.filter {
+                    $0.owner == owner && $0.sourceName.utf8.elementsEqual(sourceName.utf8)
+                }
+                guard locations.count == 1, let location = locations.first else { return nil }
+                return try CompiledValue.controlLocation(location.id).rendered(using: layout)
+            }
+            let entries = try source.labels.compactMap { try formalControl($0, owner: owner) }
+            guard entries.count == source.labels.count, let done = try formalControl(doneName, owner: doneOwner)
+            else { return nil }
+            let slots = "RHSOutputInput!MasterSelectedSlot"
+            let authored = "RHSOutputInput!MasterAuthoredEntries"
+            let following = "RHSOutputInput!MasterRouteRules!FollowingSequentialEntry"
+            let count = source.labels.count
+            routeDefinition = #"""
+            RHSOutputCompiledRoute == \#(compiledRoute)
+            LOCAL RHSOutputFormalEntries == \#(TLAValue.tuple(entries))
+            LOCAL RHSOutputFormalDone == \#(done)
+            RHSOutputAuthoredExit == \#(following)(RHSOutputFormalEntries, \#(slots), RHSOutputFormalDone)
+
+            THEOREM ActualSelectedActionUsesTheAuthoredContinuation ==
+                /\ RHSOutputCompiledRoute = RHSOutputInput!MasterSelectedRoute
+                /\ RHSOutputExit = RHSOutputAuthoredExit
+            PROOF
+            <1>slots.
+                /\ DOMAIN \#(authored) = 1..\#(count)
+                /\ DOMAIN RHSOutputFormalEntries = 1..\#(count)
+                /\ \#(slots) \in 1..\#(count)
+                BY ONLY IsaM("simp") DEF \#(authored), RHSOutputFormalEntries, \#(slots)
+            <1>next.
+                /\ \#(following)(\#(authored), \#(slots), <<>>) =
+                        IF \#(slots) < \#(count) THEN \#(authored)[\#(slots) + 1] ELSE <<>>
+                /\ RHSOutputAuthoredExit =
+                        IF \#(slots) < \#(count) THEN RHSOutputFormalEntries[\#(slots) + 1] ELSE RHSOutputFormalDone
+                BY ONLY <1>slots, RHSOutputInput!MasterRouteRules!FollowingSequentialEntryUsesTheRegisteredOrder, SMT
+                    DEF RHSOutputAuthoredExit
+            <1>. QED BY ONLY <1>next, IsaM("simp")
+                DEF RHSOutputCompiledRoute, RHSOutputInput!MasterSelectedRoute, \#(authored), \#(slots),
+                    RHSOutputExit, RHSOutputFormalEntries, RHSOutputFormalDone
+            """#
+        }
         let routeObservation = wholeModule ? #"""
             /\ (Next <=> (RHSOutputHistoryAdvance(history) \/ RHSOutputTermination))
         """# : #"""
@@ -146,7 +190,7 @@ package enum OrderedRHSTLAProof {
             BY ONLY <1>terminal, <1>frame DEF Next
         """# : #"""
         <1>route. RHSOutputCompiledRoute = RHSOutputInput!MasterSelectedRoute
-            BY ONLY DEF RHSOutputCompiledRoute, RHSOutputInput!MasterSelectedRoute
+            BY ONLY ActualSelectedActionUsesTheAuthoredContinuation
         """#
         let routeFact = wholeModule ? "<1>next" : "<1>route"
         let proof = #"""

@@ -353,11 +353,16 @@ import SwiftSyntax
 
     @Test("A later checked addition reports the failing operands")
     func laterAdditionFailure() throws {
-        let machine = try OrderedOverflowModel.makeMachine()
+        var machine = try OrderedOverflowModel.makeMachine()
+        let before = machine.snapshot
         let reason = NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])
         #expect(throws: reason) {
             try machine.successors(for: .advance)
         }
+        #expect(throws: reason) {
+            try machine.send(.advance)
+        }
+        #expect(machine.snapshot == before)
 
         var context = CheckingContext(registers: try machine.initialCheckingRegisters())
         context.startRecordingOrderedIntAssignmentFailures()

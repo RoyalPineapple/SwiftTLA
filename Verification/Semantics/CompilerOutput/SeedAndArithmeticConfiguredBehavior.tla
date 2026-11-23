@@ -23,6 +23,7 @@ THEOREM TypedArithmeticSendUsesTheCertifiedActionObservation ==
     PROVE /\ ArithmeticSendBinding.checking = "none"
           /\ (Arithmetic!advance <=> (ArithmeticPublicSend.kind = "success" /\
                   ArithmeticPublicSend.current = <<arithmeticPC', Arithmetic!RHSOutputAfter>>))
+          /\ (ArithmeticPublicSend.kind = "success" => ArithmeticSendVisits = <<ArithmeticPublicSend.current>>)
           /\ \E history :
                 /\ Arithmetic!RHSOutputSourceHistory(history)
                 /\ Arithmetic!RHSOutputHistoryObservation(history)
@@ -34,6 +35,7 @@ THEOREM TypedArithmeticSendUsesTheCertifiedActionObservation ==
                       ELSE IF final.failure # <<>>
                       THEN /\ sent.kind = "evaluationFailure" /\ sent.value = final.failure.payload
                            /\ sent.current = ArithmeticSendBefore
+                           /\ ArithmeticSendVisits = <<>>
                       ELSE /\ sent.kind = "success"
                            /\ sent.current = <<Arithmetic!RHSOutputExit, final.bindings>>
                            /\ sent.value = [action |-> Arithmetic!RHSOutputActionLabel,
@@ -92,8 +94,9 @@ PROOF
 <1>overflow. Arithmetic!RHSOutputSelected /\ final.failure # <<>> =>
     /\ sent.kind = "evaluationFailure" /\ sent.value = final.failure.payload
     /\ sent.current = ArithmeticSendBefore
+    /\ ArithmeticSendVisits = <<>>
     BY ONLY <1>visit, <1>interpreted, LenProperties, SMT
-        DEF Send!PublicSendOutcome, ArithmeticSendFailures, final
+        DEF Send!PublicSendOutcome, ArithmeticSendFailures, ArithmeticSendVisits, final
 <1>commit. Arithmetic!RHSOutputSelected /\ final.failure = <<>> =>
     /\ sent.kind = "success" /\ sent.current = <<Arithmetic!RHSOutputExit, final.bindings>>
     /\ sent.value = [action |-> Arithmetic!RHSOutputActionLabel,
@@ -105,6 +108,9 @@ PROOF
                   ArithmeticPublicSend.current = <<arithmeticPC', Arithmetic!RHSOutputAfter>>)
     BY ONLY <1>visit, <1>off, <1>overflow, <1>commit, SMT
         DEF sent, final, Arithmetic!RHSOutputHistoryObservation, Arithmetic!RHSOutputHistoryAdvance
+<1>commitsCallback. ArithmeticPublicSend.kind = "success" =>
+    ArithmeticSendVisits = <<ArithmeticPublicSend.current>>
+    BY ONLY <1>visit, <1>off, <1>overflow, <1>commit, SMT DEF ArithmeticSendVisits, sent, final
 <1>result. \E witness :
     /\ Arithmetic!RHSOutputSourceHistory(witness)
     /\ Arithmetic!RHSOutputHistoryObservation(witness)
@@ -116,13 +122,14 @@ PROOF
           ELSE IF tail.failure # <<>>
           THEN /\ result.kind = "evaluationFailure" /\ result.value = tail.failure.payload
                /\ result.current = ArithmeticSendBefore
+               /\ ArithmeticSendVisits = <<>>
           ELSE /\ result.kind = "success"
                /\ result.current = <<Arithmetic!RHSOutputExit, tail.bindings>>
                /\ result.value = [action |-> Arithmetic!RHSOutputActionLabel,
                                    before |-> Arithmetic!RHSOutputBefore, after |-> tail.bindings]
     <2>. WITNESS history
     <2>. QED BY ONLY <1>visit, <1>off, <1>overflow, <1>commit, SMT DEF sent, final
-<1>. QED BY ONLY <1>route, <1>step, <1>result, PTL
+<1>. QED BY ONLY <1>route, <1>step, <1>commitsCallback, <1>result, PTL
 
 THEOREM ConfiguredNativeAndTLAUseTheCertifiedCopyAndOverflowOutcomes ==
     /\ (\A label : SwiftTLACopyNativeLabeled(label) <=> SwiftTLACopySourceLabeled(label))
@@ -141,12 +148,14 @@ THEOREM ConfiguredNativeAndTLAUseTheCertifiedCopyAndOverflowOutcomes ==
     /\ (Arithmetic!RHSOutputStateType =>
         (Arithmetic!RHSOutputSelectedEvaluationCheck <=> Arithmetic!RHSOutputActualFailures = {}))
     /\ (Arithmetic!RHSOutputStateType =>
-        (Arithmetic!advance <=> (ArithmeticPublicSend.kind = "success" /\
-            ArithmeticPublicSend.current = <<arithmeticPC', Arithmetic!RHSOutputAfter>>)))
+        /\ (Arithmetic!advance <=> (ArithmeticPublicSend.kind = "success" /\
+              ArithmeticPublicSend.current = <<arithmeticPC', Arithmetic!RHSOutputAfter>>))
+        /\ (ArithmeticPublicSend.kind = "success" => ArithmeticSendVisits = <<ArithmeticPublicSend.current>>))
     /\ (Arithmetic!Init =>
         /\ ArithmeticPublicSend.kind = "evaluationFailure"
         /\ ArithmeticPublicSend.value = <<"integerOverflow", "addition", <<Arithmetic!RHSOutputMax, 1>>>>
         /\ ArithmeticPublicSend.current = ArithmeticSendBefore
+        /\ ArithmeticSendVisits = <<>>
         /\ Arithmetic!RHSOutputSelectedSubExpressions = {<<2, 3>>}
         /\ Arithmetic!RHSOutputActualFailures = {Arithmetic!ActualNativeProjection}
         /\ Arithmetic!RHSOutputActualFailures =
@@ -191,13 +200,15 @@ PROOF
         Arithmetic!ActualInitialEventRecordsTheExactOverflowAndPrecedingBindings, PTL
         DEF CallerInputSize, Arithmetic!CallerInputSize
 <1>sendStep. ASSUME Arithmetic!RHSOutputStateType
-    PROVE Arithmetic!advance <=> (ArithmeticPublicSend.kind = "success" /\
-        ArithmeticPublicSend.current = <<arithmeticPC', Arithmetic!RHSOutputAfter>>)
+    PROVE /\ (Arithmetic!advance <=> (ArithmeticPublicSend.kind = "success" /\
+              ArithmeticPublicSend.current = <<arithmeticPC', Arithmetic!RHSOutputAfter>>))
+          /\ (ArithmeticPublicSend.kind = "success" => ArithmeticSendVisits = <<ArithmeticPublicSend.current>>)
     BY ONLY Arithmetic!RHSOutputStateType, TypedArithmeticSendUsesTheCertifiedActionObservation, PTL
 <1>sendFailure. ASSUME Arithmetic!Init
     PROVE /\ ArithmeticPublicSend.kind = "evaluationFailure"
           /\ ArithmeticPublicSend.value = <<"integerOverflow", "addition", <<Arithmetic!RHSOutputMax, 1>>>>
           /\ ArithmeticPublicSend.current = ArithmeticSendBefore
+          /\ ArithmeticSendVisits = <<>>
     <2>type. Arithmetic!RHSOutputStateType
         BY ONLY Arithmetic!Init, SMT DEF Arithmetic!Init, Arithmetic!RHSOutputStateType,
             Arithmetic!RHSOutputBefore, Arithmetic!RHSOutputKeys, Arithmetic!RHSOutputMin, Arithmetic!RHSOutputMax
@@ -213,6 +224,7 @@ PROOF
            IN (Arithmetic!RHSOutputSelected /\ final.failure # <<>>) =>
                /\ sent.kind = "evaluationFailure" /\ sent.value = final.failure.payload
                /\ sent.current = ArithmeticSendBefore
+               /\ ArithmeticSendVisits = <<>>
         BY ONLY <2>type, TypedArithmeticSendUsesTheCertifiedActionObservation, SMT
     <2>. QED BY ONLY <2>event, <2>history, SMT DEF Arithmetic!RHSOutputHistoryObservation,
         Arithmetic!RHSOutputHistoryFailures, Arithmetic!RHSOutputFailureEvent

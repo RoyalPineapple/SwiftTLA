@@ -441,17 +441,6 @@ LOCAL NativeAssignmentAdvanceTo(after, destination) ==
 
 ActualNativeAssignmentAdvance == NativeAssignmentAdvanceTo(RHSOutputAfter, pc')
 
-\* The decoded straight-line visitor calls the complete-update continuation
-\* at most once. The per-action successor wrapper materializes that callback
-\* and calls its collector. The only generated control cases are Entry and Exit.
-LOCAL NativeAssignmentTargets ==
-    {target \in {RHSOutputEntry, RHSOutputExit} \X RHSOutputInput!Rule!AssignmentBindings :
-        NativeAssignmentAdvanceTo(target[2], target[1])}
-
-ActualNativeAssignmentCallbackSnapshots ==
-    IF NativeAssignmentTargets = {} THEN <<>>
-    ELSE <<CHOOSE target : target \in NativeAssignmentTargets>>
-
 LOCAL NativeAssignmentBefore ==
     [key \in RHSOutputKeys \cup {"pc"} |-> IF key = "pc" THEN pc ELSE RHSOutputBefore[key]]
 
@@ -463,6 +452,11 @@ LOCAL NativeAssignmentFinalPrefix ==
 
 LOCAL NativeAssignmentCheckedAppendSites ==
     {NativeSelectedFailureAppendSites[index] : index \in DOMAIN NativeSelectedFailureAppendSites}
+
+ActualNativeAssignmentCallbackSnapshots ==
+    RHSOutputInput!Rule!DecodedNativeAssignmentOrderedOutput(
+        RHSOutputRows, DecodedNativeAction, NativeFormalNames, "pc", RHSOutputBefore, pc,
+        NativeAssignmentCheckedAppendSites).callbacks
 
 LOCAL NativeAssignmentEmptyFailureBuffer ==
     [count |-> 0, items |-> [index \in {} |-> index]]
@@ -577,18 +571,6 @@ PROOF
 <1>advance. ActualNativeAssignmentAdvance <=> advance
     BY ONLY <1>actual, <1>to, SMT DEF ActualNativeAssignmentAdvance,
         RHSOutputHistoryObservation, RHSOutputHistoryAdvance, final
-<1>snapshots. ActualNativeAssignmentCallbackSnapshots =
-    IF RHSOutputSelected /\ final.failure = <<>>
-    THEN << <<RHSOutputExit, final.bindings>> >> ELSE <<>>
-    <2>target. <<RHSOutputExit, final.bindings>> \in {RHSOutputEntry, RHSOutputExit} \X RHSOutputInput!Rule!AssignmentBindings
-        BY ONLY <1>typedFinal, SMT
-    <2>none. CASE ~RHSOutputSelected \/ final.failure # <<>>
-        BY ONLY <1>to, <2>none, SMT DEF ActualNativeAssignmentCallbackSnapshots, NativeAssignmentTargets
-    <2>one. CASE RHSOutputSelected /\ final.failure = <<>>
-        <3>targets. NativeAssignmentTargets = {<<RHSOutputExit, final.bindings>>}
-            BY ONLY <1>to, <2>target, <2>one, SMT DEF NativeAssignmentTargets
-        <3>. QED BY ONLY <3>targets, SMT DEF ActualNativeAssignmentCallbackSnapshots
-    <2>. QED BY ONLY <2>none, <2>one, SMT
 <1>guard. NormalizedNativeAction.guards = <<RHSOutputEntry>>
     BY ONLY ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles, SMT
         DEF NormalizedNativeAction, RHSOutputInput!Rule!NativeAssignmentsNameTheirOperandsAndWrites,
@@ -611,6 +593,22 @@ PROOF
 <1>sites. NativeAssignmentCheckedAppendSites = 1..RHSOutputCount
     BY ONLY RHSOutputSourceRowsAreSupportedAndMatchTheActionInventory, SMT
         DEF NativeAssignmentCheckedAppendSites, NativeSelectedFailureAppendSites
+<1>snapshotInputs. RHSOutputInput!Rule!NativeAssignmentObservationInputs(
+    RHSOutputRows, DecodedNativeAction, NativeFormalNames, "pc", RHSOutputEntry, RHSOutputExit,
+    RHSOutputBefore, pc, NativeAssignmentCheckedAppendSites, history)
+    BY ONLY <1>type, <1>source, <1>prefix, <1>sites, ActualNativeActionOperandsAndWritesNameTheAuthoredAssignmentRoles,
+        SMT DEF RHSOutputInput!Rule!NativeAssignmentObservationInputs, final, RHSOutputCount
+<1>ordered. RHSOutputInput!Rule!NativeAssignmentObservationMatches(
+    RHSOutputRows, DecodedNativeAction, NativeFormalNames, "pc", RHSOutputEntry, RHSOutputExit,
+    RHSOutputBefore, RHSOutputAfter, pc, pc', NativeAssignmentCheckedAppendSites, history)
+    BY ONLY <1>snapshotInputs, RHSOutputUsesTheMachineIntegerDomain,
+        RHSOutputInput!Rule!DecodedNativeAssignmentsUseTheCertifiedActionObservation, SMT
+<1>snapshots. ActualNativeAssignmentCallbackSnapshots =
+    IF RHSOutputSelected /\ final.failure = <<>>
+    THEN << <<RHSOutputExit, final.bindings>> >> ELSE <<>>
+    BY ONLY <1>ordered, SMT DEF RHSOutputInput!Rule!NativeAssignmentObservationMatches,
+        RHSOutputInput!Rule!CertifiedAssignmentOrderedOutput, ActualNativeAssignmentCallbackSnapshots,
+        RHSOutputSelected, RHSOutputCount, final
 <1>returned. ActualNativeAssignmentFailureReasons =
     IF RHSOutputSelected /\ final.failure # <<>> THEN <<final.failure.payload>> ELSE <<>>
     <2>inactive. CASE ~RHSOutputSelected \/ final.failure = <<>>
