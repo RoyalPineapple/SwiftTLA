@@ -31,6 +31,7 @@ let _arithmetic2: Int = try SwiftTLA._nativeIntAdd(_arithmetic0, _arithmetic1)
 }())
 try _actionPart3(___atomic_0_0, updates, emit)
 } catch let failure as NativeMachineEvaluationError where failure.isModelEvaluationFailure {
+    SwiftTLA._recordNativeOrderedIntAssignmentFailure(&context, actionOrdinal: 0, assignmentOrdinal: 1, preceding: [], reason: failure)
     failures.append(failure)
 }
 }

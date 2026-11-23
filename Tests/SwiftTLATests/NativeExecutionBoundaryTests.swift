@@ -650,13 +650,7 @@ private struct ReachableInvariantFailure {
         let swiftAction = try #require(try emitter.machineMembers().first {
             $0.description.contains("private static func _visitUpdates0(")
         }?.description)
-        let additionWitness = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
-            .standardizedFileURL
-        let expectedSwift = nativeWitnessSource(try String(contentsOf: additionWitness, encoding: .utf8))
-            .replacingOccurrences(of: "let _arithmetic1: \(nativeIntType) = 1", with: "let _arithmetic1: \(nativeIntType) = -1")
-            .replacingOccurrences(of: "_nativeIntAdd", with: "_NativeMachineOperations.subtract")
+        let expectedSwift = try scalarArithmeticWitness(operation: "subtract", operand: -1)
         let actualTokens = Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
         let expectedTokens = Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text)
         #expect(actualTokens == expectedTokens)
@@ -725,13 +719,7 @@ private struct ReachableInvariantFailure {
         let swiftAction = try #require(try emitter.machineMembers().first {
             $0.description.contains("private static func _visitUpdates0(")
         }?.description)
-        let witness = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
-            .standardizedFileURL
-        let expectedSwift = nativeWitnessSource(try String(contentsOf: witness, encoding: .utf8))
-            .replacingOccurrences(of: "let _arithmetic1: \(nativeIntType) = 1", with: "let _arithmetic1: \(nativeIntType) = 2")
-            .replacingOccurrences(of: "_nativeIntAdd", with: "_NativeMachineOperations.multiply")
+        let expectedSwift = try scalarArithmeticWitness(operation: "multiply", operand: 2)
         #expect(Array(Parser.parse(source: swiftAction).tokens(viewMode: .sourceAccurate)).map(\.text)
             == Array(Parser.parse(source: expectedSwift).tokens(viewMode: .sourceAccurate)).map(\.text))
 
@@ -878,6 +866,21 @@ private struct CheckedRecordConversion {
 }
 
 extension NativeExecutionBoundaryTests {
+
+    private func scalarArithmeticWitness(operation: String, operand: Int) throws -> String {
+        let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Verification/Semantics/CheckedExecutionOverflowSwiftWitness.txt")
+        let source = try String(contentsOf: file, encoding: .utf8)
+        // Only the ordered addition route records the assignment prefix.
+        let record = "SwiftTLA._recordNativeOrderedIntAssignmentFailure(&context, actionOrdinal: 0, assignmentOrdinal: 1, preceding: [], reason: failure)"
+        let parts = source.components(separatedBy: record)
+        try #require(parts.count == 2)
+        return nativeWitnessSource(parts.joined())
+            .replacingOccurrences(of: "let _arithmetic1: \(nativeIntType) = 1",
+                                  with: "let _arithmetic1: \(nativeIntType) = \(operand)")
+            .replacingOccurrences(of: "_nativeIntAdd", with: "_NativeMachineOperations.\(operation)")
+    }
+
     @Test("record narrowing preserves valid fields and rejects out-of-domain values")
     func checkedRecordConversion() throws {
         var machine = try CheckedRecordConversion.makeMachine()
