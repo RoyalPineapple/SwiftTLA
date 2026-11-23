@@ -425,7 +425,7 @@ extension SequentialControlEvidence {
         LOCAL DeclaredFollowing(rows, count, slot) ==
             IF slot < count THEN DeclaredEntry(rows, slot + 1) ELSE DeclaredDone
         LOCAL DeclaredEntryGuard(location) ==
-            <<"guard", <<"equal", <<"programCounter">>, <<"controlLocation", location[1], location[2]>>>>
+            <<"guard", <<"equal", <<"programCounter">>, <<"controlLocation", location[1], location[2]>>>>>>
         LOCAL DeclaredDynamicWhile(row) ==
             row.loop \notin {<<>>, <<"literal", TRUE>>, <<"literal", FALSE>>}
         LOCAL DeclaredBodyTransfers(row) ==
