@@ -50,7 +50,8 @@ public enum MachineSimulator {
                 .map(SafetyViolation.invariant)
             if !failures.isEmpty {
                 let result: NativeSimulationResult<Machine> = .counterexample(.init(
-                    violations: failures, trace: [(nil, machine.snapshot)], checking: checking))
+                    violations: failures, trace: [(nil, machine.snapshot)], checking: checking,
+                    configurationSource: first))
                 try onTrace?(result)
                 return result
             }
@@ -101,7 +102,7 @@ public enum MachineSimulator {
                         .map(SafetyViolation.invariant)
                     if !failures.isEmpty {
                         witness = .init(violations: failures,
-                            trace: trace + [(action, successor.snapshot)], checking: checking)
+                            trace: trace + [(action, successor.snapshot)], checking: checking, configurationSource: first)
                         return false
                     }
                     if permitted {
@@ -130,7 +131,8 @@ public enum MachineSimulator {
             }
             guard let selected else {
                 if checking.checkDeadlock && !hasRawSuccessor {
-                    return .counterexample(.init(violations: [.deadlock], trace: trace, checking: checking))
+                    return .counterexample(.init(violations: [.deadlock], trace: trace, checking: checking,
+                        configurationSource: first))
                 }
                 return try finishTrace(trace, reason: .deadEnd, first: first,
                     checking: checking, behavior: behavior, fairness: fairness,

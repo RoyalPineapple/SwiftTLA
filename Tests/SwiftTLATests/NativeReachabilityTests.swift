@@ -75,6 +75,36 @@ import SwiftTLA
         #expect(!graph.safetyViolations.values.joined().contains(.deadlock))
     }
 
+    @Test("Replay follows the recorded choice and checks the starting control location")
+    func replaysBranchingWitness() throws {
+        let start = try BranchingControl.makeMachine()
+        let before = start.snapshot
+        guard case .counterexample(let witness) = try start.check(
+            properties: [.AtMostOne], checkDeadlock: false, maximumStates: 10
+        ) else {
+            Issue.record("Expected the choice of two to violate AtMostOne")
+            return
+        }
+        let failed = try start.replay(witness)
+        #expect(failed.state.value == 2)
+        #expect(failed.snapshot == witness.trace.last?.state)
+        #expect(start.snapshot == before)
+
+        var entered = start
+        _ = try entered.send(.enter)
+        #expect(entered.state == start.state)
+        #expect(throws: ExplorationError.replayMismatch(step: 0)) { try entered.replay(witness) }
+
+        guard case .counterexample(let initialViolation) = try failed.check(
+            properties: [.AtMostOne], checkDeadlock: false, maximumStates: 1
+        ) else {
+            Issue.record("Expected an initial violation at the failing snapshot")
+            return
+        }
+        #expect(initialViolation.trace.count == 1)
+        #expect(try failed.replay(initialViolation).snapshot == failed.snapshot)
+    }
+
     @Test("An unfinished blocked machine is a deadlock with an initial-state trace")
     func blockedControlIsDeadlocked() throws {
         var initial = try BlockedControl.makeMachine()

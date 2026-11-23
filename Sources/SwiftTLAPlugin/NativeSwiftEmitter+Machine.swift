@@ -1404,6 +1404,22 @@ extension NativeSwiftEmitter {
                 return Self(execution: execution\(configurationArguments))
             }
         }
+        public func successor(for action: Action, matching target: Snapshot) throws -> Self? {
+            var context: CheckingContext<CheckingRegisters>?
+            var match: Self?
+            do {
+                let failures = try _visitSuccessors(for: action, checking: &context) { execution in
+                    if execution == target {
+                        match = Self(execution: execution\(configurationArguments))
+                        throw _StopSuccessorTraversal()
+                    }
+                }
+                if let failure = SwiftTLA._firstNativeEvaluationFailure(failures) { throw failure }
+            } catch is _StopSuccessorTraversal {
+                return match
+            }
+            return nil
+        }
         private func _visitActionCandidates(_ visit: (Action) throws -> Void) throws {
             \(candidateEnumeration.joined(separator: "\n"))
         }

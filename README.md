@@ -129,24 +129,16 @@ print(transition.after)
 Start the clock at 23:59:59 and select its `ValidTime` invariant. This check
 explores up to ten states from that one start. A counterexample contains the
 initial snapshot and the action and snapshot for each step that follows.
+Replay follows those steps and returns a clock at the failure. The starting clock stays at 23:59:59.
 
 ```swift
 let start = try ClockModel.makeMachine(.init(hour: 23, minute: 59, second: 59))
 do {
-    let result = try ReachabilityGraph.check(
-        initialMachines: [start], maximumStates: 10,
-        checking: .init(properties: [.ValidTime], checkDeadlock: false)
-    )
+    let result = try start.check(properties: [.ValidTime], checkDeadlock: false, maximumStates: 10)
     switch result {
     case .counterexample(let witness):
-        var replay = start
-        for step in witness.trace {
-            if let action = step.action {
-                _ = try replay.send(action)
-            }
-            print(replay.state)
-            assert(replay.snapshot == step.state)
-        }
+        let failedClock = try start.replay(witness)
+        print(failedClock.state)
     case .exhausted:
         print("ValidTime held in every reachable state from this start.")
     }

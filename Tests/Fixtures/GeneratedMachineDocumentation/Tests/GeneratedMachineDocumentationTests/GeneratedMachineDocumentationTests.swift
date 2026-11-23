@@ -153,6 +153,20 @@ struct GeneratedMachineDocumentationTests {
         #expect(machine.state == beforeFailure)
     }
 
+    @Test("checking a completed counter explores from its current snapshot")
+    func checksFromCurrentSnapshot() throws {
+        var counter = try SequentialCounter.makeMachine()
+        _ = try counter.send(.advance)
+        let completed = counter.snapshot
+        let result = try counter.check(properties: [], checkDeadlock: false, maximumStates: 1)
+        guard case .exhausted(let graph) = result else {
+            Issue.record("Expected a complete graph from the stopped counter")
+            return
+        }
+        #expect(graph.initialStates == [completed])
+        #expect(counter.snapshot == completed)
+    }
+
     @Test("a standalone consumer checks its generated machine without parity infrastructure")
     func checksGeneratedMachineWithoutTLC() throws {
         var sawAdvance = false
