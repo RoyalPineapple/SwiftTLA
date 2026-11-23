@@ -303,14 +303,21 @@ import SwiftSyntax
         #expect(proofs.map(\.sourceContinuation) == ["repeatWrites", nil])
         #expect(Set(proofs.map { $0.source.name }).count == proofs.count)
         #expect(Set(proofs.map { $0.output.name }).count == proofs.count)
+        let catalog = try ArithmeticAssignmentEvidence.catalogProof(for: rendered, translations: proofs)
+        #expect(throws: InitialFailureEvidenceError.unsupportedGeneratedOutput) {
+            try ArithmeticAssignmentEvidence.catalogProof(for: rendered, translations: Array(proofs.dropLast()))
+        }
 #if compiler(>=6.2)
         let actual = rendered.tlaBundle.root
         Attachment.record(Array(authored), named: fixture.lastPathComponent)
         Attachment.record(Array(actual.tla.utf8), named: "\(actual.name).tla")
+        Attachment.record(Array(catalog.bytes), named: "\(catalog.name).tla")
         for proof in proofs {
             Attachment.record(Array(proof.source.bytes), named: "\(proof.source.name).tla")
             Attachment.record(Array(proof.output.bytes), named: "\(proof.output.name).tla")
         }
+#else
+        _ = catalog
 #endif
     }
 

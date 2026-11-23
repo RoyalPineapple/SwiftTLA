@@ -876,7 +876,7 @@ def main():
         if ordered_copy_attachments is not None:
             swift_source = "Tests/SwiftTLATests/OrderedStepFixtures.swift"
             attached_source = Path(swift_source).name
-            expected = {"OrderedCopy.tla", attached_source}
+            expected = {"OrderedCopy.tla", "SwiftTLAOrderedAssignmentCatalogOrderedCopy.tla", attached_source}
             expected.update(f"SwiftTLA{kind}OrderedCopyAction{row}.tla"
                             for kind in ("ArithmeticAssignmentSource", "OrderedRHSOutputProof") for row in (1, 2))
             attached = {path.name: path for path in ordered_copy_attachments.iterdir()}
