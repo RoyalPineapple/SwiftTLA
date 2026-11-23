@@ -3,7 +3,7 @@ import SwiftTLAMacros
 
 @TLAModel
 struct OrderedFieldCopyModel {
-    enum Step: String, CaseIterable { case copy, copyThenReset, resetThenCopy }
+    enum Step: String, CaseIterable { case copy, copyThenReset, resetThenCopy, accumulate, overflow }
 
     static var spec: TLASpec {
         #spec {
@@ -25,6 +25,14 @@ struct OrderedFieldCopyModel {
                     state.x = 7
                     state.x = 0
                     state.y = state.x
+                }
+                Do(Step.accumulate, in: State.self) { state in
+                    state.y += 3
+                    state.x += state.y
+                }
+                Do(Step.overflow, in: State.self) { state in
+                    state.x = 9_223_372_036_854_775_807
+                    state.x += state.y
                 }
             }
             copies

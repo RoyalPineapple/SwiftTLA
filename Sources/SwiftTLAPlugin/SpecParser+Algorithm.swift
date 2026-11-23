@@ -1173,6 +1173,11 @@ extension ParserSession {
                             algorithmSourceDiagnostic = .init(message: "Declare the state field '\(target)' before this assignment.", source: write.target)
                             return nil
                         }
+                        if write.adds && !scope.hasField(target, ofType: .int) {
+                            algorithmSourceDiagnostic = .init(message: "The target of += must be an Int state field.", source: write.target)
+                            return nil
+                        }
+                        let operand: StateExpr
                         switch write.source {
                         case .field(let field):
                             let source = field.sourceIdentifierName
@@ -1180,14 +1185,20 @@ extension ParserSession {
                                 algorithmSourceDiagnostic = .init(message: "Declare the state field '\(source)' before this assignment.", source: field)
                                 return nil
                             }
-                            statements.append(.copyField(target: target, source: source))
+                            if write.adds && !scope.hasField(source, ofType: .int) {
+                                algorithmSourceDiagnostic = .init(message: "The amount added by += must be an Int.", source: field)
+                                return nil
+                            }
+                            operand = .variable(source)
                         case .integer(let value):
                             guard scope.hasField(target, ofType: .int) else {
                                 algorithmSourceDiagnostic = .init(message: "An integer literal requires an Int state field.", source: write.target)
                                 return nil
                             }
-                            statements.append(.set(target: .root(target), value: .value(.int(value))))
+                            operand = .value(.int(value))
                         }
+                        let value = write.adds ? StateExpr.add(.variable(target), operand) : operand
+                        statements.append(.set(target: .root(target), value: value))
                     }
                 } catch {
                     algorithmSourceDiagnostic = .init(message: error.message, source: error.node)

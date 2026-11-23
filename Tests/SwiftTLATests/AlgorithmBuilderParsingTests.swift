@@ -67,6 +67,9 @@ import SwiftTLAMacros
         #expect(try parseCopy("work.second = work.x").diagnostics.isEmpty)
         #expect(try parseCopy("work.second = -0x10").diagnostics.isEmpty)
         for (body, detail) in [
+            ("work.enabled += 1", "target of += must be an Int"),
+            ("work.x += work.enabled", "amount added by += must be an Int"),
+            ("work.x += other.second", "whole fields of work"),
             ("work.enabled = 0", "requires an Int state field"),
             ("work.alias = 0", "Declare the state field 'alias'"),
             ("work.x = x", "whole fields of work"),

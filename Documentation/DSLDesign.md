@@ -351,9 +351,11 @@ Do(Step.reset, in: State.self) { state in
 ```
 
 After the reset, `previous` is 7 and `count` is 0. Reverse the two assignments
-and both fields become 0. The closure declares
-one atomic action. Use the ordinary `Do` body for calculations, choices, and
-control statements.
+and both fields become 0. You can also write `state.count += 1` or
+`state.count += state.batch` when both fields are integers. The addition reads
+their values at that line. If it overflows, the step reports the operands and
+commits none of its writes. Use the ordinary `Do` body for compound right-hand
+expressions, choices, and control statements.
 
 Repeated assignments are allowed and execute in order. Conditions, nested
 `When` guards, and choice domains read the values available at their position in

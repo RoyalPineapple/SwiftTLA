@@ -9,6 +9,7 @@ struct StateCopySyntax {
 
     struct FieldAssignment {
         let target: TokenSyntax
+        let adds: Bool
         let source: Source
     }
 
@@ -44,14 +45,14 @@ struct StateCopySyntax {
         }
         var writes: [FieldAssignment] = []
         for item in closure.statements {
-            guard case .expr(let expression) = item.item, let (lhs, rhs) = assignment(expression),
+            guard case .expr(let expression) = item.item, let (lhs, adds, rhs) = assignment(expression),
                   let target = field(lhs) else {
                 throw Problem(node: Syntax(item), message: "Assign to whole fields of \(binder), for example \(binder).y = \(binder).x.")
             }
             if let source = field(rhs) {
-                writes.append(.init(target: target, source: .field(source)))
+                writes.append(.init(target: target, adds: adds, source: .field(source)))
             } else if let value = SourceIntegerLiteral.value(rhs) {
-                writes.append(.init(target: target, source: .integer(value)))
+                writes.append(.init(target: target, adds: adds, source: .integer(value)))
             } else {
                 throw Problem(node: Syntax(rhs), message: "Use whole fields of \(binder) or an Int literal on the right side of this assignment.")
             }
@@ -59,13 +60,19 @@ struct StateCopySyntax {
         return writes
     }
 
-    private static func assignment(_ expression: ExprSyntax) -> (ExprSyntax, ExprSyntax)? {
-        if let infix = expression.as(InfixOperatorExprSyntax.self), infix.operator.is(AssignmentExprSyntax.self) {
-            return (infix.leftOperand, infix.rightOperand)
+    private static func assignment(_ expression: ExprSyntax) -> (ExprSyntax, Bool, ExprSyntax)? {
+        let lhs: ExprSyntax, op: ExprSyntax, rhs: ExprSyntax
+        if let infix = expression.as(InfixOperatorExprSyntax.self) {
+            (lhs, op, rhs) = (infix.leftOperand, infix.operator, infix.rightOperand)
+        } else if let sequence = expression.as(SequenceExprSyntax.self), sequence.elements.count == 3,
+                  let first = sequence.elements.first, let middle = sequence.elements.dropFirst().first,
+                  let last = sequence.elements.last {
+            (lhs, op, rhs) = (first, middle, last)
+        } else {
+            return nil
         }
-        guard let sequence = expression.as(SequenceExprSyntax.self), sequence.elements.count == 3,
-              sequence.elements.dropFirst().first?.is(AssignmentExprSyntax.self) == true,
-              let lhs = sequence.elements.first, let rhs = sequence.elements.last else { return nil }
-        return (lhs, rhs)
+        if op.is(AssignmentExprSyntax.self) { return (lhs, false, rhs) }
+        guard op.as(BinaryOperatorExprSyntax.self)?.operator.text == "+=" else { return nil }
+        return (lhs, true, rhs)
     }
 }

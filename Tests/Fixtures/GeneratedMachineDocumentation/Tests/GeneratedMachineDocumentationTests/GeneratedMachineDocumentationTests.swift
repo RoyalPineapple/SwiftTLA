@@ -11,6 +11,12 @@ struct GeneratedMachineDocumentationTests {
         #expect(after == .init(x: 4, y: 2, z: 2))
         #expect(try machine.send(.copyThenReset).after == .init(x: 0, y: 7, z: 2))
         #expect(try machine.send(.resetThenCopy).after == .init(x: 0, y: 0, z: 2))
+        #expect(try machine.send(.accumulate).after == .init(x: 3, y: 3, z: 2))
+        let beforeOverflow = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 3])) {
+            try machine.send(.overflow)
+        }
+        #expect(machine.snapshot == beforeOverflow)
         let reference = #spec("OrderedFieldCopyModel") {
             let copies = Algorithm { scope in
                 let x = scope.sharedVar(initial: 2)
@@ -30,6 +36,14 @@ struct GeneratedMachineDocumentationTests {
                     Assign(x, to: 7)
                     Assign(x, to: 0)
                     Assign(y, to: x)
+                }
+                Do(OrderedFieldCopyModel.Step.accumulate) {
+                    Assign(y, to: y + 3)
+                    Assign(x, to: x + y)
+                }
+                Do(OrderedFieldCopyModel.Step.overflow) {
+                    Assign(x, to: 9_223_372_036_854_775_807)
+                    Assign(x, to: x + y)
                 }
             }
             copies

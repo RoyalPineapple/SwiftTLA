@@ -978,7 +978,7 @@ public struct StepCopyFields<Fields: GeneratedModelFields>: Sendable {
     }
 
     public struct IntegerValue: ExpressibleByIntegerLiteral, Sendable {
-        fileprivate let expression: StateExpr?
+        fileprivate var expression: StateExpr?
 
         public init(integerLiteral value: Int) {
             expression = .value(.int(value))
@@ -986,6 +986,14 @@ public struct StepCopyFields<Fields: GeneratedModelFields>: Sendable {
 
         fileprivate init(field: KeyPath<Fields, Int>) {
             expression = Fields.fieldIdentities[field].map { .variable($0.formalName) }
+        }
+
+        public static func += (lhs: inout Self, rhs: Self) {
+            guard let left = lhs.expression, let right = rhs.expression else {
+                lhs.expression = nil
+                return
+            }
+            lhs.expression = .add(left, right)
         }
     }
 
