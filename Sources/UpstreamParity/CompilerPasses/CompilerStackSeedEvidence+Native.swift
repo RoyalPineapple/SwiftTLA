@@ -52,7 +52,7 @@ func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws {
         private func _successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
             var result: [Snapshot] = []
             let failures = try _visitSuccessors(for: action, checking: &context) { SwiftTLA._appendNativeOutcome(&result, $0) }
-            if let failure = failures.first { throw failure }
+            if let failure = SwiftTLA._firstNativeEvaluationFailure(failures) { throw failure }
             return result
         }
         """), matches(words(context), """

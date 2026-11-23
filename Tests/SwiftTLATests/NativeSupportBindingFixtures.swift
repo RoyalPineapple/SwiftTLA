@@ -56,6 +56,10 @@ private extension ArraySlice where Element == NativeSupportBindingModel.Snapshot
 
 private func || (lhs: Bool, rhs: @autoclosure () -> Bool) -> Bool { false }
 
+private extension Array where Element == NativeMachineEvaluationError {
+    var first: Element? { nil }
+}
+
 private extension Array where Element == NativeSupportBindingModel.Snapshot {
     func map<Result>(_ transform: (Element) throws -> Result) rethrows -> [Result] { [] }
 

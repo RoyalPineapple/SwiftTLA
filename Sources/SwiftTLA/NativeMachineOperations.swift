@@ -184,6 +184,14 @@ public func _mapNativeOutcomes<Source: Sendable, Result: Sendable>(
     outcomes.map(transform)
 }
 
+/// Keep generated evaluation failure selection in library scope.
+@_documentation(visibility: internal)
+public func _firstNativeEvaluationFailure(
+    _ failures: [NativeMachineEvaluationError]
+) -> NativeMachineEvaluationError? {
+    failures.first
+}
+
 /// Select one generated outcome without calling caller collection overloads.
 @_documentation(visibility: internal)
 public func _singleNativeOutcome<Outcome: Sendable>(

@@ -1248,7 +1248,7 @@ extension NativeSwiftEmitter {
                 \(loops)
                 var enabled = false
                 let failures = try _visitUpdates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(configurationArguments), checking: &context) { _ in enabled = true }
-                if let failure = failures.first { throw failure }
+                if let failure = SwiftTLA._firstNativeEvaluationFailure(failures) { throw failure }
                 if enabled { return true }
                 \(closing)
                 return false
@@ -1370,7 +1370,7 @@ extension NativeSwiftEmitter {
                         throw _StopSuccessorTraversal()
                     }
                 }
-                if let failure = failures.first { throw failure }
+                if let failure = SwiftTLA._firstNativeEvaluationFailure(failures) { throw failure }
             } catch is _StopSuccessorTraversal {
             }
             return found
@@ -1387,7 +1387,7 @@ extension NativeSwiftEmitter {
         private func _successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
             var result: [Snapshot] = []
             let failures = try _visitSuccessors(for: action, checking: &context) { SwiftTLA._appendNativeOutcome(&result, $0) }
-            if let failure = failures.first { throw failure }
+            if let failure = SwiftTLA._firstNativeEvaluationFailure(failures) { throw failure }
             return result
         }
         private func _visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?,
@@ -2288,7 +2288,7 @@ func verifyGeneratedActionRoutingOutput(
         private func _successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
             var result: [Snapshot] = []
             let failures = try _visitSuccessors(for: action, checking: &context) { SwiftTLA._appendNativeOutcome(&result, $0) }
-            if let failure = failures.first { throw failure }
+            if let failure = SwiftTLA._firstNativeEvaluationFailure(failures) { throw failure }
             return result
         }
         """,
