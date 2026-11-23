@@ -77,6 +77,6 @@ PROOF
     <2>. QED BY ONLY <2>disabled, PTL
         DEF Arithmetic!Next, Arithmetic!advance, Arithmetic!Terminating,
             OverflowActions!Next, OverflowActions!advance, OverflowActions!Terminating
-<1>. QED BY ONLY <1>copy, <1>certified, <1>advance, <1>cfg, <1>overflow, <1>blocked, PTL
+<1>. QED BY ONLY <1>copy, <1>certified, <1>advance, <1>cfg, <1>overflow, <1>blocked, Zenon
 
 ====
