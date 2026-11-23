@@ -533,24 +533,93 @@ package enum ArithmeticAssignmentEvidence {
                   /\ NativeTerminalOrderedOutput.callbacks \in Seq({<<\#(pc), TerminalBindings>>})
                   /\ NativeTerminalOrderedOutput.reasons \in Seq({})
         PROOF
+        <1>. DEFINE raw == NativeVisitor\#(terminalSlot)Action
+                    writes == NativeVisitor\#(terminalSlot)Writes
+                    slot == \#(terminalRule)!NativeCopyControlSlot
+                    fields == \#(terminalRule)!NativeCopyFields(TerminalKeys)
+                    refs == \#(terminalRule)!CopyEntryRoutes(TerminalKeys)
+                    nameOf(key) == IF key = slot THEN NativeCounter ELSE NativeFormalNames[key]
+                    keyOf(name) == \#(terminalRule)!NativeCopyKey(TerminalKeys, NativeFormalNames, NativeCounter, name)
+                    selfWrite(name) == <<name, <<"state", name>>>>
+        <1>route. /\ NativeActionAt(\#(terminalSlot)).outcome = raw
+                  /\ TerminalAppendSites = <<>>
+            <2>ordinal. /\ NativeActionRoutes[\#(terminalSlot)].visitor = \#(terminalSlot)
+                        /\ \#(terminalSlot) \in DOMAIN NativeActionRows
+                BY ONLY IsaM("simp") DEF NativeActionRoutes, NativeActionRows
+            <2>action. NativeActionAt(\#(terminalSlot)).outcome = raw
+                BY ONLY <2>ordinal, IsaM("simp"), SMT DEF raw, NativeActionAt, NativeVisitorPlans,
+                    \#(prefix)Dispatch!NativeDispatchOutcome, NativeActionRoutes, NativeActionRows
+            <2>sites. TerminalAppendSites = <<>>
+                BY ONLY <2>ordinal, SMT DEF TerminalAppendSites, NativeActionFailureAppendSites,
+                    NativeVisitor\#(terminalSlot)FailureAppendSites
+            <2>. QED BY ONLY <2>action, <2>sites
+        <1>rawShape.
+            /\ raw.captures = <<>>
+            /\ raw.guards = <<TerminalControl>>
+            /\ raw.writes = writes
+            BY ONLY SMT DEF raw, writes, TerminalControl, \#(last.instance)!RHSOutputExit,
+                NativeVisitor\#(terminalSlot)Action, NativeVisitor\#(terminalSlot)Captures,
+                NativeVisitor\#(terminalSlot)CaptureTags, NativeVisitor\#(terminalSlot)Guards
+        <1>columns. {writes[index] : index \in DOMAIN writes} = {selfWrite(nameOf(key)) : key \in fields}
+            BY ONLY SMT DEF writes, NativeVisitor\#(terminalSlot)Writes, nameOf, selfWrite, fields, slot, TerminalKeys, \#(last.instance)!RHSOutputKeys,
+                NativeFormalNames, NativeCounter, \#(terminalRule)!NativeCopyFields, \#(terminalRule)!NativeCopyControlSlot
+        <1>names. \A key \in fields : keyOf(nameOf(key)) = key
+            BY ONLY SMT DEF keyOf, nameOf, fields, slot, TerminalKeys, \#(last.instance)!RHSOutputKeys,
+                NativeFormalNames, NativeCounter, \#(terminalRule)!NativeCopyFields,
+                \#(terminalRule)!NativeCopyKey, \#(terminalRule)!NativeCopyControlSlot
+        <1>normalized.
+            /\ TerminalPlan.guards = <<TerminalControl>>
+            /\ TerminalPlan.captures = <<>>
+            /\ TerminalPlan.writes = [index \in DOMAIN writes |->
+                LET write == writes[index]
+                    ref == write[2]
+                IN <<keyOf(write[1]), IF ref[1] = "state" THEN <<"state", keyOf(ref[2])>> ELSE ref>>]
+            BY ONLY <1>route, <1>rawShape, SMT DEF TerminalPlan, keyOf, \#(terminalRule)!NativeCopyRekey
+        <1>bounds. /\ Len(TerminalPlan.writes) \in Nat
+                   /\ DOMAIN TerminalPlan.writes = 1..Len(TerminalPlan.writes)
+                   /\ DOMAIN TerminalPlan.writes = DOMAIN writes
+            <2>raw. /\ Len(writes) \in Nat /\ DOMAIN writes = 1..Len(writes)
+                BY ONLY IsaM("simp") DEF writes, NativeVisitor\#(terminalSlot)Writes
+            <2>domain. DOMAIN TerminalPlan.writes = DOMAIN writes
+                BY ONLY <1>normalized, SMT
+            <2>seq. TerminalPlan.writes \in Seq({TerminalPlan.writes[index] : index \in DOMAIN writes})
+                BY ONLY <1>normalized, <2>raw, <2>domain, \#(terminalRule)!SeqDef, SMT
+            <2>. QED BY ONLY <2>raw, <2>domain, <2>seq, \#(terminalRule)!LenProperties, SMT
+        <1>rows. \A index \in DOMAIN TerminalPlan.writes : \E key \in fields :
+            TerminalPlan.writes[index] = selfWrite(key)
+            <2>. TAKE index \in DOMAIN TerminalPlan.writes
+            <2>physical. PICK key \in fields : writes[index] = selfWrite(nameOf(key))
+                BY ONLY (index \in DOMAIN TerminalPlan.writes), <1>bounds, <1>columns, SMT
+            <2>row. TerminalPlan.writes[index] = selfWrite(key)
+                BY ONLY (index \in DOMAIN TerminalPlan.writes), <1>bounds, <1>normalized,
+                    <2>physical, <1>names, SMT DEF selfWrite
+            <2>. QED BY ONLY <2>physical, <2>row, SMT
+        <1>coverage. \A key \in fields : \E index \in DOMAIN TerminalPlan.writes : TerminalPlan.writes[index][1] = key
+            <2>. TAKE key \in fields
+            <2>physical. PICK index \in DOMAIN writes : writes[index] = selfWrite(nameOf(key))
+                BY ONLY (key \in fields), <1>columns, SMT
+            <2>row. /\ index \in DOMAIN TerminalPlan.writes /\ TerminalPlan.writes[index] = selfWrite(key)
+                BY ONLY (key \in fields), <1>bounds, <1>normalized, <2>physical, <1>names, SMT DEF selfWrite
+            <2>. QED BY ONLY <2>row, SMT DEF selfWrite
+        <1>entry. /\ TerminalKeys \subseteq STRING
+                  /\ slot \notin TerminalKeys
+                  /\ \A key \in TerminalKeys : refs[key] = <<"state", key>>
+            BY ONLY SMT DEF TerminalKeys, \#(last.instance)!RHSOutputKeys, slot, refs,
+                \#(terminalRule)!NativeCopyControlSlot, \#(terminalRule)!CopyEntryRoutes
         <1>plan. /\ \#(terminalRule)!NativeCompleteCopyPlan(TerminalPlan, TerminalKeys, <<>>,
                       \#(terminalRule)!CopyEntryRoutes(TerminalKeys), TerminalControl,
                       <<"state", \#(terminalRule)!NativeCopyControlSlot>>)
                  /\ TerminalAppendSites = <<>>
-            BY ONLY SMT DEF TerminalPlan, TerminalKeys, TerminalControl, TerminalAppendSites,
-                NativeActionAt, NativeActionRoutes, NativeVisitorPlans, NativeActionRows, NativeFormalNames, NativeCounter,
-                NativeVisitor\#(terminalSlot)Action, NativeVisitor\#(terminalSlot)Captures,
-                NativeVisitor\#(terminalSlot)CaptureTags, NativeVisitor\#(terminalSlot)Guards,
-                NativeVisitor\#(terminalSlot)Writes, NativeActionFailureAppendSites, NativeVisitor\#(terminalSlot)FailureAppendSites,
-                \#(prefix)Dispatch!NativeDispatchOutcome, \#(last.instance)!RHSOutputKeys, \#(last.instance)!RHSOutputExit,
-                \#(terminalRule)!NativeCompleteCopyPlan, \#(terminalRule)!NativeCopyRekey,
-                \#(terminalRule)!NativeCopyKey, \#(terminalRule)!NativeCopyFields,
-                \#(terminalRule)!NativeCopyControlSlot, \#(terminalRule)!CopyEntryRoutes
+            BY ONLY <1>route, <1>normalized, <1>bounds, <1>rows, <1>coverage, <1>entry, SMT
+                DEF \#(terminalRule)!NativeCompleteCopyPlan, \#(terminalRule)!NativeCopyFields, fields, slot, selfWrite, refs
         <1>state. TerminalBindings = [key \in TerminalKeys |-> TerminalBindings[key]]
             BY ONLY SMT DEF TerminalKeys, TerminalBindings, \#(last.instance)!RHSOutputKeys, \#(last.instance)!RHSOutputBefore
         <1>noCaptureReads. \A index \in DOMAIN TerminalPlan.writes :
             TerminalPlan.writes[index][2][1] # "capture"
-            BY ONLY <1>plan, SMT DEF \#(terminalRule)!NativeCompleteCopyPlan, \#(terminalRule)!CopyEntryRoutes
+            <2>. TAKE index \in DOMAIN TerminalPlan.writes
+            <2>row. PICK key \in fields : TerminalPlan.writes[index] = selfWrite(key)
+                BY ONLY (index \in DOMAIN TerminalPlan.writes), <1>rows, SMT
+            <2>. QED BY ONLY <2>row, SMT DEF selfWrite
         <1>captures. \A witness :
             \#(terminalRule)!NativeCopyWrites(TerminalPlan,
                 \#(terminalRule)!NativeCopySnapshot(TerminalKeys, TerminalBindings, \#(pc)), witness) =

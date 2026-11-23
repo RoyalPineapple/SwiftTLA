@@ -212,22 +212,52 @@ PROOF
     <2>type. Arithmetic!RHSOutputStateType
         BY ONLY Arithmetic!Init, SMT DEF Arithmetic!Init, Arithmetic!RHSOutputStateType,
             Arithmetic!RHSOutputBefore, Arithmetic!RHSOutputKeys, Arithmetic!RHSOutputMin, Arithmetic!RHSOutputMax
-    <2>event. Arithmetic!RHSOutputActualFailures =
-        {[site |-> 2, target |-> "count",
-          payload |-> <<"integerOverflow", "addition", <<Arithmetic!RHSOutputMax, 1>>>>,
-          completed |-> <<Arithmetic!RHSOutputMax>>, before |-> [count |-> Arithmetic!RHSOutputMax]]}
-        BY ONLY Arithmetic!Init, <1>overflow, PTL
+    <2>. DEFINE expected ==
+                    [site |-> 2, target |-> "count",
+                     payload |-> <<"integerOverflow", "addition", <<Arithmetic!RHSOutputMax, 1>>>>,
+                     completed |-> <<Arithmetic!RHSOutputMax>>, before |-> [count |-> Arithmetic!RHSOutputMax]]
+    <2>event. Arithmetic!RHSOutputActualFailures = {expected}
+        BY ONLY Arithmetic!Init, <1>overflow, PTL DEF expected
     <2>history. PICK history :
+        /\ Arithmetic!RHSOutputSourceHistory(history)
         /\ Arithmetic!RHSOutputHistoryObservation(history)
         /\ LET final == history[Arithmetic!RHSOutputCount]
                sent == ArithmeticPublicSend
-           IN (Arithmetic!RHSOutputSelected /\ final.failure # <<>>) =>
-               /\ sent.kind = "evaluationFailure" /\ sent.value = final.failure.payload
-               /\ sent.current = ArithmeticSendBefore
-               /\ ArithmeticSendVisits = <<>>
-        BY ONLY <2>type, TypedArithmeticSendUsesTheCertifiedActionObservation, SMT
-    <2>. QED BY ONLY <2>event, <2>history, SMT DEF Arithmetic!RHSOutputHistoryObservation,
-        Arithmetic!RHSOutputHistoryFailures, Arithmetic!RHSOutputFailureEvent
+           IN IF ~Arithmetic!RHSOutputSelected
+              THEN /\ sent.kind = "disabled" /\ sent.value = "noMatchingSuccessor"
+                   /\ sent.current = ArithmeticSendBefore
+              ELSE IF final.failure # <<>>
+              THEN /\ sent.kind = "evaluationFailure" /\ sent.value = final.failure.payload
+                   /\ sent.current = ArithmeticSendBefore
+                   /\ ArithmeticSendVisits = <<>>
+              ELSE /\ sent.kind = "success"
+                   /\ sent.current = <<Arithmetic!RHSOutputExit, final.bindings>>
+                   /\ sent.value = [action |-> Arithmetic!RHSOutputActionLabel,
+                                     before |-> Arithmetic!RHSOutputBefore, after |-> final.bindings]
+        BY ONLY <2>type, TypedArithmeticSendUsesTheCertifiedActionObservation, PTL
+    <2>. DEFINE final == history[Arithmetic!RHSOutputCount]
+                reached == Arithmetic!RHSOutputSelected /\ final.failure # <<>>
+                emitted == [site |-> final.failure.site,
+                            target |-> Arithmetic!RHSOutputRows[final.failure.site].target,
+                            payload |-> final.failure.payload, completed |-> final.completed,
+                            before |-> final.failure.before]
+    <2>failures. Arithmetic!RHSOutputActualFailures = Arithmetic!RHSOutputHistoryFailures(history)
+        BY ONLY <2>history, PTL DEF Arithmetic!RHSOutputHistoryObservation
+    <2>projection. Arithmetic!RHSOutputHistoryFailures(history) = (IF reached THEN {emitted} ELSE {})
+        BY ONLY DEF Arithmetic!RHSOutputHistoryFailures, final, reached, emitted
+    <2>singleton. (IF reached THEN {emitted} ELSE {}) = {expected}
+        BY ONLY <2>event, <2>failures, <2>projection, Zenon
+    <2>identified. reached /\ emitted.payload = expected.payload
+        BY ONLY <2>singleton, Send!ConditionalSingletonIdentifiesItsPayload, Zenon
+    <2>payload. final.failure.payload =
+        <<"integerOverflow", "addition", <<Arithmetic!RHSOutputMax, 1>>>>
+        BY ONLY <2>identified, IsaM("simp") DEF emitted, expected
+    <2>sent. /\ ArithmeticPublicSend.kind = "evaluationFailure"
+              /\ ArithmeticPublicSend.value = final.failure.payload
+              /\ ArithmeticPublicSend.current = ArithmeticSendBefore
+              /\ ArithmeticSendVisits = <<>>
+        BY ONLY <2>history, <2>identified, IsaM("auto") DEF final, reached
+    <2>. QED BY ONLY <2>sent, <2>payload, SMT
 <1>blocked. ASSUME Arithmetic!Init
              PROVE ~ENABLED Arithmetic!Next
     <2>entry. OverflowActions!Init

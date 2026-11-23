@@ -77,6 +77,9 @@ LOCAL Project(storage, plan) ==
     LET snapshot == storage[plan.projection[1]]
     IN [field \in {"state"} |-> snapshot[2]][plan.projection[2]]
 
+LOCAL ReadSendState(plan, earlier, later, step) ==
+    Project(IF Rank(plan.send, step) < Rank(plan.send, plan.writeTarget) THEN earlier ELSE later, plan)
+
 LOCAL CommittedSend(snapshot, transition) ==
     Continue([kind |-> "success", current |-> snapshot, value |-> transition])
 
@@ -86,12 +89,12 @@ LOCAL Finish(plan, action, prior, selected) ==
         local == [name \in {plan.selected} |-> selected]
         write == [key \in {plan.writeTarget} |-> local[plan.writeValue]]
         later == Store!NativeMaterializedSlots(DOMAIN earlier, earlier, write)
-        read(step) == Project(
-            IF Rank(plan.send, step) < Rank(plan.send, plan.writeTarget) THEN earlier ELSE later, plan)
-        captured == [name \in {plan.getter} |-> read(plan.captured)][plan.captureSource]
+        captured == [name \in {plan.getter} |->
+            ReadSendState(plan, earlier, later, plan.captured)][plan.captureSource]
+        returned == ReadSendState(plan, earlier, later, plan.result)
         locals == [name \in {plan.inputAction, plan.captured, plan.getter} |->
             IF name = plan.inputAction THEN action
-            ELSE IF name = plan.captured THEN captured ELSE read(plan.result)]
+            ELSE IF name = plan.captured THEN captured ELSE returned]
     IN CommittedSend(later[receiver], [field \in DOMAIN plan.fields |-> locals[plan.fields[field]]])
 
 LOCAL Unchanged(prior, kind, value) == [kind |-> kind, current |-> prior, value |-> value]
@@ -210,22 +213,22 @@ PROOF
         /\ Rank(plan.send, plan.captured) < Rank(plan.send, plan.writeTarget)
         /\ ~(Rank(plan.send, plan.result) < Rank(plan.send, plan.writeTarget))
         BY ONLY <1>send, SMT
-    <2>. DEFINE read(step) == Project(
-                    IF Rank(plan.send, step) < Rank(plan.send, plan.writeTarget) THEN before ELSE after, plan)
-                captured == [name \in {plan.getter} |-> read(plan.captured)][plan.captureSource]
+    <2>. DEFINE captured == [name \in {plan.getter} |->
+                    ReadSendState(plan, before, after, plan.captured)][plan.captureSource]
+                afterState == ReadSendState(plan, before, after, plan.result)
                 locals == [name \in {plan.inputAction, plan.captured, plan.getter} |->
                     IF name = plan.inputAction THEN action
-                    ELSE IF name = plan.captured THEN captured ELSE read(plan.result)]
+                    ELSE IF name = plan.captured THEN captured ELSE afterState]
                 fields == [field \in DOMAIN plan.fields |-> locals[plan.fields[field]]]
     <2>values.
-        /\ captured = prior[2] /\ read(plan.result) = selected[2]
-        BY ONLY <2>order, <2>bindings, <2>reads, SMT DEF captured, read
+        /\ captured = prior[2] /\ afterState = selected[2]
+        BY ONLY <2>order, <2>bindings, <2>reads, SMT DEF captured, afterState, ReadSendState
     <2>returned.
         fields = [action |-> action, before |-> prior[2], after |-> selected[2]]
         BY ONLY <2>bindings, <2>values, SMT DEF fields, locals
     <2>effect. Finish(plan, action, prior, selected) =
         CommittedSend(after[Receiver(plan, action)], fields)
-        BY ONLY DEF Finish, before, after, write, selectedBinding, fields, locals, captured, read
+        BY ONLY DEF Finish, before, after, write, selectedBinding, fields, locals, captured, afterState
     <2>installed. after[Receiver(plan, action)] = selected
         BY ONLY <2>commit, <1>receiver, IsaM("simp")
     <2>returnedEffect. CommittedSend(after[Receiver(plan, action)], fields) =
@@ -302,5 +305,11 @@ PROOF
         BY ONLY <2>done, <1>finish, <1>success, SMT DEF expected, PublicSendOutcome
     <2>. QED BY ONLY <1>observe, <2>value, <1>lengths, SMT DEF Continue
 <1>. QED BY ONLY <1>failure, <1>disabled, <1>ambiguous, <1>success, SMT
+
+THEOREM ConditionalSingletonIdentifiesItsPayload ==
+    \A selected, event, observed :
+        (IF selected THEN {event} ELSE {}) = {observed} =>
+            selected /\ event.payload = observed.payload
+    BY ONLY SMT
 
 ====
