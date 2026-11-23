@@ -778,12 +778,12 @@ def main():
             if not re.fullmatch(rb"\s*extension OrderedIntTraversalPass: SwiftTLA\.StateMachine\s*\{\s*\}\s*",
                                 bodies["extension"]):
                 raise ValueError("expected the generated unconfigured state-machine extension")
-            generated = (b"// Generated from OrderedIntTraversalPass.swift by the SwiftTLA macro.\n"
+            expansion_bytes = (b"// Generated from OrderedIntTraversalPass.swift by the SwiftTLA macro.\n"
                          b"package struct OrderedIntTraversalPass: Sendable {\n"
                          + bodies["members"] + b"}\n" + bodies["extension"])
             candidate = stack / "OrderedIntTraversalPass.swift"
-            candidate.write_bytes(generated)
-            if installed and ((root / installed_seed).is_symlink() or (root / installed_seed).read_bytes() != generated):
+            candidate.write_bytes(expansion_bytes)
+            if installed and ((root / installed_seed).is_symlink() or (root / installed_seed).read_bytes() != expansion_bytes):
                 raise ValueError("installed stack pass differs from the fresh macro output")
             authored = stack / "authored-model.swift"
             shutil.copyfile(root / stack_seed, authored)
