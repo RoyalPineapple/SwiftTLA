@@ -87,7 +87,8 @@ struct ProcedureLoweringTests {
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
         let spec = try loweredSpecification(model)
-        let proof = inWhile ? try #require(try SequentialControlOutputEvidence.callWhileProof(specification: spec)) : nil
+        let proof = inWhile ? try SequentialControlOutputEvidence.callWhileProof(specification: spec) : nil
+        try #require(!inWhile || proof != nil)
         let (compilation, initial) = try initialState(of: spec, using: proof?.compilation)
         let afterCall = try apply("start", in: compilation, to: initial)
         #expect(try value(named: "pc", in: afterCall, compilation: compilation) == .string("enter"))
@@ -233,7 +234,8 @@ struct ProcedureLoweringTests {
 
         #expect(AlgorithmValidator.validate(model).isEmpty)
         let spec = try loweredSpecification(model)
-        let proof = inWhile ? try #require(try SequentialControlOutputEvidence.callWhileProof(specification: spec)) : nil
+        let proof = inWhile ? try SequentialControlOutputEvidence.callWhileProof(specification: spec) : nil
+        try #require(!inWhile || proof != nil)
         let procedureAction = try #require(spec.actions.first { $0.name == "procedure.outer.enter" })
         #expect(procedureAction.bindings.map(\.generatedSwiftType) == ["Worker"])
         let (compilation, initial) = try initialState(of: spec, using: proof?.compilation)
