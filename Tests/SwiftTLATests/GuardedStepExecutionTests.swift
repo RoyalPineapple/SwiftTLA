@@ -27,8 +27,20 @@ struct GuardedStepExecutionTests {
             }
             _ = try machine.send(enter)
             #expect(machine.state.value == 1)
-            let before = machine.snapshot
+            let prepare = GuardedProcesses.Action.procedure_choose_prepare(process: node)
             let body = GuardedProcesses.Action.procedure_choose_body(process: node)
+            #expect(try machine.violatedInvariants(atLevel: 2).isEmpty)
+            let first = try machine.send(prepare)
+            #expect(first.after.value == (bodyReady == 1 ? 3 : 1))
+            if bodyReady == 1 {
+                #expect(try machine.isEnabled(prepare))
+                #expect(try !machine.isEnabled(body))
+                #expect(try machine.violatedInvariants(atLevel: 3).isEmpty)
+                let exit = try machine.send(prepare)
+                #expect(exit.after.value == 3)
+            }
+            #expect(try !machine.isEnabled(prepare))
+            let before = machine.snapshot
             let successors = try machine.successors(for: body)
             #expect(try machine.isEnabled(body) == (bodyReady == 1))
             #expect(Set(successors.map { $0.state.value }) == (bodyReady == 1 ? [1, 2] : []))
@@ -46,6 +58,17 @@ struct GuardedStepExecutionTests {
                 }
             }
         }
+#if compiler(>=6.2)
+        if entryReady == 1 && bodyReady == 1 {
+            let module = try GuardedProcesses.render().tlaBundle.root
+            let cfg = try #require(module.cfg)
+            let source = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .appendingPathComponent("GuardedStepExecutionFixtures.swift")
+            Attachment.record(Array(try Data(contentsOf: source)), named: source.lastPathComponent)
+            Attachment.record(Array(module.tla.utf8), named: "\(module.name).tla")
+            Attachment.record(Array(cfg.utf8), named: "\(module.name).cfg")
+        }
+#endif
     }
 
     @Test("Whole-step guards precede body evaluation and preserve every enabled branch", arguments: [0, 1])

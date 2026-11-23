@@ -322,7 +322,7 @@ enum AlgorithmLowerer {
                     processLocalRoots: localRoots,
                     procedures: procedures,
                     owner: nil,
-                    nextLabel: nextLabel,
+                    nextLabel: continuation,
                     control: control,
                     completion: requiresProgramCounter ? transfer(to: continuation) : nil
                 )
@@ -393,24 +393,31 @@ enum AlgorithmLowerer {
                         owner: .generated(algorithm: algorithm.name, purpose: CompilerControlSymbol.done.rawValue),
                         sourceName: CompilerControlSymbol.done.rawValue
                     ))
+                let entry = control.location(atomic.label.name)
                 let guardExpression = StateExpr.equal(
                     .functionApply(.programCounter, .variable(processBinding.rawValue)),
-                    control.location(atomic.label.name)
+                    entry
                 )
+                let loopCondition = atomic.loopCondition.map { rewrite($0, localRoots: localRoots) }
+                let continuation = loopCondition == nil ? nextLabel : entry
                 let loweredStatements = lower(
                     atomic.statements,
                     processLocalRoots: localRoots,
                     procedures: procedures,
                     owner: procedure,
-                    nextLabel: nextLabel,
+                    nextLabel: continuation,
                     control: control,
-                    completion: transfer(to: nextLabel)
+                    completion: transfer(to: continuation)
                 )
+                let body = loopCondition.map {
+                    ActionExpr.ifElse($0, loweredStatements.action, transfer(to: nextLabel))
+                } ?? loweredStatements.action
+                let enabled = loopCondition.map { StateExpr.and(guardExpression, $0) } ?? guardExpression
                 generatedAssertionInvariants += assertionInvariants(loweredStatements.assertions,
-                    enabled: guardExpression, domain: controlDomain(processes))
+                    enabled: enabled, domain: controlDomain(processes))
                 return NamedAction(
                     name: label,
-                    body: try ActionNormalization.checkedComplete(.and(.guard_(guardExpression), loweredStatements.action),
+                    body: try ActionNormalization.checkedComplete(.and(.guard_(guardExpression), body),
                         variables: variables, at: "actions.\(label).normalization"),
                     bindings: [ActionBinding(
                         name: processBinding.rawValue,
@@ -680,7 +687,7 @@ enum AlgorithmLowerer {
                 processLocalRoots: nil,
                 procedures: procedures,
                 owner: owner,
-                nextLabel: nextLabel,
+                nextLabel: continuation,
                 control: control,
                 completion: needsProgramCounter ? sequentialTransfer(to: continuation) : nil
             )

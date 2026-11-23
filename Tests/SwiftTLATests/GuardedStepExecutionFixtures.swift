@@ -25,7 +25,7 @@ struct GuardedAlgorithm {
 @TLAModel
 struct GuardedProcesses {
     enum Node: String, CaseIterable, FiniteTLAValueDomain { case first, second }
-    enum Step: String, CaseIterable { case enter, body, finish }
+    enum Step: String, CaseIterable { case enter, prepare, body, finish }
     enum Routine: String, CaseIterable { case choose }
 
     static var spec: TLASpec {
@@ -35,6 +35,10 @@ struct GuardedProcesses {
                 let bodyReady = scope.sharedVar(in: 0...1)
                 let value = scope.sharedVar(initial: 0)
                 Procedure(Routine.choose, parameters: Int.self) { divisor in
+                    While(Step.prepare, divisor > 0 && value == 1) {
+                        Assert(divisor > 0 && value == 1)
+                        Assign(value, to: 3)
+                    }
                     Do(Step.body, when: divisor > 0) {
                         Assign(value, to: 1 / divisor)
                         Choose(0...2) { choice in
