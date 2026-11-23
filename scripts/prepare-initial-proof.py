@@ -593,7 +593,7 @@ def main():
         ordered_copy_attachments = scratch / "ordered-copy-attachments" if selection else None
         if ordered_copy_attachments is not None:
             ordered_copy_attachments.mkdir()
-            test_filter += "|OrderedStepTests/orderedActionsSupplySelectedProofs"
+            test_filter += "|OrderedStepTests/orderedActionsSupplySelectedProofs|SequentialLoopControlTests/preservesCompletion"
         command = ["swift", "test", "-Xswiftc", "-warnings-as-errors",
                    "--disable-automatic-resolution", "--filter", test_filter, "-j", "1",
                    "--scratch-path", str(build)]
@@ -847,7 +847,8 @@ def main():
                  "CertifiedReadAssignmentObservation", "PhysicalIntAssignmentRhsRule", "NativeIntAssignmentListRule",
                  "RenderedIntAssignmentTerms", "RenderedIntAssignmentActionRule", "OrderedAssignmentOutputRules",
                  "ActionOutcomeInterface", "FrameActionRule", "PendingWriteOutcomeRule", "NativePendingWriteFold", "NativeScalarCopyRule", "ConditionalOutcomeRules", "NormalSeedCFG"]
-        names += ["CompilerOutput/SeedAndArithmeticConfiguredBehavior", "CompilerOutput/SeedConfiguredBehavior",
+        names += ["NativePublicSendFlowRule",
+                  "CompilerOutput/SeedAndArithmeticConfiguredBehavior", "CompilerOutput/SeedConfiguredBehavior",
                   "CompilerOutput/SwiftTLACopyCertifiedAssignmentObservation",
                   "CompilerOutput/SwiftTLAOrderedRHSBackendAgreement", "CompilerOutput/OrderedOverflowInitialDisabled",
                   "CompilerOutput/OrderedOverflowDirectInitialDisabled"]
@@ -858,7 +859,8 @@ def main():
                             "GuardActionRule", "AlternativeTraversalRule"]
         names += branchwise_rules
         if stack_files:
-            names += ["SequencePrefixRule", "CompilerOutput/OrderedIntTraversalPassProof", "OrderedIntTraversalNativeRule",
+            names += ["SequencePrefixRule", "SequenceLengthRule", "SequenceExpressionConstructorRules",
+                      "CompilerOutput/OrderedIntTraversalPassProof", "OrderedIntTraversalNativeRule",
                       "GeneratedCertificateExpansionRule", "CompilerOutput/OrderedIntTraversalPassConfiguredProof"]
         branchwise_imports = {name + ".tla" for name in branchwise_rules}
         branchwise_imports.update({"BranchwiseConjunctionFailureOrderModel.tla", "SwiftTLABranchwiseCheckingInputs.tla",
@@ -883,6 +885,19 @@ def main():
             attached_source = Path(swift_source).name
             catalog_module = "SwiftTLAOrderedAssignmentCatalogOrderedCopy"
             attached = {path.name: path for path in ordered_copy_attachments.iterdir()}
+            loop_source = "Tests/SwiftTLATests/SequentialLoopControlFixtures.swift"
+            loop_module = "SwiftTLASequentialControlFinishingLoop"
+            loop_parent = loop_module + "ConfiguredProof"
+            loop_names = {Path(loop_source).name, "FinishingLoop.tla", "FinishingLoop.cfg",
+                          f"{loop_module}.tla", f"{loop_parent}.tla"}
+            if not loop_names.issubset(attached):
+                raise ValueError("missing FinishingLoop source, emitted output, or configured proof")
+            loop = {name: attached.pop(name) for name in loop_names}
+            if (any(path.is_symlink() or not path.is_file() for path in loop.values())
+                    or digest(loop[Path(loop_source).name]) != inputs[loop_source]
+                    or loop[f"{loop_parent}.tla"].read_text().splitlines()[1:2] !=
+                        [f"EXTENDS {loop_module}, CallerInputPageBlock1"]):
+                raise ValueError("FinishingLoop attachments do not bind the fixture and control proof")
             ordinals = sorted(int(match[1]) for name in attached if
                               (match := re.fullmatch(r"SwiftTLAArithmeticAssignmentSourceOrderedCopyAction([1-9][0-9]*)\.tla", name)))
             configuration = "OrderedCopy.cfg"
@@ -899,7 +914,7 @@ def main():
                 raise ValueError("selected OrderedCopy test did not attach its authored source and complete catalog proofs")
             catalog_extends = "EXTENDS " + ", ".join(native_row_modules)
             row_extends = f"EXTENDS {catalog_module}NativeData"
-            configured_extends = f"EXTENDS {catalog_module}, CallerInputPageBlock1"
+            configured_extends = f"EXTENDS {catalog_module}, CallerInputPageBlock1, {catalog_module}SendBinding"
             if (any(attached[f"{module}.tla"].read_text().splitlines()[1:2] != [row_extends]
                     for module in native_row_modules)
                     or attached[f"{catalog_module}.tla"].read_text().splitlines()[1:2] != [catalog_extends]
@@ -934,7 +949,7 @@ def main():
                 "validatorSHA256": digest(binary),
             }
             proof_files = {}
-            for name, path in sorted(attached.items()):
+            for name, path in sorted({**attached, **loop}.items()):
                 retained_input = imports / name
                 data = path.read_bytes()
                 if name.endswith(".tla") and data.split(b"\n", 1)[0] != f"---- MODULE {path.stem} ----".encode():
@@ -949,7 +964,12 @@ def main():
                 "test": "OrderedStepTests/orderedActionsSupplySelectedProofs",
                 "configuration": configuration,
                 "configuredProof": configured,
-                "files": proof_files,
+                "files": {name: proof_files[name] for name in sorted(attached)},
+            }
+            receipt["sequentialLoopControl"] = {
+                "sourceSHA": head, "authoredSource": loop_source, "configuration": "FinishingLoop.cfg",
+                "test": "SequentialLoopControlTests/preservesCompletion", "configuredProof": f"{loop_parent}.tla",
+                "files": {name: proof_files[name] for name in sorted(loop)},
             }
         if stack_files:
             for name in ["OrderedIntTraversalPass.tla", "OrderedIntTraversalPassSource.tla"]:
@@ -959,6 +979,35 @@ def main():
                 if sha != stack_files[name]:
                     raise ValueError(f"retained stack pass module differs from its emitted output: {name}")
                 proof_hashes.append(f"{sha}  {retained_input.relative_to(packet)}\n")
+        send_inputs = packet / "arithmetic-send"
+        send_inputs.mkdir()
+        for helper in ("NativeMachineOperations.swift", "CheckingContext.swift"):
+            source = f"Sources/SwiftTLA/{helper}"
+            shutil.copyfile(root / source, send_inputs / helper)
+            if digest(send_inputs / helper) != inputs[source]:
+                raise ValueError("retained send helper differs from compiler inputs")
+
+        def bind_send(command, source, expected, module):
+            binding = imports / (module + ".tla")
+            subprocess.run([str(binary), "native", command, "--native-source", str(source),
+                            "--operations", str(send_inputs / "NativeMachineOperations.swift"),
+                            "--checking", str(send_inputs / "CheckingContext.swift"),
+                            "--output", str(binding)], env=env, check=True)
+            if digest(source) != expected:
+                raise ValueError("retained send source differs from its captured action evidence")
+            proof_hashes.append(f"{digest(binding)}  {binding.relative_to(packet)}\n")
+            return {"nativeSourceSHA256": expected,
+                    "operationsSHA256": digest(send_inputs / "NativeMachineOperations.swift"),
+                    "checkingSHA256": digest(send_inputs / "CheckingContext.swift"),
+                    "moduleSHA256": digest(binding)}
+
+        receipt["arithmeticPublicSendBinding"] = bind_send(
+            "prepare-arithmetic-send", generated / "native-arithmetic-source.swift",
+            arithmetic["nativeSourceSHA256"], "SwiftTLAArithmeticPublicSendBinding")
+        if ordered_copy_attachments is not None:
+            receipt["orderedCopyPublicSendBinding"] = bind_send(
+                "prepare-catalog-send", retained_ordered_copy,
+                receipt["orderedCopyNativeOutput"]["compiledSHA256"], catalog_module + "SendBinding")
         (packet / "proof-inputs.sha256").write_text("".join(proof_hashes))
         tool_inputs = packet / "toolchain/build-inputs"
         tool_inputs.mkdir(parents=True)
@@ -971,6 +1020,7 @@ def main():
         if stack_files:
             stack_proof_inputs = {
                 "OrderedIntTraversalPass.tla", "OrderedIntTraversalPassSource.tla", "SequencePrefixRule.tla",
+                "SequenceLengthRule.tla", "SequenceExpressionConstructorRules.tla", "ActionOutcomeInterface.tla",
                 "OrderedIntTraversalPassProof.tla",
                 "OrderedIntTraversalNativeRule.tla", "GeneratedCertificateExpansionRule.tla",
                 "OrderedIntTraversalPassConfiguredProof.tla", "OrderedIntExpressionRule.tla", "IndexedHistoryRules.tla",

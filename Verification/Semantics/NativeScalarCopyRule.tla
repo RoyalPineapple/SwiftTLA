@@ -49,6 +49,65 @@ NativeCopyVisits(plan, keys, before, after, entry, destination) ==
             /\ NativePendingMergesEmit(NativeCopyFields(keys), source, target, Len(plan.writes),
                     NativeCopyWrites(plan, source, captures))
 
+\* The decoded straight-line visitor has one emit continuation. Its pending
+\* write fold either reaches that call once or stops before the call.
+NativeCopyCallbackSnapshots(plan, keys, before, pcBefore, captures) ==
+    LET fields == NativeCopyFields(keys)
+        source == NativeCopySnapshot(keys, before, pcBefore)
+        writes == NativeCopyWrites(plan, source, captures)
+        count == Len(plan.writes)
+        merges == CHOOSE h : SuccessfulNativeMergeHistory(count, writes, h)
+        target == NativeMaterializedSlots(fields, source, merges[count])
+    IN IF /\ \A index \in DOMAIN plan.guards : pcBefore = plan.guards[index]
+          /\ \E h : SuccessfulNativeMergeHistory(count, writes, h)
+       THEN << <<target[NativeCopyControlSlot], [key \in keys |-> target[key]]>> >>
+       ELSE <<>>
+
+THEOREM NativeCopyCallbackUsesTheMaterializedWriteHistory ==
+    ASSUME NEW plan, NEW keys, NativeCopyControlSlot \notin keys, NEW before, NEW after,
+           NEW pcBefore, NEW pcAfter, NEW captures, Len(plan.writes) \in Nat,
+           after = [key \in keys |-> after[key]],
+           NativeCopyVisits(plan, keys, before, after, pcBefore, pcAfter),
+           \A witness : CopyCaptureHistory(NativeCopySnapshot(keys, before, pcBefore),
+                                                plan.captures, witness) => witness = captures
+    PROVE NativeCopyCallbackSnapshots(plan, keys, before, pcBefore, captures) = << <<pcAfter, after>> >>
+PROOF
+<1>. DEFINE fields == NativeCopyFields(keys)
+            source == NativeCopySnapshot(keys, before, pcBefore)
+            expected == NativeCopySnapshot(keys, after, pcAfter)
+            writes == NativeCopyWrites(plan, source, captures)
+            count == Len(plan.writes)
+            merges == CHOOSE h : SuccessfulNativeMergeHistory(count, writes, h)
+<1>visit.
+    /\ \A index \in DOMAIN plan.guards : pcBefore = plan.guards[index]
+    /\ NativePendingMergesEmit(fields, source, expected, count, writes)
+    BY ONLY NativeCopyVisits(plan, keys, before, after, pcBefore, pcAfter),
+        (\A witness : CopyCaptureHistory(NativeCopySnapshot(keys, before, pcBefore),
+                                          plan.captures, witness) => witness = captures), SMT
+        DEF NativeCopyVisits, fields, source, expected, writes, count
+<1>witness. PICK actual :
+    /\ SuccessfulNativeMergeHistory(count, writes, actual)
+    /\ expected = NativeMaterializedSlots(fields, source, actual[count])
+    BY ONLY <1>visit, SMT DEF NativePendingMergesEmit, expected, NativeCopySnapshot, fields, NativeCopyFields
+<1>chosen. SuccessfulNativeMergeHistory(count, writes, merges)
+    BY ONLY <1>witness, SMT DEF merges
+<1>keys.
+    /\ DOMAIN merges[count] = PendingWriteKeys(writes, count)
+    /\ DOMAIN actual[count] = PendingWriteKeys(writes, count)
+    /\ \A index \in 1..count :
+        merges[count][writes[index][1]] = actual[count][writes[index][1]]
+    BY ONLY <1>chosen, <1>witness, (Len(plan.writes) \in Nat), SuccessfulMergesRetainEveryWriteInThePrefix, SMT
+        DEF count
+<1>same. merges[count] = actual[count]
+    BY ONLY <1>keys, SMT DEF PendingWriteKeys
+<1>target.
+    <<NativeMaterializedSlots(fields, source, merges[count])[NativeCopyControlSlot],
+        [key \in keys |-> NativeMaterializedSlots(fields, source, merges[count])[key]]>> = <<pcAfter, after>>
+    BY ONLY <1>same, <1>witness, (NativeCopyControlSlot \notin keys),
+        (after = [key \in keys |-> after[key]]), SMT DEF expected, NativeCopySnapshot, NativeCopyFields
+<1>. QED BY ONLY <1>target, <1>chosen, <1>visit, SMT
+    DEF NativeCopyCallbackSnapshots, fields, source, writes, count, merges
+
 NativeCompleteCopyPlan(plan, keys, reads, refs, guard, control) ==
     /\ keys \subseteq STRING
     /\ NativeCopyControlSlot \notin keys

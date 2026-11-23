@@ -757,10 +757,15 @@ enum AuthoredCopySyntax {
     }
 
     static func controlMachine(_ selection: Selection) throws -> SequentialControlEvidence.Machine {
+        try controlFrontend(selection).machine
+    }
+
+    static func controlFrontend(_ selection: Selection) throws
+        -> (machine: SequentialControlEvidence.Machine, declared: SequentialControlEvidence.DeclaredSyntax) {
         let body = try authoredSteps(selection)
         guard let machine = SequentialControlEvidence.authoredMachine(steps: body.steps, algorithmName: selection.algorithm)
         else { throw unsupported }
-        return machine
+        return (machine, .init(algorithm: selection.algorithm, steps: body.steps))
     }
 
     static func capturedSequentialSteps(source: String, modelName: String) throws

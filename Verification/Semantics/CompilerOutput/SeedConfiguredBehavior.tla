@@ -31,15 +31,13 @@ THEOREM NormalConfigurationAndNativeDispatchPreserveSourceSteps ==
 
 THEOREM NormalConfigurationUsesOnlyAuthoredSequentialControl ==
     /\ (SelectedBehavior => [][AuthoredSequentialStep]_vars)
+    /\ (~AuthoredSequentialGuard => ~ENABLED Next)
+    /\ (AuthoredSequentialWriteFreeGuard => ENABLED Next)
+    /\ PhysicalAuthoredSequentialTrace = LoweredSequentialSemantics
     /\ NativeControlUsesAuthoredRoutes
-PROOF
-<1>step. Next => AuthoredSequentialStep
-    BY ActualSequentialStepUsesAuthoredRoutes
-<1>stuttering. [Next]_vars => [AuthoredSequentialStep]_vars
-    BY <1>step, PTL
-<1>always. ([][Next]_vars) => ([][AuthoredSequentialStep]_vars)
-    BY <1>stuttering, PTL
-<1>behavior. SelectedBehavior => [][AuthoredSequentialStep]_vars
-    BY <1>always, PTL DEF SelectedBehavior, SwiftTLACopySelectedBehavior, Spec, vars
-<1>. QED BY <1>behavior, ActualSequentialStepUsesAuthoredRoutes
+    /\ DOMAIN NativeActionRows = DOMAIN AuthoredSequentialLabels
+    /\ \A index \in DOMAIN NativeActionRows : NativeActionRows[index][1] = AuthoredSequentialLabels[index]
+    BY ONLY ActualSpecUsesOnlyAuthoredSequentialControl, ActualNativeControlTransfersUseSelectedTargets,
+        ActualNativeSequentialInventoryUsesAuthoredLabels, PTL
+        DEF SelectedBehavior, SwiftTLACopySelectedBehavior
 ====

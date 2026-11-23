@@ -24,6 +24,17 @@ package enum CompilerStackSeedEvidence {
               captured.binding.formalFields == ["pending", "leftChild", "rightChild"] else {
             throw invalid("authored and typed stack expansion identity")
         }
+        guard captured.expansion.countFloor == authored.countFloor,
+              captured.expansion.lastIndex == authored.lastIndex,
+              captured.expansion.prefixDrop == authored.prefixDrop,
+              captured.expansion.localExpandedPosition == authored.localExpandedPosition,
+              captured.expansion.pushes.count == authored.pushes.count,
+              zip(captured.expansion.pushes, authored.pushes).allSatisfy({ native, source in
+                  native.source.utf8.elementsEqual(source.source.utf8)
+                      && native.position == source.position && native.expanded == source.expanded
+              }) else {
+            throw invalid("authored and native stack expansion operands")
+        }
         guard captured.module == root.name, captured.identity == identity.value,
               captured.tla.utf8.elementsEqual(root.tla.utf8) else {
             throw EvidenceFormatError.invalidField(record: "OrderedIntTraversalPass", field: "expanded render bytes")
@@ -32,7 +43,7 @@ package enum CompilerStackSeedEvidence {
             root.name + ".tla": Data(root.tla.utf8),
             root.name + ".cfg": Data(configuration.utf8),
             "OrderedIntTraversalPassSource.tla": Data(sourceProof(authored, binding: captured.binding,
-                nativeInitialization: captured.initialization).utf8),
+                nativeExpansion: captured.expansion, nativeInitialization: captured.initialization).utf8),
         ]
         let hashes = files.mapValues(SHA256.hex)
         let encoder = JSONEncoder()
@@ -47,7 +58,7 @@ package enum CompilerStackSeedEvidence {
 
     private static func capturedRender(_ nativeSource: String)
         throws -> (module: String, identity: String, tla: String, binding: OrderedIntStackSeedSource,
-                   initialization: NativeTraversalSeedInitialization) {
+                   expansion: NativeTraversalSeedExpansion, initialization: NativeTraversalSeedInitialization) {
         let expansion = Parser.parse(source: nativeSource)
         let renders = expansion.statements.compactMap { $0.item.as(FunctionDeclSyntax.self) }
             .filter { $0.name.text == "render" && $0.modifiers.contains(where: { $0.name.text == "static" }) }
@@ -55,7 +66,7 @@ package enum CompilerStackSeedEvidence {
             throw EvidenceFormatError.invalidField(record: "OrderedIntTraversalPass", field: "expanded render method")
         }
         let declarations = expansion.statements.compactMap { $0.item.as(DeclSyntax.self) }
-        try verifyGeneratedTraversalSeedOutput(declarations)
+        let action = try decodeGeneratedTraversalSeedOutput(declarations)
         let initialization = try decodeGeneratedTraversalSeedInitialization(declarations)
         let marker = "// SwiftTLA.OrderedIntStackSeedSource.v1 "
         let receipts = render.leadingTrivia.compactMap { piece -> Data? in
@@ -85,7 +96,7 @@ package enum CompilerStackSeedEvidence {
               let source = literal("source") else {
             throw EvidenceFormatError.invalidField(record: "OrderedIntTraversalPass", field: "expanded render literals")
         }
-        return (module, identity, source, binding, initialization)
+        return (module, identity, source, binding, action, initialization)
     }
 
     private static func authoredExpansion(_ source: String) throws -> OrderedIntStackSeedSource.Expansion {
@@ -105,14 +116,16 @@ package enum CompilerStackSeedEvidence {
 
     private static func sourceProof(_ authored: OrderedIntStackSeedSource.Expansion,
                                     binding: OrderedIntStackSeedSource,
+                                    nativeExpansion: NativeTraversalSeedExpansion,
                                     nativeInitialization: NativeTraversalSeedInitialization) -> String {
         func record(_ fields: [(String, TLAValue)]) -> TLAValue {
             .record(TLARecord(fields.map { .init($0.0, $0.1) }))
         }
+        func push(_ source: String, _ position: Int, _ expanded: Bool) -> TLAValue {
+            record([("source", .string(source)), ("position", .int(position)), ("expanded", .bool(expanded))])
+        }
         func row(_ expansion: OrderedIntStackSeedSource.Expansion) -> TLAValue {
-            let pushes = expansion.pushes.map {
-                record([("source", .string($0.source)), ("position", .int($0.position)), ("expanded", .bool($0.expanded))])
-            }
+            let pushes = expansion.pushes.map { push($0.source, $0.position, $0.expanded) }
             return record([
                 ("label", .string(expansion.label)), ("stack", .string(expansion.stack)),
                 ("left", .string(expansion.left)), ("right", .string(expansion.right)),
@@ -126,6 +139,11 @@ package enum CompilerStackSeedEvidence {
             record([("pending", .tuple([])), ("leftChild", .int(left)), ("rightChild", .int(right)),
                     ("elementTypes", .tuple(elementTypes.map(TLAValue.string)))])
         }
+        let native = record([
+            ("countFloor", .int(nativeExpansion.countFloor)), ("lastIndex", .string(nativeExpansion.lastIndex)),
+            ("prefixDrop", .int(nativeExpansion.prefixDrop)), ("localExpandedPosition", .int(nativeExpansion.localExpandedPosition)),
+            ("pushes", .tuple(nativeExpansion.pushes.map { push($0.source, $0.position, $0.expanded) })),
+        ])
         let authoredInit = authored.initializers
         let typedInit = binding.typed.initializers
         return #"""
@@ -133,6 +151,7 @@ package enum CompilerStackSeedEvidence {
         EXTENDS Integers, Sequences, TLAPS
         AuthoredStackExpansion == \#(row(authored))
         TypedStackExpansion == \#(row(binding.typed))
+        NativeStackExpansion == \#(native)
         TypedStackFormalFields == \#(TLAValue.tuple(binding.formalFields.map(TLAValue.string)))
         TypedStackFieldOrdinals == \#(TLAValue.tuple(binding.fieldOrdinals.map(TLAValue.int)))
         TypedStackActionOrdinal == \#(binding.actionOrdinal)

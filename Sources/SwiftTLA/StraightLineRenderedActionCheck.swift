@@ -1598,6 +1598,7 @@ package enum StraightLineRenderedActionCheck {
 
     package struct FiniteActionCatalog: Sendable {
         package let invocations: [RenderedAction]
+        package let physicalInvocations: [String]
         package let frameFields: [String]
     }
 
@@ -1615,21 +1616,30 @@ package enum StraightLineRenderedActionCheck {
         let lines = rendered.tlaBundle.root.tla.components(separatedBy: "\n")
         let frame = "<<\(fields.joined(separator: ", "))>>"
         let behavior = ["Spec ==", "  /\\ Init", "  /\\ [][Next]_\(frame)"]
-        guard hasInvocationDisjunction(names, in: lines),
+        guard let physicalInvocations = physicalNextInvocations(in: lines, directNext: names == ["Next"]),
+              physicalInvocations.elementsEqual(names, by: { $0.utf8.elementsEqual($1.utf8) }),
               definitionBlock("vars", in: lines) == ["vars == \(frame)"],
               definitionBlock("Spec", in: lines)?.starts(with: behavior) == true else { return nil }
-        return .init(invocations: invocations, frameFields: fields)
+        return .init(invocations: invocations, physicalInvocations: physicalInvocations, frameFields: fields)
     }
 
     private static func hasInvocationDisjunction(_ invocations: [String], in lines: [String]) -> Bool {
-        if invocations == ["Next"] { return true }
-        let expected: [String]
-        switch invocations.count {
-        case 0: expected = ["Next == FALSE"]
-        case 1: expected = ["Next == \(invocations[0])"]
-        default: expected = ["Next =="] + invocations.map { "  \\/ \($0)" }
+        physicalNextInvocations(in: lines, directNext: invocations == ["Next"]) == invocations
+    }
+
+    private static func physicalNextInvocations(in lines: [String], directNext: Bool) -> [String]? {
+        guard let definition = definitionBlock("Next", in: lines), let header = definition.first else { return nil }
+        if directNext { return ["Next"] }
+        if definition == ["Next == FALSE"] { return [] }
+        if definition.count == 1 {
+            let prefix = "Next == "
+            guard header.hasPrefix(prefix) else { return nil }
+            return [String(header.dropFirst(prefix.count))]
         }
-        return definitionBlock("Next", in: lines) == expected
+        let prefix = "  \\/ "
+        let operands = definition.dropFirst()
+        guard header == "Next ==", operands.count > 1, operands.allSatisfy({ $0.hasPrefix(prefix) }) else { return nil }
+        return operands.map { String($0.dropFirst(prefix.count)) }
     }
 
     private static func definitionBlock(_ name: String, in lines: [String]) -> [String]? {

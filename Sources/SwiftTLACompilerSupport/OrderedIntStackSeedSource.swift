@@ -30,16 +30,17 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
         package let initializers: Initializers
 
         fileprivate init(label: String, roots: [String], local: String, write: String,
-                         frame: [String], pushes: [Push], initializers: Initializers) {
+                         frame: [String], pushes: [Push], initializers: Initializers,
+                         countFloor: Int, lastIndex: String, prefixDrop: Int, localExpandedPosition: Int) {
             self.label = label
             stack = roots[0]
             left = roots[1]
             right = roots[2]
             self.local = local
-            countFloor = 0
-            lastIndex = "count"
-            prefixDrop = 1
-            localExpandedPosition = 2
+            self.countFloor = countFloor
+            self.lastIndex = lastIndex
+            self.prefixDrop = prefixDrop
+            self.localExpandedPosition = localExpandedPosition
             self.write = write
             self.frame = frame.sorted()
             self.pushes = pushes
@@ -90,9 +91,13 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
         let steps = Array(body.statements)
         guard steps.count == 2,
               let positive = call(steps[0], named: "When", arguments: 1, closure: false),
-              spelling(positive.arguments.first?.expression) == [stack, ".", "count", ">", "0"],
+              let gateExpression = positive.arguments.first?.expression,
+              spelling(gateExpression).dropLast().elementsEqual([stack, ".", "count", ">"]),
+              let countFloor = spelling(gateExpression).last.flatMap(Int.init), countFloor == 0,
               let capture = call(steps[1], named: "Let", arguments: 1, closure: true),
-              spelling(capture.arguments.first?.expression) == [stack, "[", stack, ".", "count", "]"],
+              let lastExpression = capture.arguments.first?.expression,
+              spelling(lastExpression) == [stack, "[", stack, ".", "count", "]"],
+              let index = spelling(lastExpression).dropLast().last,
               let scoped = capture.trailingClosure, scoped.signature?.capture == nil,
               ModelSpecificationSyntax.parameterNames(in: scoped).count == 1,
               let local = ModelSpecificationSyntax.parameterNames(in: scoped).first,
@@ -102,15 +107,19 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
         let nested = Array(scoped.statements)
         guard nested.count == 2,
               let unexpanded = call(nested[0], named: "When", arguments: 1, closure: false),
-              spelling(unexpanded.arguments.first?.expression) == ["!", local, ".", "second", "(", ")"],
+              let disabledProjection = unexpanded.arguments.first?.expression.as(PrefixOperatorExprSyntax.self),
+              disabledProjection.operator.text == "!",
+              let expanded = authoredProjection(spelling(disabledProjection.expression), of: local), expanded == 2,
               let assign = call(nested[1], named: "Assign", arguments: 2, closure: false),
               let target = assign.arguments.first?.expression.as(DeclReferenceExprSyntax.self)?.baseName.text,
               let rhs = assign.arguments.last, rhs.label?.text == "to", target == stack,
-              let pushes = authoredPushes(rhs.expression, stack: stack, local: local, roots: roots)
+              let replacement = authoredPushes(rhs.expression, stack: stack, local: local, roots: roots)
         else { return nil }
         return Expansion(label: label.declName.baseName.text, roots: roots, local: local, write: target,
-                         frame: roots.filter { $0 != target }, pushes: pushes,
-                         initializers: .init(elementTypes: ["Int", "Bool"], leftChild: initialLeft, rightChild: initialRight))
+                         frame: roots.filter { $0 != target }, pushes: replacement.pushes,
+                         initializers: .init(elementTypes: ["Int", "Bool"], leftChild: initialLeft, rightChild: initialRight),
+                         countFloor: countFloor, lastIndex: index, prefixDrop: replacement.drop,
+                         localExpandedPosition: expanded)
     }
 
     package static func check(_ closure: ClosureExprSyntax, program: CompiledProgram) -> Self? {
@@ -131,13 +140,16 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
         else { return nil }
         var collector = CompiledRows(program: program, fields: fields)
         guard collector.visit(program[declaration.id].body, localScope: nil, scope: [:]),
-              let capture = collector.local, let write = collector.write, let pushes = collector.pushes,
+              let capture = collector.local, let write = collector.write, let replacement = collector.replacement,
+              let floor = collector.countFloor, let lastIndex = collector.lastIndex,
+              let expanded = collector.localExpandedPosition,
               collector.operations == ["positive", "last", "unexpanded", "write"],
               collector.frame == Set(fields.dropFirst().map(\.id))
         else { return nil }
         let actual = Expansion(label: declaration.declaration.name, roots: fields.map(\.declaration.name),
             local: authored.local, write: write, frame: fields.filter { collector.frame.contains($0.id) }.map(\.declaration.name),
-            pushes: pushes, initializers: initializers)
+            pushes: replacement.pushes, initializers: initializers,
+            countFloor: floor, lastIndex: lastIndex, prefixDrop: replacement.drop, localExpandedPosition: expanded)
         guard actual == authored else { return nil }
         return .init(authored: authored, typed: actual, formalFields: fields.map(\.formalName),
                      fieldOrdinals: fields.map(\.id.ordinal), actionOrdinal: declaration.id.ordinal,
@@ -180,8 +192,16 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
         return call
     }
 
+    private typealias Replacement = (drop: Int, pushes: [Push])
+
+    private static func authoredProjection(_ tokens: [String], of local: String) -> Int? {
+        if tokens == [local, ".", "first", "(", ")"] { return 1 }
+        if tokens == [local, ".", "second", "(", ")"] { return 2 }
+        return nil
+    }
+
     private static func authoredPushes(_ rhs: ExprSyntax, stack: String, local: String,
-                                       roots: [String]) -> [Push]? {
+                                       roots: [String]) -> Replacement? {
         var remaining = rhs
         var reversed: [Push] = []
         while let call = remaining.as(FunctionCallExprSyntax.self),
@@ -198,17 +218,19 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
             let value = spelling(operands[0].expression)
             let flag = spelling(operands[1].expression)
             guard flag == ["true", ".", "expr"] || flag == ["false", ".", "expr"] else { return nil }
-            if value == [local, ".", "first", "(", ")"] {
-                reversed.append(.init(source: "local", position: 1, expanded: flag[0] == "true"))
+            if let position = authoredProjection(value, of: local), position == 1 {
+                reversed.append(.init(source: "local", position: position, expanded: flag[0] == "true"))
             } else if value.count == 1, roots.dropFirst().contains(value[0]) {
                 reversed.append(.init(source: value[0], position: 0, expanded: flag[0] == "true"))
             } else { return nil }
             remaining = base
         }
-        guard reversed.count == 3,
-              spelling(remaining) == [stack, ".", "prefix", "(", "length", ":", stack, ".", "count", "-", "1", ")"]
+        let prefix = spelling(remaining)
+        guard reversed.count == 3, prefix.last == ")",
+              prefix.dropLast(2).elementsEqual([stack, ".", "prefix", "(", "length", ":", stack, ".", "count", "-"]),
+              let drop = prefix.dropLast().last.flatMap(Int.init), drop == 1
         else { return nil }
-        return Array(reversed.reversed())
+        return (drop, Array(reversed.reversed()))
     }
 
     private struct CompiledRows {
@@ -218,29 +240,35 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
         var write: String?
         var frame: Set<VariableID> = []
         var operations: [String] = []
-        var pushes: [Push]?
+        var replacement: Replacement?
+        var countFloor: Int?
+        var lastIndex: String?
+        var localExpandedPosition: Int?
 
-        mutating func visit(_ action: CompiledActionExpr, localScope: BinderID?, scope: [BinderID: [Push]]) -> Bool {
+        mutating func visit(_ action: CompiledActionExpr, localScope: BinderID?, scope: [BinderID: Replacement]) -> Bool {
             switch action {
             case .and(let lhs, let rhs):
                 return visit(lhs, localScope: localScope, scope: scope) && visit(rhs, localScope: localScope, scope: scope)
             case .guard_(let expression):
                 if leaf(expression, .value(.boolean(true)), .bool) { return true }
                 if node(expression, .greaterThan, .bool, 2),
-                   count(expression.children[0]), leaf(expression.children[1], .value(.integer(0)), .int) {
+                   count(expression.children[0]) != nil, let floor = integer(expression.children[1]), floor == 0 {
+                    countFloor = floor
                     operations.append("positive")
                     return true
                 }
                 if node(expression, .not, .bool, 1), let localScope,
-                   projection(expression.children[0], position: 2, binder: localScope, type: .bool) {
+                   let position = projection(expression.children[0], binder: localScope, type: .bool), position == 2 {
+                    localExpandedPosition = position
                     operations.append("unexpanded")
                     return true
                 }
                 return false
             case .define(let binder, let expression, let body):
                 if node(expression, .tupleDynamicAccess, frameType, 2),
-                   sequence(expression.children[0]), count(expression.children[1]),
+                   sequence(expression.children[0]), let index = count(expression.children[1]),
                    program.bindingTypes[binder] == frameType, local == nil {
+                    lastIndex = index
                     local = binder
                     operations.append("last")
                     return visit(body, localScope: binder, scope: scope)
@@ -252,7 +280,7 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
                 return Array(operations.dropFirst(before)) == ["write"]
             case .assign(let field, let expression):
                 guard field == fields[0].id, write == nil, let localScope else { return false }
-                let frames: [Push]?
+                let frames: Replacement?
                 if expression.resultType == stackType, expression.children.isEmpty,
                    case .boundValue(let binding) = expression.operation {
                     frames = scope[binding]
@@ -263,7 +291,7 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
                 }
                 guard let frames else { return false }
                 write = fields[0].declaration.name
-                pushes = frames
+                replacement = frames
                 operations.append("write")
                 return true
             case .unchanged(let id):
@@ -273,7 +301,7 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
             }
         }
 
-        func appendRows(_ expression: CompiledExpression, localScope: BinderID) -> [Push]? {
+        func appendRows(_ expression: CompiledExpression, localScope: BinderID) -> Replacement? {
             var remaining = expression
             var reversed: [Push] = []
             while node(remaining, .tupleAppend, stackType, 2) {
@@ -285,9 +313,9 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
             guard reversed.count == 3, node(remaining, .tuplePrefix, stackType, 2),
                   sequence(remaining.children[0]) else { return nil }
             let length = remaining.children[1]
-            guard node(length, .subtract, .int, 2), count(length.children[0]),
-                  leaf(length.children[1], .value(.integer(1)), .int) else { return nil }
-            return Array(reversed.reversed())
+            guard node(length, .subtract, .int, 2), count(length.children[0]) != nil,
+                  let drop = integer(length.children[1]), drop == 1 else { return nil }
+            return (drop, Array(reversed.reversed()))
         }
 
         func push(_ expression: CompiledExpression, localScope: BinderID) -> Push? {
@@ -302,8 +330,8 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
                   case .value(.boolean(let flag)) = pair.children[1].operation
             else { return nil }
             let value = pair.children[0]
-            if projection(value, position: 1, binder: localScope, type: .int) {
-                return .init(source: "local", position: 1, expanded: flag)
+            if let position = projection(value, binder: localScope, type: .int), position == 1 {
+                return .init(source: "local", position: position, expanded: flag)
             }
             guard value.resultType == .int, value.children.isEmpty, case .stateVariable(let id) = value.operation,
                   let field = fields.dropFirst().first(where: { $0.id == id }) else { return nil }
@@ -314,14 +342,22 @@ package struct OrderedIntStackSeedSource: Codable, Equatable, Sendable {
             leaf(expression, .stateVariable(fields[0].id), stackType)
         }
 
-        func count(_ expression: CompiledExpression) -> Bool {
-            node(expression, .tupleLength, .int, 1) && sequence(expression.children[0])
+        func count(_ expression: CompiledExpression) -> String? {
+            guard node(expression, .tupleLength, .int, 1), sequence(expression.children[0]) else { return nil }
+            return "count"
         }
 
-        func projection(_ expression: CompiledExpression, position: Int, binder: BinderID,
-                        type: CompiledValueType) -> Bool {
-            node(expression, .tupleAccess(position), type, 1)
-                && leaf(expression.children[0], .boundValue(binder), frameType)
+        func integer(_ expression: CompiledExpression) -> Int? {
+            guard case .value(.integer(let value)) = expression.operation,
+                  expression.resultType == .int, expression.children.isEmpty else { return nil }
+            return value
+        }
+
+        func projection(_ expression: CompiledExpression, binder: BinderID, type: CompiledValueType) -> Int? {
+            guard case .tupleAccess(let position) = expression.operation,
+                  expression.resultType == type, expression.children.count == 1,
+                  leaf(expression.children[0], .boundValue(binder), frameType) else { return nil }
+            return position
         }
 
         func leaf(_ expression: CompiledExpression, _ op: CompiledOperation, _ type: CompiledValueType) -> Bool {

@@ -60,6 +60,24 @@ THEOREM CatalogLabeledBranchesComposeTheFiniteUnion ==
           <=> (\E label : CatalogLabeledBranches(branches, labels, label))
     BY ONLY (DOMAIN branches = DOMAIN labels), SMT DEF CatalogLabeledBranches
 
+\* The emitted flat disjunction visits its action operands by position.
+ActionCatalogPrefix(values, width) ==
+    \E slot \in 1..width : values[slot]
+
+THEOREM EmptyActionCatalogPrefix ==
+    ASSUME NEW values
+    PROVE ~ActionCatalogPrefix(values, 0)
+    BY ONLY SMT DEF ActionCatalogPrefix
+
+THEOREM ActionCatalogPrefixAddsOneDisjunct ==
+    ASSUME NEW values, NEW width \in Nat
+    PROVE ActionCatalogPrefix(values, width + 1) <=>
+        (ActionCatalogPrefix(values, width) \/ values[width + 1])
+PROOF
+<1>positions. 1..(width + 1) = (1..width) \cup {width + 1}
+    BY ONLY (width \in Nat), SMT
+<1>. QED BY ONLY <1>positions, SMT DEF ActionCatalogPrefix
+
 NativeDispatchBindsTheActionCatalog(routes, formalLabels) ==
     /\ \A first, second \in DOMAIN routes : routes[first].handle = routes[second].handle => first = second
     /\ \A first, second \in DOMAIN formalLabels : formalLabels[first] = formalLabels[second] => first = second

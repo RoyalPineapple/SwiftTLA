@@ -197,11 +197,17 @@ package enum ArithmeticAssignmentEvidence {
         let nativeOperators = nativeSource == nil ? "" : #"""
         \#(prefix)NativeSelectedSteps == \#(tuple(modules.map { "NativeStep\($0.slot)" }))
         \#(prefix)NativeSelectedFailures == \#(tuple(modules.map { "NativeFailures\($0.slot)" }))
+        \#(prefix)NativeOrderedOutputs == \#(tuple(modules.map { "NativeOrderedOutput\($0.slot)" }))
+        \#(prefix)CertifiedOrderedOutputs(histories) ==
+            \#(tuple(modules.map { "CertifiedOrderedOutput\($0.slot)(histories[\($0.slot)])" }))
+        \#(prefix)NativeOrderedOutputsHold(histories) ==
+            \#(modules.map { "/\\ NativeOrderedOutputHolds\($0.slot)(histories[\($0.slot)])" }.joined(separator: "\n    "))
         """#
         let nativeConclusion = nativeSource == nil ? "" : #"""
                 /\ \A slot \in DOMAIN \#(prefix)NativeSelectedSteps :
                        \#(prefix)NativeSelectedSteps[slot] <=> \#(prefix)CertifiedActions(histories)[slot]
                 /\ \#(prefix)NativeSelectedFailures = \#(prefix)ActualFailures
+                /\ \#(prefix)NativeOrderedOutputsHold(histories)
         """#
         let nativeRows: [(name: String, bytes: Data)] = nativeSource == nil ? [] : modules.map { row in
             let proof = #"""
@@ -222,6 +228,18 @@ package enum ArithmeticAssignmentEvidence {
                 \#(row.instance)!RHSOutputInput!Rule!DecodedNativeAssignmentFailures(
                     \#(row.instance)!RHSOutputRows, NativePlan\#(row.slot), NativeFormalNames, NativeCounter,
                     \#(row.instance)!RHSOutputBefore, \#(pc), NativeAppendSites\#(row.slot))
+            NativeOrderedOutput\#(row.slot) ==
+                \#(row.instance)!RHSOutputInput!Rule!DecodedNativeAssignmentOrderedOutput(
+                    \#(row.instance)!RHSOutputRows, NativePlan\#(row.slot), NativeFormalNames, NativeCounter,
+                    \#(row.instance)!RHSOutputBefore, \#(pc), NativeAppendSites\#(row.slot))
+            CertifiedOrderedOutput\#(row.slot)(history) ==
+                \#(row.instance)!RHSOutputInput!Rule!CertifiedAssignmentOrderedOutput(
+                    history[\#(row.instance)!RHSOutputCount], \#(row.instance)!RHSOutputSelected,
+                    \#(row.instance)!RHSOutputExit)
+            NativeOrderedOutputHolds\#(row.slot)(history) ==
+                /\ NativeOrderedOutput\#(row.slot) = CertifiedOrderedOutput\#(row.slot)(history)
+                /\ \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentOrderedOutputsTyped(
+                      NativeOrderedOutput\#(row.slot), history[\#(row.instance)!RHSOutputCount], \#(row.instance)!RHSOutputExit)
 
             THEOREM ActualNativeAction\#(row.slot)UsesTheCertifiedHistory ==
                 ASSUME \#(row.instance)!RHSOutputStateType,
@@ -230,6 +248,7 @@ package enum ArithmeticAssignmentEvidence {
                        \#(row.instance)!RHSOutputHistoryObservation(\#(row.history))
                 PROVE /\ (NativeStep\#(row.slot) <=> \#(row.instance)!RHSOutputHistoryAdvance(\#(row.history)))
                       /\ NativeFailures\#(row.slot) = \#(row.instance)!RHSOutputActualFailures
+                      /\ NativeOrderedOutputHolds\#(row.slot)(\#(row.history))
             PROOF
             <1>failureObservation.
                 \#(row.instance)!RHSOutputActualFailures = \#(row.instance)!RHSOutputHistoryFailures(\#(row.history))
@@ -238,6 +257,7 @@ package enum ArithmeticAssignmentEvidence {
             <1>native\#(row.slot).
                 /\ (NativeStep\#(row.slot) <=> \#(row.instance)!RHSOutputHistoryAdvance(\#(row.history)))
                 /\ NativeFailures\#(row.slot) = \#(row.instance)!RHSOutputActualFailures
+                /\ NativeOrderedOutputHolds\#(row.slot)(\#(row.history))
                 PROOF
                 <2>. DEFINE route == NativeActionAt(\#(row.slot))
                             raw == NativePlan\#(row.slot)
@@ -439,7 +459,13 @@ package enum ArithmeticAssignmentEvidence {
                     BY ONLY <2>observationResult, SMT DEF \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentObservationMatches, NativeStep\#(row.slot), NativeFailures\#(row.slot),
                         \#(row.instance)!RHSOutputHistoryAdvance, \#(row.instance)!RHSOutputHistoryFailures, \#(row.instance)!RHSOutputSelected, \#(row.instance)!RHSOutputCount,
                         authored, raw, appendSites, entry, destination
-                <2>. QED BY ONLY <2>math, <1>failureObservation
+                <2>ordered. NativeOrderedOutputHolds\#(row.slot)(\#(row.history))
+                    BY ONLY <2>observationResult, SMT
+                        DEF \#(row.instance)!RHSOutputInput!Rule!NativeAssignmentObservationMatches,
+                            NativeOrderedOutputHolds\#(row.slot), NativeOrderedOutput\#(row.slot),
+                            CertifiedOrderedOutput\#(row.slot), \#(row.instance)!RHSOutputSelected,
+                            \#(row.instance)!RHSOutputCount, authored, raw, appendSites, entry, destination
+                <2>. QED BY ONLY <2>math, <2>ordered, <1>failureObservation
             <1>. QED BY ONLY <1>native\#(row.slot)
 
             ====
@@ -452,6 +478,7 @@ package enum ArithmeticAssignmentEvidence {
             <1>native\#(row.slot).
                 /\ (NativeStep\#(row.slot) <=> \#(row.instance)!RHSOutputHistoryAdvance(\#(row.history)))
                 /\ NativeFailures\#(row.slot) = \#(row.instance)!RHSOutputActualFailures
+                /\ NativeOrderedOutputHolds\#(row.slot)(\#(row.history))
                 BY ONLY \#(prefix)InputType, <1>pick\#(row.slot), ActualNativeAction\#(row.slot)UsesTheCertifiedHistory,
                     SMT DEF \#(prefix)InputType
             """#
@@ -475,11 +502,71 @@ package enum ArithmeticAssignmentEvidence {
             /\ \A slot \in DOMAIN \#(prefix)NativeSelectedSteps :
                 \#(prefix)NativeSelectedSteps[slot] <=> \#(prefix)CertifiedActions(histories)[slot]
             /\ \#(prefix)NativeSelectedFailures = \#(prefix)ActualFailures
+            /\ \#(prefix)NativeOrderedOutputsHold(histories)
             BY ONLY <1>nativeSlots, <1>nativeDomain, \#(checks), SMT
-                DEF \#(prefix)NativeSelectedFailures, \#(prefix)ActualFailures
+                DEF \#(prefix)NativeSelectedFailures, \#(prefix)ActualFailures, \#(prefix)NativeOrderedOutputsHold, histories
         """#
         }
         let nativeFact = nativeSource == nil ? "" : ", <1>nativeResult"
+        let terminalRule = "\(last.instance)!RHSOutputInput!Rule"
+        let nativeTerminal = nativeSource == nil ? "" : #"""
+        LOCAL TerminalKeys == \#(last.instance)!RHSOutputKeys
+        LOCAL TerminalBindings == \#(last.instance)!RHSOutputBefore
+        LOCAL TerminalControl == \#(last.instance)!RHSOutputExit
+        LOCAL TerminalPlan == \#(terminalRule)!NativeCopyRekey(NativeActionAt(\#(terminalSlot)).outcome,
+            TerminalKeys, NativeFormalNames, NativeCounter)
+        LOCAL TerminalAppendSites == NativeActionFailureAppendSites[NativeActionRoutes[\#(terminalSlot)].visitor]
+
+        NativeTerminalOrderedOutput ==
+            IF TerminalPlan.captures = <<>> /\ TerminalAppendSites = <<>>
+            THEN [callbacks |-> \#(terminalRule)!NativeCopyCallbackSnapshots(
+                  TerminalPlan, TerminalKeys, TerminalBindings, \#(pc), <<>>), reasons |-> <<>>]
+            ELSE <<>>
+
+        CertifiedTerminalOrderedOutput ==
+            [callbacks |-> IF \#(pc) = TerminalControl THEN << <<\#(pc), TerminalBindings>> >> ELSE <<>>,
+             reasons |-> <<>>]
+
+        THEOREM NativeTerminalOrderedOutputUsesTheCompleteFrame ==
+            ASSUME \#(prefix)InputType
+            PROVE /\ NativeTerminalOrderedOutput = CertifiedTerminalOrderedOutput
+                  /\ NativeTerminalOrderedOutput.callbacks \in Seq({<<\#(pc), TerminalBindings>>})
+                  /\ NativeTerminalOrderedOutput.reasons \in Seq({})
+        PROOF
+        <1>plan. /\ \#(terminalRule)!NativeCompleteCopyPlan(TerminalPlan, TerminalKeys, <<>>,
+                      \#(terminalRule)!CopyEntryRoutes(TerminalKeys), TerminalControl,
+                      <<"state", \#(terminalRule)!NativeCopyControlSlot>>)
+                 /\ TerminalAppendSites = <<>>
+            BY ONLY SMT DEF TerminalPlan, TerminalKeys, TerminalControl, TerminalAppendSites,
+                NativeActionAt, NativeActionRoutes, NativeVisitorPlans, NativeActionRows, NativeFormalNames, NativeCounter,
+                NativeVisitor\#(terminalSlot)Action, NativeVisitor\#(terminalSlot)Captures,
+                NativeVisitor\#(terminalSlot)CaptureTags, NativeVisitor\#(terminalSlot)Guards,
+                NativeVisitor\#(terminalSlot)Writes, NativeActionFailureAppendSites, NativeVisitor\#(terminalSlot)FailureAppendSites,
+                \#(prefix)Dispatch!NativeDispatchOutcome, \#(last.instance)!RHSOutputKeys, \#(last.instance)!RHSOutputExit,
+                \#(terminalRule)!NativeCompleteCopyPlan, \#(terminalRule)!NativeCopyRekey,
+                \#(terminalRule)!NativeCopyKey, \#(terminalRule)!NativeCopyFields,
+                \#(terminalRule)!NativeCopyControlSlot, \#(terminalRule)!CopyEntryRoutes
+        <1>state. TerminalBindings = [key \in TerminalKeys |-> TerminalBindings[key]]
+            BY ONLY SMT DEF TerminalKeys, TerminalBindings, \#(last.instance)!RHSOutputKeys, \#(last.instance)!RHSOutputBefore
+        <1>captures. \A witness : \#(terminalRule)!CopyCaptureHistory(
+            \#(terminalRule)!NativeCopySnapshot(TerminalKeys, TerminalBindings, \#(pc)), TerminalPlan.captures, witness)
+            => witness = <<>>
+            BY ONLY <1>plan, SMT DEF \#(terminalRule)!NativeCompleteCopyPlan, \#(terminalRule)!CopyCaptureHistory
+        <1>visit. \#(pc) = TerminalControl => \#(terminalRule)!NativeCopyVisits(
+            TerminalPlan, TerminalKeys, TerminalBindings, TerminalBindings, \#(pc), \#(pc))
+            BY ONLY <1>state, <1>plan, \#(terminalRule)!EmptyCopyPlanRetainsTheCompleteState,
+                \#(terminalRule)!ValidatedNativeCopyPlansHaveTheCompleteCompiledObservation, SMT
+        <1>output. NativeTerminalOrderedOutput = CertifiedTerminalOrderedOutput
+            <2>done. CASE \#(pc) = TerminalControl
+                BY ONLY <2>done, <1>plan, <1>visit, <1>state, <1>captures,
+                    \#(terminalRule)!NativeCopyCallbackUsesTheMaterializedWriteHistory, SMT
+                    DEF NativeTerminalOrderedOutput, CertifiedTerminalOrderedOutput, \#(terminalRule)!NativeCompleteCopyPlan
+            <2>off. CASE \#(pc) # TerminalControl
+                BY ONLY <2>off, <1>plan, SMT DEF NativeTerminalOrderedOutput, CertifiedTerminalOrderedOutput,
+                    \#(terminalRule)!NativeCopyCallbackSnapshots, \#(terminalRule)!NativeCompleteCopyPlan
+            <2>. QED BY ONLY <2>done, <2>off, SMT
+        <1>. QED BY ONLY <1>output, \#(terminalRule)!SeqDef, SMT DEF CertifiedTerminalOrderedOutput
+        """#
         let dependencies = nativeData.map { [(name: nativeDataName, bytes: Data($0.utf8))] + nativeRows } ?? []
         let extensions = nativeSource == nil ? "\(root.name), TLAPS" : nativeRows.map { $0.name }.joined(separator: ", ")
         let proof = #"""
@@ -498,6 +585,8 @@ package enum ArithmeticAssignmentEvidence {
         \#(prefix)Terminal ==
             /\ \#(counter.formalName) = \#(last.instance)!RHSOutputExit
             /\ \#(prefix)ActualFrameAfter = \#(prefix)ActualFrameBefore
+
+        \#(nativeTerminal)
 
         \#(prefix)HistoriesHold(histories) ==
             \#(witnessChecks)
@@ -562,7 +651,7 @@ package enum ArithmeticAssignmentEvidence {
 
         """#
         let configured = nativeSource == nil ? nil : OrderedRHSCFGProof.renderCatalog(
-            for: rendered, catalogModule: name, prefix: prefix, actions: zip(modules, ordered).map {
+            for: rendered, catalogModule: name, prefix: prefix, counter: pc, actions: zip(modules, ordered).map {
                 (instance: $0.0.instance, failureOperator: $0.1.output.failureOperator)
             })
         return .init(name: name, bytes: Data(proof.utf8), dependencies: dependencies, configured: configured)

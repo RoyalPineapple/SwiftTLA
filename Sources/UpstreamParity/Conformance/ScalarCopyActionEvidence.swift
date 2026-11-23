@@ -457,19 +457,34 @@ extension StraightLineRenderedActionCheck.FiniteActionCatalog {
         let index = prefix + "Index"
         let label = prefix + "Label"
         let emittedLabeled = prefix + "EmittedLabeled"
-        let actualInvocations = invocations.map(\.renderedName)
         let actualRoutes = invocations.map {
             TLAValue.record(TLARecord([.init("formal", .string($0.renderedName)), .init("authored", .string($0.sourceName))]))
         }
-        let emittedValues = "<<\(actualInvocations.joined(separator: ", "))>>"
-        let emittedDisjunction = actualInvocations.joined(separator: #" \/ "#)
-        let ordinals = actualInvocations.indices.map { String($0 + 1) }.joined(separator: ", ")
-        let projections = actualInvocations.enumerated().map { offset, invocation in
-            #"/\ \#(prefix)ActualActionValues[\#(offset + 1)] = \#(invocation)"#
-        }.joined(separator: "\n        ")
         let emittedBefore = "<<\(frameFields.joined(separator: ", "))>>"
         let emittedAfter = "<<\(frameFields.map { $0 + "'" }.joined(separator: ", "))>>"
         let dispatch = prefix + "Dispatch"
+        let values = prefix + "ActualActionValues"
+        let fold = prefix + "PhysicalNextPrefix"
+        let width = physicalInvocations.count
+        let emittedValues = "<<\(physicalInvocations.joined(separator: ", "))>>"
+        let foldNames = (0...width).map { "\(fold)\($0)" }
+        let folds = physicalInvocations.enumerated().map { index, invocation in
+            #"LOCAL \#(foldNames[index + 1]) == \#(foldNames[index]) \/ \#(invocation)"#
+        }.joined(separator: "\n")
+        let physicalDefinitions = ((physicalInvocations == ["Next"] ? [] : ["Next"]) + foldNames)
+            .joined(separator: ", ")
+        let foldProof = physicalInvocations.enumerated().map { index, invocation in
+            let slot = index + 1
+            return #"""
+            <2>prefix\#(slot). \#(dispatch)!ActionCatalogPrefix(\#(values), \#(slot)) <=> \#(foldNames[slot])
+                <3>append. \#(dispatch)!ActionCatalogPrefix(\#(values), \#(slot)) <=>
+                    (\#(dispatch)!ActionCatalogPrefix(\#(values), \#(index)) \/ \#(values)[\#(slot)])
+                    BY ONLY \#(dispatch)!ActionCatalogPrefixAddsOneDisjunct, SMT
+                <3>operand. \#(values)[\#(slot)] <=> \#(invocation)
+                    BY ONLY IsaM("simp") DEF \#(values)
+                <3>. QED BY ONLY <2>prefix\#(index), <3>append, <3>operand, PTL DEF \#(foldNames[slot])
+            """#
+        }.joined(separator: "\n    ")
 
         let dispatchSource = #"""
         \#(exportDispatch ? "" : "LOCAL ")\#(dispatch) == INSTANCE ActionOutcomeInterface
@@ -485,6 +500,8 @@ extension StraightLineRenderedActionCheck.FiniteActionCatalog {
         \#(prefix)ActualFrameFields == \#(TLAValue.tuple(frameFields.map(TLAValue.string)))
         \#(prefix)ActualFrameBefore == \#(emittedBefore)
         \#(prefix)ActualFrameAfter == \#(emittedAfter)
+        LOCAL \#(foldNames[0]) == FALSE
+        \#(folds)
         \#(emittedLabeled)(\#(label)) ==
             \#(dispatch)!CatalogLabeledBranches(\#(prefix)ActualActionValues, \#(prefix)ActualAuthoredLabels, \#(label))
 
@@ -503,19 +520,17 @@ extension StraightLineRenderedActionCheck.FiniteActionCatalog {
             BY ONLY SMT DEF \#(prefix)ActualActionValues, \#(prefix)ActualActionRoutes,
                 \#(prefix)ActualFormalLabels, \#(prefix)ActualAuthoredLabels
         <1>next. Next <=> (\E \#(index) \in DOMAIN \#(prefix)ActualActionValues : \#(prefix)ActualActionValues[\#(index)])
-            <2>physical. Next <=> (\#(emittedDisjunction))
-                BY ONLY DEF Next
-            <2>domain. DOMAIN \#(prefix)ActualActionValues = 1..\#(actualInvocations.count)
-                BY ONLY IsaM("simp") DEF \#(prefix)ActualActionValues
-            <2>indices. 1..\#(actualInvocations.count) = {\#(ordinals)}
-                BY ONLY SMT
-            <2>values.
-                \#(projections)
-                BY ONLY IsaM("simp") DEF \#(prefix)ActualActionValues
-            <2>union. (\E \#(index) \in DOMAIN \#(prefix)ActualActionValues : \#(prefix)ActualActionValues[\#(index)])
-                        <=> (\#(emittedDisjunction))
-                BY ONLY <2>domain, <2>indices, <2>values, SMT
-            <2>. QED BY ONLY <2>physical, <2>union, PTL
+            <2>physical. Next <=> \#(foldNames[width])
+                BY ONLY PTL DEF \#(physicalDefinitions)
+            <2>domain. DOMAIN \#(values) = 1..\#(width)
+                BY ONLY IsaM("simp") DEF \#(values)
+            <2>prefix0. \#(dispatch)!ActionCatalogPrefix(\#(values), 0) <=> \#(foldNames[0])
+                BY ONLY \#(dispatch)!EmptyActionCatalogPrefix, SMT DEF \#(foldNames[0])
+            \#(foldProof)
+            <2>union. (\E \#(index) \in DOMAIN \#(values) : \#(values)[\#(index)])
+                        <=> \#(dispatch)!ActionCatalogPrefix(\#(values), \#(width))
+                BY ONLY <2>domain, SMT DEF \#(dispatch)!ActionCatalogPrefix
+            <2>. QED BY ONLY <2>physical, <2>prefix\#(width), <2>union, PTL
         <1>frame. /\ vars = \#(prefix)ActualFrameBefore
                    /\ vars' = \#(prefix)ActualFrameAfter
             BY ONLY DEF vars, \#(prefix)ActualFrameBefore, \#(prefix)ActualFrameAfter

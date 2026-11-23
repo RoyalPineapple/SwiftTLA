@@ -5,8 +5,22 @@ import SwiftTLACompilerSupport
 
 private let nativeBoolType = "SwiftTLA.TLAValue.BooleanLiteralType"
 
-/// Bind the compiler seed's checked stack operations to the actual native visitor.
-func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws {
+struct NativeTraversalSeedExpansion: Sendable {
+    struct Push: Sendable {
+        let source: String
+        let position: Int
+        let expanded: Bool
+    }
+
+    let countFloor: Int
+    let lastIndex: String
+    let prefixDrop: Int
+    let localExpandedPosition: Int
+    let pushes: [Push]
+}
+
+/// Bind the compiler seed's checked stack operations and ordered tuple operands to the actual native visitor.
+func decodeGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws -> NativeTraversalSeedExpansion {
     func fail(_ path: String) -> CompilationDiagnostic {
         CompilationDiagnostic(
             code: .unsupportedGeneratedValueShape, stage: .validation,
@@ -101,18 +115,20 @@ func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws {
             return try \(prefix)sequenceElement(_sequenceValue, at: _sequenceIndex)
         }())
         """
-    let previous = """
-        (try { () throws -> \(stackType) in
-            let _sequenceValue = \(stack)
-            let _prefixLength = (try { () throws -> \(intType) in
-                let _arithmetic0: \(intType) = \(size)
-                let _arithmetic1: \(intType) = 1
-                let _arithmetic2: \(intType) = try \(prefix)subtract(_arithmetic0, _arithmetic1)
-                return _arithmetic2
-            }())
-            return try \(prefix)sequencePrefix(_sequenceValue, length: _prefixLength)
-        }())
+    func previous(dropping drop: Int) -> String {
         """
+            (try { () throws -> \(stackType) in
+                let _sequenceValue = \(stack)
+                let _prefixLength = (try { () throws -> \(intType) in
+                    let _arithmetic0: \(intType) = \(size)
+                    let _arithmetic1: \(intType) = \(drop)
+                    let _arithmetic2: \(intType) = try \(prefix)subtract(_arithmetic0, _arithmetic1)
+                    return _arithmetic2
+                }())
+                return try \(prefix)sequencePrefix(_sequenceValue, length: _prefixLength)
+            }())
+            """
+    }
     func append(_ sequence: String, first: String, second: Bool) -> String {
         """
         (try { () throws -> \(stackType) in
@@ -122,6 +138,44 @@ func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws {
         }())
         """
     }
+    func pushRows(in expression: ExprSyntax, frame: String) -> [NativeTraversalSeedExpansion.Push]? {
+        var pending = [Syntax(expression)]
+        var rows: [NativeTraversalSeedExpansion.Push] = []
+        while let syntax = pending.popLast() {
+            if let declaration = syntax.as(VariableDeclSyntax.self), declaration.bindings.count == 1,
+               let binding = declaration.bindings.first,
+               binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "_appendedValue" {
+                guard let pair = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+                      matches(words(pair.calledExpression), frameType), pair.arguments.count == 2,
+                      let first = pair.arguments.first, first.label?.text == "first",
+                      let flag = pair.arguments.last, flag.label?.text == "second",
+                      let expanded = flag.expression.as(BooleanLiteralExprSyntax.self) else { return nil }
+                let operand = words(first.expression)
+                if matches(operand, "\(frame).first") {
+                    rows.append(.init(source: "local", position: 1, expanded: expanded.literal.text == "true"))
+                } else if operand.count == 5, operand.starts(with: ["state", ".", "state", "."]),
+                          let field = operand.last, ["leftChild", "rightChild"].contains(field) {
+                    rows.append(.init(source: field, position: 0, expanded: expanded.literal.text == "true"))
+                } else {
+                    return nil
+                }
+            } else {
+                pending.append(contentsOf: syntax.children(viewMode: .sourceAccurate).reversed())
+            }
+        }
+        return rows.count == 3 ? rows : nil
+    }
+    func integer(after anchor: [String], in tokens: [String]) -> Int? {
+        let matches = tokens.indices.filter { index in
+            let end = index + anchor.count
+            return end < tokens.count && tokens[index..<end].elementsEqual(anchor)
+        }
+        guard matches.count == 1, let index = matches.first else { return nil }
+        let token = tokens[index + anchor.count]
+        guard let value = Int(token), value >= 0, String(value) == token else { return nil }
+        return value
+    }
+
     func unexpanded(_ frame: String, _ tokens: [String]) -> Bool {
         let names = tokens.indices.dropLast().compactMap { index -> String? in
             guard tokens[index] == "func" else { return nil }
@@ -144,6 +198,10 @@ func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws {
             """)
     }
     var events: [String] = []
+    var countFloor: Int?
+    var lastIndex: String?
+    var localExpandedPosition: Int?
+    var replacement: (drop: Int, pushes: [NativeTraversalSeedExpansion.Push])?
     var visited: Set<String> = []
     let frameSlots = ["_value_leftChild_1": "state.state.leftChild", "_value_rightChild_2": "state.state.rightChild"]
     var visitedFrameSlots: Set<String> = []
@@ -177,18 +235,22 @@ func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws {
                 continue
             }
         }
-        if scope.isEmpty, matches(core, "guard (\(size) > 0) else { return }\ntry emit(updates)") {
+        if scope.isEmpty, countFloor == nil, let floor = integer(after: words(Parser.parse(source: "\(size) >")), in: core),
+           matches(core, "guard (\(size) > \(floor)) else { return }\ntry emit(updates)") {
+            countFloor = floor
             events.append("nonempty")
             continue
         }
         if scope.count == 1, let frame = scope.first?.name,
            unexpanded(frame, core) {
+            localExpandedPosition = 2
             events.append("unexpanded")
             continue
         }
         if body.count == 2, let capture = body.first?.item.as(VariableDeclSyntax.self),
            capture.bindings.count == 1,
            let local = capture.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+           let capturedValue = capture.bindings.first?.initializer?.value,
            !scope.contains(where: { $0.name == local }),
            let lastTry = core.lastIndex(of: "try"), lastTry + 1 < core.count, parts[core[lastTry + 1]] != nil {
             let child = core[lastTry + 1]
@@ -197,9 +259,14 @@ func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws {
             if scope.isEmpty {
                 value = last
                 type = frameType
-            } else if scope.count == 1, let frame = scope.first?.name {
-                value = append(append(append(previous, first: "\(frame).first", second: true),
-                    first: "state.state.rightChild", second: false), first: "state.state.leftChild", second: false)
+            } else if scope.count == 1, let frame = scope.first?.name, replacement == nil,
+                      let drop = integer(after: words(Parser.parse(source: "_arithmetic1: \(intType) =")), in: core),
+                      let pushes = pushRows(in: capturedValue, frame: frame) {
+                value = pushes.reduce(previous(dropping: drop)) { sequence, row in
+                    let operand = row.position == 1 ? "\(frame).first" : "state.state.\(row.source)"
+                    return append(sequence, first: operand, second: row.expanded)
+                }
+                replacement = (drop, pushes)
                 type = stackType
             } else {
                 throw fail("capture")
@@ -207,6 +274,7 @@ func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws {
             guard matches(core, "let \(local) = \(value)\ntry \(child)(\(arguments)\(local), updates, emit)") else {
                 throw fail(scope.isEmpty ? "last" : "append")
             }
+            if scope.isEmpty { lastIndex = "count" }
             events.append(scope.isEmpty ? "last" : "replacement")
             pending.append((child, scope + [(local, type)]))
             continue
@@ -224,9 +292,12 @@ func verifyGeneratedTraversalSeedOutput(_ declarations: [DeclSyntax]) throws {
         throw fail("operand")
     }
     guard visited.count == parts.count, visitedFrameSlots == Set(frameSlots.keys),
-          events == ["nonempty", "last", "unexpanded", "replacement", "write"] else {
+          events == ["nonempty", "last", "unexpanded", "replacement", "write"],
+          let countFloor, let lastIndex, let localExpandedPosition, let replacement else {
         throw fail("order")
     }
+    return .init(countFloor: countFloor, lastIndex: lastIndex, prefixDrop: replacement.drop,
+                 localExpandedPosition: localExpandedPosition, pushes: replacement.pushes)
 }
 
 struct NativeTraversalSeedInitialization: Sendable, Equatable {

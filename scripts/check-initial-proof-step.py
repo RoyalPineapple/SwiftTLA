@@ -51,6 +51,37 @@ def validate_arithmetic_packet(packet, source_sha):
                 or path.is_symlink() or not path.is_file() or checksum != digest(path)):
             raise ValueError(f"retained arithmetic packet mismatch: {name}")
 
+    validate_send_packet(packet, preparation, "arithmeticPublicSendBinding",
+                         "SwiftTLAArithmeticPublicSendBinding", arithmetic["nativeSourceSHA256"])
+    copy = preparation.get("orderedCopyNativeOutput", {})
+    catalog_binding = "SwiftTLAOrderedAssignmentCatalogOrderedCopySendBinding"
+    catalog_module = packet / "proof-inputs" / (catalog_binding + ".tla")
+    if "orderedCopyPublicSendBinding" in preparation or catalog_module.exists() or catalog_module.is_symlink():
+        compiled = packet / "native-ordered-copy-source.swift"
+        attached = packet / "proof-inputs/OrderedCopyNativeMembers.swift"
+        if (copy.get("matchingSourceAccurateTokens") is not True
+                or any(path.is_symlink() or not path.is_file() for path in (compiled, attached))
+                or digest(compiled) != copy.get("compiledSHA256") or digest(attached) != copy.get("attachedSHA256")):
+            raise ValueError("retained catalog send source differs from the checked macro expansion")
+        validate_send_packet(packet, preparation, "orderedCopyPublicSendBinding",
+                             catalog_binding, copy["compiledSHA256"])
+
+
+def validate_send_packet(packet, preparation, field, module_name, native_sha):
+    send = preparation.get(field)
+    module = packet / "proof-inputs" / (module_name + ".tla")
+    if send is not None or module.exists() or module.is_symlink():
+        operations = packet / "arithmetic-send/NativeMachineOperations.swift"
+        checking = packet / "arithmetic-send/CheckingContext.swift"
+        if any(path.is_symlink() or not path.is_file() for path in (module, operations, checking)):
+            raise ValueError("retained public send evidence is incomplete")
+        if (send != {"nativeSourceSHA256": native_sha,
+                     "operationsSHA256": digest(operations), "checkingSHA256": digest(checking),
+                     "moduleSHA256": digest(module)}
+                or digest(operations) != preparation["inputs"]["Sources/SwiftTLA/NativeMachineOperations.swift"]
+                or digest(checking) != preparation["inputs"]["Sources/SwiftTLA/CheckingContext.swift"]):
+            raise ValueError("retained public send evidence differs from the compiler inputs or outputs")
+
 
 def load_byte_input(source, directory, pages, prefix="CompilerInput"):
     """Exact-byte ingress only; no selection, lexing, decoding or interpretation."""

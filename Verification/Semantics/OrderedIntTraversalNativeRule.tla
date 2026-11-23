@@ -12,15 +12,39 @@ NativeTraversalCells(stack) ==
 
 NativeTraversalCount(stack) == Cardinality(DOMAIN NativeTraversalCells(stack))
 
-NativeTraversalLast(stack) == NativeTraversalCells(stack)[NativeTraversalCount(stack) - 1]
+LOCAL NativeStackExpansionUsesAuthoredOperands ==
+    NativeStackExpansion =
+        [countFloor |-> AuthoredStackExpansion.countFloor, lastIndex |-> AuthoredStackExpansion.lastIndex,
+         prefixDrop |-> AuthoredStackExpansion.prefixDrop,
+         localExpandedPosition |-> AuthoredStackExpansion.localExpandedPosition,
+         pushes |-> AuthoredStackExpansion.pushes]
+
+LOCAL THEOREM ActualNativeExpansionBindsTheAuthoredOperands ==
+    NativeStackExpansionUsesAuthoredOperands
+    BY ONLY SMT DEF NativeStackExpansionUsesAuthoredOperands, NativeStackExpansion, AuthoredStackExpansion
+
+LOCAL NativeTraversalIndex(stack) ==
+    CASE NativeStackExpansion.lastIndex = "count" -> NativeTraversalCount(stack)
+
+NativeTraversalLast(stack) == NativeTraversalCells(stack)[NativeTraversalIndex(stack) - 1]
 
 NativeTraversalEnabled(stack) ==
-    IF NativeTraversalCount(stack) = 0 THEN FALSE ELSE ~NativeTraversalLast(stack)[2]
+    IF NativeTraversalCount(stack) <= NativeStackExpansion.countFloor THEN FALSE
+    ELSE ~NativeTraversalLast(stack)[NativeStackExpansion.localExpandedPosition]
+
+LOCAL NativeTraversalPushes(stack, left, right) ==
+    [step \in DOMAIN NativeStackExpansion.pushes |->
+        LET row == NativeStackExpansion.pushes[step]
+            origin == CASE row.source = "local" -> NativeTraversalLast(stack)[row.position]
+                        [] row.source = "leftChild" -> left
+                        [] row.source = "rightChild" -> right
+        IN <<origin, row.expanded>>]
 
 NativeTraversalExpandedPending(stack, left, right) ==
-    LET previous == ArrayPrefix!SourceSequencePrefix(stack, NativeTraversalCount(stack) - 1)
-        frame == NativeTraversalLast(stack)
-    IN Append(Append(Append(previous, <<frame[1], TRUE>>), <<right, FALSE>>), <<left, FALSE>>)
+    LET previous == ArrayPrefix!SourceSequencePrefix(stack,
+                       NativeTraversalCount(stack) - NativeStackExpansion.prefixDrop)
+        pushes == NativeTraversalPushes(stack, left, right)
+    IN Append(Append(Append(previous, pushes[1]), pushes[2]), pushes[3])
 
 NativeTraversalStep(stack, left, right, nextStack, nextLeft, nextRight) ==
     IF NativeTraversalEnabled(stack)
@@ -52,6 +76,14 @@ PROOF
     <2>. QED BY ONLY <2>interval, <2>arithmetic, <2>cardinality, SMT
 <1>. QED BY ONLY <1>indices, <1>size, SMT DEF NativeTraversalCount
 
+LOCAL THEOREM NativeStackOperationsUseTheCheckedGuardAndIndex ==
+    /\ NativeStackExpansion.countFloor = 0
+    /\ NativeStackExpansion.lastIndex = "count"
+    /\ NativeStackExpansion.prefixDrop = 1
+    /\ NativeStackExpansion.localExpandedPosition = 2
+    BY ONLY ActualNativeExpansionBindsTheAuthoredOperands, SeedAuthoredExpansionUsesTheBoundFieldsAndPushes,
+        SMT DEF NativeStackExpansionUsesAuthoredOperands
+
 THEOREM NativeSeedTraversalAgreesWithSeedReplacement ==
     ASSUME NEW stack \in Seq(SeedFrames),
            NEW left \in SeedIntValues, NEW right \in SeedIntValues
@@ -62,9 +94,11 @@ PROOF
 <1>count. /\ NativeTraversalCount(stack) = Len(stack) /\ Len(stack) \in Nat
     BY ONLY (stack \in Seq(SeedFrames)), NativeTraversalCountUsesEveryArrayIndex, LenProperties, SMT
 <1>last. Len(stack) > 0 => NativeTraversalLast(stack) = stack[Len(stack)]
-    BY ONLY <1>count, SMT DEF NativeTraversalLast, NativeTraversalCells
+    BY ONLY <1>count, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
+        DEF NativeTraversalLast, NativeTraversalIndex, NativeTraversalCells
 <1>enabled. NativeTraversalEnabled(stack) <=> SeedExpansionEnabled(stack)
-    BY ONLY <1>count, <1>last, SMT DEF NativeTraversalEnabled, SeedExpansionEnabled
+    BY ONLY <1>count, <1>last, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
+        DEF NativeTraversalEnabled, SeedExpansionEnabled
 <1>replacement.
     ASSUME SeedExpansionEnabled(stack)
     PROVE NativeTraversalExpandedPending(stack, left, right) = SeedExpandedPending(stack, left, right)
@@ -74,14 +108,20 @@ PROOF
                /\ NativeTraversalCount(stack) - 1 <= Len(stack)
         BY ONLY <1>count, SMT
     <2>prefix.
-        ArrayPrefix!SourceSequencePrefix(stack, NativeTraversalCount(stack) - 1) =
+        ArrayPrefix!SourceSequencePrefix(stack, NativeTraversalCount(stack) - NativeStackExpansion.prefixDrop) =
             SubSeq(stack, 1, Len(stack) - 1)
-        BY ONLY (stack \in Seq(SeedFrames)), <1>count, <2>bounds,
+        BY ONLY (stack \in Seq(SeedFrames)), <1>count, <2>bounds, NativeStackOperationsUseTheCheckedGuardAndIndex,
             ArrayPrefix!SequencePrefixValuePreserved, SMT
+    <2>pushes.
+        LET pushes == NativeTraversalPushes(stack, left, right)
+        IN /\ pushes[1] = <<stack[Len(stack)][1], TRUE>>
+           /\ pushes[2] = <<right, FALSE>>
+           /\ pushes[3] = <<left, FALSE>>
+        BY ONLY <1>last, <2>nonempty, ActualNativeExpansionBindsTheAuthoredOperands, SMT
+            DEF NativeStackExpansionUsesAuthoredOperands, NativeTraversalPushes, AuthoredStackExpansion
     <2>calls. NativeTraversalExpandedPending(stack, left, right) =
                 SeedPhysicalPendingReplacement(stack, left, right)
-        BY ONLY <1>last, <2>nonempty, <2>prefix, SMT
-            DEF NativeTraversalExpandedPending, SeedPhysicalPendingReplacement
+        BY ONLY <2>prefix, <2>pushes, SMT DEF NativeTraversalExpandedPending, SeedPhysicalPendingReplacement
     <2>. QED BY ONLY (stack \in Seq(SeedFrames)), (left \in SeedIntValues), (right \in SeedIntValues),
         <2>nonempty, <2>calls, SeedPhysicalPendingReplacementMatchesTheSource, Isa
 <1>. QED BY ONLY <1>enabled, <1>replacement, Isa
@@ -107,13 +147,15 @@ PROOF
 \* reached operations are nonthrowing under the reviewed Swift interpretation.
 NativeTraversalReachedFailures(stack) ==
     LET count == NativeTraversalCount(stack)
-        prefixCount == count - 1
-    IN IF count <= 0 THEN <<>>
-       ELSE IF count \notin 1..Len(stack)
-            THEN <<<<"indexOutOfBounds", count, Len(stack)>>>>
-       ELSE IF NativeTraversalLast(stack)[2] THEN <<>>
+        index == NativeTraversalIndex(stack)
+        drop == NativeStackExpansion.prefixDrop
+        prefixCount == count - drop
+    IN IF count <= NativeStackExpansion.countFloor THEN <<>>
+       ELSE IF index \notin 1..Len(stack)
+            THEN <<<<"indexOutOfBounds", index, Len(stack)>>>>
+       ELSE IF NativeTraversalLast(stack)[NativeStackExpansion.localExpandedPosition] THEN <<>>
        ELSE IF prefixCount \notin SeedIntValues
-            THEN <<<<"integerOverflow", "subtraction", <<count, 1>>>>>>
+            THEN <<<<"integerOverflow", "subtraction", <<count, drop>>>>>>
        ELSE IF prefixCount > Len(stack)
             THEN <<<<"indexOutOfBounds", prefixCount, Len(stack)>>>>
        ELSE <<>>
@@ -129,14 +171,16 @@ PROOF
     BY ONLY SeedExpansionInput, NativeSeedTraversalAgreesWithSeedReplacement, SMT DEF SeedExpansionInput
 <1>safe. SeedTraversalHelperCallsAreSafe
     BY ONLY SeedExpansionInput, ActualSeedExpansionDoesNotFailOnTypedInput
-<1>access. NativeTraversalCount(pending) > 0 =>
-                  NativeTraversalCount(pending) \in 1..Len(pending)
-    BY ONLY <1>count, <1>safe, SMT DEF SeedTraversalHelperCallsAreSafe
+<1>access. NativeTraversalCount(pending) > NativeStackExpansion.countFloor =>
+                  NativeTraversalIndex(pending) \in 1..Len(pending)
+    BY ONLY <1>count, <1>safe, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
+        DEF SeedTraversalHelperCallsAreSafe, NativeTraversalIndex
 <1>prefix. NativeTraversalEnabled(pending) =>
-                /\ NativeTraversalCount(pending) - 1 \in SeedIntValues
-                /\ NativeTraversalCount(pending) - 1 <= Len(pending)
-    BY ONLY <1>count, <1>enabled, <1>safe, SMT DEF SeedTraversalHelperCallsAreSafe
-<1>. QED BY ONLY <1>count, <1>access, <1>prefix, SMT DEF NativeTraversalReachedFailures, NativeTraversalEnabled
+                /\ NativeTraversalCount(pending) - NativeStackExpansion.prefixDrop \in SeedIntValues
+                /\ NativeTraversalCount(pending) - NativeStackExpansion.prefixDrop <= Len(pending)
+    BY ONLY <1>count, <1>enabled, <1>safe, NativeStackOperationsUseTheCheckedGuardAndIndex, SMT
+        DEF SeedTraversalHelperCallsAreSafe
+<1>. QED BY ONLY <1>access, <1>prefix, SMT DEF NativeTraversalReachedFailures, NativeTraversalEnabled
 
 NativeSeedInit ==
     /\ pending = NativeStackInitialization.pending

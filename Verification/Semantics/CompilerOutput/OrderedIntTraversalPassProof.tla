@@ -6,6 +6,11 @@ SeedIntMin == ((-9 * 1000000000 - 223372036) * 1000000000 - 854775808)
 SeedIntValues == SeedIntMin..SeedIntMax
 SeedFrames == SeedIntValues \X BOOLEAN
 
+LOCAL SeedSourceLength == INSTANCE SequenceLengthRule
+LOCAL SeedSourcePrefix == INSTANCE SequencePrefixRule
+LOCAL SeedSourceEdits == INSTANCE SequenceExpressionConstructorRules
+    WITH Elements <- SeedFrames, FailureValues <- {}, NoFailure <- <<>>
+
 LOCAL SeedPairShape(frame) ==
     /\ DOMAIN frame = 1..2
     /\ frame[1] \in Int
@@ -67,9 +72,17 @@ SeedPhysicalPendingReplacement(stack, left, right) ==
     Append(Append(Append(SubSeq(stack, 1, Len(stack) - 1),
         <<stack[Len(stack)][1], TRUE>>), <<right, FALSE>>), <<left, FALSE>>)
 
+LOCAL SeedAuthoredLength(stack) == SeedSourceLength!SourceSequenceLength(stack)
+
+LOCAL SeedAuthoredIndex(stack) ==
+    CASE AuthoredStackExpansion.lastIndex = "count" -> SeedAuthoredLength(stack)
+
+LOCAL SeedAuthoredFrame(stack) == stack[SeedAuthoredIndex(stack)]
+
 LOCAL SeedAuthoredPushOrigin(push, stack, left, right) ==
-    IF push.source = "local" THEN stack[Len(stack)][push.position]
-    ELSE IF push.source = AuthoredStackExpansion.left THEN left ELSE right
+    CASE push.source = "local" -> SeedAuthoredFrame(stack)[push.position]
+      [] push.source = AuthoredStackExpansion.left -> left
+      [] push.source = AuthoredStackExpansion.right -> right
 
 LOCAL SeedAuthoredPushes(stack, left, right) ==
     [index \in DOMAIN AuthoredStackExpansion.pushes |->
@@ -77,12 +90,16 @@ LOCAL SeedAuthoredPushes(stack, left, right) ==
           AuthoredStackExpansion.pushes[index].expanded>>]
 
 SeedAuthoredPendingReplacement(stack, left, right) ==
-    [index \in 1..(Len(stack) - AuthoredStackExpansion.prefixDrop) |-> stack[index]]
-    \o SeedAuthoredPushes(stack, left, right)
+    LET prior == SeedSourcePrefix!SourceSequencePrefix(stack,
+                     SeedAuthoredLength(stack) - AuthoredStackExpansion.prefixDrop)
+        pushes == SeedAuthoredPushes(stack, left, right)
+        first == SeedSourceEdits!SourceAppendValue(prior, pushes[1])
+        second == SeedSourceEdits!SourceAppendValue(first, pushes[2])
+    IN SeedSourceEdits!SourceAppendValue(second, pushes[3])
 
 SeedAuthoredExpansionEnabled(stack) ==
-    IF Len(stack) <= AuthoredStackExpansion.countFloor THEN FALSE
-    ELSE ~stack[Len(stack)][AuthoredStackExpansion.localExpandedPosition]
+    IF SeedAuthoredLength(stack) <= AuthoredStackExpansion.countFloor THEN FALSE
+    ELSE ~SeedAuthoredFrame(stack)[AuthoredStackExpansion.localExpandedPosition]
 
 SeedExpansion ==
     IF SeedAuthoredExpansionEnabled(pending)
@@ -158,68 +175,6 @@ LOCAL SeedOperandRows ==
     <<[source |-> "local", position |-> 1, expanded |-> TRUE],
       [source |-> "rightChild", position |-> 0, expanded |-> FALSE],
       [source |-> "leftChild", position |-> 0, expanded |-> FALSE]>>
-
-THEOREM SeedAuthoredExpansionUsesTheBoundFieldsAndPushes ==
-    /\ AuthoredStackExpansion.label = "expand"
-    /\ AuthoredStackExpansion.stack = "pending"
-    /\ AuthoredStackExpansion.write = "pending"
-    /\ AuthoredStackExpansion.left = "leftChild"
-    /\ AuthoredStackExpansion.right = "rightChild"
-    /\ AuthoredStackExpansion.lastIndex = "count"
-    /\ AuthoredStackExpansion.frame = {"leftChild", "rightChild"}
-    /\ AuthoredStackExpansion.countFloor = 0
-    /\ AuthoredStackExpansion.prefixDrop = 1
-    /\ AuthoredStackExpansion.localExpandedPosition = 2
-    /\ \A stack \in Seq(SeedFrames) :
-           /\ SeedAuthoredExpansionEnabled(stack) = SeedExpansionEnabled(stack)
-           /\ \A left, right \in SeedIntValues :
-                 SeedAuthoredPendingReplacement(stack, left, right) = SeedExpandedPending(stack, left, right)
-PROOF
-<1>roles. /\ AuthoredStackExpansion.label = "expand"
-          /\ AuthoredStackExpansion.stack = "pending"
-          /\ AuthoredStackExpansion.write = "pending"
-          /\ AuthoredStackExpansion.left = "leftChild"
-          /\ AuthoredStackExpansion.right = "rightChild"
-          /\ AuthoredStackExpansion.lastIndex = "count"
-          /\ AuthoredStackExpansion.frame = {"leftChild", "rightChild"}
-          /\ AuthoredStackExpansion.countFloor = 0
-          /\ AuthoredStackExpansion.localExpandedPosition = 2
-          /\ AuthoredStackExpansion.prefixDrop = 1
-          /\ AuthoredStackExpansion.pushes = SeedOperandRows
-    <2>names. /\ TypedStackExpansion.label = "expand"
-              /\ TypedStackExpansion.stack = "pending"
-              /\ TypedStackExpansion.write = "pending"
-              /\ TypedStackExpansion.left = "leftChild"
-              /\ TypedStackExpansion.right = "rightChild"
-              /\ TypedStackExpansion.frame = {"leftChild", "rightChild"}
-        BY ONLY SMT DEF TypedStackExpansion
-    <2>control. /\ TypedStackExpansion.lastIndex = "count"
-                /\ TypedStackExpansion.countFloor = 0
-                /\ TypedStackExpansion.localExpandedPosition = 2
-                /\ TypedStackExpansion.prefixDrop = 1
-        BY ONLY SMT DEF TypedStackExpansion
-    <2>pushes. TypedStackExpansion.pushes = SeedOperandRows
-        BY ONLY SMT DEF TypedStackExpansion, SeedOperandRows
-    <2>. QED BY ONLY AuthoredStackExpansionMatchesTypedIR, <2>names, <2>control, <2>pushes, SMT
-<1>guard. \A stack \in Seq(SeedFrames) :
-    SeedAuthoredExpansionEnabled(stack) = SeedExpansionEnabled(stack)
-    BY ONLY <1>roles, LenProperties, SMT DEF SeedAuthoredExpansionEnabled, SeedExpansionEnabled
-<1>values. \A stack \in Seq(SeedFrames), left, right \in SeedIntValues :
-    SeedAuthoredPendingReplacement(stack, left, right) = SeedExpandedPending(stack, left, right)
-    <2>. TAKE stack \in Seq(SeedFrames), left, right \in SeedIntValues
-    <2>. DEFINE pushes == SeedAuthoredPushes(stack, left, right)
-                meaning == SeedExpansionSuffix(stack[Len(stack)][1], left, right)
-    <2>domain. /\ DOMAIN pushes = 1..3
-               /\ DOMAIN meaning = 1..3
-        BY ONLY <1>roles, IsaM("simp") DEF pushes, meaning, SeedAuthoredPushes, SeedExpansionSuffix, SeedOperandRows
-    <2>positions. \A index \in 1..3 : pushes[index] = meaning[index]
-        BY ONLY <1>roles, <2>domain, SMT
-            DEF pushes, meaning, SeedAuthoredPushes, SeedAuthoredPushOrigin, SeedExpansionSuffix, SeedOperandRows
-    <2>suffix. pushes = meaning
-        BY ONLY <1>roles, <2>domain, <2>positions, SMT DEF pushes, meaning, SeedAuthoredPushes, SeedExpansionSuffix
-    <2>. QED BY ONLY <1>roles, <2>suffix, SMT
-        DEF pushes, meaning, SeedAuthoredPendingReplacement, SeedExpandedPending, SeedExpansionPrefix
-<1>. QED BY ONLY <1>roles, <1>guard, <1>values, SMT
 
 THEOREM SeedPendingExpansionRetainsPrefixAndPushOrder ==
     ASSUME NEW stack \in Seq(SeedFrames), Len(stack) > 0,
@@ -299,6 +254,102 @@ PROOF
     BY ONLY <1>frames, SeqDef, SMT DEF parent, rightFrame, leftFrame, SeedExpansionSuffix
 <1>. QED BY ONLY <1>prefix, <1>appended, <1>suffix, ConcatProperties, ConcatAssociative, SMT
     DEF SeedPhysicalPendingReplacement, SeedExpandedPending, size, popped, parent, rightFrame, leftFrame, first, second
+
+THEOREM SeedAuthoredExpansionUsesTheBoundFieldsAndPushes ==
+    /\ AuthoredStackExpansion.label = "expand"
+    /\ AuthoredStackExpansion.stack = "pending"
+    /\ AuthoredStackExpansion.write = "pending"
+    /\ AuthoredStackExpansion.left = "leftChild"
+    /\ AuthoredStackExpansion.right = "rightChild"
+    /\ AuthoredStackExpansion.lastIndex = "count"
+    /\ AuthoredStackExpansion.frame = {"leftChild", "rightChild"}
+    /\ AuthoredStackExpansion.countFloor = 0
+    /\ AuthoredStackExpansion.prefixDrop = 1
+    /\ AuthoredStackExpansion.localExpandedPosition = 2
+    /\ \A stack \in Seq(SeedFrames) :
+           /\ SeedAuthoredExpansionEnabled(stack) = SeedExpansionEnabled(stack)
+           /\ \A left, right \in SeedIntValues :
+                 SeedAuthoredExpansionEnabled(stack) =>
+                     SeedAuthoredPendingReplacement(stack, left, right) = SeedExpandedPending(stack, left, right)
+PROOF
+<1>roles. /\ AuthoredStackExpansion.label = "expand"
+          /\ AuthoredStackExpansion.stack = "pending"
+          /\ AuthoredStackExpansion.write = "pending"
+          /\ AuthoredStackExpansion.left = "leftChild"
+          /\ AuthoredStackExpansion.right = "rightChild"
+          /\ AuthoredStackExpansion.lastIndex = "count"
+          /\ AuthoredStackExpansion.frame = {"leftChild", "rightChild"}
+          /\ AuthoredStackExpansion.countFloor = 0
+          /\ AuthoredStackExpansion.localExpandedPosition = 2
+          /\ AuthoredStackExpansion.prefixDrop = 1
+          /\ AuthoredStackExpansion.pushes = SeedOperandRows
+    <2>names. /\ TypedStackExpansion.label = "expand"
+              /\ TypedStackExpansion.stack = "pending"
+              /\ TypedStackExpansion.write = "pending"
+              /\ TypedStackExpansion.left = "leftChild"
+              /\ TypedStackExpansion.right = "rightChild"
+              /\ TypedStackExpansion.frame = {"leftChild", "rightChild"}
+        BY ONLY SMT DEF TypedStackExpansion
+    <2>control. /\ TypedStackExpansion.lastIndex = "count"
+                /\ TypedStackExpansion.countFloor = 0
+                /\ TypedStackExpansion.localExpandedPosition = 2
+                /\ TypedStackExpansion.prefixDrop = 1
+        BY ONLY SMT DEF TypedStackExpansion
+    <2>pushes. TypedStackExpansion.pushes = SeedOperandRows
+        BY ONLY SMT DEF TypedStackExpansion, SeedOperandRows
+    <2>. QED BY ONLY AuthoredStackExpansionMatchesTypedIR, <2>names, <2>control, <2>pushes, SMT
+<1>length. \A stack \in Seq(SeedFrames) : SeedAuthoredLength(stack) = Len(stack)
+    BY ONLY SeedSourceLength!SequenceLengthIsDomainSize, SMT DEF SeedAuthoredLength
+<1>guard. \A stack \in Seq(SeedFrames) :
+    SeedAuthoredExpansionEnabled(stack) = SeedExpansionEnabled(stack)
+    BY ONLY <1>roles, <1>length, LenProperties, SMT
+        DEF SeedAuthoredExpansionEnabled, SeedExpansionEnabled, SeedAuthoredIndex, SeedAuthoredFrame
+<1>values. \A stack \in Seq(SeedFrames), left, right \in SeedIntValues :
+    SeedAuthoredExpansionEnabled(stack) =>
+        SeedAuthoredPendingReplacement(stack, left, right) = SeedExpandedPending(stack, left, right)
+    <2>. TAKE stack \in Seq(SeedFrames), left, right \in SeedIntValues
+    <2>. SUFFICES ASSUME SeedAuthoredExpansionEnabled(stack)
+         PROVE SeedAuthoredPendingReplacement(stack, left, right) = SeedExpandedPending(stack, left, right)
+        OBVIOUS
+    <2>length. /\ SeedAuthoredLength(stack) = Len(stack) /\ Len(stack) > 0
+               /\ Len(stack) - 1 \in 0..Len(stack)
+        BY ONLY <1>length, <1>guard, (stack \in Seq(SeedFrames)),
+            SeedAuthoredExpansionEnabled(stack), LenProperties, SMT DEF SeedExpansionEnabled
+    <2>frame. /\ SeedAuthoredFrame(stack) = stack[Len(stack)]
+              /\ stack[Len(stack)][1] \in SeedIntValues
+        <3>last. stack[Len(stack)] \in SeedFrames
+            BY ONLY <2>length, (stack \in Seq(SeedFrames)), LenProperties, ElementOfSeq, SMT
+        <3>. QED BY ONLY <1>roles, <2>length, <3>last, SMT DEF SeedAuthoredIndex, SeedAuthoredFrame, SeedFrames
+    <2>. DEFINE prior == SeedSourcePrefix!SourceSequencePrefix(stack,
+                            SeedAuthoredLength(stack) - AuthoredStackExpansion.prefixDrop)
+                pushes == SeedAuthoredPushes(stack, left, right)
+                first == SeedSourceEdits!SourceAppendValue(prior, pushes[1])
+                second == SeedSourceEdits!SourceAppendValue(first, pushes[2])
+    <2>prefix. /\ prior = SubSeq(stack, 1, Len(stack) - 1)
+               /\ prior \in Seq(SeedFrames)
+        <3>value. prior = SubSeq(stack, 1, Len(stack) - 1)
+            BY ONLY <1>roles, <2>length, (stack \in Seq(SeedFrames)),
+                SeedSourcePrefix!SequencePrefixValuePreserved, SMT DEF prior
+        <3>. QED BY ONLY <3>value, <2>length, (stack \in Seq(SeedFrames)), SubSeqProperties, ElementOfSeq, SMT
+    <2>pushes.
+        /\ pushes[1] = <<stack[Len(stack)][1], TRUE>>
+        /\ pushes[2] = <<right, FALSE>>
+        /\ pushes[3] = <<left, FALSE>>
+        BY ONLY <1>roles, <2>frame, SMT DEF pushes, SeedAuthoredPushes, SeedAuthoredPushOrigin, SeedOperandRows
+    <2>typed. /\ pushes[1] \in SeedFrames /\ pushes[2] \in SeedFrames /\ pushes[3] \in SeedFrames
+        BY ONLY <2>pushes, <2>frame, (left \in SeedIntValues), (right \in SeedIntValues), SMT DEF SeedFrames
+    <2>first. /\ first = Append(prior, pushes[1]) /\ first \in Seq(SeedFrames)
+        BY ONLY <2>prefix, <2>typed, SeedSourceEdits!AppendRetainsEveryIndex, AppendProperties, SMT DEF first
+    <2>second. /\ second = Append(first, pushes[2]) /\ second \in Seq(SeedFrames)
+        BY ONLY <2>first, <2>typed, SeedSourceEdits!AppendRetainsEveryIndex, AppendProperties, SMT DEF second
+    <2>third. SeedSourceEdits!SourceAppendValue(second, pushes[3]) = Append(second, pushes[3])
+        BY ONLY <2>second, <2>typed, SeedSourceEdits!AppendRetainsEveryIndex, SMT
+    <2>physical. SeedAuthoredPendingReplacement(stack, left, right) = SeedPhysicalPendingReplacement(stack, left, right)
+        BY ONLY <2>prefix, <2>pushes, <2>first, <2>second, <2>third, SMT
+            DEF SeedAuthoredPendingReplacement, SeedPhysicalPendingReplacement, prior, pushes, first, second
+    <2>. QED BY ONLY <2>physical, <2>length, (stack \in Seq(SeedFrames)),
+        (left \in SeedIntValues), (right \in SeedIntValues), SeedPhysicalPendingReplacementMatchesTheSource, SMT
+<1>. QED BY ONLY <1>roles, <1>guard, <1>values, SMT
 
 LOCAL THEOREM SeedExpansionInputSuppliesTheReachedBoundsAndPairViews ==
     ASSUME SeedExpansionInput, Len(pending) > 0

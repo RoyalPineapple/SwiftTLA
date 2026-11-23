@@ -19,6 +19,21 @@ private enum NativeCommandError: Error, CustomStringConvertible {
 
 func runNative(arguments: [String]) -> Never {
     do {
+        if let command = arguments.first, ["prepare-arithmetic-send", "prepare-catalog-send"].contains(command) {
+            guard arguments.count == 9, arguments[1] == "--native-source", arguments[3] == "--operations",
+                  arguments[5] == "--checking", arguments[7] == "--output" else {
+                throw NativeCommandError.usage
+            }
+            let output = URL(fileURLWithPath: arguments[8])
+            let binding = try nativePublicSendBinding(
+                String(contentsOf: URL(fileURLWithPath: arguments[2]), encoding: .utf8),
+                operations: String(contentsOf: URL(fileURLWithPath: arguments[4]), encoding: .utf8),
+                checking: String(contentsOf: URL(fileURLWithPath: arguments[6]), encoding: .utf8),
+                module: output.deletingPathExtension().lastPathComponent,
+                binding: command == "prepare-catalog-send" ? "CatalogSendBinding" : "ArithmeticSendBinding")
+            try binding.write(to: output, options: .withoutOverwriting)
+            exit(0)
+        }
         if arguments.first == "verify-member-tokens" {
             guard arguments.count == 5, arguments[1] == "--compiled-members", arguments[3] == "--attached-members"
             else { throw NativeCommandError.usage }

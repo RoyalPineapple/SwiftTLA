@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import UpstreamParity
 @testable import SwiftTLA
@@ -42,6 +43,33 @@ struct SequentialLoopControlTests {
         let scheduled = try #require(control.scheduled.canonicalTraces(sourceWrites: false))
         let lowered = try #require(control.lowered.canonicalTraces(sourceWrites: false))
         #expect(scheduled == lowered)
-        #expect(try FinishingLoop.render().tlaBundle.tla.contains("VARIABLES pc, value\n"))
+        let initial = try #require(graph.initialStates.first)
+        let body = try #require(graph.transitions[initial]?.first)
+        #expect(body.action == .advance)
+        #expect(body.target.state.value == 1)
+        let exit = try #require(graph.transitions[body.target]?.first)
+        #expect(exit.action == .advance)
+        #expect(exit.target.state.value == body.target.state.value)
+        let terminal = try #require(graph.transitions[exit.target]?.first)
+        #expect(terminal.action == .Terminating)
+        #expect(terminal.target == exit.target)
+
+        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("SequentialLoopControlFixtures.swift")
+        let authored = try Data(contentsOf: fixture)
+        let rendered = try FinishingLoop.render()
+        let proof = try #require(try SequentialControlOutputEvidence.proof(authoredSource: authored,
+            modelName: String(describing: FinishingLoop.self), spec: FinishingLoop.spec, rendered: rendered))
+        let module = rendered.tlaBundle.root
+        let cfg = try #require(module.cfg)
+#if compiler(>=6.2)
+        Attachment.record(Array(authored), named: fixture.lastPathComponent)
+        Attachment.record(Array(module.tla.utf8), named: "\(module.name).tla")
+        Attachment.record(Array(cfg.utf8), named: "\(module.name).cfg")
+        Attachment.record(Array(proof.control), named: "\(proof.controlModule).tla")
+        Attachment.record(Array(proof.configured), named: "\(proof.configuredModule).tla")
+#else
+        _ = (cfg, proof)
+#endif
     }
 }

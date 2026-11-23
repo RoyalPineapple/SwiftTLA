@@ -70,10 +70,10 @@ package enum OrderedRHSCFGProof {
 
     /// Uses the same emitted CFG grammar and caller-byte proof as the single-action case.
     static func renderCatalog(
-        for rendered: RenderedSpecification, catalogModule: String, prefix: String,
+        for rendered: RenderedSpecification, catalogModule: String, prefix: String, counter: String,
         actions: [(instance: String, failureOperator: String?)]
     ) -> (name: String, bytes: Data)? {
-        guard let selection = normalSelection(for: rendered), !actions.isEmpty else { return nil }
+        guard let selection = normalSelection(for: rendered), let last = actions.last else { return nil }
         let name = catalogModule + "ConfiguredProof"
         let checking = selection.checking
         let failureSelectors = actions.map { "\($0.instance)!RHSOutputFailureSelected" }
@@ -97,9 +97,44 @@ package enum OrderedRHSCFGProof {
         }
         let bindings = failureBindings.map(\.proof).joined(separator: "\n")
         let selectorSupport = (failureBindings.map(\.fact) + ["PTL"]).joined(separator: ", ")
+        let terminal = actions.count + 1
+        let before = (actions + [last]).map { "<<\(counter), \($0.instance)!RHSOutputBefore>>" }.joined(separator: ", ")
+        let sendProofs = actions.enumerated().map { index, action in
+            let slot = index + 1
+            return #"""
+            <2>send\#(slot). \#(prefix)PublicSendUsesCertifiedOutput(histories, \#(slot))
+                <3>. DEFINE output == \#(prefix)NativeOrderedOutputs[\#(slot)]
+                            certified == \#(prefix)CertifiedOrderedOutputs(histories)[\#(slot)]
+                            before == \#(prefix)SendBefore[\#(slot)]
+                            handle == NativeActionRoutes[\#(slot)].handle
+                            final == histories[\#(slot)][\#(action.instance)!RHSOutputCount]
+                            snapshots == {<<\#(action.instance)!RHSOutputExit, final.bindings>>}
+                            reasons == \#(action.instance)!RHSOutputInput!Rule!ArithmeticFailures
+                <3>route. SendSlot(handle) = \#(slot)
+                    BY ONLY <1>sendRoute, SMT DEF handle, NativeActionRoutes
+                <3>bindings. Send!DecodedSendOperands(CatalogSendBinding, handle)
+                    BY ONLY SMT DEF Send!DecodedSendOperands, CatalogSendBinding, handle, NativeActionRoutes
+                <3>receipt.
+                    /\ output = certified
+                    /\ output.callbacks \in Seq(snapshots)
+                    /\ output.reasons \in Seq(reasons)
+                    /\ <<>> \notin reasons
+                    BY ONLY <2>histories, IsaM("simp"), SMT DEF \#(prefix)NativeOrderedOutputsHold,
+                        NativeOrderedOutputHolds\#(slot), \#(prefix)NativeOrderedOutputs, \#(prefix)CertifiedOrderedOutputs,
+                        \#(action.instance)!RHSOutputInput!Rule!NativeAssignmentOrderedOutputsTyped,
+                        output, certified, final, snapshots, reasons
+                <3>run. Send!DecodedPublicSend(CatalogSendBinding, before, handle, output.callbacks, output.reasons) =
+                        Send!PublicSendOutcome(CatalogSendBinding, before, handle, output.callbacks, output.reasons)
+                    BY ONLY <3>bindings, <3>receipt, Send!DecodedSendUsesTheFirstErrorOrCommitsExactlyOneCallback, SMT
+                <3>. QED BY ONLY <3>run, <3>receipt, <3>route, SMT DEF \#(prefix)PublicSendUsesCertifiedOutput,
+                    \#(prefix)NativePublicSend, output, certified, before, handle
+            """#
+        }.joined(separator: "\n    ")
+        let sendFacts = (1...terminal).map { "<2>send\($0)" }.joined(separator: ", ")
+        let sendCases = (1...terminal).map { "slot = \($0)" }.joined(separator: #" \/ "#)
         let proof = #"""
         ---- MODULE \#(name) ----
-        EXTENDS \#(catalogModule), CallerInputPageBlock1
+        EXTENDS \#(catalogModule), CallerInputPageBlock1, \#(catalogModule)SendBinding
 
         \#(selection.proof)
 
@@ -112,6 +147,23 @@ package enum OrderedRHSCFGProof {
         LOCAL AuthoredFormal == [slot \in AuthoredSlots |-> \#(prefix)ActualFormalLabels[slot]]
         LOCAL AuthoredLabels == [slot \in AuthoredSlots |-> \#(prefix)ActualAuthoredLabels[slot]]
         LOCAL NoAuthoredFailures(failures) == \A slot \in DOMAIN failures : failures[slot] = {}
+        LOCAL Send == INSTANCE NativePublicSendFlowRule
+        LOCAL \#(prefix)SendBefore == <<\#(before)>>
+        LOCAL SendSlots == AuthoredSlots \cup {\#(terminal)}
+        LOCAL SendSlot(action) == CHOOSE slot \in SendSlots : NativeActionRoutes[slot].handle = action
+
+        \#(prefix)NativePublicSend(action) ==
+            LET slot == SendSlot(action)
+                output == IF slot = \#(terminal) THEN NativeTerminalOrderedOutput ELSE \#(prefix)NativeOrderedOutputs[slot]
+            IN Send!DecodedPublicSend(CatalogSendBinding, \#(prefix)SendBefore[slot],
+                action, output.callbacks, output.reasons)
+
+        \#(prefix)PublicSendUsesCertifiedOutput(histories, slot) ==
+            LET output == IF slot = \#(terminal) THEN CertifiedTerminalOrderedOutput
+                         ELSE \#(prefix)CertifiedOrderedOutputs(histories)[slot]
+            IN \#(prefix)NativePublicSend(NativeActionRoutes[slot].handle) =
+                Send!PublicSendOutcome(CatalogSendBinding, \#(prefix)SendBefore[slot],
+                    NativeActionRoutes[slot].handle, output.callbacks, output.reasons)
 
         \#(prefix)NativeAuthoredLabeled(label) ==
             \#(prefix)Dispatch!NativeDispatchLabeled(AuthoredRoutes, \#(prefix)NativeSelectedSteps,
@@ -127,6 +179,8 @@ package enum OrderedRHSCFGProof {
                 /\ \#(prefix)HistoriesHold(histories)
                 /\ (Next <=> \#(prefix)CertifiedNext(histories))
                 /\ \A label : \#(prefix)NativeAuthoredLabeled(label) <=> \#(prefix)CertifiedAuthoredLabeled(histories, label)
+                /\ SendSlots = DOMAIN NativeActionRoutes
+                /\ \A slot \in SendSlots : \#(prefix)PublicSendUsesCertifiedOutput(histories, slot)
                 /\ (\#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)CertifiedFailures(histories)))
                 /\ (\#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)NativeSelectedFailures)))
         PROOF
@@ -150,11 +204,20 @@ package enum OrderedRHSCFGProof {
                 \#(prefix)Dispatch!NativeDispatchBindsTheActionCatalog
         <1>labelDomain. DOMAIN AuthoredLabels = DOMAIN AuthoredFormal
             BY ONLY SMT DEF AuthoredLabels, AuthoredFormal
+        <1>sendDomain. SendSlots = DOMAIN NativeActionRoutes
+            BY ONLY IsaM("simp"), SMT DEF SendSlots, AuthoredSlots, \#(prefix)NativeSelectedSteps, NativeActionRoutes
+        <1>sendRoute. \A slot \in DOMAIN NativeActionRoutes : SendSlot(NativeActionRoutes[slot].handle) = slot
+            <2>unique. \A first, second \in DOMAIN NativeActionRoutes :
+                NativeActionRoutes[first].handle = NativeActionRoutes[second].handle => first = second
+                BY ONLY SMT DEF NativeActionRoutes
+            <2>. QED BY ONLY <1>sendDomain, <2>unique, SMT DEF SendSlot
         <1>typed. ASSUME \#(prefix)InputType
             PROVE \E histories :
                 /\ \#(prefix)HistoriesHold(histories)
                 /\ (Next <=> \#(prefix)CertifiedNext(histories))
                 /\ \A label : \#(prefix)NativeAuthoredLabeled(label) <=> \#(prefix)CertifiedAuthoredLabeled(histories, label)
+                /\ SendSlots = DOMAIN NativeActionRoutes
+                /\ \A slot \in SendSlots : \#(prefix)PublicSendUsesCertifiedOutput(histories, slot)
                 /\ (\#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)CertifiedFailures(histories)))
                 /\ (\#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)NativeSelectedFailures))
             <2>histories. PICK histories :
@@ -164,6 +227,7 @@ package enum OrderedRHSCFGProof {
                     \#(prefix)NativeSelectedSteps[slot] <=> \#(prefix)CertifiedActions(histories)[slot]
                 /\ \#(prefix)NativeSelectedFailures = \#(prefix)ActualFailures
                 /\ \#(prefix)ActualFailures = \#(prefix)CertifiedFailures(histories)
+                /\ \#(prefix)NativeOrderedOutputsHold(histories)
                 BY ONLY \#(prefix)InputType, ActualNextAndFailuresUseTheCertifiedAssignmentHistories,
                     SMT DEF AuthoredSlots
             <2>points. \A slot \in DOMAIN AuthoredFormal :
@@ -181,8 +245,33 @@ package enum OrderedRHSCFGProof {
                 BY ONLY IsaM("simp"), SMT DEF NoAuthoredFailures, \#(prefix)ActualFailures
             <2>checking. \#(prefix)SelectedEvaluationCheck <=> NoAuthoredFailures(\#(prefix)ActualFailures)
                 BY ONLY <1>selector, <2>predicates, <2>physical, SMT
+            \#(sendProofs)
+            <2>send\#(terminal). \#(prefix)PublicSendUsesCertifiedOutput(histories, \#(terminal))
+                <3>. DEFINE output == NativeTerminalOrderedOutput
+                            before == \#(prefix)SendBefore[\#(terminal)]
+                            handle == NativeActionRoutes[\#(terminal)].handle
+                            snapshots == {<<\#(counter), \#(last.instance)!RHSOutputBefore>>}
+                <3>route. SendSlot(handle) = \#(terminal)
+                    BY ONLY <1>sendRoute, SMT DEF handle, NativeActionRoutes
+                <3>binding. Send!DecodedSendOperands(CatalogSendBinding, handle)
+                    BY ONLY SMT DEF Send!DecodedSendOperands, CatalogSendBinding, handle, NativeActionRoutes
+                <3>receipt.
+                    /\ output = CertifiedTerminalOrderedOutput
+                    /\ output.callbacks \in Seq(snapshots)
+                    /\ output.reasons \in Seq({})
+                    BY ONLY \#(prefix)InputType, NativeTerminalOrderedOutputUsesTheCompleteFrame, SMT
+                        DEF output, snapshots
+                <3>run. Send!DecodedPublicSend(CatalogSendBinding, before, handle, output.callbacks, output.reasons) =
+                        Send!PublicSendOutcome(CatalogSendBinding, before, handle, output.callbacks, output.reasons)
+                    BY ONLY <3>binding, <3>receipt, Send!DecodedSendUsesTheFirstErrorOrCommitsExactlyOneCallback, SMT
+                <3>. QED BY ONLY <3>run, <3>receipt, <3>route, SMT DEF \#(prefix)PublicSendUsesCertifiedOutput,
+                    \#(prefix)NativePublicSend, output, before, handle
+            <2>sendSlots. \A slot \in SendSlots : \#(sendCases)
+                BY ONLY IsaM("simp"), SMT DEF SendSlots, AuthoredSlots, \#(prefix)NativeSelectedSteps
+            <2>send. \A slot \in SendSlots : \#(prefix)PublicSendUsesCertifiedOutput(histories, slot)
+                BY ONLY <2>sendSlots, \#(sendFacts), SMT
             <2>. WITNESS histories
-            <2>. QED BY ONLY <2>histories, <2>labels, <2>checking, SMT
+            <2>. QED BY ONLY <2>histories, <2>labels, <2>checking, <1>sendDomain, <2>send, SMT
         <1>. QED BY ONLY NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking, <1>next, <1>behavior, <1>typed, Zenon
 
         ====
