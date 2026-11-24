@@ -23,7 +23,7 @@ package struct PrisonerSingleSwitchModel: Sendable {
             let NormalPrisoner = Prisoner.removing(DesignatedCounter)
             let SignalLimit = If(Light_Unknown, then: 2, else: 1)
             let VictoryThreshold = If(Light_Unknown,
-                then: 2 * Prisoner.cardinality - 1, else: Prisoner.cardinality)
+                then: 2 * Prisoner.count - 1, else: Prisoner.count)
 
             let count = scope.sharedVar(initial: 1)
             let announced = scope.sharedVar(initial: false)

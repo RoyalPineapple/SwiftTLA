@@ -48,7 +48,7 @@ package struct CigaretteSmokersModel: Sendable {
                 ]))
             Assume(Offers.isSubset(of: Subsets(of: Ingredients))
                 && ForAll(in: Offers) { offer in
-                    offer.cardinality == Ingredients.cardinality - 1
+                    offer.count == Ingredients.count - 1
                 })
 
             let smokers = scope.sharedVar(initial: Dictionary<Ingredient, Smoker>.mapping(over: Ingredients) { _ in
@@ -86,7 +86,7 @@ package struct CigaretteSmokersModel: Sendable {
                     && (Offers.contains(dealer) || dealer.isEmpty)
             }
             AtMostOne {
-                Ingredients.filtering { ingredient in smokers[ingredient].smoking }.cardinality <= 1
+                Ingredients.filtering { ingredient in smokers[ingredient].smoking }.count <= 1
             }
 
             let CigaretteSmokers = Validation {

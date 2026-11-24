@@ -110,7 +110,7 @@ package struct SingleLaneBridgeModel: Sendable {
                             && Location[first] == Location[second]) || first == second
                     }
                 }
-                CarsInBridge.cardinality < Bridge.cardinality + 1
+                CarsInBridge.count < Bridge.count + 1
                 ForAll(in: CarsRight) { right in
                     ForAll(in: CarsLeft) { left in
                         !(Bridge.contains(Location[right]) && Bridge.contains(Location[left]))
@@ -119,7 +119,7 @@ package struct SingleLaneBridgeModel: Sendable {
             }
             TypeOK {
                 Functions(from: Cars, to: Positions).contains(Location)
-                    && WaitingBeforeBridge.count <= Cars.cardinality
+                    && WaitingBeforeBridge.count <= Cars.count
             }
 
             CarsInBridgeExitBridge(.all([

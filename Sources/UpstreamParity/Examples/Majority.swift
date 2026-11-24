@@ -18,7 +18,7 @@ package struct MajorityModel: Sendable {
             let Value = scope.parameter(as: Set<Element>.self,
                 in: Set<Set<Element>>([Set<Element>([Element.A, Element.B, Element.C])]))
             let bound = scope.parameter(as: Int.self, in: 0...5)
-            Assume(Value.cardinality > 0 && bound >= 0)
+            Assume(Value.count > 0 && bound >= 0)
             let seq = scope.sharedVar(initiallyIn: Sequences(of: Value, lengths: IntRange(0, through: bound)))
             let i = scope.sharedVar(initial: 1)
             let cand = scope.sharedVar(initiallyIn: Value)
@@ -51,19 +51,19 @@ package struct MajorityModel: Sendable {
                 i <= seq.count || ForAll(in: Value) { value in
                     2 * IntRange(1, through: seq.count).filtering { index in
                         seq[index.expr] == value
-                    }.cardinality <= seq.count || value == cand
+                    }.count <= seq.count || value == cand
                 }
             }
             let candidateOccurrences = IntRange(1, through: i - 1).filtering { index in
                 seq[index.expr] == cand
-            }.cardinality
+            }.count
             Inv {
                 cnt <= candidateOccurrences
                     && 2 * (candidateOccurrences - cnt) <= i - 1 - cnt
                     && ForAll(in: Value) { value in
                         value == cand || 2 * IntRange(1, through: i - 1).filtering { index in
                             seq[index.expr] == value
-                        }.cardinality <= i - 1 - cnt
+                        }.count <= i - 1 - cnt
                     }
             }
             let MCMajority = Validation {

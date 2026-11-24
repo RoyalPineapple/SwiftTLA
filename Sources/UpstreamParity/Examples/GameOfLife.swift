@@ -32,7 +32,7 @@ package struct GameOfLifeModel: Sendable {
                             && (neighbor.expr.first() != cell.expr.first()
                                 || neighbor.expr.second() != cell.expr.second())
                             && grid[neighbor.expr]
-                    }.cardinality == 3
+                    }.count == 3
                         || (grid[cell.expr] && positions.filtering { neighbor in
                             IntRange(cell.expr.first() - 1, through: cell.expr.first() + 1)
                                 .contains(neighbor.expr.first())
@@ -41,7 +41,7 @@ package struct GameOfLifeModel: Sendable {
                                 && (neighbor.expr.first() != cell.expr.first()
                                     || neighbor.expr.second() != cell.expr.second())
                                 && grid[neighbor.expr]
-                        }.cardinality == 2)
+                        }.count == 2)
                 })
             }
 

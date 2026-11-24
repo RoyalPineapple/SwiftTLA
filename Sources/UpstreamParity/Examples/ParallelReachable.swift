@@ -35,7 +35,7 @@ package struct ParallelReachableModel: Sendable {
                 let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
                 let successors = Select(
                     from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { graph in
-                        ForAll(Node.all) { node in graph[node].cardinality == 2 }
+                        ForAll(Node.all) { node in graph[node].count == 2 }
                     },
                     matching: { graph in graph.expr == graph.expr }
                 )

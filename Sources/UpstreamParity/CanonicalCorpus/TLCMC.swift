@@ -86,7 +86,7 @@ package struct TLCMCModel: Sendable {
                         Assign(currentState, to: SearchNode.first(current))
                         Assign(frontier, to: frontier.expr.removing(at: 1))
                         Assign(successors, to: nonSelfSuccessors.subtracting(closed.expr))
-                        If(nonSelfSuccessors.cardinality == 0) {
+                        If(nonSelfSuccessors.count == 0) {
                             Assign(counterexample, to: TupleExpr<Node>.literal(current))
                             Goto(Step.trace)
                         } else: {

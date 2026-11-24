@@ -52,13 +52,13 @@ package struct MissionariesAndCannibalsModel: Sendable {
                     let other = If(bank_of_boat == Bank.E, then: Bank.W, else: Bank.E)
                     let departing = who_is_on_bank[bank_of_boat].subtracting(passengers)
                     let arriving = who_is_on_bank[other].union(passengers)
-                    When(SetExpr<Int>.literal(1, 2).contains(passengers.expr.cardinality))
+                    When(SetExpr<Int>.literal(1, 2).contains(passengers.expr.count))
                     When(departing.isSubset(of: Cannibals)
-                        || departing.intersection(Cannibals).cardinality
-                            <= departing.intersection(Missionaries).cardinality)
+                        || departing.intersection(Cannibals).count
+                            <= departing.intersection(Missionaries).count)
                     When(arriving.isSubset(of: Cannibals)
-                        || arriving.intersection(Cannibals).cardinality
-                            <= arriving.intersection(Missionaries).cardinality)
+                        || arriving.intersection(Cannibals).count
+                            <= arriving.intersection(Missionaries).count)
                     Assign(who_is_on_bank, to:
                         Dictionary<Bank, Set<Person>>.mapping(over: Banks) { bank in
                             If(bank == bank_of_boat, then: departing, else: arriving)

@@ -370,6 +370,8 @@ extension TypedExpression where ExpressionValue: FormalSetValue {
     Expr(.equal(.cardinality(stateExpr), .value(.int(0))))
   }
 
+  public var count: Expr<Int> { cardinality }
+
   public var cardinality: Expr<Int> {
     Expr<Int>(.cardinality(stateExpr))
   }

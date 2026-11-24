@@ -46,7 +46,7 @@ package struct ConsensusModel: Sendable {
                     chosen.isSubset(of: SetExpr<Value>.literal(.one, .two, .three))
                 }
                 Invariant("Inv") {
-                    chosen.cardinality <= 1
+                    chosen.count <= 1
                 }
                 Eventually("Success", !chosen.isEmpty)
             })

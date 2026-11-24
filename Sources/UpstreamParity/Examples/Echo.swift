@@ -60,7 +60,7 @@ package struct EchoModel: Sendable {
                 }, in: { path in
                     ForAll(in: Node) { from in
                         ForAll(in: Node) { to in
-                            path(Triple<NodeID, NodeID, Int>.literal(from, to, Node.cardinality))
+                            path(Triple<NodeID, NodeID, Int>.literal(from, to, Node.count))
                         }
                     }
                 }))
@@ -92,7 +92,7 @@ package struct EchoModel: Sendable {
                         }
                     }
 
-                    While(Step.n1, rcvd.expr < nbrs.expr.cardinality) {
+                    While(Step.n1, rcvd.expr < nbrs.expr.count) {
                         With(inbox[selfID]) { (message: WithValue<Message>) in
                             Let(inbox.updating(selfID, to: inbox[selfID].removing(message))) { (networkAfterReceive: WithValue<[NodeID: Set<Message>]>) in
                                 If(selfID != initiator && rcvd.expr == 0) {
@@ -130,7 +130,7 @@ package struct EchoModel: Sendable {
                                 parent == OneOf<NodeID, NoNode>.first(node)
                             }
                         children.isSubset(of: Node)
-                        rcvd >= 0 && rcvd <= nbrs.cardinality
+                        rcvd >= 0 && rcvd <= nbrs.count
                         nbrs == Node.filtering { neighbor in
                             R.contains(Pair<NodeID, NodeID>.literal(neighbor, selfID))
                         }
@@ -158,11 +158,11 @@ package struct EchoModel: Sendable {
                                 }, in: { ancestor in
                                     ForAll(in: Node) { node in
                                         node == initiator || ancestor(Triple<NodeID, NodeID, Int>.literal(
-                                            node, initiator, Node.cardinality))
+                                            node, initiator, Node.count))
                                     }
                                         && ForAll(in: Node) { node in
                                             !ancestor(Triple<NodeID, NodeID, Int>.literal(
-                                                node, node, Node.cardinality))
+                                                node, node, Node.count))
                                         }
                                 })
                     }

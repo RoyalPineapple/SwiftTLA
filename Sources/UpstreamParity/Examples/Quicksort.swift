@@ -24,7 +24,7 @@ package struct QuicksortModel: Sendable {
 
                 While(Step.a, !U.isEmpty) {
                     With(U) { I in
-                        If(I.cardinality == 1) {
+                        If(I.count == 1) {
                             Assign(U, to: U.removing(I))
                         } else: {
                             Let(Select(from: I) { x in ForAll(in: I) { y in x <= y } }) { minimum in
@@ -35,9 +35,9 @@ package struct QuicksortModel: Sendable {
                                             ForAll(in: Values) { value in
                                                 IntRange(1, through: seq.count).filtering { i in
                                                     t.expr[i] == value
-                                                }.cardinality == IntRange(1, through: seq.count).filtering { i in
+                                                }.count == IntRange(1, through: seq.count).filtering { i in
                                                     seq[i] == value
-                                                }.cardinality
+                                                }.count
                                             }
                                             && ForAll(in: IntRange(1, through: seq.count).subtracting(I)) { i in
                                                 t.expr[i] == seq[i]
@@ -71,8 +71,8 @@ package struct QuicksortModel: Sendable {
                         !I.isEmpty && I.isSubset(of: IntRange(1, through: seq0.count))
                     }
                 let permutation = seq.count == seq0.count && ForAll(in: IntRange(1, through: seq0.count)) { original in
-                    IntRange(1, through: seq.count).filtering { i in seq[i] == seq0[original] }.cardinality
-                        == IntRange(1, through: seq0.count).filtering { i in seq0[i] == seq0[original] }.cardinality
+                    IntRange(1, through: seq.count).filtering { i in seq[i] == seq0[original] }.count
+                        == IntRange(1, through: seq0.count).filtering { i in seq0[i] == seq0[original] }.count
                 }
                 let UV = U.union(IntRange(1, through: seq.count)
                     .subtracting(U.flatMapping { I in I.expr })

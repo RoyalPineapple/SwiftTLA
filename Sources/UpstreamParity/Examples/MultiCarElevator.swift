@@ -37,7 +37,7 @@ package struct MultiCarElevator: Sendable {
             let ClosedDoorMovement = Invariant()
             let NoDoubleAssignment = Invariant()
 
-            Constraint(calls.cardinality <= 1)
+            Constraint(calls.count <= 1)
             TypeOK {
                 FloorID.all.contains(cars[.carA].floor)
                     && FloorID.all.contains(cars[.carB].floor)
@@ -63,7 +63,7 @@ package struct MultiCarElevator: Sendable {
                 Assign(calls, to: calls.inserting(call))
             }
             Do(Step.assign, over: PersonID.all, CarID.all, Direction.all) { person, car, direction in
-                When(calls.cardinality == 1
+                When(calls.count == 1
                     && cars[.carA].rider != person.assuming(String.self)
                     && cars[.carB].rider != person.assuming(String.self)
                     && cars[car].rider == "none")

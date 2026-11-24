@@ -1253,6 +1253,7 @@ final class ParserSession {
             case "recordFields": return .domain(base)
             case "count":
                 switch typedFacadeValueType(baseSyntax, scope: scope) {
+                case .set: return .cardinality(base)
                 case .array: return .tupleLength(base)
                 case .dictionary: return .cardinality(.domain(base))
                 default: return nil

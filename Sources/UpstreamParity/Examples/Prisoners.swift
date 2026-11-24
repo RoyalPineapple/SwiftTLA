@@ -20,7 +20,7 @@ package struct PrisonersModel: Sendable {
             let Prisoner = scope.parameter(as: Set<PrisonerID>.self,
                 in: Subsets(of: Set<PrisonerID>([.p1, .p2, .p3, .p4])))
             let Counter = scope.parameter(as: PrisonerID.self, in: PrisonerID.all)
-            Assume(Prisoner.contains(Counter) && Prisoner.cardinality > 1)
+            Assume(Prisoner.contains(Counter) && Prisoner.count > 1)
             let OtherPrisoner = Prisoner.removing(Counter)
             let switchAUp = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
             let switchBUp = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, true))
@@ -54,12 +54,12 @@ package struct PrisonersModel: Sendable {
             WeakFairness(counterStep)
             WeakFairness(each: nonCounterStep)
 
-            let done = count == 2 * (Prisoner.cardinality - 1)
+            let done = count == 2 * (Prisoner.count - 1)
             TypeOK {
                 SetExpr<Bool>.literal(false, true).contains(switchAUp)
                     && SetExpr<Bool>.literal(false, true).contains(switchBUp)
                     && Functions(from: OtherPrisoner, to: IntRange(0, through: 2)).contains(timesSwitched)
-                    && IntRange(0, through: 2 * Prisoner.cardinality - 1).contains(count)
+                    && IntRange(0, through: 2 * Prisoner.count - 1).contains(count)
             }
             CountInvariant {
                 let total = LetRec("sum", over: Subsets(of: OtherPrisoner), taking: Set<PrisonerID>.self,
