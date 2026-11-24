@@ -38,7 +38,7 @@ configuration. It is not a place to invent a friendlier algorithm.
 | `process (p \in S)` | `Each(S) { p in ... }` |
 | labeled atomic code | `Do(Label.foo) { ... }` |
 | `await P` | `When(P)` |
-| `x := e` | `Assign(x, to: e)` |
+| `x := e` | `x.set(e)`, or `x += amount` for an integer increment |
 | `if` / `either` | `If` / `Either` |
 | `with` / choice | `With` / `Choose` |
 | `Seq(S)` in a finite TLC model | `Sequences(of: S, lengths: 0...n)` |
@@ -78,6 +78,7 @@ Do not run TLC locally.
 
 ## Names and source mapping
 
+- Prefer lower camel case for Swift bindings. A step enum raw value preserves an upstream label, and `Invariant("TypeOK")` preserves an upstream property name. Use `label:` for display text.
 - Keep upstream variable names, module names, action labels, and invariant
   names unless the lowerer necessarily creates internal labels.
 - File names are PascalCase. Fixture names retain the upstream model name.

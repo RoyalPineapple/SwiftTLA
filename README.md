@@ -106,7 +106,7 @@ public struct ClockModel: Sendable {
 
 Each successful `send(.tick)` runs the loop body once. The next tick needs another send.
 
-The `validTime` binding names one property. Its three conditions must all hold. Select `.validTime` when checking the clock.
+Select `.validTime` to check that the hour, minute, and second are all in range at startup and after every tick the checker explores.
 
 The ranges in `sharedVar(initiallyIn:)` describe the allowed **starting values**.
 `validTime` asks a separate question about **reached values**. For example,

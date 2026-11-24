@@ -34,6 +34,21 @@ The authoring API must make three questions easy to answer:
 2. What should be true of its states and executions?
 3. Under which finite configurations should we validate those claims?
 
+Use a Swift reader's prediction as the readability check for a corpus example.
+Can they identify the possible starting states, predict one enabled action,
+and give an example of a state that violates a rule? In HourClock, any hour
+from 1 through 12 is a valid start, a tick at 12 produces 1, and 0 violates
+the clock invariant. Keep the upstream names available for traces and use
+Swift names in the expressions people read. Explain a modeling choice where
+it matters, such as whether several assignments happen in one action.
+
+Use familiar Swift vocabulary when it conveys the behavior. Use `count` for the
+number of members, `filter` to keep matching members, and `contains` to ask
+whether a match exists. When a concept needs a new name, explain it with a
+consequence the reader can predict. An invariant is a rule that must hold in
+every reachable state. A guard determines whether an action can run. A false
+guard disables that action. A broken invariant reports a failure.
+
 ## 2. Architecture
 
 ```mermaid
@@ -48,6 +63,13 @@ flowchart TD
     F --> I[Compare graphs and property outcomes]
     H --> I
 ```
+
+Prefer Swift spellings that lower to existing typed operations. For example,
+`marked.insert(node)` lowers to one assignment of the union of `marked` and
+the singleton set containing `node`. The statement reads the current value
+of `marked` at that point in the step. To reuse a preservation proof, establish
+that the builder and parser produce that assignment with the same target and
+operand bindings.
 
 Applications select transitions. Model checking explores transitions. Both use
 the same generated Swift implementations. Do not add an expression interpreter
@@ -184,7 +206,7 @@ The whole-step guard syntax is:
 
 ```swift
 Do(Step.increment, when: count < limit) {
-    Assign(count, to: count + 1)
+    count += 1
     Goto(Step.increment)
 }
 ```
@@ -200,7 +222,7 @@ Keep a nested guard where it needs a value bound inside the body:
 Do(Step.select) {
     Choose(1...3) { candidate in
         When(candidate != selected)
-        Assign(selected, to: candidate)
+        selected.set(candidate)
     }
 }
 ```
@@ -224,10 +246,10 @@ No program counter, source-order scheduling, or termination action is added.
 #spec("IndependentCounter") { scope in
     let count = scope.sharedVar(initial: 0)
     Do(Step.increment, when: count < 2) {
-        Assign(count, to: count + 1)
+        count += 1
     }
     Do(Step.reset, when: count == 2) {
-        Assign(count, to: 0)
+        count.set(0)
     }
     let complete = Validation {}
     complete
@@ -271,7 +293,7 @@ not change the generated scheduler or transitions. A mutable domain is rejected.
 
 ```swift
 let visit = Do(Step.visit, over: members) { member in
-    Assign(seen[member], to: true)
+    seen[member].set(true)
 }
 visit
 WeakFairness(each: visit)
@@ -295,8 +317,8 @@ The compiler retains each argument type and binding identity through native gene
 Do(Step.pour, over: jugs, jugs) { source, destination in
     When(source != destination)
     let amount = contents[source]
-    Assign(contents[source], to: 0)
-    Assign(contents[destination], to: contents[destination] + amount)
+    contents[source].set(0)
+    contents[destination] += amount
 }
 ```
 
@@ -317,7 +339,7 @@ An immutable `Macro` binding at specification scope defines reusable statements 
 Each call expands inside its enclosing atomic step. It does not add an action, process, or program counter.
 
 ```swift
-let advance = Macro { Assign(count, to: count + 1) }
+let advance = Macro { count += 1 }
 Do(Step.once) { advance() }
 Do(Step.twice) { advance(); advance() }
 ```
@@ -352,6 +374,10 @@ Do(Step.copy) {
 same ordered reads and overflow behavior as `Assign(x, to: x + amount)`.
 Use `second.set(0)` to replace a value or `y.set(x)` to copy the current value
 of another field. Keep the variable handle declared with `let`.
+
+For writable sets, use `marked.insert(node)` to add a member,
+`frontier.remove(node)` to remove one, and `frontier.formUnion(successors)`
+to add a set of members in one assignment.
 
 Within a scoped `Algorithm`, declare a shared field by key path when you only
 need its state member. In a `Do` with `in: State.self`, copy another field of
@@ -415,8 +441,8 @@ uses the same saved-value semantics.
 ```swift
 Do(Step.swap) {
     let originalLeft = left
-    Assign(left, to: right)
-    Assign(right, to: originalLeft)
+    left.set(right)
+    right.set(originalLeft)
 }
 ```
 
@@ -462,6 +488,15 @@ Additional property-handle forms need a named corpus case and an explicit
 contract. Retain the temporal composition capabilities needed by the corpus;
 these four forms do not limit expressiveness.
 
+### Name a property in Swift and in the model
+
+Inside `#spec`, `let validTime = Invariant { … }` uses the binding as its model name.
+When matching a published specification, write `let solution = Invariant("Solution") { … }`.
+Register it with `solution`, then use that value in `.checking(only:)` or `.expect`.
+The TLA+ operator and the name in the configuration are both `Solution`.
+For an action label, use a Swift enum raw value such as `case produce = "ProducerStep"`
+and write `Do(Step.produce)`. The exported transition still carries `ProducerStep`.
+
 ### Invariant handles across scopes
 
 The invariant forward-declaration syntax is `let safe = Invariant()` inside `#spec`.
@@ -474,11 +509,11 @@ The predicate retains its inner scope and any process-member quantification.
 
 ```swift
 let safe = Invariant()
-let worker = Algorithm(scoped: { scope in
+let worker = Algorithm { scope in
     let value = scope.sharedVar(initial: 0)
     Do(Step.wait) { Goto(Step.wait) }
     safe { value == 0 }
-})
+}
 worker
 let safety = Validation {}.checking(only: [safe])
 safety
@@ -566,8 +601,8 @@ For example, the existing `RecurringPopulation` declarations supply `members`, `
 let EachRecurs = AlwaysEventually()
 let toggle = Algorithm {
     Each(members, fairness: .weak) { member in
-        While(Step.toggle, true) {
-            Assign(value, to: 1 - value)
+        Loop(Step.toggle) {
+            value.set(1 - value)
         }
         EachRecurs(value == member)
     }
@@ -824,8 +859,8 @@ The population must depend only on constants or immutable model parameters.
 ```swift
 let EachRecurs = AlwaysEventually()
 Each(members, fairness: .weak) { member in
-    While(Step.toggle, true) {
-        Assign(value, to: 1 - value)
+    Loop(Step.toggle) {
+        value.set(1 - value)
     }
     EachRecurs(value == member)
 }
@@ -908,11 +943,11 @@ retains. An action constraint selects successors using a typed before/after
 value beside the algorithm it bounds:
 
 ```swift
-let counter = Algorithm(scoped: { scope in
+let counter = Algorithm { scope in
     let count = scope.sharedVar(initial: 0)
-    While(Step.advance, true) { Assign(count, to: count + 1) }
+    Loop(Step.advance) { count += 1 }
     ActionConstraint(on: count) { before, after in after <= 2 }
-})
+}
 counter
 ```
 
@@ -1221,13 +1256,14 @@ Dictionary expressions expose `.keys` as a typed set. An empty dictionary has an
 Native generation and TLA+ export preserve the key type and domain expression.
 `IntRange` produces `Expr<Set<Int>>`. A set's `.mapping` expression produces a Swift `Set` of its result type, which must be `Hashable`.
 Both operations retain formal expressions until evaluation. They do not enumerate their members during source construction.
-`ForAll(in:)` and `Exists(in:)` accept typed Swift sets and retain their element types.
+Use `members.allSatisfy { member in … }` to check every member of a typed set. Use `members.contains { member in … }` to check whether any member satisfies the predicate. On an empty set, these return true and false respectively. Both bind the element with its model type. Use `members.contains(member)` to check membership and `members.count` to count distinct members.
+A query such as `members.filter { member in ready[member] }.count` counts the ready members. The filtered value is itself a set. Use it in another expression or pass it to `formUnion` in a step.
 Their predicate closures can use immutable `let` bindings before one final `return` expression.
 Each binding retains references to the quantified members, earlier bindings, and enclosing model values.
 Nested quantifiers retain their own scope. Mutable bindings and statements after `return` are invalid.
 
 ```swift
-ForAll(in: members) { member in
+members.allSatisfy { member in
     let expected = member + 10
     let matches = family[member] == expected
     return matches
@@ -1276,16 +1312,16 @@ identifier type. Both existing closure forms retain their meaning:
 ```swift
 Each(nodes) { member in
     Do(Step.visit) {
-        Assign(selected, to: selected.inserting(member))
+        selected.set(selected.inserting(member))
     }
 }
 
-Each(nodes, scoped: { member, process in
+Each(nodes) { member, process in
     let visited = process.localVar(initial: false)
     Do(Step.visit) {
-        Assign(visited, to: true)
+        visited.set(true)
     }
-})
+}
 ```
 
 When the process action needs a stable formal name, pass a typed String-backed
@@ -1326,11 +1362,11 @@ let devices = scope.parameter(as: Set<DeviceID>.self,
 let phase = scope.sharedVar(initial:
     Dictionary<DeviceID, Int>.mapping(over: devices) { _ in 0 })
 
-let protocolAlgorithm = Algorithm(scoped: { _ in
+let protocolAlgorithm = Algorithm { _ in
     Each(devices) { member in
-        Do(Step.advance) { Assign(phase[member], to: phase[member] + 1) }
+        Do(Step.advance) { phase[member] += 1 }
     }
-})
+}
 protocolAlgorithm
 
 let pair = Validation(label: "Pair") {
