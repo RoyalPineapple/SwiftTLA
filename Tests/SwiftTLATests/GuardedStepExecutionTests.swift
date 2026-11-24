@@ -73,14 +73,68 @@ struct GuardedStepExecutionTests {
             let frontend = try TLASpecVerifier.parseAndVerify(declaration)
             try #require(frontend.procedureLoopSources.count == 1)
             let loop = try #require(frontend.procedureLoopSources.first)
+            try #require(loop.body != nil)
             let proof = try #require(try SequentialControlOutputEvidence.procedureLoopProof(
                 source: loop, program: frontend.program, rendered: rendered))
+            try checkBooleanProcedureGuard(in: declaration)
             Attachment.record(Array(authored), named: source.lastPathComponent)
             Attachment.record(Array(module.tla.utf8), named: "\(module.name).tla")
             Attachment.record(Array(cfg.utf8), named: "\(module.name).cfg")
             Attachment.record(Array(proof.bytes), named: "\(proof.name).tla")
         }
 #endif
+    }
+
+    private func checkBooleanProcedureGuard(in declaration: StructDeclSyntax) throws {
+        let booleanSource = declaration.description
+            .replacingOccurrences(of: "let bodyReady = scope.sharedVar(initiallyIn: 0...1)",
+                                  with: "let bodyReady = scope.sharedVar(initial: true)")
+            .replacingOccurrences(of: "parameters: Int.self", with: "parameters: Bool.self")
+            .replacingOccurrences(of: "divisor > 0", with: "divisor")
+            .replacingOccurrences(of: "divisor && value == 1", with: "bodyReady && divisor && value == 1")
+            .replacingOccurrences(of: "1 / divisor", with: "1")
+        let parsed = Parser.parse(source: booleanSource)
+        let variant = try #require(parsed.statements.first?.item.as(StructDeclSyntax.self))
+        let compiled = try TLASpecVerifier.parseAndVerify(variant)
+        let loop = try #require(compiled.procedureLoopSources.first)
+        let shared = try #require(compiled.program.layout.variables.first { $0.declaration.name == "bodyReady" })
+        let local = try #require(compiled.program.layout.variables.first { loop.localRoots.contains($0.declaration.name) })
+        let value = try #require(compiled.program.layout.variables.first { $0.declaration.name == "value" })
+        let enter = try #require(compiled.program.layout.testActionID(named: "enter"))
+        let prepare = try #require(compiled.program.layout.testActionID(named: loop.action))
+        let runtime = CompiledRuntime(program: compiled.program)
+        let entries = try runtime.initialStates().flatMap { try runtime.successors(for: enter, from: $0) }
+        let entered = try #require(entries.first)
+        let worker = try #require(entered.arguments.first)
+        let permission: CompiledValue? = switch try entered.state.value(for: local.id) {
+        case .function(let values): values[worker]
+        default: nil
+        }
+        #expect(try entered.state.value(for: shared.id) == .boolean(true))
+        #expect(permission == .boolean(true))
+        #expect(try entered.state.value(for: value.id) == .integer(1))
+        let successors = try runtime.successors(for: prepare, from: entered.state)
+        let completed = try #require(successors.first { $0.arguments == entered.arguments })
+        #expect(try completed.state.value(for: value.id) == .integer(3))
+
+        let module = try compiled.program.renderModule()
+        let configuration = module.configuration
+        let rendered = try RenderedSpecification(_generatedModule: module.moduleName, source: module.renderedModuleSource,
+            compilationIdentity: compiled.program.identity.value, declarations: configuration.declarations,
+            _generatedConstants: module.constantValues, checkDeadlock: configuration.checkDeadlock,
+            _generatedIntegerBitWidth: Int.bitWidth, _generatedIntrinsicInvariants: configuration.intrinsicInvariants,
+            invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
+            properties: configuration.properties, refinements: configuration.refinements, symmetry: configuration.symmetry,
+            actions: module.renderedActions)
+        let proof = try #require(try SequentialControlOutputEvidence.procedureLoopProof(
+            source: loop, program: compiled.program, rendered: rendered))
+        let input = try #require(String(decoding: proof.bytes, as: UTF8.self).split(separator: "\n").first {
+            $0.hasPrefix("AuthoredProcedureLoopInput(worker) ==")
+        })
+        #expect(input.contains(#"\#(shared.formalName) \in BOOLEAN"#))
+        #expect(input.contains(#"\#(local.formalName)[worker] \in BOOLEAN"#))
+        #expect(!input.contains(#"\#(shared.formalName) \in Int"#))
+        #expect(!input.contains(#"\#(local.formalName)[worker] \in Int"#))
     }
 
     @Test("Whole-step guards precede body evaluation and preserve every enabled branch", arguments: [0, 1])

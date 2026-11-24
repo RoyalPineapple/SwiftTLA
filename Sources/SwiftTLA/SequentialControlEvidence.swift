@@ -23,7 +23,7 @@ package struct SequentialControlEvidence: Sendable {
         package let observations: [Observation]
         package let control: Control
 
-        fileprivate func canonicalTrace(sourceWrites: Bool) -> Branch? {
+        package func canonicalTrace(sourceWrites: Bool) -> Branch? {
             var effects: [Observation] = []
             var captures: [String: [StateExpr]] = [:]
             var boundNames: Set<String> = []
@@ -232,6 +232,7 @@ extension SequentialControlEvidence {
         package let sourceOffset: Int
         package let localRoots: Set<String>
         package let condition: StateExpr
+        package let body: Branch?
         package let fallsThrough: Bool
         package let ownsConfiguredAssertions: Bool
 
@@ -271,6 +272,29 @@ extension SequentialControlEvidence {
                 }
             }
         }
+        // Capture authored write order for the optional straight-line action proof.
+        func directWrites(_ statements: [AlgorithmStatementModel], roots: Set<String>) -> [Observation]? {
+            var writes: [Observation] = []
+            for statement in statements {
+                switch statement {
+                case .assert: continue // Lowering collects assertions as separate state checks.
+                case .skip: continue
+                case .set(.root(let target), let value) where roots.contains(target):
+                    switch value {
+                    case .value(.int), .value(.bool): break
+                    case .variable(let read) where roots.contains(read): break
+                    default: return nil
+                    }
+                    writes.append(.write(target, value))
+                default: return nil
+                }
+            }
+            return writes
+        }
+        let sharedRoots = Set(algorithm.components.compactMap { component -> String? in
+            guard case .shared(let shared) = component else { return nil }
+            return shared.root
+        })
         let assertionOwners = (algorithm.sequentialSteps + algorithm.processes.flatMap(\.steps)
                                + algorithm.procedures.flatMap(\.steps)).filter { hasAssertion($0.statements) }.count
         return algorithm.procedures.flatMap { procedure in
@@ -280,9 +304,13 @@ extension SequentialControlEvidence {
                 guard let condition = step.loopCondition, index + 1 < labels.count,
                       let offset = declarationOffset("procedure.\(procedure.name).\(step.label.name)")
                 else { return nil }
-                return .init(owner: .procedure(algorithm: algorithm.name, name: procedure.name),
-                    procedure: procedure.name, labels: labels, slot: index, sourceOffset: offset,
-                    localRoots: roots, condition: condition,
+                let owner = ControlOwner.procedure(algorithm: algorithm.name, name: procedure.name)
+                let entry = ControlLocationReference(owner: owner, sourceName: labels[index])
+                let body = directWrites(step.statements, roots: sharedRoots.union(roots)).map {
+                    Branch(observations: $0, control: .transfer(entry))
+                }
+                return .init(owner: owner, procedure: procedure.name, labels: labels, slot: index,
+                    sourceOffset: offset, localRoots: roots, condition: condition, body: body,
                     fallsThrough: !hasExplicitTransfer(step.statements),
                     ownsConfiguredAssertions: assertionOwners == 1 && hasAssertion(step.statements))
             }

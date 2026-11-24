@@ -2,7 +2,7 @@ import Foundation
 import SwiftTLA
 
 extension SequentialControlOutputEvidence {
-    /// Bind control and the skipped assertions of a registered procedure While.
+    /// Bind control, supported body writes, and skipped assertions of a registered procedure While.
     package static func procedureLoopProof(
         source: SequentialControlEvidence.ProcedureLoopSource,
         program: CompiledProgram, rendered: RenderedSpecification
@@ -27,16 +27,31 @@ extension SequentialControlOutputEvidence {
         }
         guard labels.count == source.labels.count else { return nil }
 
-        var tables: Set<String> = [pc.formalName]
-        var intReads: Set<String> = []
-        guard let condition = procedureTerm(source.condition, variable: { root in
+        func variable(_ root: String) -> CompiledVariableLayout? {
             let matches = program.layout.variables.filter { $0.declaration.name.utf8.elementsEqual(root.utf8) }
-            guard matches.count == 1, let variable = matches.first else { return nil }
-            let name = variable.formalName
-            let local = source.localRoots.contains(root)
-            if local { tables.insert(name) }
-            let read = local ? "\(name)[worker]" : name
-            intReads.insert(read)
+            return matches.count == 1 ? matches.first : nil
+        }
+        var tables: Set<String> = [pc.formalName]
+        var readDomains: [String: String] = [:]
+        guard let condition = procedureTerm(source.condition, variable: { root in
+            guard let layout = variable(root), let storage = program.variableTypes[layout.id] else { return nil }
+            let name = layout.formalName
+            let read: String
+            let type: CompiledValueType
+            if source.localRoots.contains(root) {
+                guard case .dictionary(_, let element) = storage else { return nil }
+                tables.insert(name)
+                read = "\(name)[worker]"
+                type = element
+            } else {
+                read = name
+                type = storage
+            }
+            switch type {
+            case .int: readDomains[read] = "Int"
+            case .bool: readDomains[read] = "BOOLEAN"
+            default: return nil
+            }
             return read
         }),
               let cfgInput = try procedureConfiguration(cfg, rendered: rendered) else { return nil }
@@ -44,13 +59,21 @@ extension SequentialControlOutputEvidence {
         guard !source.ownsConfiguredAssertions || !assertions.isEmpty else { return nil }
         let frame = program.layout.variables.filter { $0.id != pc.id }.map(\.formalName)
         let assumed = (tables.sorted().map { #"worker \in DOMAIN \#($0)"# }
-                       + intReads.sorted().map { #"\#($0) \in Int"# }).joined(separator: #" /\ "#)
+                       + readDomains.sorted(by: { $0.key < $1.key }).map { #"\#($0.key) \in \#($0.value)"# })
+            .joined(separator: #" /\ "#)
         let workerValues = rows.map { $0.arguments[0].description }
         let pcName = pc.formalName
         let trueArm = source.fallsThrough ? #"""
             /\ ((\#(action)(worker) /\ AuthoredProcedureLoopGuard(worker)) =>
                 \#(pcName)' = [\#(pcName) EXCEPT ![worker] = AuthoredProcedureLoopEntry])
         """# : ""
+        let body = procedureLoopBody(source, counter: pcName, frame: frame, action: action,
+                                     formalName: { variable($0)?.formalName })
+        guard source.body == nil || body != nil else { return nil }
+        let bodyResult = body == nil ? "" : #"""
+            /\ (\A worker : AuthoredProcedureLoopBodyInput(worker) => AuthoredProcedureLoopBodyWritesAgree(worker))
+        """#
+        let bodyFact = body == nil ? "" : ", ActualProcedureWhilePublishesTheAuthoredWrites"
         let assertionScope = workerValues.map { #"AuthoredProcedureLoopSkipped(\#($0))"# }.joined(separator: #" /\ "#)
         let assertionSource: String
         let assertionResult: String
@@ -115,6 +138,8 @@ extension SequentialControlOutputEvidence {
             DEF \#(action), AuthoredProcedureLoopControl, AuthoredProcedureLoopFalseArm,
                 AuthoredProcedureLoopInput, AuthoredProcedureLoopEntry, AuthoredProcedureLoopEntries, AuthoredProcedureLoopGuard
 
+        \#(body ?? "")
+
         \#(assertionSource)
 
         \#(selection)
@@ -125,14 +150,66 @@ extension SequentialControlOutputEvidence {
             /\ ProcedureLoopActualCFG = ProcedureLoopExpectedCFG
             /\ AuthoredProcedureLoopInNext
             /\ (\A worker : AuthoredProcedureLoopInput(worker) => AuthoredProcedureLoopControl(worker))
+        \#(bodyResult)
         \#(assertionResult)
             BY ONLY ActualProcedureLoopConfigurationIsSelected, ActualNextIncludesTheSelectedProcedureLoop,
-                ActualProcedureWhileUsesTheAuthoredControl\#(assertionFact), Zenon
+                ActualProcedureWhileUsesTheAuthoredControl\#(bodyFact)\#(assertionFact), Zenon
 
         ====
 
         """#
         return (name, Data(proof.utf8))
+    }
+
+    private static func procedureLoopBody(
+        _ source: SequentialControlEvidence.ProcedureLoopSource, counter: String, frame: [String],
+        action: String, formalName: (String) -> String?
+    ) -> String? {
+        guard let body = source.body, let trace = body.canonicalTrace(sourceWrites: true) else { return nil }
+        var touched: Set<String> = []
+        for case .write(let target, let value) in body.observations {
+            touched.insert(target)
+            touched.formUnion(value.freeVariableNames)
+        }
+        var names: [String: String] = [:]
+        for root in touched {
+            guard let name = formalName(root), frame.contains(name) else { return nil }
+            names[root] = name
+        }
+        let definedWorkers = source.localRoots.intersection(touched).compactMap { names[$0] }.sorted()
+        let bodyInput = (["AuthoredProcedureLoopInput(worker)"] + definedWorkers.map { #"worker \in DOMAIN \#($0)"# })
+            .joined(separator: #" /\ "#)
+        var targets: Set<String> = []
+        var writes: [String] = []
+        for case .write(let root, let value) in trace.observations {
+            guard let target = names[root], targets.insert(target).inserted,
+                  let rhs = procedureTerm(value, variable: { read in
+                      guard let name = names[read] else { return nil }
+                      return source.localRoots.contains(read) ? "\(name)[worker]" : name
+                  }) else { return nil }
+            let update = source.localRoots.contains(root) ? "[\(target) EXCEPT ![worker] = \(rhs)]" : rhs
+            writes.append(#"/\ \#(target)' = \#(update)"#)
+        }
+        let unchanged = frame.filter { !targets.contains($0) }.joined(separator: ", ")
+        let updates = (writes + [#"/\ UNCHANGED <<\#(unchanged)>>"#]).joined(separator: "\n    ")
+        return #"""
+        AuthoredProcedureLoopBodyInput(worker) == \#(bodyInput)
+        AuthoredProcedureLoopTrueArm(worker) ==
+            /\ \#(counter)[worker] = AuthoredProcedureLoopEntry
+            /\ AuthoredProcedureLoopGuard(worker)
+            /\ \#(counter)' = [\#(counter) EXCEPT ![worker] = AuthoredProcedureLoopEntry]
+            \#(updates)
+        AuthoredProcedureLoopBodyWritesAgree(worker) ==
+            ((\#(action)(worker) /\ AuthoredProcedureLoopGuard(worker)) <=> AuthoredProcedureLoopTrueArm(worker))
+
+        THEOREM ActualProcedureWhilePublishesTheAuthoredWrites ==
+            ASSUME NEW worker, AuthoredProcedureLoopBodyInput(worker)
+            PROVE AuthoredProcedureLoopBodyWritesAgree(worker)
+            BY ONLY AuthoredProcedureLoopBodyInput(worker), SMT
+                DEF \#(action), AuthoredProcedureLoopBodyWritesAgree, AuthoredProcedureLoopTrueArm,
+                    AuthoredProcedureLoopGuard, AuthoredProcedureLoopEntry, AuthoredProcedureLoopEntries,
+                    AuthoredProcedureLoopBodyInput, AuthoredProcedureLoopInput
+        """#
     }
 
     private static func procedureTerm(
