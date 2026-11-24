@@ -4,7 +4,12 @@ import SwiftTLAMacros
 @TLAModel
 package struct DieHardModel: Sendable {
     package enum Step: String, CaseIterable {
-        case FillSmallJug, FillBigJug, EmptySmallJug, EmptyBigJug, SmallToBig, BigToSmall
+        case fillSmallJug = "FillSmallJug"
+        case fillBigJug = "FillBigJug"
+        case emptySmallJug = "EmptySmallJug"
+        case emptyBigJug = "EmptyBigJug"
+        case smallToBig = "SmallToBig"
+        case bigToSmall = "BigToSmall"
     }
 
     package static var spec: TLASpec {
@@ -12,13 +17,11 @@ package struct DieHardModel: Sendable {
             Extends(.naturals)
             let big = scope.sharedVar(initial: 0)
             let small = scope.sharedVar(initial: 0)
-            let TypeOK = Invariant()
-            let NotSolved = Invariant()
-            Do(Step.FillSmallJug) { small.set(3) }
-            Do(Step.FillBigJug) { big.set(5) }
-            Do(Step.EmptySmallJug) { small.set(0) }
-            Do(Step.EmptyBigJug) { big.set(0) }
-            Do(Step.SmallToBig) {
+            Do(Step.fillSmallJug) { small.set(3) }
+            Do(Step.fillBigJug) { big.set(5) }
+            Do(Step.emptySmallJug) { small.set(0) }
+            Do(Step.emptyBigJug) { big.set(0) }
+            Do(Step.smallToBig) {
                 If(big + small <= 5) {
                     big += small
                     small.set(0)
@@ -27,7 +30,7 @@ package struct DieHardModel: Sendable {
                     big.set(5)
                 }
             }
-            Do(Step.BigToSmall) {
+            Do(Step.bigToSmall) {
                 If(big + small <= 3) {
                     small.set(big + small)
                     big.set(0)
@@ -36,9 +39,13 @@ package struct DieHardModel: Sendable {
                     small.set(3)
                 }
             }
-            TypeOK { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
-            NotSolved { big != 4 }
-            let Upstream = Validation {}.expect(NotSolved, .violated)
+            Invariant("TypeOK") {
+                (0...5).contains(big)
+                (0...3).contains(small)
+            }
+            let notSolved = Invariant("NotSolved") { big != 4 }
+            notSolved
+            let Upstream = Validation {}.expect(notSolved, .violated)
             Upstream
         }
     }

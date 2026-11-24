@@ -13,9 +13,7 @@ package struct NQueensModel: Sendable {
             Extends(.naturals)
             let N = model.parameter(as: Int.self, in: 1...4)
             Assume(N > 0)
-            let TypeInvariant = Invariant()
             let NoSolutions = Invariant()
-            let Invariant = Invariant()
             let Termination = Temporal()
             let Queens = Algorithm(fairness: .weak) { scope in
                 let todo = scope.sharedVar(initial: Set<[Int]>([Array<Int>([])]))
@@ -57,32 +55,33 @@ package struct NQueensModel: Sendable {
                     of: IntRange(1, through: N), lengths: IntRange(N, through: N)
                 ).filter { placement in
                     IntRange(1, through: N - 1).allSatisfy { row in
-                        IntRange(row.expr + 1, through: N).allSatisfy { other in
-                            placement.expr[row.expr] != placement.expr[other.expr]
-                                && placement.expr[row.expr] - placement.expr[other.expr] != row.expr - other.expr
-                                && placement.expr[other.expr] - placement.expr[row.expr] != row.expr - other.expr
+                        IntRange(row + 1, through: N).allSatisfy { other in
+                            let column = placement[row]
+                            let otherColumn = placement[other]
+                            let rowDifference = row - other
+                            return column != otherColumn
+                                && column - otherColumn != rowDifference
+                                && otherColumn - column != rowDifference
                         }
                     }
                 }
-                Invariant {
+                Invariant("Invariant") {
                     sols.expr.isSubset(of: validSolutions)
                         && (!todo.expr.isEmpty || validSolutions.isSubset(of: sols.expr))
                 }
                 NoSolutions { sols.expr.isEmpty }
                 Termination(.eventually(Finished()))
 
-                TypeInvariant {
-                    todo.expr.allSatisfy { placement in
-                        placement.expr.count < N
-                            && IntRange(1, through: placement.expr.count).allSatisfy { row in
-                                IntRange(1, through: N).contains(placement.expr[row.expr])
-                            }
+                Invariant("TypeInvariant") {
+                    todo.allSatisfy { placement in
+                        placement.count < N && IntRange(1, through: placement.count).allSatisfy { row in
+                            IntRange(1, through: N).contains(placement[row])
+                        }
                     }
-                    && sols.expr.allSatisfy { placement in
-                        placement.expr.count == N
-                            && IntRange(1, through: placement.expr.count).allSatisfy { row in
-                                IntRange(1, through: N).contains(placement.expr[row.expr])
-                            }
+                    sols.allSatisfy { placement in
+                        placement.count == N && IntRange(1, through: placement.count).allSatisfy { row in
+                            IntRange(1, through: N).contains(placement[row])
+                        }
                     }
                 }
             }

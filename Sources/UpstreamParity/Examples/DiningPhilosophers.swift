@@ -66,35 +66,32 @@ package struct DiningPhilosophersModel: Sendable {
                             && rightFork.clean == true) { canEat in
 
                             Either {
-                                When(leftFork.holder == philosopher && leftFork.clean == false)
-                                forks[philosopher].holder.set(left)
-                                forks[philosopher].clean.set(true)
-                            } or: {
-                                Either {
-                                    When(
-                                        rightFork.holder == philosopher
-                                            && rightFork.clean == false
-                                            && !(leftFork.holder == philosopher && leftFork.clean == false)
-                                    )
+                                When(leftFork.holder == philosopher && leftFork.clean == false) {
+                                    forks[philosopher].holder.set(left)
+                                    forks[philosopher].clean.set(true)
+                                }
+                                When(
+                                    rightFork.holder == philosopher
+                                        && rightFork.clean == false
+                                        && !(leftFork.holder == philosopher && leftFork.clean == false)
+                                ) {
                                     forks[right].holder.set(right)
                                     forks[right].clean.set(true)
-                                } or: {
-                                    When(
-                                        !(leftFork.holder == philosopher && leftFork.clean == false)
-                                            && !(rightFork.holder == philosopher && rightFork.clean == false)
-                                    )
                                 }
+                                When(
+                                    !(leftFork.holder == philosopher && leftFork.clean == false)
+                                        && !(rightFork.holder == philosopher && rightFork.clean == false)
+                                ) {}
                             }
 
                             Either {
-                                When(canEat && hungry == true)
-                                Goto(Step.eat)
-                            } or: {
-                                Either {
-                                    When(!canEat && hungry == true)
+                                When(canEat && hungry == true) {
+                                    Goto(Step.eat)
+                                }
+                                When(!canEat && hungry == true) {
                                     Goto(Step.loop)
-                                } or: {
-                                    When(hungry == false)
+                                }
+                                When(hungry == false) {
                                     Goto(Step.think)
                                 }
                             }
@@ -131,8 +128,8 @@ package struct DiningPhilosophersModel: Sendable {
                 }
 
                 ExclusiveAccess {
-                    ForAll(Philosopher.all) { first in
-                        ForAll(Philosopher.all) { second in
+                    Philosopher.all.allSatisfy { first in
+                        Philosopher.all.allSatisfy { second in
                             first == second
                                 || !(At(Step.eat, first) && At(Step.eat, second)
                                     && ((first == Philosopher.one && second == Philosopher.two)

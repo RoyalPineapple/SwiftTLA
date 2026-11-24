@@ -4,15 +4,24 @@ import SwiftTLAMacros
 @TLAModel
 package struct LeastCircularSubstringModel: Sendable {
     package enum Step: String, CaseIterable {
-        case L3, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, LVR
+        case l3 = "L3"
+        case l5 = "L5"
+        case l6 = "L6"
+        case l7 = "L7"
+        case l8 = "L8"
+        case l9 = "L9"
+        case l10 = "L10"
+        case l11 = "L11"
+        case l12 = "L12"
+        case l13 = "L13"
+        case l14 = "L14"
+        case lvr = "LVR"
     }
 
     package static var spec: TLASpec {
         #spec("MCLeastCircularSubstring") { scope in
             let CharSetSize = scope.parameter(as: Int.self, in: 0...3)
             let MaxStringLength = scope.parameter(as: Int.self, in: 0...8)
-            let TypeInvariant = Invariant()
-            let Correctness = Invariant()
             Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: MaxStringLength))
             let LeastCircularSubstring = Algorithm { algorithm in
                 let b = algorithm.sharedVar(initiallyIn: ZSequences.sequences(over: IntRange(0, through: CharSetSize - 1)))
@@ -23,47 +32,47 @@ package struct LeastCircularSubstringModel: Sendable {
                 let j = algorithm.sharedVar(initial: 1)
                 let k = algorithm.sharedVar(initial: 0)
 
-                Do(Step.L3) {
-                    If(j < n * 2) { Goto(Step.L5) } else: { Stop() }
+                Do(Step.l3) {
+                    If(j < n * 2) { Goto(Step.l5) } else: { Stop() }
                 }
-                Do(Step.L5) { i.set(f[j - k - 1]) }
-                Do(Step.L6) {
+                Do(Step.l5) { i.set(f[j - k - 1]) }
+                Do(Step.l6) {
                     If(b[j % n] != b[(k + i + 1) % n] && i != -1) {
-                        Goto(Step.L7)
-                    } else: { Goto(Step.L10) }
+                        Goto(Step.l7)
+                    } else: { Goto(Step.l10) }
                 }
-                Do(Step.L7) {
+                Do(Step.l7) {
                     If(b[j % n] < b[(k + i + 1) % n]) {
-                        Goto(Step.L8)
-                    } else: { Goto(Step.L9) }
+                        Goto(Step.l8)
+                    } else: { Goto(Step.l9) }
                 }
-                Do(Step.L8) { k.set(j - i - 1) }
-                Do(Step.L9) {
+                Do(Step.l8) { k.set(j - i - 1) }
+                Do(Step.l9) {
                     i.set(f[i])
-                    Goto(Step.L6)
+                    Goto(Step.l6)
                 }
-                Do(Step.L10) {
+                Do(Step.l10) {
                     If(b[j % n] != b[(k + i + 1) % n] && i == -1) {
-                        Goto(Step.L11)
-                    } else: { Goto(Step.L14) }
+                        Goto(Step.l11)
+                    } else: { Goto(Step.l14) }
                 }
-                Do(Step.L11) {
+                Do(Step.l11) {
                     If(b[j % n] < b[(k + i + 1) % n]) {
-                        Goto(Step.L12)
-                    } else: { Goto(Step.L13) }
+                        Goto(Step.l12)
+                    } else: { Goto(Step.l13) }
                 }
-                Do(Step.L12) { k.set(j) }
-                Do(Step.L13) {
+                Do(Step.l12) { k.set(j) }
+                Do(Step.l13) {
                     f[j - k].set(-1)
-                    Goto(Step.LVR)
+                    Goto(Step.lvr)
                 }
-                Do(Step.L14) { f[j - k].set(i + 1) }
-                Do(Step.LVR) {
+                Do(Step.l14) { f[j - k].set(i + 1) }
+                Do(Step.lvr) {
                     j += 1
-                    Goto(Step.L3)
+                    Goto(Step.l3)
                 }
 
-                TypeInvariant {
+                Invariant("TypeInvariant") {
                     ZSequences.sequences(over: IntRange(0, through: CharSetSize - 1)).contains(b)
                         && n == ZSequences.length(of: b)
                         && Functions(from: IntRange(0, through: n * 2),
@@ -72,7 +81,7 @@ package struct LeastCircularSubstringModel: Sendable {
                         && IntRange(0, through: n * 2).inserting(1).contains(j)
                         && ZSequences.indices(of: b).inserting(0).contains(k)
                 }
-                Correctness {
+                Invariant("Correctness") {
                     !Finished() || ZSequences.rotations(of: b).allSatisfy { other in
                         ZSequences.lexicographicallyPrecedesOrEquals(
                             ZSequences.rotation(of: b, leftBy: k), other.seq)

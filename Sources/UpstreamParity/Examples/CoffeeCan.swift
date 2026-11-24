@@ -8,7 +8,10 @@ package struct CoffeeCanModel: Sendable {
         package let white: Int
     }
     package enum Step: String, CaseIterable {
-        case PickSameColorWhite, PickSameColorBlack, PickDifferentColor, Termination
+        case pickSameColorWhite = "PickSameColorWhite"
+        case pickSameColorBlack = "PickSameColorBlack"
+        case pickDifferentColor = "PickDifferentColor"
+        case termination = "Termination"
     }
 
     package static var spec: TLASpec {
@@ -26,25 +29,25 @@ package struct CoffeeCanModel: Sendable {
             })
             let beanCount = can.black + can.white
 
-            Do(Step.PickSameColorWhite, when: beanCount > 1 && can.white >= 2) {
+            Do(Step.pickSameColorWhite, when: beanCount > 1 && can.white >= 2) {
                 can.black += 1
                 can.white.set(can.white - 2)
             }
-            Do(Step.PickSameColorBlack, when: beanCount > 1 && can.black >= 2) {
+            Do(Step.pickSameColorBlack, when: beanCount > 1 && can.black >= 2) {
                 can.black.set(can.black - 1)
             }
-            Do(Step.PickDifferentColor, when: beanCount > 1 && can.black >= 1 && can.white >= 1) {
+            Do(Step.pickDifferentColor, when: beanCount > 1 && can.black >= 1 && can.white >= 1) {
                 can.black.set(can.black - 1)
             }
-            let Termination = Do(Step.Termination, when: beanCount == 1) { Skip() }
+            let Termination = Do(Step.termination, when: beanCount == 1) { Skip() }
             Termination
             WeakFairnessNext()
 
-            let TypeInvariant = Invariant()
-            TypeInvariant {
+            let typeInvariant = Invariant("TypeInvariant") {
                 can.black >= 0 && can.black <= MaxBeanCount
                     && can.white >= 0 && can.white <= MaxBeanCount
             }
+            typeInvariant
             let MonotonicDecrease = Temporal()
             let EventuallyTerminates = Temporal()
             let LoopInvariant = Temporal()
@@ -66,7 +69,7 @@ package struct CoffeeCanModel: Sendable {
             CoffeeCan1000Beans
             let CoffeeCan3000Beans = Validation { Bind(MaxBeanCount, to: 3000) }
             CoffeeCan3000Beans
-            let APCoffeeCan = Validation { Bind(MaxBeanCount, to: 5) }.checking(only: [TypeInvariant])
+            let APCoffeeCan = Validation { Bind(MaxBeanCount, to: 5) }.checking(only: [typeInvariant])
             APCoffeeCan
         }
     }

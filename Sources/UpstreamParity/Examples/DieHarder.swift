@@ -3,7 +3,11 @@ import SwiftTLAMacros
 
 @TLAModel
 package struct DieHarderModel: Sendable {
-    package enum Step: String, CaseIterable { case FillJug, EmptyJug, JugToJug }
+    package enum Step: String, CaseIterable {
+        case fillJug = "FillJug"
+        case emptyJug = "EmptyJug"
+        case jugToJug = "JugToJug"
+    }
 
     package static var spec: TLASpec {
         #spec("DieHarder") { scope in
@@ -15,12 +19,10 @@ package struct DieHarderModel: Sendable {
                 in: Functions(from: Jug, to: Set<Int>([3, 5])))
             let Goal = scope.parameter(as: Int.self, in: Set<Int>([4]))
             let contents = scope.sharedVar(initial: Dictionary<String, Int>.mapping(over: Jug) { _ in 0 })
-            let TypeOK = Invariant()
-            let NotSolved = Invariant()
             Assume(Capacity.keys == Jug && Goal >= 0 && Jug.allSatisfy { j in Capacity[j] > 0 })
-            Do(Step.FillJug, over: Jug) { j in contents[j].set(Capacity[j]) }
-            Do(Step.EmptyJug, over: Jug) { j in contents[j].set(0) }
-            Do(Step.JugToJug, over: Jug, Jug) { j, k in
+            Do(Step.fillJug, over: Jug) { j in contents[j].set(Capacity[j]) }
+            Do(Step.emptyJug, over: Jug) { j in contents[j].set(0) }
+            Do(Step.jugToJug, over: Jug, Jug) { j, k in
                 When(j != k)
                 If(contents[j] < Capacity[k] - contents[k]) {
                     let amountPoured = contents[j]
@@ -32,19 +34,21 @@ package struct DieHarderModel: Sendable {
                     contents[k].set(Capacity[k])
                 }
             }
-            TypeOK { contents.keys == Jug && Jug.allSatisfy { j in contents[j] >= 0 } }
-            NotSolved { Jug.allSatisfy { j in contents[j] != Goal } }
+            let typeOK = Invariant("TypeOK") { contents.keys == Jug && Jug.allSatisfy { j in contents[j] >= 0 } }
+            typeOK
+            let notSolved = Invariant("NotSolved") { Jug.allSatisfy { j in contents[j] != Goal } }
+            notSolved
             let MCDieHarder = Validation {
                 Bind(Jug, to: Set<String>(["j1", "j2"]))
                 Bind(Capacity, to: ["j1": 3, "j2": 5])
                 Bind(Goal, to: 4)
-            }.expect(NotSolved, .violated)
+            }.expect(notSolved, .violated)
             MCDieHarder
             let APDieHarder = Validation {
                 Bind(Jug, to: Set<String>(["small_OF_JUG", "big_OF_JUG"]))
                 Bind(Capacity, to: ["small_OF_JUG": 3, "big_OF_JUG": 5])
                 Bind(Goal, to: 4)
-            }.checking(only: [TypeOK])
+            }.checking(only: [typeOK])
             APDieHarder
         }
     }

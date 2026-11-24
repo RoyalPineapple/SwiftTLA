@@ -55,14 +55,14 @@ package struct CigaretteSmokersModel: Sendable {
                 Smoker.expression(smoking: false)
             })
             let dealer = scope.sharedVar(initiallyIn: Offers)
-            let TypeOK = Invariant()
-            let AtMostOne = Invariant()
 
             Do(Step.startSmoking, when: !dealer.isEmpty) {
-                smokers.set(Dictionary<Ingredient, Smoker>.mapping(over: Ingredients) { ingredient in
-                    Smoker.expression(smoking:
-                        Set<Ingredient>([]).inserting(ingredient.expr).union(dealer) == Ingredients)
-                })
+                smokers.set(
+                    Dictionary<Ingredient, Smoker>.mapping(over: Ingredients) { ingredient in
+                        Smoker.expression(smoking:
+                            Set<Ingredient>([]).inserting(ingredient.expr).union(dealer) == Ingredients)
+                    }
+                )
                 dealer.set(Set<Ingredient>([]))
             }
             Do(Step.stopSmoking, when: dealer.isEmpty) {
@@ -78,12 +78,12 @@ package struct CigaretteSmokersModel: Sendable {
                 }
             }
 
-            TypeOK {
+            Invariant("TypeOK") {
                 Functions(from: Ingredients, to: SetExpr<Smoker>.literal(
                     Smoker(smoking: false), Smoker(smoking: true))).contains(smokers)
                     && (Offers.contains(dealer) || dealer.isEmpty)
             }
-            AtMostOne {
+            Invariant("AtMostOne") {
                 Ingredients.filter { ingredient in smokers[ingredient].smoking }.count <= 1
             }
 

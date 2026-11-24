@@ -13,7 +13,6 @@ public struct TwoBuckets: Sendable {
         #spec { scope in
             let three = scope.sharedVar(initial: 0)
             let five = scope.sharedVar(initial: 0)
-            let Capacity = Invariant()
 
             Do(Step.fillThree, when: three < 3) {
                 three.set(3)
@@ -47,7 +46,10 @@ public struct TwoBuckets: Sendable {
                     three.set(3)
                 }
             }
-            Capacity { three >= 0 && three <= 3 && five >= 0 && five <= 5 }
+            Invariant("Capacity") {
+                (0...3).contains(three)
+                (0...5).contains(five)
+            }
         }
     }
 }

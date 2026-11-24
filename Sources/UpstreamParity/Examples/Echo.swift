@@ -84,11 +84,13 @@ package struct EchoModel: Sendable {
 
                     Do(Step.n0) {
                         If(selfID == initiator) {
-                            inbox.set(Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
-                                If(nbrs.expr.contains(destination),
-                                   then: inbox[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
-                                   else: inbox[destination])
-                            })
+                            inbox.set(
+                                Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
+                                    If(nbrs.expr.contains(destination),
+                                       then: inbox[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
+                                       else: inbox[destination])
+                                }
+                            )
                         }
                     }
 
@@ -98,11 +100,13 @@ package struct EchoModel: Sendable {
                                 If(selfID != initiator && rcvd.expr == 0) {
                                     Assert(message.kind == .message)
                                     parent.set(OneOf<NodeID, NoNode>.first(message.sndr))
-                                    inbox.set(Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
-                                        If(nbrs.expr.removing(message.sndr).contains(destination),
-                                           then: networkAfterReceive[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
-                                           else: networkAfterReceive[destination])
-                                    })
+                                    inbox.set(
+                                        Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
+                                            If(nbrs.expr.removing(message.sndr).contains(destination),
+                                               then: networkAfterReceive[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
+                                               else: networkAfterReceive[destination])
+                                        }
+                                    )
                                 } else: {
                                     inbox.set(networkAfterReceive.expr)
                                 }

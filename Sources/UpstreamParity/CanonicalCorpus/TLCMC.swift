@@ -84,9 +84,9 @@ package struct TLCMCModel: Sendable {
                         let current = frontier.at(1)
                         let nonSelfSuccessors = transitionTargets[current].removing(current)
                         currentState.set(SearchNode.first(current))
-                        frontier.remove(at: 1)
+                        frontier.set(frontier.expr.removing(at: 1))
                         successors.set(nonSelfSuccessors.subtracting(closed.expr))
-                        If(nonSelfSuccessors.count == 0) {
+                        If(nonSelfSuccessors.isEmpty) {
                             counterexample.set(TupleExpr<Node>.literal(current))
                             Goto(Step.trace)
                         } else: {

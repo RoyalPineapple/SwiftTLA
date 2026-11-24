@@ -183,7 +183,7 @@ package struct KVsnapModel: Sendable {
                             to: Subsets(of: SetExpr<Key>.literal(.k1, .k2))
                         ).contains(missed.expr)
                 }
-                Eventually("Termination", ForAll(Transaction.all) { Finished($0) })
+                Eventually("Termination", Transaction.all.allSatisfy { Finished($0) })
             }
             KVsnap
             let MCKVsnap = Validation {}

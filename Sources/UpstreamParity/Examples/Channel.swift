@@ -23,7 +23,10 @@ package struct ChannelModel: Sendable {
         package let val: Datum
     }
 
-    package enum Step: String, CaseIterable { case Send, Rcv }
+    package enum Step: String, CaseIterable {
+        case send = "Send"
+        case receive = "Rcv"
+    }
 
     package static var spec: TLASpec {
         #spec("Channel") { scope in
@@ -36,17 +39,16 @@ package struct ChannelModel: Sendable {
                     Channel.expression(ack: bit, rdy: bit, val: value)
                 }
             })
-            let TypeInvariant = Invariant()
 
-            Do(Step.Send, over: Data) { d in
+            Do(Step.send, over: Data) { d in
                 When(chan.rdy == chan.ack)
                 chan.val.set(d)
                 chan.rdy.set(1 - chan.rdy)
             }
-            Do(Step.Rcv, when: chan.rdy != chan.ack) {
+            Do(Step.receive, when: chan.rdy != chan.ack) {
                 chan.ack.set(1 - chan.ack)
             }
-            TypeInvariant {
+            Invariant("TypeInvariant") {
                 Data.contains(chan.val)
                     && IntRange(0, through: 1).contains(chan.rdy)
                     && IntRange(0, through: 1).contains(chan.ack)

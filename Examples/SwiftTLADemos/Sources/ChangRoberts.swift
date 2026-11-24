@@ -54,12 +54,11 @@ public struct ChangRoberts {
                         With(messages) { message in
                             When(leader == 0 && message.to == node)
                             Either {
-                                When(message.candidate == identifiers[node])
-                                leader.set(message.candidate)
-                                messages.remove(message)
-                            } or: {
-                                Either {
-                                    When(message.candidate > identifiers[node])
+                                When(message.candidate == identifiers[node]) {
+                                    leader.set(message.candidate)
+                                    messages.remove(message)
+                                }
+                                When(message.candidate > identifiers[node]) {
                                     messages.set(messages.removing(message).inserting(
                                         Message.expression(
                                             candidate: message.candidate,
@@ -67,8 +66,8 @@ public struct ChangRoberts {
                                             to: next[node]
                                         )
                                     ))
-                                } or: {
-                                    When(message.candidate < identifiers[node])
+                                }
+                                When(message.candidate < identifiers[node]) {
                                     messages.remove(message)
                                 }
                             }
@@ -78,8 +77,7 @@ public struct ChangRoberts {
                 }
             }
             changRoberts
-            let LeaderDomain = Invariant()
-            LeaderDomain { leader >= 0 && leader <= 12 }
+            Invariant("LeaderDomain") { (0...12).contains(leader) }
         }
     }
 }

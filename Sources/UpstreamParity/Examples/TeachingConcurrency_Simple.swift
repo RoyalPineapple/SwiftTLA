@@ -17,9 +17,6 @@ package struct TeachingSimpleN5Model: Sendable {
     package static var spec: TLASpec {
         #spec("Simple") {
             Extends(.integers)
-            let PCorrect = Invariant()
-            let TypeOK = Invariant()
-            let Inv = Invariant()
             let Simple = Algorithm { scope in
                 let x = scope.sharedVar(initial: Function<Process, Int>.mapping { _ in 0 })
                 let y = scope.sharedVar(initial: Function<Process, Int>.mapping { _ in 0 })
@@ -36,22 +33,22 @@ package struct TeachingSimpleN5Model: Sendable {
                     }
                 }
 
-                let typeOK = ForAll(Process.all) { process in
+                let typeOK = Process.all.allSatisfy { process in
                     SetExpr<Int>.literal(0, 1).contains(x[process])
                         && SetExpr<Int>.literal(0, 1).contains(y[process])
                         && (At(Step.a, process) || At(Step.b, process) || Finished(process))
                 }
-                PCorrect {
-                    !ForAll(Process.all) { process in Finished(process) }
+                Invariant("PCorrect") {
+                    !Process.all.allSatisfy { process in Finished(process) }
                         || Process.all.contains { process in y[process] == 1 }
                 }
-                TypeOK { typeOK }
-                Inv {
+                Invariant("TypeOK") { typeOK }
+                Invariant("Inv") {
                     typeOK
-                    ForAll(Process.all) { process in
+                    Process.all.allSatisfy { process in
                         !(At(Step.b, process) || Finished(process)) || x[process] == 1
                     }
-                    !ForAll(Process.all) { process in Finished(process) }
+                    !Process.all.allSatisfy { process in Finished(process) }
                         || Process.all.contains { process in y[process] == 1 }
                 }
             }

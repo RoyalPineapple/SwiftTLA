@@ -5,7 +5,9 @@ import SwiftTLAMacros
 @TLAModel
 package struct SyncTerminationDetectionModel: Sendable {
     private enum Step: String, CaseIterable {
-        case Terminate, Wakeup, DetectTermination
+        case terminate = "Terminate"
+        case wakeUp = "Wakeup"
+        case detectTermination = "DetectTermination"
     }
 
     package static var spec: TLASpec {
@@ -18,33 +20,33 @@ package struct SyncTerminationDetectionModel: Sendable {
             let terminated = Node.allSatisfy { node in !active[node] }
             let terminationDetected = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, terminated))
 
-            let TypeOK = Invariant()
-            let TDCorrect = Invariant()
             let Quiescence = Temporal()
             let Liveness = Temporal()
 
-            Do(Step.Terminate, over: Node) { node in
+            Do(Step.terminate, over: Node) { node in
                 When(active[node])
                 active[node].set(false)
                 With(SetExpr<Bool>.literal(terminationDetected, terminated)) { detected in
                     terminationDetected.set(detected)
                 }
             }
-            Do(Step.Wakeup, over: Node, Node) { node, destination in
+            Do(Step.wakeUp, over: Node, Node) { node, destination in
                 When(active[node])
                 active[destination].set(true)
             }
-            let detectTermination = Do(Step.DetectTermination, when: terminated) {
+            let detectTermination = Do(Step.detectTermination, when: terminated) {
                 terminationDetected.set(true)
             }
             detectTermination
             WeakFairness(detectTermination)
 
-            TypeOK {
+            let typeOK = Invariant("TypeOK") {
                 Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
                     && SetExpr<Bool>.literal(false, true).contains(terminationDetected)
             }
-            TDCorrect { !terminationDetected || terminated }
+            typeOK
+            let TDCorrect = Invariant { !terminationDetected || terminated }
+            TDCorrect
             Quiescence(.alwaysStep(on: terminated) { before, after in !before || after })
             Liveness(.leadsTo(terminated, terminationDetected))
 
@@ -55,7 +57,7 @@ package struct SyncTerminationDetectionModel: Sendable {
 
             let APSyncTerminationDetection = Validation {
                 Bind(N, to: 7)
-            }.checking(only: [TypeOK, TDCorrect])
+            }.checking(only: [typeOK, TDCorrect])
             APSyncTerminationDetection
         }
     }

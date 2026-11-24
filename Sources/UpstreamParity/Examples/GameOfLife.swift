@@ -5,12 +5,11 @@ import SwiftTLAMacros
 @TLAModel
 package struct GameOfLifeModel: Sendable {
     package typealias Position = Pair<Int, Int>
-    package enum Step: String, CaseIterable { case Next }
+    package enum Step: String, CaseIterable { case next = "Next" }
 
     package static var spec: TLASpec {
         #spec("GameOfLife") { scope in
             let N = scope.parameter(as: Int.self, in: Int.all)
-            let TypeOK = Invariant()
             Assume(N >= 0)
 
             let positions = IntRange(1, through: N).flatMapping { column in
@@ -22,18 +21,10 @@ package struct GameOfLifeModel: Sendable {
 
             let grid: SharedVariable<[Position: Bool]> = scope.sharedVar(initiallyIn: grids)
 
-            Do(Step.Next) {
-                grid.set(Dictionary<Position, Bool>.mapping(over: positions) { cell in
-                    positions.filter { neighbor in
-                        IntRange(cell.expr.first() - 1, through: cell.expr.first() + 1)
-                            .contains(neighbor.expr.first())
-                            && IntRange(cell.expr.second() - 1, through: cell.expr.second() + 1)
-                                .contains(neighbor.expr.second())
-                            && (neighbor.expr.first() != cell.expr.first()
-                                || neighbor.expr.second() != cell.expr.second())
-                            && grid[neighbor.expr]
-                    }.count == 3
-                        || (grid[cell.expr] && positions.filter { neighbor in
+            Do(Step.next) {
+                grid.set(
+                    Dictionary<Position, Bool>.mapping(over: positions) { cell in
+                        positions.filter { neighbor in
                             IntRange(cell.expr.first() - 1, through: cell.expr.first() + 1)
                                 .contains(neighbor.expr.first())
                                 && IntRange(cell.expr.second() - 1, through: cell.expr.second() + 1)
@@ -41,11 +32,21 @@ package struct GameOfLifeModel: Sendable {
                                 && (neighbor.expr.first() != cell.expr.first()
                                     || neighbor.expr.second() != cell.expr.second())
                                 && grid[neighbor.expr]
-                        }.count == 2)
-                })
+                        }.count == 3
+                            || (grid[cell.expr] && positions.filter { neighbor in
+                                IntRange(cell.expr.first() - 1, through: cell.expr.first() + 1)
+                                    .contains(neighbor.expr.first())
+                                    && IntRange(cell.expr.second() - 1, through: cell.expr.second() + 1)
+                                        .contains(neighbor.expr.second())
+                                    && (neighbor.expr.first() != cell.expr.first()
+                                        || neighbor.expr.second() != cell.expr.second())
+                                    && grid[neighbor.expr]
+                            }.count == 2)
+                    }
+                )
             }
 
-            TypeOK { grids.contains(grid) }
+            Invariant("TypeOK") { grids.contains(grid) }
 
             let GameOfLife = Validation {
                 Bind(N, to: 4)

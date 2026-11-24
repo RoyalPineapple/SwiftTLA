@@ -11,7 +11,7 @@ package struct CatModel: Sendable {
         package static var defaultValue: Self { .left }
     }
 
-    private enum Step: String, CaseIterable { case Next }
+    private enum Step: String, CaseIterable { case next = "Next" }
 
     package static var spec: TLASpec {
         #spec("Cat") { scope in
@@ -24,7 +24,7 @@ package struct CatModel: Sendable {
             let observed_box = scope.sharedVar(initiallyIn: Observed_Boxes)
             let direction = scope.sharedVar(initiallyIn: SetExpr<Direction>.literal(.left, .right))
 
-            Do(Step.Next) {
+            Do(Step.next) {
                 With(Boxes) { next in
                     When(next == cat_box + 1 || next == cat_box - 1)
                     cat_box.set(next)
@@ -42,23 +42,23 @@ package struct CatModel: Sendable {
             // cat_box has exactly the Move_Cat relation used by upstream fairness.
             WeakFairnessNext(on: cat_box)
 
-            let TypeOK = Invariant()
-            TypeOK {
+            let typeOK = Invariant("TypeOK") {
                 Boxes.contains(cat_box)
                     && Observed_Boxes.contains(observed_box)
                     && SetExpr<Direction>.literal(.left, .right).contains(direction)
             }
+            typeOK
             let Victory = Temporal()
             Victory(.eventually(observed_box == cat_box))
 
             let CatEvenBoxes = Validation { Bind(Number_Of_Boxes, to: 6) }
-                .expect(TypeOK, .satisfied).expect(Victory, .satisfied).expectDeadlock(.satisfied)
+                .expect(typeOK, .satisfied).expect(Victory, .satisfied).expectDeadlock(.satisfied)
             CatEvenBoxes
             let CatOddBoxes = Validation { Bind(Number_Of_Boxes, to: 5) }
-                .expect(TypeOK, .satisfied).expect(Victory, .satisfied).expectDeadlock(.satisfied)
+                .expect(typeOK, .satisfied).expect(Victory, .satisfied).expectDeadlock(.satisfied)
             CatOddBoxes
             let APCat = Validation { Bind(Number_Of_Boxes, to: 4) }
-                .checking(only: [TypeOK]).expect(TypeOK, .satisfied).expectDeadlock(.satisfied)
+                .checking(only: [typeOK]).expect(typeOK, .satisfied).expectDeadlock(.satisfied)
             APCat
         }
     }

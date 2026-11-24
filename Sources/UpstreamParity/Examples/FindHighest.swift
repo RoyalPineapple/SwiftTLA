@@ -12,10 +12,6 @@ package struct FindHighestModel: Sendable {
             Extends(.integers)
             let MaxLength = model.parameter(as: Int.self, in: 3...3)
             let MaxNat = model.parameter(as: Int.self, in: 4...4)
-            let TypeOK = Invariant()
-            let InductiveInvariant = Invariant()
-            let DoneIndexValue = Invariant()
-            let Correctness = Invariant()
             let Highest = Algorithm { scope in
                 let f = scope.sharedVar(initiallyIn: Sequences(
                     of: IntRange(0, through: MaxNat),
@@ -30,7 +26,7 @@ package struct FindHighestModel: Sendable {
                 }
 
                 StateConstraint(f.count <= MaxLength)
-                TypeOK {
+                Invariant("TypeOK") {
                     f.count <= MaxNat
                     IntRange(1, through: f.count).allSatisfy { index in
                         f[index] >= 0 && f[index] <= MaxNat
@@ -38,15 +34,15 @@ package struct FindHighestModel: Sendable {
                     i >= 1 && i <= f.count + 1 && i <= MaxNat
                     h >= -1 && h <= MaxNat
                 }
-                InductiveInvariant {
+                Invariant("InductiveInvariant") {
                     IntRange(1, through: i - 1).allSatisfy { index in
                         f[index] <= h
                     }
                 }
-                DoneIndexValue {
+                Invariant("DoneIndexValue") {
                     (!Finished()) || i == f.count + 1
                 }
-                Correctness {
+                Invariant("Correctness") {
                     (!Finished()) || IntRange(1, through: f.count).allSatisfy { index in
                         f[index] <= h
                     }

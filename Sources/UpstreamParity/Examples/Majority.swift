@@ -10,7 +10,7 @@ package struct MajorityModel: Sendable {
         package static let finiteValues = allCases
         package var tlaValue: TLAValue { .constant(rawValue) }
     }
-    package enum Step: String, CaseIterable { case Next }
+    package enum Step: String, CaseIterable { case next = "Next" }
 
     package static var spec: TLASpec {
         #spec("Majority") { scope in
@@ -24,10 +24,7 @@ package struct MajorityModel: Sendable {
             let cand = scope.sharedVar(initiallyIn: Value)
             let cnt = scope.sharedVar(initial: 0)
 
-            let TypeOK = Invariant()
-            let Correct = Invariant()
-            let Inv = Invariant()
-            Do(Step.Next, when: i <= seq.count) {
+            Do(Step.next, when: i <= seq.count) {
                 If(cnt == 0) {
                     cand.set(seq[i])
                     cnt.set(1)
@@ -39,14 +36,14 @@ package struct MajorityModel: Sendable {
             }
             WeakFairnessNext()
 
-            TypeOK {
+            Invariant("TypeOK") {
                 seq.count <= bound && i >= 1 && i <= seq.count + 1 && cnt >= 0
                     && Value.contains(cand)
                     && IntRange(1, through: seq.count).allSatisfy { index in
                         Value.contains(seq[index.expr])
                     }
             }
-            Correct {
+            Invariant("Correct") {
                 i <= seq.count || Value.allSatisfy { value in
                     2 * IntRange(1, through: seq.count).filter { index in
                         seq[index.expr] == value
@@ -56,7 +53,7 @@ package struct MajorityModel: Sendable {
             let candidateOccurrences = IntRange(1, through: i - 1).filter { index in
                 seq[index.expr] == cand
             }.count
-            Inv {
+            Invariant("Inv") {
                 cnt <= candidateOccurrences
                     && 2 * (candidateOccurrences - cnt) <= i - 1 - cnt
                     && Value.allSatisfy { value in

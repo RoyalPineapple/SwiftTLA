@@ -3,7 +3,7 @@ import SwiftTLAMacros
 
 @TLAModel
 package struct DieHardestModel: Sendable {
-    package enum Step: String, CaseIterable { case NextInterleaved }
+    package enum Step: String, CaseIterable { case nextInterleaved = "NextInterleaved" }
 
     package static var spec: TLASpec {
         #spec("DieHardest") { scope in
@@ -15,9 +15,8 @@ package struct DieHardestModel: Sendable {
             let c2 = scope.sharedVar(initial: Dictionary<String, Int>.mapping(over: Capacities[2].keys) { _ in 0 })
             let s1 = scope.sharedVar(initial: 0)
             let s2 = scope.sharedVar(initial: 0)
-            let NotSolved = Invariant()
 
-            Do(Step.NextInterleaved) {
+            Do(Step.nextInterleaved) {
                 With(Set<Int>([1, 2]), Set<Int>([0, 1, 2])) { copy, operation in
                     If(copy == 1) {
                         With(Capacities[1].keys) { j in
@@ -70,14 +69,15 @@ package struct DieHardestModel: Sendable {
                     }
                 }
             }
-            NotSolved {
+            let notSolved = Invariant("NotSolved") {
                 !(c1.keys.contains { j in c1[j] == Goal }
                     && c2.keys.contains { j in c2[j] == Goal })
             }
+            notSolved
             let MCDieHardest = Validation {
                 Bind(Capacities, to: [["j1": 5, "j2": 3], ["j1": 5, "j2": 3, "j3": 3]])
                 Bind(Goal, to: 4)
-            }.checkingMode(.decisiveCounterexample).expect(NotSolved, .violated)
+            }.checkingMode(.decisiveCounterexample).expect(notSolved, .violated)
             MCDieHardest
         }
     }

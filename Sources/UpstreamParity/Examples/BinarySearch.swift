@@ -18,9 +18,6 @@ package struct BinarySearchModel: Sendable {
             let Values = model.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([1, 2, 3, 4, 5])]))
             let MaxSeqLen = model.parameter(as: Int.self, in: 8...8)
-            let resultCorrect = Invariant()
-            let TypeOK = Invariant()
-            let Inv = Invariant()
             let Termination = Temporal()
             let BinarySearch = Algorithm(fairness: .weak) { scope in
                 let seq = scope.sharedVar(initiallyIn: SortedSequences(
@@ -59,8 +56,8 @@ package struct BinarySearchModel: Sendable {
                     && low >= 1 && low <= seq.count + 1
                     && high >= 0 && high <= seq.count
                     && result >= 0 && result <= seq.count
-                TypeOK { typeOK }
-                Inv {
+                Invariant("TypeOK") { typeOK }
+                Invariant("Inv") {
                     typeOK
                     result == 0 || (seq.count > 0 && seq[result] == val)
                     Finished() || If(
@@ -71,7 +68,7 @@ package struct BinarySearchModel: Sendable {
                     !Finished() || result != 0
                         || IntRange(1, through: seq.count).allSatisfy { index in seq[index] != val }
                 }
-                resultCorrect {
+                Invariant("resultCorrect") {
                     (!Finished()) || If(
                         IntRange(1, through: seq.count).contains { index in
                             seq[index.expr] == val

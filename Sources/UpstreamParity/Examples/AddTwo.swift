@@ -3,17 +3,15 @@ import SwiftTLAMacros
 
 @TLAModel
 package struct AddTwoModel: Sendable {
-    package enum Step: String, CaseIterable { case Next }
+    package enum Step: String, CaseIterable { case next = "Next" }
 
     package static var spec: TLASpec {
         #spec("AddTwo") { scope in
             Extends(.naturals)
             let x = scope.sharedVar(initial: 0)
-            let TypeOK = Invariant()
-            let Even = Invariant()
-            Do(Step.Next) { x += 2 }
-            TypeOK { x >= 0 }
-            Even { x % 2 == 0 }
+            Do(Step.next) { x += 2 }
+            Invariant("TypeOK") { x >= 0 }
+            Invariant("Even") { x % 2 == 0 }
         }
     }
 }

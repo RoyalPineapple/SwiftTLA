@@ -3,7 +3,7 @@ import SwiftTLAMacros
 
 @TLAModel
 package struct DieHardestGlobalFreezeModel: Sendable {
-    package enum Step: String, CaseIterable { case NextParallelGlobalFreeze }
+    package enum Step: String, CaseIterable { case nextParallelGlobalFreeze = "NextParallelGlobalFreeze" }
 
     package static var spec: TLASpec {
         #spec("DieHardestGlobalFreeze") { scope in
@@ -17,9 +17,8 @@ package struct DieHardestGlobalFreezeModel: Sendable {
             let c2 = scope.sharedVar(initial: Dictionary<String, Int>.mapping(over: Capacities[2].keys) { _ in 0 })
             let s1 = scope.sharedVar(initial: 0)
             let s2 = scope.sharedVar(initial: 0)
-            let NotSolved = Invariant()
 
-            Do(Step.NextParallelGlobalFreeze) {
+            Do(Step.nextParallelGlobalFreeze) {
                 If(scope.checkingLevel >= firstFreeze) {
                     c1.set(c1)
                 } else: {
@@ -79,14 +78,15 @@ package struct DieHardestGlobalFreezeModel: Sendable {
                 s1.set(s1)
                 s2.set(s2)
             }
-            NotSolved {
+            let notSolved = Invariant("NotSolved") {
                 !(c1.keys.contains { j in c1[j] == Goal }
                     && c2.keys.contains { j in c2[j] == Goal })
             }
+            notSolved
             let NextParallelGlobalFreeze = Validation {
                 Bind(Capacities, to: [["j1": 9, "j2": 10], ["j1": 1, "j2": 3]])
                 Bind(Goal, to: 2)
-            }.checkingMode(.decisiveCounterexample).expect(NotSolved, .violated)
+            }.checkingMode(.decisiveCounterexample).expect(notSolved, .violated)
             NextParallelGlobalFreeze
         }
     }

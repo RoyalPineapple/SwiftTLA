@@ -52,7 +52,7 @@ package struct LockModel: Sendable {
                 }
 
                 Invariant("TypeOK") {
-                    lock >= 0 && lock <= 1
+                    (0...1).contains(lock)
                 }
             }
             Lock

@@ -12,7 +12,10 @@ package struct PrisonersModel: Sendable {
         package var tlaValue: TLAValue { .constant(rawValue) }
     }
 
-    private enum Step: String, CaseIterable { case CounterStep, NonCounterStep }
+    private enum Step: String, CaseIterable {
+        case counterStep = "CounterStep"
+        case nonCounterStep = "NonCounterStep"
+    }
 
     package static var spec: TLASpec {
         #spec("Prisoners") { scope in
@@ -27,12 +30,10 @@ package struct PrisonersModel: Sendable {
             let timesSwitched = scope.sharedVar(initial:
                 Dictionary<PrisonerID, Int>.mapping(over: OtherPrisoner) { _ in 0 })
             let count = scope.sharedVar(initial: 0)
-            let TypeOK = Invariant()
-            let CountInvariant = Invariant()
             let Safety = Temporal()
             let Liveness = Temporal()
 
-            let counterStep = Do(Step.CounterStep) {
+            let counterStep = Do(Step.counterStep) {
                 If(switchAUp) {
                     switchAUp.set(false)
                     count += 1
@@ -41,7 +42,7 @@ package struct PrisonersModel: Sendable {
                 }
             }
             counterStep
-            let nonCounterStep = Do(Step.NonCounterStep, over: OtherPrisoner) { prisoner in
+            let nonCounterStep = Do(Step.nonCounterStep, over: OtherPrisoner) { prisoner in
                 If(!switchAUp && timesSwitched[prisoner] < 2) {
                     switchAUp.set(true)
                     timesSwitched[prisoner] += 1
@@ -55,13 +56,13 @@ package struct PrisonersModel: Sendable {
             WeakFairness(each: nonCounterStep)
 
             let done = count == 2 * (Prisoner.count - 1)
-            TypeOK {
+            Invariant("TypeOK") {
                 SetExpr<Bool>.literal(false, true).contains(switchAUp)
                     && SetExpr<Bool>.literal(false, true).contains(switchBUp)
                     && Functions(from: OtherPrisoner, to: IntRange(0, through: 2)).contains(timesSwitched)
                     && IntRange(0, through: 2 * Prisoner.count - 1).contains(count)
             }
-            CountInvariant {
+            Invariant("CountInvariant") {
                 let total = LetRec("sum", over: Subsets(of: OtherPrisoner), taking: Set<PrisonerID>.self,
                     { sum, remaining in
                         If(remaining.isEmpty, then: 0, else:

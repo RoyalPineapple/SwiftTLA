@@ -21,9 +21,6 @@ package struct TeachingSimpleRegularN8Model: Sendable {
     package static var spec: TLASpec {
         #spec("SimpleRegular") {
             Extends(.integers)
-            let PCorrect = Invariant()
-            let TypeOK = Invariant()
-            let Inv = Invariant()
             let SimpleRegular = Algorithm { scope in
                 let x = scope.sharedVar(initial: Function<Process, SetExpr<Int>>.literal(
                     (.p0, SetExpr<Int>.literal(0)), (.p1, SetExpr<Int>.literal(0)),
@@ -54,25 +51,25 @@ package struct TeachingSimpleRegularN8Model: Sendable {
                     }
                 }
 
-                let typeOK = ForAll(Process.all) { process in
+                let typeOK = Process.all.allSatisfy { process in
                     !x[process].isEmpty
                         && x[process].isSubset(of: SetExpr<Int>.literal(0, 1))
                         && SetExpr<Int>.literal(0, 1).contains(y[process])
                         && (At(Step.a1, process) || At(Step.a2, process)
                             || At(Step.b, process) || Finished(process))
                 }
-                PCorrect {
-                    !ForAll(Process.all) { process in Finished(process) }
+                Invariant("PCorrect") {
+                    !Process.all.allSatisfy { process in Finished(process) }
                         || Process.all.contains { process in y[process] == 1 }
                 }
-                TypeOK { typeOK }
-                Inv {
+                Invariant("TypeOK") { typeOK }
+                Invariant("Inv") {
                     typeOK
-                    ForAll(Process.all) { process in
+                    Process.all.allSatisfy { process in
                         !(At(Step.b, process) || Finished(process))
                             || x[process] == SetExpr<Int>.literal(1)
                     }
-                    !ForAll(Process.all) { process in Finished(process) }
+                    !Process.all.allSatisfy { process in Finished(process) }
                         || Process.all.contains { process in y[process] == 1 }
                 }
             }

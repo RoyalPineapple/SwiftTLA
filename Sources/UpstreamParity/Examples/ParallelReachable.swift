@@ -35,7 +35,7 @@ package struct ParallelReachableModel: Sendable {
                 let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
                 let successors = Select(
                     from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { graph in
-                        ForAll(Node.all) { node in graph[node].count == 2 }
+                        Node.all.allSatisfy { node in graph[node].count == 2 }
                     },
                     matching: { graph in graph.expr == graph.expr }
                 )
@@ -48,14 +48,15 @@ package struct ParallelReachableModel: Sendable {
 
                     Do(Step.a) {
                         Either {
-                            When(!frontier.isEmpty)
-                            With(frontier) { node in
-                                current.set(node)
+                            When(!frontier.isEmpty) {
+                                With(frontier) { node in
+                                    current.set(node)
+                                }
+                                Goto(Step.b)
                             }
-                            Goto(Step.b)
-                        } or: {
-                            When(frontier.isEmpty)
-                            Stop()
+                            When(frontier.isEmpty) {
+                                Stop()
+                            }
                         }
                     }
 
@@ -72,15 +73,16 @@ package struct ParallelReachableModel: Sendable {
 
                     Do(Step.c) {
                         Either {
-                            When(!pending.expr.isEmpty)
-                            With(pending) { node in
-                                frontier.insert(node)
-                                pending.remove(node)
+                            When(!pending.expr.isEmpty) {
+                                With(pending) { node in
+                                    frontier.insert(node)
+                                    pending.remove(node)
+                                }
+                                Goto(Step.c)
                             }
-                            Goto(Step.c)
-                        } or: {
-                            When(pending.expr.isEmpty)
-                            Goto(Step.a)
+                            When(pending.expr.isEmpty) {
+                                Goto(Step.a)
+                            }
                         }
                     }
                 }

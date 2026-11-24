@@ -11,9 +11,6 @@ package struct QuicksortModel: Sendable {
             let Values = model.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([1, 2, 3])]))
             let MaxSeqLen = model.parameter(as: Int.self, in: 4...4)
-            let PCorrect = Invariant()
-            let TypeOK = Invariant()
-            let Inv = Invariant()
             let Termination = Temporal()
             let Quicksort = Algorithm(fairness: .weak) { scope in
                 let seq = scope.sharedVar(initiallyIn: Sequences(
@@ -77,13 +74,13 @@ package struct QuicksortModel: Sendable {
                 let UV = U.union(IntRange(1, through: seq.count)
                     .subtracting(U.flatMapping { I in I.expr })
                     .mapping { i in Set<Int>([]).inserting(i) })
-                TypeOK { typeOK }
-                PCorrect {
+                Invariant("TypeOK") { typeOK }
+                Invariant("PCorrect") {
                     !Finished() || (permutation && IntRange(1, through: seq.count).allSatisfy { p in
                         IntRange(p + 1, through: seq.count).allSatisfy { q in seq[p] <= seq[q] }
                     })
                 }
-                Inv {
+                Invariant("Inv") {
                     typeOK
                     !Finished() || U.isEmpty
                     permutation

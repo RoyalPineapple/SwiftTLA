@@ -3,21 +3,21 @@ import SwiftTLAMacros
 
 @TLAModel
 package struct HourClockModel: Sendable {
-    package enum Step: String, CaseIterable { case HCnxt }
+    package enum Step: String, CaseIterable { case tick = "HCnxt" }
 
     package static var spec: TLASpec {
         #spec("HourClock") {
-            let HCini = Invariant()
             let Clock = Algorithm { scope in
+                // Every hour in this range is a valid starting state.
                 let hr = scope.sharedVar(initiallyIn: 1...12)
-                Loop(Step.HCnxt) {
+                Loop(Step.tick) {
                     If(hr != 12) {
                         hr += 1
                     } else: {
                         hr.set(1)
                     }
                 }
-                HCini { hr >= 1 && hr <= 12 }
+                Invariant("HCini") { (1...12).contains(hr) }
             }
             Clock
             let Upstream = Validation {}

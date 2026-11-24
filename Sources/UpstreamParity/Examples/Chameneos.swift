@@ -27,7 +27,7 @@ package struct ChameneosModel: Sendable {
     package typealias Color = OneOf<Hue, FadedToken>
     package typealias CreatureState = Pair<Color, Int>
     package typealias WaitingPlace = OneOf<Int, EmptyMeetingPlace>
-    package enum Step: String, CaseIterable { case Next }
+    package enum Step: String, CaseIterable { case next = "Next" }
 
     package static var spec: TLASpec {
         #spec("Chameneos") { scope in
@@ -37,8 +37,6 @@ package struct ChameneosModel: Sendable {
             let Faded = scope.parameter(as: FadedToken.self, in: Set<FadedToken>([.faded]))
             let MeetingPlaceEmpty = scope.parameter(as: EmptyMeetingPlace.self,
                 in: Set<EmptyMeetingPlace>([.empty]))
-            let TypeOK = Invariant()
-            let SumMet = Invariant()
             Assume(N > 0 && M > 0)
             let creatureIDs = IntRange(1, through: M)
             let initialColors = SetExpr<Hue>.literal(.blue, .red, .yellow)
@@ -53,7 +51,7 @@ package struct ChameneosModel: Sendable {
             let meetingPlace: SharedVariable<WaitingPlace> = scope.sharedVar(initial: empty)
             let numMeetings = scope.sharedVar(initial: 0)
 
-            Do(Step.Next) {
+            Do(Step.next) {
                 With(creatureIDs) { cid in
                     When(chameneoses[cid].first() != fadedColor)
                     If(meetingPlace == empty) {
@@ -83,7 +81,7 @@ package struct ChameneosModel: Sendable {
                     }
                 }
             }
-            TypeOK {
+            Invariant("TypeOK") {
                 chameneoses.keys == creatureIDs
                     && creatureIDs.allSatisfy { id in
                         let color = chameneoses[id.expr].first()
@@ -98,7 +96,7 @@ package struct ChameneosModel: Sendable {
                     })
             }
 
-            SumMet {
+            Invariant("SumMet") {
                 let meetings = SequenceMapping(length: M) { index in
                     chameneoses[index.expr].second()
                 }

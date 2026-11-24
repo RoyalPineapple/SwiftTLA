@@ -3,7 +3,10 @@ import SwiftTLAMacros
 
 @TLAModel
 package struct DieHardestParallelModel: Sendable {
-    package enum Step: String, CaseIterable { case NextParallel, NextParallelFreeze }
+    package enum Step: String, CaseIterable {
+        case nextParallel = "NextParallel"
+        case nextParallelFreeze = "NextParallelFreeze"
+    }
 
     package static var spec: TLASpec {
         #spec("DieHardestParallel") { scope in
@@ -16,7 +19,6 @@ package struct DieHardestParallelModel: Sendable {
             let c2 = scope.sharedVar(initial: Dictionary<String, Int>.mapping(over: Capacities[2].keys) { _ in 0 })
             let s1 = scope.sharedVar(initial: 0)
             let s2 = scope.sharedVar(initial: 0)
-            let NotSolved = Invariant()
 
             let firstStep = Macro {
                 With(Capacities[1].keys, Set<Int>([0, 1, 2])) { j, operation in
@@ -66,13 +68,13 @@ package struct DieHardestParallelModel: Sendable {
                     }
                 }
             }
-            Do(Step.NextParallel, when: !Freeze) {
+            Do(Step.nextParallel, when: !Freeze) {
                 firstStep()
                 secondStep()
                 s1.set(s1)
                 s2.set(s2)
             }
-            Do(Step.NextParallelFreeze, when: Freeze) {
+            Do(Step.nextParallelFreeze, when: Freeze) {
                 If(c1.keys.contains { j in c1[j] == Goal }) {
                     c1.set(c1)
                 } else: { firstStep() }
@@ -82,21 +84,22 @@ package struct DieHardestParallelModel: Sendable {
                 s1.set(s1)
                 s2.set(s2)
             }
-            NotSolved {
+            let notSolved = Invariant("NotSolved") {
                 !(c1.keys.contains { j in c1[j] == Goal }
                     && c2.keys.contains { j in c2[j] == Goal })
             }
+            notSolved
             let NextParallel = Validation {
                 Bind(Capacities, to: [["j1": 9, "j2": 10], ["j1": 1, "j2": 3]])
                 Bind(Goal, to: 2)
                 Bind(Freeze, to: false)
-            }.expect(NotSolved, .violated)
+            }.expect(notSolved, .violated)
             NextParallel
             let NextParallelFreeze = Validation {
                 Bind(Capacities, to: [["j1": 9, "j2": 10], ["j1": 1, "j2": 3]])
                 Bind(Goal, to: 2)
                 Bind(Freeze, to: true)
-            }.expect(NotSolved, .violated)
+            }.expect(notSolved, .violated)
             NextParallelFreeze
         }
     }

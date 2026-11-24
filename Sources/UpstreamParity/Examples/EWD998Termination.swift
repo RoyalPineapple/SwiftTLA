@@ -5,7 +5,10 @@ import SwiftTLAMacros
 @TLAModel
 package struct EWD998TerminationModel: Sendable {
     private enum Step: String, CaseIterable {
-        case Terminate, SendMsg, RcvMsg, DetectTermination
+        case terminate = "Terminate"
+        case sendMessage = "SendMsg"
+        case receiveMessage = "RcvMsg"
+        case detectTermination = "DetectTermination"
     }
 
     package static var spec: TLASpec {
@@ -20,39 +23,37 @@ package struct EWD998TerminationModel: Sendable {
             let terminated = Node.allSatisfy { node in !active[node] && pending[node] == 0 }
             let terminationDetected = scope.sharedVar(initiallyIn: SetExpr<Bool>.literal(false, terminated))
 
-            let TypeOK = Invariant()
-            let Safe = Invariant()
             let Quiescence = Temporal()
             let Live = Temporal()
 
-            Do(Step.Terminate, over: Node) { node in
+            Do(Step.terminate, over: Node) { node in
                 When(active[node])
                 active[node].set(false)
                 With(SetExpr<Bool>.literal(terminationDetected, terminated)) { detected in
                     terminationDetected.set(detected)
                 }
             }
-            Do(Step.SendMsg, over: Node, Node) { sender, receiver in
+            Do(Step.sendMessage, over: Node, Node) { sender, receiver in
                 When(active[sender])
                 pending[receiver] += 1
             }
-            Do(Step.RcvMsg, over: Node) { node in
+            Do(Step.receiveMessage, over: Node) { node in
                 When(pending[node] > 0)
                 active[node].set(true)
                 pending[node].set(pending[node] - 1)
             }
-            let detectTermination = Do(Step.DetectTermination, when: terminated) {
+            let detectTermination = Do(Step.detectTermination, when: terminated) {
                 terminationDetected.set(true)
             }
             detectTermination
             WeakFairness(detectTermination)
 
-            TypeOK {
+            Invariant("TypeOK") {
                 Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
                     && Node.allSatisfy { node in pending[node] >= 0 }
                     && SetExpr<Bool>.literal(false, true).contains(terminationDetected)
             }
-            Safe { !terminationDetected || terminated }
+            Invariant("Safe") { !terminationDetected || terminated }
             Quiescence(.alwaysStep(on: terminated) { before, after in !before || after })
             Live(.leadsTo(terminated, terminationDetected))
             Constraint(Node.allSatisfy { node in pending[node] <= 3 })

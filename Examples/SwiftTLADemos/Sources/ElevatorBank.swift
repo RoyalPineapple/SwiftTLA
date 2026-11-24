@@ -57,7 +57,6 @@ public struct ElevatorBank {
                 .alice: Passenger(phase: .waiting, floor: .one, destination: .three),
                 .bob: Passenger(phase: .waiting, floor: .three, destination: .one)
             ])
-            let CarFloorDomain = Invariant()
 
             let elevatorBank = Algorithm {
                 Each(CarID.all, fairness: .weak) { car in
@@ -83,44 +82,51 @@ public struct ElevatorBank {
                                 }
                             } or: {
                                 Either {
-                                    When(cars[car].door == .closed)
-                                    When(cars[car].rider != .none)
-                                    When(cars[car].floor < riders[cars[car].rider].destination)
-                                    Either {
-                                        When(cars[car].floor == .one)
-                                        cars[car].floor.set(.two)
-                                    } or: {
-                                        When(cars[car].floor == .two)
-                                        cars[car].floor.set(.three)
+                                    When(
+                                        cars[car].door == .closed,
+                                        cars[car].rider != .none,
+                                        cars[car].floor < riders[cars[car].rider].destination
+                                    ) {
+                                        Either {
+                                            When(cars[car].floor == .one) {
+                                                cars[car].floor.set(.two)
+                                            }
+                                            When(cars[car].floor == .two) {
+                                                cars[car].floor.set(.three)
+                                            }
+                                        }
                                     }
-                                } or: {
-                                    Either {
-                                        When(cars[car].door == .closed)
-                                        When(cars[car].rider != .none)
-                                        When(cars[car].floor > riders[cars[car].rider].destination)
+                                    When(
+                                        cars[car].door == .closed,
+                                        cars[car].rider != .none,
+                                        cars[car].floor > riders[cars[car].rider].destination
+                                    ) {
                                         Either {
-                                            When(cars[car].floor == .three)
-                                            cars[car].floor.set(.two)
-                                        } or: {
-                                            When(cars[car].floor == .two)
-                                            cars[car].floor.set(.one)
+                                            When(cars[car].floor == .three) {
+                                                cars[car].floor.set(.two)
+                                            }
+                                            When(cars[car].floor == .two) {
+                                                cars[car].floor.set(.one)
+                                            }
                                         }
-                                    } or: {
-                                        Either {
-                                            When(cars[car].door == .closed)
-                                            When(cars[car].rider != .none)
-                                            When(cars[car].floor == riders[cars[car].rider].destination)
-                                            cars[car].door.set(.open)
-                                        } or: {
-                                            When(cars[car].door == .open)
-                                            When(cars[car].rider != .none)
-                                            When(riders[cars[car].rider].phase == .onboard)
-                                            When(cars[car].floor == riders[cars[car].rider].destination)
-                                            let exitingRider = cars[car].rider
-                                            cars[car].rider.set(.none)
-                                            cars[car].door.set(.closed)
-                                            riders[exitingRider].phase.set(.arrived)
-                                        }
+                                    }
+                                    When(
+                                        cars[car].door == .closed,
+                                        cars[car].rider != .none,
+                                        cars[car].floor == riders[cars[car].rider].destination
+                                    ) {
+                                        cars[car].door.set(.open)
+                                    }
+                                    When(
+                                        cars[car].door == .open,
+                                        cars[car].rider != .none,
+                                        riders[cars[car].rider].phase == .onboard,
+                                        cars[car].floor == riders[cars[car].rider].destination
+                                    ) {
+                                        let exitingRider = cars[car].rider
+                                        cars[car].rider.set(.none)
+                                        cars[car].door.set(.closed)
+                                        riders[exitingRider].phase.set(.arrived)
                                     }
                                 }
                             }
@@ -131,7 +137,7 @@ public struct ElevatorBank {
             }
             elevatorBank
 
-            CarFloorDomain {
+            Invariant("CarFloorDomain") {
                 cars[.carA].floor == .one || cars[.carA].floor == .two || cars[.carA].floor == .three
                 cars[.carB].floor == .one || cars[.carB].floor == .two || cars[.carB].floor == .three
             }

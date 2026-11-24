@@ -32,26 +32,22 @@ package struct MultiCarElevator: Sendable {
             let calls = scope.sharedVar(initial: Set<Call>())
             let lastMoveDoorClosed = scope.sharedVar(initial: true)
             let riders = Set<String>(["none", "alice", "bob"])
-            let TypeOK = Invariant()
-            let FloorBounds = Invariant()
-            let ClosedDoorMovement = Invariant()
-            let NoDoubleAssignment = Invariant()
 
             Constraint(calls.count <= 1)
-            TypeOK {
+            Invariant("TypeOK") {
                 FloorID.all.contains(cars[.carA].floor)
                     && FloorID.all.contains(cars[.carB].floor)
                     && riders.contains(cars[.carA].rider)
                     && riders.contains(cars[.carB].rider)
             }
-            FloorBounds {
+            Invariant("FloorBounds") {
                 cars[.carA].floor.assuming(Int.self) >= 0
                     && cars[.carA].floor.assuming(Int.self) <= 2
                     && cars[.carB].floor.assuming(Int.self) >= 0
                     && cars[.carB].floor.assuming(Int.self) <= 2
             }
-            ClosedDoorMovement { lastMoveDoorClosed == true }
-            NoDoubleAssignment {
+            Invariant("ClosedDoorMovement") { lastMoveDoorClosed == true }
+            Invariant("NoDoubleAssignment") {
                 cars[.carA].rider == "none"
                     || cars[.carB].rider == "none"
                     || cars[.carA].rider != cars[.carB].rider

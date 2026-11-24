@@ -18,7 +18,10 @@ package struct AsynchInterfaceModel: Sendable {
         }
     }
 
-    package enum Step: String, CaseIterable { case Send, Rcv }
+    package enum Step: String, CaseIterable {
+        case send = "Send"
+        case receive = "Rcv"
+    }
 
     package static var spec: TLASpec {
         #spec("AsynchInterface") { scope in
@@ -29,19 +32,18 @@ package struct AsynchInterfaceModel: Sendable {
             let val = scope.sharedVar(initiallyIn: Data)
             let rdy = scope.sharedVar(initiallyIn: 0...1)
             let ack = scope.sharedVar(initial: rdy)
-            let TypeInvariant = Invariant()
 
-            Do(Step.Send, when: rdy == ack) {
+            Do(Step.send, when: rdy == ack) {
                 With(Data) { datum in
                     val.set(datum)
                 }
                 rdy.set(1 - rdy)
             }
-            Do(Step.Rcv, when: rdy != ack) {
+            Do(Step.receive, when: rdy != ack) {
                 ack.set(1 - ack)
             }
-            TypeInvariant {
-                Data.contains(val) && rdy >= 0 && rdy <= 1 && ack >= 0 && ack <= 1
+            Invariant("TypeInvariant") {
+                Data.contains(val) && (0...1).contains(rdy) && (0...1).contains(ack)
             }
             let Upstream = Validation { Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2, Datum.d3])) }
             Upstream

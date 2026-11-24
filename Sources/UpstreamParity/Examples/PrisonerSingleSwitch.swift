@@ -11,7 +11,7 @@ package struct PrisonerSingleSwitchModel: Sendable {
         package static let finiteValues = allCases
     }
 
-    private enum Step: String, CaseIterable { case WardenAction }
+    private enum Step: String, CaseIterable { case wardenAction = "WardenAction" }
 
     package static var spec: TLASpec {
         #spec("Prisoner") { scope in
@@ -33,11 +33,9 @@ package struct PrisonerSingleSwitchModel: Sendable {
                 then: SetExpr<Light>.literal(.off, .on),
                 else: SetExpr<Light>.literal(.off)))
             let has_visited = scope.sharedVar(initial: Set<String>())
-            let TypeOK = Invariant()
-            let VictoryOK = Invariant()
             let Terminating = Temporal()
 
-            let wardenAction = Do(Step.WardenAction, over: Prisoner) { prisoner in
+            let wardenAction = Do(Step.wardenAction, over: Prisoner) { prisoner in
                 If(prisoner == DesignatedCounter) {
                     If(light == Light.on) {
                         light.set(Light.off)
@@ -55,14 +53,14 @@ package struct PrisonerSingleSwitchModel: Sendable {
             wardenAction
             WeakFairness(each: wardenAction)
 
-            TypeOK {
+            Invariant("TypeOK") {
                 IntRange(1, through: VictoryThreshold + 1).contains(count)
                     && SetExpr<Bool>.literal(false, true).contains(announced)
                     && Functions(from: NormalPrisoner, to: IntRange(0, through: 2)).contains(signalled)
                     && SetExpr<Light>.literal(.off, .on).contains(light)
                     && has_visited.isSubset(of: Prisoner)
             }
-            VictoryOK { !announced || has_visited == Prisoner }
+            Invariant("VictoryOK") { !announced || has_visited == Prisoner }
             Terminating(.eventually(announced))
 
             let prisonerValidation = Validation(label: "Prisoner") {

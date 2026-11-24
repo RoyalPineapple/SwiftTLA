@@ -16,7 +16,9 @@ package struct SingleLaneBridgeModel: Sendable {
     }
 
     private enum Step: String, CaseIterable {
-        case MoveOutsideBridge, MoveInsideBridge, EnterBridge
+        case moveOutsideBridge = "MoveOutsideBridge"
+        case moveInsideBridge = "MoveInsideBridge"
+        case enterBridge = "EnterBridge"
     }
 
     package static var spec: TLASpec {
@@ -50,12 +52,10 @@ package struct SingleLaneBridgeModel: Sendable {
                 })
             let WaitingBeforeBridge = scope.sharedVar(initial: Array<Car>([]))
             let CarsInBridge = Cars.filter { car in Bridge.contains(Location[car]) }
-            let Invariants = Invariant()
-            let TypeOK = Invariant()
             let CarsInBridgeExitBridge = Temporal()
             let CarsEnterBridge = Temporal()
 
-            let moveOutside = Do(Step.MoveOutsideBridge, over: Cars) { car in
+            let moveOutside = Do(Step.moveOutsideBridge, over: Cars) { car in
                 let next = If(CarsRight.contains(car),
                     then: If(Location[car] > StartPos, then: Location[car] - 1, else: EndPos),
                     else: If(Location[car] < EndPos, then: Location[car] + 1, else: StartPos))
@@ -68,7 +68,7 @@ package struct SingleLaneBridgeModel: Sendable {
             }
             moveOutside
 
-            let moveInside = Do(Step.MoveInsideBridge, over: Cars) { car in
+            let moveInside = Do(Step.moveInsideBridge, over: Cars) { car in
                 let next = If(CarsRight.contains(car),
                     then: If(Location[car] > StartPos, then: Location[car] - 1, else: EndPos),
                     else: If(Location[car] < EndPos, then: Location[car] + 1, else: StartPos))
@@ -82,7 +82,7 @@ package struct SingleLaneBridgeModel: Sendable {
             }
             moveInside
 
-            let enterBridge = Do(Step.EnterBridge, when: WaitingBeforeBridge.count > 0) {
+            let enterBridge = Do(Step.enterBridge, when: WaitingBeforeBridge.count > 0) {
                 let car = WaitingBeforeBridge.head()
                 let next = If(CarsRight.contains(car),
                     then: If(Location[car] > StartPos, then: Location[car] - 1, else: EndPos),
@@ -102,7 +102,7 @@ package struct SingleLaneBridgeModel: Sendable {
             WeakFairness(each: moveInside)
             WeakFairness(enterBridge)
 
-            Invariants {
+            let invariants = Invariant("Invariants") {
                 Cars.allSatisfy { first in
                     Cars.allSatisfy { second in
                         !(Bridge.contains(Location[first])
@@ -116,7 +116,8 @@ package struct SingleLaneBridgeModel: Sendable {
                     }
                 }
             }
-            TypeOK {
+            invariants
+            Invariant("TypeOK") {
                 Functions(from: Cars, to: Positions).contains(Location)
                     && WaitingBeforeBridge.count <= Cars.count
             }
@@ -139,7 +140,7 @@ package struct SingleLaneBridgeModel: Sendable {
                 Bind(CarsLeft, to: Set<Car>([.leftOne, .leftTwo]))
                 Bind(Bridge, to: Set<Int>([4, 5]))
                 Bind(Positions, to: Set<Int>([1, 2, 3, 4, 5, 6, 7, 8]))
-            }.checking(only: [Invariants, CarsInBridgeExitBridge, CarsEnterBridge])
+            }.checking(only: [invariants, CarsInBridgeExitBridge, CarsEnterBridge])
             MC
         }
     }

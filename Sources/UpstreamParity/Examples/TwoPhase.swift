@@ -4,7 +4,10 @@ import SwiftTLAMacros
 // Upstream: specifications/TwoPhase/MCTwoPhase.tla
 @TLAModel
 package struct TwoPhaseModel: Sendable {
-    package enum Step: String, CaseIterable { case ProducerStep, ConsumerStep }
+    package enum Step: String, CaseIterable {
+        case produce = "ProducerStep"
+        case consume = "ConsumerStep"
+    }
 
     package static var spec: TLASpec {
         #spec("TwoPhase") { scope in
@@ -12,11 +15,11 @@ package struct TwoPhaseModel: Sendable {
             let c = scope.sharedVar(initial: 0)
             let x = scope.sharedVar(initial: 0)
 
-            Do(Step.ProducerStep, when: p == c) {
+            Do(Step.produce, when: p == c) {
                 p.set((p + 1) % 2)
                 x.set(x)
             }
-            Do(Step.ConsumerStep, when: p != c) {
+            Do(Step.consume, when: p != c) {
                 c.set((c + 1) % 2)
                 x.set(x)
             }

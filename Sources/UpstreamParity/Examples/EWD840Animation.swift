@@ -11,7 +11,10 @@ package struct EWD840AnimationModel: Sendable {
     }
 
     private enum Step: String, CaseIterable {
-        case AnimInitiateProbe, AnimPassToken, AnimSendMsg, AnimDeactivate
+        case animInitiateProbe = "AnimInitiateProbe"
+        case animPassToken = "AnimPassToken"
+        case animSendMsg = "AnimSendMsg"
+        case animDeactivate = "AnimDeactivate"
     }
 
     package static var spec: TLASpec {
@@ -28,7 +31,7 @@ package struct EWD840AnimationModel: Sendable {
             let tcolor = scope.sharedVar(initial: Color.black)
             let history = scope.sharedVar(initial: Triple(first: 0, second: 0, third: "init"))
 
-            let initiate = Do(Step.AnimInitiateProbe, when: tpos == 0
+            let initiate = Do(Step.animInitiateProbe, when: tpos == 0
                 && (tcolor == Color.black || color[0] == Color.black)) {
                 tpos.set(N - 1)
                 tcolor.set(Color.white)
@@ -37,7 +40,7 @@ package struct EWD840AnimationModel: Sendable {
             }
             initiate
 
-            let pass = Do(Step.AnimPassToken, over: Node) { i in
+            let pass = Do(Step.animPassToken, over: Node) { i in
                 When(i != 0 && tpos == i
                     && (!active[i] || color[i] == Color.black || tcolor == Color.black))
                 tpos.set(i - 1)
@@ -48,7 +51,7 @@ package struct EWD840AnimationModel: Sendable {
             pass
             WeakFairness(anyOf: [initiate, pass])
 
-            Do(Step.AnimSendMsg, over: Node) { i in
+            Do(Step.animSendMsg, over: Node) { i in
                 When(active[i])
                 With(Node) { j in
                     When(j != i)
@@ -60,22 +63,22 @@ package struct EWD840AnimationModel: Sendable {
                 }
             }
 
-            Do(Step.AnimDeactivate, over: Node) { i in
+            Do(Step.animDeactivate, over: Node) { i in
                 When(active[i])
                 active[i].set(false)
                 history.set(Triple.literal(history.first(), history.second(), "Deactivate"))
             }
 
-            let AnimInv = Invariant()
             let terminationDetected = tpos == 0 && tcolor == Color.white
                 && color[0] == Color.white && !active[0]
-            AnimInv { !terminationDetected || scope.checkingLevel < 20 }
+            let animInv = Invariant("AnimInv") { !terminationDetected || scope.checkingLevel < 20 }
+            animInv
 
             let EWD840_anim = Validation { Bind(N, to: 9) }
-                .checking(only: [AnimInv])
+                .checking(only: [animInv])
                 .checkingDeadlock(false)
                 .simulating(traces: 100)
-                .expect(AnimInv, .violated)
+                .expect(animInv, .violated)
             EWD840_anim
         }
     }
