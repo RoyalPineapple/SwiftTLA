@@ -95,6 +95,11 @@ struct NativeSwiftEmitter {
         )
     }
 
+    func enumMember(_ member: String, of name: String) -> String {
+        guard name.hasSuffix("?") else { return "`\(member)`" }
+        return member == "$nil" ? "none" : "some(.`\(member)`)"
+    }
+
     func swiftType(_ type: CompiledValueType) throws -> String {
         switch type {
         case .int: return nativeIntType
@@ -103,6 +108,7 @@ struct NativeSwiftEmitter {
         case .modelValue: return "_ModelValue"
         case .controlLocation: return "_ControlLocation"
         case .named(let name):
+            if name.hasSuffix("?") { return "Swift.Optional<\(try swiftType(.named(String(name.dropLast()))))>" }
             return sourceNominalPrefix.map { name.contains(".") ? name : "\($0).`\(name)`" } ?? name
         case .oneOf(let first, let second):
             if let name = typeDeclarations.names[type] { return name }
@@ -205,7 +211,8 @@ struct NativeSwiftEmitter {
         if case .named(let name) = type {
             if let members = program.enums.cases[name],
                let item = members.first(where: { $0.value == value }) {
-                return "\(name).`\(item.name)`"
+                let owner = name.hasSuffix("?") ? try swiftType(type) : name
+                return "\(owner).\(enumMember(item.name, of: name))"
             }
             throw unsupported("literal of \(name)")
         }
@@ -298,7 +305,7 @@ struct NativeSwiftEmitter {
         case .named(let name):
             guard let members = program.enums.cases[name] else { throw unsupported("enum declaration for \(name)") }
             cases = try members.map { item in
-                "case .`\(item.name)`: return \(try literal(item.value, as: destination))"
+                "case .\(enumMember(item.name, of: name)): return \(try literal(item.value, as: destination))"
             }.joined(separator: "\n")
         case .finite(let members):
             cases = try members.indices.map { index in
@@ -392,7 +399,7 @@ struct NativeSwiftEmitter {
         guard let members = program.enums.cases[name] else { throw unsupported("ordering opaque type \(name)") }
         let values = Set(members.map(\.value)).sorted()
         let ranks = Dictionary(uniqueKeysWithValues: values.enumerated().map { ($0.element, $0.offset) })
-        return members.map { "case .`\($0.name)`: return \(ranks[$0.value]!)" }.joined(separator: "\n")
+        return members.map { "case .\(enumMember($0.name, of: name)): return \(ranks[$0.value]!)" }.joined(separator: "\n")
     }
 
     /// Emits a native comparator matching CompiledValue's structural order.

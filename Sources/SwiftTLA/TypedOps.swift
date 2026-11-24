@@ -81,6 +81,22 @@ public func !=<Expression: TypedExpression>(_ lhs: Expression.ExpressionValue, _
     Expr(.notEqual(lhs.stateExpr, rhs.stateExpr))
 }
 
+public func ==<Element: NoneEncodedOptionalElement & TLAValueType>(_ lhs: some TypedExpression<Element?>, _ rhs: some TypedExpression<Element>) -> Expr<Bool> {
+    Expr(.equal(lhs.stateExpr, .assertView(rhs.stateExpr, Element.presentValueShape)))
+}
+
+public func ==<Element: NoneEncodedOptionalElement & TLAValueType>(_ lhs: some TypedExpression<Element>, _ rhs: some TypedExpression<Element?>) -> Expr<Bool> {
+    Expr(.equal(.assertView(lhs.stateExpr, Element.presentValueShape), rhs.stateExpr))
+}
+
+public func !=<Element: NoneEncodedOptionalElement & TLAValueType>(_ lhs: some TypedExpression<Element?>, _ rhs: some TypedExpression<Element>) -> Expr<Bool> {
+    Expr(.notEqual(lhs.stateExpr, .assertView(rhs.stateExpr, Element.presentValueShape)))
+}
+
+public func !=<Element: NoneEncodedOptionalElement & TLAValueType>(_ lhs: some TypedExpression<Element>, _ rhs: some TypedExpression<Element?>) -> Expr<Bool> {
+    Expr(.notEqual(.assertView(lhs.stateExpr, Element.presentValueShape), rhs.stateExpr))
+}
+
 public func &&(_ lhs: some TypedExpression<Bool>, _ rhs: some TypedExpression<Bool>) -> Expr<Bool> {
     Expr(.and(lhs.stateExpr, rhs.stateExpr))
 }

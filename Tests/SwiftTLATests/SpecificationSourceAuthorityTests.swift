@@ -321,6 +321,17 @@ struct SpecificationSourceAuthorityTests {
         }
     }
 
+    @Test("An optional enum reserves the string that represents nil")
+    func rejectsAmbiguousOptionalEncoding() throws {
+        let cases = #"case empty = "none", alice"#
+        let plain = try declaration("enum Rider: String, CaseIterable { \(cases) }")
+        #expect(try TLASpecVerifier.collectEnumVariables(from: plain.memberBlock.members).count == 1)
+        let optional = try declaration("enum Rider: String, NoneEncodedOptionalElement { \(cases) }")
+        #expect(throws: CompiledValueType.diagnostic("types.Rider", "the formal string \"none\" is reserved for nil")) {
+            _ = try TLASpecVerifier.collectEnumVariables(from: optional.memberBlock.members)
+        }
+    }
+
     @Test("Direct specification getters retain their inline declaration")
     func directGettersAreAdmitted() throws {
         let getters = [

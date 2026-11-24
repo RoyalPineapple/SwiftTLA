@@ -40,7 +40,8 @@ extension ParserSession {
                       let first = binding.arguments.first, let last = binding.arguments.last,
                       last.label?.text == "to",
                       case .parameter(let parameter)? = decodeTypedFacadeValue(first.expression, scope: sourceScope),
-                      let value = decodeTypedFacadeValue(last.expression, scope: sourceScope) else {
+                      let value = decodeTypedFacadeValue(last.expression, scope: sourceScope,
+                        expectedType: typedFacadeValueType(first.expression, scope: sourceScope)) else {
                     throw SourceParseDiagnostic(message: "Validation bindings require Bind(modelParameter, to: value).", source: statement)
                 }
                 recordValidationBinding(named: name, parameter: parameter.name, at: last.expression)

@@ -29,7 +29,7 @@ extension NativeSwiftEmitter {
            let members = program.enums.cases[name] {
             let cases = members.map { item in
                 let payload = try? literal(item.value, as: target)
-                return "case .`\(item.name)`: " + (payload.map { "return " + $0 } ?? "throw NativeMachineEvaluationError.noMatchingCase")
+                return "case .\(enumMember(item.name, of: name)): " + (payload.map { "return " + $0 } ?? "throw NativeMachineEvaluationError.noMatchingCase")
             }.joined(separator: "\n")
             return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in\nswitch value { \(cases) } }(\(value)))"
         }
@@ -144,7 +144,7 @@ extension NativeSwiftEmitter {
         }
         func members(_ type: CompiledValueType) -> [(name: String, value: CompiledValue)]? {
             switch type {
-            case .named(let name): return program.enums.cases[name]?.map { ("`\($0.name)`", $0.value) }
+            case .named(let name): return program.enums.cases[name]?.map { (enumMember($0.name, of: name), $0.value) }
             case .finite(let values): return values.enumerated().map { (finiteCaseName(values, index: $0.offset), $0.element) }
             default: return nil
             }
@@ -239,7 +239,7 @@ extension NativeSwiftEmitter {
             return "({ (value: \(try swiftType(type))) -> \(nativeIntType) in\nswitch value { \(cases) } })(\(value))"
         case .named(let name):
             guard let members = program.enums.cases[name] else { throw unsupported("union enum rank") }
-            let cases = members.map { "case .`\($0.name)`: return \($0.value.orderingKind)" }.joined(separator: "\n")
+            let cases = members.map { "case .\(enumMember($0.name, of: name)): return \($0.value.orderingKind)" }.joined(separator: "\n")
             return "({ (value: \(name)) -> \(nativeIntType) in\nswitch value { \(cases) } })(\(value))"
         default: throw unsupported("union alternative order")
         }

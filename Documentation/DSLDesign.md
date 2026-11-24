@@ -379,6 +379,19 @@ For writable sets, use `marked.insert(node)` to add a member,
 `frontier.remove(node)` to remove one, and `frontier.formUnion(successors)`
 to add a set of members in one assignment.
 
+A finite string-backed enum expression exposes its Swift `rawValue`. For example,
+a model value `d1` has the raw string `"d1"`. Comparing the enum cases directly
+keeps their formal identities. In a validation binding, the parameter type
+determines the collection. `Bind(Prisoner, to: ["Alice", "Bob"])` supplies a set
+when `Prisoner` has type `Set<String>`.
+
+For an upstream model that encodes an empty slot as the formal string `"none"`,
+conform the wrapped string enum to `NoneEncodedOptionalElement`. The elevator
+declares `Car.rider: PersonID?`, assigns with `rider.set(person)`, and clears
+with `rider.set(nil)`. The generated Swift state exposes the optional. The formal
+state retains the upstream strings. The model declaration rejects a wrapped
+case that would also encode as `"none"`.
+
 Within a scoped `Algorithm`, declare a shared field by key path when you only
 need its state member. In a `Do` with `in: State.self`, copy another field of
 the same type or assign an integer literal to an `Int` field.

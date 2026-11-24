@@ -2,6 +2,36 @@ public protocol FiniteTLAValueDomain: TLAValueType, Hashable, Sendable {
   static var finiteValues: [Self] { get }
 }
 
+/// Uses the upstream string "none" for a missing value of this enum.
+public protocol NoneEncodedOptionalElement: CaseIterable, RawRepresentable where RawValue == String {}
+
+extension NoneEncodedOptionalElement where Self: TLAValueType {
+  static var presentValueShape: FormalValueShape {
+    .finite(typeName: String(describing: Self.self), values: allCases.map(\.tlaValue))
+  }
+}
+
+extension Optional: TLAValueType, TLAValueConvertible, TypedExpression, StateExprConvertible where Wrapped: NoneEncodedOptionalElement & TLAValueType {
+  public static var defaultValue: Self { nil }
+  public static var formalValueShape: FormalValueShape {
+    .finite(typeName: "\(Wrapped.self)?", values: [.string("none")] + Wrapped.allCases.map(\.tlaValue))
+  }
+  public var tlaValue: TLAValue { map(\.tlaValue) ?? .string("none") }
+  public var sourceIssue: SourceModelIssue? {
+    if Wrapped.allCases.contains(where: { $0.tlaValue == .string("none") }) {
+      return .formalDeclaration(kind: "optional", name: String(describing: Wrapped.self),
+        problem: "a wrapped value uses the reserved formal string \"none\"")
+    }
+    return flatMap(\.sourceIssue)
+  }
+  public init?(formalValue: TLAValue) {
+    if formalValue == .string("none") { self = nil }
+    else if let value = Wrapped(formalValue: formalValue), value.preservesFormalValue(formalValue) { self = value }
+    else { return nil }
+    guard sourceIssue == nil else { return nil }
+  }
+}
+
 extension FiniteTLAValueDomain {
   public static var formalValueShape: FormalValueShape {
     .finite(typeName: String(describing: Self.self), values: tlaValues)

@@ -1481,8 +1481,9 @@ extension ParserSession {
                 targetSyntax = call.arguments.first?.expression
                 valueSyntax = call.arguments.first(where: { $0.label?.text == "to" })?.expression
             }
-            guard let target = algorithmTarget(targetSyntax, scope: scope), let valueSyntax,
-                  let value = decodeAlgorithmStateExpression(valueSyntax, scope: scope)
+            guard let targetSyntax, let target = algorithmTarget(targetSyntax, scope: scope), let valueSyntax,
+                  let value = decodeTypedFacadeValue(valueSyntax, scope: scope,
+                    expectedType: typedFacadeValueType(targetSyntax, scope: scope))
             else { return nil }
             return .set(target: target, value: value)
         case .goto:

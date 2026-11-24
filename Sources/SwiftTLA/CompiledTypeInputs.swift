@@ -164,6 +164,10 @@ package struct CompiledTypeContext: Sendable {
         }
         switch source {
         case .named(let name):
+            if case .named(let optional) = expected, optional == name + "?",
+               let source = namedDomains[name], let target = namedDomains[optional] {
+                return source.isSubset(of: target) && !source.contains(.string("none"))
+            }
             if expected != .unknown, namedRepresentations[name] == expected { return true }
             if case .finite(let members) = expected, let domain = namedDomains[name] {
                 return domain.isSubset(of: Set(members))

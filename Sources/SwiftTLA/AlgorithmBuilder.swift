@@ -1484,6 +1484,10 @@ extension AssignmentTarget {
     /// Writes the new value when the modeled step executes.
     public func set(_ value: Value) -> StepStatement { Assign(self, to: value) }
 
+    public func set<Element: NoneEncodedOptionalElement & TLAValueType>(_ expression: some TypedExpression<Element>) -> StepStatement where Value == Element? {
+        Assign(self, to: Expr<Value>(.assertView(expression.stateExpr, Element.presentValueShape)))
+    }
+
     public func set(_ expression: some TypedExpression<Value>) -> StepStatement {
         Assign(self, to: expression)
     }

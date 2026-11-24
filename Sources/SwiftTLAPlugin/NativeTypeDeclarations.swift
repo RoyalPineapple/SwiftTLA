@@ -174,7 +174,7 @@ struct NativeTypeDeclarations: Sendable {
         self.nominalRecords = nominalRecords
         self.identityElements = identityElements
         self.enumNames = Set(visited.compactMap {
-            if case .named(let name) = $0 { return name }
+            if case .named(let name) = $0 { return name.hasSuffix("?") ? String(name.dropLast()) : name }
             return nil
         })
         self.unions = unions

@@ -21,6 +21,9 @@ struct EnumEncodingTests {
         let authored = SetExpr<String>.literal(Expr(EncodedEnumDomain.Datum.text).assuming(String.self), Expr("é"))
         let exactStrings: Set<TLAValue> = [.string("e\u{301}"), .string("é")]
         #expect(try compiledValue(authored.stateExpr) == .set(exactStrings))
+        for value in EncodedEnumDomain.Datum.allCases {
+            #expect(try compiledValue(Expr(value).rawValue.stateExpr) == .canonicalSwiftString(value.rawValue))
+        }
         let scenario = try #require(EncodedEnumDomain.validationScenarios().first)
         let machines = try scenario.initialMachines()
         let token = try #require(TLAStateProjection.Token(validating: "value"))
@@ -75,7 +78,7 @@ struct EnumEncodingTests {
                 let reached = try machine.formalProjection(of: machine.snapshot)
                 #expect(reached.value(for: rawToken) == .string("e\u{301}"))
                 #expect(reached.value(for: textsToken) == .set(exactStrings))
-                #expect(try machine.violatedInvariants(checking: [.RawTextPreserved], atLevel: 2).isEmpty)
+                #expect(try machine.violatedInvariants(checking: [.RawTextPreserved, .RawValueSpelling], atLevel: 2).isEmpty)
                 #expect(EncodedEnumDomain.Datum(formalValue: value.tlaValue)?.tlaValue == value.tlaValue)
             }
         }

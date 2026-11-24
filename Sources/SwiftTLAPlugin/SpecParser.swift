@@ -1269,6 +1269,10 @@ final class ParserSession {
             }
             switch member.declName.baseName.sourceIdentifierName {
             case "raw", "stateExpr", "expr": return base
+            case "rawValue":
+                guard let name = typedFacadeValueType(baseSyntax, scope: scope)?.enumerationType,
+                      let cases = enumDefinition(named: name)?.stringRawValues else { return nil }
+                return base.stringRawValue(cases: cases)
             case "keys":
                 guard case .dictionary = typedFacadeValueType(baseSyntax, scope: scope) else { return nil }
                 return .domain(base)
@@ -1605,6 +1609,15 @@ final class ParserSession {
     ) -> StateExpr? {
         let expectedType = expectedType ?? expectedEnumType.flatMap { try? sourceTypeResolver.resolve($0) }
         let expectedEnumType = expectedType?.enumerationType ?? expectedEnumType
+        if let optional = expectedEnumType, optional.hasSuffix("?") {
+            if expression.is(NilLiteralExprSyntax.self) { return .value(.string("none")) }
+            let wrapped = String(optional.dropLast())
+            if typedFacadeValueType(expression, scope: scope) == .named(wrapped),
+               let declaration = enumDefinition(named: wrapped),
+               let value = decodeTypedFacadeValue(expression, scope: scope, expectedEnumType: wrapped) {
+                return .assertView(value, .finite(typeName: wrapped, values: declaration.cases.map(\.value)))
+            }
+        }
         if let tuple = expression.as(TupleExprSyntax.self), tuple.elements.count == 1,
            let element = tuple.elements.first, element.label == nil {
             return decodeTypedFacadeValue(element.expression, scope: scope,
@@ -1638,6 +1651,10 @@ final class ParserSession {
                     expectedEnumType: expectedEnumType, expectedType: expectedType?.selectedElement)
             }
             guard elements.count == array.elements.count else { return nil }
+            if case .set = expectedType {
+                var seen: Set<StateExpr> = []
+                return .setLiteral(elements.filter { seen.insert($0).inserted })
+            }
             let literals = elements.compactMap { value -> TLAValue? in
                 if case .value(let literal) = value { return literal }
                 return nil
@@ -1958,6 +1975,11 @@ final class ParserSession {
             else { return nil }
             return .value(value)
         }
+        if let expectedType, expectedType.hasSuffix("?") {
+            if member.declName.baseName.sourceIdentifierName == "none" { return .value(.string("none")) }
+            return enumDefinition(named: String(expectedType.dropLast()))?
+                .value(named: member.declName.baseName.sourceIdentifierName).map(StateExpr.value)
+        }
         if let expectedType, let declaration = enumDefinition(named: expectedType) {
             return declaration.value(named: member.declName.baseName.sourceIdentifierName).map(StateExpr.value)
         }
@@ -2092,6 +2114,10 @@ final class ParserSession {
            let field = typedFacadeValueType(base, scope: scope)?.recordFields?.first(where: {
                $0.name == member.declName.baseName.sourceIdentifierName
            }) { return field.type }
+        if let member = expression.as(MemberAccessExprSyntax.self), let base = member.base,
+           member.declName.baseName.sourceIdentifierName == "rawValue",
+           let name = typedFacadeValueType(base, scope: scope)?.enumerationType,
+           enumDefinition(named: name)?.stringRawValues != nil { return .string }
         if let member = expression.as(MemberAccessExprSyntax.self), let base = member.base,
            member.declName.baseName.sourceIdentifierName == "keys",
            case .dictionary(let key, _) = typedFacadeValueType(base, scope: scope) {

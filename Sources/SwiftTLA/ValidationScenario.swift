@@ -260,6 +260,12 @@ public func Bind<Value: TLAValueType>(
     .init(parameter: parameter.reference, value: value.stateExpr)
 }
 
+public func Bind<Element: TLAValueType>(
+    _ parameter: ModelParameter<Set<Element>>, to value: Set<Element>
+) -> ValidationBinding {
+    .init(parameter: parameter.reference, value: value.stateExpr)
+}
+
 @resultBuilder
 public enum ValidationBuilder {
     public static func buildBlock(_ bindings: ValidationBinding...) -> [ValidationBinding] { bindings }

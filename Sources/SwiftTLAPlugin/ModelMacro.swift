@@ -107,7 +107,7 @@ enum TLASpecVerifier {
             let name = type.name.sourceIdentifierName
             switch (module.name.sourceIdentifierName, name) {
             case ("Swift", "Int"), ("Swift", "String"), ("Swift", "CaseIterable"),
-                 ("SwiftTLA", "TLAValueType"), ("SwiftTLA", "FiniteTLAValueDomain"):
+                 ("SwiftTLA", "TLAValueType"), ("SwiftTLA", "FiniteTLAValueDomain"), ("SwiftTLA", "NoneEncodedOptionalElement"):
                 return name
             default: return nil
             }
@@ -115,7 +115,7 @@ enum TLASpecVerifier {
     }
 
     static func infersFiniteEnumConformance(_ inheritedNames: Set<String>) -> Bool {
-        inheritedNames.contains("CaseIterable")
+        (inheritedNames.contains("CaseIterable") || inheritedNames.contains("NoneEncodedOptionalElement"))
             && (inheritedNames.contains("Int") || inheritedNames.contains("String"))
             && !inheritedNames.contains("TLAValueType")
             && !inheritedNames.contains("FiniteTLAValueDomain")
@@ -133,8 +133,9 @@ enum TLASpecVerifier {
             guard intBacked || stringBacked else { continue }
             let formalValue = inheritedNames.contains("TLAValueType")
                 || inheritedNames.contains("FiniteTLAValueDomain")
+            let supportsOptional = inheritedNames.contains("NoneEncodedOptionalElement")
             let inferredFiniteDomain = infersFiniteEnumConformance(inheritedNames)
-            guard formalValue || inferredFiniteDomain else {
+            guard formalValue || inferredFiniteDomain || supportsOptional else {
                 continue
             }
 
@@ -207,11 +208,16 @@ enum TLASpecVerifier {
             if case .cases(let encodings) = encoding, Set(encodings.keys) != caseNames {
                 throw ModelMacroError.unsupportedEnumEncoding(typeName: enumDecl.name.text)
             }
+            if supportsOptional, cases.contains(where: { $0.value == .string("none") }) {
+                throw CompiledValueType.diagnostic("types." + enumDecl.name.text,
+                    "the formal string \"none\" is reserved for nil")
+            }
             enums.append(SourceEnum(
                 typeName: enumDecl.name.text,
                 cases: cases,
                 finiteValues: try finiteValues(in: enumDecl, cases: cases),
-                isFiniteDomain: inheritedNames.contains("FiniteTLAValueDomain") || inferredFiniteDomain
+                isFiniteDomain: inheritedNames.contains("FiniteTLAValueDomain") || inferredFiniteDomain || supportsOptional,
+                supportsOptional: supportsOptional
             ))
         }
         return enums

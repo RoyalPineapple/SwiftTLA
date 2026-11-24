@@ -739,6 +739,8 @@ package struct CompiledTypeChecker: Sendable {
             return .record(try zip(a, b).map { .init(name: $0.name, type: try operandContext($0.type, $1.type)) })
         case (.oneOf, _), (.union, _): return lhs
         case (_, .oneOf), (_, .union): return rhs
+        case (.named(let wrapped), .named(let optional)) where optional == wrapped + "?": return rhs
+        case (.named(let optional), .named(let wrapped)) where optional == wrapped + "?": return lhs
         case (.named, .named): return try CompiledValueType.merge(lhs, rhs)
         case (.finite, _): return lhs
         case (_, .finite): return rhs

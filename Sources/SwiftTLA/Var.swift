@@ -88,6 +88,25 @@ extension TLAValueType where Self: RawRepresentable, Self.RawValue == String {
   }
 }
 
+extension TypedExpression where ExpressionValue: CaseIterable & RawRepresentable, ExpressionValue.RawValue == String {
+  public var rawValue: Expr<String> {
+    Expr(stateExpr.stringRawValue(cases: ExpressionValue.allCases.map { ($0.tlaValue, $0.rawValue) }))
+  }
+}
+
+extension StateExpr {
+  package func stringRawValue(cases: [(TLAValue, String)]) -> Self {
+    if cases.allSatisfy({ $0.0 == .canonicalSwiftString($0.1) }) {
+      return .assertView(self, .string)
+    }
+    let name = Self.freshBoundName("__rawValue", avoiding: freeVariableNames)
+    let branches = cases.flatMap { key, raw in
+      [Self.equal(.variable(name), .value(key)), .value(.canonicalSwiftString(raw))]
+    }
+    return .letValue(name, self, .caseExpr(branches, nil))
+  }
+}
+
 extension TLAValue: TLAValueType {
   public static var defaultValue: TLAValue { .int(0) }
   public init?(formalValue: TLAValue) { self = formalValue }
