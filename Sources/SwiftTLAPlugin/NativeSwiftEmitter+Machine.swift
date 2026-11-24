@@ -3494,12 +3494,15 @@ func verifyGeneratedActionWriteOutput(
                 "generated conjunction differs from the checked rule")
         }
     }
+    func actionPartCallPositions(in tokens: [String]) -> [Int] {
+        guard tokens.count >= 3 else { return [] }
+        return (1..<(tokens.count - 1)).filter { index in
+            tokens[index - 1] == "try" && tokens[index].hasPrefix("_actionPart") && tokens[index + 1] == "("
+        }
+    }
     for id in alternatives {
         let tokens = bodies[id]!
-        let positions = tokens.indices.filter { index in
-            index > 0 && index + 1 < tokens.count && tokens[index].hasPrefix("_actionPart") &&
-                tokens[index - 1] == "try" && tokens[index + 1] == "("
-        }
+        let positions = actionPartCallPositions(in: tokens)
         func call(at position: Int) -> [String]? {
             var depth = 0
             for end in (position + 1)..<tokens.count {
@@ -3536,10 +3539,7 @@ func verifyGeneratedActionWriteOutput(
         let id = condition.id
         let tokens = bodies[id]!
         let children = expectedChildren[id]!
-        let positions = tokens.indices.filter { index in
-            index > 0 && index + 1 < tokens.count && tokens[index].hasPrefix("_actionPart") &&
-                tokens[index - 1] == "try" && tokens[index + 1] == "("
-        }
+        let positions = actionPartCallPositions(in: tokens)
         func call(at position: Int) -> [String]? {
             var depth = 0
             for end in (position + 1)..<tokens.count {
