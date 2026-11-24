@@ -118,6 +118,24 @@ PublicSendOutcome(plan, prior, action, visits, failures) ==
        ELSE [kind |-> "success", current |-> visits[1],
              value |-> [action |-> action, before |-> prior[2], after |-> visits[1][2]]]
 
+THEOREM EmptyAndSingletonSendQueuesHaveTheirLengths ==
+    /\ Len(<<>>) = 0
+    /\ \A value : Len(<<value>>) = 1 /\ <<value>>[1] = value
+    BY ONLY EmptySeq, SeqDef, LenProperties, SMT
+
+THEOREM PublicSendOutcomeUsesTheEmptyAndSingletonQueues ==
+    ASSUME NEW plan, NEW prior, NEW action, NEW visits, NEW failures
+    PROVE LET sent == PublicSendOutcome(plan, prior, action, visits, failures)
+          IN /\ (visits = <<>> /\ failures = <<>> =>
+                   sent = [kind |-> "disabled", current |-> prior,
+                           value |-> plan.errors[plan.selectorGuards[1].error]])
+             /\ (\A reason : failures = <<reason>> =>
+                   sent = [kind |-> "evaluationFailure", current |-> prior, value |-> reason])
+             /\ (\A snapshot : visits = <<snapshot>> /\ failures = <<>> =>
+                   sent = [kind |-> "success", current |-> snapshot,
+                           value |-> [action |-> action, before |-> prior[2], after |-> snapshot[2]]])
+    BY ONLY EmptyAndSingletonSendQueuesHaveTheirLengths, SMT DEF PublicSendOutcome
+
 THEOREM DecodedSendUsesTheFirstErrorOrCommitsExactlyOneCallback ==
     ASSUME NEW plan, NEW action, NEW prior, DecodedSendOperands(plan, action),
            NEW snapshots, NEW reasons, <<>> \notin reasons,
@@ -253,7 +271,7 @@ PROOF
 <1>lengths.
     /\ Len(<<>>) = 0
     /\ \A value : Len(<<value>>) = 1 /\ <<value>>[1] = value
-    BY ONLY EmptySeq, SeqDef, LenProperties, SMT
+    BY ONLY EmptyAndSingletonSendQueuesHaveTheirLengths
 <1>observe. observed =
     IF completed.failure = <<>> THEN completed.updates[1]
     ELSE Unchanged(prior, completed.failure.kind, completed.failure.value)

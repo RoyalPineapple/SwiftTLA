@@ -1,6 +1,6 @@
 ---- MODULE SwiftTLAOrderedRHSBackendAgreement ----
 EXTENDS SwiftTLAOrderedRHSConfiguredProof, SwiftTLANativeAssignmentActions, TLAPS,
-        OrderedOverflowDirectInitialDisabled
+        OrderedOverflowDirectInitialDisabled, SwiftTLAArithmeticPublicSendBinding
 \* CallerInputPage1 CallerInputPage2 CallerInputPage3 CallerInputPage4 CallerInputPage5
 \* The native packet records this failure from the real visitor of the actual initial machine.
 LOCAL ActualNativeFailure == NativeAssignmentFailure
@@ -515,6 +515,9 @@ THEOREM ActualNativeAndTLAAdvanceAgreeOnTypedInput ==
                         ELSE <<>>
                     /\ ActualNativeAssignmentFailureReasons =
                         IF RHSOutputSelected /\ final.failure # <<>> THEN <<final.failure.payload>> ELSE <<>>
+                    /\ ActualNativeAssignmentCallbackSnapshots \in Seq({<<RHSOutputExit, final.bindings>>})
+                    /\ ActualNativeAssignmentFailureReasons \in Seq(RHSOutputInput!Rule!ArithmeticFailures)
+                    /\ <<>> \notin RHSOutputInput!Rule!ArithmeticFailures
 PROOF
 <1>actual. PICK history : RHSOutputSourceHistory(history) /\ RHSOutputHistoryObservation(history)
     BY ONLY RHSOutputStateType, ActualTLAActionHasACertifiedAssignmentHistory
@@ -626,6 +629,22 @@ PROOF
                 DEF NativeAssignmentEmptyFailureBuffer
         <3>. QED BY ONLY <2>reached, <3>reason, SMT DEF ActualNativeAssignmentFailureReasons
     <2>. QED BY ONLY <2>inactive, <2>reached, SMT
+<1>outputType.
+    /\ ActualNativeAssignmentCallbackSnapshots \in Seq({<<RHSOutputExit, final.bindings>>})
+    /\ ActualNativeAssignmentFailureReasons \in Seq(RHSOutputInput!Rule!ArithmeticFailures)
+    /\ <<>> \notin RHSOutputInput!Rule!ArithmeticFailures
+    <2>. DEFINE output == RHSOutputInput!Rule!DecodedNativeAssignmentOrderedOutput(
+                    RHSOutputRows, DecodedNativeAction, NativeFormalNames, "pc", RHSOutputBefore, pc,
+                    NativeAssignmentCheckedAppendSites)
+    <2>decoded.
+        /\ output = RHSOutputInput!Rule!CertifiedAssignmentOrderedOutput(final, RHSOutputSelected, RHSOutputExit)
+        /\ RHSOutputInput!Rule!NativeAssignmentOrderedOutputsTyped(output, final, RHSOutputExit)
+        BY ONLY <1>ordered, PTL DEF RHSOutputInput!Rule!NativeAssignmentObservationMatches,
+            output, final, RHSOutputSelected, RHSOutputCount
+    <2>reasons. ActualNativeAssignmentFailureReasons = output.reasons
+        BY ONLY <1>returned, <2>decoded, IsaM("auto") DEF RHSOutputInput!Rule!CertifiedAssignmentOrderedOutput
+    <2>. QED BY ONLY <2>decoded, <2>reasons, IsaM("auto")
+        DEF output, ActualNativeAssignmentCallbackSnapshots, RHSOutputInput!Rule!NativeAssignmentOrderedOutputsTyped
 <1>raw. NativeAssignmentRawFailures =
     IF RHSOutputSelected /\ final.failure # <<>> THEN
         {[label |-> RHSOutputActionLabel, actionOrdinal |-> NativeActionOrdinal, site |-> final.failure.site,
@@ -640,17 +659,226 @@ PROOF
         BY ONLY <1>raw, <1>prefix, <1>before, <2>reached, SMT
             DEF ActualNativeAssignmentFailures, NativeAssignmentFailureEvent, RHSOutputHistoryFailures, final
     <2>. QED BY ONLY <2>inactive, <2>reached, SMT
-<1>callbacks. \E witness :
-    /\ RHSOutputSourceHistory(witness)
-    /\ RHSOutputHistoryObservation(witness)
-    /\ LET tail == witness[RHSOutputCount] IN
+<1>callbacks. \E history :
+    /\ RHSOutputSourceHistory(history)
+    /\ RHSOutputHistoryObservation(history)
+    /\ LET final == history[RHSOutputCount] IN
         /\ ActualNativeAssignmentCallbackSnapshots =
-            IF RHSOutputSelected /\ tail.failure = <<>>
-            THEN << <<RHSOutputExit, tail.bindings>> >> ELSE <<>>
+            IF RHSOutputSelected /\ final.failure = <<>>
+            THEN << <<RHSOutputExit, final.bindings>> >>
+            ELSE <<>>
         /\ ActualNativeAssignmentFailureReasons =
-            IF RHSOutputSelected /\ tail.failure # <<>> THEN <<tail.failure.payload>> ELSE <<>>
+            IF RHSOutputSelected /\ final.failure # <<>> THEN <<final.failure.payload>> ELSE <<>>
+        /\ ActualNativeAssignmentCallbackSnapshots \in Seq({<<RHSOutputExit, final.bindings>>})
+        /\ ActualNativeAssignmentFailureReasons \in Seq(RHSOutputInput!Rule!ArithmeticFailures)
+        /\ <<>> \notin RHSOutputInput!Rule!ArithmeticFailures
     <2>. WITNESS history
-    <2>. QED BY ONLY <1>actual, <1>snapshots, <1>returned DEF final
+    <2>. QED BY ONLY <1>actual, <1>snapshots, <1>returned, <1>outputType DEF final
 <1>. QED BY ONLY <1>advance, <1>actual, <1>failures, <1>callbacks DEF RHSOutputHistoryObservation
+
+ArithmeticSendBefore == <<pc, RHSOutputBefore>>
+
+
+LOCAL ArithmeticSendAction == ActualNativeAssignmentHandle
+ArithmeticSendVisits == ActualNativeAssignmentCallbackSnapshots
+LOCAL ArithmeticSendFailures == ActualNativeAssignmentFailureReasons
+ArithmeticPublicSend ==
+    DecodedPublicSend(ArithmeticSendBinding, ArithmeticSendBefore, ArithmeticSendAction,
+                           ArithmeticSendVisits, ArithmeticSendFailures)
+
+THEOREM TypedArithmeticSendUsesTheCertifiedActionObservation ==
+    ASSUME RHSOutputStateType
+    PROVE /\ ArithmeticSendBinding.checking = "none"
+          /\ (advance <=> (ArithmeticPublicSend.kind = "success" /\
+                  ArithmeticPublicSend.current = <<pc', RHSOutputAfter>>))
+          /\ (ArithmeticPublicSend.kind = "success" => ArithmeticSendVisits = <<ArithmeticPublicSend.current>>)
+          /\ \E history :
+                /\ RHSOutputSourceHistory(history)
+                /\ RHSOutputHistoryObservation(history)
+                /\ LET final == history[RHSOutputCount]
+                       sent == ArithmeticPublicSend
+                   IN IF ~RHSOutputSelected
+                      THEN /\ sent.kind = "disabled" /\ sent.value = "noMatchingSuccessor"
+                           /\ sent.current = ArithmeticSendBefore
+                      ELSE IF final.failure # <<>>
+                      THEN /\ sent.kind = "evaluationFailure" /\ sent.value = final.failure.payload
+                           /\ sent.current = ArithmeticSendBefore
+                           /\ ArithmeticSendVisits = <<>>
+                      ELSE /\ sent.kind = "success"
+                           /\ sent.current = <<RHSOutputExit, final.bindings>>
+                           /\ sent.value = [action |-> RHSOutputActionLabel,
+                                             before |-> RHSOutputBefore, after |-> final.bindings]
+PROOF
+<1>route. ArithmeticSendBinding.checking = "none"
+    BY ONLY ArithmeticSendBindingUsesNoChecking, PTL
+<1>handle. ActualNativeAssignmentHandle = RHSOutputActionLabel
+    BY ONLY CallerInputDomain, CallerInputPageBlock1AtFileOffsets,
+        ActualArithmeticCandidateInvokesTheCheckedNativeVisitor, PTL
+        DEF CallerInputSize
+<1>name. RHSOutputActionLabel = "advance"
+    BY ONLY SMT DEF RHSOutputActionLabel
+<1>visit. PICK history :
+    /\ RHSOutputSourceHistory(history)
+    /\ RHSOutputHistoryObservation(history)
+    /\ LET final == history[RHSOutputCount] IN
+        /\ ActualNativeAssignmentCallbackSnapshots =
+            IF RHSOutputSelected /\ final.failure = <<>>
+            THEN << <<RHSOutputExit, final.bindings>> >> ELSE <<>>
+        /\ ActualNativeAssignmentFailureReasons =
+            IF RHSOutputSelected /\ final.failure # <<>> THEN <<final.failure.payload>> ELSE <<>>
+        /\ ActualNativeAssignmentCallbackSnapshots \in Seq({<<RHSOutputExit, final.bindings>>})
+        /\ ActualNativeAssignmentFailureReasons \in Seq(RHSOutputInput!Rule!ArithmeticFailures)
+        /\ <<>> \notin RHSOutputInput!Rule!ArithmeticFailures
+    BY ONLY RHSOutputStateType, CallerInputDomain, CallerInputPageBlock1AtFileOffsets,
+        ActualNativeAndTLAAdvanceAgreeOnTypedInput, PTL
+        DEF CallerInputSize
+<1>. DEFINE final == history[RHSOutputCount]
+            sent == ArithmeticPublicSend
+<1>operands. DecodedSendOperands(ArithmeticSendBinding, ArithmeticSendAction)
+    BY ONLY <1>handle, <1>name, ArithmeticSendBindingDecodesReceiverOperands, SMT
+        DEF ArithmeticSendAction
+<1>. DEFINE snapshots == {<<RHSOutputExit, final.bindings>>}
+            reasons == RHSOutputInput!Rule!ArithmeticFailures
+<1>sequences.
+    /\ ArithmeticSendVisits \in Seq(snapshots)
+    /\ ArithmeticSendFailures \in Seq(reasons)
+    /\ <<>> \notin reasons
+    BY ONLY <1>visit, PTL DEF ArithmeticSendVisits, ArithmeticSendFailures, snapshots, final, reasons
+<1>interpreted. sent =
+    PublicSendOutcome(ArithmeticSendBinding, ArithmeticSendBefore, ArithmeticSendAction,
+                           ArithmeticSendVisits, ArithmeticSendFailures)
+    BY ONLY <1>operands, <1>sequences, DecodedSendUsesTheFirstErrorOrCommitsExactlyOneCallback, SMT
+        DEF sent, ArithmeticPublicSend
+<1>off. ASSUME ~RHSOutputSelected
+    PROVE /\ sent.kind = "disabled" /\ sent.value = "noMatchingSuccessor"
+          /\ sent.current = ArithmeticSendBefore
+    <2>missing. ArithmeticSendBinding.errors[ArithmeticSendBinding.selectorGuards[1].error] = "noMatchingSuccessor"
+        BY ONLY ArithmeticSendBindingReportsMissingSuccessor, PTL
+    <2>empty. /\ ArithmeticSendVisits = <<>> /\ ArithmeticSendFailures = <<>>
+        BY ONLY ~RHSOutputSelected, <1>visit, IsaM("auto") DEF ArithmeticSendVisits, ArithmeticSendFailures
+    <2>. QED BY ONLY <2>empty, <2>missing, <1>interpreted,
+        PublicSendOutcomeUsesTheEmptyAndSingletonQueues, SMT
+<1>overflow. ASSUME RHSOutputSelected /\ final.failure # <<>>
+    PROVE /\ sent.kind = "evaluationFailure" /\ sent.value = final.failure.payload
+          /\ sent.current = ArithmeticSendBefore
+          /\ ArithmeticSendVisits = <<>>
+    <2>queues. /\ ArithmeticSendVisits = <<>> /\ ArithmeticSendFailures = <<final.failure.payload>>
+        BY ONLY (RHSOutputSelected /\ final.failure # <<>>), <1>visit, IsaM("auto")
+            DEF ArithmeticSendVisits, ArithmeticSendFailures, final
+    <2>. QED BY ONLY <2>queues, <1>interpreted, PublicSendOutcomeUsesTheEmptyAndSingletonQueues, SMT
+<1>commit. ASSUME RHSOutputSelected /\ final.failure = <<>>
+    PROVE /\ sent.kind = "success" /\ sent.current = <<RHSOutputExit, final.bindings>>
+          /\ sent.value = [action |-> RHSOutputActionLabel,
+                            before |-> RHSOutputBefore, after |-> final.bindings]
+    <2>queues. /\ ArithmeticSendVisits = << <<RHSOutputExit, final.bindings>> >>
+               /\ ArithmeticSendFailures = <<>>
+        BY ONLY (RHSOutputSelected /\ final.failure = <<>>), <1>visit, IsaM("auto")
+            DEF ArithmeticSendVisits, ArithmeticSendFailures, final
+    <2>. DEFINE callback == <<RHSOutputExit, final.bindings>>
+    <2>policy. PublicSendOutcome(ArithmeticSendBinding, ArithmeticSendBefore, ArithmeticSendAction,
+                                      <<callback>>, <<>>) =
+        [kind |-> "success", current |-> callback,
+         value |-> [action |-> ArithmeticSendAction, before |-> ArithmeticSendBefore[2], after |-> callback[2]]]
+        BY ONLY EmptyAndSingletonSendQueuesHaveTheirLengths, SMT DEF PublicSendOutcome
+    <2>selected. sent =
+        [kind |-> "success", current |-> callback,
+         value |-> [action |-> ArithmeticSendAction, before |-> ArithmeticSendBefore[2], after |-> callback[2]]]
+        BY ONLY <2>queues, <1>interpreted, <2>policy, Zenon DEF callback
+    <2>. QED BY ONLY <2>selected, <1>handle, IsaM("simp") DEF callback, ArithmeticSendBefore, ArithmeticSendAction
+<1>selectedOnSuccess. ASSUME ArithmeticPublicSend.kind = "success"
+    PROVE RHSOutputSelected /\ final.failure = <<>>
+    BY ONLY ArithmeticPublicSend.kind = "success", <1>off, <1>overflow, IsaM("auto") DEF sent
+<1>step. advance <=> (ArithmeticPublicSend.kind = "success" /\
+                  ArithmeticPublicSend.current = <<pc', RHSOutputAfter>>)
+    <2>observed. advance <=>
+        /\ RHSOutputSelected /\ final.failure = <<>>
+        /\ pc' = RHSOutputExit /\ RHSOutputAfter = final.bindings
+        BY ONLY <1>visit, PTL DEF final, RHSOutputHistoryObservation, RHSOutputHistoryAdvance
+    <2>reached. ArithmeticPublicSend.kind = "success" <=> RHSOutputSelected /\ final.failure = <<>>
+        BY ONLY <1>selectedOnSuccess, <1>commit, PTL DEF sent
+    <2>. QED BY ONLY <2>observed, <2>reached, <1>commit, IsaM("auto") DEF sent
+<1>commitsCallback. ASSUME ArithmeticPublicSend.kind = "success"
+    PROVE ArithmeticSendVisits = <<ArithmeticPublicSend.current>>
+    <2>callback. ArithmeticSendVisits = << <<RHSOutputExit, final.bindings>> >>
+        BY ONLY <1>visit, ArithmeticPublicSend.kind = "success", <1>selectedOnSuccess, IsaM("auto") DEF ArithmeticSendVisits, final
+    <2>. QED BY ONLY <2>callback, <1>commit, ArithmeticPublicSend.kind = "success", <1>selectedOnSuccess, IsaM("auto") DEF sent
+<1>result. \E history :
+    /\ RHSOutputSourceHistory(history)
+    /\ RHSOutputHistoryObservation(history)
+    /\ LET final == history[RHSOutputCount]
+           sent == ArithmeticPublicSend
+       IN IF ~RHSOutputSelected
+          THEN /\ sent.kind = "disabled" /\ sent.value = "noMatchingSuccessor"
+               /\ sent.current = ArithmeticSendBefore
+          ELSE IF final.failure # <<>>
+          THEN /\ sent.kind = "evaluationFailure" /\ sent.value = final.failure.payload
+               /\ sent.current = ArithmeticSendBefore
+               /\ ArithmeticSendVisits = <<>>
+          ELSE /\ sent.kind = "success"
+               /\ sent.current = <<RHSOutputExit, final.bindings>>
+               /\ sent.value = [action |-> RHSOutputActionLabel,
+                                 before |-> RHSOutputBefore, after |-> final.bindings]
+    <2>. WITNESS history
+    <2>. QED BY ONLY <1>visit, <1>off, <1>overflow, <1>commit, IsaM("auto") DEF sent, final
+<1>. QED BY ONLY <1>route, <1>step, <1>commitsCallback, <1>result, PTL
+
+THEOREM InitialArithmeticSendReportsTheCertifiedOverflow ==
+    ASSUME Init
+    PROVE /\ ArithmeticPublicSend.kind = "evaluationFailure"
+          /\ ArithmeticPublicSend.value = <<"integerOverflow", "addition", <<RHSOutputMax, 1>>>>
+          /\ ArithmeticPublicSend.current = ArithmeticSendBefore
+          /\ ArithmeticSendVisits = <<>>
+PROOF
+<1>type. RHSOutputStateType
+    BY ONLY Init, SMT DEF Init, RHSOutputStateType,
+        RHSOutputBefore, RHSOutputKeys, RHSOutputMin, RHSOutputMax
+<1>. DEFINE expected ==
+                [site |-> 2, target |-> "count",
+                 payload |-> <<"integerOverflow", "addition", <<RHSOutputMax, 1>>>>,
+                 completed |-> <<RHSOutputMax>>, before |-> [count |-> RHSOutputMax]]
+<1>event. RHSOutputActualFailures = {expected}
+    BY ONLY Init, CallerInputDomain, CallerInputPageBlock1AtFileOffsets,
+        ActualInitialEventRecordsTheExactOverflowAndPrecedingBindings, PTL
+        DEF CallerInputSize, expected
+<1>history. PICK history :
+    /\ RHSOutputSourceHistory(history)
+    /\ RHSOutputHistoryObservation(history)
+    /\ LET final == history[RHSOutputCount]
+           sent == ArithmeticPublicSend
+       IN IF ~RHSOutputSelected
+          THEN /\ sent.kind = "disabled" /\ sent.value = "noMatchingSuccessor"
+               /\ sent.current = ArithmeticSendBefore
+          ELSE IF final.failure # <<>>
+          THEN /\ sent.kind = "evaluationFailure" /\ sent.value = final.failure.payload
+               /\ sent.current = ArithmeticSendBefore
+               /\ ArithmeticSendVisits = <<>>
+          ELSE /\ sent.kind = "success"
+               /\ sent.current = <<RHSOutputExit, final.bindings>>
+               /\ sent.value = [action |-> RHSOutputActionLabel,
+                                 before |-> RHSOutputBefore, after |-> final.bindings]
+    BY ONLY <1>type, TypedArithmeticSendUsesTheCertifiedActionObservation, PTL
+<1>. DEFINE final == history[RHSOutputCount]
+            reached == RHSOutputSelected /\ final.failure # <<>>
+            emitted == [site |-> final.failure.site,
+                        target |-> RHSOutputRows[final.failure.site].target,
+                        payload |-> final.failure.payload, completed |-> final.completed,
+                        before |-> final.failure.before]
+<1>failures. RHSOutputActualFailures = RHSOutputHistoryFailures(history)
+    BY ONLY <1>history, PTL DEF RHSOutputHistoryObservation
+<1>projection. RHSOutputHistoryFailures(history) = (IF reached THEN {emitted} ELSE {})
+    BY ONLY DEF RHSOutputHistoryFailures, final, reached, emitted
+<1>singleton. (IF reached THEN {emitted} ELSE {}) = {expected}
+    BY ONLY <1>event, <1>failures, <1>projection, Zenon
+<1>identified. reached /\ emitted.payload = expected.payload
+    BY ONLY <1>singleton, ConditionalSingletonIdentifiesItsPayload, Zenon
+<1>payload. final.failure.payload =
+    <<"integerOverflow", "addition", <<RHSOutputMax, 1>>>>
+    BY ONLY <1>identified, IsaM("simp") DEF emitted, expected
+<1>sent. /\ ArithmeticPublicSend.kind = "evaluationFailure"
+          /\ ArithmeticPublicSend.value = final.failure.payload
+          /\ ArithmeticPublicSend.current = ArithmeticSendBefore
+          /\ ArithmeticSendVisits = <<>>
+    BY ONLY <1>history, <1>identified, IsaM("auto") DEF final, reached
+<1>. QED BY ONLY <1>sent, <1>payload, SMT
 
 ====

@@ -395,23 +395,151 @@ private func nativePublicSendFlow(_ declarations: [DeclSyntax], state: VariableD
     let tests = actionTuple(checks.map { "[test |-> \(string($0.0)), error |-> \(string($0.1))]" })
     let targets = receivers.map { "[handle |-> \(string($0.0)), slot |-> \(string($0.1))]" }
 
+    let bindingFields = [
+        ("checking", string("none")),
+        ("send", tuple(sendOrder)), ("selected", string(selectedName)), ("selector", string(selector)),
+        ("inputAction", string(inputAction)), ("suppliedAction", string(suppliedAction)),
+        ("captured", string(prior)), ("captureSource", string(captureSource)),
+        ("writeTarget", string(destination)), ("writeValue", string(writeSource)),
+        ("result", string(constructor)), ("fields", "[\(transitionFields.joined(separator: ", "))]"),
+        ("getter", string(getterName)), ("projection", tuple([snapshot, snapshotState])),
+        ("visitorAction", string(visitorAction)), ("visitor", string(visitor)),
+        ("callbackOrder", tuple(collectionOrder)), ("visitorResult", string(visitorResult)),
+        ("failureGate", string(firstFailure)), ("snapshots", string(snapshots)),
+        ("collector", string(collector)), ("appendOperation", string(appendOperation)),
+        ("appendTarget", string(appendTarget)), ("appended", string(appended)),
+        ("receivers", actionTuple(targets)), ("selectorGuards", tests),
+        ("lookupBinding", string(picked)), ("lookupResult", string(selectorResult))
+    ]
+    let selectorErrors = "[\(errors.joined(separator: ", "))]"
+    let planFields = bindingFields + [("errors", selectorErrors)]
+    let groupWidth = 8
+    let groups = stride(from: 0, to: planFields.count, by: groupWidth).map {
+        planFields[$0..<min($0 + groupWidth, planFields.count)]
+    }
+    func groupName(_ index: Int) -> String { "\(binding)FieldGroup\(index + 1)" }
+    func fieldNames(_ fields: ArraySlice<(String, String)>) -> String {
+        fields.map { string($0.0) }.joined(separator: ", ")
+    }
+    func fieldGroup(_ field: String) throws -> Int {
+        guard let index = groups.firstIndex(where: { $0.contains { $0.0 == field } }) else { throw invalid }
+        return index
+    }
+    func fieldProjection(_ field: String) throws -> String {
+        "\(binding), \(groupName(try fieldGroup(field)))"
+    }
+    let planNames = fieldNames(planFields[...])
+    let groupDefinitions = groups.enumerated().map { index, fields in
+        let lastValue = fields[fields.index(before: fields.endIndex)].1
+        let alternatives = fields.dropLast().reversed().reduce(lastValue) { rest, field in
+            "IF name = \(string(field.0)) THEN \(field.1)\n    ELSE \(rest)"
+        }
+        return "LOCAL \(groupName(index))(name) ==\n    \(alternatives)"
+    }.joined(separator: "\n\n")
+    let lookup = groups.dropLast().enumerated().reversed().reduce("\(groupName(groups.count - 1))(name)") {
+        rest, group in
+        "IF name \\in {\(fieldNames(group.element))} THEN \(groupName(group.offset))(name)\n        ELSE \(rest)"
+    }
+    let handles = receivers.map { string($0.0) }.joined(separator: ", ")
+    let operandFields = bindingFields.filter { $0.0 != "checking" && $0.0 != "selectorGuards" }
+    let projections = try operandFields.map { field, value in
+        let claim = "<1>\(field). \(binding).\(field) = \(value)"
+        let index = try fieldGroup(field)
+        let group = groupName(index)
+        guard field == "appendOperation" || field == "lookupBinding" else {
+            return """
+                \(claim)
+                    BY ONLY IsaM("(subst fapply, simp, simp)") DEF \(binding), \(group)
+                """
+        }
+        let key = string(field)
+        let conditions = groups.dropLast().enumerated().prefix(index + 1).map { part in
+            let membership = part.offset == index ? "\\in" : "\\notin"
+            return "/\\ \(key) \(membership) {\(fieldNames(part.element))}"
+        }.joined(separator: "\n            ")
+        return """
+            \(claim)
+                <2>column. \(binding).\(field) = \(group)(\(key))
+                    <3>domain. \(key) \\in {\(planNames)}
+                        BY ONLY SMT
+                    <3>groups.
+                        \(conditions)
+                        BY ONLY SMT
+                    <3>. QED BY ONLY <3>domain, <3>groups, SMT DEF \(binding)
+                <2>. QED BY ONLY <2>column, IsaM("simp") DEF \(group)
+            """
+    }.joined(separator: "\n")
+    let receiverIndices = receivers.indices.map { String($0 + 1) }.joined(separator: ", ")
+
     return Data("""
     ---- MODULE \(module) ----
+    EXTENDS NativePublicSendFlowRule
+
+    \(groupDefinitions)
+
     \(binding) ==
-        [send |-> \(tuple(sendOrder)), selected |-> \(string(selectedName)), selector |-> \(string(selector)),
-         inputAction |-> \(string(inputAction)), suppliedAction |-> \(string(suppliedAction)),
-         captured |-> \(string(prior)), captureSource |-> \(string(captureSource)),
-         writeTarget |-> \(string(destination)), writeValue |-> \(string(writeSource)),
-         result |-> \(string(constructor)), fields |-> [\(transitionFields.joined(separator: ", "))],
-         getter |-> \(string(getterName)), projection |-> \(tuple([snapshot, snapshotState])),
-         checking |-> "none", visitorAction |-> \(string(visitorAction)), visitor |-> \(string(visitor)),
-         callbackOrder |-> \(tuple(collectionOrder)), visitorResult |-> \(string(visitorResult)),
-         failureGate |-> \(string(firstFailure)), snapshots |-> \(string(snapshots)),
-         collector |-> \(string(collector)), appendOperation |-> \(string(appendOperation)),
-         appendTarget |-> \(string(appendTarget)), appended |-> \(string(appended)),
-         receivers |-> \(actionTuple(targets)), selectorGuards |-> \(tests),
-         lookupBinding |-> \(string(picked)), lookupResult |-> \(string(selectorResult)),
-         errors |-> [\(errors.joined(separator: ", "))]]
+        [name \\in {\(planNames)} |->
+            \(lookup)]
+
+    THEOREM \(binding)UsesNoChecking == \(binding).checking = "none"
+        BY ONLY IsaM("(subst fapply, simp, simp)") DEF \(try fieldProjection("checking"))
+
+    THEOREM \(binding)SelectorGuards == \(binding).selectorGuards = \(tests)
+        BY ONLY IsaM("(subst fapply, simp, simp)") DEF \(try fieldProjection("selectorGuards"))
+
+    THEOREM \(binding)ReportsMissingSuccessor ==
+        \(binding).errors[\(binding).selectorGuards[1].error] = "noMatchingSuccessor"
+    PROOF
+    <1>errors. \(binding).errors = \(selectorErrors)
+        BY ONLY IsaM("(subst fapply, simp, simp)") DEF \(try fieldProjection("errors"))
+    <1>. QED BY ONLY \(binding)SelectorGuards, <1>errors, IsaM("simp")
+
+    THEOREM \(binding)DecodesReceiverOperands ==
+        \\A action \\in {\(handles)} : DecodedSendOperands(\(binding), action)
+    PROOF
+    \(projections)
+    <1>. TAKE action \\in {\(handles)}
+    <1>receiverIndices. DOMAIN \(binding).receivers = {\(receiverIndices)}
+        BY ONLY <1>receivers, SMT
+    <1>route.
+        /\\ \\E row \\in DOMAIN \(binding).receivers : \(binding).receivers[row].handle = action
+        /\\ \\A row \\in DOMAIN \(binding).receivers :
+               \(binding).receivers[row].handle = action => \(binding).receivers[row].slot = \(binding).writeTarget
+        BY ONLY (action \\in {\(handles)}), <1>receiverIndices, <1>receivers, <1>writeTarget, SMT
+    <1>sendOrder.
+        /\\ \(binding).send = <<\(binding).selected, \(binding).captured, \(binding).writeTarget, \(binding).result>>
+        /\\ \\A i, j \\in DOMAIN \(binding).send : \(binding).send[i] = \(binding).send[j] => i = j
+        BY ONLY <1>send, <1>selected, <1>captured, <1>writeTarget, <1>result, SMT
+    <1>callbackSteps.
+        /\\ \(binding).callbackOrder = <<\(binding).collector, \(binding).visitorResult, \(binding).failureGate, "return">>
+        /\\ \\A i, j \\in DOMAIN \(binding).callbackOrder : \(binding).callbackOrder[i] = \(binding).callbackOrder[j] => i = j
+        BY ONLY <1>callbackOrder, <1>collector, <1>visitorResult, <1>failureGate, SMT
+    <1>localNames.
+        \\A i, j \\in DOMAIN <<\(binding).inputAction, \(binding).captured, \(binding).getter>> :
+            <<\(binding).inputAction, \(binding).captured, \(binding).getter>>[i]
+                = <<\(binding).inputAction, \(binding).captured, \(binding).getter>>[j] => i = j
+        BY ONLY <1>inputAction, <1>captured, <1>getter, SMT
+    <1>wiring.
+        /\\ \(binding).checking = "none" /\\ \(binding).visitor = "_visitSuccessors"
+        /\\ \(binding).failureGate = "_firstNativeEvaluationFailure"
+        /\\ \(binding).appendOperation = "_appendNativeOutcome" /\\ \(binding).appended = "$0"
+        /\\ \(binding).suppliedAction = \(binding).inputAction /\\ \(binding).visitorAction = \(binding).inputAction
+        /\\ \(binding).collector = \(binding).appendTarget /\\ \(binding).collector = \(binding).snapshots
+        /\\ \(binding).selector = "_singleNativeOutcome"
+        /\\ DOMAIN \(binding).selectorGuards = {1, 2}
+        /\\ \(binding).selectorGuards[1].test = "first" /\\ \(binding).selectorGuards[2].test = "count"
+        /\\ \(binding).lookupResult = \(binding).lookupBinding
+        /\\ \(binding).projection = <<\(binding).writeTarget, "state">>
+        /\\ \(binding).captureSource = \(binding).getter
+        /\\ \(binding).writeValue = \(binding).selected
+        /\\ \(binding).fields = [action |-> \(binding).inputAction, before |-> \(binding).captured, after |-> \(binding).getter]
+        BY ONLY \(binding)UsesNoChecking, \(binding)SelectorGuards, <1>visitor, <1>failureGate,
+            <1>appendOperation, <1>appended, <1>suppliedAction, <1>inputAction, <1>visitorAction,
+            <1>collector, <1>appendTarget, <1>snapshots, <1>selector, <1>lookupResult,
+            <1>lookupBinding, <1>projection, <1>writeTarget, <1>captureSource, <1>getter,
+            <1>writeValue, <1>selected, <1>fields, <1>captured, IsaM("simp")
+    <1>. QED BY ONLY <1>route, <1>sendOrder, <1>callbackSteps, <1>localNames, <1>wiring,
+        PTL DEF DecodedSendOperands
     ====
 
     """.utf8)
