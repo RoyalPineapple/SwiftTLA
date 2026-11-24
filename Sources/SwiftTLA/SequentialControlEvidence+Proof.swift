@@ -109,7 +109,8 @@ extension SequentialControlEvidence {
             }
         }
 
-        guard actions.count == physicalTrace.actions.count,
+        guard let sourceEntry = try formal(physicalTrace.initial),
+              actions.count == physicalTrace.actions.count,
               zip(actions, physicalTrace.actions).allSatisfy({
                   $0.0.sourceName.utf8.elementsEqual($0.1.label.utf8)
               }) else { return nil }
@@ -229,6 +230,7 @@ extension SequentialControlEvidence {
         SequentialActionLabels == \#(labels)
         LOCAL SequentialLabelProjection(rows) == [index \in DOMAIN rows |-> rows[index][1]]
         AuthoredSequentialLabels == SequentialLabelProjection(PhysicalAuthoredSequentialTrace[2])
+        AuthoredSequentialInitialControl == \#(counter) = \#(sourceEntry)
         AuthoredSequentialGuard == \#(authoredGuard)
         AuthoredSequentialStep == \#(allowedSteps.joined(separator: " \\/ "))
         AuthoredSequentialWriteFreeGuard == \#(writeFreeGuard)
@@ -304,11 +306,16 @@ extension SequentialControlEvidence {
         <1>. QED BY ONLY <1>routes, <1>disabled, <1>available
 
         THEOREM ActualSpecUsesOnlyAuthoredSequentialControl ==
+            /\ (Spec => AuthoredSequentialInitialControl)
             /\ (Spec => [][AuthoredSequentialStep]_vars)
             /\ (~AuthoredSequentialGuard => ~ENABLED Next)
             /\ (AuthoredSequentialWriteFreeGuard => ENABLED Next)
             /\ PhysicalAuthoredSequentialTrace = LoweredSequentialSemantics
         PROOF
+        <1>entry. Init => AuthoredSequentialInitialControl
+            BY ONLY SMT DEF Init, AuthoredSequentialInitialControl
+        <1>initial. Spec => AuthoredSequentialInitialControl
+            BY ONLY <1>entry, PTL DEF Spec
         <1>step. Next => AuthoredSequentialStep
             BY ONLY ActualSequentialStepUsesAuthoredRoutes
         <1>stuttering. [Next]_vars => [AuthoredSequentialStep]_vars
@@ -317,7 +324,8 @@ extension SequentialControlEvidence {
             BY ONLY <1>stuttering, PTL
         <1>binding. PhysicalAuthoredSequentialTrace = LoweredSequentialSemantics
             BY ONLY ActualLoweredControlPreservesAuthoredRouteShape, SMT
-        <1>. QED BY ONLY <1>always, <1>binding, ActualSequentialStepUsesAuthoredRoutes, PTL DEF Spec, vars
+        <1>. QED BY ONLY <1>initial, <1>always, <1>binding,
+            ActualSequentialStepUsesAuthoredRoutes, PTL DEF Spec, vars
 
         \#(native)\#(declaredProof)
 

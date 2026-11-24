@@ -446,7 +446,8 @@ struct ChoiceEvaluationFailureTests {
         let source = Parser.parse(source: try String(contentsOf: fixture, encoding: .utf8))
         let branchwiseFixture = fixture.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/UpstreamParity/ValidationModels/BranchwiseConjunctionFailureOrderModel.swift")
-        let branchwiseSource = Parser.parse(source: try String(contentsOf: branchwiseFixture, encoding: .utf8))
+        let branchwiseAuthored = try String(contentsOf: branchwiseFixture, encoding: .utf8)
+        let branchwiseSource = Parser.parse(source: branchwiseAuthored)
         for (name, witnessName) in [
             ("EitherDistinctFailuresModel", "EitherDistinctFailuresSwiftWitness.txt"),
             ("EitherChoiceAfterDivisionFailureModel", "EitherChoiceAfterDivisionFailureSwiftWitness.txt"),
@@ -485,6 +486,7 @@ struct ChoiceEvaluationFailureTests {
                         || diagnostic.path.hasPrefix("native.action.alternative."))
                 }
                 try checkOverwrittenBranchCapture(declaration)
+                try checkSharedPrefixBranchCapture(branchwiseAuthored)
             }
         }
     }
@@ -517,7 +519,7 @@ struct ChoiceEvaluationFailureTests {
         try #require(earlier.count == 3 && later.count == 2)
         let selected = try #require(compiled.program.layout.variables.first { $0.declaration.name == "selected" }).id
         let result = try #require(compiled.program.layout.variables.first { $0.declaration.name == "result" }).id
-        let branches = action.body.orderedAlternativeFailureBranches
+        let branches = action.body.orderedAlternativeFailureRegions
         #expect(branches.map { $0.bindings.map(\.binder) } == [earlier, later])
         #expect(branches.map { $0.bindings.map(\.target) } == [[selected, selected, result], [selected, result]])
 
@@ -584,6 +586,148 @@ struct ChoiceEvaluationFailureTests {
             #expect(diagnostic.path.hasPrefix("native.action.failures."))
             #expect(diagnostic.actual == "missing or changed assignment failure observation")
         }
+    }
+
+    private func checkSharedPrefixBranchCapture(_ authored: String) throws {
+        let choice = "                Either {\n"
+        try #require(authored.components(separatedBy: choice).count == 2)
+        let prefixed = authored.replacingOccurrences(of: choice, with: "                Assign(selected, to: 4)\n\(choice)")
+        let syntax = Parser.parse(source: prefixed)
+        try #require(!syntax.hasError)
+        let variant = try #require(syntax.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
+            .first { $0.name.text == "BranchwiseConjunctionFailureOrderModel" })
+        let found = try TLASpecVerifier.findSpec(in: variant.memberBlock.members, defaultName: variant.name.text)
+        let literal = try #require(found)
+        let members = variant.memberBlock.members
+        let enums = try TLASpecVerifier.collectEnumVariables(from: members)
+        let parser = ParserSession(sourceTypes: try TLASpecVerifier.sourceTypes(in: members, enums: enums))
+        parser.sourceModelTypeName = variant.name.text
+        let spec = parser.parseSpecClosure(named: literal.name, literal.closure)
+        let (compilation, receipts) = try spec.compileRetainingAtomicBranchContinuations()
+        let program = try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation))
+        let rendered = try program.renderModule(retainingCaptureGuards: true)
+        let pick = try #require(program.layout.actions.first { $0.declaration.name == "pick" })
+        let action = program[pick.id]
+        guard case .define(let prefix, let value, let continuation) = action.body,
+              case .value(.integer(4)) = value.operation, case .or = continuation else {
+            Issue.record("The compiler lost the single shared assignment before the alternative")
+            return
+        }
+        let selected = try #require(program.layout.variables.first { $0.declaration.name == "selected" }).id
+        let result = try #require(program.layout.variables.first { $0.declaration.name == "result" }).id
+        let definitions = try CheckingSelectionEvidence.branchwiseContinuationDefinitions(
+            authoredSource: prefixed, receipts: receipts, program: program, rendered: rendered)
+            .split(separator: "\n").map(String.init)
+        let sourceRow = TLAValue.record(TLARecord([
+            .init("target", .string("selected")),
+            .init("sourceTerm", .tuple([.tuple([.string("literal"), .int(4)])])),
+            .init("reads", .tuple([])),
+        ]))
+        #expect(definitions.contains("BranchwiseContinuationPrefix == \(TLAValue.tuple([sourceRow]))"))
+        #expect(definitions.contains("BranchwiseScheduledPrefixBindings == <<<<\(prefix.ordinal), \(selected.ordinal)>>>>"))
+
+        let division = "Assign(result, to: 1 / divisor)"
+        try #require(prefixed.components(separatedBy: division).count == 2)
+        let wrongUploadedSource = prefixed.replacingOccurrences(of: division, with: "Assign(result, to: 1 / modulus)")
+        let mismatch = EvidenceFormatError.invalidField(record: "Branchwise selected checks",
+            field: "uploaded continuation assignment")
+        #expect(throws: mismatch) {
+            try CheckingSelectionEvidence.branchwiseContinuationDefinitions(
+                authoredSource: wrongUploadedSource, receipts: receipts, program: program, rendered: rendered)
+        }
+
+        let regions = action.body.orderedAlternativeFailureRegions
+        try #require(regions.map(\.armOrdinal) == [0, 1])
+        try #require(regions.map { $0.bindings.count } == [3, 3])
+        #expect(regions.map { $0.bindings.map(\.target) } == [[selected, selected, result], [selected, selected, result]])
+        #expect(regions.allSatisfy { $0.bindings.filter { $0.binder == prefix }.map(\.target) == [selected]
+            && $0.bindings.first?.binder == prefix })
+
+        let macro = try MacroCompilation(typeName: variant.name.text, program: program)
+        var emitter = NativeSwiftEmitter(model: macro)
+        let visitor = try #require(try emitter.machineMembers().first {
+            $0.as(FunctionDeclSyntax.self)?.name.text == "_visitUpdates\(action.id.ordinal)"
+        })
+        let parts = try emitter.actionFunctions(action)
+        func verify(_ member: DeclSyntax) throws {
+            try verifyGeneratedActionWriteOutput(member, action: action.body, program: program,
+                stateFields: emitter.stateMemberNames, parts: parts.writes, conditions: parts.conditions)
+        }
+        try verify(visitor)
+        let name = try #require(program.binderNames[prefix])
+        let local = "_\(name)_\(prefix.ordinal)"
+        let nativeRow = "(binding: \(prefix.ordinal), target: \(selected.ordinal), value: \(local))"
+        #expect(visitor.description.components(separatedBy: "let \(local) = 4").count == 2)
+        #expect(visitor.description.components(separatedBy: nativeRow).count == 4)
+
+        let history = try #require(rendered.renderedModuleSource.split(separator: "\n").first {
+            $0.hasPrefix("__SwiftTLAActionFailureHistory\(action.id.ordinal) == ")
+        })
+        let events = String(history).components(separatedBy: "[source |-> ").dropFirst()
+        let sites = [(arm: 0, offset: 2), (arm: 1, offset: 1), (arm: 1, offset: 2)]
+        var matched = 0
+        for (arm, offset) in sites {
+            let bindings = regions[arm].bindings
+            let site = bindings[offset]
+            let route = "branch |-> \(arm), site |-> \(site.binder.ordinal), target |-> \(site.target.ordinal),"
+            let actual = events.filter { $0.contains(route) }
+            try #require(!actual.isEmpty)
+            let before = try bindings.prefix(offset).map { binding in
+                let lexical = try #require(program.binderNames[binding.binder])
+                return "[binding |-> \(binding.binder.ordinal), target |-> \(binding.target.ordinal), value |-> \(lexical)]"
+            }.joined(separator: ", ")
+            #expect(actual.allSatisfy { $0.contains("LET \(name) == 4 IN") && $0.contains("<<\(before)>>") })
+            matched += actual.count
+        }
+        #expect(matched == events.count)
+
+        let site = regions[1].bindings[1].binder.ordinal
+        let record = "branch: 1, site: \(site), target: \(selected.ordinal), before: [\(nativeRow)]"
+        try #require(visitor.description.components(separatedBy: record).count == 2)
+        let wrong = "(binding: \(prefix.ordinal), target: \(result.ordinal), value: \(local))"
+        let tampered = Parser.parse(source: visitor.description.replacingOccurrences(of: record,
+            with: record.replacingOccurrences(of: nativeRow, with: wrong)))
+        try #require(!tampered.hasError)
+        let wrongVisitor = try #require(tampered.statements.first?.item.as(DeclSyntax.self))
+        do {
+            try verify(wrongVisitor)
+            Issue.record("The generated failure accepted a wrong shared assignment target")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.hasPrefix("native.action.failures."))
+            #expect(diagnostic.actual == "missing or changed assignment failure observation")
+        }
+
+        let run = try runExternalGeneratedConsumer(prefixed + #"""
+
+        @main struct ObserveBranchwisePrefix {
+            static func main() throws {
+                let initial = try BranchwiseConjunctionFailureOrderModel.initialMachines()
+                for modulus in [0, 2] {
+                    guard let machine = initial.first(where: { $0.state.divisor == 0 && $0.state.modulus == modulus })
+                    else { fatalError("Missing authored initial state") }
+                    let outcome = try MachineValidator.run(initialMachines: [machine], maximumStates: 1,
+                        checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false) { _ in }
+                    guard let history = outcome.orderedActionFailureHistory, outcome.edges == 0,
+                          outcome.completion == .evaluationFailure(.divisionByZero)
+                    else { fatalError("The actual generated machine did not report the reached failures") }
+                    for event in history {
+                        let failure = event.failure
+                        guard failure.reason == .divisionByZero else { fatalError("Unexpected failure reason") }
+                        let captures = failure.before.map { "\($0.binding):\($0.target):\($0.value)" }.joined(separator: ",")
+                        print("modulus=\(modulus) source=\(event.source) action=\(failure.action) branch=\(failure.branch) "
+                            + "site=\(failure.site) target=\(failure.target) before=\(captures)")
+                    }
+                }
+            }
+        }
+        """#)
+        try #require(run.status == 0, Comment(rawValue: run.output))
+        #expect(run.output.split(separator: "\n").map(String.init) == [
+            "modulus=0 source=0 action=0 branch=0 site=2 target=3 before=0:2:4,1:2:0",
+            "modulus=0 source=0 action=0 branch=1 site=3 target=2 before=0:2:4",
+            "modulus=2 source=0 action=0 branch=0 site=2 target=3 before=0:2:4,1:2:0",
+            "modulus=2 source=0 action=0 branch=1 site=4 target=3 before=0:2:4,3:2:1",
+        ])
     }
 
     @Test("A failing candidate retains another candidate's successor in both outputs")
@@ -971,7 +1115,29 @@ struct ChoiceEvaluationFailureTests {
         let rendered = try BranchwiseConjunctionFailureOrderModel.render()
         let proofInput = semanticFixture("BranchwiseConjunctionFailureOrderModel.tla")
         #expect(rendered.tlaBundle.root.tla == (try String(contentsOf: proofInput, encoding: .utf8)))
-        let authored = try BranchwiseConjunctionFailureOrderModel.spec.compile()
+        let spec = BranchwiseConjunctionFailureOrderModel.spec
+        let (authored, schedules) = try spec.compileRetainingAtomicBranchContinuations()
+        let step = try #require(spec.sourceAtomicSteps.first)
+        _ = try #require(schedules[step.model.label.name])
+        let loweredModel = try spec.loweredSourceModel()
+        let lowered = try #require(loweredModel.actions.first { $0.name == step.model.label.name }).body
+        guard case .or(.define(let selection, let selectedValue,
+                                .define(let result, .divide(let dividend, let divisor), let writes)), let other) = lowered else {
+            Issue.record("The real alternative did not retain its division continuation")
+            return
+        }
+        let replacement = StateExpr.int(1)
+        let divisorChanged: Bool = divisor != replacement
+        try #require(divisorChanged)
+        let changed = ActionExpr.or(
+            .define(selection, selectedValue, .define(result, .divide(dividend, replacement), writes)), other)
+        do {
+            _ = try StraightLineAssignmentCheck.checkedAtomicBranchContinuations(
+                step, lowered: changed, stateRoots: Set(loweredModel.variables.map(\.name)))
+            Issue.record("A shared fallible continuation accepted a changed divisor in just one arm")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "actions.pick.branchContinuations")
+        }
         let scenario = try #require(BranchwiseConjunctionFailureOrderModel.validationScenarios().first {
             $0.name == "Selected"
         })

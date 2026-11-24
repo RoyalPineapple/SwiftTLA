@@ -157,6 +157,7 @@ package struct RenderedModule: Sendable, Equatable {
     let actionConstraint: String?
     package var temporalObligations: [PropertyID: [_RenderedTemporalObligation]] = [:]
     package var temporalBindingNames: [BinderID: String] = [:]
+    package var actionCaptureGuards: [ActionID: [BinderID: StraightLineRenderedActionCheck.CaptureGuard]] = [:]
 }
 
 public struct RenderedAction: Sendable, Equatable {
@@ -1278,11 +1279,29 @@ public extension TLASpec {
         })
     }
 
-    private func compile<Projection>(retainingScalarCopyRoutes: Bool, projection: (TLASpec) -> Projection) throws
+    package func compileRetainingAtomicBranchContinuations() throws
+        -> (CompiledSpecification, [String: StraightLineAssignmentCheck.AtomicBranchContinuationReceipt]) {
+        try compile(retainingScalarCopyRoutes: false, projection: { lowered in
+            guard sourceAlgorithms.isEmpty else { return [:] }
+            let roots = Set(lowered.variables.map(\.name))
+            var receipts: [String: StraightLineAssignmentCheck.AtomicBranchContinuationReceipt] = [:]
+            for step in sourceAtomicSteps {
+                let label = step.model.label.name
+                let actions = lowered.actions.filter { $0.name.utf8.elementsEqual(label.utf8) }
+                guard actions.count == 1, let action = actions.first,
+                      let receipt = try StraightLineAssignmentCheck.checkedAtomicBranchContinuations(
+                          step, lowered: action.body, stateRoots: roots) else { continue }
+                receipts[label] = receipt
+            }
+            return receipts
+        })
+    }
+
+    private func compile<Projection>(retainingScalarCopyRoutes: Bool, projection: (TLASpec) throws -> Projection) throws
         -> (CompiledSpecification, Projection) {
         try validateSourceDeclarationNames()
         let lowered = try loweredSourceModel(retainingScalarCopyRoutes: retainingScalarCopyRoutes)
-        return (try lowered.compileLowered(), projection(lowered))
+        return (try lowered.compileLowered(), try projection(lowered))
     }
 
     private func compileLowered() throws -> CompiledSpecification {
@@ -2364,8 +2383,9 @@ extension CompiledProgram {
         return try AlgorithmPlusCalRenderer(module: module, formalRenderer: renderer).render()
     }
 
-    package func renderModule() throws -> RenderedModule {
-        try renderModule(named: moduleName, owningRoot: moduleName, structuralPath: [], reserving: [])
+    package func renderModule(retainingCaptureGuards: Bool = false) throws -> RenderedModule {
+        try renderModule(named: moduleName, owningRoot: moduleName, structuralPath: [], reserving: [],
+            retainingCaptureGuards: retainingCaptureGuards)
     }
 
     package func renderGeneratedModelValue(_ value: CompiledStateQuery) throws -> String {
@@ -2387,7 +2407,7 @@ extension CompiledProgram {
     }
 
     private func renderModule(named name: String, owningRoot: String, structuralPath: [String],
-        reserving reservedModuleNames: Set<String>) throws -> RenderedModule {
+        reserving reservedModuleNames: Set<String>, retainingCaptureGuards: Bool = false) throws -> RenderedModule {
         guard moduleMetadata.formalParameters.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
                 path: "export.\(moduleMetadata.name)", expected: "a resolved standalone module",
@@ -2513,7 +2533,8 @@ extension CompiledProgram {
             configuration: metadata.tlcConfiguration(behavior: behavior, replacements: replacements,
                 refinementNames: refinements.map(\.name), hasState: !layout.variables.isEmpty),
             requiredStandardModules: requiredStandardModules,
-            importedNames: metadata.imports.map { moduleNames[$0] ?? $0 }, instancesAfterBehavior: true)
+            importedNames: metadata.imports.map { moduleNames[$0] ?? $0 }, instancesAfterBehavior: true,
+            retainingCaptureGuards: retainingCaptureGuards)
         result.moduleReplacements = replacements
         result.imports = imports
         result.importedOwnership = ownership
@@ -2592,7 +2613,8 @@ private extension CompiledModuleMetadata {
         definitions: [String], definitionsBeforeInstances: [String], definitionsAfterInstances: [String],
         instances: [String], recursiveFunctions: [String], renderedRefinements: [String],
         renderedFormalModuleReplacements: [String], configuration: TLCConfiguration,
-        requiredStandardModules: Set<StandardModule>, importedNames: [String], instancesAfterBehavior: Bool = false
+        requiredStandardModules: Set<StandardModule>, importedNames: [String], instancesAfterBehavior: Bool = false,
+        retainingCaptureGuards: Bool = false
     ) throws -> RenderedModule {
         let layout = renderer.layout
         func statePredicate(_ expression: CompiledExpression, negated: Bool = false) throws -> String {
@@ -2624,6 +2646,7 @@ private extension CompiledModuleMetadata {
             uniqueKeysWithValues: emittedActionCalls.map { ($0.call, $0.renderedName) }
         )
         let callsByAction = Dictionary(grouping: emittedActionCalls, by: { $0.call.action })
+        var actionCaptureGuards: [ActionID: [BinderID: StraightLineRenderedActionCheck.CaptureGuard]] = [:]
         let directModuleActions: [DirectModuleAction] = try layout.actions.enumerated().map { index, declaration in
             let compiled = behavior.actions[index]
             guard let renderedName = emittedActionNamesByID[compiled.id] else {
@@ -2638,7 +2661,12 @@ private extension CompiledModuleMetadata {
             }
             let renderedBody = try renderer.action(compiled.body)
             let requiresIndependentCheck = orderedIntProofActionNames.contains(declaration.declaration.name)
-            if !requiresIndependentCheck {
+            if retainingCaptureGuards {
+                try StraightLineRenderedActionCheck.verifyStructure(compiled.body, rendered: renderedBody,
+                    renderer: renderer, collectCapture: { binder, capture in
+                        actionCaptureGuards[compiled.id, default: [:]][binder] = capture
+                    })
+            } else if !requiresIndependentCheck {
                 try StraightLineRenderedActionCheck.verifyStructure(compiled.body,
                     rendered: renderedBody, renderer: renderer)
             }
@@ -2722,7 +2750,8 @@ private extension CompiledModuleMetadata {
                 guard let obligations = try renderer.temporalObligations(property.expression) else { return nil }
                 return (property.id, obligations)
             }),
-            temporalBindingNames: renderer.bindings.binders
+            temporalBindingNames: renderer.bindings.binders,
+            actionCaptureGuards: actionCaptureGuards
         )
     }
 

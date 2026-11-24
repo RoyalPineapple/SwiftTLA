@@ -1,6 +1,12 @@
 import Foundation
 
 package enum StraightLineRenderedActionCheck {
+    package struct CaptureGuard: Sendable, Equatable {
+        package let name: String
+        package let value: String
+        package let condition: String?
+    }
+
     private enum StructureTask {
         case action(CompiledActionExpr)
         case text(String)
@@ -261,19 +267,22 @@ package enum StraightLineRenderedActionCheck {
     }
 
     static func verifyStructure(_ action: CompiledActionExpr, rendered: String,
-                                renderer: CompiledTLARenderer) throws {
+                                renderer: CompiledTLARenderer,
+                                collectCapture: ((BinderID, CaptureGuard) -> Void)? = nil) throws {
         let names = Dictionary(uniqueKeysWithValues: renderer.layout.variables.map {
             ($0.id, $0.formalName)
         })
-        func mismatch() -> CompilationDiagnostic {
+        func mismatch(_ actual: String = "the emitted TLA+ action body differs from that structure")
+            -> CompilationDiagnostic {
             CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
                 path: "tla.action.structure",
                 expected: "the compiled action constructors and state-variable identities",
-                actual: "the emitted TLA+ action body differs from that structure",
+                actual: actual,
                 nextSafeAction: "Report this TLA+ action emission failure.")
         }
         var pending: [StructureTask] = [.action(action)]
         var parts: [String] = []
+        var capturedBinders: Set<BinderID> = []
         func schedule(_ tasks: [StructureTask]) { pending.append(contentsOf: tasks.reversed()) }
         while let task = pending.popLast() {
             switch task {
@@ -308,7 +317,14 @@ package enum StraightLineRenderedActionCheck {
                     guard let name = renderer.bindings.binders[binder] else { throw mismatch() }
                     let defined = try renderer.evaluationDefined(value)
                     if let defined { parts.append("(IF \(defined) THEN ") }
-                    parts.append("(LET \(name) == \(try renderer.state(value)) IN ")
+                    let rhs = try renderer.state(value)
+                    parts.append("(LET \(name) == \(rhs) IN ")
+                    if let collectCapture {
+                        guard capturedBinders.insert(binder).inserted else {
+                            throw mismatch("the emitted TLA+ action repeats capture binder \(binder.ordinal)")
+                        }
+                        collectCapture(binder, .init(name: name, value: rhs, condition: defined))
+                    }
                     schedule([.action(body), .text(defined == nil ? ")" : ") ELSE FALSE)")])
                 case .ifElse(let condition, let yes, let no):
                     let defined = try renderer.evaluationDefined(condition)
@@ -325,7 +341,12 @@ package enum StraightLineRenderedActionCheck {
                 }
             }
         }
-        guard parts.joined() == rendered else { throw mismatch() }
+        let candidate = parts.joined()
+        if collectCapture != nil {
+            guard candidate.utf8.elementsEqual(rendered.utf8) else { throw mismatch() }
+        } else {
+            guard candidate == rendered else { throw mismatch() }
+        }
     }
 
     // shortcut: only direct scalar addition trees are checked here; extend to other expression forms with their output rules.

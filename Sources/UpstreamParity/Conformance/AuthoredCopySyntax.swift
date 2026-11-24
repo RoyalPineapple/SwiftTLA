@@ -22,14 +22,15 @@ enum AuthoredCopySyntax {
         let caseName: String
     }
 
-    private static func specification(source: String, modelName: String) throws
+    private static func specification(source: String, modelName: String, requiringModuleName: Bool = false) throws
         -> (MemberBlockItemListSyntax, ClosureExprSyntax) {
         let file = Parser.parse(source: source)
         let models = file.statements.compactMap { $0.item.as(StructDeclSyntax.self) }
             .filter { name($0.name) == modelName }
         guard !file.hasError, models.count == 1, let model = models.first else { throw unsupported }
         let members = model.memberBlock.members
-        guard let spec = try ModelSpecificationSyntax.find(in: members, defaultName: modelName) else {
+        guard let spec = try ModelSpecificationSyntax.find(in: members, defaultName: modelName),
+              !requiringModuleName || spec.name.utf8.elementsEqual(modelName.utf8) else {
             throw unsupported
         }
         return (members, spec.closure)
@@ -761,11 +762,12 @@ enum AuthoredCopySyntax {
     }
 
     static func controlFrontend(_ selection: Selection) throws
-        -> (machine: SequentialControlEvidence.Machine, declared: SequentialControlEvidence.DeclaredSyntax) {
+        -> (machine: SequentialControlEvidence.Machine, declared: SequentialControlEvidence.DeclaredSyntax,
+            literalInitials: [(name: String, value: TLAValue)]?) {
         let body = try authoredSteps(selection)
         guard let machine = SequentialControlEvidence.authoredMachine(steps: body.steps, algorithmName: selection.algorithm)
         else { throw unsupported }
-        return (machine, .init(algorithm: selection.algorithm, steps: body.steps))
+        return (machine, .init(algorithm: selection.algorithm, steps: body.steps), body.literalInitials)
     }
 
     static func capturedSequentialSteps(source: String, modelName: String) throws
@@ -775,9 +777,11 @@ enum AuthoredCopySyntax {
         return (selection.algorithm, authored.fields, authored.steps)
     }
 
-    private static func authoredSteps(_ selection: Selection) throws -> (fields: Set<String>, steps: [AlgorithmStepModel]) {
+    private static func authoredSteps(_ selection: Selection) throws
+        -> (fields: Set<String>, steps: [AlgorithmStepModel], literalInitials: [(name: String, value: TLAValue)]?) {
         var roots = selection.capturedRoots
         var steps: [AlgorithmStepModel] = []
+        var literalInitials: [(name: String, value: TLAValue)]? = roots.isEmpty ? [] : nil
         var labels: [Label: String] = [:]
         var enumNames: Set<String> = []
 
@@ -797,8 +801,14 @@ enum AuthoredCopySyntax {
         }
 
         for item in selection.body {
-            if steps.isEmpty, let (binding, explicit) = try rootDeclaration(item, in: selection.scope) {
-                guard roots.updateValue(explicit ?? binding, forKey: binding) == nil else { throw unsupported }
+            if steps.isEmpty, let declaration = try scopedRootDeclaration(item, in: selection.scope) {
+                let root = declaration.explicit ?? declaration.binding
+                guard roots.updateValue(root, forKey: declaration.binding) == nil else { throw unsupported }
+                if let value = scalarLiteralInitializer(declaration.initializer) {
+                    literalInitials?.append((root, value))
+                } else {
+                    literalInitials = nil
+                }
                 continue
             }
             guard let call = item.item.as(FunctionCallExprSyntax.self),
@@ -835,7 +845,7 @@ enum AuthoredCopySyntax {
         guard fields.count == roots.count, !steps.isEmpty, Set(steps.map(\.label)).count == steps.count else {
             throw UnsupportedControlSyntax(reason: "Expected distinct roots and a nonempty sequence of distinct control labels.")
         }
-        return (fields, steps)
+        return (fields, steps, literalInitials)
     }
 
     private static func boundArithmeticView(
@@ -1184,6 +1194,73 @@ enum AuthoredCopySyntax {
                         "predicate": guardTerm, "ifTrue": yesWrite, "ifFalse": noWrite])
     }
 
+    struct BranchwiseAssignments {
+        struct Write {
+            let target: TLAValue
+            let sourceTerm: [TLAValue]
+        }
+
+        let fields: Set<TLAValue>
+        let label: TLAValue
+        let prefix: [Write]
+        let arms: [[Write]]
+        let suffix: [Write]
+    }
+
+    static func branchwiseAssignments(source: String, modelName: String) throws -> BranchwiseAssignments {
+        let (members, specBody) = try specification(source: source, modelName: modelName, requiringModuleName: true)
+        let parameters = ModelSpecificationSyntax.parameterNames(in: specBody)
+        let items = Array(specBody.statements)
+        let steps = items.indices.filter { index in
+            guard let call = items[index].item.as(FunctionCallExprSyntax.self) else { return false }
+            return reference(call.calledExpression) == "Do"
+        }
+        guard parameters.count == 1, let scope = parameters.first,
+              steps.count == 1, let stepIndex = steps.first,
+              let call = items[stepIndex].item.as(FunctionCallExprSyntax.self),
+              call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil,
+              let label = labelReference(argument.expression),
+              let body = call.trailingClosure, body.signature == nil, call.additionalTrailingClosures.isEmpty,
+              let declaredLabel = try enumBindings(in: members, named: [label.enumName]).first(where: { $0.0 == label })
+        else { throw unsupported }
+
+        var roots: [String: String] = [:]
+        for item in items[..<stepIndex] {
+            guard let (binding, explicit) = try rootDeclaration(item, in: scope),
+                  roots.updateValue(explicit ?? binding, forKey: binding) == nil else { throw unsupported }
+        }
+        let fields = Set(roots.values.map(TLAValue.string))
+        let statements = try controlStatements(body.statements, roots: roots, resolve: { _ in throw unsupported })
+        guard fields.count == roots.count, let fork = statements.firstIndex(where: {
+            if case .either = $0 { return true }
+            return false
+        }), case .either(let first, let second) = statements[fork] else { throw unsupported }
+
+        func scalar(_ expression: StateExpr) -> TLAValue? {
+            switch expression {
+            case .variable, .value(.int): return expression.scalarEvidenceTerm
+            default: return nil
+            }
+        }
+        func writes(_ statements: some Sequence<AlgorithmStatementModel>) throws -> [BranchwiseAssignments.Write] {
+            try statements.map { statement in
+                guard case .set(.root(let target), let value) = statement else { throw unsupported }
+                if let operand = scalar(value) { return .init(target: .string(target), sourceTerm: [operand]) }
+                let operation: (tag: String, left: StateExpr, right: StateExpr)
+                switch value {
+                case .divide(let left, let right): operation = ("divide", left, right)
+                case .modulo(let left, let right): operation = ("modulo", left, right)
+                default: throw unsupported
+                }
+                guard let left = scalar(operation.left), let right = scalar(operation.right) else { throw unsupported }
+                return .init(target: .string(target), sourceTerm: [.tuple([.string(operation.tag)]), left, right])
+            }
+        }
+        return try .init(fields: fields, label: .string(declaredLabel.1 ?? label.caseName),
+                         prefix: writes(statements[..<fork]), arms: [writes(first), writes(second)],
+                         suffix: writes(statements[(fork + 1)...]))
+    }
+
     private static func scalarComparison(_ expression: StateExpr) -> TLAValue? {
         func isOperand(_ value: StateExpr) -> Bool {
             switch value {
@@ -1225,6 +1302,14 @@ enum AuthoredCopySyntax {
                 let yes = try controlStatements(body.statements, roots: roots, resolve: resolve)
                 let no = try noClosure.map { try controlStatements($0.statements, roots: roots, resolve: resolve) } ?? []
                 return .ifElse(try controlExpression(predicate.expression, roots: roots), yes, no)
+            }
+            if kind == "Either" {
+                guard call.arguments.isEmpty, let first = call.trailingClosure, first.signature == nil,
+                      call.additionalTrailingClosures.count == 1,
+                      let other = call.additionalTrailingClosures.first,
+                      other.label.text == "or", other.closure.signature == nil else { throw error }
+                return try .either(controlStatements(first.statements, roots: roots, resolve: resolve),
+                                   controlStatements(other.closure.statements, roots: roots, resolve: resolve))
             }
             guard call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { throw error }
             switch kind {
@@ -1339,6 +1424,8 @@ enum AuthoredCopySyntax {
         case "||": return .or(lhs, rhs)
         case "+": return .add(lhs, rhs)
         case "-": return .subtract(lhs, rhs)
+        case "/": return .divide(lhs, rhs)
+        case "%": return .modulo(lhs, rhs)
         default: throw error
         }
     }
@@ -1373,14 +1460,31 @@ enum AuthoredCopySyntax {
     }
 
     private static func rootDeclaration(_ item: CodeBlockItemSyntax, in scope: String) throws -> (String, String?)? {
+        try scopedRootDeclaration(item, in: scope).map { ($0.binding, $0.explicit) }
+    }
+
+    private static func scopedRootDeclaration(_ item: CodeBlockItemSyntax, in scope: String) throws
+        -> (binding: String, explicit: String?, initializer: LabeledExprSyntax)? {
         guard let (binding, value) = letBinding(item), let call = value.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self),
               reference(member.base) == scope, name(member.declName.baseName) == "sharedVar",
               call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
               call.arguments.filter({ $0.label?.text == "_name" }).count <= 1,
-              call.arguments.allSatisfy({ ["_name", "label", "initial", "initiallyIn"].contains($0.label?.text ?? "") }),
-              call.arguments.filter({ $0.label?.text == "initial" || $0.label?.text == "initiallyIn" }).count == 1 else { return nil }
-        return (binding, try literal(call.arguments.first(where: { $0.label?.text == "_name" })?.expression))
+              call.arguments.allSatisfy({ ["_name", "label", "initial", "initiallyIn"].contains($0.label?.text ?? "") })
+        else { return nil }
+        let initializers = call.arguments.filter { $0.label?.text == "initial" || $0.label?.text == "initiallyIn" }
+        guard initializers.count == 1, let initializer = initializers.first else { return nil }
+        return (binding, try literal(call.arguments.first(where: { $0.label?.text == "_name" })?.expression), initializer)
+    }
+
+    private static func scalarLiteralInitializer(_ initializer: LabeledExprSyntax) -> TLAValue? {
+        guard initializer.label?.text == "initial",
+              let expression = try? controlExpression(initializer.expression, roots: [:]) else { return nil }
+        switch expression {
+        case .value(.int(let value)): return .int(value)
+        case .value(.bool(let value)): return .bool(value)
+        default: return nil
+        }
     }
 
     private static func enumBindings(in members: MemberBlockItemListSyntax, named enumNames: Set<String>) throws

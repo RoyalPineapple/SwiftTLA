@@ -1,5 +1,5 @@
 ------------- MODULE BranchwiseConjunctionFailureOrderProof -------------
-EXTENDS TLAPS, BranchwiseConjunctionFailureOrderModel
+EXTENDS TLAPS, BranchwiseConjunctionFailureOrderModel, OrderedArithmeticFailures
 LOCAL INSTANCE SequenceTheorems
 
 LOCAL FailurePayloads ==
@@ -396,6 +396,73 @@ THEOREM UngatedLaterFailureWouldDisagree ==
         __SwiftTLANegativeModuloDivisorFailure0
 
 SourceOrderedFailureHistory == SourceLeftFailureHistory \o SourceRightFailureHistory
+
+\* The configured parent supplies source terms from the retained authored
+\* writes. This owner admits the original arms and one total shared write.
+AuthoredFieldPositions == [divisor |-> 1, modulus |-> 2, selected |-> 3, result |-> 4]
+
+AuthoredLiteralTerms == {"literal"} \X Int
+AuthoredScalarTerms == AuthoredLiteralTerms \cup ({"state"} \X (DOMAIN AuthoredFieldPositions))
+
+AuthoredBranchwiseSourceShape(prefix, arms) ==
+    /\ DOMAIN prefix = 1..Len(prefix)
+    /\ Len(prefix) \in 0..1
+    /\ \A position \in DOMAIN prefix :
+           /\ prefix[position].target = "selected"
+           /\ DOMAIN prefix[position].sourceTerm = {1}
+           /\ prefix[position].sourceTerm[1] \in AuthoredScalarTerms
+    /\ DOMAIN arms = 1..2
+    /\ \A arm \in DOMAIN arms :
+           /\ DOMAIN arms[arm] = 1..2
+           /\ arms[arm][1].target = "selected"
+           /\ arms[arm][2].target = "result"
+           /\ arms[arm][2].sourceTerm = <<<<"divide">>, <<"literal", 1>>, <<"state", "divisor">>>>
+    /\ DOMAIN arms[1][1].sourceTerm = {1}
+    /\ arms[1][1].sourceTerm[1] \in AuthoredLiteralTerms
+    /\ arms[2][1].sourceTerm = <<<<"modulo">>, <<"literal", 1>>, <<"state", "modulus">>>>
+
+AuthoredScalarValue(term) ==
+    IF term[1] = "literal" THEN term[2]
+    ELSE <<divisor, modulus, selected, result>>[AuthoredFieldPositions[term[2]]]
+
+AuthoredCapture(write, site, value) ==
+    [binding |-> site, target |-> AuthoredFieldPositions[write.target] - 1, value |-> value]
+
+AuthoredPrefixBefore(prefix) ==
+    [position \in DOMAIN prefix |->
+        AuthoredCapture(prefix[position], position - 1, AuthoredScalarValue(prefix[position].sourceTerm[1]))]
+
+AuthoredLeftFailureHistory(prefix, rows) ==
+    LET initial == rows[1]
+        division == rows[Len(rows)]
+        site == Len(prefix) + Len(rows) - 1
+        den == AuthoredScalarValue(division.sourceTerm[3])
+        before == Append(AuthoredPrefixBefore(prefix),
+                         AuthoredCapture(initial, Len(prefix), AuthoredScalarValue(initial.sourceTerm[1])))
+    IN IF SourceFirstDivisionOutcome(den) = "divisionByZero"
+       THEN <<DivisionEvent(0, site, AuthoredFieldPositions[division.target] - 1, before)>>
+       ELSE <<>>
+
+AuthoredRightFailureHistory(prefix, left, rows) ==
+    LET modulo == rows[1]
+        division == rows[Len(rows)]
+        entry == Len(prefix) + Len(left)
+        site == entry + Len(rows) - 1
+        common == AuthoredPrefixBefore(prefix)
+        den == AuthoredScalarValue(modulo.sourceTerm[3])
+        moduloOutcome == SourceModuloOutcome(den)
+        target == AuthoredFieldPositions[modulo.target] - 1
+    IN IF moduloOutcome = "divisionByZero" THEN <<DivisionEvent(1, entry, target, common)>>
+       ELSE IF moduloOutcome = "negativeModuloDivisor"
+       THEN <<FailureEvent(1, entry, target, <<moduloOutcome, den>>, common)>>
+       ELSE IF SourceFirstDivisionOutcome(AuthoredScalarValue(division.sourceTerm[3])) = "divisionByZero"
+       THEN LET value == AuthoredScalarValue(modulo.sourceTerm[2]) % den
+                before == Append(common, AuthoredCapture(modulo, entry, value))
+            IN <<DivisionEvent(1, site, AuthoredFieldPositions[division.target] - 1, before)>>
+       ELSE <<>>
+
+AuthoredBranchwiseFailureHistory(prefix, arms) ==
+    AuthoredLeftFailureHistory(prefix, arms[1]) \o AuthoredRightFailureHistory(prefix, arms[1], arms[2])
 
 THEOREM ActualBranchwiseHistoryMatchesAuthoredOrder ==
     ASSUME SourceDomain

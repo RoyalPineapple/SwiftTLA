@@ -860,7 +860,7 @@ def main():
                   "ActionFailureHistoryProjection"]
         branchwise_rules = ["BranchwiseConjunctionFailureOrderProof", "ActionTreeOutcomeComposition",
                             "ConditionalActionRule", "AlternativeActionRule", "BranchwiseConjunctionRule",
-                            "GuardActionRule", "AlternativeTraversalRule"]
+                            "GuardActionRule", "AlternativeTraversalRule", "OrderedArithmeticFailures"]
         names += branchwise_rules
         if stack_files:
             names += ["SequencePrefixRule", "SequenceLengthRule", "SequenceExpressionConstructorRules",
@@ -869,6 +869,7 @@ def main():
         branchwise_imports = {name + ".tla" for name in branchwise_rules}
         branchwise_imports.update({"BranchwiseConjunctionFailureOrderModel.tla", "SwiftTLABranchwiseCheckingInputs.tla",
                                    "IndexedHistoryRules.tla", "ActionOutcomeInterface.tla", "ActionFailureHistoryProjection.tla",
+                                   "ScalarCopyOutputBinding.tla", "OrderedScalarCopyRule.tla",
                                    "CheckingSelectionRule.tla", "CheckingSelectionComposition.tla",
                                    "CheckingSelectionCompilerBinding.tla"})
         proof_hashes = []

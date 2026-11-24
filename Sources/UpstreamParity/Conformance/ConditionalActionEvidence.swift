@@ -15,7 +15,7 @@ package enum ConditionalActionEvidence {
               let physical = try AuthoredCopySyntax.conditionalProofInput(
                   source: authored, modelName: String(describing: GeneratedScalarConditionalProofModel.self))
         else { throw invalid }
-        let compilation = try GeneratedScalarConditionalProofModel.spec.compile()
+        let (compilation, continuations) = try GeneratedScalarConditionalProofModel.spec.compileRetainingAtomicBranchContinuations()
         let inputs = try CompiledTypeInputs(compilation: compilation,
             types: CompiledTypeContext(enums: .init(), formalNames: [:])) {
             switch $0 {
@@ -32,7 +32,22 @@ package enum ConditionalActionEvidence {
               program.behavior.actions.count == 1, let action = program.behavior.actions.first,
               case .ifElse(let predicate, _, _) = action.body,
               predicate.resultType == .bool, predicate.operation == .lessThan,
-              predicate.children.count == 2 else { throw invalid }
+              predicate.children.count == 2,
+              let label = program.layout.actions.first(where: { $0.id == action.id })?.declaration.name,
+              let continuation = continuations[label], continuation.prefix.isEmpty,
+              let condition = continuation.condition else { throw invalid }
+
+        func plan(_ branch: StraightLineAssignmentCheck.AtomicBranchContinuationReceipt.Branch) throws -> TLAValue {
+            let captures = branch.captures.compactMap { $0.count == 1 ? $0.first : nil }
+            guard captures.count == branch.captures.count else { throw invalid }
+            let writes = branch.writes.map { TLAValue.tuple([.string($0.root), $0.reference]) }
+            return .record(["captures": .tuple(captures), "guards": .tuple([]), "writes": .tuple(writes)])
+        }
+        let scheduled = TLAValue.record([
+            "fields": .set(Set(continuation.fields.map(TLAValue.string))),
+            "condition": .tuple(condition),
+            "plans": .tuple(try [plan(continuation.first), plan(continuation.second)])
+        ])
 
         func read(_ expression: CompiledExpression) throws -> String {
             guard expression.resultType == .int, expression.children.isEmpty,
@@ -63,6 +78,7 @@ package enum ConditionalActionEvidence {
             + """
 
         PhysicalConditional == \(physical)
+        ScheduledConditional == \(scheduled)
         PhysicalOperand(term) == CopyReferenceValue(NativeChooseBefore, <<>>, term)
         PhysicalGuard ==
             LET term == PhysicalConditional.predicate IN
@@ -100,11 +116,24 @@ package enum ConditionalActionEvidence {
             PROVE /\\ (RenderedLabeledStep(label) <=> PhysicalSourceLabeledStep(label))
                   /\\ (NativeChooseLabeledStep(label) <=> PhysicalSourceLabeledStep(label))
             PROOF
+            <1>scheduler.
+                /\\ ScheduledConditional.fields = PhysicalConditional.fields
+                /\\ ScheduledConditional.condition =
+                    <<<<PhysicalConditional.predicate[1]>>,
+                      PhysicalConditional.predicate[2], PhysicalConditional.predicate[3]>>
+                /\\ ExpectedNativeChoosePlan(ScheduledConditional.plans[1], TRUE)
+                /\\ ExpectedNativeChoosePlan(ScheduledConditional.plans[2], FALSE)
+                BY ONLY SMT DEF ScheduledConditional, PhysicalConditional, ExpectedNativeChoosePlan
+            <1>physical.
+                /\\ NativeChooseFields = ScheduledConditional.fields
+                /\\ NativeChoosePlans[NativeChooseChildren[1]] = ScheduledConditional.plans[1]
+                /\\ NativeChoosePlans[NativeChooseChildren[2]] = ScheduledConditional.plans[2]
+                BY ONLY SMT DEF NativeChooseFields, NativeChoosePlans, NativeChooseChildren, ScheduledConditional
             <1>fields. NativeChooseFields = {"left", "right", "selected"}
-                BY SMT DEF NativeChooseFields
+                BY ONLY <1>scheduler, <1>physical, SMT DEF PhysicalConditional
             <1>arms. /\\ ExpectedNativeChoosePlan(NativeChoosePlans[NativeChooseChildren[1]], TRUE)
                       /\\ ExpectedNativeChoosePlan(NativeChoosePlans[NativeChooseChildren[2]], FALSE)
-                BY SMT DEF ExpectedNativeChoosePlan, NativeChoosePlans, NativeChooseChildren
+                BY ONLY <1>scheduler, <1>physical, SMT
             <1>backends. /\\ (RenderedLabeledStep(label) <=> SourceLabeledStep(label))
                          /\\ (NativeChooseLabeledStep(label) <=> SourceLabeledStep(label))
                 BY <1>fields, <1>arms, ConditionalPreservesCompleteLabeledStep, SMT

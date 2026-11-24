@@ -68,14 +68,37 @@ enum RenderedEvaluationFailureKind {
     case emptySequence
 }
 
-// Each lexical value has an assignment target from its scheduled occurrence or the final frame.
-package struct AlternativeFailureBranch {
-    package let body: CompiledActionExpr
+package struct AlternativeFailureRegion {
+    fileprivate typealias Binding = (binder: BinderID, target: VariableID)
+
+    package let armOrdinal: Int
+    fileprivate let body: CompiledActionExpr
+    fileprivate let sharedBindingCount: Int
     package let bindings: [(binder: BinderID, target: VariableID)]
+
+    package func index(of site: BinderID) -> Int? {
+        bindings.indices.dropFirst(sharedBindingCount).first { bindings[$0].binder == site }
+    }
 }
 
 package extension CompiledActionExpr {
-    var orderedAlternativeFailureBranches: [AlternativeFailureBranch] {
+    var orderedAlternativeFailureRegions: [AlternativeFailureRegion] {
+        typealias Definition = (binder: BinderID, value: CompiledExpression)
+
+        func splitDefinitions(_ body: CompiledActionExpr) -> ([Definition], CompiledActionExpr) {
+            var definitions: [Definition] = []
+            var remainder = body
+            while case .define(let binder, let value, let next) = remainder {
+                definitions.append((binder, value))
+                remainder = next
+            }
+            return (definitions, remainder)
+        }
+        var choice = self
+        while case .define(_, _, let body) = choice { choice = body }
+        guard case .or(let left, let right) = choice else { return [] }
+        let (prefix, _) = splitDefinitions(self)
+
         func isValue(_ value: CompiledExpression) -> Bool {
             switch value.operation {
             case .value(.integer), .stateVariable, .boundValue:
@@ -84,22 +107,25 @@ package extension CompiledActionExpr {
                 return false
             }
         }
-        func branch(_ body: CompiledActionExpr) -> AlternativeFailureBranch? {
-            var current = body
-            var bindings: [BinderID] = []
-            var hasFailureSite = false
-            while case .define(let binder, let value, let next) = current {
-                if value.isObservedAlternativeIntegerOperation {
-                    guard value.children.count == 2, value.children.allSatisfy(isValue) else { return nil }
-                    hasFailureSite = true
-                } else if !isValue(value) {
-                    return nil
-                }
-                bindings.append(binder)
-                current = next
+        func isSupported(_ definition: Definition) -> Bool {
+            let value = definition.value
+            return isValue(value) || (value.isObservedAlternativeIntegerOperation
+                && value.children.count == 2 && value.children.allSatisfy(isValue))
+        }
+        // The existing native history records a reached arm. A shared RHS must be total here.
+        guard prefix.allSatisfy({ isValue($0.value) }) else { return [] }
+
+        func withPrefix(_ body: CompiledActionExpr) -> CompiledActionExpr {
+            prefix.reversed().reduce(body) { rest, definition in
+                .define(definition.binder, definition.value, rest)
             }
-            guard hasFailureSite else { return nil }
-            var pending = [current]
+        }
+        func arm(_ body: CompiledActionExpr, ordinal: Int) -> AlternativeFailureRegion? {
+            let (local, frame) = splitDefinitions(body)
+            guard local.allSatisfy(isSupported),
+                  local.contains(where: { $0.value.isObservedAlternativeIntegerOperation }) else { return nil }
+
+            var pending = [frame]
             var targets: [BinderID: VariableID] = [:]
             while let part = pending.popLast() {
                 switch part {
@@ -118,18 +144,22 @@ package extension CompiledActionExpr {
                     return nil
                 }
             }
-            guard Set(bindings).count == bindings.count else { return nil }
-            var mapped: [(binder: BinderID, target: VariableID)] = []
-            for binder in bindings {
+            let definitions = (prefix + local).map(\.binder)
+            guard Set(definitions).count == definitions.count else { return nil }
+            var mapped: [AlternativeFailureRegion.Binding] = []
+            for binder in definitions {
                 let terminal = targets[binder]
                 guard let target = binder.displacedAssignmentTarget ?? terminal,
                       terminal == nil || terminal == target else { return nil }
                 mapped.append((binder, target))
             }
-            return .init(body: body, bindings: mapped)
+            return .init(armOrdinal: ordinal, body: withPrefix(body), sharedBindingCount: prefix.count, bindings: mapped)
         }
-        guard case .or(let left, let right) = self, let first = branch(left), let second = branch(right),
-              Set(first.bindings.map(\.binder)).isDisjoint(with: second.bindings.map(\.binder)) else { return [] }
+        guard let first = arm(left, ordinal: 0), let second = arm(right, ordinal: 1),
+              Set(first.bindings.dropFirst(prefix.count).map(\.binder))
+                .isDisjoint(with: second.bindings.dropFirst(prefix.count).map(\.binder)) else { return [] }
+        guard first.bindings.prefix(prefix.count)
+            .elementsEqual(second.bindings.prefix(prefix.count), by: { $0.target == $1.target }) else { return [] }
         return [first, second]
     }
 }
@@ -430,21 +460,21 @@ struct CompiledTLARenderer {
     }
 
     func fullAlternativeFailureHistory(_ action: CompiledActionExpr, ordinal: Int) -> String? {
-        let branches = action.orderedAlternativeFailureBranches
-        guard !branches.isEmpty else { return nil }
+        let regions = action.orderedAlternativeFailureRegions
+        guard !regions.isEmpty else { return nil }
         let source = "<<\(layout.variables.map(\.formalName).joined(separator: ", "))>>"
 
-        // Reached RHS occurrences in branch order. Each branch uses only its own reachability guards.
+        // Arm failures use the actual lexical values captured before the split.
         var events: [String] = []
-        for (branchIndex, branch) in branches.enumerated() {
-            guard let failures = try? evaluationFailures(branch.body, retainingAllRHSBindings: true),
+        for region in regions {
+            guard let failures = try? evaluationFailures(region.body, retainingAllRHSBindings: true),
                   !failures.isEmpty else { return nil }
             for failure in failures {
                 guard let binding = failure.observedBinding, let before = failure.rhsBindingsBefore,
-                      let site = branch.bindings.firstIndex(where: { $0.binder == binding }), before.count == site else {
+                      let site = region.index(of: binding), before.count == site else {
                     return nil
                 }
-                let prefix = zip(branch.bindings.prefix(site), before).compactMap { origin, lexical -> String? in
+                let prefix = zip(region.bindings.prefix(site), before).compactMap { origin, lexical -> String? in
                     guard (try? binderName(origin.binder)) == lexical.name else { return nil }
                     return "[binding |-> \(origin.binder.ordinal), target |-> \(origin.target.ordinal), value |-> \(lexical.name)]"
                 }
@@ -462,8 +492,8 @@ struct CompiledTLARenderer {
                 default:
                     return nil
                 }
-                let occurrence = "[source |-> \(source), action |-> \(ordinal), branch |-> \(branchIndex), "
-                    + "site |-> \(binding.ordinal), target |-> \(branch.bindings[site].target.ordinal), payload |-> \(payload), "
+                let occurrence = "[source |-> \(source), action |-> \(ordinal), branch |-> \(region.armOrdinal), "
+                    + "site |-> \(binding.ordinal), target |-> \(region.bindings[site].target.ordinal), payload |-> \(payload), "
                     + "before |-> \(renderRHSBindingPrefix(before, projecting: prefix))]"
                 events.append("(IF \(failure.predicate) THEN <<\(occurrence)>> ELSE <<>>)")
             }

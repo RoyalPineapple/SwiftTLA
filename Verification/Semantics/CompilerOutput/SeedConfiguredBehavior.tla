@@ -30,6 +30,7 @@ THEOREM NormalConfigurationAndNativeDispatchPreserveSourceSteps ==
         DEF NativeSteps, SourceSteps, SelectedBehavior
 
 THEOREM NormalConfigurationUsesOnlyAuthoredSequentialControl ==
+    /\ (SelectedBehavior => AuthoredSequentialInitialControl)
     /\ (SelectedBehavior => [][AuthoredSequentialStep]_vars)
     /\ (~AuthoredSequentialGuard => ~ENABLED Next)
     /\ (AuthoredSequentialWriteFreeGuard => ENABLED Next)

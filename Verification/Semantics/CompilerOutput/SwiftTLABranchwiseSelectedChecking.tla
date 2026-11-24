@@ -1,6 +1,6 @@
 ---------------- MODULE SwiftTLABranchwiseSelectedChecking ----------------
 EXTENDS TLAPS, Integers, SequenceTheorems_proofs, SwiftTLABranchwiseProjectedCheckingInputs,
-        BranchwiseFailureStateProjectionProof
+        BranchwiseFailureStateProjectionProof, ScalarCopyOutputBinding
 \* BranchwisePhysicalPageRequests
 
 LOCAL Check == INSTANCE CheckingSelectionCompilerBinding WITH NoPropertyHandle <- ""
@@ -15,7 +15,9 @@ LOCAL Native == BranchwiseNativeHistory
 LOCAL Cuts == BranchwiseNativeCuts
 LOCAL Lift(visit, events) ==
     [offset \in DOMAIN events |-> <<visit - 1, events[offset].action, events[offset]>>]
-LOCAL AuthoredAt(visit) == Lift(visit, M8At(visit)!SourceOrderedFailureHistory)
+LOCAL AuthoredHistoryAt(visit) ==
+    M8At(visit)!AuthoredBranchwiseFailureHistory(BranchwiseContinuationPrefix, BranchwiseContinuationArms)
+LOCAL AuthoredAt(visit) == Lift(visit, AuthoredHistoryAt(visit))
 LOCAL EmittedAt(visit) == Lift(visit, M8At(visit)!__SwiftTLAActionFailureHistory0)
 LOCAL ReceivedAt(visit) ==
     [offset \in 1..(Cuts[visit + 1] - Cuts[visit]) |-> Native[Cuts[visit] + offset]]
@@ -33,13 +35,8 @@ BranchwiseAuthoredHistory == Assemble(BranchwiseAuthoredSlices)
 BranchwiseEmittedHistory == Assemble(BranchwiseEmittedSlices)
 
 LOCAL FailureFactsAt(visit) ==
-    LET At == INSTANCE BranchwiseConjunctionFailureHistories
-        WITH divisor <- BranchwiseNativeSnapshots[visit][1],
-             modulus <- BranchwiseNativeSnapshots[visit][2],
-             selected <- BranchwiseNativeSnapshots[visit][3],
-             result <- BranchwiseNativeSnapshots[visit][4]
-    IN /\ At!__SwiftTLAActionFailureHistory0 = At!SourceOrderedFailureHistory
-       /\ (At!__SwiftTLAEvaluationOK <=> DOMAIN At!SourceOrderedFailureHistory = {})
+    /\ M8At(visit)!__SwiftTLAActionFailureHistory0 = AuthoredHistoryAt(visit)
+    /\ (M8At(visit)!__SwiftTLAEvaluationOK <=> DOMAIN AuthoredHistoryAt(visit) = {})
 
 LOCAL BadVisit == CHOOSE visit \in Visits : ~FailureFactsAt(visit)
 LOCAL M8Bad == INSTANCE BranchwiseConjunctionFailureHistories
@@ -65,18 +62,27 @@ PROOF
         BY ONLY (\E visit \in Visits : ~FailureFactsAt(visit)), SMT DEF BadVisit
     <2>typed. M8Bad!SourceDomain
         BY ONLY <1>states, <2>chosen, SMT DEF M8Bad!SourceDomain
-    <2>history. M8Bad!__SwiftTLAActionFailureHistory0 = M8Bad!SourceOrderedFailureHistory
-        BY ONLY <2>typed, M8Bad!ActualBranchwiseHistoryMatchesAuthoredOrder
-    <2>presence. M8Bad!__SwiftTLAEvaluationOK <=> DOMAIN M8Bad!SourceOrderedFailureHistory = {}
-        BY ONLY <2>typed, M8Bad!ActualBranchwiseEvaluationCheckUsesTheOrderedHistory
+    <2>shape. M8Bad!AuthoredBranchwiseSourceShape(BranchwiseContinuationPrefix, BranchwiseContinuationArms)
+        BY ONLY IsaM("simp") DEF BranchwiseContinuationPrefix, BranchwiseContinuationArms, BranchwiseContinuationPaths,
+            M8Bad!AuthoredBranchwiseSourceShape, M8Bad!AuthoredScalarTerms, M8Bad!AuthoredLiteralTerms,
+            M8Bad!AuthoredFieldPositions, M8Bad!AuthoredFieldOrder
+    <2>history. M8Bad!__SwiftTLAActionFailureHistory0 =
+                M8Bad!AuthoredBranchwiseFailureHistory(BranchwiseContinuationPrefix, BranchwiseContinuationArms)
+        BY ONLY <2>typed, <2>shape, SMT
+        DEF BranchwiseContinuationPrefix, BranchwiseContinuationArms, BranchwiseContinuationPaths,
+            M8Bad!SourceDomain, M8Bad!__SwiftTLAActionFailureHistory0, M8Bad!vars,
+            M8Bad!AuthoredBranchwiseFailureHistory, M8Bad!AuthoredLeftFailureHistory, M8Bad!AuthoredRightFailureHistory,
+            M8Bad!AuthoredCapture, M8Bad!AuthoredPrefixBefore, M8Bad!AuthoredScalarValue,
+            M8Bad!AuthoredFieldPositions, M8Bad!AuthoredFieldOrder,
+            M8Bad!SourceFirstDivisionOutcome, M8Bad!SourceModuloOutcome, M8Bad!DivisionEvent, M8Bad!FailureEvent
+    <2>presence. M8Bad!__SwiftTLAEvaluationOK <=> DOMAIN M8Bad!__SwiftTLAActionFailureHistory0 = {}
+        BY ONLY <2>typed, SMT DEF M8Bad!SourceDomain, M8Bad!__SwiftTLAEvaluationOK,
+            M8Bad!__SwiftTLAAnyEvaluationFailure0, M8Bad!__SwiftTLAActionFailureHistory0
     <2>facts. FailureFactsAt(BadVisit)
         BY ONLY <2>history, <2>presence, SMT
-        DEF FailureFactsAt,
-            M8Bad!__SwiftTLAActionFailureHistory0, M8Bad!__SwiftTLAEvaluationOK,
-            M8Bad!__SwiftTLAAnyEvaluationFailure0, M8Bad!SourceOrderedFailureHistory,
-            M8Bad!SourceLeftFailureHistory, M8Bad!SourceRightFailureHistory,
-            M8Bad!DivisionEvent, M8Bad!NegativeModuloEvent, M8Bad!FailureEvent,
-            M8Bad!LeftBefore, M8Bad!RightBefore, M8Bad!vars
+        DEF FailureFactsAt, AuthoredHistoryAt, M8At!AuthoredBranchwiseFailureHistory,
+            M8Bad!AuthoredBranchwiseFailureHistory, M8At!__SwiftTLAActionFailureHistory0,
+            M8Bad!__SwiftTLAActionFailureHistory0, M8At!__SwiftTLAEvaluationOK, M8Bad!__SwiftTLAEvaluationOK
     <2>. QED BY ONLY <2>chosen, <2>facts
 <1>. QED BY ONLY <1>counterexample, SMT
 
@@ -119,9 +125,13 @@ PROOF
     <2>native. /\ DOMAIN AuthoredAt(visit) = 1..(Cuts[visit + 1] - Cuts[visit])
                /\ ReceivedAt(visit) = AuthoredAt(visit)
         BY ONLY (visit \in Visits), SMT
-            DEF Visits, ReceivedAt, AuthoredAt, Lift, Cuts, Native,
-                M8At!SourceOrderedFailureHistory, M8At!SourceLeftFailureHistory, M8At!SourceRightFailureHistory,
-                BranchwiseNativeSnapshots, BranchwiseNativeHistory, BranchwiseNativeCuts
+            DEF Visits, ReceivedAt, AuthoredAt, AuthoredHistoryAt, Lift, Cuts, Native,
+                BranchwiseContinuationPrefix, BranchwiseContinuationArms, BranchwiseContinuationPaths,
+                M8At!AuthoredBranchwiseFailureHistory, M8At!AuthoredLeftFailureHistory, M8At!AuthoredRightFailureHistory,
+                M8At!AuthoredCapture, M8At!AuthoredPrefixBefore, M8At!AuthoredScalarValue,
+                M8At!AuthoredFieldPositions, M8At!AuthoredFieldOrder,
+                M8At!SourceFirstDivisionOutcome, M8At!SourceModuloOutcome, M8At!DivisionEvent, M8At!FailureEvent,
+                M8At!vars, BranchwiseNativeSnapshots, BranchwiseNativeHistory, BranchwiseNativeCuts
     <2>. QED BY ONLY <2>emitted, <2>native
 <1>output. /\ BranchwiseAuthoredHistory = Native /\ BranchwiseEmittedHistory = Native
     <2>domain. /\ DOMAIN BranchwiseAuthoredHistory = DOMAIN Native
@@ -176,12 +186,136 @@ LOCAL CFGObservation ==
         ClaimTable(BranchwiseCFGClaims), {}, Check!ActionFailureEventSet(BranchwiseEmittedHistory),
         BranchwiseCFGSelection.deadlock)
 
+LOCAL Scheduled == BranchwiseScheduledFailures
+LOCAL OperandAt(event, reference) ==
+    CASE reference[1] = "literal" -> reference[2]
+      [] reference[1] = "state" -> event.source[reference[2]]
+      [] reference[1] = "capture" -> event.before[reference[2]].value
+
+\* The operands are interpreted inputs, independent of the native error payload.
+\* The zero-divisor callback reports its reason without carrying an operand pair.
+LOCAL ScheduledFailure(event) ==
+    /\ event.site \in DOMAIN Scheduled
+    /\ LET site == Scheduled[event.site]
+           rhs == OperandAt(event, site.operands[2])
+       IN /\ event.action = BranchwiseScheduledAction
+          /\ event.branch = site.branch
+          /\ event.target = site.target
+          /\ DOMAIN event.before = 1..(site.position - 1)
+          /\ [i \in DOMAIN event.before |-> <<event.before[i].binding, event.before[i].target>>] =
+                 BranchwiseScheduledPrefixBindings \o site.prior
+          /\ OperandAt(event, site.operands[1]) \in Int
+          /\ \/ /\ event.payload = <<"divisionByZero">>
+                /\ site.operation \in {"divide", "modulo"}
+                /\ rhs = 0
+             \/ /\ site.operation = "modulo"
+                /\ rhs \in Int /\ rhs < 0
+                /\ event.payload = <<"negativeModuloDivisor", rhs>>
+
+LOCAL MatchesScheduledFailures(history) ==
+    \A offset \in DOMAIN history : ScheduledFailure(history[offset][3])
+LOCAL ReachesScheduledSuffix(history) ==
+    \A branch \in {0, 1} :
+        \E offset \in DOMAIN history :
+            LET event == history[offset][3]
+            IN event.branch = branch /\ Scheduled[event.site].inSuffix
+LOCAL KeepsScheduledFrame ==
+    \A edge \in BranchwiseNativeEdges :
+        edge[2] = BranchwiseScheduledAction =>
+            \A field \in BranchwiseScheduledFrame :
+                BranchwiseNativeSnapshots[edge[1] + 1][field] = BranchwiseNativeSnapshots[edge[3] + 1][field]
+
+LOCAL Path(event) == BranchwiseContinuationPaths[event.branch + 1]
+LOCAL EventCount(event) == Len(Path(event))
+LOCAL EventPosition(event) == Scheduled[event.site].position
+LOCAL PhysicalGates(event) ==
+    [index \in 1..EventCount(event) |-> BranchwisePhysicalCaptureGuard(event.source, event.branch, index)]
+LOCAL SourceTerms(rows) ==
+    [index \in DOMAIN rows |-> <<rows[index].target, rows[index].sourceTerm>>]
+LOCAL EdgeSegments(rows) ==
+    <<SubSeq(SourceTerms(rows), 1, BranchwiseContinuationPrefixLength),
+      SubSeq(SourceTerms(rows), Len(rows) - BranchwiseContinuationSuffixLength + 1, Len(rows))>>
+LOCAL CapturesStayStopped(history) ==
+    \A offset \in DOMAIN history :
+        LET event == history[offset][3]
+        IN \A later \in EventPosition(event)..EventCount(event) : ~PhysicalGates(event)[later]
+
+THEOREM ActualBranchwiseCaptureRoutesRespectTheAuthoredWrites ==
+    /\ \A rows \in {BranchwiseContinuationPaths[index] : index \in DOMAIN BranchwiseContinuationPaths} :
+            ContinuationReadsUseTheOrderedWrites(BranchwiseContinuationKeys, rows)
+    /\ \A first, second \in DOMAIN BranchwiseContinuationPaths :
+            EdgeSegments(BranchwiseContinuationPaths[first]) = EdgeSegments(BranchwiseContinuationPaths[second])
+PROOF
+<1>readings. \A index \in DOMAIN BranchwiseContinuationPaths :
+    ContinuationReadsNameWriters(BranchwiseContinuationKeys, BranchwiseContinuationPaths[index])
+    BY ONLY IsaM("auto") DEF BranchwiseContinuationPaths, BranchwiseContinuationPrefix, BranchwiseContinuationArms, BranchwiseContinuationKeys,
+        ContinuationReadsNameWriters, CopyReceiptNamesWriter, CopyReceiptOrdinal,
+        LastDirectCopy, DirectCopyReference
+<1>names. \A rows \in {BranchwiseContinuationPaths[index] : index \in DOMAIN BranchwiseContinuationPaths} :
+            ContinuationReadsUseTheOrderedWrites(BranchwiseContinuationKeys, rows)
+    BY ONLY <1>readings, AContinuationReadsTheLatestWriterOnItsOwnPath, SMT
+<1>shared. \A first, second \in DOMAIN BranchwiseContinuationPaths :
+    EdgeSegments(BranchwiseContinuationPaths[first]) = EdgeSegments(BranchwiseContinuationPaths[second])
+    BY ONLY IsaM("auto") DEF BranchwiseContinuationPaths, BranchwiseContinuationPrefix, BranchwiseContinuationArms, EdgeSegments, SourceTerms,
+        BranchwiseContinuationPrefixLength, BranchwiseContinuationSuffixLength
+<1>. QED BY ONLY <1>names, <1>shared
+
+THEOREM ActualBranchwiseFailedCapturesBlockTheRemainingPhysicalGuards ==
+    CapturesStayStopped(Native)
+PROOF
+<1>identified. \A occurrence \in DOMAIN Native :
+    LET event == Native[occurrence][3]
+    IN /\ EventCount(event) \in Nat
+       /\ EventPosition(event) \in 1..EventCount(event)
+    BY ONLY IsaM("auto") DEF Native, BranchwiseNativeHistory, EventCount, Path,
+        BranchwiseContinuationPaths, BranchwiseContinuationPrefix, BranchwiseContinuationArms, EventPosition, Scheduled, BranchwiseScheduledFailures
+<1>local. \A occurrence \in DOMAIN Native :
+    LET event == Native[occurrence][3]
+    IN /\ ContinuationGuardsFollowTheLexicalPrefix(PhysicalGates(event), EventCount(event))
+       /\ ~PhysicalGates(event)[EventPosition(event)]
+    BY ONLY IsaM("auto") DEF Native, BranchwiseNativeHistory, EventCount, Path,
+        BranchwiseContinuationPaths, BranchwiseContinuationPrefix, BranchwiseContinuationArms, EventPosition, Scheduled, BranchwiseScheduledFailures,
+        PhysicalGates, BranchwisePhysicalCaptureGuard, ContinuationGuardsFollowTheLexicalPrefix
+<1>. QED BY ONLY <1>identified, <1>local, AFailedCaptureBlocksEveryLaterContinuationCapture, SMT
+    DEF CapturesStayStopped
+
+THEOREM ActualBranchwiseCheckingUsesTheScheduledContinuation ==
+    /\ MatchesScheduledFailures(Native)
+    /\ MatchesScheduledFailures(BranchwiseAuthoredHistory)
+    /\ MatchesScheduledFailures(BranchwiseEmittedHistory)
+    /\ ReachesScheduledSuffix(BranchwiseEmittedHistory)
+    /\ KeepsScheduledFrame
+    /\ CapturesStayStopped(BranchwiseEmittedHistory)
+PROOF
+<1>route. MatchesScheduledFailures(Native)
+    BY ONLY IsaM("simp") DEF MatchesScheduledFailures, ScheduledFailure, Scheduled, OperandAt,
+        Native, BranchwiseNativeHistory, BranchwiseScheduledFailures, BranchwiseScheduledAction,
+        BranchwiseScheduledPrefixBindings
+<1>suffix. ReachesScheduledSuffix(Native)
+    BY ONLY IsaM("auto") DEF ReachesScheduledSuffix, Scheduled, Native, BranchwiseNativeHistory,
+        BranchwiseScheduledFailures
+<1>frame. KeepsScheduledFrame
+    BY ONLY IsaM("simp") DEF KeepsScheduledFrame, BranchwiseNativeEdges, BranchwiseNativeSnapshots,
+        BranchwiseScheduledAction, BranchwiseScheduledFrame
+<1>. QED BY ONLY <1>route, <1>suffix, <1>frame, ActualBranchwiseOrderedFailureHistoriesAgree,
+    ActualBranchwiseFailedCapturesBlockTheRemainingPhysicalGuards, SMT
+
 THEOREM ActualBranchwiseNamedCheckingUsesTheSameOrderedFailures ==
     /\ AuthoredObservation = NativeObservation
     /\ AuthoredObservation = CFGObservation
     /\ BranchwiseAuthoredHistory = Native
     /\ BranchwiseEmittedHistory = Native
     /\ BranchwiseCFGEvaluationCheckEnabled
+    /\ MatchesScheduledFailures(BranchwiseAuthoredHistory)
+    /\ MatchesScheduledFailures(Native)
+    /\ MatchesScheduledFailures(BranchwiseEmittedHistory)
+    /\ ReachesScheduledSuffix(BranchwiseEmittedHistory)
+    /\ KeepsScheduledFrame
+    /\ CapturesStayStopped(BranchwiseEmittedHistory)
+    /\ \A rows \in {BranchwiseContinuationPaths[index] : index \in DOMAIN BranchwiseContinuationPaths} :
+            ContinuationReadsUseTheOrderedWrites(BranchwiseContinuationKeys, rows)
+    /\ \A first, second \in DOMAIN BranchwiseContinuationPaths :
+            EdgeSegments(BranchwiseContinuationPaths[first]) = EdgeSegments(BranchwiseContinuationPaths[second])
     /\ BranchwiseStateProjectionMatchesEmission
     /\ \A visit \in Visits :
            BranchwiseActualTLAEvaluationOK(BranchwiseNativeSnapshots[visit])
@@ -231,12 +365,12 @@ PROOF
     BranchwiseActualTLAEvaluationOK(BranchwiseNativeSnapshots[visit])
         <=> DOMAIN ReceivedAt(visit) = {}
     <2>. TAKE visit \in Visits
-    <2>presence. M8At(visit)!__SwiftTLAEvaluationOK <=> DOMAIN M8At(visit)!SourceOrderedFailureHistory = {}
+    <2>presence. M8At(visit)!__SwiftTLAEvaluationOK <=> DOMAIN AuthoredHistoryAt(visit) = {}
         BY ONLY (visit \in Visits), TheObservedVisitsHaveTheCheckedM8FailureFacts, SMT DEF FailureFactsAt
     <2>mode. BranchwiseActualTLAEvaluationOK(BranchwiseNativeSnapshots[visit]) <=> M8At(visit)!__SwiftTLAEvaluationOK
         BY ONLY SMT DEF BranchwiseActualTLAEvaluationOK, BranchwisePredicates!__SwiftTLAEvaluationOK,
             M8At!__SwiftTLAEvaluationOK
-    <2>domain. DOMAIN ReceivedAt(visit) = DOMAIN M8At(visit)!SourceOrderedFailureHistory
+    <2>domain. DOMAIN ReceivedAt(visit) = DOMAIN AuthoredHistoryAt(visit)
         BY ONLY (visit \in Visits), ActualBranchwiseOrderedFailureHistoriesAgree, SMT DEF AuthoredAt, Lift
     <2>. QED BY ONLY <2>presence, <2>mode, <2>domain
 <1>named. \E first, second, omitted \in BranchwiseAuthoredInvariantNames :
@@ -298,6 +432,7 @@ PROOF
     <2>. QED BY ONLY <2>candidate, <2>length, <2>values, SMT
 <1>. QED BY ONLY <1>native, <1>configured, <1>named, <1>occurrences, <1>evaluation,
     ActualBranchwiseOrderedFailureHistoriesAgree, ActualBranchwiseCFGContainsTheEvaluationInvariant,
-    TheProjectionUsesTheActualEmittedStateOperators, SMT
+    TheProjectionUsesTheActualEmittedStateOperators, ActualBranchwiseCheckingUsesTheScheduledContinuation,
+    ActualBranchwiseCaptureRoutesRespectTheAuthoredWrites, SMT
 
 ====

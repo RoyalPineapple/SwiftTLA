@@ -1074,7 +1074,7 @@ extension NativeSwiftEmitter {
         conditions: [(id: Int, value: String)]
     ) {
         let observesAddition = program.requiresOrderedIntOutput(action.id)
-        let alternativeBranches = action.bindings.isEmpty ? action.body.orderedAlternativeFailureBranches : []
+        let alternativeRegions = action.bindings.isEmpty ? action.body.orderedAlternativeFailureRegions : []
         var pending: [(node: CompiledActionExpr, id: Int, bindings: [BinderID])] = [(action.body, 0, [])]
         var nextID = 1
         var declarations: [String] = []
@@ -1147,7 +1147,7 @@ extension NativeSwiftEmitter {
             } else {
                 let recording: String
                 if case .define(let site, let value, _) = node, value.isObservedAlternativeIntegerOperation,
-                   let alternative = alternativeFailureRecordingSource(branches: alternativeBranches, site: site,
+                   let alternative = alternativeFailureRecordingSource(regions: alternativeRegions, site: site,
                        action: action.id.ordinal, lexical: bindings.map(binder), program: program) {
                     recording = alternative + "\n"
                 } else if case .define(_, let value, _) = node, observesAddition,
@@ -2421,20 +2421,20 @@ private func isTotalScalarAssignment(_ root: CompiledActionExpr) -> Bool {
     return true
 }
 
-private func alternativeFailureRecordingSource(branches: [AlternativeFailureBranch], site: BinderID,
+private func alternativeFailureRecordingSource(regions: [AlternativeFailureRegion], site: BinderID,
     action: Int, lexical: [String], program: CompiledProgram) -> String? {
-    for (branchIndex, branch) in branches.enumerated() {
-        guard let position = branch.bindings.firstIndex(where: { $0.binder == site }) else { continue }
+    for region in regions {
+        guard let position = region.index(of: site) else { continue }
         guard lexical.count == position else { return nil }
-        let prefix = zip(branch.bindings.prefix(position), lexical).compactMap { origin, local -> String? in
+        let prefix = zip(region.bindings.prefix(position), lexical).compactMap { origin, local -> String? in
             guard let name = program.binderNames[origin.binder], "_\(name)_\(origin.binder.ordinal)" == local else {
                 return nil
             }
             return "(binding: \(origin.binder.ordinal), target: \(origin.target.ordinal), value: \(local))"
         }
         guard prefix.count == position else { return nil }
-        return "SwiftTLA._recordNativeAlternativeFailure(&context, action: \(action), branch: \(branchIndex), "
-            + "site: \(site.ordinal), target: \(branch.bindings[position].target.ordinal), "
+        return "SwiftTLA._recordNativeAlternativeFailure(&context, action: \(action), branch: \(region.armOrdinal), "
+            + "site: \(site.ordinal), target: \(region.bindings[position].target.ordinal), "
             + "before: [\(prefix.joined(separator: ", "))], reason: failure)"
     }
     return nil
@@ -2495,7 +2495,7 @@ func verifyGeneratedActionWriteOutput(
     }
     let observesAddition = observedAction.map { program.requiresOrderedIntOutput($0.id) } ?? false
     let observesAlternatives = observedAction.map { program[$0.id].bindings.isEmpty } == true
-    let alternativeBranches = observesAlternatives ? action.orderedAlternativeFailureBranches : []
+    let alternativeRegions = observesAlternatives ? action.orderedAlternativeFailureRegions : []
     var bodies: [Int: [String]] = [:]
     var failureRecordings: [Int: [String]] = [:]
     var firstStatements: [Int: Syntax] = [:]
@@ -3419,7 +3419,7 @@ func verifyGeneratedActionWriteOutput(
         let preceding = Array(parent.dropLast(2))
         let recording: String?
         if let observedAction, value.isObservedAlternativeIntegerOperation {
-            recording = alternativeFailureRecordingSource(branches: alternativeBranches, site: binding,
+            recording = alternativeFailureRecordingSource(regions: alternativeRegions, site: binding,
                 action: observedAction.id.ordinal, lexical: preceding, program: program)
         } else if let observedAction, observesAddition, value.operation == .add, value.resultType == .int {
             recording = nativeOrderedIntAssignmentFailureSource(actionOrdinal: observedAction.id.ordinal, preceding: preceding)

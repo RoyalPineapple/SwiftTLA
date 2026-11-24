@@ -804,6 +804,195 @@ package enum StraightLineAssignmentCheck {
         }
     }
 
+    package struct AtomicBranchContinuationReceipt: Sendable {
+        package struct Branch: Sendable {
+            package let captures: [[TLAValue]]
+            package let sourceCaptures: [[TLAValue]]
+            package let targets: [String]
+            package let writes: [(root: String, reference: TLAValue)]
+        }
+
+        package let fields: Set<String>
+        package let prefix: [[TLAValue]]
+        package let condition: [TLAValue]?
+        package let suffixLength: Int
+        package let first: Branch
+        package let second: Branch
+    }
+
+    private static func atomicBranchTerm(_ expression: StateExpr,
+                                         read: (String) -> TLAValue?) -> [TLAValue]? {
+        var pending = [expression]
+        var terms: [TLAValue] = []
+        while let next = pending.popLast() {
+            switch next {
+            case .variable(let root):
+                guard let reference = read(root) else { return nil }
+                terms.append(reference)
+            case .value(.int(let value)):
+                terms.append(.tuple([.string("literal"), .int(value)]))
+            case .value(.bool(let value)):
+                terms.append(.tuple([.string("literal"), .bool(value)]))
+            case .not(let child):
+                terms.append(.tuple([.string("not")]))
+                pending.append(child)
+            case .add(let left, let right), .divide(let left, let right), .modulo(let left, let right),
+                 .equal(let left, let right), .lessThan(let left, let right):
+                let tag: String = switch next {
+                case .add: "add"
+                case .divide: "divide"
+                case .modulo: "modulo"
+                case .lessThan: "lessThan"
+                default: "equal"
+                }
+                terms.append(.tuple([.string(tag)]))
+                pending.append(right)
+                pending.append(left)
+            default:
+                return nil
+            }
+        }
+        return terms
+    }
+
+    package static func checkedAtomicBranchContinuations(
+        _ step: AtomicStep, lowered: ActionExpr, stateRoots: Set<String>
+    ) throws -> AtomicBranchContinuationReceipt? {
+        let statements = step.model.statements
+        guard step.bindings.isEmpty, let fork = statements.firstIndex(where: {
+            if case .ifElse = $0 { return true }
+            if case .either = $0 { return true }
+            return false
+        }) else { return nil }
+
+        let condition: StateExpr?
+        let arms: ([AlgorithmStatementModel], [AlgorithmStatementModel])
+        switch statements[fork] {
+        case .ifElse(let test, let yes, let no):
+            condition = test
+            arms = (yes, no)
+        case .either(let first, let second):
+            condition = nil
+            arms = (first, second)
+        default:
+            return nil
+        }
+
+        func initial(_ root: String) -> TLAValue? {
+            stateRoots.contains(root) ? .tuple([.string("state"), .string(root)]) : nil
+        }
+        func writes(_ statements: some Sequence<AlgorithmStatementModel>) -> [AlgorithmAssignmentModel]? {
+            var assignments: [AlgorithmAssignmentModel] = []
+            for statement in statements {
+                guard case .set(let target, let expression) = statement,
+                      case .root(let root) = target, stateRoots.contains(root),
+                      atomicBranchTerm(expression, read: initial) != nil else { return nil }
+                assignments.append(.init(target: target, value: expression))
+            }
+            return assignments
+        }
+        if let condition, atomicBranchTerm(condition, read: initial) == nil { return nil }
+        guard let prefix = writes(statements[..<fork]),
+              let yes = writes(arms.0), let no = writes(arms.1),
+              let suffix = writes(statements[(fork + 1)...]) else { return nil }
+
+        let failure = CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .validation,
+            path: "actions.\(step.model.label.name).branchContinuations",
+            expected: "the authored capture occurrences, selected arm, common continuation, and latest root writes",
+            actual: "the lowered branch changed a capture reference, evaluation site, continuation, or frame",
+            nextSafeAction: "Report this atomic scheduling failure.")
+        let sourceNames = statements.algorithmScopeNames
+
+        struct Captures {
+            var remaining: ActionExpr
+            var authored: [String: TLAValue] = [:]
+            var physical: [String: TLAValue] = [:]
+            var plans: [[TLAValue]] = []
+            var sourcePlans: [[TLAValue]] = []
+            var targets: [String] = []
+        }
+        func advance(_ assignments: [AlgorithmAssignmentModel], from before: Captures) throws -> Captures {
+            var result = before
+            for assignment in assignments {
+                guard case .define(let name, let rhs, let rest) = result.remaining,
+                      !sourceNames.contains(name), result.physical[name] == nil,
+                      let source = atomicBranchTerm(assignment.value, read: initial),
+                      let expected = atomicBranchTerm(assignment.value, read: { result.authored[$0] ?? initial($0) }),
+                      let actual = atomicBranchTerm(rhs, read: { result.physical[$0] ?? initial($0) }),
+                      actual == expected else { throw failure }
+                result.plans.append(actual)
+                result.sourcePlans.append(source)
+                result.targets.append(assignment.target.root)
+                let reference: TLAValue = .tuple([.string("capture"), .int(result.plans.count)])
+                result.authored[assignment.target.root] = reference
+                result.physical[name] = reference
+                result.remaining = rest
+            }
+            return result
+        }
+
+        func publish(_ branch: Captures) throws -> AtomicBranchContinuationReceipt.Branch {
+            var published: [String: TLAValue] = [:]
+            var ordered: [(String, TLAValue)] = []
+            var pending = [branch.remaining]
+            while let node = pending.popLast() {
+                let root: String
+                let reference: TLAValue
+                switch node {
+                case .and(let left, let right):
+                    pending.append(right)
+                    pending.append(left)
+                    continue
+                case .guard_(.value(.bool(true))):
+                    continue
+                case .assign(.named(let name), .variable(let capture)):
+                    guard let resolved = branch.physical[capture] else { throw failure }
+                    root = name
+                    reference = resolved
+                case .unchanged(.named(let name)):
+                    guard let original = initial(name) else { throw failure }
+                    root = name
+                    reference = original
+                default:
+                    throw failure
+                }
+                guard published.updateValue(reference, forKey: root) == nil else { throw failure }
+                ordered.append((root, reference))
+            }
+            var expected = branch.authored
+            for root in stateRoots where expected[root] == nil { expected[root] = initial(root) }
+            guard published == expected else { throw failure }
+            return .init(captures: branch.plans, sourceCaptures: branch.sourcePlans, targets: branch.targets,
+                         writes: ordered)
+        }
+
+        let preceding = try advance(prefix, from: .init(remaining: lowered))
+        let predicate: [TLAValue]?
+        let actual: (ActionExpr, ActionExpr)
+        switch (condition, preceding.remaining) {
+        case (.some(let test), .ifElse(let rendered, let first, let second)):
+            guard let expected = atomicBranchTerm(test, read: { preceding.authored[$0] ?? initial($0) }),
+                  let observed = atomicBranchTerm(rendered, read: { preceding.physical[$0] ?? initial($0) }),
+                  observed == expected else { throw failure }
+            predicate = observed
+            actual = (first, second)
+        case (.none, .or(let first, let second)):
+            predicate = nil
+            actual = (first, second)
+        default:
+            throw failure
+        }
+
+        func finish(_ instructions: [AlgorithmAssignmentModel], using action: ActionExpr) throws
+            -> AtomicBranchContinuationReceipt.Branch {
+            var input = preceding
+            input.remaining = action
+            return try publish(advance(instructions, from: input))
+        }
+        return try .init(fields: stateRoots, prefix: preceding.plans, condition: predicate, suffixLength: suffix.count,
+            first: finish(yes + suffix, using: actual.0), second: finish(no + suffix, using: actual.1))
+    }
+
     private static func verifySequentialIntAssignments(
         _ step: AtomicStep, lowered: ActionExpr?, stateRoots: Set<String>,
         control: (entry: ControlLocationReference, next: ControlLocationReference)?,

@@ -35,7 +35,14 @@ package enum CheckingSelectionEvidence {
         guard let sourceText = String(data: authoredSource, encoding: .utf8),
               !sourceText.utf8.contains(0) else { throw invalid("authored model bytes") }
         let authored = try authoredSelection(in: sourceText, modelName: modelName, needsInvariantFloors: branchwise)
-        let compiled = try source.compile()
+        let compiled: CompiledSpecification
+        let continuations: [String: StraightLineAssignmentCheck.AtomicBranchContinuationReceipt]
+        if branchwise {
+            (compiled, continuations) = try source.compileRetainingAtomicBranchContinuations()
+        } else {
+            compiled = try source.compile()
+            continuations = [:]
+        }
         let scenario = try unique(scenarios.filter { $0.name == "Selected" }, "native scenario")
         let compiledScenario = try unique(compiled.semantics.behavior.validationScenarios.filter {
             $0.name == scenario.name
@@ -47,7 +54,7 @@ package enum CheckingSelectionEvidence {
                 return .int
             }
         let program = try CompiledProgram(inputs: inputs)
-        let compilerRender = try program.renderModule()
+        let compilerRender = try program.renderModule(retainingCaptureGuards: branchwise)
         let root = rendered.tlaBundle.root
         guard case .compiled(let identity, _, _) = rendered.tlaBundle.provenance
         else { throw invalid("configured render provenance") }
@@ -143,6 +150,8 @@ package enum CheckingSelectionEvidence {
             nativeHistory = "BranchwiseNativeHistory"
             supplementalEvidence = try observed.definitions(history: orderedHistory, summary: nativeRun,
                 names: scenario.formalPropertyNames, program: program)
+                + "\n" + branchwiseContinuationDefinitions(authoredSource: sourceText,
+                    receipts: continuations, program: program, rendered: compilerRender)
                 + "\n" + branchwiseInvariantDefinitions(authored.declarations, program: program, module: root.name)
             proofName = "SwiftTLABranchwiseCheckingInputs"
             proof = selectionProof + "\n\n" + branchwiseSelectionProof
