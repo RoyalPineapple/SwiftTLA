@@ -8662,22 +8662,26 @@
     {
       "path": "specifications/ReadersWriters",
       "name": "The Readers-Writers Problem",
-      "audit": "pinned source, manifest, and both published configurations inspected; implementation and hosted parity pending",
-      "gap": "APReadersWriters selects NumActors = 3, INIT/NEXT, and Safety only. MC binds NumActors through n = 3 and selects fair Spec, TypeOK, Safety, and Liveness; the manifest reports 21,527 distinct states. Queue ordering, per-actor weak fairness, and universal recurring-progress checks need exact native and TLC parity. No implementation or evidence is credited.",
+      "audit": "typed source and both published configurations registered; hosted comparison pending",
+      "gap": "Both scenarios use the same authored model. AP selects Safety under Init/Next. MC selects TypeOK, Safety and per-actor recurring Liveness under fair Spec. Independent hosted comparisons remain pending.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/ReadersWriters/APReadersWriters.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/ReadersWriters.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ReadersWriters/MC.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/ReadersWriters.swift"
+          ],
           "dispositionComplete": false
         },
         {
@@ -8691,7 +8695,9 @@
           "path": "specifications/ReadersWriters/ReadersWriters.tla",
           "role": "shared model dependency",
           "reason": "MC extends this base module and APReadersWriters instantiates it. The manifest gives it no standalone configuration; its Init, Next, fairness, invariants, and liveness are covered by the two configured roots, not an invented third model.",
-          "implementations": [],
+          "implementations": [
+            "Sources/UpstreamParity/Examples/ReadersWriters.swift"
+          ],
           "dispositionComplete": true
         }
       ],
@@ -8700,20 +8706,32 @@
           "module": "specifications/ReadersWriters/APReadersWriters.tla",
           "configuration": "specifications/ReadersWriters/APReadersWriters.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/ReadersWriters.swift",
+              "scenario": "APReadersWriters",
+              "caseID": "ap-readers-writers"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/ReadersWriters/MC.tla",
           "configuration": "specifications/ReadersWriters/MC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/ReadersWriters.swift",
+              "scenario": "MC",
+              "caseID": "readers-writers"
+            }
+          ],
           "evidence": []
         }
       ],

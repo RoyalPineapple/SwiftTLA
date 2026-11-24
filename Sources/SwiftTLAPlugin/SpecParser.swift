@@ -1520,7 +1520,7 @@ final class ParserSession {
             return .tuplePrefix(base, length)
         case "union", "inserting", "removing":
             guard let operand = call.arguments.first?.expression else { return nil }
-            return decodeSetExpression(access.declName.baseName.sourceIdentifierName, base: base,
+            return decodeCollectionUpdate(access.declName.baseName.sourceIdentifierName, base: base,
                 operand: operand, type: baseType, scope: scope)
         case "updating":
             break
@@ -1588,11 +1588,12 @@ final class ParserSession {
         return .except(base, selection.selector, value)
     }
 
-    func decodeSetExpression(_ name: String, base: StateExpr, operand: ExprSyntax,
+    func decodeCollectionUpdate(_ name: String, base: StateExpr, operand: ExprSyntax,
                              type: CompiledValueType?, scope: TypedFacadeScope) -> StateExpr? {
         guard let value = decodeTypedFacadeValue(operand, scope: scope,
             expectedType: name == "union" ? type : type?.selectedElement) else { return nil }
         switch name {
+        case "appending": return .tupleAppend(base, value)
         case "union": return .union(base, value)
         case "inserting": return .union(base, .setLiteral([value]))
         case "removing": return .setDifference(base, .setLiteral([value]))

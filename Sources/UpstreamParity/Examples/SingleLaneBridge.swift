@@ -62,7 +62,7 @@ package struct SingleLaneBridgeModel: Sendable {
                 When(!Bridge.contains(next))
                 If(CarsRight.contains(car) && next == EndBridge + 1
                     || CarsLeft.contains(car) && next == StartBridge - 1) {
-                    WaitingBeforeBridge.set(WaitingBeforeBridge.appending(car))
+                    WaitingBeforeBridge.append(car)
                 }
                 Location[car].set(next)
             }
@@ -76,7 +76,7 @@ package struct SingleLaneBridgeModel: Sendable {
                     && Cars.allSatisfy { other in Location[other] != next })
                 If(CarsRight.contains(car) && next == EndBridge + 1
                     || CarsLeft.contains(car) && next == StartBridge - 1) {
-                    WaitingBeforeBridge.set(WaitingBeforeBridge.appending(car))
+                    WaitingBeforeBridge.append(car)
                 }
                 Location[car].set(next)
             }

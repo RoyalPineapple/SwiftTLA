@@ -1304,6 +1304,60 @@
       "timeoutSeconds": 300
     },
     {
+      "id": "ap-readers-writers",
+      "sourceModel": "readers-writers",
+      "scenario": "APReadersWriters",
+      "module": "readers-writers/APReadersWriters.tla",
+      "configuration": "readers-writers/APReadersWriters.cfg",
+      "imports": [
+        "readers-writers/ReadersWriters.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APReadersWriters",
+          "importedModule": "ReadersWriters"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ReadersWriters/APReadersWriters.tla",
+        "sha256": "4274771776b2ec3d521dbdec8daa9f38fa36cef9975dee9c9a179813cf5f85be"
+      },
+      "exploration": {
+        "maximumStateLimit": 25000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "4274771776b2ec3d521dbdec8daa9f38fa36cef9975dee9c9a179813cf5f85be",
+      "cfgSHA256": "72b96918d7256397680646894ccb8f5f45b44f47759ac9351970339609f0924e",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "readers-writers",
+      "sourceModel": "readers-writers",
+      "scenario": "MC",
+      "module": "readers-writers/MC.tla",
+      "configuration": "readers-writers/MC.cfg",
+      "imports": [
+        "readers-writers/ReadersWriters.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC",
+          "importedModule": "ReadersWriters"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ReadersWriters/MC.tla",
+        "sha256": "ebaa5772aab4758cfc62d249dcae493c60008ced982f428764212feb14a33366"
+      },
+      "exploration": {
+        "maximumStateLimit": 25000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "ebaa5772aab4758cfc62d249dcae493c60008ced982f428764212feb14a33366",
+      "cfgSHA256": "71c402125bae63c3ac0cf685d990282ab50f8b360f1cfdc8749ad9c1a33f636f",
+      "timeoutSeconds": 600
+    },
+    {
       "id": "single-lane-bridge-0",
       "sourceModel": "single-lane-bridge",
       "scenario": "MC",

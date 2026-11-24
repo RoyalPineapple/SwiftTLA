@@ -375,6 +375,8 @@ same ordered reads and overflow behavior as `Assign(x, to: x + amount)`.
 Use `second.set(0)` to replace a value or `y.set(x)` to copy the current value
 of another field. Keep the variable handle declared with `let`.
 
+For a writable sequence, `waiting.append(request)` puts the request at the back of the queue. It lowers to `waiting.set(waiting.appending(request))` at the same point in the step.
+
 For writable sets, use `marked.insert(node)` to add a member,
 `frontier.remove(node)` to remove one, and `frontier.formUnion(successors)`
 to add a set of members in one assignment.
@@ -862,6 +864,12 @@ authored PlusCal marks the same excluded steps with `:-` and selects its
 translated `Spec`. Both exports come from the compiled algorithm, not a
 post-render text rewrite. Dijkstra's three-process `LSpec` configuration uses
 this form, while its four-process safety configuration keeps the default `Spec`.
+
+A direct-action model can require a temporal condition separately for each member
+of an immutable finite domain, without declaring a process. In ReadersWriters,
+`Liveness(forEach: actors) { actor in .alwaysEventually(readers.contains(actor)) }`
+requires every actor to read repeatedly. The observations for different actors
+can occur at different times. An empty domain satisfies the universal condition.
 
 ### Temporal claims for each process member
 

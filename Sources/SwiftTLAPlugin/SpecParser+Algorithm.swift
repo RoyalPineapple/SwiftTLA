@@ -62,8 +62,8 @@ private enum AlgorithmSourceConstruct: Equatable {
         }
     }
 
-    // A set update assigns the corresponding set expression to the same location.
-    static let setUpdateExpressions = ["insert": "inserting", "remove": "removing", "formUnion": "union"]
+    // A collection update assigns the corresponding expression to the same location.
+    static let collectionUpdateExpressions = ["append": "appending", "insert": "inserting", "remove": "removing", "formUnion": "union"]
 
     init?(_ expression: ExprSyntax) {
         if let reference = Self.reference(in: expression) {
@@ -73,7 +73,7 @@ private enum AlgorithmSourceConstruct: Equatable {
         guard let member = expression.as(MemberAccessExprSyntax.self) else { return nil }
         let name = member.declName.baseName.sourceIdentifierName
         if member.declName.argumentNames == nil, member.base != nil,
-           name == "set" || Self.setUpdateExpressions[name] != nil {
+           name == "set" || Self.collectionUpdateExpressions[name] != nil {
             self = .assign
             return
         }
@@ -1470,9 +1470,9 @@ extension ParserSession {
                       call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
                 targetSyntax = member.base
                 valueSyntax = call.arguments.first?.expression
-                if let name = AlgorithmSourceConstruct.setUpdateExpressions[member.declName.baseName.sourceIdentifierName] {
+                if let name = AlgorithmSourceConstruct.collectionUpdateExpressions[member.declName.baseName.sourceIdentifierName] {
                     guard let receiver = member.base, let target = algorithmTarget(receiver, scope: scope),
-                          let valueSyntax, let value = decodeSetExpression(name, base: target.expression,
+                          let valueSyntax, let value = decodeCollectionUpdate(name, base: target.expression,
                             operand: valueSyntax, type: typedFacadeValueType(receiver, scope: scope), scope: scope)
                     else { return nil }
                     return .set(target: target, value: value)

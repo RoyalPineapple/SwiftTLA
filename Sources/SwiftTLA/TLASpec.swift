@@ -715,6 +715,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ReachableDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ValidationDeclaration) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessProfileDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: QuantifiedTemporalDeclaration) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }

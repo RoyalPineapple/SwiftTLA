@@ -1518,6 +1518,14 @@ extension AssignmentTarget {
     }
 }
 
+extension AssignmentTarget where Value: FormalSequenceValue {
+    public func append(_ element: some TypedExpression<Value.Element>) -> StepStatement {
+        set(appending(element))
+    }
+
+    public func append(_ element: Value.Element) -> StepStatement { append(element.expr) }
+}
+
 extension AssignmentTarget where Value: FormalSetValue {
     public func insert(_ member: some TypedExpression<Value.Element>) -> StepStatement {
         set(inserting(member))
