@@ -1419,13 +1419,15 @@ func conditionalNativeSuccessProof(writeOrders: [[String]]) -> (definitions: Str
     let writeRoleSteps = zip(arms, writeOrders).map { arm, order in
         let renderedKeys = TLAValue.tuple(order.map(TLAValue.string))
         let keySet = "{\(order.map { String(describing: TLAValue.string($0)) }.joined(separator: ", "))}"
-        let matches = order.indices.map { index in
-            "raw[\(index + 1)][2] = routes[keys[\(index + 1)]]"
-        }
-        let matchBody = matches.isEmpty ? "TRUE" : matches.joined(separator: " /\\ ")
-        let matchProof = matches.isEmpty
-            ? "OBVIOUS"
-            : #"BY ONLY <2>arm\#(arm), IsaM("simp"), SMT DEF raw, keys, routes, ConditionalNativeRows, ConditionalSourceRows"#
+        let matchSteps = order.indices.map { index in
+            let position = index + 1
+            return #"""
+                        <4>write\#(position). raw[\#(position)][2] = routes[keys[\#(position)]]
+                            BY ONLY <2>arm\#(arm), IsaM("simp"), SMT DEF raw, keys, routes,
+                                ConditionalNativeRows, ConditionalSourceRows
+            """#
+        }.joined(separator: "\n")
+        let matchFacts = order.indices.map { "<4>write\($0 + 1), " }.joined()
         return #"""
             <2>arm\#(arm). CASE arm = \#(arm)
                 <3>. DEFINE keys == \#(renderedKeys)
@@ -1435,8 +1437,10 @@ func conditionalNativeSuccessProof(writeOrders: [[String]]) -> (definitions: Str
                     BY ONLY <2>arm\#(arm), IsaM("auto"), SMT DEF raw, keys, ConditionalNativeRows
                 <3>keySet. targets = {keys[i] : i \in 1..\#(order.count)} /\ targets \subseteq ConditionalStateKeys
                     BY ONLY SMT DEF keys, targets, ConditionalStateKeys
-                <3>matches. \#(matchBody)
-                    \#(matchProof)
+                <3>matches. \A i \in 1..\#(order.count) : raw[i][2] = routes[keys[i]]
+                    <4>. TAKE i \in 1..\#(order.count)
+        \#(matchSteps)
+                    <4>. QED BY ONLY (i \in 1..\#(order.count)), \#(matchFacts)SMT
                 <3>untouched. \A key \in ConditionalStateKeys \ targets : routes[key] = <<"state", key>>
                     BY ONLY <2>arm\#(arm), IsaM("auto"), SMT DEF routes, targets, ConditionalSourceRows, ConditionalStateKeys
                 <3>. QED BY ONLY <3>domain, <3>keySet, <3>matches, <3>untouched, SMT

@@ -971,15 +971,14 @@ package enum ConditionalActionEvidence {
                               /\ row.before[i].binding = ConditionalPrefix(a)[i].binding
                               /\ row.before[i].target = ConditionalPrefix(a)[i].field
                               /\ row.before[i].slot = i
-            <2>header. /\ ConditionalNativeRows[1].action = ConditionalActionOrdinal
-                        /\ ConditionalNativeRows[2].action = ConditionalActionOrdinal
-                        /\ ConditionalNativeRows[1].branch = 1 - 1
-                        /\ ConditionalNativeRows[2].branch = 2 - 1
-                        /\ ConditionalNativeRows[1].site = ConditionalSourceRows[1].site
-                        /\ ConditionalNativeRows[2].site = ConditionalSourceRows[2].site
-                        /\ ConditionalNativeRows[1].target = ConditionalSourceRows[1].target
-                        /\ ConditionalNativeRows[2].target = ConditionalSourceRows[2].target
-                BY ONLY IsaM("simp") DEF ConditionalNativeRows, ConditionalSourceRows, ConditionalActionOrdinal
+            <2>sourceHeader. /\ <<ConditionalSourceRows[1].site, ConditionalSourceRows[1].target>> = <<\#(first.site), \#(first.target)>>
+                              /\ <<ConditionalSourceRows[2].site, ConditionalSourceRows[2].target>> = <<\#(second.site), \#(second.target)>>
+                BY ONLY SMT DEF ConditionalSourceRows
+            <2>nativeHeader. /\ LET row == ConditionalNativeRows[1]
+                                IN <<row.action, row.branch, row.site, row.target>> = <<ConditionalActionOrdinal, 0, \#(first.site), \#(first.target)>>
+                              /\ LET row == ConditionalNativeRows[2]
+                                 IN <<row.action, row.branch, row.site, row.target>> = <<ConditionalActionOrdinal, 1, \#(second.site), \#(second.target)>>
+                BY ONLY SMT DEF ConditionalNativeRows, ConditionalActionOrdinal
             <2>prefix. /\ ConditionalPrefix(1) = \#(first.prefixRows)
                         /\ ConditionalPrefix(2) = \#(second.prefixRows)
                 BY ONLY IsaM("simp") DEF ConditionalPrefix, ConditionalSourceRows
@@ -987,7 +986,7 @@ package enum ConditionalActionEvidence {
                           /\ ConditionalNativeRows[2].before = \#(second.nativeBefore)
                 BY ONLY IsaM("simp") DEF ConditionalNativeRows
             <2>both. matches(1) /\ matches(2)
-                BY ONLY <2>header, <2>prefix, <2>recorded, SMT DEF matches
+                BY ONLY <2>sourceHeader, <2>nativeHeader, <2>prefix, <2>recorded, SMT DEF matches
             <2>every. \A a \in ConditionalArms : matches(a)
                 BY ONLY <1>shape, <2>both, SMT
             <2>. TAKE arm \in ConditionalArms
@@ -1149,7 +1148,7 @@ package enum ConditionalActionEvidence {
         <1>always. []ConditionalTypedState => (([][Next]_vars) <=> ([][ConditionalSourceStep]_vars))
             BY ONLY <1>stuttering, PTL
         <1>spec. Spec <=> Init /\ [][Next]_vars
-            BY ONLY DEF Spec
+            BY ONLY DEF Spec, vars
         <1>behavior. []ConditionalTypedState => (Spec <=> ConditionalConfiguredBehavior)
             BY ONLY <1>spec, <1>always, PTL DEF ConditionalConfiguredBehavior
         <1>. QED BY ONLY NormalOrderedRHSCFGSelectsSpecDeadlockAndEvaluationChecking, <1>checked, <1>behavior, PTL
