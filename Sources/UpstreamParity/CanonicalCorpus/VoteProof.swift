@@ -77,10 +77,10 @@ package struct VoteProofModel: Sendable {
 
                 FormalDefinition("SafeAt", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value -> Expr<Bool> in
                     LetRec("SA", over: ballots, taking: Int.self, { (recursion: LocalRecursion<Int, Bool>, currentBallot) in
-                        currentBallot == 0 || Exists(in: quorums) { quorum in
+                        currentBallot == 0 || quorums.contains { quorum in
                             quorum.expr.allSatisfy { acceptor in
                                 maxBal[acceptor] >= currentBallot.expr
-                            } && Exists(in: IntRange(-1, through: currentBallot.expr - 1)) { priorBallot in
+                            } && IntRange(-1, through: currentBallot.expr - 1).contains { priorBallot in
                                 ((priorBallot == -1) || (
                                     recursion(priorBallot.expr)
                                         && quorum.expr.allSatisfy { acceptor in
@@ -104,7 +104,7 @@ package struct VoteProofModel: Sendable {
                 }
 
                 FormalDefinition("ChosenIn", taking: Int.self, Value.self, plusCalPhase: .define) { ballot, value -> Expr<Bool> in
-                    Exists(in: quorums) { quorum in
+                    quorums.contains { quorum in
                         quorum.expr.allSatisfy { acceptor in
                             votes[acceptor].contains(Pair<Int, Value>.literal(ballot, value))
                         }
@@ -115,7 +115,7 @@ package struct VoteProofModel: Sendable {
                     "chosen",
                     parameters: [],
                     body: values.filter { value in
-                        Exists(in: ballots) { ballot in
+                        ballots.contains { ballot in
                             FormalCall(as: Bool.self, "ChosenIn", ballot.expr, value.expr)
                         }
                     },

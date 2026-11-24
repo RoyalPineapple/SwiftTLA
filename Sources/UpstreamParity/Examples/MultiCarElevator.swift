@@ -80,7 +80,7 @@ package struct MultiCarElevator: Sendable {
             }
             Do(Step.board, over: PersonID.all, CarID.all, FloorID.all) { person, car, floor in
                 When(cars[car].doorsOpen == true && cars[car].rider == person.assuming(String.self))
-                calls.set(calls.removing(Call.expression(person: person, floor: floor, direction: Direction.up)))
+                calls.remove(Call.expression(person: person, floor: floor, direction: Direction.up))
             }
             Do(Step.closeDoor, over: CarID.all, FloorID.all, Direction.all) { car, floor, direction in
                 When(cars[car].doorsOpen == true)

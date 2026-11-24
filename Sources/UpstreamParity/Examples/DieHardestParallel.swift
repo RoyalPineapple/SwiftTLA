@@ -73,18 +73,18 @@ package struct DieHardestParallelModel: Sendable {
                 s2.set(s2)
             }
             Do(Step.NextParallelFreeze, when: Freeze) {
-                If(Exists(in: c1.keys) { j in c1[j] == Goal }) {
+                If(c1.keys.contains { j in c1[j] == Goal }) {
                     c1.set(c1)
                 } else: { firstStep() }
-                If(Exists(in: c2.keys) { j in c2[j] == Goal }) {
+                If(c2.keys.contains { j in c2[j] == Goal }) {
                     c2.set(c2)
                 } else: { secondStep() }
                 s1.set(s1)
                 s2.set(s2)
             }
             NotSolved {
-                !(Exists(in: c1.keys) { j in c1[j] == Goal }
-                    && Exists(in: c2.keys) { j in c2[j] == Goal })
+                !(c1.keys.contains { j in c1[j] == Goal }
+                    && c2.keys.contains { j in c2[j] == Goal })
             }
             let NextParallel = Validation {
                 Bind(Capacities, to: [["j1": 9, "j2": 10], ["j1": 1, "j2": 3]])

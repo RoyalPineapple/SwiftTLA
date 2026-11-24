@@ -43,7 +43,7 @@ package struct QuicksortModel: Sendable {
                                                 t.expr[i] == seq[i]
                                             }
                                             && I.allSatisfy { i in
-                                                Exists(in: I) { j in t.expr[i] == seq[j] }
+                                                I.contains { j in t.expr[i] == seq[j] }
                                             }
                                             && I.allSatisfy { i in
                                                 I.allSatisfy { j in
@@ -89,8 +89,8 @@ package struct QuicksortModel: Sendable {
                     permutation
                     UV.flatMapping { I in I.expr } == IntRange(1, through: seq0.count)
                     UV.allSatisfy { I in
-                        Exists(in: IntRange(1, through: seq0.count)) { minimum in
-                            Exists(in: IntRange(1, through: seq0.count)) { maximum in
+                        IntRange(1, through: seq0.count).contains { minimum in
+                            IntRange(1, through: seq0.count).contains { maximum in
                                 I == IntRange(minimum, through: maximum)
                             }
                         }

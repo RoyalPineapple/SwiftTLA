@@ -52,7 +52,7 @@ package struct EchoModel: Sendable {
                 { (path: LocalRecursion<Triple<NodeID, NodeID, Int>, Bool>,
                    endpoints: WithValue<Triple<NodeID, NodeID, Int>>) in
                     endpoints.first() == endpoints.second()
-                        || (endpoints.third() > 0 && Exists(in: Node) { next in
+                        || (endpoints.third() > 0 && Node.contains { next in
                             R.contains(Pair<NodeID, NodeID>.literal(endpoints.first(), next))
                                 && path(Triple<NodeID, NodeID, Int>.literal(
                                     next, endpoints.second(), endpoints.third() - 1))
@@ -126,7 +126,7 @@ package struct EchoModel: Sendable {
 
                     TypeOK {
                         parent == OneOf<NodeID, NoNode>.second(NoNode.value)
-                            || Exists(in: Node) { node in
+                            || Node.contains { node in
                                 parent == OneOf<NodeID, NoNode>.first(node)
                             }
                         children.isSubset(of: Node)
@@ -150,7 +150,7 @@ package struct EchoModel: Sendable {
                                    path: WithValue<Triple<NodeID, NodeID, Int>>) in
                                     If(path.third() == 0, then: false, else:
                                         parents[path.first()] == OneOf<NodeID, NoNode>.first(path.second())
-                                            || Exists(in: Node) { next in
+                                            || Node.contains { next in
                                                 parents[path.first()] == OneOf<NodeID, NoNode>.first(next)
                                                     && ancestor(Triple<NodeID, NodeID, Int>.literal(
                                                         next, path.second(), path.third() - 1))

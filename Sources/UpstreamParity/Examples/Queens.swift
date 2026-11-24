@@ -22,7 +22,7 @@ package struct QueensModel: Sendable {
                 With(todo) { queens in
                     let nextQueen = queens.count + 1
                     let columns = IntRange(1, through: N).filter { column in
-                        !Exists(in: IntRange(1, through: queens.count)) { row in
+                        !IntRange(1, through: queens.count).contains { row in
                             queens.appending(column).at(row.expr) == queens.appending(column).at(nextQueen)
                                 || queens.appending(column).at(row.expr) - queens.appending(column).at(nextQueen)
                                     == row.expr - nextQueen

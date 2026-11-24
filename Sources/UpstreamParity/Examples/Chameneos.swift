@@ -93,7 +93,7 @@ package struct ChameneosModel: Sendable {
                             || color == fadedColor)
                             && IntRange(0, through: N).contains(chameneoses[id.expr].second())
                     }
-                    && (meetingPlace == empty || Exists(in: creatureIDs) { id in
+                    && (meetingPlace == empty || creatureIDs.contains { id in
                         meetingPlace == WaitingPlace.first(id.expr)
                     })
             }

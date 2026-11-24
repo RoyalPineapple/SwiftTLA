@@ -32,10 +32,10 @@ package struct StonesModel: Sendable {
                                                input.second() - x.expr))
                                        })
                             }, in: { partitions in
-                                Exists(in: partitions(Pair.literal(Array<Int>(), W))) { partition in
+                                partitions(Pair.literal(Array<Int>(), W)).contains { partition in
                                     If(IntRange(1, through: W).allSatisfy { weight in
-                                        Exists(in: Functions(from: IntRange(1, through: N),
-                                                             to: IntRange(-1, through: 1))) { coefficients in
+                                        Functions(from: IntRange(1, through: N),
+                                                             to: IntRange(-1, through: 1)).contains { coefficients in
                                             seqSum(SequenceMapping(length: N) { index in
                                                 coefficients[index.expr] * partition[index.expr]
                                             }) == weight.expr

@@ -63,7 +63,7 @@ package struct TeachingSimpleRegularN8Model: Sendable {
                 }
                 PCorrect {
                     !ForAll(Process.all) { process in Finished(process) }
-                        || Exists(in: Process.all) { process in y[process] == 1 }
+                        || Process.all.contains { process in y[process] == 1 }
                 }
                 TypeOK { typeOK }
                 Inv {
@@ -73,7 +73,7 @@ package struct TeachingSimpleRegularN8Model: Sendable {
                             || x[process] == SetExpr<Int>.literal(1)
                     }
                     !ForAll(Process.all) { process in Finished(process) }
-                        || Exists(in: Process.all) { process in y[process] == 1 }
+                        || Process.all.contains { process in y[process] == 1 }
                 }
             }
             SimpleRegular

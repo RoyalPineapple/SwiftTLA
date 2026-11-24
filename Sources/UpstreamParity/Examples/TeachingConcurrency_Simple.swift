@@ -43,7 +43,7 @@ package struct TeachingSimpleN5Model: Sendable {
                 }
                 PCorrect {
                     !ForAll(Process.all) { process in Finished(process) }
-                        || Exists(in: Process.all) { process in y[process] == 1 }
+                        || Process.all.contains { process in y[process] == 1 }
                 }
                 TypeOK { typeOK }
                 Inv {
@@ -52,7 +52,7 @@ package struct TeachingSimpleN5Model: Sendable {
                         !(At(Step.b, process) || Finished(process)) || x[process] == 1
                     }
                     !ForAll(Process.all) { process in Finished(process) }
-                        || Exists(in: Process.all) { process in y[process] == 1 }
+                        || Process.all.contains { process in y[process] == 1 }
                 }
             }
             Simple

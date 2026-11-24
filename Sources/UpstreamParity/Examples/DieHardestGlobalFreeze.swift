@@ -72,16 +72,16 @@ package struct DieHardestGlobalFreezeModel: Sendable {
                         }
                     }
                 }
-                When(!(Exists(in: c1.keys) { j in c1[j] == Goal } && firstFreeze == 999)
+                When(!(c1.keys.contains { j in c1[j] == Goal } && firstFreeze == 999)
                     || firstFreeze.set(scope.checkingLevel + 1))
-                When(!(Exists(in: c2.keys) { j in c2[j] == Goal } && secondFreeze == 999)
+                When(!(c2.keys.contains { j in c2[j] == Goal } && secondFreeze == 999)
                     || secondFreeze.set(scope.checkingLevel + 1))
                 s1.set(s1)
                 s2.set(s2)
             }
             NotSolved {
-                !(Exists(in: c1.keys) { j in c1[j] == Goal }
-                    && Exists(in: c2.keys) { j in c2[j] == Goal })
+                !(c1.keys.contains { j in c1[j] == Goal }
+                    && c2.keys.contains { j in c2[j] == Goal })
             }
             let NextParallelGlobalFreeze = Validation {
                 Bind(Capacities, to: [["j1": 9, "j2": 10], ["j1": 1, "j2": 3]])

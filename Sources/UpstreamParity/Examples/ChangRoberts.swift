@@ -66,7 +66,7 @@ package struct ChangRobertsModel: Sendable {
                     Node.allSatisfy { node in
                         Set<ProcessState>([.candidate, .lost, .won]).contains(state[node])
                             && msgs[node].allSatisfy { message in
-                                Exists(in: Node) { owner in message == Id[owner] }
+                                Node.contains { owner in message == Id[owner] }
                             }
                     }
                 }
@@ -79,8 +79,8 @@ package struct ChangRobertsModel: Sendable {
                             })
                     }
                 }
-                let hasCandidate = Exists(in: Node) { node in state[node] == ProcessState.candidate }
-                let hasWinner = Exists(in: Node) { node in state[node] == ProcessState.won }
+                let hasCandidate = Node.contains { node in state[node] == ProcessState.candidate }
+                let hasWinner = Node.contains { node in state[node] == ProcessState.won }
                 Liveness(.conditional(hasCandidate, then: .eventually(hasWinner), else: .always(true)))
             }
             ChangRoberts

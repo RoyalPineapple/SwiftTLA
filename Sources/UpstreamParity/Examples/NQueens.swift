@@ -26,7 +26,7 @@ package struct NQueensModel: Sendable {
                         Let(queens.expr.count + 1) { nextQueen in
                             Let(
                                 IntRange(1, through: N).filter { column in
-                                    !Exists(in: IntRange(1, through: queens.expr.count)) { row in
+                                    !IntRange(1, through: queens.expr.count).contains { row in
                                         queens.expr.appending(column.expr).at(row.expr)
                                             == queens.expr.appending(column.expr).at(nextQueen.expr)
                                             || queens.expr.appending(column.expr).at(row.expr)

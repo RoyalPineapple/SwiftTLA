@@ -64,8 +64,8 @@ package struct BinarySearchModel: Sendable {
                     typeOK
                     result == 0 || (seq.count > 0 && seq[result] == val)
                     Finished() || If(
-                        Exists(in: IntRange(1, through: seq.count)) { index in seq[index] == val },
-                        then: Exists(in: IntRange(low, through: high)) { index in seq[index] == val },
+                        IntRange(1, through: seq.count).contains { index in seq[index] == val },
+                        then: IntRange(low, through: high).contains { index in seq[index] == val },
                         else: result == 0
                     )
                     !Finished() || result != 0
@@ -73,7 +73,7 @@ package struct BinarySearchModel: Sendable {
                 }
                 resultCorrect {
                     (!Finished()) || If(
-                        Exists(in: IntRange(1, through: seq.count)) { index in
+                        IntRange(1, through: seq.count).contains { index in
                             seq[index.expr] == val
                         },
                         then: seq[result] == val,

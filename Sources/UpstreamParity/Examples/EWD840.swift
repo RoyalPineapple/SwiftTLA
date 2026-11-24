@@ -77,7 +77,7 @@ package struct EWD840Model: Sendable {
             }
             TerminationDetection { !terminationDetected || terminated }
             let inductiveInvariant = Node.allSatisfy { i in tpos >= i || !active[i] }
-                || Exists(in: IntRange(0, through: tpos)) { i in color[i] == Color.black }
+                || IntRange(0, through: tpos).contains { i in color[i] == Color.black }
                 || tcolor == Color.black
             Inv { inductiveInvariant }
             // The upstream JSON trace/exit effect belongs to validation, not the state predicate.

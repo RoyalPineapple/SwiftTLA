@@ -71,8 +71,8 @@ package struct DieHardestModel: Sendable {
                 }
             }
             NotSolved {
-                !(Exists(in: c1.keys) { j in c1[j] == Goal }
-                    && Exists(in: c2.keys) { j in c2[j] == Goal })
+                !(c1.keys.contains { j in c1[j] == Goal }
+                    && c2.keys.contains { j in c2[j] == Goal })
             }
             let MCDieHardest = Validation {
                 Bind(Capacities, to: [["j1": 5, "j2": 3], ["j1": 5, "j2": 3, "j3": 3]])

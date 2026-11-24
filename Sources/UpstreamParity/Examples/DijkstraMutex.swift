@@ -142,12 +142,12 @@ package struct DijkstraMutexModel: Sendable {
                     Do(Label.nonCritical) { Goto(Label.li0) }
                     DeadlockFree(
                         At(Label.li0, selfID),
-                        Exists(in: Proc) { member in At(Label.critical, member) }
+                        Proc.contains { member in At(Label.critical, member) }
                     )
                     StarvationFree(At(Label.li0, selfID), At(Label.critical, selfID))
                     DeadlockFreedom(
                         !At(Label.li5, selfID) && !At(Label.li6, selfID) && !At(Label.nonCritical, selfID),
-                        Exists(in: Proc) { member in At(Label.critical, member) }
+                        Proc.contains { member in At(Label.critical, member) }
                     )
                 }
 
