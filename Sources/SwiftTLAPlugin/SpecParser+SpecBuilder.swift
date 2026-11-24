@@ -1472,7 +1472,7 @@ extension ParserSession {
         if let parametersSyntax = call.arguments.first(where: { $0.label?.text == "parameters" })?.expression,
            let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression,
            let parameters = parseFormalParameters(parametersSyntax),
-           let body = decodeTypedFacadeValue(bodySyntax, scope: .empty) ?? decodeStateExpr(bodySyntax) {
+           let body = decodeTypedFacadeValue(bodySyntax, scope: sourceScope) ?? decodeStateExpr(bodySyntax) {
             return FormalOperatorDefinition(name: name, parameters: parameters, body: body,
                 plusCalPhase: phase, plusCalDependencies: dependencies)
         }
@@ -1492,7 +1492,7 @@ extension ParserSession {
               typeWitnesses.allSatisfy({ isMetatype($0.expression) })
         else { return nil }
         var formalParameters: [FormalParameter] = []
-        var scope = TypedFacadeScope.empty
+        var scope = sourceScope
         for (index, pair) in zip(parameters, typeWitnesses).enumerated() {
             guard let metatype = pair.1.expression.as(MemberAccessExprSyntax.self),
                   let typeSyntax = metatype.base else { return nil }
