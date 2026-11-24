@@ -100,9 +100,8 @@ extension SequentialControlOutputEvidence {
             assertionResult = ""
             assertionFact = ""
         }
-        guard let routes = source.routes,
-              let selection = try procedureNext(rendered, layout: program.layout, actions: program.behavior.actions,
-                                                registered: routes, selected: [source.action])
+        guard let selection = try procedureNext(rendered, layout: program.layout, actions: program.behavior.actions,
+                                                source: source.algorithm, selected: [source.action])
         else { return nil }
         let configuration = procedureCFG(cfgInput.expected, prefix: "ProcedureLoop", theorem: "ActualProcedureLoopConfigurationIsSelected")
         let slot = source.slot + 1
@@ -151,10 +150,13 @@ extension SequentialControlOutputEvidence {
         THEOREM ConfiguredProcedureControlUsesTheAuthoredPaths ==
             /\ ProcedureLoopActualCFG = ProcedureLoopExpectedCFG
             /\ ProcedureNextUsesTheRegisteredRoutes
+            /\ ProcedureNextUsesTheCheckedBodies
+            /\ ProcedureRequiredBodySlots \subseteq ProcedureCheckedBodySlots
             /\ (\A worker : AuthoredProcedureLoopInput(worker) => AuthoredProcedureLoopControl(worker))
         \#(bodyResult)
         \#(assertionResult)
             BY ONLY ActualProcedureLoopConfigurationIsSelected, ActualNextPartitionsAllRegisteredProcedureRoutes,
+                ActualRegisteredProcedureBodiesMatchTheCheckedRows, ActualRegisteredProcedureBodyCoverage,
                 ActualProcedureWhileUsesTheAuthoredControl\#(bodyFact)\#(assertionFact), Zenon
 
         ====
@@ -256,19 +258,358 @@ extension SequentialControlOutputEvidence {
         return (invariants, expectedCFG)
     }
 
+    // Interpret the authored control transfer and its successful state updates.
+    // Unsupported statement shapes keep their emitted contribution to Next.
+    private struct ProcedureBody {
+        let inputs: [String]
+        let predicate: String
+    }
+
+    private static func authoredProcedureBody(
+        _ route: SequentialControlEvidence.ProcedureActionDomain,
+        in algorithm: AlgorithmModel, layout: CompiledLayout
+    ) -> ProcedureBody? {
+        let processes = algorithm.components.compactMap { component -> AlgorithmProcessModel? in
+            guard case .process(let process) = component else { return nil }
+            return process
+        }
+        let procedures = algorithm.components.compactMap { component -> AlgorithmProcedureModel? in
+            guard case .procedure(let procedure) = component else { return nil }
+            return procedure
+        }
+        guard let pc = layout.variables.first(where: { $0.declaration.origin == .programCounter })?.formalName,
+              let stack = layout.variables.first(where: { $0.declaration.origin == .procedureStack })?.formalName
+        else { return nil }
+        func location(_ owner: ControlOwner, _ label: String) -> String? {
+            let matches = layout.controlLocations.filter {
+                $0.owner == owner && $0.sourceName.utf8.elementsEqual(label.utf8)
+            }
+            return matches.count == 1 ? matches.first.map { TLAValue.string($0.formalName).description } : nil
+        }
+        let doneLabel = CompilerControlSymbol.done.rawValue
+        guard let done = location(.generated(algorithm: algorithm.name, purpose: doneLabel), doneLabel) else { return nil }
+        let allFields = layout.variables.map(\.formalName)
+        func frame(_ changed: Set<String>) -> String {
+            let fields = allFields.filter { !changed.contains($0) }
+            return fields.isEmpty ? "TRUE" : "UNCHANGED <<\(fields.joined(separator: ", "))>>"
+        }
+        func conjunction(_ clauses: [String]) -> String {
+            clauses.isEmpty ? "TRUE" : clauses.joined(separator: #" /\ "#)
+        }
+        guard let step = route.step else {
+            let guards = processes.compactMap { process -> String? in
+                guard let members = process.domain.literalSetMembers else { return nil }
+                return #"(\A worker \in \#(TLAValue.set(Set(members))) : \#(pc)[worker] = \#(done))"#
+            }
+            guard guards.count == processes.count else { return nil }
+            let atDone = processes.isEmpty ? ["\(pc) = \(done)"] : guards
+            return .init(inputs: [], predicate: conjunction(atDone + [frame([])]))
+        }
+        let scoped = route.workers != nil
+        var indexed = scoped ? Set([pc]) : []
+        var domains: [String] = []
+        func atWorker(_ field: String) -> String {
+            guard scoped else { return field }
+            indexed.insert(field)
+            return "\(field)[worker]"
+        }
+        func workerUpdate(_ field: String, to value: String) -> String {
+            guard scoped else { return "\(field)' = \(value)" }
+            indexed.insert(field)
+            return "\(field)' = [\(field) EXCEPT ![worker] = \(value)]"
+        }
+        func rootName(_ root: String, origin: VariableOrigin) -> String? {
+            let matches = layout.variables.filter {
+                $0.declaration.origin == origin && $0.declaration.name.utf8.elementsEqual(root.utf8)
+            }
+            return matches.count == 1 ? matches.first?.formalName : nil
+        }
+        let allocated = procedures.flatMap { $0.parameters.map(\.root) + $0.locals.map(\.root) }
+        guard Set(allocated).count == allocated.count else { return nil }
+
+        let shared = Set(algorithm.components.compactMap { component -> String? in
+            guard case .shared(let state) = component else { return nil }
+            return state.root
+        })
+        var localOrigins: [String: VariableOrigin] = [:]
+        switch route.owner {
+        case .process(_, let index, _):
+            guard processes.indices.contains(index) else { return nil }
+            for component in processes[index].components {
+                if case .local(let local) = component {
+                    localOrigins[local.root] = local.exposed ? .source : .compiler
+                }
+            }
+        case .procedure(_, let name):
+            guard let owner = procedures.first(where: { $0.name == name }) else { return nil }
+            for local in owner.parameters.map(\.root) + owner.locals.map(\.root) { localOrigins[local] = .compiler }
+        default: break
+        }
+        func term(_ expression: StateExpr) -> String? {
+            procedureTerm(expression, variable: { root in
+                if let origin = localOrigins[root], let field = rootName(root, origin: origin) {
+                    return atWorker(field)
+                }
+                guard shared.contains(root) else { return nil }
+                return rootName(root, origin: .source)
+            }, workerLookup: scoped ? { root in
+                guard localOrigins[root] == nil, shared.contains(root),
+                      let field = rootName(root, origin: .source) else { return nil }
+                return atWorker(field)
+            } : nil)
+        }
+
+        guard let entry = location(route.owner, step.label.name) else { return nil }
+        let following: String
+        if let label = route.following {
+            guard let next = location(route.owner, label) else { return nil }
+            following = next
+        } else {
+            following = done
+        }
+        let statements = step.statements.filter { $0 != .skip }
+        let continuation = step.loopCondition == nil ? following : entry
+        var updates: [String] = []
+        var changed: Set<String> = [pc]
+        switch statements.last {
+        case .none:
+            updates = [workerUpdate(pc, to: continuation)]
+        case .some(.stop) where statements.count == 1:
+            updates = [workerUpdate(pc, to: done)]
+        case .some(.goto(let label)) where statements.count == 1:
+            guard let destination = location(route.owner, label.name) else { return nil }
+            updates = [workerUpdate(pc, to: destination)]
+        case .some(.call(let name, let arguments)) where statements.count == 1:
+            guard let callee = procedures.first(where: { $0.name == name }), let first = callee.steps.first,
+                  let destination = location(.procedure(algorithm: algorithm.name, name: name), first.label.name),
+                  arguments.count == callee.parameters.count,
+                  let slots = procedureFrameFields(allocated, resolving: { rootName($0, origin: .compiler) })
+            else { return nil }
+            for (parameter, argument) in zip(callee.parameters, arguments) {
+                guard let field = rootName(parameter.root, origin: .compiler),
+                      let value = term(argument) else { return nil }
+                changed.insert(field)
+                updates.append(workerUpdate(field, to: value))
+            }
+            for local in callee.locals {
+                guard case .value(let value) = local.initialization,
+                      let field = rootName(local.root, origin: .compiler),
+                      let initial = term(.value(value)) else { return nil }
+                changed.insert(field)
+                updates.append(workerUpdate(field, to: initial))
+            }
+            let saved = [
+                "\(CompilerControlSymbol.procedure.rawValue) |-> \(TLAValue.string(name))",
+                "\(CompilerControlSymbol.programCounter.rawValue) |-> \(continuation)"
+            ] + slots.map { "\($0.0) |-> \(atWorker($0.1))" }
+            let beforeStack = atWorker(stack)
+            updates += [workerUpdate(pc, to: destination),
+                        workerUpdate(stack, to: #"<<[\#(saved.joined(separator: ", "))]>> \o \#(beforeStack)"#)]
+            changed.insert(stack)
+        case .some(.return):
+            guard case .procedure = route.owner,
+                  let slots = procedureFrameFields(allocated, resolving: { rootName($0, origin: .compiler) })
+            else { return nil }
+            let beforeStack = atWorker(stack)
+            updates = ["Len(\(beforeStack)) > 0",
+                       workerUpdate(pc, to: "(Head(\(beforeStack))).pc"),
+                       workerUpdate(stack, to: "Tail(\(beforeStack))")]
+            for (key, field) in slots { updates.append(workerUpdate(field, to: "(Head(\(beforeStack))).\(key)")) }
+            changed.formUnion([stack] + slots.map { $0.1 })
+            let preceding = statements.dropLast()
+            if !preceding.isEmpty {
+                guard preceding.count == 1, case .some(.set(let target, let expression)) = preceding.first,
+                      shared.contains(target.root), localOrigins[target.root] == nil,
+                      let field = rootName(target.root, origin: .source)
+                else { return nil }
+                let value: String
+                if case .add(let left, let right) = expression {
+                    guard let lhs = term(left), let rhs = term(right) else { return nil }
+                    let integers = "\(TLAValue.int(.min))..\(TLAValue.int(.max))"
+                    domains += [#"\#(lhs) \in \#(integers)"#, #"\#(rhs) \in \#(integers)"#]
+                    value = "(\(lhs) + \(rhs))"
+                    updates.insert(#"\#(value) \in \#(integers)"#, at: 0)
+                } else {
+                    guard let leaf = term(expression) else { return nil }
+                    value = leaf
+                }
+                switch target {
+                case .root:
+                    updates.append("\(field)' = \(value)")
+                case .function(.root(_), let key):
+                    guard let index = term(key) else { return nil }
+                    domains.append(#"\#(index) \in DOMAIN \#(field)"#)
+                    updates.append("\(field)' = [\(field) EXCEPT ![\(index)] = \(value)]")
+                default: return nil
+                }
+                changed.insert(field)
+            }
+        default: return nil
+        }
+        let success = conjunction(updates + [frame(changed)])
+        let atEntry = "\(atWorker(pc)) = \(entry)"
+        var active = [atEntry]
+        let effect: String
+        if let guardExpression = step.loopCondition {
+            guard let condition = term(guardExpression) else { return nil }
+            active.append(condition)
+            let exit = conjunction([workerUpdate(pc, to: following), frame([pc])])
+            effect = "(IF \(condition) THEN (\(success)) ELSE (\(exit)))"
+        } else {
+            effect = success
+        }
+        let predicate = conjunction([atEntry, effect])
+        let indexedInputs = indexed.sorted().map { #"worker \in DOMAIN \#($0)"# }
+        let inputs = indexedInputs + domains.map { "((\(conjunction(active))) => \($0))" }
+        return .init(inputs: inputs, predicate: predicate)
+    }
+
+    private static func procedureFrameFields(
+        _ roots: [String], resolving name: (String) -> String?
+    ) -> [(String, String)]? {
+        let fields = roots.compactMap { root in name(root).map { (root, $0) } }
+        guard fields.count == roots.count,
+              !roots.contains(CompilerControlSymbol.programCounter.rawValue),
+              !roots.contains(CompilerControlSymbol.procedure.rawValue),
+              roots.allSatisfy({ $0.range(of: #"^[A-Za-z][A-Za-z0-9_]*$"#, options: .regularExpression) != nil })
+        else { return nil }
+        return fields
+    }
+
+    private static func authoredProcedureCatalog(
+        _ rows: [(RenderedAction, SequentialControlEvidence.ProcedureActionDomain)],
+        source: AlgorithmModel, layout: CompiledLayout
+    ) -> (proof: String, unchecked: Set<Int>) {
+        var unchecked: Set<Int> = []
+        var inputs: [String] = []
+        var values: [String] = []
+        var declarations: [String] = []
+        var proofs: [String] = []
+        var equality: [String] = []
+        var interpreted: [String: Int] = [:]
+        for (index, pair) in rows.enumerated() {
+            let (action, route) = pair
+            let slot = index + 1
+            let observed = "ProcedureRegisteredAction\(slot)"
+            let basis = interpreted[action.emittedBaseName] ?? slot
+            let input = "ProcedureBodyInput\(basis)"
+            let predicate = "ProcedureAuthoredBody\(basis)"
+            let scoped = !action.arguments.isEmpty
+            let arguments = scoped ? "(\(observed).arguments[1])" : ""
+            if basis == slot {
+                guard let body = authoredProcedureBody(route, in: source, layout: layout) else {
+                    unchecked.insert(slot)
+                    values.append(action.renderedName)
+                    continue
+                }
+                interpreted[action.emittedBaseName] = slot
+                let parameters = scoped ? "(worker)" : ""
+                let clauses = body.inputs.isEmpty ? "TRUE" : body.inputs.joined(separator: #" /\ "#)
+                declarations.append(#"""
+                LOCAL \#(input)\#(parameters) == \#(clauses)
+                LOCAL \#(predicate)\#(parameters) == \#(body.predicate)
+                """#)
+                let quantified = scoped ? #"\A worker : "# : ""
+                proofs.append(#"""
+                    <2>meaning\#(basis). \#(quantified)\#(input)\#(parameters) =>
+                        (\#(action.emittedBaseName)\#(parameters) = \#(predicate)\#(parameters))
+                        BY ONLY SMT DEF \#(input), \#(predicate), \#(action.emittedBaseName)
+                """#)
+            }
+            inputs.append(input + arguments)
+            values.append(predicate + arguments)
+            let expansion = scoped ? ", \(action.renderedName), \(observed)" : ""
+            proofs.append(#"""
+                <2>row\#(slot). \#(action.renderedName) = \#(predicate)\#(arguments)
+                    BY ONLY <2>inputs, <2>meaning\#(basis), SMT DEF ProcedureAuthoredInput\#(expansion)
+            """#)
+            equality.append("<2>row\(slot)")
+        }
+        let domain = TLAValue.set(Set(unchecked.map(TLAValue.int)))
+        let allInputs = inputs.isEmpty ? "TRUE" : inputs.joined(separator: #" /\ "#)
+        let bodyFacts = (equality + [#"IsaM("simp")"#]).joined(separator: ", ")
+        let proof = #"""
+        \#(declarations.joined(separator: "\n"))
+        ProcedureUncheckedBodySlots == \#(domain)
+        ProcedureCheckedBodySlots == DOMAIN ProcedureRegisteredActions \ ProcedureUncheckedBodySlots
+        ProcedureAuthoredInput == \#(allInputs)
+        ProcedureBodyValues == <<\#(values.joined(separator: ", "))>>
+        LOCAL ProcedureBodyCatalogLabeled(observed) ==
+            ProcedureCatalogDispatch!CatalogLabeledBranches(ProcedureBodyValues, ProcedureRegisteredActions, observed)
+        ProcedureCheckedBodyStep(observed) ==
+            \E slot \in ProcedureCheckedBodySlots :
+                ProcedureRegisteredActions[slot] = observed /\ ProcedureBodyValues[slot]
+        ProcedureEmittedOnlyStep(observed) ==
+            \E slot \in DOMAIN ProcedureRegisteredActions \cap ProcedureUncheckedBodySlots :
+                ProcedureRegisteredActions[slot] = observed /\ ProcedureCatalogActualActionValues[slot]
+        ProcedureComposedStep(observed) ==
+            ProcedureCheckedBodyStep(observed) \/ ProcedureEmittedOnlyStep(observed)
+
+        ProcedureNextUsesTheCheckedBodies ==
+            ProcedureAuthoredInput =>
+                /\ (\A observed : ProcedureRegisteredLabeled(observed) <=> ProcedureComposedStep(observed))
+                /\ (Next <=> (\E observed : ProcedureComposedStep(observed)))
+                /\ ([Next]_vars <=> ((\E observed : ProcedureComposedStep(observed))
+                                    \/ ProcedureCatalogActualFrameAfter = ProcedureCatalogActualFrameBefore))
+
+        THEOREM ActualRegisteredProcedureBodiesMatchTheCheckedRows ==
+            ProcedureNextUsesTheCheckedBodies
+        PROOF
+        <1>compose. ASSUME ProcedureAuthoredInput
+            PROVE /\ (\A observed : ProcedureRegisteredLabeled(observed) <=> ProcedureComposedStep(observed))
+                  /\ (Next <=> (\E observed : ProcedureComposedStep(observed)))
+                  /\ ([Next]_vars <=> ((\E observed : ProcedureComposedStep(observed))
+                                      \/ ProcedureCatalogActualFrameAfter = ProcedureCatalogActualFrameBefore))
+            <2>inputs. ProcedureAuthoredInput BY ONLY ProcedureAuthoredInput
+        \#(proofs.joined(separator: "\n"))
+            <2>bodies. ProcedureCatalogActualActionValues = ProcedureBodyValues
+                BY ONLY \#(bodyFacts) DEF ProcedureCatalogActualActionValues, ProcedureBodyValues
+            <2>width. DOMAIN ProcedureBodyValues = DOMAIN ProcedureRegisteredActions
+                BY ONLY IsaM("simp") DEF ProcedureBodyValues, ProcedureRegisteredActions
+            <2>split. \A observed : ProcedureBodyCatalogLabeled(observed) <=> ProcedureComposedStep(observed)
+                BY ONLY <2>bodies, SMT DEF ProcedureBodyCatalogLabeled, ProcedureComposedStep,
+                    ProcedureCheckedBodyStep, ProcedureEmittedOnlyStep, ProcedureCheckedBodySlots,
+                    ProcedureCatalogDispatch!CatalogLabeledBranches
+            <2>labels. \A observed : ProcedureRegisteredLabeled(observed) <=> ProcedureComposedStep(observed)
+                BY ONLY <2>bodies, <2>split, SMT DEF ProcedureRegisteredLabeled, ProcedureBodyCatalogLabeled
+            <2>catalog. (\E ProcedureCatalogIndex \in DOMAIN ProcedureCatalogActualActionValues : ProcedureCatalogActualActionValues[ProcedureCatalogIndex])
+                          <=> (\E observed : ProcedureBodyCatalogLabeled(observed))
+                BY ONLY <2>bodies, <2>width, ProcedureCatalogDispatch!CatalogLabeledBranchesComposeTheFiniteUnion, SMT
+                    DEF ProcedureBodyCatalogLabeled
+            <2>union. (\E ProcedureCatalogIndex \in DOMAIN ProcedureCatalogActualActionValues : ProcedureCatalogActualActionValues[ProcedureCatalogIndex])
+                       <=> (\E observed : ProcedureComposedStep(observed))
+                BY ONLY <2>catalog, <2>split, SMT
+            <2>actual.
+                /\ (Next <=> (\E ProcedureCatalogIndex \in DOMAIN ProcedureCatalogActualActionValues : ProcedureCatalogActualActionValues[ProcedureCatalogIndex]))
+                /\ ([Next]_vars <=> ((\E ProcedureCatalogIndex \in DOMAIN ProcedureCatalogActualActionValues : ProcedureCatalogActualActionValues[ProcedureCatalogIndex])
+                                    \/ ProcedureCatalogActualFrameAfter = ProcedureCatalogActualFrameBefore))
+                BY ONLY ProcedureCatalogActualNextUsesTheCompleteLabeledActionCatalog, PTL
+            <2>. QED BY ONLY <2>labels, <2>union, <2>actual, PTL
+        <1>. QED BY ONLY <1>compose DEF ProcedureNextUsesTheCheckedBodies
+        """#
+        return (proof, unchecked)
+    }
+
     private static func procedureNext(
         _ rendered: RenderedSpecification, layout: CompiledLayout, actions: [CompiledAction],
-        registered: [SequentialControlEvidence.ProcedureActionDomain], selected: Set<String>
+        source: AlgorithmModel, selected: Set<String>, completeBodies: Bool = false
     ) throws -> String? {
         let tla = rendered.tlaBundle.root.tla
         guard !tla.contains("ProcedureCatalog"), !tla.contains("ProcedureRegisteredInvocations"),
               !tla.contains("ProcedureRegisteredAction"), !tla.contains("ProcedureRegisteredLabeled"),
               !tla.contains("ProcedureSelected"), !tla.contains("ProcedureRemainingStep"),
-              !tla.contains("ProcedureNextUsesTheRegisteredRoutes") else { return nil }
+              !tla.contains("ProcedureNextUsesThe"), !tla.contains("ProcedureAuthored"),
+              !tla.contains("ProcedureBody"), !tla.contains("ProcedureUncheckedBodySlots"),
+              !tla.contains("ProcedureCheckedBody"), !tla.contains("ProcedureRequiredBodySlots"),
+              !tla.contains("ProcedureEmittedOnlyStep"),
+              !tla.contains("ProcedureComposedStep"),
+              !tla.contains("ActualRegisteredProcedureBodies"), !tla.contains("ActualRegisteredProcedureBodyCoverage")
+        else { return nil }
         let declarations = layout.actions.filter { !$0.declaration.name.isEmpty }
-        guard declarations.count == registered.count, declarations.last?.isTermination == true,
+        guard let registered = SequentialControlEvidence.procedureActionDomains(in: source),
+              declarations.count == registered.count, declarations.last?.isTermination == true,
               !selected.isEmpty, selected.isSubset(of: Set(registered.map(\.label))) else { return nil }
-        var expected: [RenderedAction] = []
+        var rows: [(RenderedAction, SequentialControlEvidence.ProcedureActionDomain)] = []
         for (declaration, source) in zip(declarations, registered) {
             guard declaration.declaration.name.utf8.elementsEqual(source.label.utf8),
                   actions.indices.contains(declaration.id.ordinal) else { return nil }
@@ -282,19 +623,41 @@ extension SequentialControlOutputEvidence {
                     workers.firstIndex(of: value).map { workers[$0] }
                 }
                 guard values.count == workers.count, Set(authored) == workers else { return nil }
-                expected += authored.enumerated().map { index, worker in
-                    .init(sourceName: source.label, emittedBaseName: formal, arguments: [worker],
-                          renderedName: "\(formal)__\(index)")
+                rows += authored.enumerated().map { index, worker in
+                    (.init(sourceName: source.label, emittedBaseName: formal, arguments: [worker],
+                           renderedName: "\(formal)__\(index)"), source)
                 }
             } else {
                 guard action.bindings.isEmpty else { return nil }
-                expected.append(.init(sourceName: source.label, emittedBaseName: formal, arguments: [], renderedName: formal))
+                rows.append((.init(sourceName: source.label, emittedBaseName: formal, arguments: [], renderedName: formal), source))
             }
         }
+        let expected = rows.map { $0.0 }
         guard let catalog = StraightLineRenderedActionCheck.finiteActionCatalog(
             in: rendered, frameFields: layout.variables.map(\.formalName), matching: expected)
         else { return nil }
         let physical = catalog.proofSource(prefix: "ProcedureCatalog")
+        let authoredBodies = authoredProcedureCatalog(rows, source: source, layout: layout)
+        let required = Set(rows.enumerated().compactMap { index, row -> Int? in
+            guard let step = row.1.step else { return index + 1 }
+            return step.loopCondition == nil && step.statements.filter { $0 != .skip } == [.stop]
+                ? index + 1 : nil
+        })
+        guard required.isDisjoint(with: authoredBodies.unchecked),
+              !completeBodies || authoredBodies.unchecked.isEmpty else { return nil }
+        let coverage = completeBodies
+            ? #"""
+              THEOREM ActualRegisteredProcedureBodyCoverage ==
+                  ProcedureUncheckedBodySlots = {}
+                  BY ONLY DEF ProcedureUncheckedBodySlots
+              """#
+            : #"""
+              ProcedureRequiredBodySlots == \#(TLAValue.set(Set(required.map(TLAValue.int))))
+              THEOREM ActualRegisteredProcedureBodyCoverage ==
+                  ProcedureRequiredBodySlots \subseteq ProcedureCheckedBodySlots
+                  BY ONLY IsaM("simp") DEF ProcedureRequiredBodySlots, ProcedureCheckedBodySlots,
+                      ProcedureUncheckedBodySlots, ProcedureRegisteredActions
+              """#
         let selectedLabels = TLAValue.set(Set(selected.map(TLAValue.string)))
         let observations = expected.indices.map { "ProcedureRegisteredAction\($0 + 1)" }
         let records = zip(observations, expected).map { name, row in
@@ -354,6 +717,10 @@ extension SequentialControlOutputEvidence {
             BY ONLY SMT DEF ProcedureSelectedStep, ProcedureRemainingStep
         <1>. QED BY ONLY <1>bindings, <1>inventory, <1>union, <1>split, PTL
             DEF ProcedureNextUsesTheRegisteredRoutes
+
+        \#(authoredBodies.proof)
+
+        \#(coverage)
         """#
     }
 
@@ -489,13 +856,10 @@ extension SequentialControlOutputEvidence {
         }
         func slotName(_ root: String) -> String? { formalName(root, origin: .compiler) }
         let frameKeys = procedures.flatMap { $0.parameters.map(\.root) + $0.locals.map(\.root) }
-        let saved = frameKeys.compactMap { key in slotName(key).map { (key, $0) } }
         let counterField = CompilerControlSymbol.programCounter.rawValue
         let procedureField = CompilerControlSymbol.procedure.rawValue
-        guard saved.count == frameKeys.count, Set(frameKeys).count == frameKeys.count,
-              !frameKeys.contains(counterField), !frameKeys.contains(procedureField),
-              frameKeys.allSatisfy({ $0.range(of: #"^[A-Za-z][A-Za-z0-9_]*$"#, options: .regularExpression) != nil })
-        else { return nil }
+        guard Set(frameKeys).count == frameKeys.count,
+              let saved = procedureFrameFields(frameKeys, resolving: slotName) else { return nil }
         let shared = source.components.compactMap { component -> AlgorithmStateModel? in
             guard case .shared(let state) = component else { return nil }
             return state
@@ -588,9 +952,9 @@ extension SequentialControlOutputEvidence {
             assign(stack, "Tail(\(stackBefore))"),
         ] + restored
         func clauses(_ values: [String]) -> String { values.map { #"/\ \#($0)"# }.joined(separator: "\n    ") }
-        guard let registered = SequentialControlEvidence.procedureActionDomains(in: source),
-              let selection = try procedureNext(rendered, layout: layout, actions: compilation.semantics.behavior.actions,
-                                                registered: registered, selected: [steps[index].label.name, returnRows[0].sourceName])
+        guard let selection = try procedureNext(rendered, layout: layout, actions: compilation.semantics.behavior.actions,
+                                                source: source, selected: [steps[index].label.name, returnRows[0].sourceName],
+                                                completeBodies: true)
         else { return nil }
         let configuration = procedureCFG(cfgInput.expected, prefix: "CallWhile", theorem: "ActualCallWhileConfigurationIsSelected")
         let slot = index + 1
@@ -654,10 +1018,13 @@ extension SequentialControlOutputEvidence {
         THEOREM ConfiguredCallWhileUsesTheAuthoredContinuations ==
             /\ CallWhileActualCFG = CallWhileExpectedCFG
             /\ ProcedureNextUsesTheRegisteredRoutes
+            /\ ProcedureNextUsesTheCheckedBodies
+            /\ ProcedureUncheckedBodySlots = {}
             /\ AuthoredCallWhileSavesContinuation
             /\ AuthoredCallWhileAdvancesOnFalse
             /\ AuthoredCallWhileRestoresContinuation
             BY ONLY ActualCallWhileConfigurationIsSelected, ActualNextPartitionsAllRegisteredProcedureRoutes,
+                ActualRegisteredProcedureBodiesMatchTheCheckedRows, ActualRegisteredProcedureBodyCoverage,
                 ActualCallWhileSavesTheAuthoredContinuation, ActualFalseCallWhileTakesTheAuthoredNextLabel,
                 ActualCallWhileReturnRestoresTheSavedContinuation, PTL
 

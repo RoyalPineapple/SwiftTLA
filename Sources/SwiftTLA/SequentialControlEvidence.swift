@@ -226,6 +226,9 @@ extension SequentialControlEvidence {
     package struct ProcedureActionDomain: Sendable {
         package let label: String
         package let workers: Set<TLAValue>?
+        package let owner: ControlOwner
+        package let step: AlgorithmStepModel?
+        package let following: String?
     }
 
     package static func procedureActionDomains(in algorithm: AlgorithmModel) -> [ProcedureActionDomain]? {
@@ -236,15 +239,27 @@ extension SequentialControlEvidence {
             process.domain.literalSetMembers.map { Set($0) }
         }
         guard domains.count == processes.count else { return nil }
-        var routes = sequential.map { ProcedureActionDomain(label: $0.label.name, workers: nil) }
-        for (process, domain) in zip(processes, domains) {
-            routes += process.steps.map { .init(label: $0.label.name, workers: domain) }
+        func rows(_ steps: [AlgorithmStepModel], owner: ControlOwner, workers: Set<TLAValue>?,
+                  prefix: String = "") -> [ProcedureActionDomain] {
+            steps.enumerated().map { index, step in
+                .init(label: prefix + step.label.name, workers: workers, owner: owner, step: step,
+                      following: steps.indices.contains(index + 1) ? steps[index + 1].label.name : nil)
+            }
+        }
+        var routes = rows(sequential, owner: .sequential(algorithm: algorithm.name), workers: nil)
+        for (index, process) in processes.enumerated() {
+            routes += rows(process.steps,
+                owner: .process(algorithm: algorithm.name, ordinal: index, typeName: process.typeName),
+                workers: domains[index])
         }
         let workers = processes.isEmpty ? nil : domains.reduce(into: Set<TLAValue>()) { $0.formUnion($1) }
         for procedure in algorithm.procedures {
-            routes += procedure.steps.map { .init(label: "procedure.\(procedure.name).\($0.label.name)", workers: workers) }
+            routes += rows(procedure.steps, owner: .procedure(algorithm: algorithm.name, name: procedure.name),
+                           workers: workers, prefix: "procedure.\(procedure.name).")
         }
-        routes.append(.init(label: CompilerControlSymbol.terminatingAction.rawValue, workers: nil))
+        routes.append(.init(label: CompilerControlSymbol.terminatingAction.rawValue, workers: nil,
+                            owner: .generated(algorithm: algorithm.name, purpose: CompilerControlSymbol.done.rawValue),
+                            step: nil, following: nil))
         return routes
     }
 
@@ -258,7 +273,7 @@ extension SequentialControlEvidence {
         package let localRoots: Set<String>
         package let condition: StateExpr
         package let body: Branch?
-        package let routes: [ProcedureActionDomain]?
+        package let algorithm: AlgorithmModel
         package let fallsThrough: Bool
         package let ownsConfiguredAssertions: Bool
 
@@ -321,7 +336,6 @@ extension SequentialControlEvidence {
             guard case .shared(let shared) = component else { return nil }
             return shared.root
         })
-        let routes = procedureActionDomains(in: algorithm)
         let assertionOwners = (algorithm.sequentialSteps + algorithm.processes.flatMap(\.steps)
                                + algorithm.procedures.flatMap(\.steps)).filter { hasAssertion($0.statements) }.count
         return algorithm.procedures.flatMap { procedure in
@@ -337,7 +351,7 @@ extension SequentialControlEvidence {
                     Branch(observations: $0, control: .transfer(entry))
                 }
                 return .init(owner: owner, procedure: procedure.name, labels: labels, slot: index,
-                    sourceOffset: offset, localRoots: roots, condition: condition, body: body, routes: routes,
+                    sourceOffset: offset, localRoots: roots, condition: condition, body: body, algorithm: algorithm,
                     fallsThrough: !hasExplicitTransfer(step.statements),
                     ownsConfiguredAssertions: assertionOwners == 1 && hasAssertion(step.statements))
             }
